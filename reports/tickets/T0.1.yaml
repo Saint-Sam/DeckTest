@@ -1,0 +1,21 @@
+id: T0.1
+title: Toolchain bootstrap
+tier: 0
+tags: []
+scope_paths:
+  - rust-toolchain.toml
+  - INSTALL.md
+  - scripts/bootstrap_toolchain.sh
+  - docs/toolchain.lock.md
+  - scripts/check_toolchain.sh
+inputs:
+  - FORGE_REBUILD_MASTER_PLAN.md Section 5 T0.1
+acceptance:
+  - rustup, rustc, cargo, rustfmt, clippy, llvm-tools-preview targets are present
+  - cargo helper binaries are present or reported with install guidance
+  - docs/toolchain.lock.md records verified versions
+  - fresh checkout instructions support recursive clones and GitHub ZIP downloads
+verify: scripts/check_toolchain.sh
+retry_policy: 3 attempts then blocker
+depends_on: []
+parallel_ok: false

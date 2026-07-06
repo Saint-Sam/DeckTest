@@ -1,0 +1,54 @@
+{
+  "tier": 0,
+  "tasks": {
+    "T0.1": {
+      "status": "verified",
+      "branch": "task/T0.1-toolchain-bootstrap",
+      "attempts": 1
+    },
+    "T0.2": {
+      "status": "verified",
+      "branch": "task/T0.2-workspace-skeleton",
+      "attempts": 0
+    },
+    "T0.3": {
+      "status": "implementation_complete_pending_remote_ci",
+      "branch": "task/T0.3-ci-pipeline",
+      "attempts": 0
+    },
+    "T0.4": {
+      "status": "verified",
+      "branch": "task/T0.4-gate-review-metrics-scripting",
+      "attempts": 0
+    },
+    "T0.5": {
+      "status": "verified",
+      "branch": "task/T0.5-vendor-legacy-rules",
+      "attempts": 0
+    },
+    "T0.6": {
+      "status": "verified",
+      "branch": "task/T0.6-legacy-mining-report",
+      "attempts": 0
+    }
+  },
+  "gates_passed": [],
+  "metrics_snapshot": "metrics/legacy_inventory.json",
+  "gate_reviews": {
+    "T0": {
+      "status": "failed",
+      "bundle": "reports/gates/T0/bundle",
+      "signoff": "reports/gates/T0/SIGNOFF.md",
+      "remediation": {
+        "T0.R1": "remote GitHub CI evidence required",
+        "T0.R2": "T0 gate Owner Brief required",
+        "T0.R3": "regenerate bundle with current PLAN_STATE",
+        "T0.R4": "fresh-clone gate run after first commit"
+      }
+    }
+  },
+  "owner_input": {
+    "O1": "complete",
+    "O2": "complete"
+  }
+}

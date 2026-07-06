@@ -1,0 +1,34 @@
+[workspace]
+members = [
+    "crates/forge-core",
+    "crates/forge-carddef",
+    "crates/forge-cardc",
+    "crates/forge-cards",
+    "crates/forge-ai",
+    "crates/forge-testkit",
+    "crates/forge-arena",
+    "crates/forge-cli",
+    "crates/forge-ui",
+    "crates/forge-app-desktop",
+    "crates/forge-app-android",
+    "crates/forge-app-ios",
+    "crates/forge-app-wasm",
+    "crates/forge-net",
+    "crates/forge-porttools",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "GPL-3.0-only"
+repository = "https://github.com/OWNER/forge-rs"
+rust-version = "1.79"
+
+[workspace.lints.rust]
+missing_docs = "deny"
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+

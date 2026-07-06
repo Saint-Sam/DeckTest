@@ -1,0 +1,23 @@
+id: T0.5
+title: Vendor legacy Forge and Comprehensive Rules text
+tier: 0
+tags: []
+scope_paths:
+  - vendor/legacy-forge
+  - docs/vendor/**
+  - docs/adr/0002-legacy-forge-pin.md
+  - docs/adr/0003-comprehensive-rules-vendor.md
+inputs:
+  - FORGE_REBUILD_MASTER_PLAN.md Section 1.4
+  - FORGE_REBUILD_MASTER_PLAN.md Section 2
+  - FORGE_REBUILD_MASTER_PLAN.md Section 5 T0.5
+acceptance:
+  - vendor/legacy-forge is pinned to an explicit commit
+  - docs/vendor/comprehensive-rules.txt exists with date and source URL recorded
+  - ADR-0002 and ADR-0003 record the vendor decisions
+verify: scripts/gates/gate_T0.sh
+retry_policy: 3 attempts then blocker
+depends_on:
+  - T0.1
+parallel_ok: true
+

@@ -1,0 +1,20 @@
+id: T0.3
+title: CI pipeline
+tier: 0
+tags: []
+scope_paths:
+  - .github/workflows/**
+inputs:
+  - FORGE_REBUILD_MASTER_PLAN.md Section 4.3
+  - FORGE_REBUILD_MASTER_PLAN.md Section 5 T0.3
+  - FORGE_REBUILD_MASTER_PLAN.md Appendix C
+acceptance:
+  - CI includes fmt, clippy, test-linux, test-macos, test-windows, build-wasm,
+    build-android, coverage, and deny-audit coverage
+  - Scheduled jobs reflect recurring checks where practical
+verify: scripts/selftest.sh
+retry_policy: 3 attempts then blocker
+depends_on:
+  - T0.2
+parallel_ok: true
+

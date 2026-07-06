@@ -1,0 +1,3 @@
+[submodule "vendor/legacy-forge"]
+	path = vendor/legacy-forge
+	url = https://github.com/Card-Forge/forge

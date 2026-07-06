@@ -1,0 +1,26 @@
+id: T0.4
+title: Gate, review, and metrics scripting
+tier: 0
+tags: []
+scope_paths:
+  - scripts/**
+  - tools/perf_diff.py
+  - tools/metrics_write.py
+inputs:
+  - FORGE_REBUILD_MASTER_PLAN.md Section 0.4
+  - FORGE_REBUILD_MASTER_PLAN.md Section 0.5
+  - FORGE_REBUILD_MASTER_PLAN.md Section 4.3
+  - FORGE_REBUILD_MASTER_PLAN.md Section 5 T0.4
+acceptance:
+  - scripts/vl.sh exists and is executable
+  - scripts/gates/gate_T0.sh through gate_T8.sh exist
+  - scripts/review/mutation_check.sh, no_unwrap.sh, no_card_names.sh, and
+    determinism.sh exist
+  - tools/perf_diff.py and tools/metrics_write.py exist
+  - scripts/selftest.sh passes
+verify: scripts/selftest.sh
+retry_policy: 3 attempts then blocker
+depends_on:
+  - T0.2
+parallel_ok: true
+

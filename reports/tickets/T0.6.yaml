@@ -1,0 +1,21 @@
+id: T0.6
+title: Legacy mining report
+tier: 0
+tags: []
+scope_paths:
+  - tools/mine_legacy.py
+  - metrics/legacy_inventory.json
+  - docs/legacy_inventory.md
+inputs:
+  - FORGE_REBUILD_MASTER_PLAN.md Section 2
+  - FORGE_REBUILD_MASTER_PLAN.md Section 5 T0.6
+acceptance:
+  - tools/mine_legacy.py parses legacy card scripts
+  - metrics/legacy_inventory.json exists after running the tool
+  - docs/legacy_inventory.md renders the top API/key/keyword/SVar tables
+verify: python3 tools/mine_legacy.py --repo vendor/legacy-forge --out metrics/legacy_inventory.json docs/legacy_inventory.md
+retry_policy: 3 attempts then blocker
+depends_on:
+  - T0.5
+parallel_ok: true
+

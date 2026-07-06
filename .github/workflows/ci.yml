@@ -1,0 +1,301 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fmt:
+    name: fmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Detect Cargo workspace
+        id: workspace
+        run: |
+          if [ -f Cargo.toml ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "Cargo.toml is not present yet; skipping until T0.2 lands."
+          fi
+      - name: Install rustfmt
+        if: steps.workspace.outputs.present == 'true'
+        run: rustup component add rustfmt
+      - uses: Swatinem/rust-cache@v2
+        if: steps.workspace.outputs.present == 'true'
+      - name: cargo fmt
+        if: steps.workspace.outputs.present == 'true'
+        run: cargo fmt --all -- --check
+
+  clippy:
+    name: clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Detect Cargo workspace
+        id: workspace
+        run: |
+          if [ -f Cargo.toml ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "Cargo.toml is not present yet; skipping until T0.2 lands."
+          fi
+      - name: Install clippy
+        if: steps.workspace.outputs.present == 'true'
+        run: rustup component add clippy
+      - uses: Swatinem/rust-cache@v2
+        if: steps.workspace.outputs.present == 'true'
+      - name: cargo clippy
+        if: steps.workspace.outputs.present == 'true'
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+  test-linux:
+    name: test-linux
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Detect Cargo workspace
+        id: workspace
+        run: |
+          if [ -f Cargo.toml ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "Cargo.toml is not present yet; skipping until T0.2 lands."
+          fi
+      - uses: Swatinem/rust-cache@v2
+        if: steps.workspace.outputs.present == 'true'
+      - name: cargo test
+        if: steps.workspace.outputs.present == 'true'
+        run: cargo test --workspace --quiet
+
+  test-macos:
+    name: test-macos
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Detect Cargo workspace
+        id: workspace
+        run: |
+          if [ -f Cargo.toml ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "Cargo.toml is not present yet; skipping until T0.2 lands."
+          fi
+      - uses: Swatinem/rust-cache@v2
+        if: steps.workspace.outputs.present == 'true'
+      - name: cargo test
+        if: steps.workspace.outputs.present == 'true'
+        run: cargo test --workspace --quiet
+
+  test-windows:
+    name: test-windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Detect Cargo workspace
+        id: workspace
+        run: |
+          if [ -f Cargo.toml ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "Cargo.toml is not present yet; skipping until T0.2 lands."
+          fi
+      - uses: Swatinem/rust-cache@v2
+        if: steps.workspace.outputs.present == 'true'
+      - name: cargo test
+        if: steps.workspace.outputs.present == 'true'
+        run: cargo test --workspace --quiet
+
+  build-wasm:
+    name: build-wasm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Detect Cargo workspace
+        id: workspace
+        run: |
+          if [ -f Cargo.toml ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "Cargo.toml is not present yet; skipping until T0.2 lands."
+          fi
+      - uses: Swatinem/rust-cache@v2
+        if: steps.workspace.outputs.present == 'true'
+      - name: Add wasm target
+        if: steps.workspace.outputs.present == 'true'
+        run: rustup target add wasm32-unknown-unknown
+      - name: Build wasm app
+        if: steps.workspace.outputs.present == 'true'
+        run: cargo build -p forge-app-wasm --target wasm32-unknown-unknown --release
+
+  build-android:
+    name: build-android
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Detect Cargo workspace
+        id: workspace
+        run: |
+          if [ -f Cargo.toml ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "Cargo.toml is not present yet; skipping until T0.2 lands."
+          fi
+      - uses: Swatinem/rust-cache@v2
+        if: steps.workspace.outputs.present == 'true'
+      - name: Select hosted Android NDK
+        if: steps.workspace.outputs.present == 'true'
+        run: |
+          if [ -n "${ANDROID_NDK_LATEST_HOME:-}" ]; then
+            echo "ANDROID_NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> "$GITHUB_ENV"
+          fi
+      - name: Install cargo-ndk target and tool
+        if: steps.workspace.outputs.present == 'true'
+        run: |
+          rustup target add aarch64-linux-android
+          cargo install cargo-ndk --locked
+      - name: Build Android app
+        if: steps.workspace.outputs.present == 'true'
+        run: cargo ndk -t arm64-v8a build -p forge-app-android --release
+
+  coverage:
+    name: coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Detect Cargo workspace
+        id: workspace
+        run: |
+          if [ -f Cargo.toml ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "Cargo.toml is not present yet; skipping until T0.2 lands."
+          fi
+      - uses: Swatinem/rust-cache@v2
+        if: steps.workspace.outputs.present == 'true'
+      - name: Install cargo-llvm-cov
+        if: steps.workspace.outputs.present == 'true'
+        run: |
+          rustup component add llvm-tools-preview
+          cargo install cargo-llvm-cov --locked
+      - name: Generate coverage metrics
+        if: steps.workspace.outputs.present == 'true'
+        run: |
+          mkdir -p metrics
+          cargo llvm-cov --workspace --json --output-path metrics/llvm-cov.json
+      - name: Upload coverage metrics
+        uses: actions/upload-artifact@v4
+        if: steps.workspace.outputs.present == 'true'
+        with:
+          name: coverage-metrics
+          path: metrics/llvm-cov.json
+          if-no-files-found: error
+
+  deny-audit:
+    name: deny-audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Detect Cargo workspace
+        id: workspace
+        run: |
+          if [ -f Cargo.toml ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "Cargo.toml is not present yet; skipping until T0.2 lands."
+          fi
+      - uses: Swatinem/rust-cache@v2
+        if: steps.workspace.outputs.present == 'true'
+      - name: Install audit tools
+        if: steps.workspace.outputs.present == 'true'
+        run: |
+          cargo install cargo-audit --locked
+          cargo install cargo-deny --locked
+      - name: cargo audit
+        if: steps.workspace.outputs.present == 'true'
+        run: cargo audit
+      - name: cargo deny
+        if: steps.workspace.outputs.present == 'true'
+        run: cargo deny check
+
+  verification-loop:
+    name: verification-loop
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - uses: Swatinem/rust-cache@v2
+        if: ${{ hashFiles('Cargo.toml') != '' }}
+      - name: Run T0.4 verification loop hook
+        run: |
+          if [ -x scripts/vl.sh ]; then
+            scripts/vl.sh
+          elif [ -e scripts/vl.sh ]; then
+            echo "::error::scripts/vl.sh exists but is not executable."
+            exit 1
+          else
+            echo "scripts/vl.sh is not present/executable yet; T0.4 owns this hook."
+          fi
+
+  determinism-replay:
+    name: determinism-replay
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - uses: Swatinem/rust-cache@v2
+        if: ${{ hashFiles('Cargo.toml') != '' }}
+      - name: Run T0.4 determinism hook
+        run: |
+          if [ -x scripts/review/determinism.sh ]; then
+            scripts/review/determinism.sh
+          elif [ -e scripts/review/determinism.sh ]; then
+            echo "::error::scripts/review/determinism.sh exists but is not executable."
+            exit 1
+          else
+            echo "scripts/review/determinism.sh is not present/executable yet; T0.4 owns this hook."
+          fi

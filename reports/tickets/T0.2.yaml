@@ -1,0 +1,24 @@
+id: T0.2
+title: Workspace skeleton
+tier: 0
+tags: []
+scope_paths:
+  - Cargo.toml
+  - crates/**
+  - cards/
+  - tests/oracle/
+  - docs/
+  - metrics/
+inputs:
+  - FORGE_REBUILD_MASTER_PLAN.md Section 3.2
+  - FORGE_REBUILD_MASTER_PLAN.md Section 5 T0.2
+acceptance:
+  - All planned crates exist
+  - Each crate has one documented bootstrap API and one trivial test
+  - scripts/vl.sh exits 0 after T0.4 is available and T0.1 is installed
+verify: scripts/vl.sh
+retry_policy: 3 attempts then blocker
+depends_on:
+  - T0.1
+parallel_ok: false
+
