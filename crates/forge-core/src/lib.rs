@@ -58,6 +58,716 @@ impl CardId {
     }
 }
 
+/// Maximum number of payment plans returned by the T1.4 enumerator.
+pub const PAYMENT_PLAN_LIMIT: usize = 64;
+
+const MANA_KIND_COUNT: usize = 6;
+const COLORED_MANA_KINDS: [ManaKind; 5] = [
+    ManaKind::White,
+    ManaKind::Blue,
+    ManaKind::Black,
+    ManaKind::Red,
+    ManaKind::Green,
+];
+
+/// A kind of mana that can exist in a player's mana pool.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum ManaKind {
+    /// White mana.
+    White,
+    /// Blue mana.
+    Blue,
+    /// Black mana.
+    Black,
+    /// Red mana.
+    Red,
+    /// Green mana.
+    Green,
+    /// Colorless mana.
+    Colorless,
+}
+
+impl ManaKind {
+    const fn index(self) -> usize {
+        match self {
+            Self::White => 0,
+            Self::Blue => 1,
+            Self::Black => 2,
+            Self::Red => 3,
+            Self::Green => 4,
+            Self::Colorless => 5,
+        }
+    }
+}
+
+/// Mana currently available or selected for payment.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub struct ManaPool {
+    amounts: [u32; MANA_KIND_COUNT],
+}
+
+impl ManaPool {
+    /// Creates an empty mana pool.
+    #[must_use]
+    pub const fn empty() -> Self {
+        Self {
+            amounts: [0; MANA_KIND_COUNT],
+        }
+    }
+
+    /// Creates a mana pool from WUBRG and colorless amounts.
+    #[must_use]
+    pub const fn new(
+        white: u32,
+        blue: u32,
+        black: u32,
+        red: u32,
+        green: u32,
+        colorless: u32,
+    ) -> Self {
+        Self {
+            amounts: [white, blue, black, red, green, colorless],
+        }
+    }
+
+    /// Creates a pool containing one kind of mana.
+    #[must_use]
+    pub fn of(kind: ManaKind, amount: u32) -> Self {
+        let mut pool = Self::empty();
+        pool.amounts[kind.index()] = amount;
+        pool
+    }
+
+    /// Returns the amount of one kind of mana in this pool.
+    #[must_use]
+    pub const fn get(self, kind: ManaKind) -> u32 {
+        self.amounts[kind.index()]
+    }
+
+    /// Returns the total mana in this pool.
+    #[must_use]
+    pub fn total(self) -> u32 {
+        self.amounts.iter().copied().sum()
+    }
+
+    /// Returns the total colored mana in this pool.
+    #[must_use]
+    pub fn colored_total(self) -> u32 {
+        COLORED_MANA_KINDS.iter().map(|kind| self.get(*kind)).sum()
+    }
+
+    /// Returns true when this pool has at least every amount in `required`.
+    #[must_use]
+    pub fn contains_at_least(self, required: Self) -> bool {
+        self.amounts
+            .iter()
+            .zip(required.amounts.iter())
+            .all(|(available, needed)| available >= needed)
+    }
+
+    /// Pays a validated payment plan from this pool.
+    pub fn pay(self, plan: PaymentPlan) -> Result<Self, PaymentError> {
+        self.checked_sub(plan.paid)
+            .ok_or(PaymentError::InsufficientMana)
+    }
+
+    fn checked_add(self, other: Self) -> Option<Self> {
+        let mut amounts = [0_u32; MANA_KIND_COUNT];
+        for (index, amount) in amounts.iter_mut().enumerate() {
+            *amount = self.amounts[index].checked_add(other.amounts[index])?;
+        }
+        Some(Self { amounts })
+    }
+
+    fn checked_sub(self, other: Self) -> Option<Self> {
+        let mut amounts = [0_u32; MANA_KIND_COUNT];
+        for (index, amount) in amounts.iter_mut().enumerate() {
+            *amount = self.amounts[index].checked_sub(other.amounts[index])?;
+        }
+        Some(Self { amounts })
+    }
+
+    const fn canonical_key(self) -> [u32; MANA_KIND_COUNT] {
+        self.amounts
+    }
+}
+
+/// A resolved mana cost: colored requirements plus generic and optional X.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct ManaCost {
+    colored: [u32; 5],
+    generic: u32,
+    x_count: u32,
+    x_value: u32,
+}
+
+impl ManaCost {
+    /// Creates a mana cost from WUBRG colored pips and a generic amount.
+    #[must_use]
+    pub const fn new(
+        white: u32,
+        blue: u32,
+        black: u32,
+        red: u32,
+        green: u32,
+        generic: u32,
+    ) -> Self {
+        Self {
+            colored: [white, blue, black, red, green],
+            generic,
+            x_count: 0,
+            x_value: 0,
+        }
+    }
+
+    /// Returns this cost with `x_count` X symbols set to the chosen value.
+    #[must_use]
+    pub const fn with_x(mut self, x_count: u32, x_value: u32) -> Self {
+        self.x_count = x_count;
+        self.x_value = x_value;
+        self
+    }
+
+    /// Returns the colored pips of one mana kind.
+    #[must_use]
+    pub const fn colored(self, kind: ManaKind) -> u32 {
+        match kind {
+            ManaKind::White => self.colored[0],
+            ManaKind::Blue => self.colored[1],
+            ManaKind::Black => self.colored[2],
+            ManaKind::Red => self.colored[3],
+            ManaKind::Green => self.colored[4],
+            ManaKind::Colorless => 0,
+        }
+    }
+
+    /// Returns the printed generic component before X is added.
+    #[must_use]
+    pub const fn base_generic(self) -> u32 {
+        self.generic
+    }
+
+    /// Returns how many X symbols this cost contains.
+    #[must_use]
+    pub const fn x_count(self) -> u32 {
+        self.x_count
+    }
+
+    /// Returns the chosen value of X.
+    #[must_use]
+    pub const fn x_value(self) -> u32 {
+        self.x_value
+    }
+
+    /// Returns colored requirements as a mana pool.
+    #[must_use]
+    pub const fn colored_pool(self) -> ManaPool {
+        ManaPool::new(
+            self.colored[0],
+            self.colored[1],
+            self.colored[2],
+            self.colored[3],
+            self.colored[4],
+            0,
+        )
+    }
+
+    /// Returns the total generic amount after adding X.
+    pub fn generic_total(self) -> Result<u32, PaymentError> {
+        let x_total = self
+            .x_count
+            .checked_mul(self.x_value)
+            .ok_or(PaymentError::ManaValueOverflow)?;
+        self.generic
+            .checked_add(x_total)
+            .ok_or(PaymentError::ManaValueOverflow)
+    }
+}
+
+/// A validated choice of mana used to pay a cost.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct PaymentPlan {
+    paid: ManaPool,
+    generic_paid: ManaPool,
+    generic_required: u32,
+    x_value: u32,
+    waste_score: u32,
+}
+
+impl PaymentPlan {
+    /// Returns all mana consumed by this plan.
+    #[must_use]
+    pub const fn paid(self) -> ManaPool {
+        self.paid
+    }
+
+    /// Returns the part of the payment assigned to generic or X costs.
+    #[must_use]
+    pub const fn generic_paid(self) -> ManaPool {
+        self.generic_paid
+    }
+
+    /// Returns the generic amount, including X, that this plan pays.
+    #[must_use]
+    pub const fn generic_required(self) -> u32 {
+        self.generic_required
+    }
+
+    /// Returns the chosen X value captured by this plan.
+    #[must_use]
+    pub const fn x_value(self) -> u32 {
+        self.x_value
+    }
+
+    /// Returns the ordering score used by auto-payment.
+    ///
+    /// Lower is better. T1.4 defines waste as colored mana spent on generic or
+    /// X costs when colorless mana could otherwise preserve colored resources.
+    #[must_use]
+    pub const fn waste_score(self) -> u32 {
+        self.waste_score
+    }
+}
+
+/// A bounded set of distinct payment plans.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PaymentEnumeration {
+    plans: Vec<PaymentPlan>,
+    truncated: bool,
+}
+
+impl PaymentEnumeration {
+    /// Returns payment plans in deterministic auto-payment order.
+    #[must_use]
+    pub fn plans(&self) -> &[PaymentPlan] {
+        &self.plans
+    }
+
+    /// Returns true when more than [`PAYMENT_PLAN_LIMIT`] plans exist.
+    #[must_use]
+    pub const fn truncated(&self) -> bool {
+        self.truncated
+    }
+
+    /// Returns the first and therefore preferred automatic payment plan.
+    #[must_use]
+    pub fn best(&self) -> Option<PaymentPlan> {
+        self.plans.first().copied()
+    }
+}
+
+/// One object that can be auto-tapped for mana in T1.4 planning.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct ManaSource {
+    object: ObjectId,
+    produces: ManaPool,
+}
+
+impl ManaSource {
+    /// Creates a mana source from an object and one deterministic output.
+    #[must_use]
+    pub const fn new(object: ObjectId, produces: ManaPool) -> Self {
+        Self { object, produces }
+    }
+
+    /// Returns the object that would be tapped.
+    #[must_use]
+    pub const fn object(self) -> ObjectId {
+        self.object
+    }
+
+    /// Returns the mana this source produces when tapped.
+    #[must_use]
+    pub const fn produces(self) -> ManaPool {
+        self.produces
+    }
+}
+
+/// One tap chosen by an auto-tap payment plan.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct ManaTap {
+    source: ObjectId,
+    produced: ManaPool,
+}
+
+impl ManaTap {
+    /// Returns the tapped source object.
+    #[must_use]
+    pub const fn source(self) -> ObjectId {
+        self.source
+    }
+
+    /// Returns the mana produced by this tap.
+    #[must_use]
+    pub const fn produced(self) -> ManaPool {
+        self.produced
+    }
+}
+
+/// A source-level auto-tap choice plus the resulting payment plan.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AutoTapPaymentPlan {
+    taps: Vec<ManaTap>,
+    produced: ManaPool,
+    payment: PaymentPlan,
+    unspent: ManaPool,
+    total_waste_score: u32,
+}
+
+impl AutoTapPaymentPlan {
+    /// Returns taps in deterministic source order.
+    #[must_use]
+    pub fn taps(&self) -> &[ManaTap] {
+        &self.taps
+    }
+
+    /// Returns all mana produced by the taps.
+    #[must_use]
+    pub const fn produced(&self) -> ManaPool {
+        self.produced
+    }
+
+    /// Returns the pool-level payment plan chosen from the produced mana.
+    #[must_use]
+    pub const fn payment(&self) -> PaymentPlan {
+        self.payment
+    }
+
+    /// Returns mana that would remain floating after the payment.
+    #[must_use]
+    pub const fn unspent(&self) -> ManaPool {
+        self.unspent
+    }
+
+    /// Returns the source-level ordering score used by auto-tap.
+    #[must_use]
+    pub const fn total_waste_score(&self) -> u32 {
+        self.total_waste_score
+    }
+}
+
+/// A bounded set of source-level auto-tap plans.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AutoTapPaymentEnumeration {
+    plans: Vec<AutoTapPaymentPlan>,
+    truncated: bool,
+}
+
+impl AutoTapPaymentEnumeration {
+    /// Returns auto-tap plans in deterministic preference order.
+    #[must_use]
+    pub fn plans(&self) -> &[AutoTapPaymentPlan] {
+        &self.plans
+    }
+
+    /// Returns true when more than [`PAYMENT_PLAN_LIMIT`] plans exist.
+    #[must_use]
+    pub const fn truncated(&self) -> bool {
+        self.truncated
+    }
+
+    /// Returns the first and therefore preferred auto-tap plan.
+    #[must_use]
+    pub fn best(&self) -> Option<&AutoTapPaymentPlan> {
+        self.plans.first()
+    }
+}
+
+/// Errors raised while enumerating or applying mana payments.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PaymentError {
+    /// A mana arithmetic operation overflowed `u32`.
+    ManaValueOverflow,
+    /// The available pool cannot cover the requested payment.
+    InsufficientMana,
+    /// The proposed explicit payment does not satisfy the cost.
+    InvalidPaymentPlan,
+}
+
+/// Returns all distinct payment plans up to [`PAYMENT_PLAN_LIMIT`].
+pub fn enumerate_payment_plans(
+    available: ManaPool,
+    cost: ManaCost,
+) -> Result<PaymentEnumeration, PaymentError> {
+    let colored_required = cost.colored_pool();
+    if !available.contains_at_least(colored_required) {
+        return Ok(PaymentEnumeration {
+            plans: Vec::new(),
+            truncated: false,
+        });
+    }
+    let generic_required = cost.generic_total()?;
+    let Some(remaining) = available.checked_sub(colored_required) else {
+        return Ok(PaymentEnumeration {
+            plans: Vec::new(),
+            truncated: false,
+        });
+    };
+    if generic_required > remaining.total() {
+        return Ok(PaymentEnumeration {
+            plans: Vec::new(),
+            truncated: false,
+        });
+    }
+
+    let max_colored_spend = generic_required.min(remaining.colored_total());
+    let mut plans = Vec::new();
+    let mut truncated = false;
+    for colored_spend in 0..=max_colored_spend {
+        let colorless_spend = generic_required - colored_spend;
+        if colorless_spend > remaining.get(ManaKind::Colorless) {
+            continue;
+        }
+        let mut colored_generic = [0_u32; 5];
+        let mut search = PaymentSearch {
+            remaining,
+            colorless_spend,
+            colored_required,
+            generic_required,
+            x_value: cost.x_value(),
+            plans: &mut plans,
+            truncated: &mut truncated,
+        };
+        let should_continue = enumerate_colored_payment_distributions(
+            &mut search,
+            colored_spend,
+            0,
+            &mut colored_generic,
+        );
+        if !should_continue {
+            break;
+        }
+    }
+
+    Ok(PaymentEnumeration { plans, truncated })
+}
+
+/// Returns the preferred automatic payment plan, if the cost can be paid.
+pub fn auto_payment_plan(
+    available: ManaPool,
+    cost: ManaCost,
+) -> Result<Option<PaymentPlan>, PaymentError> {
+    Ok(enumerate_payment_plans(available, cost)?.best())
+}
+
+/// Enumerates source-level auto-tap plans up to [`PAYMENT_PLAN_LIMIT`].
+pub fn enumerate_auto_tap_payment_plans(
+    sources: &[ManaSource],
+    cost: ManaCost,
+) -> Result<AutoTapPaymentEnumeration, PaymentError> {
+    let mut sorted_sources = sources.to_vec();
+    sorted_sources.sort_by_key(|source| (source.object.0, source.produces.canonical_key()));
+    let mut candidates = Vec::new();
+    let mut child_truncated = false;
+    let mut taps = Vec::new();
+    let mut search = AutoTapSearch {
+        sources: &sorted_sources,
+        cost,
+        candidates: &mut candidates,
+        child_truncated: &mut child_truncated,
+    };
+    collect_auto_tap_candidates(&mut search, 0, ManaPool::empty(), &mut taps)?;
+
+    candidates.sort_by(compare_auto_tap_plans);
+    candidates.dedup();
+    let mut truncated = child_truncated;
+    if candidates.len() > PAYMENT_PLAN_LIMIT {
+        candidates.truncate(PAYMENT_PLAN_LIMIT);
+        truncated = true;
+    }
+    Ok(AutoTapPaymentEnumeration {
+        plans: candidates,
+        truncated,
+    })
+}
+
+/// Returns the preferred source-level auto-tap plan, if the cost can be paid.
+pub fn auto_tap_payment_plan(
+    sources: &[ManaSource],
+    cost: ManaCost,
+) -> Result<Option<AutoTapPaymentPlan>, PaymentError> {
+    Ok(enumerate_auto_tap_payment_plans(sources, cost)?
+        .best()
+        .cloned())
+}
+
+struct PaymentSearch<'a> {
+    remaining: ManaPool,
+    colorless_spend: u32,
+    colored_required: ManaPool,
+    generic_required: u32,
+    x_value: u32,
+    plans: &'a mut Vec<PaymentPlan>,
+    truncated: &'a mut bool,
+}
+
+struct AutoTapSearch<'a> {
+    sources: &'a [ManaSource],
+    cost: ManaCost,
+    candidates: &'a mut Vec<AutoTapPaymentPlan>,
+    child_truncated: &'a mut bool,
+}
+
+/// Validates an explicit pool selection against an available pool and cost.
+pub fn validate_payment_plan(
+    available: ManaPool,
+    cost: ManaCost,
+    paid: ManaPool,
+) -> Result<PaymentPlan, PaymentError> {
+    if !available.contains_at_least(paid) {
+        return Err(PaymentError::InsufficientMana);
+    }
+    let colored_required = cost.colored_pool();
+    let Some(generic_paid) = paid.checked_sub(colored_required) else {
+        return Err(PaymentError::InvalidPaymentPlan);
+    };
+    let generic_required = cost.generic_total()?;
+    if generic_paid.total() != generic_required {
+        return Err(PaymentError::InvalidPaymentPlan);
+    }
+    Ok(PaymentPlan {
+        paid,
+        generic_paid,
+        generic_required,
+        x_value: cost.x_value(),
+        waste_score: generic_paid.colored_total(),
+    })
+}
+
+fn collect_auto_tap_candidates(
+    search: &mut AutoTapSearch<'_>,
+    source_index: usize,
+    produced: ManaPool,
+    taps: &mut Vec<ManaTap>,
+) -> Result<(), PaymentError> {
+    if source_index == search.sources.len() {
+        let payment_plans = enumerate_payment_plans(produced, search.cost)?;
+        *search.child_truncated |= payment_plans.truncated();
+        for payment in payment_plans.plans() {
+            let unspent = produced
+                .checked_sub(payment.paid())
+                .ok_or(PaymentError::InvalidPaymentPlan)?;
+            let total_waste_score = payment
+                .waste_score()
+                .checked_add(unspent.total())
+                .ok_or(PaymentError::ManaValueOverflow)?;
+            search.candidates.push(AutoTapPaymentPlan {
+                taps: taps.clone(),
+                produced,
+                payment: *payment,
+                unspent,
+                total_waste_score,
+            });
+        }
+        return Ok(());
+    }
+
+    collect_auto_tap_candidates(search, source_index + 1, produced, taps)?;
+
+    let source = search.sources[source_index];
+    if let Some(next_produced) = produced.checked_add(source.produces) {
+        taps.push(ManaTap {
+            source: source.object,
+            produced: source.produces,
+        });
+        collect_auto_tap_candidates(search, source_index + 1, next_produced, taps)?;
+        taps.pop();
+    } else {
+        return Err(PaymentError::ManaValueOverflow);
+    }
+    Ok(())
+}
+
+fn compare_auto_tap_plans(
+    left: &AutoTapPaymentPlan,
+    right: &AutoTapPaymentPlan,
+) -> std::cmp::Ordering {
+    left.total_waste_score
+        .cmp(&right.total_waste_score)
+        .then(left.taps.len().cmp(&right.taps.len()))
+        .then(left.payment.waste_score().cmp(&right.payment.waste_score()))
+        .then(
+            left.unspent
+                .canonical_key()
+                .cmp(&right.unspent.canonical_key()),
+        )
+        .then(
+            left.payment
+                .generic_paid()
+                .canonical_key()
+                .cmp(&right.payment.generic_paid().canonical_key()),
+        )
+        .then_with(|| compare_mana_taps(&left.taps, &right.taps))
+}
+
+fn compare_mana_taps(left: &[ManaTap], right: &[ManaTap]) -> std::cmp::Ordering {
+    for (left_tap, right_tap) in left.iter().zip(right.iter()) {
+        let ordering = left_tap.source.0.cmp(&right_tap.source.0).then(
+            left_tap
+                .produced
+                .canonical_key()
+                .cmp(&right_tap.produced.canonical_key()),
+        );
+        if ordering != std::cmp::Ordering::Equal {
+            return ordering;
+        }
+    }
+    left.len().cmp(&right.len())
+}
+
+fn enumerate_colored_payment_distributions(
+    search: &mut PaymentSearch<'_>,
+    target_colored: u32,
+    color_index: usize,
+    colored_generic: &mut [u32; 5],
+) -> bool {
+    if color_index == COLORED_MANA_KINDS.len() {
+        if target_colored != 0 {
+            return true;
+        }
+        if search.plans.len() == PAYMENT_PLAN_LIMIT {
+            *search.truncated = true;
+            return false;
+        }
+        let generic_paid = ManaPool::new(
+            colored_generic[0],
+            colored_generic[1],
+            colored_generic[2],
+            colored_generic[3],
+            colored_generic[4],
+            search.colorless_spend,
+        );
+        let Some(paid) = search.colored_required.checked_add(generic_paid) else {
+            *search.truncated = true;
+            return false;
+        };
+        search.plans.push(PaymentPlan {
+            paid,
+            generic_paid,
+            generic_required: search.generic_required,
+            x_value: search.x_value,
+            waste_score: generic_paid.colored_total(),
+        });
+        return true;
+    }
+
+    let kind = COLORED_MANA_KINDS[color_index];
+    let max_amount = search.remaining.get(kind).min(target_colored);
+    for amount in 0..=max_amount {
+        colored_generic[color_index] = amount;
+        if !enumerate_colored_payment_distributions(
+            search,
+            target_colored - amount,
+            color_index + 1,
+            colored_generic,
+        ) {
+            return false;
+        }
+    }
+    colored_generic[color_index] = 0;
+    true
+}
+
 /// Zone categories tracked by the T1 state arena.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum ZoneKind {
@@ -462,6 +1172,7 @@ pub struct PlayerState {
     life: i32,
     poison: u32,
     max_hand_size: u32,
+    mana_pool: ManaPool,
 }
 
 impl PlayerState {
@@ -473,6 +1184,7 @@ impl PlayerState {
             life: 20,
             poison: 0,
             max_hand_size: 7,
+            mana_pool: ManaPool::empty(),
         }
     }
 
@@ -498,6 +1210,12 @@ impl PlayerState {
     #[must_use]
     pub const fn max_hand_size(self) -> u32 {
         self.max_hand_size
+    }
+
+    /// Returns the player's current mana pool.
+    #[must_use]
+    pub const fn mana_pool(self) -> ManaPool {
+        self.mana_pool
     }
 }
 
@@ -689,6 +1407,12 @@ pub enum StateError {
     EmptyStack,
     /// A stack entry refers to a spell object that is no longer on the stack.
     StackObjectNotOnStack(ObjectId),
+    /// A mana arithmetic operation overflowed.
+    ManaValueOverflow,
+    /// A player does not have enough mana for a requested payment.
+    InsufficientMana,
+    /// A proposed explicit payment does not satisfy the cost.
+    InvalidPaymentPlan,
 }
 
 /// Complete T1 game state.
@@ -881,6 +1605,70 @@ impl GameState {
             .get_mut(player.index())
             .ok_or(StateError::UnknownPlayer(player))?;
         player_state.max_hand_size = max_hand_size;
+        Ok(())
+    }
+
+    /// Returns a player's current mana pool.
+    pub fn mana_pool(&self, player: PlayerId) -> Result<ManaPool, StateError> {
+        Ok(self
+            .players
+            .get(player.index())
+            .ok_or(StateError::UnknownPlayer(player))?
+            .mana_pool)
+    }
+
+    /// Adds mana to a player's pool.
+    pub fn add_mana_to_pool(&mut self, player: PlayerId, mana: ManaPool) -> Result<(), StateError> {
+        let player_state = self
+            .players
+            .get_mut(player.index())
+            .ok_or(StateError::UnknownPlayer(player))?;
+        player_state.mana_pool = player_state
+            .mana_pool
+            .checked_add(mana)
+            .ok_or(StateError::ManaValueOverflow)?;
+        Ok(())
+    }
+
+    /// Clears one player's mana pool.
+    pub fn clear_mana_pool(&mut self, player: PlayerId) -> Result<(), StateError> {
+        let player_state = self
+            .players
+            .get_mut(player.index())
+            .ok_or(StateError::UnknownPlayer(player))?;
+        player_state.mana_pool = ManaPool::empty();
+        Ok(())
+    }
+
+    /// Enumerates payment plans for one player's current mana pool.
+    pub fn payment_plans_for_player(
+        &self,
+        player: PlayerId,
+        cost: ManaCost,
+    ) -> Result<PaymentEnumeration, StateError> {
+        enumerate_payment_plans(self.mana_pool(player)?, cost).map_err(Self::map_payment_error)
+    }
+
+    /// Applies one explicit payment plan to a player's mana pool.
+    pub fn pay_mana(
+        &mut self,
+        player: PlayerId,
+        cost: ManaCost,
+        plan: PaymentPlan,
+    ) -> Result<(), StateError> {
+        let player_state = self
+            .players
+            .get_mut(player.index())
+            .ok_or(StateError::UnknownPlayer(player))?;
+        let canonical = validate_payment_plan(player_state.mana_pool, cost, plan.paid())
+            .map_err(Self::map_payment_error)?;
+        if canonical != plan {
+            return Err(StateError::InvalidPaymentPlan);
+        }
+        player_state.mana_pool = player_state
+            .mana_pool
+            .pay(plan)
+            .map_err(Self::map_payment_error)?;
         Ok(())
     }
 
@@ -1211,6 +1999,7 @@ impl GameState {
             bytes.write_i32(player.life);
             bytes.write_u32(player.poison);
             bytes.write_u32(player.max_hand_size);
+            bytes.write_mana_pool(player.mana_pool);
         }
 
         bytes.write_u32(self.objects.len() as u32);
@@ -1269,6 +2058,7 @@ impl GameState {
             hash.write_i32(player.life);
             hash.write_u32(player.poison);
             hash.write_u32(player.max_hand_size);
+            hash.write_mana_pool(player.mana_pool);
         }
 
         hash.write_u32(self.objects.len() as u32);
@@ -1330,6 +2120,7 @@ impl GameState {
     fn end_step(&mut self, step: Step) {
         self.priority_player = None;
         self.priority_pass_count = 0;
+        self.clear_all_mana_pools();
         if step == Step::EndOfCombat {
             self.expire_end_of_combat_markers();
         }
@@ -1470,6 +2261,20 @@ impl GameState {
     fn grant_priority_after_resolution(&mut self) {
         self.priority_player = self.active_player;
         self.priority_pass_count = 0;
+    }
+
+    fn map_payment_error(error: PaymentError) -> StateError {
+        match error {
+            PaymentError::ManaValueOverflow => StateError::ManaValueOverflow,
+            PaymentError::InsufficientMana => StateError::InsufficientMana,
+            PaymentError::InvalidPaymentPlan => StateError::InvalidPaymentPlan,
+        }
+    }
+
+    fn clear_all_mana_pools(&mut self) {
+        for player in &mut self.players {
+            player.mana_pool = ManaPool::empty();
+        }
     }
 
     fn perform_cleanup_actions(&mut self) -> Result<CleanupReport, StateError> {
@@ -1691,6 +2496,12 @@ impl Fnva64 {
         self.write_u32(report.expired_this_turn);
     }
 
+    fn write_mana_pool(&mut self, pool: ManaPool) {
+        for amount in pool.amounts {
+            self.write_u32(amount);
+        }
+    }
+
     fn write_zone_id(&mut self, zone: ZoneId) {
         self.write_u8(zone.kind.canonical_code());
         match zone.owner {
@@ -1794,6 +2605,12 @@ impl CanonicalBytes {
         self.write_u32(report.expired_this_turn);
     }
 
+    fn write_mana_pool(&mut self, pool: ManaPool) {
+        for amount in pool.amounts {
+            self.write_u32(amount);
+        }
+    }
+
     fn write_zone_id(&mut self, zone: ZoneId) {
         self.write_u8(zone.kind.canonical_code());
         match zone.owner {
@@ -1844,9 +2661,11 @@ impl CanonicalBytes {
 #[cfg(test)]
 mod tests {
     use super::{
-        crate_ready, CardId, EffectDuration, GameState, Phase, PlayerId, PriorityOutcome,
-        StackEntryId, StackObjectKind, StateError, Step, ZoneConservation, ZoneId, ZoneKind,
-        NORMAL_TURN_STEPS,
+        auto_payment_plan, crate_ready, enumerate_auto_tap_payment_plans, enumerate_payment_plans,
+        validate_payment_plan, CardId, EffectDuration, GameState, ManaCost, ManaKind, ManaPool,
+        ManaSource, PaymentError, Phase, PlayerId, PriorityOutcome, StackEntryId, StackObjectKind,
+        StateError, Step, ZoneConservation, ZoneId, ZoneKind, NORMAL_TURN_STEPS,
+        PAYMENT_PLAN_LIMIT,
     };
 
     #[test]
@@ -1947,6 +2766,223 @@ mod tests {
                 None,
                 ZoneKind::Hand
             )))
+        );
+    }
+
+    #[test]
+    fn insufficient_colored_mana_has_no_payment_plans() {
+        let available = ManaPool::new(0, 0, 0, 0, 0, 5);
+        let cost = ManaCost::new(0, 0, 0, 1, 0, 1);
+
+        let plans = enumerate_payment_plans(available, cost)
+            .unwrap_or_else(|error| panic!("unexpected payment error: {error:?}"));
+
+        assert!(plans.plans().is_empty());
+        assert!(!plans.truncated());
+    }
+
+    #[test]
+    fn generic_cost_uses_colorless_before_colored_mana() {
+        let available = ManaPool::new(1, 1, 0, 1, 0, 2);
+        let cost = ManaCost::new(0, 0, 0, 1, 0, 2);
+
+        let plans = enumerate_payment_plans(available, cost)
+            .unwrap_or_else(|error| panic!("unexpected payment error: {error:?}"));
+        let best = plans
+            .best()
+            .unwrap_or_else(|| panic!("missing best payment plan"));
+
+        assert_eq!(best.paid(), ManaPool::new(0, 0, 0, 1, 0, 2));
+        assert_eq!(best.generic_paid(), ManaPool::new(0, 0, 0, 0, 0, 2));
+        assert_eq!(best.waste_score(), 0);
+        assert!(plans
+            .plans()
+            .windows(2)
+            .all(|window| window[0].waste_score() <= window[1].waste_score()));
+    }
+
+    #[test]
+    fn x_cost_is_added_to_generic_requirement() {
+        let available = ManaPool::new(0, 0, 0, 1, 0, 4);
+        let cost = ManaCost::new(0, 0, 0, 1, 0, 1).with_x(1, 3);
+
+        let best = auto_payment_plan(available, cost)
+            .unwrap_or_else(|error| panic!("unexpected payment error: {error:?}"))
+            .unwrap_or_else(|| panic!("missing best payment plan"));
+
+        assert_eq!(best.x_value(), 3);
+        assert_eq!(best.generic_required(), 4);
+        assert_eq!(best.paid(), available);
+    }
+
+    #[test]
+    fn x_cost_overflow_is_reported() {
+        let cost = ManaCost::new(0, 0, 0, 0, 0, 0).with_x(u32::MAX, 2);
+
+        assert_eq!(
+            enumerate_payment_plans(ManaPool::empty(), cost),
+            Err(PaymentError::ManaValueOverflow)
+        );
+    }
+
+    #[test]
+    fn explicit_payment_plan_is_validated_and_applied() {
+        let mut state = GameState::new();
+        let player = state.add_player();
+        let available = ManaPool::new(0, 1, 0, 1, 0, 2);
+        let cost = ManaCost::new(0, 1, 0, 0, 0, 2);
+        state
+            .add_mana_to_pool(player, available)
+            .unwrap_or_else(|error| panic!("unexpected add mana error: {error:?}"));
+        let plan = validate_payment_plan(available, cost, ManaPool::new(0, 1, 0, 1, 0, 1))
+            .unwrap_or_else(|error| panic!("unexpected plan validation error: {error:?}"));
+
+        state
+            .pay_mana(player, cost, plan)
+            .unwrap_or_else(|error| panic!("unexpected payment error: {error:?}"));
+
+        assert_eq!(
+            state
+                .mana_pool(player)
+                .unwrap_or_else(|error| panic!("unexpected mana pool error: {error:?}")),
+            ManaPool::new(0, 0, 0, 0, 0, 1)
+        );
+    }
+
+    #[test]
+    fn invalid_explicit_payment_is_rejected() {
+        let available = ManaPool::new(0, 0, 0, 1, 0, 2);
+        let cost = ManaCost::new(0, 0, 0, 1, 0, 2);
+
+        assert_eq!(
+            validate_payment_plan(available, cost, ManaPool::new(0, 0, 0, 1, 0, 1)),
+            Err(PaymentError::InvalidPaymentPlan)
+        );
+    }
+
+    #[test]
+    fn payment_enumeration_caps_at_sixty_four_distinct_plans() {
+        let available = ManaPool::new(20, 20, 20, 20, 20, 0);
+        let cost = ManaCost::new(0, 0, 0, 0, 0, 10);
+
+        let plans = enumerate_payment_plans(available, cost)
+            .unwrap_or_else(|error| panic!("unexpected payment error: {error:?}"));
+
+        assert_eq!(plans.plans().len(), PAYMENT_PLAN_LIMIT);
+        assert!(plans.truncated());
+        assert!(plans
+            .plans()
+            .windows(2)
+            .all(|window| window[0].waste_score() <= window[1].waste_score()));
+    }
+
+    #[test]
+    fn auto_tap_prefers_exact_sources_with_minimal_waste() {
+        let mut state = GameState::new();
+        let player = state.add_player();
+        let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+        let red_source = state
+            .create_object(CardId::new(70), player, player, battlefield)
+            .unwrap_or_else(|error| panic!("unexpected create error: {error:?}"));
+        let colorless_source = state
+            .create_object(CardId::new(71), player, player, battlefield)
+            .unwrap_or_else(|error| panic!("unexpected create error: {error:?}"));
+        let green_source = state
+            .create_object(CardId::new(72), player, player, battlefield)
+            .unwrap_or_else(|error| panic!("unexpected create error: {error:?}"));
+        let sources = [
+            ManaSource::new(green_source, ManaPool::of(ManaKind::Green, 1)),
+            ManaSource::new(colorless_source, ManaPool::of(ManaKind::Colorless, 1)),
+            ManaSource::new(red_source, ManaPool::of(ManaKind::Red, 1)),
+        ];
+
+        let plans = enumerate_auto_tap_payment_plans(&sources, ManaCost::new(0, 0, 0, 1, 0, 1))
+            .unwrap_or_else(|error| panic!("unexpected auto-tap error: {error:?}"));
+        let best = plans
+            .best()
+            .unwrap_or_else(|| panic!("missing best auto-tap plan"));
+        let tapped: Vec<_> = best.taps().iter().map(|tap| tap.source()).collect();
+
+        assert_eq!(tapped, vec![red_source, colorless_source]);
+        assert_eq!(best.total_waste_score(), 0);
+        assert_eq!(best.unspent(), ManaPool::empty());
+    }
+
+    #[test]
+    fn auto_tap_keeps_equivalent_sources_distinct() {
+        let mut state = GameState::new();
+        let player = state.add_player();
+        let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+        let first = state
+            .create_object(CardId::new(80), player, player, battlefield)
+            .unwrap_or_else(|error| panic!("unexpected create error: {error:?}"));
+        let second = state
+            .create_object(CardId::new(81), player, player, battlefield)
+            .unwrap_or_else(|error| panic!("unexpected create error: {error:?}"));
+        let sources = [
+            ManaSource::new(first, ManaPool::of(ManaKind::Red, 1)),
+            ManaSource::new(second, ManaPool::of(ManaKind::Red, 1)),
+        ];
+
+        let plans = enumerate_auto_tap_payment_plans(&sources, ManaCost::new(0, 0, 0, 0, 0, 1))
+            .unwrap_or_else(|error| panic!("unexpected auto-tap error: {error:?}"));
+        let one_tap_sources: Vec<_> = plans
+            .plans()
+            .iter()
+            .filter(|plan| plan.taps().len() == 1)
+            .map(|plan| plan.taps()[0].source())
+            .collect();
+
+        assert_eq!(one_tap_sources, vec![first, second]);
+    }
+
+    #[test]
+    fn mana_pool_changes_state_hash_and_matches_streaming_hash() {
+        let mut state = GameState::new();
+        let player = state.add_player();
+        let before = state.deterministic_hash();
+
+        state
+            .add_mana_to_pool(player, ManaPool::of(ManaKind::Green, 1))
+            .unwrap_or_else(|error| panic!("unexpected add mana error: {error:?}"));
+
+        assert_ne!(state.deterministic_hash(), before);
+        assert_eq!(
+            state.deterministic_hash(),
+            state.deterministic_hash_streaming()
+        );
+    }
+
+    #[test]
+    fn mana_pool_empties_when_step_ends() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        state
+            .start_turn(active)
+            .unwrap_or_else(|error| panic!("unexpected start error: {error:?}"));
+        state
+            .advance_step()
+            .unwrap_or_else(|error| panic!("unexpected upkeep advance error: {error:?}"));
+        state
+            .add_mana_to_pool(active, ManaPool::of(ManaKind::Red, 1))
+            .unwrap_or_else(|error| panic!("unexpected add mana error: {error:?}"));
+
+        assert_eq!(
+            state
+                .mana_pool(active)
+                .unwrap_or_else(|error| panic!("unexpected mana pool error: {error:?}")),
+            ManaPool::of(ManaKind::Red, 1)
+        );
+
+        state
+            .pass_priority(active)
+            .unwrap_or_else(|error| panic!("unexpected pass error: {error:?}"));
+
+        assert_eq!(
+            state
+                .mana_pool(active)
+                .unwrap_or_else(|error| panic!("unexpected mana pool error: {error:?}")),
+            ManaPool::empty()
         );
     }
 

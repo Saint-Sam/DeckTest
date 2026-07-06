@@ -1,0 +1,27 @@
+id: T1.4
+title: Mana system with explicit payment and auto-tap plans
+tier: 1
+tags:
+  - kernel
+  - mana
+  - payment
+  - deterministic-state
+scope_paths:
+  - crates/forge-core/src/lib.rs
+inputs:
+  - FORGE_REBUILD_MASTER_PLAN.md Section 6 T1.4
+acceptance:
+  - mana pools track WUBRG and colorless amounts per player
+  - mana costs support colored pips, generic costs, and checked X costs
+  - explicit payment plans validate exact colored and generic requirements
+  - payment enumeration returns at most 64 distinct plans
+  - payment enumeration orders colorless generic payment before colored generic payment
+  - source-level auto-tap plans include deterministic tap lists and unspent mana
+  - equivalent mana sources remain distinct by source object
+  - mana pools are included in canonical bytes and streaming state hashes
+  - mana pools empty when a step or phase segment ends
+verify: cargo test -p forge-core && cargo clippy -p forge-core --all-targets -- -D warnings && scripts/vl.sh
+retry_policy: 3 attempts then blocker
+depends_on:
+  - T1.3
+parallel_ok: false
