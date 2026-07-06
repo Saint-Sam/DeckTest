@@ -40,10 +40,10 @@
       "bundle": "reports/gates/T0/bundle",
       "signoff": "reports/gates/T0/SIGNOFF.md",
       "remediation": {
-        "T0.R1": "remote GitHub CI evidence required",
-        "T0.R2": "T0 gate Owner Brief required",
-        "T0.R3": "regenerate bundle with current PLAN_STATE",
-        "T0.R4": "fresh-clone gate run after first commit"
+        "T0.R1": "pending: remote GitHub CI evidence required",
+        "T0.R2": "complete: T0 gate Owner Brief created",
+        "T0.R3": "complete: bundle regenerated with current PLAN_STATE",
+        "T0.R4": "complete: fresh-clone gate passed from commit 93cad32"
       }
     }
   },
