@@ -1,0 +1,29 @@
+id: T1.5
+title: Casting pipeline with target legality snapshots
+tier: 1
+tags:
+  - kernel
+  - casting
+  - targets
+  - stack
+  - deterministic-state
+scope_paths:
+  - crates/forge-core/src/lib.rs
+inputs:
+  - FORGE_REBUILD_MASTER_PLAN.md Section 6 T1.5
+  - docs/vendor/comprehensive-rules.txt rules 115, 117, 601, and 608.2b
+acceptance:
+  - cast_spell validates priority, source zone, timing, targets, and payment before mutating state
+  - failed target announcement leaves canonical state unchanged
+  - failed explicit payment leaves canonical state unchanged
+  - instant timing is accepted with priority and sorcery timing requires active main phase with empty stack
+  - stack entries record target requirements, selected targets, original target zones, and payment metadata
+  - resolution rechecks target snapshots
+  - all targets illegal on resolution counters the spell by game rules and moves it to the owner's graveyard
+  - at least one legal target allows resolution and records a legal-target mask
+  - target choices affect canonical bytes and streaming state hashes
+verify: cargo test -p forge-core && cargo clippy -p forge-core --all-targets -- -D warnings && scripts/vl.sh
+retry_policy: 3 attempts then blocker
+depends_on:
+  - T1.4
+parallel_ok: false

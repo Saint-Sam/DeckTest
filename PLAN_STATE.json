@@ -50,8 +50,14 @@
       "remote_ci": "GitHub Actions ci #8 run 28820393577 passed all required jobs for commit 41fccc0"
     },
     "T1.4": {
-      "status": "verified_local",
+      "status": "verified_remote",
       "branch": "task/T1.4-mana-payment",
+      "attempts": 0,
+      "remote_ci": "GitHub Actions ci #9 run 28821155679 passed all required jobs for commit be950cc"
+    },
+    "T1.5": {
+      "status": "verified_local",
+      "branch": "task/T1.5-casting-pipeline",
       "attempts": 0
     }
   },

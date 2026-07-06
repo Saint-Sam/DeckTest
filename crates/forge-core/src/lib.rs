@@ -1084,73 +1084,301 @@ impl StackObjectKind {
     }
 }
 
+/// Timing permission used by the T1.5 casting pipeline.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum SpellTiming {
+    /// Castable whenever the player has priority.
+    Instant,
+    /// Castable only during the active player's main phase with an empty stack.
+    Sorcery,
+}
+
+/// A target category understood by the T1.5 casting pipeline.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum TargetKind {
+    /// A player in the game.
+    Player,
+    /// An object currently on the battlefield.
+    Permanent,
+    /// An object currently in a specific zone.
+    ObjectInZone(ZoneId),
+}
+
+impl TargetKind {
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::Player => 0,
+            Self::Permanent => 1,
+            Self::ObjectInZone(_) => 2,
+        }
+    }
+}
+
+/// One required target slot for a spell.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct TargetRequirement {
+    kind: TargetKind,
+}
+
+impl TargetRequirement {
+    /// Creates a target requirement.
+    #[must_use]
+    pub const fn new(kind: TargetKind) -> Self {
+        Self { kind }
+    }
+
+    /// Returns the required target category.
+    #[must_use]
+    pub const fn kind(self) -> TargetKind {
+        self.kind
+    }
+}
+
+/// A selected spell target.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum TargetChoice {
+    /// A targeted player.
+    Player(PlayerId),
+    /// A targeted game object.
+    Object(ObjectId),
+}
+
+impl TargetChoice {
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::Player(_) => 0,
+            Self::Object(_) => 1,
+        }
+    }
+}
+
+/// Legality snapshot captured as a spell is cast.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct TargetSnapshot {
+    requirement: TargetRequirement,
+    choice: TargetChoice,
+    original_zone: Option<ZoneId>,
+}
+
+impl TargetSnapshot {
+    /// Returns the target requirement.
+    #[must_use]
+    pub const fn requirement(self) -> TargetRequirement {
+        self.requirement
+    }
+
+    /// Returns the selected target.
+    #[must_use]
+    pub const fn choice(self) -> TargetChoice {
+        self.choice
+    }
+
+    /// Returns the object zone captured when the target was selected.
+    #[must_use]
+    pub const fn original_zone(self) -> Option<ZoneId> {
+        self.original_zone
+    }
+}
+
+/// Request object for casting one spell.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CastSpellRequest {
+    kind: StackObjectKind,
+    timing: SpellTiming,
+    cost: ManaCost,
+    payment: PaymentPlan,
+    target_requirements: Vec<TargetRequirement>,
+    target_choices: Vec<TargetChoice>,
+}
+
+impl CastSpellRequest {
+    /// Creates a spell-casting request with no targets.
+    #[must_use]
+    pub fn new(
+        kind: StackObjectKind,
+        timing: SpellTiming,
+        cost: ManaCost,
+        payment: PaymentPlan,
+    ) -> Self {
+        Self {
+            kind,
+            timing,
+            cost,
+            payment,
+            target_requirements: Vec::new(),
+            target_choices: Vec::new(),
+        }
+    }
+
+    /// Adds target requirements and selected targets.
+    #[must_use]
+    pub fn with_targets(
+        mut self,
+        target_requirements: Vec<TargetRequirement>,
+        target_choices: Vec<TargetChoice>,
+    ) -> Self {
+        self.target_requirements = target_requirements;
+        self.target_choices = target_choices;
+        self
+    }
+
+    /// Returns the stack-object kind that will be created.
+    #[must_use]
+    pub const fn kind(&self) -> StackObjectKind {
+        self.kind
+    }
+
+    /// Returns the timing permission used for this cast.
+    #[must_use]
+    pub const fn timing(&self) -> SpellTiming {
+        self.timing
+    }
+
+    /// Returns the total mana cost to pay.
+    #[must_use]
+    pub const fn cost(&self) -> ManaCost {
+        self.cost
+    }
+
+    /// Returns the explicit payment plan.
+    #[must_use]
+    pub const fn payment(&self) -> PaymentPlan {
+        self.payment
+    }
+
+    /// Returns target requirements.
+    #[must_use]
+    pub fn target_requirements(&self) -> &[TargetRequirement] {
+        &self.target_requirements
+    }
+
+    /// Returns selected targets.
+    #[must_use]
+    pub fn target_choices(&self) -> &[TargetChoice] {
+        &self.target_choices
+    }
+}
+
+/// Outcome recorded when a stack entry leaves the stack.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum ResolutionOutcome {
+    /// The entry resolved normally.
+    Resolved,
+    /// The entry had targets and all of them were illegal on resolution.
+    CounteredOnResolution,
+}
+
+impl ResolutionOutcome {
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::Resolved => 0,
+            Self::CounteredOnResolution => 1,
+        }
+    }
+}
+
 /// One spell or ability waiting on the stack.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct StackEntry {
     id: StackEntryId,
     controller: PlayerId,
     object: Option<ObjectId>,
     kind: StackObjectKind,
+    targets: Vec<TargetSnapshot>,
+    payment: Option<PaymentPlan>,
 }
 
 impl StackEntry {
     /// Returns the stable stack-entry ID.
     #[must_use]
-    pub const fn id(self) -> StackEntryId {
+    pub const fn id(&self) -> StackEntryId {
         self.id
     }
 
     /// Returns the controller of the spell or ability on the stack.
     #[must_use]
-    pub const fn controller(self) -> PlayerId {
+    pub const fn controller(&self) -> PlayerId {
         self.controller
     }
 
     /// Returns the physical object on the stack, if this entry is a spell.
     #[must_use]
-    pub const fn object(self) -> Option<ObjectId> {
+    pub const fn object(&self) -> Option<ObjectId> {
         self.object
     }
 
     /// Returns the coarse stack-object kind.
     #[must_use]
-    pub const fn kind(self) -> StackObjectKind {
+    pub const fn kind(&self) -> StackObjectKind {
         self.kind
+    }
+
+    /// Returns target snapshots captured as this entry was put on the stack.
+    #[must_use]
+    pub fn targets(&self) -> &[TargetSnapshot] {
+        &self.targets
+    }
+
+    /// Returns the payment plan used to cast this spell, if any.
+    #[must_use]
+    pub const fn payment(&self) -> Option<PaymentPlan> {
+        self.payment
     }
 }
 
 /// Record of a stack object that resolved.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ResolutionRecord {
     stack_entry: StackEntryId,
     controller: PlayerId,
     object: Option<ObjectId>,
     kind: StackObjectKind,
+    targets: Vec<TargetSnapshot>,
+    legal_targets: Vec<bool>,
+    outcome: ResolutionOutcome,
 }
 
 impl ResolutionRecord {
     /// Returns the stack-entry ID that resolved.
     #[must_use]
-    pub const fn stack_entry(self) -> StackEntryId {
+    pub const fn stack_entry(&self) -> StackEntryId {
         self.stack_entry
     }
 
     /// Returns the controller of the resolved entry.
     #[must_use]
-    pub const fn controller(self) -> PlayerId {
+    pub const fn controller(&self) -> PlayerId {
         self.controller
     }
 
     /// Returns the physical object that resolved, if any.
     #[must_use]
-    pub const fn object(self) -> Option<ObjectId> {
+    pub const fn object(&self) -> Option<ObjectId> {
         self.object
     }
 
     /// Returns the resolved stack-object kind.
     #[must_use]
-    pub const fn kind(self) -> StackObjectKind {
+    pub const fn kind(&self) -> StackObjectKind {
         self.kind
+    }
+
+    /// Returns target snapshots captured for the entry.
+    #[must_use]
+    pub fn targets(&self) -> &[TargetSnapshot] {
+        &self.targets
+    }
+
+    /// Returns whether each target was legal when the entry resolved.
+    #[must_use]
+    pub fn legal_targets(&self) -> &[bool] {
+        &self.legal_targets
+    }
+
+    /// Returns whether the entry resolved or was countered by game rules.
+    #[must_use]
+    pub const fn outcome(&self) -> ResolutionOutcome {
+        self.outcome
     }
 }
 
@@ -1413,6 +1641,24 @@ pub enum StateError {
     InsufficientMana,
     /// A proposed explicit payment does not satisfy the cost.
     InvalidPaymentPlan,
+    /// The object cannot be cast from its current zone by that player.
+    ObjectNotCastable(ObjectId),
+    /// The requested spell cannot be cast at the current time.
+    InvalidSpellTiming,
+    /// Target requirements and selected targets have different lengths.
+    TargetCountMismatch {
+        /// Number of target slots required by the spell.
+        required: u32,
+        /// Number of targets selected by the player.
+        selected: u32,
+    },
+    /// A selected target is not legal while the spell is being announced.
+    IllegalTarget {
+        /// Zero-based target slot.
+        index: u32,
+        /// Target that failed legality.
+        target: TargetChoice,
+    },
 }
 
 /// Complete T1 game state.
@@ -1566,7 +1812,7 @@ impl GameState {
     /// Returns the current top stack entry.
     #[must_use]
     pub fn stack_top(&self) -> Option<StackEntry> {
-        self.stack_entries.last().copied()
+        self.stack_entries.last().cloned()
     }
 
     /// Returns resolved stack entries in resolution order.
@@ -1754,7 +2000,62 @@ impl GameState {
         }
     }
 
+    /// Casts a spell through the T1.5 CR 601 pipeline.
+    ///
+    /// This validates priority, timing, targets, and the explicit mana payment
+    /// before mutating state. On success, the spell object moves to the stack,
+    /// target legality snapshots are captured, costs are paid, and priority
+    /// returns to the caster.
+    pub fn cast_spell(
+        &mut self,
+        player: PlayerId,
+        object: ObjectId,
+        request: CastSpellRequest,
+    ) -> Result<StackEntryId, StateError> {
+        self.require_priority_player(player)?;
+        self.require_player(player)?;
+        let record = self
+            .objects
+            .get(object)
+            .ok_or(StateError::UnknownObject(object))?;
+        if record.controller() != player
+            || self.object_zone(object) != Some(ZoneId::new(Some(player), ZoneKind::Hand))
+        {
+            return Err(StateError::ObjectNotCastable(object));
+        }
+        if !self.can_cast_with_timing(player, request.timing()) {
+            return Err(StateError::InvalidSpellTiming);
+        }
+        let target_snapshots =
+            self.capture_target_snapshots(request.target_requirements(), request.target_choices())?;
+        let canonical_payment = validate_payment_plan(
+            self.mana_pool(player)?,
+            request.cost(),
+            request.payment().paid(),
+        )
+        .map_err(Self::map_payment_error)?;
+        if canonical_payment != request.payment() {
+            return Err(StateError::InvalidPaymentPlan);
+        }
+
+        self.pay_mana(player, request.cost(), request.payment())?;
+        self.move_object(object, ZoneId::new(None, ZoneKind::Stack))?;
+        let id = self.push_stack_entry(
+            player,
+            Some(object),
+            request.kind(),
+            target_snapshots,
+            Some(request.payment()),
+        );
+        self.after_priority_action(player, true);
+        Ok(id)
+    }
+
     /// Puts a spell object on the stack for the current priority player.
+    ///
+    /// This is a low-level stack helper retained for priority and stack tests.
+    /// Use [`GameState::cast_spell`] for CR 601 legality, target, and payment
+    /// validation.
     ///
     /// When `hold_priority` is true, priority remains with the caster as an
     /// explicit full-control choice. T1.3 keeps the same result either way
@@ -1775,7 +2076,7 @@ impl GameState {
         if self.object_zone(object) != Some(stack_zone) {
             self.move_object(object, stack_zone)?;
         }
-        let id = self.push_stack_entry(player, Some(object), kind);
+        let id = self.push_stack_entry(player, Some(object), kind, Vec::new(), None);
         self.after_priority_action(player, hold_priority);
         Ok(id)
     }
@@ -1789,7 +2090,7 @@ impl GameState {
     ) -> Result<StackEntryId, StateError> {
         self.require_priority_player(player)?;
         self.require_player(player)?;
-        let id = self.push_stack_entry(player, None, kind);
+        let id = self.push_stack_entry(player, None, kind, Vec::new(), None);
         self.after_priority_action(player, hold_priority);
         Ok(id)
     }
@@ -1812,7 +2113,7 @@ impl GameState {
         for player in self.apnap_players(active)? {
             for ability_controller in abilities {
                 if *ability_controller == player {
-                    ids.push(self.push_stack_entry(player, None, kind));
+                    ids.push(self.push_stack_entry(player, None, kind, Vec::new(), None));
                 }
             }
         }
@@ -2028,11 +2329,11 @@ impl GameState {
         bytes.write_u32(self.next_stack_entry);
         bytes.write_u32(self.stack_entries.len() as u32);
         for entry in &self.stack_entries {
-            bytes.write_stack_entry(*entry);
+            bytes.write_stack_entry(entry);
         }
         bytes.write_u32(self.resolution_log.len() as u32);
         for resolution in &self.resolution_log {
-            bytes.write_resolution_record(*resolution);
+            bytes.write_resolution_record(resolution);
         }
         bytes.finish()
     }
@@ -2088,11 +2389,11 @@ impl GameState {
         hash.write_u32(self.next_stack_entry);
         hash.write_u32(self.stack_entries.len() as u32);
         for entry in &self.stack_entries {
-            hash.write_stack_entry(*entry);
+            hash.write_stack_entry(entry);
         }
         hash.write_u32(self.resolution_log.len() as u32);
         for resolution in &self.resolution_log {
-            hash.write_resolution_record(*resolution);
+            hash.write_resolution_record(resolution);
         }
 
         StateHash(hash.finish())
@@ -2208,11 +2509,93 @@ impl GameState {
         self.priority_pass_count = 0;
     }
 
+    fn can_cast_with_timing(&self, player: PlayerId, timing: SpellTiming) -> bool {
+        match timing {
+            SpellTiming::Instant => true,
+            SpellTiming::Sorcery => {
+                self.active_player == Some(player)
+                    && matches!(
+                        self.current_step,
+                        Some(Step::PrecombatMain | Step::PostcombatMain)
+                    )
+                    && self.stack_entries.is_empty()
+            }
+        }
+    }
+
+    fn capture_target_snapshots(
+        &self,
+        requirements: &[TargetRequirement],
+        choices: &[TargetChoice],
+    ) -> Result<Vec<TargetSnapshot>, StateError> {
+        if requirements.len() != choices.len() {
+            return Err(StateError::TargetCountMismatch {
+                required: requirements.len() as u32,
+                selected: choices.len() as u32,
+            });
+        }
+        let mut snapshots = Vec::with_capacity(requirements.len());
+        for (index, (requirement, choice)) in requirements.iter().zip(choices.iter()).enumerate() {
+            if !self.is_target_legal_at_cast(*requirement, *choice) {
+                return Err(StateError::IllegalTarget {
+                    index: index as u32,
+                    target: *choice,
+                });
+            }
+            snapshots.push(TargetSnapshot {
+                requirement: *requirement,
+                choice: *choice,
+                original_zone: match choice {
+                    TargetChoice::Object(object) => self.object_zone(*object),
+                    TargetChoice::Player(_) => None,
+                },
+            });
+        }
+        Ok(snapshots)
+    }
+
+    fn is_target_legal_at_cast(
+        &self,
+        requirement: TargetRequirement,
+        choice: TargetChoice,
+    ) -> bool {
+        match (requirement.kind(), choice) {
+            (TargetKind::Player, TargetChoice::Player(player)) => {
+                self.require_player(player).is_ok()
+            }
+            (TargetKind::Permanent, TargetChoice::Object(object)) => {
+                self.object_zone(object) == Some(ZoneId::new(None, ZoneKind::Battlefield))
+            }
+            (TargetKind::ObjectInZone(zone), TargetChoice::Object(object)) => {
+                self.object_zone(object) == Some(zone)
+            }
+            (TargetKind::Player, TargetChoice::Object(_))
+            | (TargetKind::Permanent | TargetKind::ObjectInZone(_), TargetChoice::Player(_)) => {
+                false
+            }
+        }
+    }
+
+    fn is_target_still_legal(&self, snapshot: TargetSnapshot) -> bool {
+        match snapshot.choice {
+            TargetChoice::Player(player) => {
+                snapshot.requirement.kind() == TargetKind::Player
+                    && self.require_player(player).is_ok()
+            }
+            TargetChoice::Object(object) => {
+                self.object_zone(object) == snapshot.original_zone
+                    && self.is_target_legal_at_cast(snapshot.requirement, snapshot.choice)
+            }
+        }
+    }
+
     fn push_stack_entry(
         &mut self,
         controller: PlayerId,
         object: Option<ObjectId>,
         kind: StackObjectKind,
+        targets: Vec<TargetSnapshot>,
+        payment: Option<PaymentPlan>,
     ) -> StackEntryId {
         let id = StackEntryId(self.next_stack_entry);
         self.next_stack_entry = self.next_stack_entry.saturating_add(1);
@@ -2221,18 +2604,37 @@ impl GameState {
             controller,
             object,
             kind,
+            targets,
+            payment,
         });
         id
     }
 
     fn resolve_top_stack_entry(&mut self) -> Result<StackEntryId, StateError> {
-        let entry = self.stack_entries.pop().ok_or(StateError::EmptyStack)?;
-        if let Some(object) = entry.object {
+        let entry = self
+            .stack_entries
+            .last()
+            .cloned()
+            .ok_or(StateError::EmptyStack)?;
+        if let Some(object) = entry.object() {
             if self.object_zone(object) != Some(ZoneId::new(None, ZoneKind::Stack)) {
                 return Err(StateError::StackObjectNotOnStack(object));
             }
-            let destination = match entry.kind {
-                StackObjectKind::InstantSpell | StackObjectKind::SorcerySpell => {
+        }
+        let legal_targets: Vec<bool> = entry
+            .targets()
+            .iter()
+            .map(|target| self.is_target_still_legal(*target))
+            .collect();
+        let outcome = if !legal_targets.is_empty() && legal_targets.iter().all(|legal| !*legal) {
+            ResolutionOutcome::CounteredOnResolution
+        } else {
+            ResolutionOutcome::Resolved
+        };
+        let entry = self.stack_entries.pop().ok_or(StateError::EmptyStack)?;
+        if let Some(object) = entry.object() {
+            let destination = match outcome {
+                ResolutionOutcome::CounteredOnResolution => {
                     let owner = self
                         .objects
                         .get(object)
@@ -2240,22 +2642,35 @@ impl GameState {
                         .owner();
                     ZoneId::new(Some(owner), ZoneKind::Graveyard)
                 }
-                StackObjectKind::PermanentSpell => ZoneId::new(None, ZoneKind::Battlefield),
-                StackObjectKind::ActivatedAbility | StackObjectKind::TriggeredAbility => {
-                    ZoneId::new(None, ZoneKind::Stack)
-                }
+                ResolutionOutcome::Resolved => match entry.kind() {
+                    StackObjectKind::InstantSpell | StackObjectKind::SorcerySpell => {
+                        let owner = self
+                            .objects
+                            .get(object)
+                            .ok_or(StateError::UnknownObject(object))?
+                            .owner();
+                        ZoneId::new(Some(owner), ZoneKind::Graveyard)
+                    }
+                    StackObjectKind::PermanentSpell => ZoneId::new(None, ZoneKind::Battlefield),
+                    StackObjectKind::ActivatedAbility | StackObjectKind::TriggeredAbility => {
+                        ZoneId::new(None, ZoneKind::Stack)
+                    }
+                },
             };
             if destination != ZoneId::new(None, ZoneKind::Stack) {
                 self.move_object(object, destination)?;
             }
         }
         self.resolution_log.push(ResolutionRecord {
-            stack_entry: entry.id,
-            controller: entry.controller,
-            object: entry.object,
-            kind: entry.kind,
+            stack_entry: entry.id(),
+            controller: entry.controller(),
+            object: entry.object(),
+            kind: entry.kind(),
+            targets: entry.targets().to_vec(),
+            legal_targets,
+            outcome,
         });
-        Ok(entry.id)
+        Ok(entry.id())
     }
 
     fn grant_priority_after_resolution(&mut self) {
@@ -2534,18 +2949,85 @@ impl Fnva64 {
         }
     }
 
-    fn write_stack_entry(&mut self, entry: StackEntry) {
+    fn write_target_kind(&mut self, kind: TargetKind) {
+        self.write_u8(kind.canonical_code());
+        if let TargetKind::ObjectInZone(zone) = kind {
+            self.write_zone_id(zone);
+        }
+    }
+
+    fn write_target_requirement(&mut self, requirement: TargetRequirement) {
+        self.write_target_kind(requirement.kind);
+    }
+
+    fn write_target_choice(&mut self, choice: TargetChoice) {
+        self.write_u8(choice.canonical_code());
+        match choice {
+            TargetChoice::Player(player) => self.write_u32(player.0),
+            TargetChoice::Object(object) => self.write_u32(object.0),
+        }
+    }
+
+    fn write_optional_zone(&mut self, zone: Option<ZoneId>) {
+        match zone {
+            Some(zone) => {
+                self.write_u8(1);
+                self.write_zone_id(zone);
+            }
+            None => self.write_u8(0),
+        }
+    }
+
+    fn write_target_snapshot(&mut self, target: TargetSnapshot) {
+        self.write_target_requirement(target.requirement);
+        self.write_target_choice(target.choice);
+        self.write_optional_zone(target.original_zone);
+    }
+
+    fn write_payment_plan(&mut self, payment: PaymentPlan) {
+        self.write_mana_pool(payment.paid);
+        self.write_mana_pool(payment.generic_paid);
+        self.write_u32(payment.generic_required);
+        self.write_u32(payment.x_value);
+        self.write_u32(payment.waste_score);
+    }
+
+    fn write_optional_payment_plan(&mut self, payment: Option<PaymentPlan>) {
+        match payment {
+            Some(payment) => {
+                self.write_u8(1);
+                self.write_payment_plan(payment);
+            }
+            None => self.write_u8(0),
+        }
+    }
+
+    fn write_stack_entry(&mut self, entry: &StackEntry) {
         self.write_u32(entry.id.0);
         self.write_u32(entry.controller.0);
         self.write_optional_object(entry.object);
         self.write_u8(entry.kind.canonical_code());
+        self.write_u32(entry.targets.len() as u32);
+        for target in &entry.targets {
+            self.write_target_snapshot(*target);
+        }
+        self.write_optional_payment_plan(entry.payment);
     }
 
-    fn write_resolution_record(&mut self, record: ResolutionRecord) {
+    fn write_resolution_record(&mut self, record: &ResolutionRecord) {
         self.write_u32(record.stack_entry.0);
         self.write_u32(record.controller.0);
         self.write_optional_object(record.object);
         self.write_u8(record.kind.canonical_code());
+        self.write_u32(record.targets.len() as u32);
+        for target in &record.targets {
+            self.write_target_snapshot(*target);
+        }
+        self.write_u32(record.legal_targets.len() as u32);
+        for legal in &record.legal_targets {
+            self.write_bool(*legal);
+        }
+        self.write_u8(record.outcome.canonical_code());
     }
 }
 
@@ -2643,18 +3125,85 @@ impl CanonicalBytes {
         }
     }
 
-    fn write_stack_entry(&mut self, entry: StackEntry) {
+    fn write_target_kind(&mut self, kind: TargetKind) {
+        self.write_u8(kind.canonical_code());
+        if let TargetKind::ObjectInZone(zone) = kind {
+            self.write_zone_id(zone);
+        }
+    }
+
+    fn write_target_requirement(&mut self, requirement: TargetRequirement) {
+        self.write_target_kind(requirement.kind);
+    }
+
+    fn write_target_choice(&mut self, choice: TargetChoice) {
+        self.write_u8(choice.canonical_code());
+        match choice {
+            TargetChoice::Player(player) => self.write_u32(player.0),
+            TargetChoice::Object(object) => self.write_u32(object.0),
+        }
+    }
+
+    fn write_optional_zone(&mut self, zone: Option<ZoneId>) {
+        match zone {
+            Some(zone) => {
+                self.write_u8(1);
+                self.write_zone_id(zone);
+            }
+            None => self.write_u8(0),
+        }
+    }
+
+    fn write_target_snapshot(&mut self, target: TargetSnapshot) {
+        self.write_target_requirement(target.requirement);
+        self.write_target_choice(target.choice);
+        self.write_optional_zone(target.original_zone);
+    }
+
+    fn write_payment_plan(&mut self, payment: PaymentPlan) {
+        self.write_mana_pool(payment.paid);
+        self.write_mana_pool(payment.generic_paid);
+        self.write_u32(payment.generic_required);
+        self.write_u32(payment.x_value);
+        self.write_u32(payment.waste_score);
+    }
+
+    fn write_optional_payment_plan(&mut self, payment: Option<PaymentPlan>) {
+        match payment {
+            Some(payment) => {
+                self.write_u8(1);
+                self.write_payment_plan(payment);
+            }
+            None => self.write_u8(0),
+        }
+    }
+
+    fn write_stack_entry(&mut self, entry: &StackEntry) {
         self.write_u32(entry.id.0);
         self.write_u32(entry.controller.0);
         self.write_optional_object(entry.object);
         self.write_u8(entry.kind.canonical_code());
+        self.write_u32(entry.targets.len() as u32);
+        for target in &entry.targets {
+            self.write_target_snapshot(*target);
+        }
+        self.write_optional_payment_plan(entry.payment);
     }
 
-    fn write_resolution_record(&mut self, record: ResolutionRecord) {
+    fn write_resolution_record(&mut self, record: &ResolutionRecord) {
         self.write_u32(record.stack_entry.0);
         self.write_u32(record.controller.0);
         self.write_optional_object(record.object);
         self.write_u8(record.kind.canonical_code());
+        self.write_u32(record.targets.len() as u32);
+        for target in &record.targets {
+            self.write_target_snapshot(*target);
+        }
+        self.write_u32(record.legal_targets.len() as u32);
+        for legal in &record.legal_targets {
+            self.write_bool(*legal);
+        }
+        self.write_u8(record.outcome.canonical_code());
     }
 }
 
@@ -2662,10 +3211,11 @@ impl CanonicalBytes {
 mod tests {
     use super::{
         auto_payment_plan, crate_ready, enumerate_auto_tap_payment_plans, enumerate_payment_plans,
-        validate_payment_plan, CardId, EffectDuration, GameState, ManaCost, ManaKind, ManaPool,
-        ManaSource, PaymentError, Phase, PlayerId, PriorityOutcome, StackEntryId, StackObjectKind,
-        StateError, Step, ZoneConservation, ZoneId, ZoneKind, NORMAL_TURN_STEPS,
-        PAYMENT_PLAN_LIMIT,
+        validate_payment_plan, CardId, CastSpellRequest, EffectDuration, GameState, ManaCost,
+        ManaKind, ManaPool, ManaSource, PaymentError, Phase, PlayerId, PriorityOutcome,
+        ResolutionOutcome, SpellTiming, StackEntryId, StackObjectKind, StateError, Step,
+        TargetChoice, TargetKind, TargetRequirement, ZoneConservation, ZoneId, ZoneKind,
+        NORMAL_TURN_STEPS, PAYMENT_PLAN_LIMIT,
     };
 
     #[test]
@@ -2984,6 +3534,345 @@ mod tests {
                 .unwrap_or_else(|error| panic!("unexpected mana pool error: {error:?}")),
             ManaPool::empty()
         );
+    }
+
+    #[test]
+    fn successful_instant_cast_pays_cost_and_records_target_snapshot() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let hand = ZoneId::new(Some(active), ZoneKind::Hand);
+        let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+        let spell = state
+            .create_object(CardId::new(90), active, active, hand)
+            .unwrap_or_else(|error| panic!("unexpected spell create error: {error:?}"));
+        let target = state
+            .create_object(CardId::new(91), active, active, battlefield)
+            .unwrap_or_else(|error| panic!("unexpected target create error: {error:?}"));
+        start_upkeep(&mut state, active);
+        let cost = ManaCost::new(0, 0, 0, 1, 0, 0);
+        state
+            .add_mana_to_pool(active, ManaPool::of(ManaKind::Red, 1))
+            .unwrap_or_else(|error| panic!("unexpected add mana error: {error:?}"));
+        let payment = validate_payment_plan(
+            state
+                .mana_pool(active)
+                .unwrap_or_else(|error| panic!("unexpected mana pool error: {error:?}")),
+            cost,
+            ManaPool::of(ManaKind::Red, 1),
+        )
+        .unwrap_or_else(|error| panic!("unexpected payment validation error: {error:?}"));
+        let request = CastSpellRequest::new(
+            StackObjectKind::InstantSpell,
+            SpellTiming::Instant,
+            cost,
+            payment,
+        )
+        .with_targets(
+            vec![TargetRequirement::new(TargetKind::Permanent)],
+            vec![TargetChoice::Object(target)],
+        );
+
+        let entry = state
+            .cast_spell(active, spell, request)
+            .unwrap_or_else(|error| panic!("unexpected cast error: {error:?}"));
+
+        assert_eq!(
+            state.object_zone(spell),
+            Some(ZoneId::new(None, ZoneKind::Stack))
+        );
+        assert_eq!(state.priority_player(), Some(active));
+        assert_eq!(
+            state
+                .mana_pool(active)
+                .unwrap_or_else(|error| panic!("unexpected mana pool error: {error:?}")),
+            ManaPool::empty()
+        );
+        let stack_entry = state
+            .stack_top()
+            .unwrap_or_else(|| panic!("missing stack entry"));
+        assert_eq!(stack_entry.id(), entry);
+        assert_eq!(stack_entry.targets().len(), 1);
+        assert_eq!(
+            stack_entry.targets()[0].choice(),
+            TargetChoice::Object(target)
+        );
+        assert_eq!(stack_entry.targets()[0].original_zone(), Some(battlefield));
+        assert_eq!(stack_entry.payment(), Some(payment));
+    }
+
+    #[test]
+    fn illegal_target_during_announcement_leaves_state_unchanged() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let hand = ZoneId::new(Some(active), ZoneKind::Hand);
+        let graveyard = ZoneId::new(Some(active), ZoneKind::Graveyard);
+        let spell = state
+            .create_object(CardId::new(92), active, active, hand)
+            .unwrap_or_else(|error| panic!("unexpected spell create error: {error:?}"));
+        let target = state
+            .create_object(CardId::new(93), active, active, graveyard)
+            .unwrap_or_else(|error| panic!("unexpected target create error: {error:?}"));
+        start_upkeep(&mut state, active);
+        let before = state.canonical_bytes();
+        let cost = ManaCost::new(0, 0, 0, 0, 0, 0);
+        let request = CastSpellRequest::new(
+            StackObjectKind::InstantSpell,
+            SpellTiming::Instant,
+            cost,
+            zero_payment(cost),
+        )
+        .with_targets(
+            vec![TargetRequirement::new(TargetKind::Permanent)],
+            vec![TargetChoice::Object(target)],
+        );
+
+        assert_eq!(
+            state.cast_spell(active, spell, request),
+            Err(StateError::IllegalTarget {
+                index: 0,
+                target: TargetChoice::Object(target)
+            })
+        );
+        assert_eq!(state.canonical_bytes(), before);
+    }
+
+    #[test]
+    fn invalid_payment_during_cast_leaves_state_unchanged() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let hand = ZoneId::new(Some(active), ZoneKind::Hand);
+        let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+        let spell = state
+            .create_object(CardId::new(94), active, active, hand)
+            .unwrap_or_else(|error| panic!("unexpected spell create error: {error:?}"));
+        let target = state
+            .create_object(CardId::new(95), active, active, battlefield)
+            .unwrap_or_else(|error| panic!("unexpected target create error: {error:?}"));
+        start_upkeep(&mut state, active);
+        state
+            .add_mana_to_pool(active, ManaPool::of(ManaKind::Red, 1))
+            .unwrap_or_else(|error| panic!("unexpected add mana error: {error:?}"));
+        let before = state.canonical_bytes();
+        let cost = ManaCost::new(0, 0, 0, 1, 0, 0);
+        let bad_payment = zero_payment(ManaCost::new(0, 0, 0, 0, 0, 0));
+        let request = CastSpellRequest::new(
+            StackObjectKind::InstantSpell,
+            SpellTiming::Instant,
+            cost,
+            bad_payment,
+        )
+        .with_targets(
+            vec![TargetRequirement::new(TargetKind::Permanent)],
+            vec![TargetChoice::Object(target)],
+        );
+
+        assert_eq!(
+            state.cast_spell(active, spell, request),
+            Err(StateError::InvalidPaymentPlan)
+        );
+        assert_eq!(state.canonical_bytes(), before);
+    }
+
+    #[test]
+    fn sorcery_timing_rejects_non_main_phase_and_nonempty_stack() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let hand = ZoneId::new(Some(active), ZoneKind::Hand);
+        let first = state
+            .create_object(CardId::new(96), active, active, hand)
+            .unwrap_or_else(|error| panic!("unexpected spell create error: {error:?}"));
+        let second = state
+            .create_object(CardId::new(97), active, active, hand)
+            .unwrap_or_else(|error| panic!("unexpected spell create error: {error:?}"));
+        start_upkeep(&mut state, active);
+        let cost = ManaCost::new(0, 0, 0, 0, 0, 0);
+        let sorcery_request = CastSpellRequest::new(
+            StackObjectKind::SorcerySpell,
+            SpellTiming::Sorcery,
+            cost,
+            zero_payment(cost),
+        );
+
+        assert_eq!(
+            state.cast_spell(active, first, sorcery_request.clone()),
+            Err(StateError::InvalidSpellTiming)
+        );
+
+        while state.current_step() != Some(Step::PrecombatMain) {
+            state
+                .advance_step()
+                .unwrap_or_else(|error| panic!("unexpected advance error: {error:?}"));
+        }
+        state
+            .cast_spell(active, first, sorcery_request)
+            .unwrap_or_else(|error| panic!("unexpected main phase cast error: {error:?}"));
+        let second_request = CastSpellRequest::new(
+            StackObjectKind::SorcerySpell,
+            SpellTiming::Sorcery,
+            cost,
+            zero_payment(cost),
+        );
+        assert_eq!(
+            state.cast_spell(active, second, second_request),
+            Err(StateError::InvalidSpellTiming)
+        );
+    }
+
+    #[test]
+    fn all_targets_illegal_before_resolution_counter_spell_by_rules() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let responder = state.add_player();
+        let hand = ZoneId::new(Some(active), ZoneKind::Hand);
+        let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+        let graveyard = ZoneId::new(Some(active), ZoneKind::Graveyard);
+        let spell = state
+            .create_object(CardId::new(98), active, active, hand)
+            .unwrap_or_else(|error| panic!("unexpected spell create error: {error:?}"));
+        let target = state
+            .create_object(CardId::new(99), active, active, battlefield)
+            .unwrap_or_else(|error| panic!("unexpected target create error: {error:?}"));
+        start_upkeep(&mut state, active);
+        let cost = ManaCost::new(0, 0, 0, 0, 0, 0);
+        let request = CastSpellRequest::new(
+            StackObjectKind::InstantSpell,
+            SpellTiming::Instant,
+            cost,
+            zero_payment(cost),
+        )
+        .with_targets(
+            vec![TargetRequirement::new(TargetKind::Permanent)],
+            vec![TargetChoice::Object(target)],
+        );
+        let entry = state
+            .cast_spell(active, spell, request)
+            .unwrap_or_else(|error| panic!("unexpected cast error: {error:?}"));
+
+        state
+            .move_object(target, graveyard)
+            .unwrap_or_else(|error| panic!("unexpected target move error: {error:?}"));
+        pass_round(&mut state, active, responder, entry);
+
+        assert_eq!(state.object_zone(spell), Some(graveyard));
+        assert_eq!(
+            state.resolution_log()[0].outcome(),
+            ResolutionOutcome::CounteredOnResolution
+        );
+        assert_eq!(state.resolution_log()[0].legal_targets(), &[false]);
+        assert_eq!(state.priority_player(), Some(active));
+    }
+
+    #[test]
+    fn one_legal_target_allows_spell_to_resolve() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let responder = state.add_player();
+        let hand = ZoneId::new(Some(active), ZoneKind::Hand);
+        let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+        let graveyard = ZoneId::new(Some(active), ZoneKind::Graveyard);
+        let spell = state
+            .create_object(CardId::new(100), active, active, hand)
+            .unwrap_or_else(|error| panic!("unexpected spell create error: {error:?}"));
+        let first_target = state
+            .create_object(CardId::new(101), active, active, battlefield)
+            .unwrap_or_else(|error| panic!("unexpected first target create error: {error:?}"));
+        let second_target = state
+            .create_object(CardId::new(102), active, active, battlefield)
+            .unwrap_or_else(|error| panic!("unexpected second target create error: {error:?}"));
+        start_upkeep(&mut state, active);
+        let cost = ManaCost::new(0, 0, 0, 0, 0, 0);
+        let request = CastSpellRequest::new(
+            StackObjectKind::InstantSpell,
+            SpellTiming::Instant,
+            cost,
+            zero_payment(cost),
+        )
+        .with_targets(
+            vec![
+                TargetRequirement::new(TargetKind::Permanent),
+                TargetRequirement::new(TargetKind::Permanent),
+            ],
+            vec![
+                TargetChoice::Object(first_target),
+                TargetChoice::Object(second_target),
+            ],
+        );
+        let entry = state
+            .cast_spell(active, spell, request)
+            .unwrap_or_else(|error| panic!("unexpected cast error: {error:?}"));
+
+        state
+            .move_object(first_target, graveyard)
+            .unwrap_or_else(|error| panic!("unexpected target move error: {error:?}"));
+        pass_round(&mut state, active, responder, entry);
+
+        assert_eq!(state.object_zone(spell), Some(graveyard));
+        assert_eq!(
+            state.resolution_log()[0].outcome(),
+            ResolutionOutcome::Resolved
+        );
+        assert_eq!(state.resolution_log()[0].legal_targets(), &[false, true]);
+    }
+
+    #[test]
+    fn target_choices_affect_canonical_hash() {
+        let mut left = GameState::new();
+        let left_active = left.add_player();
+        let left_hand = ZoneId::new(Some(left_active), ZoneKind::Hand);
+        let left_battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+        let left_spell = left
+            .create_object(CardId::new(103), left_active, left_active, left_hand)
+            .unwrap_or_else(|error| panic!("unexpected left spell create error: {error:?}"));
+        let left_first = left
+            .create_object(CardId::new(104), left_active, left_active, left_battlefield)
+            .unwrap_or_else(|error| panic!("unexpected left target create error: {error:?}"));
+        left.create_object(CardId::new(105), left_active, left_active, left_battlefield)
+            .unwrap_or_else(|error| {
+                panic!("unexpected left second target create error: {error:?}")
+            });
+        start_upkeep(&mut left, left_active);
+
+        let mut right = GameState::new();
+        let right_active = right.add_player();
+        let right_hand = ZoneId::new(Some(right_active), ZoneKind::Hand);
+        let right_battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+        let right_spell = right
+            .create_object(CardId::new(103), right_active, right_active, right_hand)
+            .unwrap_or_else(|error| panic!("unexpected right spell create error: {error:?}"));
+        right
+            .create_object(
+                CardId::new(104),
+                right_active,
+                right_active,
+                right_battlefield,
+            )
+            .unwrap_or_else(|error| panic!("unexpected right target create error: {error:?}"));
+        let right_second = right
+            .create_object(
+                CardId::new(105),
+                right_active,
+                right_active,
+                right_battlefield,
+            )
+            .unwrap_or_else(|error| {
+                panic!("unexpected right second target create error: {error:?}")
+            });
+        start_upkeep(&mut right, right_active);
+
+        let cost = ManaCost::new(0, 0, 0, 0, 0, 0);
+        cast_zero_cost_target_spell(&mut left, left_active, left_spell, left_first);
+        cast_zero_cost_target_spell(&mut right, right_active, right_spell, right_second);
+
+        assert_ne!(left.deterministic_hash(), right.deterministic_hash());
+        assert_eq!(
+            left.deterministic_hash(),
+            left.deterministic_hash_streaming()
+        );
+        assert_eq!(
+            right.deterministic_hash(),
+            right.deterministic_hash_streaming()
+        );
+        assert_eq!(cost.generic_total(), Ok(0));
     }
 
     #[test]
@@ -3500,6 +4389,33 @@ mod tests {
         state
             .advance_step()
             .unwrap_or_else(|error| panic!("unexpected upkeep advance error: {error:?}"));
+    }
+
+    fn zero_payment(cost: ManaCost) -> super::PaymentPlan {
+        validate_payment_plan(ManaPool::empty(), cost, ManaPool::empty())
+            .unwrap_or_else(|error| panic!("unexpected zero payment error: {error:?}"))
+    }
+
+    fn cast_zero_cost_target_spell(
+        state: &mut GameState,
+        active: PlayerId,
+        spell: super::ObjectId,
+        target: super::ObjectId,
+    ) {
+        let cost = ManaCost::new(0, 0, 0, 0, 0, 0);
+        let request = CastSpellRequest::new(
+            StackObjectKind::InstantSpell,
+            SpellTiming::Instant,
+            cost,
+            zero_payment(cost),
+        )
+        .with_targets(
+            vec![TargetRequirement::new(TargetKind::Permanent)],
+            vec![TargetChoice::Object(target)],
+        );
+        state
+            .cast_spell(active, spell, request)
+            .unwrap_or_else(|error| panic!("unexpected target cast error: {error:?}"));
     }
 
     fn pass_round(
