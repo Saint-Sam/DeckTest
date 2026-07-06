@@ -12,7 +12,7 @@
       "attempts": 0
     },
     "T0.3": {
-      "status": "implementation_complete_pending_remote_ci",
+      "status": "verified",
       "branch": "task/T0.3-ci-pipeline",
       "attempts": 0
     },
@@ -36,11 +36,11 @@
   "metrics_snapshot": "metrics/legacy_inventory.json",
   "gate_reviews": {
     "T0": {
-      "status": "failed",
+      "status": "remediation_complete_pending_re_review",
       "bundle": "reports/gates/T0/bundle",
       "signoff": "reports/gates/T0/SIGNOFF.md",
       "remediation": {
-        "T0.R1": "pending: remote GitHub CI evidence required",
+        "T0.R1": "complete: remote CI run 28815618762 passed all required T0 jobs; branch protection equivalence documented in reports/gates/T0/remote-ci-2026-07-06.md",
         "T0.R2": "complete: T0 gate Owner Brief created",
         "T0.R3": "complete: bundle regenerated with current PLAN_STATE",
         "T0.R4": "complete: fresh-clone gate passed from commit 93cad32"

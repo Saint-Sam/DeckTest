@@ -10,8 +10,7 @@ legacy inventory report all exist. `INSTALL.md` now documents the one-command
 fresh install path, and `scripts/bootstrap_toolchain.sh` supports both recursive
 git clones and GitHub ZIP downloads. The local T0 gate script passes, and a
 fresh recursive clone from commit `93cad32` passed `scripts/gates/gate_T0.sh`.
-The Gate Reviewer did not sign off yet because the project still needs remote
-GitHub CI evidence.
+Remote GitHub CI run `ci #3` also passed on commit `b9f13fa`.
 
 ## 2. WHAT YOU SHOULD SEE - TRY IT YOURSELF
 
@@ -29,10 +28,17 @@ GitHub CI evidence.
 - RED FLAG: any sign-off that claims T0 passed before GitHub CI and a
   fresh-clone run are complete.
 
+- DO: open `reports/gates/T0/remote-ci-2026-07-06.md`
+- EXPECT: it records `ci #3` passing on commit `b9f13fa` with fmt, clippy,
+  Linux/macOS/Windows tests, WASM, Android, coverage, deny-audit,
+  verification-loop, and determinism-replay all green.
+- RED FLAG: any later CI run on `main` failing before T0 Gate re-review.
+
 - DO: open `reports/gates/T0/SIGNOFF.md`
-- EXPECT: it says `Verdict: FAIL`; this remains correct until remote GitHub CI
-  evidence exists and the Gate Reviewer re-reviews.
-- RED FLAG: any sign-off that claims T0 passed before GitHub CI is complete.
+- EXPECT: it still contains the prior Gate Reviewer fail, plus the remediation
+  evidence files now exist for re-review.
+- RED FLAG: any plan state claiming T0 passed before a new Gate Reviewer
+  sign-off.
 
 ## 3. NUMBERS THAT MATTER
 
@@ -41,20 +47,23 @@ GitHub CI evidence.
 - 43,649 legacy ability lines were counted.
 - 251 distinct keyword rows were found in the legacy card scripts.
 - Local target build smoke passed for WASM, Android, iOS, and Windows targets.
+- Remote CI run `28815618762` passed all T0.3 jobs.
 
 ## 4. KNOWN ROUGH EDGES
 
-There is no playable game yet; T0 is infrastructure only. Remote GitHub CI has
-not run because the repository remote is not configured yet. The current local
-Gate Reviewer verdict is intentionally a fail until that remote evidence exists.
+There is no playable game yet; T0 is infrastructure only. Branch protection has
+not been changed automatically because that is a GitHub repo-settings change.
+Before collaboration branches or release, configure `main` protection to require
+the T0.3 CI jobs. The current Gate Reviewer verdict remains the prior fail until
+the re-review is complete.
 
 ## 5. WHAT YOU SHOULD EXPECT NEXT
 
-The Orchestrator will configure or attach the GitHub repository so CI can run.
-After that evidence gap is closed, the Gate Reviewer will re-review T0.
+The Gate Reviewer will re-review T0 using the refreshed bundle and the green
+remote CI evidence.
 
 ## 6. WHAT WE NEED FROM YOU
 
-The exact GitHub destination for publishing this local repository: provide the
-`owner/repo` or remote URL, or create an empty GitHub repository under
-`Saint-Sam` and send its URL.
+No immediate input unless the Gate Reviewer requires branch protection before
+sign-off. If that happens, the requested setting will be explicit and narrow:
+protect `main` and require the T0.3 CI jobs.

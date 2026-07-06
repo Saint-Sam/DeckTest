@@ -47,4 +47,12 @@ fi
   fi
 } > "$bundle/blockers_history.md"
 
+evidence_dir="reports/gates/${gate_id}"
+if find "$evidence_dir" -maxdepth 1 -type f -name '*.md' ! -name 'SIGNOFF.md' -print -quit 2>/dev/null | grep -q .; then
+  mkdir -p "$bundle/evidence"
+  while IFS= read -r -d '' evidence_file; do
+    cp "$evidence_file" "$bundle/evidence/$(basename "$evidence_file")"
+  done < <(find "$evidence_dir" -maxdepth 1 -type f -name '*.md' ! -name 'SIGNOFF.md' -print0 | sort -z)
+fi
+
 echo "WROTE $bundle"
