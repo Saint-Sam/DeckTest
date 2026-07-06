@@ -608,6 +608,13 @@ struct AutoTapSearch<'a> {
     child_truncated: &'a mut bool,
 }
 
+struct CombatDamageProfile {
+    legal_targets: Vec<CombatDamageTarget>,
+    required_total: u32,
+    trample_blockers: Vec<ObjectId>,
+    trample_defender: CombatDamageTarget,
+}
+
 /// Validates an explicit pool selection against an available pool and cost.
 pub fn validate_payment_plan(
     available: ManaPool,
@@ -1382,6 +1389,534 @@ impl ResolutionRecord {
     }
 }
 
+/// Combat-relevant static keywords tracked by the T1.6 kernel.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub struct CreatureKeywords {
+    first_strike: bool,
+    double_strike: bool,
+    trample: bool,
+    deathtouch: bool,
+    lifelink: bool,
+    flying: bool,
+    reach: bool,
+    menace: bool,
+    vigilance: bool,
+    haste: bool,
+}
+
+impl CreatureKeywords {
+    /// Creates an empty keyword set.
+    #[must_use]
+    pub const fn none() -> Self {
+        Self {
+            first_strike: false,
+            double_strike: false,
+            trample: false,
+            deathtouch: false,
+            lifelink: false,
+            flying: false,
+            reach: false,
+            menace: false,
+            vigilance: false,
+            haste: false,
+        }
+    }
+
+    /// Returns this set with first strike enabled.
+    #[must_use]
+    pub const fn with_first_strike(mut self) -> Self {
+        self.first_strike = true;
+        self
+    }
+
+    /// Returns this set with double strike enabled.
+    #[must_use]
+    pub const fn with_double_strike(mut self) -> Self {
+        self.double_strike = true;
+        self
+    }
+
+    /// Returns this set with trample enabled.
+    #[must_use]
+    pub const fn with_trample(mut self) -> Self {
+        self.trample = true;
+        self
+    }
+
+    /// Returns this set with deathtouch enabled.
+    #[must_use]
+    pub const fn with_deathtouch(mut self) -> Self {
+        self.deathtouch = true;
+        self
+    }
+
+    /// Returns this set with lifelink enabled.
+    #[must_use]
+    pub const fn with_lifelink(mut self) -> Self {
+        self.lifelink = true;
+        self
+    }
+
+    /// Returns this set with flying enabled.
+    #[must_use]
+    pub const fn with_flying(mut self) -> Self {
+        self.flying = true;
+        self
+    }
+
+    /// Returns this set with reach enabled.
+    #[must_use]
+    pub const fn with_reach(mut self) -> Self {
+        self.reach = true;
+        self
+    }
+
+    /// Returns this set with menace enabled.
+    #[must_use]
+    pub const fn with_menace(mut self) -> Self {
+        self.menace = true;
+        self
+    }
+
+    /// Returns this set with vigilance enabled.
+    #[must_use]
+    pub const fn with_vigilance(mut self) -> Self {
+        self.vigilance = true;
+        self
+    }
+
+    /// Returns this set with haste enabled.
+    #[must_use]
+    pub const fn with_haste(mut self) -> Self {
+        self.haste = true;
+        self
+    }
+
+    /// Returns true if this set has first strike.
+    #[must_use]
+    pub const fn first_strike(self) -> bool {
+        self.first_strike
+    }
+
+    /// Returns true if this set has double strike.
+    #[must_use]
+    pub const fn double_strike(self) -> bool {
+        self.double_strike
+    }
+
+    /// Returns true if this set has trample.
+    #[must_use]
+    pub const fn trample(self) -> bool {
+        self.trample
+    }
+
+    /// Returns true if this set has deathtouch.
+    #[must_use]
+    pub const fn deathtouch(self) -> bool {
+        self.deathtouch
+    }
+
+    /// Returns true if this set has lifelink.
+    #[must_use]
+    pub const fn lifelink(self) -> bool {
+        self.lifelink
+    }
+
+    /// Returns true if this set has flying.
+    #[must_use]
+    pub const fn flying(self) -> bool {
+        self.flying
+    }
+
+    /// Returns true if this set has reach.
+    #[must_use]
+    pub const fn reach(self) -> bool {
+        self.reach
+    }
+
+    /// Returns true if this set has menace.
+    #[must_use]
+    pub const fn menace(self) -> bool {
+        self.menace
+    }
+
+    /// Returns true if this set has vigilance.
+    #[must_use]
+    pub const fn vigilance(self) -> bool {
+        self.vigilance
+    }
+
+    /// Returns true if this set has haste.
+    #[must_use]
+    pub const fn haste(self) -> bool {
+        self.haste
+    }
+
+    const fn canonical_bits(self) -> u16 {
+        (self.first_strike as u16)
+            | ((self.double_strike as u16) << 1)
+            | ((self.trample as u16) << 2)
+            | ((self.deathtouch as u16) << 3)
+            | ((self.lifelink as u16) << 4)
+            | ((self.flying as u16) << 5)
+            | ((self.reach as u16) << 6)
+            | ((self.menace as u16) << 7)
+            | ((self.vigilance as u16) << 8)
+            | ((self.haste as u16) << 9)
+    }
+}
+
+/// Power, toughness, and combat keywords for a creature object.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct CreatureCharacteristics {
+    power: i32,
+    toughness: i32,
+    keywords: CreatureKeywords,
+}
+
+impl CreatureCharacteristics {
+    /// Creates creature characteristics with no keywords.
+    #[must_use]
+    pub const fn new(power: i32, toughness: i32) -> Self {
+        Self {
+            power,
+            toughness,
+            keywords: CreatureKeywords::none(),
+        }
+    }
+
+    /// Returns this creature with the provided keyword set.
+    #[must_use]
+    pub const fn with_keywords(mut self, keywords: CreatureKeywords) -> Self {
+        self.keywords = keywords;
+        self
+    }
+
+    /// Returns this creature's power.
+    #[must_use]
+    pub const fn power(self) -> i32 {
+        self.power
+    }
+
+    /// Returns this creature's toughness.
+    #[must_use]
+    pub const fn toughness(self) -> i32 {
+        self.toughness
+    }
+
+    /// Returns this creature's combat keywords.
+    #[must_use]
+    pub const fn keywords(self) -> CreatureKeywords {
+        self.keywords
+    }
+}
+
+/// Which combat damage step is currently being processed.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum CombatDamageStepKind {
+    /// A single normal combat damage step.
+    Normal,
+    /// The first combat damage step created by first strike or double strike.
+    FirstStrike,
+    /// The second combat damage step after a first-strike step.
+    Regular,
+}
+
+impl CombatDamageStepKind {
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::Normal => 0,
+            Self::FirstStrike => 1,
+            Self::Regular => 2,
+        }
+    }
+}
+
+/// A player or creature that may receive combat damage.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum CombatDamageTarget {
+    /// Damage assigned to a player.
+    Player(PlayerId),
+    /// Damage assigned to a creature object.
+    Object(ObjectId),
+}
+
+impl CombatDamageTarget {
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::Player(_) => 0,
+            Self::Object(_) => 1,
+        }
+    }
+}
+
+/// One attacker chosen during the declare attackers step.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct AttackDeclaration {
+    attacker: ObjectId,
+    defending_player: PlayerId,
+}
+
+impl AttackDeclaration {
+    /// Creates an attack declaration.
+    #[must_use]
+    pub const fn new(attacker: ObjectId, defending_player: PlayerId) -> Self {
+        Self {
+            attacker,
+            defending_player,
+        }
+    }
+
+    /// Returns the attacking object.
+    #[must_use]
+    pub const fn attacker(self) -> ObjectId {
+        self.attacker
+    }
+
+    /// Returns the player this attacker is attacking.
+    #[must_use]
+    pub const fn defending_player(self) -> PlayerId {
+        self.defending_player
+    }
+}
+
+/// One blocker chosen during the declare blockers step.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct BlockDeclaration {
+    blocker: ObjectId,
+    attacker: ObjectId,
+}
+
+impl BlockDeclaration {
+    /// Creates a block declaration.
+    #[must_use]
+    pub const fn new(blocker: ObjectId, attacker: ObjectId) -> Self {
+        Self { blocker, attacker }
+    }
+
+    /// Returns the blocking object.
+    #[must_use]
+    pub const fn blocker(self) -> ObjectId {
+        self.blocker
+    }
+
+    /// Returns the attacking object being blocked.
+    #[must_use]
+    pub const fn attacker(self) -> ObjectId {
+        self.attacker
+    }
+}
+
+/// One target and amount in a combat damage assignment.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct CombatDamageAssignment {
+    target: CombatDamageTarget,
+    amount: u32,
+}
+
+impl CombatDamageAssignment {
+    /// Creates one combat damage assignment.
+    #[must_use]
+    pub const fn new(target: CombatDamageTarget, amount: u32) -> Self {
+        Self { target, amount }
+    }
+
+    /// Returns the assigned target.
+    #[must_use]
+    pub const fn target(self) -> CombatDamageTarget {
+        self.target
+    }
+
+    /// Returns the assigned damage amount.
+    #[must_use]
+    pub const fn amount(self) -> u32 {
+        self.amount
+    }
+}
+
+/// All combat damage assigned by one source.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CombatDamageAssignmentRequest {
+    source: ObjectId,
+    assignments: Vec<CombatDamageAssignment>,
+}
+
+impl CombatDamageAssignmentRequest {
+    /// Creates a request for one combat damage source.
+    #[must_use]
+    pub fn new(source: ObjectId, assignments: Vec<CombatDamageAssignment>) -> Self {
+        Self {
+            source,
+            assignments,
+        }
+    }
+
+    /// Returns the damage source.
+    #[must_use]
+    pub const fn source(&self) -> ObjectId {
+        self.source
+    }
+
+    /// Returns target assignments for this source.
+    #[must_use]
+    pub fn assignments(&self) -> &[CombatDamageAssignment] {
+        &self.assignments
+    }
+}
+
+/// One combat damage event recorded after damage is dealt.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct CombatDamageRecord {
+    source: ObjectId,
+    target: CombatDamageTarget,
+    amount: u32,
+    step: CombatDamageStepKind,
+    source_had_deathtouch: bool,
+    source_had_lifelink: bool,
+}
+
+impl CombatDamageRecord {
+    /// Returns the damage source.
+    #[must_use]
+    pub const fn source(self) -> ObjectId {
+        self.source
+    }
+
+    /// Returns the damaged target.
+    #[must_use]
+    pub const fn target(self) -> CombatDamageTarget {
+        self.target
+    }
+
+    /// Returns the dealt damage amount.
+    #[must_use]
+    pub const fn amount(self) -> u32 {
+        self.amount
+    }
+
+    /// Returns which combat damage step dealt this damage.
+    #[must_use]
+    pub const fn step(self) -> CombatDamageStepKind {
+        self.step
+    }
+
+    /// Returns whether the source had deathtouch as damage was dealt.
+    #[must_use]
+    pub const fn source_had_deathtouch(self) -> bool {
+        self.source_had_deathtouch
+    }
+
+    /// Returns whether the source had lifelink as damage was dealt.
+    #[must_use]
+    pub const fn source_had_lifelink(self) -> bool {
+        self.source_had_lifelink
+    }
+}
+
+/// One attacking creature in the current combat.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AttackingCreature {
+    object: ObjectId,
+    defending_player: PlayerId,
+    blocked: bool,
+    blockers: Vec<ObjectId>,
+}
+
+impl AttackingCreature {
+    /// Returns the attacking object.
+    #[must_use]
+    pub const fn object(&self) -> ObjectId {
+        self.object
+    }
+
+    /// Returns the attacked player.
+    #[must_use]
+    pub const fn defending_player(&self) -> PlayerId {
+        self.defending_player
+    }
+
+    /// Returns true once this attacker has become blocked this combat.
+    #[must_use]
+    pub const fn blocked(&self) -> bool {
+        self.blocked
+    }
+
+    /// Returns blockers declared for this attacker in declaration order.
+    #[must_use]
+    pub fn blockers(&self) -> &[ObjectId] {
+        &self.blockers
+    }
+}
+
+/// One blocking creature in the current combat.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct BlockingCreature {
+    object: ObjectId,
+    attacker: ObjectId,
+}
+
+impl BlockingCreature {
+    /// Returns the blocking object.
+    #[must_use]
+    pub const fn object(self) -> ObjectId {
+        self.object
+    }
+
+    /// Returns the attacking creature this object blocks.
+    #[must_use]
+    pub const fn attacker(self) -> ObjectId {
+        self.attacker
+    }
+}
+
+/// Current combat state, cleared at the beginning and end of combat.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct CombatState {
+    attackers: Vec<AttackingCreature>,
+    blockers: Vec<BlockingCreature>,
+    damage_records: Vec<CombatDamageRecord>,
+    damage_step: Option<CombatDamageStepKind>,
+    first_strike_participants: Vec<ObjectId>,
+}
+
+impl CombatState {
+    /// Creates an empty combat state.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            attackers: Vec::new(),
+            blockers: Vec::new(),
+            damage_records: Vec::new(),
+            damage_step: None,
+            first_strike_participants: Vec::new(),
+        }
+    }
+
+    /// Returns current attackers in declaration order.
+    #[must_use]
+    pub fn attackers(&self) -> &[AttackingCreature] {
+        &self.attackers
+    }
+
+    /// Returns current blockers in declaration order.
+    #[must_use]
+    pub fn blockers(&self) -> &[BlockingCreature] {
+        &self.blockers
+    }
+
+    /// Returns combat damage records in deal order.
+    #[must_use]
+    pub fn damage_records(&self) -> &[CombatDamageRecord] {
+        &self.damage_records
+    }
+
+    /// Returns the current combat damage sub-step, if any.
+    #[must_use]
+    pub const fn damage_step(&self) -> Option<CombatDamageStepKind> {
+        self.damage_step
+    }
+}
+
 /// Result of one priority pass.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PriorityOutcome {
@@ -1454,6 +1989,10 @@ pub struct ObjectRecord {
     card: CardId,
     owner: PlayerId,
     controller: PlayerId,
+    tapped: bool,
+    creature: Option<CreatureCharacteristics>,
+    damage_marked: u32,
+    controlled_since_turn: u32,
 }
 
 impl ObjectRecord {
@@ -1479,6 +2018,30 @@ impl ObjectRecord {
     #[must_use]
     pub const fn controller(self) -> PlayerId {
         self.controller
+    }
+
+    /// Returns true if this object is tapped.
+    #[must_use]
+    pub const fn tapped(self) -> bool {
+        self.tapped
+    }
+
+    /// Returns creature characteristics, if this object is currently a creature.
+    #[must_use]
+    pub const fn creature(self) -> Option<CreatureCharacteristics> {
+        self.creature
+    }
+
+    /// Returns damage currently marked on this object.
+    #[must_use]
+    pub const fn damage_marked(self) -> u32 {
+        self.damage_marked
+    }
+
+    /// Returns the turn number since which this controller has controlled it.
+    #[must_use]
+    pub const fn controlled_since_turn(self) -> u32 {
+        self.controlled_since_turn
     }
 }
 
@@ -1512,15 +2075,29 @@ impl ObjectArena {
         self.records.iter().copied()
     }
 
-    fn push(&mut self, card: CardId, owner: PlayerId, controller: PlayerId) -> ObjectId {
+    fn push(
+        &mut self,
+        card: CardId,
+        owner: PlayerId,
+        controller: PlayerId,
+        controlled_since_turn: u32,
+    ) -> ObjectId {
         let id = ObjectId(self.records.len() as u32);
         self.records.push(ObjectRecord {
             id,
             card,
             owner,
             controller,
+            tapped: false,
+            creature: None,
+            damage_marked: 0,
+            controlled_since_turn,
         });
         id
+    }
+
+    fn get_mut(&mut self, id: ObjectId) -> Option<&mut ObjectRecord> {
+        self.records.get_mut(id.index())
     }
 }
 
@@ -1659,6 +2236,38 @@ pub enum StateError {
         /// Target that failed legality.
         target: TargetChoice,
     },
+    /// A combat action was requested in the wrong step.
+    InvalidCombatStep {
+        /// Step required by that action.
+        expected: Step,
+        /// Actual current step.
+        actual: Option<Step>,
+    },
+    /// A combat action was requested by the wrong player.
+    InvalidCombatPlayer(PlayerId),
+    /// The object is not currently a creature.
+    NotACreature(ObjectId),
+    /// The creature is tapped and cannot attack or block.
+    CreatureTapped(ObjectId),
+    /// The creature has not been controlled continuously since the turn began.
+    SummoningSick(ObjectId),
+    /// The same object appeared more than once in a declaration or assignment.
+    DuplicateCombatObject(ObjectId),
+    /// The declared attack is not legal.
+    IllegalAttack(ObjectId),
+    /// The declared block is not legal.
+    IllegalBlock {
+        /// Blocking creature.
+        blocker: ObjectId,
+        /// Attacking creature.
+        attacker: ObjectId,
+    },
+    /// A damage assignment was missing for a source that must assign damage.
+    MissingCombatDamageAssignment(ObjectId),
+    /// A damage assignment is illegal for its source or target set.
+    IllegalCombatDamageAssignment(ObjectId),
+    /// Combat damage arithmetic overflowed.
+    CombatDamageOverflow,
 }
 
 /// Complete T1 game state.
@@ -1683,6 +2292,7 @@ pub struct GameState {
     next_stack_entry: u32,
     stack_entries: Vec<StackEntry>,
     resolution_log: Vec<ResolutionRecord>,
+    combat: CombatState,
 }
 
 impl Default for GameState {
@@ -1732,6 +2342,7 @@ impl GameState {
             next_stack_entry: 0,
             stack_entries: Vec::new(),
             resolution_log: Vec::new(),
+            combat: CombatState::new(),
         }
     }
 
@@ -1819,6 +2430,12 @@ impl GameState {
     #[must_use]
     pub fn resolution_log(&self) -> &[ResolutionRecord] {
         &self.resolution_log
+    }
+
+    /// Returns current combat state.
+    #[must_use]
+    pub const fn combat_state(&self) -> &CombatState {
+        &self.combat
     }
 
     /// Adds a player and that player's owned zones.
@@ -1915,6 +2532,61 @@ impl GameState {
             .mana_pool
             .pay(plan)
             .map_err(Self::map_payment_error)?;
+        Ok(())
+    }
+
+    /// Sets or replaces creature characteristics for one object.
+    pub fn set_creature_characteristics(
+        &mut self,
+        object: ObjectId,
+        characteristics: CreatureCharacteristics,
+    ) -> Result<(), StateError> {
+        let record = self
+            .objects
+            .get_mut(object)
+            .ok_or(StateError::UnknownObject(object))?;
+        record.creature = Some(characteristics);
+        Ok(())
+    }
+
+    /// Clears creature characteristics from one object.
+    pub fn clear_creature_characteristics(&mut self, object: ObjectId) -> Result<(), StateError> {
+        let record = self
+            .objects
+            .get_mut(object)
+            .ok_or(StateError::UnknownObject(object))?;
+        record.creature = None;
+        self.remove_object_from_combat(object);
+        Ok(())
+    }
+
+    /// Sets an object's tapped status.
+    pub fn set_object_tapped(&mut self, object: ObjectId, tapped: bool) -> Result<(), StateError> {
+        let record = self
+            .objects
+            .get_mut(object)
+            .ok_or(StateError::UnknownObject(object))?;
+        record.tapped = tapped;
+        Ok(())
+    }
+
+    /// Marks damage on a creature object.
+    pub fn mark_damage_on_object(
+        &mut self,
+        object: ObjectId,
+        amount: u32,
+    ) -> Result<(), StateError> {
+        let record = self
+            .objects
+            .get_mut(object)
+            .ok_or(StateError::UnknownObject(object))?;
+        if record.creature.is_none() {
+            return Err(StateError::NotACreature(object));
+        }
+        record.damage_marked = record
+            .damage_marked
+            .checked_add(amount)
+            .ok_or(StateError::CombatDamageOverflow)?;
         Ok(())
     }
 
@@ -2131,6 +2803,11 @@ impl GameState {
             }
             Step::Cleanup => return self.begin_next_turn(),
             Step::DeclareAttackers if !self.attackers_declared_this_combat => Step::EndOfCombat,
+            Step::CombatDamage
+                if self.combat.damage_step == Some(CombatDamageStepKind::FirstStrike) =>
+            {
+                Step::CombatDamage
+            }
             step => Self::next_normal_step(step),
         };
         self.begin_step(next)?;
@@ -2143,6 +2820,156 @@ impl GameState {
     /// in T1.6, but keeping the flag here makes the step machine testable now.
     pub fn set_attackers_declared_this_combat(&mut self, attackers_declared: bool) {
         self.attackers_declared_this_combat = attackers_declared;
+    }
+
+    /// Declares attackers for the current declare attackers step.
+    pub fn declare_attackers(
+        &mut self,
+        player: PlayerId,
+        attacks: &[AttackDeclaration],
+    ) -> Result<(), StateError> {
+        self.require_combat_step(Step::DeclareAttackers)?;
+        if self.active_player != Some(player) {
+            return Err(StateError::InvalidCombatPlayer(player));
+        }
+        self.require_priority_player(player)?;
+        let mut seen = Vec::with_capacity(attacks.len());
+        for attack in attacks {
+            if seen.contains(&attack.attacker()) {
+                return Err(StateError::DuplicateCombatObject(attack.attacker()));
+            }
+            seen.push(attack.attacker());
+            self.validate_attack_declaration(player, *attack)?;
+        }
+
+        self.combat = CombatState::new();
+        for attack in attacks {
+            let keywords = self.creature_keywords(attack.attacker())?;
+            if !keywords.vigilance() {
+                self.objects
+                    .get_mut(attack.attacker())
+                    .ok_or(StateError::UnknownObject(attack.attacker()))?
+                    .tapped = true;
+            }
+            self.combat.attackers.push(AttackingCreature {
+                object: attack.attacker(),
+                defending_player: attack.defending_player(),
+                blocked: false,
+                blockers: Vec::new(),
+            });
+        }
+        self.attackers_declared_this_combat = !attacks.is_empty();
+        self.priority_player = Some(player);
+        self.priority_pass_count = 0;
+        Ok(())
+    }
+
+    /// Declares blockers for the current declare blockers step.
+    pub fn declare_blockers(
+        &mut self,
+        defending_player: PlayerId,
+        blocks: &[BlockDeclaration],
+    ) -> Result<(), StateError> {
+        self.require_combat_step(Step::DeclareBlockers)?;
+        self.require_player(defending_player)?;
+        if self.active_player == Some(defending_player) {
+            return Err(StateError::InvalidCombatPlayer(defending_player));
+        }
+        let mut seen_blockers = Vec::with_capacity(blocks.len());
+        for block in blocks {
+            if seen_blockers.contains(&block.blocker()) {
+                return Err(StateError::DuplicateCombatObject(block.blocker()));
+            }
+            seen_blockers.push(block.blocker());
+            self.validate_block_declaration(defending_player, *block)?;
+        }
+        self.validate_menace_blocks(blocks)?;
+
+        self.combat.blockers.clear();
+        for attacker in &mut self.combat.attackers {
+            attacker.blockers.clear();
+            attacker.blocked = false;
+        }
+        for block in blocks {
+            self.combat.blockers.push(BlockingCreature {
+                object: block.blocker(),
+                attacker: block.attacker(),
+            });
+            if let Some(attacker) = self
+                .combat
+                .attackers
+                .iter_mut()
+                .find(|attacker| attacker.object == block.attacker())
+            {
+                attacker.blocked = true;
+                attacker.blockers.push(block.blocker());
+            }
+        }
+        self.priority_player = self.active_player;
+        self.priority_pass_count = 0;
+        Ok(())
+    }
+
+    /// Assigns and deals combat damage for the current combat damage step.
+    pub fn assign_combat_damage(
+        &mut self,
+        assignments: &[CombatDamageAssignmentRequest],
+    ) -> Result<Vec<CombatDamageRecord>, StateError> {
+        self.require_combat_step(Step::CombatDamage)?;
+        let step = self
+            .combat
+            .damage_step
+            .ok_or(StateError::InvalidCombatStep {
+                expected: Step::CombatDamage,
+                actual: self.current_step,
+            })?;
+        let eligible = self.eligible_combat_damage_sources()?;
+        let mut seen_sources = Vec::with_capacity(assignments.len());
+        for request in assignments {
+            if seen_sources.contains(&request.source()) {
+                return Err(StateError::DuplicateCombatObject(request.source()));
+            }
+            seen_sources.push(request.source());
+            if !eligible.contains(&request.source()) {
+                return Err(StateError::IllegalCombatDamageAssignment(request.source()));
+            }
+            self.validate_combat_damage_request(request)?;
+        }
+        for source in &eligible {
+            let profile = self.combat_damage_profile(*source)?;
+            let must_assign = profile.required_total > 0;
+            let supplied = assignments
+                .iter()
+                .any(|request| request.source() == *source);
+            if must_assign && !supplied {
+                return Err(StateError::MissingCombatDamageAssignment(*source));
+            }
+            if !must_assign && supplied {
+                return Err(StateError::IllegalCombatDamageAssignment(*source));
+            }
+        }
+
+        let mut records = Vec::new();
+        for request in assignments {
+            let keywords = self.creature_keywords(request.source())?;
+            for assignment in request.assignments() {
+                if assignment.amount() == 0 {
+                    continue;
+                }
+                let record = CombatDamageRecord {
+                    source: request.source(),
+                    target: assignment.target(),
+                    amount: assignment.amount(),
+                    step,
+                    source_had_deathtouch: keywords.deathtouch(),
+                    source_had_lifelink: keywords.lifelink(),
+                };
+                self.apply_combat_damage(record)?;
+                records.push(record);
+            }
+        }
+        self.combat.damage_records.extend(records.iter().copied());
+        Ok(records)
     }
 
     /// Requests the CR 514.3a cleanup exception after cleanup actions finish.
@@ -2184,7 +3011,7 @@ impl GameState {
         self.require_player(owner)?;
         self.require_player(controller)?;
         self.require_zone(zone)?;
-        let object = self.objects.push(card, owner, controller);
+        let object = self.objects.push(card, owner, controller, self.turn_number);
         self.zone_mut(zone)?.objects.push(object);
         Ok(object)
     }
@@ -2204,6 +3031,7 @@ impl GameState {
         if from_zone_id == to {
             return Ok(());
         }
+        let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
         let from_position = self.zones[from_index]
             .objects
             .iter()
@@ -2211,6 +3039,15 @@ impl GameState {
             .ok_or(StateError::MissingZoneMembership(object))?;
         self.zones[from_index].objects.remove(from_position);
         self.zone_mut(to)?.objects.push(object);
+        if from_zone_id == battlefield && to != battlefield {
+            self.remove_object_from_combat(object);
+        }
+        if from_zone_id != battlefield && to == battlefield {
+            if let Some(record) = self.objects.get_mut(object) {
+                record.controlled_since_turn = self.turn_number;
+                record.damage_marked = 0;
+            }
+        }
         Ok(())
     }
 
@@ -2309,6 +3146,10 @@ impl GameState {
             bytes.write_u32(object.card.0);
             bytes.write_u32(object.owner.0);
             bytes.write_u32(object.controller.0);
+            bytes.write_bool(object.tapped);
+            bytes.write_optional_creature_characteristics(object.creature);
+            bytes.write_u32(object.damage_marked);
+            bytes.write_u32(object.controlled_since_turn);
         }
 
         bytes.write_u32(self.zones.len() as u32);
@@ -2335,6 +3176,7 @@ impl GameState {
         for resolution in &self.resolution_log {
             bytes.write_resolution_record(resolution);
         }
+        bytes.write_combat_state(&self.combat);
         bytes.finish()
     }
 
@@ -2368,6 +3210,10 @@ impl GameState {
             hash.write_u32(object.card.0);
             hash.write_u32(object.owner.0);
             hash.write_u32(object.controller.0);
+            hash.write_bool(object.tapped);
+            hash.write_optional_creature_characteristics(object.creature);
+            hash.write_u32(object.damage_marked);
+            hash.write_u32(object.controlled_since_turn);
         }
 
         hash.write_u32(self.zones.len() as u32);
@@ -2395,6 +3241,7 @@ impl GameState {
         for resolution in &self.resolution_log {
             hash.write_resolution_record(resolution);
         }
+        hash.write_combat_state(&self.combat);
 
         StateHash(hash.finish())
     }
@@ -2410,6 +3257,11 @@ impl GameState {
             }
             Step::BeginningOfCombat => {
                 self.attackers_declared_this_combat = false;
+                self.combat = CombatState::new();
+                self.assign_normal_priority(step);
+            }
+            Step::CombatDamage => {
+                self.begin_combat_damage_step();
                 self.assign_normal_priority(step);
             }
             Step::Cleanup => self.begin_cleanup_step()?,
@@ -2424,6 +3276,7 @@ impl GameState {
         self.clear_all_mana_pools();
         if step == Step::EndOfCombat {
             self.expire_end_of_combat_markers();
+            self.combat = CombatState::new();
         }
         if self.phase_ends_after_step(step) {
             self.expire_phase_end_markers(step.phase());
@@ -2440,6 +3293,7 @@ impl GameState {
             .ok_or(StateError::TurnNumberOverflow)?;
         self.cleanup_iteration = 0;
         self.attackers_declared_this_combat = false;
+        self.combat = CombatState::new();
         self.begin_step(Step::Untap)?;
         Ok(Step::Untap)
     }
@@ -2479,6 +3333,7 @@ impl GameState {
 
     fn begin_cleanup_step(&mut self) -> Result<(), StateError> {
         self.cleanup_iteration = self.cleanup_iteration.saturating_add(1);
+        self.clear_damage_marked();
         self.last_cleanup_report = self.perform_cleanup_actions()?;
         let grant_priority = self.cleanup_priority_requested;
         self.cleanup_priority_requested = false;
@@ -2490,6 +3345,444 @@ impl GameState {
         };
         self.priority_pass_count = 0;
         Ok(())
+    }
+
+    fn require_combat_step(&self, expected: Step) -> Result<(), StateError> {
+        if self.current_step == Some(expected) {
+            Ok(())
+        } else {
+            Err(StateError::InvalidCombatStep {
+                expected,
+                actual: self.current_step,
+            })
+        }
+    }
+
+    fn validate_attack_declaration(
+        &self,
+        player: PlayerId,
+        attack: AttackDeclaration,
+    ) -> Result<(), StateError> {
+        let record = self
+            .objects
+            .get(attack.attacker())
+            .ok_or(StateError::UnknownObject(attack.attacker()))?;
+        if record.controller() != player
+            || self.object_zone(attack.attacker()) != Some(ZoneId::new(None, ZoneKind::Battlefield))
+        {
+            return Err(StateError::IllegalAttack(attack.attacker()));
+        }
+        let Some(creature) = record.creature() else {
+            return Err(StateError::NotACreature(attack.attacker()));
+        };
+        if record.tapped() {
+            return Err(StateError::CreatureTapped(attack.attacker()));
+        }
+        if record.controlled_since_turn() == self.turn_number && !creature.keywords().haste() {
+            return Err(StateError::SummoningSick(attack.attacker()));
+        }
+        self.require_player(attack.defending_player())?;
+        if attack.defending_player() == player {
+            return Err(StateError::IllegalAttack(attack.attacker()));
+        }
+        Ok(())
+    }
+
+    fn validate_block_declaration(
+        &self,
+        defending_player: PlayerId,
+        block: BlockDeclaration,
+    ) -> Result<(), StateError> {
+        let blocker = self
+            .objects
+            .get(block.blocker())
+            .ok_or(StateError::UnknownObject(block.blocker()))?;
+        if blocker.controller() != defending_player
+            || self.object_zone(block.blocker()) != Some(ZoneId::new(None, ZoneKind::Battlefield))
+        {
+            return Err(StateError::IllegalBlock {
+                blocker: block.blocker(),
+                attacker: block.attacker(),
+            });
+        }
+        if blocker.creature().is_none() {
+            return Err(StateError::NotACreature(block.blocker()));
+        }
+        if blocker.tapped() {
+            return Err(StateError::CreatureTapped(block.blocker()));
+        }
+        let Some(attacker) = self
+            .combat
+            .attackers
+            .iter()
+            .find(|attacker| attacker.object == block.attacker())
+        else {
+            return Err(StateError::IllegalBlock {
+                blocker: block.blocker(),
+                attacker: block.attacker(),
+            });
+        };
+        if attacker.defending_player != defending_player {
+            return Err(StateError::IllegalBlock {
+                blocker: block.blocker(),
+                attacker: block.attacker(),
+            });
+        }
+        let attacker_keywords = self.creature_keywords(block.attacker())?;
+        let blocker_keywords = self.creature_keywords(block.blocker())?;
+        if attacker_keywords.flying() && !(blocker_keywords.flying() || blocker_keywords.reach()) {
+            return Err(StateError::IllegalBlock {
+                blocker: block.blocker(),
+                attacker: block.attacker(),
+            });
+        }
+        Ok(())
+    }
+
+    fn validate_menace_blocks(&self, blocks: &[BlockDeclaration]) -> Result<(), StateError> {
+        for attacker in &self.combat.attackers {
+            if self.creature_keywords(attacker.object)?.menace() {
+                let block_count = blocks
+                    .iter()
+                    .filter(|block| block.attacker() == attacker.object)
+                    .count();
+                if block_count == 1 {
+                    let blocker = blocks
+                        .iter()
+                        .find(|block| block.attacker() == attacker.object)
+                        .map_or(ObjectId(u32::MAX), |block| block.blocker());
+                    return Err(StateError::IllegalBlock {
+                        blocker,
+                        attacker: attacker.object,
+                    });
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn begin_combat_damage_step(&mut self) {
+        match self.combat.damage_step {
+            Some(CombatDamageStepKind::FirstStrike) => {
+                self.combat.damage_step = Some(CombatDamageStepKind::Regular);
+            }
+            _ => {
+                self.combat.first_strike_participants = self
+                    .active_combat_creatures()
+                    .into_iter()
+                    .filter(|object| {
+                        self.creature_keywords(*object).is_ok_and(|keywords| {
+                            keywords.first_strike() || keywords.double_strike()
+                        })
+                    })
+                    .collect();
+                self.combat.damage_step = if self.combat.first_strike_participants.is_empty() {
+                    Some(CombatDamageStepKind::Normal)
+                } else {
+                    Some(CombatDamageStepKind::FirstStrike)
+                };
+            }
+        }
+    }
+
+    fn eligible_combat_damage_sources(&self) -> Result<Vec<ObjectId>, StateError> {
+        let step = self
+            .combat
+            .damage_step
+            .ok_or(StateError::InvalidCombatStep {
+                expected: Step::CombatDamage,
+                actual: self.current_step,
+            })?;
+        let mut sources = Vec::new();
+        for object in self.active_combat_creatures() {
+            let keywords = self.creature_keywords(object)?;
+            let eligible = match step {
+                CombatDamageStepKind::Normal => true,
+                CombatDamageStepKind::FirstStrike => {
+                    keywords.first_strike() || keywords.double_strike()
+                }
+                CombatDamageStepKind::Regular => {
+                    !self.combat.first_strike_participants.contains(&object)
+                        || keywords.double_strike()
+                }
+            };
+            if eligible {
+                sources.push(object);
+            }
+        }
+        Ok(sources)
+    }
+
+    fn validate_combat_damage_request(
+        &self,
+        request: &CombatDamageAssignmentRequest,
+    ) -> Result<(), StateError> {
+        let profile = self.combat_damage_profile(request.source())?;
+        let mut total = 0_u32;
+        for assignment in request.assignments() {
+            if !profile.legal_targets.contains(&assignment.target()) {
+                return Err(StateError::IllegalCombatDamageAssignment(request.source()));
+            }
+            total = total
+                .checked_add(assignment.amount())
+                .ok_or(StateError::CombatDamageOverflow)?;
+        }
+        if total != profile.required_total {
+            return Err(StateError::IllegalCombatDamageAssignment(request.source()));
+        }
+        if !profile.trample_blockers.is_empty() {
+            self.validate_trample_assignment(request, &profile)?;
+        }
+        Ok(())
+    }
+
+    fn validate_trample_assignment(
+        &self,
+        request: &CombatDamageAssignmentRequest,
+        profile: &CombatDamageProfile,
+    ) -> Result<(), StateError> {
+        let assigned_to_defender: u32 = request
+            .assignments()
+            .iter()
+            .filter(|assignment| assignment.target() == profile.trample_defender)
+            .map(|assignment| assignment.amount())
+            .sum();
+        if assigned_to_defender == 0 {
+            return Ok(());
+        }
+        let source_keywords = self.creature_keywords(request.source())?;
+        for blocker in &profile.trample_blockers {
+            let assigned_to_blocker: u32 = request
+                .assignments()
+                .iter()
+                .filter(|assignment| assignment.target() == CombatDamageTarget::Object(*blocker))
+                .map(|assignment| assignment.amount())
+                .sum();
+            if assigned_to_blocker < self.lethal_damage_required(*blocker, source_keywords)? {
+                return Err(StateError::IllegalCombatDamageAssignment(request.source()));
+            }
+        }
+        Ok(())
+    }
+
+    fn combat_damage_profile(&self, source: ObjectId) -> Result<CombatDamageProfile, StateError> {
+        let power = self.creature_power(source)?;
+        let required_total = u32::try_from(power.max(0)).unwrap_or(0);
+        if let Some(attacker) = self
+            .combat
+            .attackers
+            .iter()
+            .find(|attacker| attacker.object == source)
+        {
+            let keywords = self.creature_keywords(source)?;
+            if !attacker.blocked {
+                return Ok(CombatDamageProfile {
+                    legal_targets: vec![CombatDamageTarget::Player(attacker.defending_player)],
+                    required_total,
+                    trample_blockers: Vec::new(),
+                    trample_defender: CombatDamageTarget::Player(attacker.defending_player),
+                });
+            }
+            let current_blockers: Vec<ObjectId> = attacker
+                .blockers
+                .iter()
+                .copied()
+                .filter(|blocker| self.is_active_blocking_creature(*blocker))
+                .collect();
+            if current_blockers.is_empty() {
+                if keywords.trample() {
+                    return Ok(CombatDamageProfile {
+                        legal_targets: vec![CombatDamageTarget::Player(attacker.defending_player)],
+                        required_total,
+                        trample_blockers: Vec::new(),
+                        trample_defender: CombatDamageTarget::Player(attacker.defending_player),
+                    });
+                }
+                return Ok(CombatDamageProfile {
+                    legal_targets: Vec::new(),
+                    required_total: 0,
+                    trample_blockers: Vec::new(),
+                    trample_defender: CombatDamageTarget::Player(attacker.defending_player),
+                });
+            }
+            let mut legal_targets: Vec<CombatDamageTarget> = current_blockers
+                .iter()
+                .map(|blocker| CombatDamageTarget::Object(*blocker))
+                .collect();
+            let trample_defender = CombatDamageTarget::Player(attacker.defending_player);
+            let trample_blockers = if keywords.trample() {
+                legal_targets.push(trample_defender);
+                current_blockers
+            } else {
+                Vec::new()
+            };
+            return Ok(CombatDamageProfile {
+                legal_targets,
+                required_total,
+                trample_blockers,
+                trample_defender,
+            });
+        }
+
+        if let Some(blocker) = self
+            .combat
+            .blockers
+            .iter()
+            .find(|blocker| blocker.object == source)
+        {
+            let legal_targets = if self.is_active_attacking_creature(blocker.attacker) {
+                vec![CombatDamageTarget::Object(blocker.attacker)]
+            } else {
+                Vec::new()
+            };
+            let required_total = if legal_targets.is_empty() {
+                0
+            } else {
+                required_total
+            };
+            return Ok(CombatDamageProfile {
+                legal_targets,
+                required_total,
+                trample_blockers: Vec::new(),
+                trample_defender: CombatDamageTarget::Object(blocker.attacker),
+            });
+        }
+
+        Err(StateError::IllegalCombatDamageAssignment(source))
+    }
+
+    fn apply_combat_damage(&mut self, record: CombatDamageRecord) -> Result<(), StateError> {
+        match record.target {
+            CombatDamageTarget::Player(player) => {
+                let player_state = self
+                    .players
+                    .get_mut(player.index())
+                    .ok_or(StateError::UnknownPlayer(player))?;
+                player_state.life = player_state
+                    .life
+                    .checked_sub(i32::try_from(record.amount).unwrap_or(i32::MAX))
+                    .ok_or(StateError::CombatDamageOverflow)?;
+            }
+            CombatDamageTarget::Object(object) => {
+                self.mark_damage_on_object(object, record.amount)?;
+            }
+        }
+        if record.source_had_lifelink {
+            let controller = self
+                .objects
+                .get(record.source)
+                .ok_or(StateError::UnknownObject(record.source))?
+                .controller();
+            let player_state = self
+                .players
+                .get_mut(controller.index())
+                .ok_or(StateError::UnknownPlayer(controller))?;
+            player_state.life = player_state
+                .life
+                .checked_add(i32::try_from(record.amount).unwrap_or(i32::MAX))
+                .ok_or(StateError::CombatDamageOverflow)?;
+        }
+        Ok(())
+    }
+
+    fn active_combat_creatures(&self) -> Vec<ObjectId> {
+        let mut objects = Vec::new();
+        for attacker in &self.combat.attackers {
+            if self.is_active_attacking_creature(attacker.object) {
+                objects.push(attacker.object);
+            }
+        }
+        for blocker in &self.combat.blockers {
+            if self.is_active_blocking_creature(blocker.object) {
+                objects.push(blocker.object);
+            }
+        }
+        objects
+    }
+
+    fn is_active_attacking_creature(&self, object: ObjectId) -> bool {
+        self.combat
+            .attackers
+            .iter()
+            .any(|attacker| attacker.object == object)
+            && self.object_zone(object) == Some(ZoneId::new(None, ZoneKind::Battlefield))
+            && self
+                .objects
+                .get(object)
+                .is_some_and(|record| record.creature().is_some())
+    }
+
+    fn is_active_blocking_creature(&self, object: ObjectId) -> bool {
+        self.combat
+            .blockers
+            .iter()
+            .any(|blocker| blocker.object == object)
+            && self.object_zone(object) == Some(ZoneId::new(None, ZoneKind::Battlefield))
+            && self
+                .objects
+                .get(object)
+                .is_some_and(|record| record.creature().is_some())
+    }
+
+    fn creature_characteristics(
+        &self,
+        object: ObjectId,
+    ) -> Result<CreatureCharacteristics, StateError> {
+        let record = self
+            .objects
+            .get(object)
+            .ok_or(StateError::UnknownObject(object))?;
+        record.creature().ok_or(StateError::NotACreature(object))
+    }
+
+    fn creature_keywords(&self, object: ObjectId) -> Result<CreatureKeywords, StateError> {
+        Ok(self.creature_characteristics(object)?.keywords())
+    }
+
+    fn creature_power(&self, object: ObjectId) -> Result<i32, StateError> {
+        Ok(self.creature_characteristics(object)?.power())
+    }
+
+    fn lethal_damage_required(
+        &self,
+        object: ObjectId,
+        source_keywords: CreatureKeywords,
+    ) -> Result<u32, StateError> {
+        let record = self
+            .objects
+            .get(object)
+            .ok_or(StateError::UnknownObject(object))?;
+        let Some(creature) = record.creature() else {
+            return Err(StateError::NotACreature(object));
+        };
+        if source_keywords.deathtouch() {
+            return Ok(1);
+        }
+        let remaining = creature
+            .toughness()
+            .saturating_sub(i32::try_from(record.damage_marked()).unwrap_or(i32::MAX));
+        Ok(u32::try_from(remaining.max(0)).unwrap_or(0))
+    }
+
+    fn remove_object_from_combat(&mut self, object: ObjectId) {
+        self.combat
+            .attackers
+            .retain(|attacker| attacker.object != object);
+        self.combat
+            .blockers
+            .retain(|blocker| blocker.object != object);
+        for attacker in &mut self.combat.attackers {
+            attacker.blockers.retain(|blocker| *blocker != object);
+        }
+        self.combat
+            .first_strike_participants
+            .retain(|participant| *participant != object);
+    }
+
+    fn clear_damage_marked(&mut self) {
+        for record in &mut self.objects.records {
+            record.damage_marked = 0;
+        }
     }
 
     fn require_priority_player(&self, player: PlayerId) -> Result<(), StateError> {
@@ -2917,6 +4210,29 @@ impl Fnva64 {
         }
     }
 
+    fn write_creature_keywords(&mut self, keywords: CreatureKeywords) {
+        self.write_u32(u32::from(keywords.canonical_bits()));
+    }
+
+    fn write_creature_characteristics(&mut self, creature: CreatureCharacteristics) {
+        self.write_i32(creature.power);
+        self.write_i32(creature.toughness);
+        self.write_creature_keywords(creature.keywords);
+    }
+
+    fn write_optional_creature_characteristics(
+        &mut self,
+        creature: Option<CreatureCharacteristics>,
+    ) {
+        match creature {
+            Some(creature) => {
+                self.write_u8(1);
+                self.write_creature_characteristics(creature);
+            }
+            None => self.write_u8(0),
+        }
+    }
+
     fn write_zone_id(&mut self, zone: ZoneId) {
         self.write_u8(zone.kind.canonical_code());
         match zone.owner {
@@ -3028,6 +4344,68 @@ impl Fnva64 {
             self.write_bool(*legal);
         }
         self.write_u8(record.outcome.canonical_code());
+    }
+
+    fn write_combat_damage_step(&mut self, step: Option<CombatDamageStepKind>) {
+        match step {
+            Some(step) => {
+                self.write_u8(1);
+                self.write_u8(step.canonical_code());
+            }
+            None => self.write_u8(0),
+        }
+    }
+
+    fn write_combat_damage_target(&mut self, target: CombatDamageTarget) {
+        self.write_u8(target.canonical_code());
+        match target {
+            CombatDamageTarget::Player(player) => self.write_u32(player.0),
+            CombatDamageTarget::Object(object) => self.write_u32(object.0),
+        }
+    }
+
+    fn write_attacking_creature(&mut self, attacker: &AttackingCreature) {
+        self.write_u32(attacker.object.0);
+        self.write_u32(attacker.defending_player.0);
+        self.write_bool(attacker.blocked);
+        self.write_u32(attacker.blockers.len() as u32);
+        for blocker in &attacker.blockers {
+            self.write_u32(blocker.0);
+        }
+    }
+
+    fn write_blocking_creature(&mut self, blocker: BlockingCreature) {
+        self.write_u32(blocker.object.0);
+        self.write_u32(blocker.attacker.0);
+    }
+
+    fn write_combat_damage_record(&mut self, record: CombatDamageRecord) {
+        self.write_u32(record.source.0);
+        self.write_combat_damage_target(record.target);
+        self.write_u32(record.amount);
+        self.write_u8(record.step.canonical_code());
+        self.write_bool(record.source_had_deathtouch);
+        self.write_bool(record.source_had_lifelink);
+    }
+
+    fn write_combat_state(&mut self, combat: &CombatState) {
+        self.write_u32(combat.attackers.len() as u32);
+        for attacker in &combat.attackers {
+            self.write_attacking_creature(attacker);
+        }
+        self.write_u32(combat.blockers.len() as u32);
+        for blocker in &combat.blockers {
+            self.write_blocking_creature(*blocker);
+        }
+        self.write_u32(combat.damage_records.len() as u32);
+        for record in &combat.damage_records {
+            self.write_combat_damage_record(*record);
+        }
+        self.write_combat_damage_step(combat.damage_step);
+        self.write_u32(combat.first_strike_participants.len() as u32);
+        for participant in &combat.first_strike_participants {
+            self.write_u32(participant.0);
+        }
     }
 }
 
@@ -3093,6 +4471,29 @@ impl CanonicalBytes {
         }
     }
 
+    fn write_creature_keywords(&mut self, keywords: CreatureKeywords) {
+        self.write_u32(u32::from(keywords.canonical_bits()));
+    }
+
+    fn write_creature_characteristics(&mut self, creature: CreatureCharacteristics) {
+        self.write_i32(creature.power);
+        self.write_i32(creature.toughness);
+        self.write_creature_keywords(creature.keywords);
+    }
+
+    fn write_optional_creature_characteristics(
+        &mut self,
+        creature: Option<CreatureCharacteristics>,
+    ) {
+        match creature {
+            Some(creature) => {
+                self.write_u8(1);
+                self.write_creature_characteristics(creature);
+            }
+            None => self.write_u8(0),
+        }
+    }
+
     fn write_zone_id(&mut self, zone: ZoneId) {
         self.write_u8(zone.kind.canonical_code());
         match zone.owner {
@@ -3205,14 +4606,78 @@ impl CanonicalBytes {
         }
         self.write_u8(record.outcome.canonical_code());
     }
+
+    fn write_combat_damage_step(&mut self, step: Option<CombatDamageStepKind>) {
+        match step {
+            Some(step) => {
+                self.write_u8(1);
+                self.write_u8(step.canonical_code());
+            }
+            None => self.write_u8(0),
+        }
+    }
+
+    fn write_combat_damage_target(&mut self, target: CombatDamageTarget) {
+        self.write_u8(target.canonical_code());
+        match target {
+            CombatDamageTarget::Player(player) => self.write_u32(player.0),
+            CombatDamageTarget::Object(object) => self.write_u32(object.0),
+        }
+    }
+
+    fn write_attacking_creature(&mut self, attacker: &AttackingCreature) {
+        self.write_u32(attacker.object.0);
+        self.write_u32(attacker.defending_player.0);
+        self.write_bool(attacker.blocked);
+        self.write_u32(attacker.blockers.len() as u32);
+        for blocker in &attacker.blockers {
+            self.write_u32(blocker.0);
+        }
+    }
+
+    fn write_blocking_creature(&mut self, blocker: BlockingCreature) {
+        self.write_u32(blocker.object.0);
+        self.write_u32(blocker.attacker.0);
+    }
+
+    fn write_combat_damage_record(&mut self, record: CombatDamageRecord) {
+        self.write_u32(record.source.0);
+        self.write_combat_damage_target(record.target);
+        self.write_u32(record.amount);
+        self.write_u8(record.step.canonical_code());
+        self.write_bool(record.source_had_deathtouch);
+        self.write_bool(record.source_had_lifelink);
+    }
+
+    fn write_combat_state(&mut self, combat: &CombatState) {
+        self.write_u32(combat.attackers.len() as u32);
+        for attacker in &combat.attackers {
+            self.write_attacking_creature(attacker);
+        }
+        self.write_u32(combat.blockers.len() as u32);
+        for blocker in &combat.blockers {
+            self.write_blocking_creature(*blocker);
+        }
+        self.write_u32(combat.damage_records.len() as u32);
+        for record in &combat.damage_records {
+            self.write_combat_damage_record(*record);
+        }
+        self.write_combat_damage_step(combat.damage_step);
+        self.write_u32(combat.first_strike_participants.len() as u32);
+        for participant in &combat.first_strike_participants {
+            self.write_u32(participant.0);
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
         auto_payment_plan, crate_ready, enumerate_auto_tap_payment_plans, enumerate_payment_plans,
-        validate_payment_plan, CardId, CastSpellRequest, EffectDuration, GameState, ManaCost,
-        ManaKind, ManaPool, ManaSource, PaymentError, Phase, PlayerId, PriorityOutcome,
+        validate_payment_plan, AttackDeclaration, BlockDeclaration, CardId, CastSpellRequest,
+        CombatDamageAssignment, CombatDamageAssignmentRequest, CombatDamageStepKind,
+        CombatDamageTarget, CreatureCharacteristics, CreatureKeywords, EffectDuration, GameState,
+        ManaCost, ManaKind, ManaPool, ManaSource, PaymentError, Phase, PlayerId, PriorityOutcome,
         ResolutionOutcome, SpellTiming, StackEntryId, StackObjectKind, StateError, Step,
         TargetChoice, TargetKind, TargetRequirement, ZoneConservation, ZoneId, ZoneKind,
         NORMAL_TURN_STEPS, PAYMENT_PLAN_LIMIT,
@@ -4027,6 +5492,532 @@ mod tests {
     }
 
     #[test]
+    fn declare_attackers_taps_nonvigilance_and_preserves_vigilance() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let defender = state.add_player();
+        let first = battlefield_creature(&mut state, active, 200, 2, 2, CreatureKeywords::none());
+        let vigilant = battlefield_creature(
+            &mut state,
+            active,
+            201,
+            3,
+            3,
+            CreatureKeywords::none().with_vigilance(),
+        );
+        start_declare_attackers(&mut state, active);
+        let before = state.deterministic_hash();
+
+        state
+            .declare_attackers(
+                active,
+                &[
+                    AttackDeclaration::new(first, defender),
+                    AttackDeclaration::new(vigilant, defender),
+                ],
+            )
+            .unwrap_or_else(|error| panic!("unexpected attack error: {error:?}"));
+
+        assert!(state
+            .objects()
+            .get(first)
+            .unwrap_or_else(|| panic!("missing first attacker"))
+            .tapped());
+        assert!(!state
+            .objects()
+            .get(vigilant)
+            .unwrap_or_else(|| panic!("missing vigilant attacker"))
+            .tapped());
+        assert_eq!(state.combat_state().attackers().len(), 2);
+        assert_ne!(state.deterministic_hash(), before);
+        assert_eq!(
+            state.deterministic_hash(),
+            state.deterministic_hash_streaming()
+        );
+    }
+
+    #[test]
+    fn illegal_attack_declarations_leave_state_unchanged() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let defender = state.add_player();
+        let tapped = battlefield_creature(&mut state, active, 202, 2, 2, CreatureKeywords::none());
+        state
+            .set_object_tapped(tapped, true)
+            .unwrap_or_else(|error| panic!("unexpected tap error: {error:?}"));
+        start_declare_attackers(&mut state, active);
+        let before = state.canonical_bytes();
+
+        assert_eq!(
+            state.declare_attackers(active, &[AttackDeclaration::new(tapped, defender)]),
+            Err(StateError::CreatureTapped(tapped))
+        );
+        assert_eq!(state.canonical_bytes(), before);
+
+        let fresh = state
+            .create_object(
+                CardId::new(203),
+                active,
+                active,
+                ZoneId::new(None, ZoneKind::Battlefield),
+            )
+            .unwrap_or_else(|error| panic!("unexpected fresh create error: {error:?}"));
+        state
+            .set_creature_characteristics(fresh, CreatureCharacteristics::new(2, 2))
+            .unwrap_or_else(|error| panic!("unexpected fresh creature error: {error:?}"));
+        let before = state.canonical_bytes();
+        assert_eq!(
+            state.declare_attackers(active, &[AttackDeclaration::new(fresh, defender)]),
+            Err(StateError::SummoningSick(fresh))
+        );
+        assert_eq!(state.canonical_bytes(), before);
+    }
+
+    #[test]
+    fn declare_no_attackers_skips_blockers_and_damage() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        start_declare_attackers(&mut state, active);
+
+        state
+            .declare_attackers(active, &[])
+            .unwrap_or_else(|error| panic!("unexpected empty attack error: {error:?}"));
+
+        assert_eq!(
+            state
+                .advance_step()
+                .unwrap_or_else(|error| panic!("unexpected no-attack advance error: {error:?}")),
+            Step::EndOfCombat
+        );
+    }
+
+    #[test]
+    fn flying_reach_and_menace_block_legality_is_enforced() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let defender = state.add_player();
+        let flyer = battlefield_creature(
+            &mut state,
+            active,
+            204,
+            2,
+            2,
+            CreatureKeywords::none().with_flying(),
+        );
+        let ground =
+            battlefield_creature(&mut state, defender, 205, 2, 2, CreatureKeywords::none());
+        let reach = battlefield_creature(
+            &mut state,
+            defender,
+            206,
+            2,
+            2,
+            CreatureKeywords::none().with_reach(),
+        );
+        start_declare_attackers(&mut state, active);
+        state
+            .declare_attackers(active, &[AttackDeclaration::new(flyer, defender)])
+            .unwrap_or_else(|error| panic!("unexpected flying attack error: {error:?}"));
+        state
+            .advance_step()
+            .unwrap_or_else(|error| panic!("unexpected blockers step error: {error:?}"));
+        let before = state.canonical_bytes();
+
+        assert_eq!(
+            state.declare_blockers(defender, &[BlockDeclaration::new(ground, flyer)]),
+            Err(StateError::IllegalBlock {
+                blocker: ground,
+                attacker: flyer
+            })
+        );
+        assert_eq!(state.canonical_bytes(), before);
+        state
+            .declare_blockers(defender, &[BlockDeclaration::new(reach, flyer)])
+            .unwrap_or_else(|error| panic!("unexpected reach block error: {error:?}"));
+
+        let mut menace_state = GameState::new();
+        let menace_active = menace_state.add_player();
+        let menace_defender = menace_state.add_player();
+        let menace = battlefield_creature(
+            &mut menace_state,
+            menace_active,
+            207,
+            3,
+            3,
+            CreatureKeywords::none().with_menace(),
+        );
+        let first_blocker = battlefield_creature(
+            &mut menace_state,
+            menace_defender,
+            208,
+            1,
+            1,
+            CreatureKeywords::none(),
+        );
+        let second_blocker = battlefield_creature(
+            &mut menace_state,
+            menace_defender,
+            209,
+            1,
+            1,
+            CreatureKeywords::none(),
+        );
+        start_declare_attackers(&mut menace_state, menace_active);
+        menace_state
+            .declare_attackers(
+                menace_active,
+                &[AttackDeclaration::new(menace, menace_defender)],
+            )
+            .unwrap_or_else(|error| panic!("unexpected menace attack error: {error:?}"));
+        menace_state
+            .advance_step()
+            .unwrap_or_else(|error| panic!("unexpected menace blockers step error: {error:?}"));
+        assert_eq!(
+            menace_state.declare_blockers(
+                menace_defender,
+                &[BlockDeclaration::new(first_blocker, menace)]
+            ),
+            Err(StateError::IllegalBlock {
+                blocker: first_blocker,
+                attacker: menace
+            })
+        );
+        menace_state
+            .declare_blockers(
+                menace_defender,
+                &[
+                    BlockDeclaration::new(first_blocker, menace),
+                    BlockDeclaration::new(second_blocker, menace),
+                ],
+            )
+            .unwrap_or_else(|error| panic!("unexpected two-blocker menace error: {error:?}"));
+    }
+
+    #[test]
+    fn blocked_attacker_remains_blocked_after_blocker_leaves() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let defender = state.add_player();
+        let attacker =
+            battlefield_creature(&mut state, active, 210, 4, 4, CreatureKeywords::none());
+        let blocker =
+            battlefield_creature(&mut state, defender, 211, 1, 1, CreatureKeywords::none());
+        start_declare_attackers(&mut state, active);
+        state
+            .declare_attackers(active, &[AttackDeclaration::new(attacker, defender)])
+            .unwrap_or_else(|error| panic!("unexpected attack error: {error:?}"));
+        state
+            .advance_step()
+            .unwrap_or_else(|error| panic!("unexpected blockers advance error: {error:?}"));
+        state
+            .declare_blockers(defender, &[BlockDeclaration::new(blocker, attacker)])
+            .unwrap_or_else(|error| panic!("unexpected block error: {error:?}"));
+        state
+            .move_object(blocker, ZoneId::new(Some(defender), ZoneKind::Graveyard))
+            .unwrap_or_else(|error| panic!("unexpected blocker move error: {error:?}"));
+        state
+            .advance_step()
+            .unwrap_or_else(|error| panic!("unexpected damage advance error: {error:?}"));
+
+        assert!(state.combat_state().attackers()[0].blocked());
+        assert!(state.assign_combat_damage(&[]).is_ok());
+        assert_eq!(state.players()[defender.index()].life(), 20);
+    }
+
+    #[test]
+    fn double_strike_creates_two_damage_steps() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let defender = state.add_player();
+        let striker = battlefield_creature(
+            &mut state,
+            active,
+            212,
+            2,
+            2,
+            CreatureKeywords::none().with_double_strike(),
+        );
+        start_declare_attackers(&mut state, active);
+        state
+            .declare_attackers(active, &[AttackDeclaration::new(striker, defender)])
+            .unwrap_or_else(|error| panic!("unexpected double-strike attack error: {error:?}"));
+        state
+            .advance_step()
+            .unwrap_or_else(|error| panic!("unexpected blockers advance error: {error:?}"));
+        state
+            .declare_blockers(defender, &[])
+            .unwrap_or_else(|error| panic!("unexpected empty block error: {error:?}"));
+        state
+            .advance_step()
+            .unwrap_or_else(|error| panic!("unexpected first damage advance error: {error:?}"));
+        assert_eq!(
+            state.combat_state().damage_step(),
+            Some(CombatDamageStepKind::FirstStrike)
+        );
+        state
+            .assign_combat_damage(&[CombatDamageAssignmentRequest::new(
+                striker,
+                vec![CombatDamageAssignment::new(
+                    CombatDamageTarget::Player(defender),
+                    2,
+                )],
+            )])
+            .unwrap_or_else(|error| panic!("unexpected first damage error: {error:?}"));
+        assert_eq!(
+            state.advance_step().unwrap_or_else(|error| panic!(
+                "unexpected regular damage advance error: {error:?}"
+            )),
+            Step::CombatDamage
+        );
+        assert_eq!(
+            state.combat_state().damage_step(),
+            Some(CombatDamageStepKind::Regular)
+        );
+        state
+            .assign_combat_damage(&[CombatDamageAssignmentRequest::new(
+                striker,
+                vec![CombatDamageAssignment::new(
+                    CombatDamageTarget::Player(defender),
+                    2,
+                )],
+            )])
+            .unwrap_or_else(|error| panic!("unexpected regular damage error: {error:?}"));
+
+        assert_eq!(state.players()[defender.index()].life(), 16);
+    }
+
+    #[test]
+    fn trample_with_deathtouch_allows_one_damage_to_each_blocker() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let defender = state.add_player();
+        let trampler = battlefield_creature(
+            &mut state,
+            active,
+            213,
+            5,
+            5,
+            CreatureKeywords::none().with_trample().with_deathtouch(),
+        );
+        let blocker =
+            battlefield_creature(&mut state, defender, 214, 3, 3, CreatureKeywords::none());
+        start_declare_attackers(&mut state, active);
+        state
+            .declare_attackers(active, &[AttackDeclaration::new(trampler, defender)])
+            .unwrap_or_else(|error| panic!("unexpected trample attack error: {error:?}"));
+        state
+            .advance_step()
+            .unwrap_or_else(|error| panic!("unexpected blockers advance error: {error:?}"));
+        state
+            .declare_blockers(defender, &[BlockDeclaration::new(blocker, trampler)])
+            .unwrap_or_else(|error| panic!("unexpected trample block error: {error:?}"));
+        state
+            .advance_step()
+            .unwrap_or_else(|error| panic!("unexpected damage advance error: {error:?}"));
+
+        state
+            .assign_combat_damage(&[
+                CombatDamageAssignmentRequest::new(
+                    trampler,
+                    vec![
+                        CombatDamageAssignment::new(CombatDamageTarget::Object(blocker), 1),
+                        CombatDamageAssignment::new(CombatDamageTarget::Player(defender), 4),
+                    ],
+                ),
+                CombatDamageAssignmentRequest::new(
+                    blocker,
+                    vec![CombatDamageAssignment::new(
+                        CombatDamageTarget::Object(trampler),
+                        3,
+                    )],
+                ),
+            ])
+            .unwrap_or_else(|error| panic!("unexpected trample damage error: {error:?}"));
+
+        assert_eq!(
+            state
+                .objects()
+                .get(blocker)
+                .unwrap_or_else(|| panic!("missing blocker"))
+                .damage_marked(),
+            1
+        );
+        assert_eq!(state.players()[defender.index()].life(), 16);
+    }
+
+    #[test]
+    fn trample_without_lethal_blocker_damage_is_rejected() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let defender = state.add_player();
+        let trampler = battlefield_creature(
+            &mut state,
+            active,
+            215,
+            5,
+            5,
+            CreatureKeywords::none().with_trample(),
+        );
+        let blocker =
+            battlefield_creature(&mut state, defender, 216, 3, 3, CreatureKeywords::none());
+        start_declare_attackers(&mut state, active);
+        state
+            .declare_attackers(active, &[AttackDeclaration::new(trampler, defender)])
+            .unwrap_or_else(|error| panic!("unexpected trample attack error: {error:?}"));
+        state
+            .advance_step()
+            .unwrap_or_else(|error| panic!("unexpected blockers advance error: {error:?}"));
+        state
+            .declare_blockers(defender, &[BlockDeclaration::new(blocker, trampler)])
+            .unwrap_or_else(|error| panic!("unexpected trample block error: {error:?}"));
+        state
+            .advance_step()
+            .unwrap_or_else(|error| panic!("unexpected damage advance error: {error:?}"));
+        let before = state.canonical_bytes();
+
+        assert_eq!(
+            state.assign_combat_damage(&[CombatDamageAssignmentRequest::new(
+                trampler,
+                vec![
+                    CombatDamageAssignment::new(CombatDamageTarget::Object(blocker), 1),
+                    CombatDamageAssignment::new(CombatDamageTarget::Player(defender), 4),
+                ],
+            )]),
+            Err(StateError::IllegalCombatDamageAssignment(trampler))
+        );
+        assert_eq!(state.canonical_bytes(), before);
+    }
+
+    #[test]
+    fn lifelink_combat_damage_gains_life_as_damage_is_dealt() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let defender = state.add_player();
+        let lifelinker = battlefield_creature(
+            &mut state,
+            active,
+            217,
+            3,
+            3,
+            CreatureKeywords::none().with_lifelink(),
+        );
+        start_declare_attackers(&mut state, active);
+        state
+            .declare_attackers(active, &[AttackDeclaration::new(lifelinker, defender)])
+            .unwrap_or_else(|error| panic!("unexpected lifelink attack error: {error:?}"));
+        state
+            .advance_step()
+            .unwrap_or_else(|error| panic!("unexpected blockers advance error: {error:?}"));
+        state
+            .declare_blockers(defender, &[])
+            .unwrap_or_else(|error| panic!("unexpected empty block error: {error:?}"));
+        state
+            .advance_step()
+            .unwrap_or_else(|error| panic!("unexpected damage advance error: {error:?}"));
+
+        let records = state
+            .assign_combat_damage(&[CombatDamageAssignmentRequest::new(
+                lifelinker,
+                vec![CombatDamageAssignment::new(
+                    CombatDamageTarget::Player(defender),
+                    3,
+                )],
+            )])
+            .unwrap_or_else(|error| panic!("unexpected lifelink damage error: {error:?}"));
+
+        assert_eq!(records.len(), 1);
+        assert!(records[0].source_had_lifelink());
+        assert_eq!(state.players()[active.index()].life(), 23);
+        assert_eq!(state.players()[defender.index()].life(), 17);
+    }
+
+    #[test]
+    fn combat_damage_marks_persist_until_cleanup() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let defender = state.add_player();
+        let attacker =
+            battlefield_creature(&mut state, active, 218, 2, 2, CreatureKeywords::none());
+        let blocker =
+            battlefield_creature(&mut state, defender, 219, 2, 2, CreatureKeywords::none());
+        start_declare_attackers(&mut state, active);
+        state
+            .declare_attackers(active, &[AttackDeclaration::new(attacker, defender)])
+            .unwrap_or_else(|error| panic!("unexpected attack error: {error:?}"));
+        state
+            .advance_step()
+            .unwrap_or_else(|error| panic!("unexpected blockers advance error: {error:?}"));
+        state
+            .declare_blockers(defender, &[BlockDeclaration::new(blocker, attacker)])
+            .unwrap_or_else(|error| panic!("unexpected block error: {error:?}"));
+        state
+            .advance_step()
+            .unwrap_or_else(|error| panic!("unexpected damage advance error: {error:?}"));
+        state
+            .assign_combat_damage(&[
+                CombatDamageAssignmentRequest::new(
+                    attacker,
+                    vec![CombatDamageAssignment::new(
+                        CombatDamageTarget::Object(blocker),
+                        2,
+                    )],
+                ),
+                CombatDamageAssignmentRequest::new(
+                    blocker,
+                    vec![CombatDamageAssignment::new(
+                        CombatDamageTarget::Object(attacker),
+                        2,
+                    )],
+                ),
+            ])
+            .unwrap_or_else(|error| panic!("unexpected creature damage error: {error:?}"));
+        state
+            .advance_step()
+            .unwrap_or_else(|error| panic!("unexpected end combat advance error: {error:?}"));
+        state
+            .advance_step()
+            .unwrap_or_else(|error| panic!("unexpected postcombat advance error: {error:?}"));
+        assert_eq!(
+            state
+                .objects()
+                .get(attacker)
+                .unwrap_or_else(|| panic!("missing attacker"))
+                .damage_marked(),
+            2
+        );
+        assert_eq!(
+            state
+                .objects()
+                .get(blocker)
+                .unwrap_or_else(|| panic!("missing blocker"))
+                .damage_marked(),
+            2
+        );
+
+        while state.current_step() != Some(Step::Cleanup) {
+            state
+                .advance_step()
+                .unwrap_or_else(|error| panic!("unexpected cleanup walk error: {error:?}"));
+        }
+        assert_eq!(
+            state
+                .objects()
+                .get(attacker)
+                .unwrap_or_else(|| panic!("missing attacker"))
+                .damage_marked(),
+            0
+        );
+        assert_eq!(
+            state
+                .objects()
+                .get(blocker)
+                .unwrap_or_else(|| panic!("missing blocker"))
+                .damage_marked(),
+            0
+        );
+    }
+
+    #[test]
     fn end_of_turn_durations_survive_end_step_and_expire_during_cleanup() {
         let mut state = GameState::new();
         let active = state.add_player();
@@ -4389,6 +6380,42 @@ mod tests {
         state
             .advance_step()
             .unwrap_or_else(|error| panic!("unexpected upkeep advance error: {error:?}"));
+    }
+
+    fn start_declare_attackers(state: &mut GameState, active: PlayerId) {
+        state
+            .start_turn(active)
+            .unwrap_or_else(|error| panic!("unexpected start error: {error:?}"));
+        while state.current_step() != Some(Step::DeclareAttackers) {
+            state
+                .advance_step()
+                .unwrap_or_else(|error| panic!("unexpected combat walk error: {error:?}"));
+        }
+    }
+
+    fn battlefield_creature(
+        state: &mut GameState,
+        controller: PlayerId,
+        card: u32,
+        power: i32,
+        toughness: i32,
+        keywords: CreatureKeywords,
+    ) -> super::ObjectId {
+        let object = state
+            .create_object(
+                CardId::new(card),
+                controller,
+                controller,
+                ZoneId::new(None, ZoneKind::Battlefield),
+            )
+            .unwrap_or_else(|error| panic!("unexpected battlefield create error: {error:?}"));
+        state
+            .set_creature_characteristics(
+                object,
+                CreatureCharacteristics::new(power, toughness).with_keywords(keywords),
+            )
+            .unwrap_or_else(|error| panic!("unexpected creature characteristics error: {error:?}"));
+        object
     }
 
     fn zero_payment(cost: ManaCost) -> super::PaymentPlan {
