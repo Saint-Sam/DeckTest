@@ -32,18 +32,23 @@
       "attempts": 0
     }
   },
-  "gates_passed": [],
+  "gates_passed": [
+    "T0"
+  ],
   "metrics_snapshot": "metrics/legacy_inventory.json",
   "gate_reviews": {
     "T0": {
-      "status": "remediation_complete_pending_re_review",
+      "status": "passed_conditional",
       "bundle": "reports/gates/T0/bundle",
       "signoff": "reports/gates/T0/SIGNOFF.md",
+      "conditions": {
+        "T0.C1": "Before collaboration branches or release, configure GitHub main branch protection to require fmt, clippy, test-linux, test-macos, test-windows, build-wasm, build-android, coverage, deny-audit, verification-loop, and determinism-replay."
+      },
       "remediation": {
-        "T0.R1": "complete: remote CI run 28815618762 passed all required T0 jobs; branch protection equivalence documented in reports/gates/T0/remote-ci-2026-07-06.md",
+        "T0.R1": "complete: remote CI run 28816494698 passed all required T0 jobs on current main head 3ee6166; branch protection equivalence documented in reports/gates/T0/remote-ci-2026-07-06.md",
         "T0.R2": "complete: T0 gate Owner Brief created",
         "T0.R3": "complete: bundle regenerated with current PLAN_STATE",
-        "T0.R4": "complete: fresh-clone gate passed from commit 93cad32"
+        "T0.R4": "complete: fresh-clone gate passed from current committed head 3ee6166 and initial foundation commit 93cad32"
       }
     }
   },

@@ -1,5 +1,67 @@
 # T0 Gate Signoff
 
+## Re-review: 2026-07-06
+
+Reviewer identity: designated strong reasoning model (`Anscombe`, delegated Gate
+Reviewer)
+
+Verdict: PASS CONDITIONAL
+
+Commit SHA reviewed:
+`3ee6166a6a969207088c46beda5e7c29a914ad48`
+(`T0.3: record remote CI remediation evidence`)
+
+Scope reviewed: failed-item remediation from the initial T0 gate review, current
+T0 bundle, current `PLAN_STATE.json`, Owner Brief, fresh-clone gate evidence,
+remote CI evidence, and branch-protection equivalence note.
+
+Current tree note: this signoff supersedes the historical FAIL below. The
+packet-only evidence corrections made during re-review are explicitly included
+in this signoff commit so the gate record references one reviewed state.
+
+## Conditions
+
+1. Before collaboration branches or release, configure GitHub `main` branch
+   protection to require the T0.3 CI jobs: `fmt`, `clippy`, `test-linux`,
+   `test-macos`, `test-windows`, `build-wasm`, `build-android`, `coverage`,
+   `deny-audit`, `verification-loop`, and `determinism-replay`.
+2. The signoff/evidence commit contains no product-code change beyond gate
+   paperwork. Its push must receive the same green GitHub Actions CI before the
+   remote repository is considered fully synchronized with this local gate
+   state.
+
+## Re-review Checklist
+
+| ID | Result | Evidence |
+| --- | --- | --- |
+| G1 Gate script green from scratch | PASS | Fresh recursive clone of `3ee6166a6a969207088c46beda5e7c29a914ad48` to `/private/tmp/forge_t0_fresh_3ee6166_20260706_1918` checked out legacy submodule `1f0a3e0815822d8f58f798e0304b33d4534248b1`; `bash scripts/gates/gate_T0.sh` ended `ALL CHECKS PASSED` and `PASS gate_T0.sh`. |
+| G2 Exit criteria and metrics | PASS | `metrics/legacy_inventory.json` remains the metrics snapshot; T0.3 remote CI run `28816494698` on `3ee6166` passed all required jobs. |
+| G3 Test-quality audit | PASS WITH LIMITATION | T0 still contains intentionally trivial bootstrap tests, which match the T0.2 empty-workspace requirement. Meaningful mutation checking begins when nontrivial engine behavior exists. |
+| G4 Adversarial oracle scenarios | N/A FOR T0 | No rules engine or oracle subject exists in T0. |
+| G5 Blocker and quarantine hygiene | PASS | Bundle reports no blockers; quarantine is not active until later tiers. |
+| G6 Determinism and fuzz | N/A FOR T0 | Determinism hook exists and passes/skips as expected; no replay/fuzz subject exists yet. |
+| G7 Spot play / replays | N/A FOR T0 | No playable game or replay format exists in T0. |
+| G8 ADR/spec consistency | PASS | Legacy submodule pin, vendored CR metadata, toolchain lock, and workspace/CI layout remain consistent with T0 plan requirements. |
+| G9 Question Queue clear | PASS | `questions_open.md` reports no open P0/P1 questions. |
+| G10 Scope integrity | PASS | Changes are confined to T0 foundation, CI, gate evidence, status, and owner-report surfaces. |
+| G11 Owner Brief delivered | PASS | `reports/owner/brief-T0-gate.md` exists, includes the T0 `scripts/vl.sh` try-it row, known rough edges, and required owner-facing closing sections. |
+
+## Remediation Closure
+
+- T0.R1: COMPLETE. Remote GitHub Actions run `28816494698` passed the required
+  T0.3 jobs on `3ee6166`; branch-protection equivalence is documented, with
+  real branch protection left as a future owner-controlled repo setting before
+  collaboration branches or release.
+- T0.R2: COMPLETE. T0 gate Owner Brief exists and no longer repeats stale Rust
+  installation claims.
+- T0.R3: COMPLETE. Bundle was regenerated from current `PLAN_STATE.json`.
+- T0.R4: COMPLETE. Fresh recursive clone gate run passed for current committed
+  head `3ee6166`.
+
+Blockers forcing FAIL: none.
+
+## Historical Review: Initial Fail Superseded
+
 Date: 2026-07-06
 
 Reviewer identity: designated strong reasoning model
