@@ -1,0 +1,27 @@
+id: T1.R2
+title: Replace stored creature characteristics with a computed characteristic boundary
+tier: 1
+priority: P0
+tags:
+  - remediation
+  - cp-kernel
+  - characteristics
+  - layers-ready
+scope_paths:
+  - crates/forge-core/src/lib.rs
+  - crates/forge-carddef/src/lib.rs
+inputs:
+  - reports/gates/CP-KERNEL/SIGNOFF.md
+  - FORGE_REBUILD_MASTER_PLAN.md Section 3.3
+  - FORGE_REBUILD_MASTER_PLAN.md Section 7 T2.4
+acceptance:
+  - ObjectRecord no longer stores current power, toughness, or keyword abilities as directly mutable CreatureCharacteristics
+  - stored card/object data is split into base printed characteristics or carddef IR references, with current characteristics derived through a query function
+  - combat and SBA code obtains power, toughness, types, and abilities through the derived-characteristics query path
+  - direct setters that mutate current power, toughness, or keyword abilities are removed from the public API
+  - tests cover that combat/SBA behavior follows the derived query path and that no code path directly mutates current creature power/toughness
+verify: cargo test -p forge-core && cargo clippy -p forge-core --all-targets -- -D warnings && scripts/vl.sh
+retry_policy: 3 attempts then blocker
+depends_on:
+  - T1.R1
+parallel_ok: false

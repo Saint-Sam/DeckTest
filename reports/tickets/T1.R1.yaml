@@ -1,0 +1,27 @@
+id: T1.R1
+title: Seal the kernel behind the Section 3.3 action surface
+tier: 1
+priority: P0
+tags:
+  - remediation
+  - cp-kernel
+  - kernel-api
+  - action-surface
+scope_paths:
+  - crates/forge-core/src/lib.rs
+  - scripts/review/
+inputs:
+  - reports/gates/CP-KERNEL/SIGNOFF.md
+  - FORGE_REBUILD_MASTER_PLAN.md Section 3.3
+  - FORGE_REBUILD_MASTER_PLAN.md Section 15.4 CP-KERNEL
+acceptance:
+  - forge-core exposes public mutation only through legal_actions(&GameState) -> ActionList and apply(&mut GameState, Action) -> Outcome, plus read-only queries
+  - public GameState methods that directly mutate state are made private, pub(crate), test-only, or moved behind an explicitly non-consumer testkit/internal API
+  - low-level helpers such as put_spell_on_stack, put_ability_on_stack, move_object, create_object, set_* mutators, declare_* mutators, and check_state_based_actions are not callable by external consumers except through Action/apply
+  - a review script fails if new public GameState methods taking &mut self appear outside an allowlist for new/apply
+  - existing forge-core tests either use the action surface or clearly test private internals from the inline test module without expanding the external API
+verify: cargo test -p forge-core && cargo clippy -p forge-core --all-targets -- -D warnings && scripts/vl.sh
+retry_policy: 3 attempts then blocker
+depends_on:
+  - T1.7
+parallel_ok: false

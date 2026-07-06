@@ -1,0 +1,26 @@
+id: T1.R4
+title: Flatten or guard the GameState clone surface
+tier: 1
+priority: P1
+tags:
+  - remediation
+  - cp-kernel
+  - clone
+  - performance
+scope_paths:
+  - crates/forge-core/src/lib.rs
+  - scripts/review/
+  - tools/
+inputs:
+  - reports/gates/CP-KERNEL/SIGNOFF.md
+  - FORGE_REBUILD_MASTER_PLAN.md Section 3.3
+acceptance:
+  - per-record game-state structures are Copy-friendly or store index/range handles into arenas rather than owning nested Vec allocations
+  - any remaining nested Vec in GameState is documented with an invariant explaining why clone allocation remains bounded
+  - a clone benchmark or allocation-count guard is added before CP-KERNEL re-review, not deferred to T1.13, and the gate evidence records the baseline
+  - GameSnapshot/StateSnapshot construction does not require unnecessary full-information deep clones for UI/AI consumers
+verify: cargo test -p forge-core && cargo clippy -p forge-core --all-targets -- -D warnings && scripts/vl.sh
+retry_policy: 3 attempts then blocker
+depends_on:
+  - T1.R1
+parallel_ok: true
