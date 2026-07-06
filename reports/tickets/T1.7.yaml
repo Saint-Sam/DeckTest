@@ -1,0 +1,30 @@
+id: T1.7
+title: State-based actions and game outcome
+tier: 1
+tags:
+  - kernel
+  - state-based-actions
+  - deterministic-state
+  - combat
+scope_paths:
+  - crates/forge-core/src/lib.rs
+inputs:
+  - FORGE_REBUILD_MASTER_PLAN.md Section 6 T1.7
+  - docs/vendor/comprehensive-rules.txt rules 117.5 and 704
+acceptance:
+  - CR 704.5 state-based-action rows are represented as an explicit table through 704.5z
+  - unsupported rows remain visible no-ops until later tiers add their state models
+  - SBA runner checks a pre-action snapshot, applies simultaneous actions, and repeats to a fixpoint with a 64-iteration cap
+  - state-based actions run before priority is granted after step begins, stack resolution, casting/stack actions, attack/block declarations, combat damage, and cleanup checks
+  - game outcome records in-progress, win, and draw results; simultaneous player losses produce a draw
+  - life-total, empty-library draw, and poison-counter player losses are handled
+  - zero-or-less toughness, lethal damage, and deathtouch damage move creatures to owner graveyards
+  - deathtouch damage and empty-library draw attempts are tracked only until the next SBA check
+  - lifelink combat damage is applied before loss SBAs are checked
+  - cleanup grants priority and repeats cleanup when SBAs happen during cleanup
+  - pending SBA state affects canonical bytes and streaming state hashes
+verify: cargo test -p forge-core && cargo clippy -p forge-core --all-targets -- -D warnings && scripts/vl.sh
+retry_policy: 3 attempts then blocker
+depends_on:
+  - T1.6
+parallel_ok: false

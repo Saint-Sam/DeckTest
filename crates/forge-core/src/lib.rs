@@ -61,6 +61,9 @@ impl CardId {
 /// Maximum number of payment plans returned by the T1.4 enumerator.
 pub const PAYMENT_PLAN_LIMIT: usize = 64;
 
+/// Maximum number of state-based-action loops before declaring nontermination.
+pub const SBA_FIXPOINT_LIMIT: u32 = 64;
+
 const MANA_KIND_COUNT: usize = 6;
 const COLORED_MANA_KINDS: [ManaKind; 5] = [
     ManaKind::White,
@@ -1917,6 +1920,206 @@ impl CombatState {
     }
 }
 
+/// Current game result derived by state-based actions.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum GameOutcome {
+    /// The game has not ended.
+    InProgress,
+    /// Exactly one player remains in the game.
+    Won(PlayerId),
+    /// No player remains, or all remaining players lost simultaneously.
+    Draw,
+}
+
+impl GameOutcome {
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::InProgress => 0,
+            Self::Won(_) => 1,
+            Self::Draw => 2,
+        }
+    }
+}
+
+/// One CR 704.5 state-based-action row.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum StateBasedActionKind {
+    /// CR 704.5a: a player with 0 or less life loses the game.
+    PlayerZeroOrLessLife,
+    /// CR 704.5b: a player who tried to draw from an empty library loses.
+    PlayerDrewFromEmptyLibrary,
+    /// CR 704.5c: a player with ten or more poison counters loses.
+    PlayerTenOrMorePoison,
+    /// CR 704.5d: a token outside the battlefield ceases to exist.
+    TokenOffBattlefield,
+    /// CR 704.5e: a copy in an illegal zone ceases to exist.
+    CopyOutOfAllowedZone,
+    /// CR 704.5f: a creature with toughness 0 or less goes to its owner's graveyard.
+    CreatureZeroOrLessToughness,
+    /// CR 704.5g: lethal damage destroys a creature with toughness greater than 0.
+    CreatureLethalDamage,
+    /// CR 704.5h: deathtouch damage destroys a creature with toughness greater than 0.
+    CreatureDeathtouchDamage,
+    /// CR 704.5i: a planeswalker with loyalty 0 goes to its owner's graveyard.
+    PlaneswalkerZeroLoyalty,
+    /// CR 704.5j: the legend rule.
+    LegendRule,
+    /// CR 704.5k: the world rule.
+    WorldRule,
+    /// CR 704.5m: illegal or unattached Auras go to their owners' graveyards.
+    AuraIllegalOrUnattached,
+    /// CR 704.5n: illegal Equipment or Fortification attachments become unattached.
+    EquipmentOrFortificationIllegalAttachment,
+    /// CR 704.5p: battles, creatures, and other illegal attachments become unattached.
+    BattleCreatureOrOtherIllegalAttachment,
+    /// CR 704.5q: matching +1/+1 and -1/-1 counters annihilate.
+    CounterPairCancellation,
+    /// CR 704.5r: counters above a maximum are removed.
+    CounterMaximum,
+    /// CR 704.5s: completed Sagas are sacrificed.
+    SagaFinalChapter,
+    /// CR 704.5t: completed dungeons are removed from the game.
+    DungeonCompleted,
+    /// CR 704.5u: space sculptor sector designations are chosen.
+    SpaceSculptorDesignation,
+    /// CR 704.5v: a battle with defense 0 goes to its owner's graveyard.
+    BattleZeroDefense,
+    /// CR 704.5w: a battle without a protector chooses one or goes to graveyard.
+    BattleMissingProtector,
+    /// CR 704.5x: a Siege whose controller is its protector chooses a new protector.
+    SiegeControllerProtector,
+    /// CR 704.5y: duplicate Roles controlled by one player are put into graveyards.
+    DuplicateRole,
+    /// CR 704.5z: start your engines! gives speed 1.
+    StartYourEnginesNoSpeed,
+}
+
+const STATE_BASED_ACTION_TABLE: [StateBasedActionKind; 24] = [
+    StateBasedActionKind::PlayerZeroOrLessLife,
+    StateBasedActionKind::PlayerDrewFromEmptyLibrary,
+    StateBasedActionKind::PlayerTenOrMorePoison,
+    StateBasedActionKind::TokenOffBattlefield,
+    StateBasedActionKind::CopyOutOfAllowedZone,
+    StateBasedActionKind::CreatureZeroOrLessToughness,
+    StateBasedActionKind::CreatureLethalDamage,
+    StateBasedActionKind::CreatureDeathtouchDamage,
+    StateBasedActionKind::PlaneswalkerZeroLoyalty,
+    StateBasedActionKind::LegendRule,
+    StateBasedActionKind::WorldRule,
+    StateBasedActionKind::AuraIllegalOrUnattached,
+    StateBasedActionKind::EquipmentOrFortificationIllegalAttachment,
+    StateBasedActionKind::BattleCreatureOrOtherIllegalAttachment,
+    StateBasedActionKind::CounterPairCancellation,
+    StateBasedActionKind::CounterMaximum,
+    StateBasedActionKind::SagaFinalChapter,
+    StateBasedActionKind::DungeonCompleted,
+    StateBasedActionKind::SpaceSculptorDesignation,
+    StateBasedActionKind::BattleZeroDefense,
+    StateBasedActionKind::BattleMissingProtector,
+    StateBasedActionKind::SiegeControllerProtector,
+    StateBasedActionKind::DuplicateRole,
+    StateBasedActionKind::StartYourEnginesNoSpeed,
+];
+
+/// Returns the CR 704.5 table used by the state-based-action runner.
+#[must_use]
+pub const fn state_based_action_table() -> &'static [StateBasedActionKind] {
+    &STATE_BASED_ACTION_TABLE
+}
+
+/// Summary returned after checking state-based actions to a fixpoint.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub struct StateBasedActionReport {
+    iterations: u32,
+    actions_performed: u32,
+    players_lost: u32,
+    permanents_moved_to_graveyard: u32,
+    empty_library_draw_losses: u32,
+    zero_toughness_creatures: u32,
+    lethal_damage_creatures: u32,
+    deathtouch_damage_creatures: u32,
+}
+
+impl StateBasedActionReport {
+    /// Returns how many nonempty CR 704 passes were needed.
+    #[must_use]
+    pub const fn iterations(self) -> u32 {
+        self.iterations
+    }
+
+    /// Returns the total count of player-loss and permanent-movement actions.
+    #[must_use]
+    pub const fn actions_performed(self) -> u32 {
+        self.actions_performed
+    }
+
+    /// Returns how many players lost during this check.
+    #[must_use]
+    pub const fn players_lost(self) -> u32 {
+        self.players_lost
+    }
+
+    /// Returns how many permanents were moved to graveyards.
+    #[must_use]
+    pub const fn permanents_moved_to_graveyard(self) -> u32 {
+        self.permanents_moved_to_graveyard
+    }
+
+    /// Returns how many player losses came from empty-library draw attempts.
+    #[must_use]
+    pub const fn empty_library_draw_losses(self) -> u32 {
+        self.empty_library_draw_losses
+    }
+
+    /// Returns how many creatures moved for toughness 0 or less.
+    #[must_use]
+    pub const fn zero_toughness_creatures(self) -> u32 {
+        self.zero_toughness_creatures
+    }
+
+    /// Returns how many creatures were destroyed by lethal damage.
+    #[must_use]
+    pub const fn lethal_damage_creatures(self) -> u32 {
+        self.lethal_damage_creatures
+    }
+
+    /// Returns how many creatures were destroyed by deathtouch damage.
+    #[must_use]
+    pub const fn deathtouch_damage_creatures(self) -> u32 {
+        self.deathtouch_damage_creatures
+    }
+
+    fn record_iteration(&mut self) {
+        self.iterations = self.iterations.saturating_add(1);
+    }
+
+    fn record_player_loss(&mut self, kind: StateBasedActionKind) {
+        self.actions_performed = self.actions_performed.saturating_add(1);
+        self.players_lost = self.players_lost.saturating_add(1);
+        if kind == StateBasedActionKind::PlayerDrewFromEmptyLibrary {
+            self.empty_library_draw_losses = self.empty_library_draw_losses.saturating_add(1);
+        }
+    }
+
+    fn record_permanent_move(&mut self, kind: StateBasedActionKind) {
+        self.actions_performed = self.actions_performed.saturating_add(1);
+        self.permanents_moved_to_graveyard = self.permanents_moved_to_graveyard.saturating_add(1);
+        match kind {
+            StateBasedActionKind::CreatureZeroOrLessToughness => {
+                self.zero_toughness_creatures = self.zero_toughness_creatures.saturating_add(1);
+            }
+            StateBasedActionKind::CreatureLethalDamage => {
+                self.lethal_damage_creatures = self.lethal_damage_creatures.saturating_add(1);
+            }
+            StateBasedActionKind::CreatureDeathtouchDamage => {
+                self.deathtouch_damage_creatures =
+                    self.deathtouch_damage_creatures.saturating_add(1);
+            }
+            _ => {}
+        }
+    }
+}
+
 /// Result of one priority pass.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PriorityOutcome {
@@ -1934,6 +2137,7 @@ pub struct PlayerState {
     id: PlayerId,
     life: i32,
     poison: u32,
+    lost: bool,
     max_hand_size: u32,
     mana_pool: ManaPool,
 }
@@ -1946,6 +2150,7 @@ impl PlayerState {
             id,
             life: 20,
             poison: 0,
+            lost: false,
             max_hand_size: 7,
             mana_pool: ManaPool::empty(),
         }
@@ -1967,6 +2172,12 @@ impl PlayerState {
     #[must_use]
     pub const fn poison(self) -> u32 {
         self.poison
+    }
+
+    /// Returns whether this player has lost the game.
+    #[must_use]
+    pub const fn lost(self) -> bool {
+        self.lost
     }
 
     /// Returns the player's current maximum hand size.
@@ -1992,6 +2203,7 @@ pub struct ObjectRecord {
     tapped: bool,
     creature: Option<CreatureCharacteristics>,
     damage_marked: u32,
+    deathtouch_damage_marked: bool,
     controlled_since_turn: u32,
 }
 
@@ -2036,6 +2248,12 @@ impl ObjectRecord {
     #[must_use]
     pub const fn damage_marked(self) -> u32 {
         self.damage_marked
+    }
+
+    /// Returns whether this object has deathtouch damage pending an SBA check.
+    #[must_use]
+    pub const fn deathtouch_damage_marked(self) -> bool {
+        self.deathtouch_damage_marked
     }
 
     /// Returns the turn number since which this controller has controlled it.
@@ -2091,6 +2309,7 @@ impl ObjectArena {
             tapped: false,
             creature: None,
             damage_marked: 0,
+            deathtouch_damage_marked: false,
             controlled_since_turn,
         });
         id
@@ -2214,6 +2433,10 @@ pub enum StateError {
     StackObjectNotOnStack(ObjectId),
     /// A mana arithmetic operation overflowed.
     ManaValueOverflow,
+    /// A life-total arithmetic operation overflowed.
+    LifeTotalOverflow,
+    /// A poison-counter arithmetic operation overflowed.
+    PoisonCounterOverflow,
     /// A player does not have enough mana for a requested payment.
     InsufficientMana,
     /// A proposed explicit payment does not satisfy the cost.
@@ -2268,6 +2491,20 @@ pub enum StateError {
     IllegalCombatDamageAssignment(ObjectId),
     /// Combat damage arithmetic overflowed.
     CombatDamageOverflow,
+    /// State-based actions did not reach a fixpoint within the limit.
+    StateBasedActionLoop,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PendingStateBasedAction {
+    PlayerLoses {
+        player: PlayerId,
+        kind: StateBasedActionKind,
+    },
+    MovePermanentToGraveyard {
+        object: ObjectId,
+        kind: StateBasedActionKind,
+    },
 }
 
 /// Complete T1 game state.
@@ -2275,6 +2512,7 @@ pub enum StateError {
 pub struct GameState {
     seed: u64,
     turn_number: u32,
+    outcome: GameOutcome,
     active_player: Option<PlayerId>,
     priority_player: Option<PlayerId>,
     priority_pass_count: u32,
@@ -2293,6 +2531,7 @@ pub struct GameState {
     stack_entries: Vec<StackEntry>,
     resolution_log: Vec<ResolutionRecord>,
     combat: CombatState,
+    empty_library_draws_since_sba: Vec<PlayerId>,
 }
 
 impl Default for GameState {
@@ -2308,6 +2547,7 @@ impl GameState {
         Self {
             seed: 0,
             turn_number: 0,
+            outcome: GameOutcome::InProgress,
             active_player: None,
             priority_player: None,
             priority_pass_count: 0,
@@ -2343,6 +2583,7 @@ impl GameState {
             stack_entries: Vec::new(),
             resolution_log: Vec::new(),
             combat: CombatState::new(),
+            empty_library_draws_since_sba: Vec::new(),
         }
     }
 
@@ -2361,6 +2602,12 @@ impl GameState {
     #[must_use]
     pub const fn turn_number(&self) -> u32 {
         self.turn_number
+    }
+
+    /// Returns the current game outcome.
+    #[must_use]
+    pub const fn game_outcome(&self) -> GameOutcome {
+        self.outcome
     }
 
     /// Returns the active player, if turn structure has selected one.
@@ -2468,6 +2715,55 @@ impl GameState {
             .get_mut(player.index())
             .ok_or(StateError::UnknownPlayer(player))?;
         player_state.max_hand_size = max_hand_size;
+        Ok(())
+    }
+
+    /// Sets a player's life total.
+    pub fn set_player_life(&mut self, player: PlayerId, life: i32) -> Result<(), StateError> {
+        let player_state = self
+            .players
+            .get_mut(player.index())
+            .ok_or(StateError::UnknownPlayer(player))?;
+        player_state.life = life;
+        Ok(())
+    }
+
+    /// Makes a player lose life.
+    pub fn lose_life(&mut self, player: PlayerId, amount: u32) -> Result<(), StateError> {
+        let player_state = self
+            .players
+            .get_mut(player.index())
+            .ok_or(StateError::UnknownPlayer(player))?;
+        player_state.life = player_state
+            .life
+            .checked_sub(i32::try_from(amount).unwrap_or(i32::MAX))
+            .ok_or(StateError::LifeTotalOverflow)?;
+        Ok(())
+    }
+
+    /// Makes a player gain life.
+    pub fn gain_life(&mut self, player: PlayerId, amount: u32) -> Result<(), StateError> {
+        let player_state = self
+            .players
+            .get_mut(player.index())
+            .ok_or(StateError::UnknownPlayer(player))?;
+        player_state.life = player_state
+            .life
+            .checked_add(i32::try_from(amount).unwrap_or(i32::MAX))
+            .ok_or(StateError::LifeTotalOverflow)?;
+        Ok(())
+    }
+
+    /// Adds poison counters to a player.
+    pub fn add_poison_counters(&mut self, player: PlayerId, amount: u32) -> Result<(), StateError> {
+        let player_state = self
+            .players
+            .get_mut(player.index())
+            .ok_or(StateError::UnknownPlayer(player))?;
+        player_state.poison = player_state
+            .poison
+            .checked_add(amount)
+            .ok_or(StateError::PoisonCounterOverflow)?;
         Ok(())
     }
 
@@ -2590,6 +2886,11 @@ impl GameState {
         Ok(())
     }
 
+    /// Checks CR 704 state-based actions until a fixpoint is reached.
+    pub fn check_state_based_actions(&mut self) -> Result<StateBasedActionReport, StateError> {
+        self.perform_state_based_actions()
+    }
+
     /// Returns the players in arena order.
     #[must_use]
     pub fn players(&self) -> &[PlayerState] {
@@ -2667,7 +2968,7 @@ impl GameState {
             Ok(PriorityOutcome::StepComplete)
         } else {
             let resolved = self.resolve_top_stack_entry()?;
-            self.grant_priority_after_resolution();
+            self.grant_priority_after_resolution()?;
             Ok(PriorityOutcome::Resolved(resolved))
         }
     }
@@ -2719,7 +3020,7 @@ impl GameState {
             target_snapshots,
             Some(request.payment()),
         );
-        self.after_priority_action(player, true);
+        self.after_priority_action(player, true)?;
         Ok(id)
     }
 
@@ -2749,7 +3050,7 @@ impl GameState {
             self.move_object(object, stack_zone)?;
         }
         let id = self.push_stack_entry(player, Some(object), kind, Vec::new(), None);
-        self.after_priority_action(player, hold_priority);
+        self.after_priority_action(player, hold_priority)?;
         Ok(id)
     }
 
@@ -2763,7 +3064,7 @@ impl GameState {
         self.require_priority_player(player)?;
         self.require_player(player)?;
         let id = self.push_stack_entry(player, None, kind, Vec::new(), None);
-        self.after_priority_action(player, hold_priority);
+        self.after_priority_action(player, hold_priority)?;
         Ok(id)
     }
 
@@ -2859,8 +3160,7 @@ impl GameState {
             });
         }
         self.attackers_declared_this_combat = !attacks.is_empty();
-        self.priority_player = Some(player);
-        self.priority_pass_count = 0;
+        self.grant_priority_to(Some(player))?;
         Ok(())
     }
 
@@ -2905,8 +3205,7 @@ impl GameState {
                 attacker.blockers.push(block.blocker());
             }
         }
-        self.priority_player = self.active_player;
-        self.priority_pass_count = 0;
+        self.grant_priority_to(self.active_player)?;
         Ok(())
     }
 
@@ -2969,6 +3268,7 @@ impl GameState {
             }
         }
         self.combat.damage_records.extend(records.iter().copied());
+        self.perform_state_based_actions()?;
         Ok(records)
     }
 
@@ -3041,11 +3341,16 @@ impl GameState {
         self.zone_mut(to)?.objects.push(object);
         if from_zone_id == battlefield && to != battlefield {
             self.remove_object_from_combat(object);
+            if let Some(record) = self.objects.get_mut(object) {
+                record.damage_marked = 0;
+                record.deathtouch_damage_marked = false;
+            }
         }
         if from_zone_id != battlefield && to == battlefield {
             if let Some(record) = self.objects.get_mut(object) {
                 record.controlled_since_turn = self.turn_number;
                 record.damage_marked = 0;
+                record.deathtouch_damage_marked = false;
             }
         }
         Ok(())
@@ -3122,6 +3427,7 @@ impl GameState {
         let mut bytes = CanonicalBytes::default();
         bytes.write_u64(self.seed);
         bytes.write_u32(self.turn_number);
+        bytes.write_game_outcome(self.outcome);
         bytes.write_optional_player(self.active_player);
         bytes.write_optional_player(self.priority_player);
         bytes.write_u32(self.priority_pass_count);
@@ -3136,6 +3442,7 @@ impl GameState {
             bytes.write_u32(player.id.0);
             bytes.write_i32(player.life);
             bytes.write_u32(player.poison);
+            bytes.write_bool(player.lost);
             bytes.write_u32(player.max_hand_size);
             bytes.write_mana_pool(player.mana_pool);
         }
@@ -3149,6 +3456,7 @@ impl GameState {
             bytes.write_bool(object.tapped);
             bytes.write_optional_creature_characteristics(object.creature);
             bytes.write_u32(object.damage_marked);
+            bytes.write_bool(object.deathtouch_damage_marked);
             bytes.write_u32(object.controlled_since_turn);
         }
 
@@ -3177,6 +3485,10 @@ impl GameState {
             bytes.write_resolution_record(resolution);
         }
         bytes.write_combat_state(&self.combat);
+        bytes.write_u32(self.empty_library_draws_since_sba.len() as u32);
+        for player in &self.empty_library_draws_since_sba {
+            bytes.write_u32(player.0);
+        }
         bytes.finish()
     }
 
@@ -3186,6 +3498,7 @@ impl GameState {
         let mut hash = Fnva64::new();
         hash.write_u64(self.seed);
         hash.write_u32(self.turn_number);
+        hash.write_game_outcome(self.outcome);
         hash.write_optional_player(self.active_player);
         hash.write_optional_player(self.priority_player);
         hash.write_u32(self.priority_pass_count);
@@ -3200,6 +3513,7 @@ impl GameState {
             hash.write_u32(player.id.0);
             hash.write_i32(player.life);
             hash.write_u32(player.poison);
+            hash.write_bool(player.lost);
             hash.write_u32(player.max_hand_size);
             hash.write_mana_pool(player.mana_pool);
         }
@@ -3213,6 +3527,7 @@ impl GameState {
             hash.write_bool(object.tapped);
             hash.write_optional_creature_characteristics(object.creature);
             hash.write_u32(object.damage_marked);
+            hash.write_bool(object.deathtouch_damage_marked);
             hash.write_u32(object.controlled_since_turn);
         }
 
@@ -3242,6 +3557,10 @@ impl GameState {
             hash.write_resolution_record(resolution);
         }
         hash.write_combat_state(&self.combat);
+        hash.write_u32(self.empty_library_draws_since_sba.len() as u32);
+        for player in &self.empty_library_draws_since_sba {
+            hash.write_u32(player.0);
+        }
 
         StateHash(hash.finish())
     }
@@ -3253,19 +3572,19 @@ impl GameState {
             Step::Untap => self.priority_player = None,
             Step::Draw => {
                 self.draw_turn_card()?;
-                self.assign_normal_priority(step);
+                self.assign_normal_priority(step)?;
             }
             Step::BeginningOfCombat => {
                 self.attackers_declared_this_combat = false;
                 self.combat = CombatState::new();
-                self.assign_normal_priority(step);
+                self.assign_normal_priority(step)?;
             }
             Step::CombatDamage => {
                 self.begin_combat_damage_step();
-                self.assign_normal_priority(step);
+                self.assign_normal_priority(step)?;
             }
             Step::Cleanup => self.begin_cleanup_step()?,
-            _ => self.assign_normal_priority(step),
+            _ => self.assign_normal_priority(step)?,
         }
         Ok(())
     }
@@ -3322,23 +3641,25 @@ impl GameState {
         ) || (matches!(step, Step::Cleanup) && !self.cleanup_repeat_pending)
     }
 
-    fn assign_normal_priority(&mut self, step: Step) {
-        self.priority_player = if step.receives_priority_normally() {
+    fn assign_normal_priority(&mut self, step: Step) -> Result<(), StateError> {
+        let priority_player = if step.receives_priority_normally() {
             self.active_player
         } else {
             None
         };
-        self.priority_pass_count = 0;
+        self.grant_priority_to(priority_player)
     }
 
     fn begin_cleanup_step(&mut self) -> Result<(), StateError> {
         self.cleanup_iteration = self.cleanup_iteration.saturating_add(1);
-        self.clear_damage_marked();
         self.last_cleanup_report = self.perform_cleanup_actions()?;
+        self.clear_damage_marked();
+        let sba_report = self.perform_state_based_actions()?;
         let grant_priority = self.cleanup_priority_requested;
         self.cleanup_priority_requested = false;
-        self.cleanup_repeat_pending = grant_priority;
-        self.priority_player = if grant_priority {
+        let needs_priority = grant_priority || sba_report.actions_performed() > 0;
+        self.cleanup_repeat_pending = needs_priority && self.outcome == GameOutcome::InProgress;
+        self.priority_player = if needs_priority && self.outcome == GameOutcome::InProgress {
             self.active_player
         } else {
             None
@@ -3654,17 +3975,16 @@ impl GameState {
     fn apply_combat_damage(&mut self, record: CombatDamageRecord) -> Result<(), StateError> {
         match record.target {
             CombatDamageTarget::Player(player) => {
-                let player_state = self
-                    .players
-                    .get_mut(player.index())
-                    .ok_or(StateError::UnknownPlayer(player))?;
-                player_state.life = player_state
-                    .life
-                    .checked_sub(i32::try_from(record.amount).unwrap_or(i32::MAX))
-                    .ok_or(StateError::CombatDamageOverflow)?;
+                self.lose_life(player, record.amount)?;
             }
             CombatDamageTarget::Object(object) => {
                 self.mark_damage_on_object(object, record.amount)?;
+                if record.source_had_deathtouch && record.amount > 0 {
+                    self.objects
+                        .get_mut(object)
+                        .ok_or(StateError::UnknownObject(object))?
+                        .deathtouch_damage_marked = true;
+                }
             }
         }
         if record.source_had_lifelink {
@@ -3673,14 +3993,7 @@ impl GameState {
                 .get(record.source)
                 .ok_or(StateError::UnknownObject(record.source))?
                 .controller();
-            let player_state = self
-                .players
-                .get_mut(controller.index())
-                .ok_or(StateError::UnknownPlayer(controller))?;
-            player_state.life = player_state
-                .life
-                .checked_add(i32::try_from(record.amount).unwrap_or(i32::MAX))
-                .ok_or(StateError::CombatDamageOverflow)?;
+            self.gain_life(controller, record.amount)?;
         }
         Ok(())
     }
@@ -3782,6 +4095,7 @@ impl GameState {
     fn clear_damage_marked(&mut self) {
         for record in &mut self.objects.records {
             record.damage_marked = 0;
+            record.deathtouch_damage_marked = false;
         }
     }
 
@@ -3797,9 +4111,254 @@ impl GameState {
         }
     }
 
-    fn after_priority_action(&mut self, player: PlayerId, _hold_priority: bool) {
-        self.priority_player = Some(player);
+    fn after_priority_action(
+        &mut self,
+        player: PlayerId,
+        _hold_priority: bool,
+    ) -> Result<(), StateError> {
+        self.grant_priority_to(Some(player))
+    }
+
+    fn grant_priority_after_resolution(&mut self) -> Result<(), StateError> {
+        self.grant_priority_to(self.active_player)
+    }
+
+    fn grant_priority_to(&mut self, player: Option<PlayerId>) -> Result<(), StateError> {
+        self.perform_state_based_actions()?;
+        self.priority_player = if self.outcome == GameOutcome::InProgress {
+            player
+        } else {
+            None
+        };
         self.priority_pass_count = 0;
+        Ok(())
+    }
+
+    fn perform_state_based_actions(&mut self) -> Result<StateBasedActionReport, StateError> {
+        let mut report = StateBasedActionReport::default();
+        for _ in 0..SBA_FIXPOINT_LIMIT {
+            let actions = self.collect_state_based_actions();
+            self.clear_since_last_sba_markers();
+            if actions.is_empty() {
+                return Ok(report);
+            }
+            report.record_iteration();
+            for action in actions {
+                self.apply_state_based_action(action, &mut report)?;
+            }
+            self.refresh_game_outcome();
+        }
+        Err(StateError::StateBasedActionLoop)
+    }
+
+    fn collect_state_based_actions(&self) -> Vec<PendingStateBasedAction> {
+        let mut actions = Vec::new();
+        for kind in state_based_action_table() {
+            match *kind {
+                StateBasedActionKind::PlayerZeroOrLessLife => {
+                    self.collect_life_total_sbas(*kind, &mut actions);
+                }
+                StateBasedActionKind::PlayerDrewFromEmptyLibrary => {
+                    self.collect_empty_library_sbas(*kind, &mut actions);
+                }
+                StateBasedActionKind::PlayerTenOrMorePoison => {
+                    self.collect_poison_sbas(*kind, &mut actions);
+                }
+                StateBasedActionKind::CreatureZeroOrLessToughness
+                | StateBasedActionKind::CreatureLethalDamage
+                | StateBasedActionKind::CreatureDeathtouchDamage => {
+                    self.collect_creature_sbas(*kind, &mut actions);
+                }
+                StateBasedActionKind::TokenOffBattlefield
+                | StateBasedActionKind::CopyOutOfAllowedZone
+                | StateBasedActionKind::PlaneswalkerZeroLoyalty
+                | StateBasedActionKind::LegendRule
+                | StateBasedActionKind::WorldRule
+                | StateBasedActionKind::AuraIllegalOrUnattached
+                | StateBasedActionKind::EquipmentOrFortificationIllegalAttachment
+                | StateBasedActionKind::BattleCreatureOrOtherIllegalAttachment
+                | StateBasedActionKind::CounterPairCancellation
+                | StateBasedActionKind::CounterMaximum
+                | StateBasedActionKind::SagaFinalChapter
+                | StateBasedActionKind::DungeonCompleted
+                | StateBasedActionKind::SpaceSculptorDesignation
+                | StateBasedActionKind::BattleZeroDefense
+                | StateBasedActionKind::BattleMissingProtector
+                | StateBasedActionKind::SiegeControllerProtector
+                | StateBasedActionKind::DuplicateRole
+                | StateBasedActionKind::StartYourEnginesNoSpeed => {}
+            }
+        }
+        actions
+    }
+
+    fn collect_life_total_sbas(
+        &self,
+        kind: StateBasedActionKind,
+        actions: &mut Vec<PendingStateBasedAction>,
+    ) {
+        for player in &self.players {
+            if !player.lost && player.life <= 0 {
+                Self::push_player_loss_sba(actions, player.id, kind);
+            }
+        }
+    }
+
+    fn collect_empty_library_sbas(
+        &self,
+        kind: StateBasedActionKind,
+        actions: &mut Vec<PendingStateBasedAction>,
+    ) {
+        for player in &self.empty_library_draws_since_sba {
+            if self
+                .players
+                .get(player.index())
+                .is_some_and(|state| !state.lost)
+            {
+                Self::push_player_loss_sba(actions, *player, kind);
+            }
+        }
+    }
+
+    fn collect_poison_sbas(
+        &self,
+        kind: StateBasedActionKind,
+        actions: &mut Vec<PendingStateBasedAction>,
+    ) {
+        for player in &self.players {
+            if !player.lost && player.poison >= 10 {
+                Self::push_player_loss_sba(actions, player.id, kind);
+            }
+        }
+    }
+
+    fn collect_creature_sbas(
+        &self,
+        kind: StateBasedActionKind,
+        actions: &mut Vec<PendingStateBasedAction>,
+    ) {
+        let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+        for object in self.objects.iter() {
+            if self.object_zone(object.id()) != Some(battlefield) {
+                continue;
+            }
+            let Some(creature) = object.creature() else {
+                continue;
+            };
+            let applies = match kind {
+                StateBasedActionKind::CreatureZeroOrLessToughness => creature.toughness() <= 0,
+                StateBasedActionKind::CreatureLethalDamage => {
+                    creature.toughness() > 0
+                        && object.damage_marked() > 0
+                        && object.damage_marked()
+                            >= u32::try_from(creature.toughness()).unwrap_or(u32::MAX)
+                }
+                StateBasedActionKind::CreatureDeathtouchDamage => {
+                    creature.toughness() > 0 && object.deathtouch_damage_marked()
+                }
+                _ => false,
+            };
+            if applies {
+                Self::push_permanent_graveyard_sba(actions, object.id(), kind);
+            }
+        }
+    }
+
+    fn push_player_loss_sba(
+        actions: &mut Vec<PendingStateBasedAction>,
+        player: PlayerId,
+        kind: StateBasedActionKind,
+    ) {
+        if !actions.iter().any(|action| {
+            matches!(
+                action,
+                PendingStateBasedAction::PlayerLoses {
+                    player: existing,
+                    ..
+                } if *existing == player
+            )
+        }) {
+            actions.push(PendingStateBasedAction::PlayerLoses { player, kind });
+        }
+    }
+
+    fn push_permanent_graveyard_sba(
+        actions: &mut Vec<PendingStateBasedAction>,
+        object: ObjectId,
+        kind: StateBasedActionKind,
+    ) {
+        if !actions.iter().any(|action| {
+            matches!(
+                action,
+                PendingStateBasedAction::MovePermanentToGraveyard {
+                    object: existing,
+                    ..
+                } if *existing == object
+            )
+        }) {
+            actions.push(PendingStateBasedAction::MovePermanentToGraveyard { object, kind });
+        }
+    }
+
+    fn apply_state_based_action(
+        &mut self,
+        action: PendingStateBasedAction,
+        report: &mut StateBasedActionReport,
+    ) -> Result<(), StateError> {
+        match action {
+            PendingStateBasedAction::PlayerLoses { player, kind } => {
+                let player_state = self
+                    .players
+                    .get_mut(player.index())
+                    .ok_or(StateError::UnknownPlayer(player))?;
+                if !player_state.lost {
+                    player_state.lost = true;
+                    report.record_player_loss(kind);
+                }
+            }
+            PendingStateBasedAction::MovePermanentToGraveyard { object, kind } => {
+                if self.object_zone(object) == Some(ZoneId::new(None, ZoneKind::Battlefield)) {
+                    let owner = self
+                        .objects
+                        .get(object)
+                        .ok_or(StateError::UnknownObject(object))?
+                        .owner();
+                    self.move_object(object, ZoneId::new(Some(owner), ZoneKind::Graveyard))?;
+                    report.record_permanent_move(kind);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn clear_since_last_sba_markers(&mut self) {
+        self.empty_library_draws_since_sba.clear();
+        for object in &mut self.objects.records {
+            object.deathtouch_damage_marked = false;
+        }
+    }
+
+    fn refresh_game_outcome(&mut self) {
+        let remaining: Vec<PlayerId> = self
+            .players
+            .iter()
+            .filter(|player| !player.lost)
+            .map(|player| player.id)
+            .collect();
+        self.outcome = if self.players.is_empty()
+            || remaining.len() == self.players.len()
+            || remaining.len() > 1
+        {
+            GameOutcome::InProgress
+        } else if remaining.len() == 1 {
+            GameOutcome::Won(remaining[0])
+        } else {
+            GameOutcome::Draw
+        };
+        if self.outcome != GameOutcome::InProgress {
+            self.priority_player = None;
+            self.priority_pass_count = 0;
+        }
     }
 
     fn can_cast_with_timing(&self, player: PlayerId, timing: SpellTiming) -> bool {
@@ -3966,11 +4525,6 @@ impl GameState {
         Ok(entry.id())
     }
 
-    fn grant_priority_after_resolution(&mut self) {
-        self.priority_player = self.active_player;
-        self.priority_pass_count = 0;
-    }
-
     fn map_payment_error(error: PaymentError) -> StateError {
         match error {
             PaymentError::ManaValueOverflow => StateError::ManaValueOverflow,
@@ -4021,7 +4575,11 @@ impl GameState {
         let active = self.active_player.ok_or(StateError::TurnNotStarted)?;
         let library = ZoneId::new(Some(active), ZoneKind::Library);
         let hand = ZoneId::new(Some(active), ZoneKind::Hand);
-        let _ = self.move_last_between_zones(library, hand)?;
+        if self.move_last_between_zones(library, hand)?.is_none()
+            && !self.empty_library_draws_since_sba.contains(&active)
+        {
+            self.empty_library_draws_since_sba.push(active);
+        }
         Ok(())
     }
 
@@ -4191,6 +4749,13 @@ impl Fnva64 {
                 self.write_u8(step.canonical_code());
             }
             None => self.write_u8(0),
+        }
+    }
+
+    fn write_game_outcome(&mut self, outcome: GameOutcome) {
+        self.write_u8(outcome.canonical_code());
+        if let GameOutcome::Won(player) = outcome {
+            self.write_u32(player.0);
         }
     }
 
@@ -4455,6 +5020,13 @@ impl CanonicalBytes {
         }
     }
 
+    fn write_game_outcome(&mut self, outcome: GameOutcome) {
+        self.write_u8(outcome.canonical_code());
+        if let GameOutcome::Won(player) = outcome {
+            self.write_u32(player.0);
+        }
+    }
+
     fn write_bool(&mut self, value: bool) {
         self.write_u8(u8::from(value));
     }
@@ -4674,18 +5246,30 @@ impl CanonicalBytes {
 mod tests {
     use super::{
         auto_payment_plan, crate_ready, enumerate_auto_tap_payment_plans, enumerate_payment_plans,
-        validate_payment_plan, AttackDeclaration, BlockDeclaration, CardId, CastSpellRequest,
-        CombatDamageAssignment, CombatDamageAssignmentRequest, CombatDamageStepKind,
-        CombatDamageTarget, CreatureCharacteristics, CreatureKeywords, EffectDuration, GameState,
-        ManaCost, ManaKind, ManaPool, ManaSource, PaymentError, Phase, PlayerId, PriorityOutcome,
-        ResolutionOutcome, SpellTiming, StackEntryId, StackObjectKind, StateError, Step,
-        TargetChoice, TargetKind, TargetRequirement, ZoneConservation, ZoneId, ZoneKind,
-        NORMAL_TURN_STEPS, PAYMENT_PLAN_LIMIT,
+        state_based_action_table, validate_payment_plan, AttackDeclaration, BlockDeclaration,
+        CardId, CastSpellRequest, CombatDamageAssignment, CombatDamageAssignmentRequest,
+        CombatDamageStepKind, CombatDamageTarget, CreatureCharacteristics, CreatureKeywords,
+        EffectDuration, GameOutcome, GameState, ManaCost, ManaKind, ManaPool, ManaSource,
+        PaymentError, Phase, PlayerId, PriorityOutcome, ResolutionOutcome, SpellTiming,
+        StackEntryId, StackObjectKind, StateBasedActionKind, StateError, Step, TargetChoice,
+        TargetKind, TargetRequirement, ZoneConservation, ZoneId, ZoneKind, NORMAL_TURN_STEPS,
+        PAYMENT_PLAN_LIMIT,
     };
 
     #[test]
     fn bootstrap_crate_is_ready() {
         assert!(crate_ready());
+    }
+
+    #[test]
+    fn state_based_action_table_tracks_cr_704_rows() {
+        let table = state_based_action_table();
+
+        assert_eq!(table.len(), 24);
+        assert_eq!(table[0], StateBasedActionKind::PlayerZeroOrLessLife);
+        assert_eq!(table[23], StateBasedActionKind::StartYourEnginesNoSpeed);
+        assert!(table.contains(&StateBasedActionKind::CreatureLethalDamage));
+        assert!(table.contains(&StateBasedActionKind::CreatureDeathtouchDamage));
     }
 
     #[test]
@@ -4972,6 +5556,7 @@ mod tests {
     fn mana_pool_empties_when_step_ends() {
         let mut state = GameState::new();
         let active = state.add_player();
+        ensure_library_card(&mut state, active);
         state
             .start_turn(active)
             .unwrap_or_else(|error| panic!("unexpected start error: {error:?}"));
@@ -5430,6 +6015,7 @@ mod tests {
         let mut state = GameState::new();
         let active = state.add_player();
         state.add_player();
+        ensure_library_card(&mut state, active);
 
         state
             .start_turn(active)
@@ -5459,6 +6045,7 @@ mod tests {
         let mut state = GameState::new();
         let active = state.add_player();
         state.add_player();
+        ensure_library_card(&mut state, active);
 
         state
             .start_turn(active)
@@ -5835,12 +6422,16 @@ mod tests {
             .unwrap_or_else(|error| panic!("unexpected trample damage error: {error:?}"));
 
         assert_eq!(
+            state.object_zone(blocker),
+            Some(ZoneId::new(Some(defender), ZoneKind::Graveyard))
+        );
+        assert_eq!(
             state
                 .objects()
                 .get(blocker)
                 .unwrap_or_else(|| panic!("missing blocker"))
                 .damage_marked(),
-            1
+            0
         );
         assert_eq!(state.players()[defender.index()].life(), 16);
     }
@@ -5932,14 +6523,333 @@ mod tests {
     }
 
     #[test]
+    fn life_total_sba_causes_loss_and_win_before_priority() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let opponent = state.add_player();
+        state
+            .set_player_life(active, 0)
+            .unwrap_or_else(|error| panic!("unexpected life set error: {error:?}"));
+
+        start_upkeep(&mut state, active);
+
+        assert!(state.players()[active.index()].lost());
+        assert!(!state.players()[opponent.index()].lost());
+        assert_eq!(state.game_outcome(), GameOutcome::Won(opponent));
+        assert_eq!(state.priority_player(), None);
+    }
+
+    #[test]
+    fn poison_sba_causes_loss() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let opponent = state.add_player();
+        state
+            .add_poison_counters(active, 10)
+            .unwrap_or_else(|error| panic!("unexpected poison error: {error:?}"));
+
+        let report = state
+            .check_state_based_actions()
+            .unwrap_or_else(|error| panic!("unexpected SBA error: {error:?}"));
+
+        assert_eq!(report.players_lost(), 1);
+        assert!(state.players()[active.index()].lost());
+        assert_eq!(state.game_outcome(), GameOutcome::Won(opponent));
+    }
+
+    #[test]
+    fn simultaneous_lethal_life_loss_is_a_draw() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let opponent = state.add_player();
+        state
+            .lose_life(active, 20)
+            .unwrap_or_else(|error| panic!("unexpected active life loss error: {error:?}"));
+        state
+            .lose_life(opponent, 20)
+            .unwrap_or_else(|error| panic!("unexpected opponent life loss error: {error:?}"));
+
+        let report = state
+            .check_state_based_actions()
+            .unwrap_or_else(|error| panic!("unexpected SBA error: {error:?}"));
+
+        assert_eq!(report.iterations(), 1);
+        assert_eq!(report.players_lost(), 2);
+        assert_eq!(state.game_outcome(), GameOutcome::Draw);
+        assert_eq!(state.priority_player(), None);
+    }
+
+    #[test]
+    fn empty_library_draw_step_loses_before_priority() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let opponent = state.add_player();
+        state
+            .start_turn(active)
+            .unwrap_or_else(|error| panic!("unexpected start error: {error:?}"));
+
+        while state.current_step() != Some(Step::Draw) {
+            state
+                .advance_step()
+                .unwrap_or_else(|error| panic!("unexpected draw walk error: {error:?}"));
+        }
+
+        assert_eq!(state.current_step(), Some(Step::Draw));
+        assert!(state.players()[active.index()].lost());
+        assert_eq!(state.game_outcome(), GameOutcome::Won(opponent));
+        assert_eq!(state.priority_player(), None);
+    }
+
+    #[test]
+    fn lifelink_is_applied_before_loss_state_based_actions() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let defender = state.add_player();
+        let lifelinker = battlefield_creature(
+            &mut state,
+            active,
+            220,
+            3,
+            3,
+            CreatureKeywords::none().with_lifelink(),
+        );
+        state
+            .set_player_life(active, 3)
+            .unwrap_or_else(|error| panic!("unexpected life set error: {error:?}"));
+        start_declare_attackers(&mut state, active);
+        state
+            .declare_attackers(active, &[AttackDeclaration::new(lifelinker, defender)])
+            .unwrap_or_else(|error| panic!("unexpected lifelink attack error: {error:?}"));
+        state
+            .advance_step()
+            .unwrap_or_else(|error| panic!("unexpected blockers advance error: {error:?}"));
+        state
+            .declare_blockers(defender, &[])
+            .unwrap_or_else(|error| panic!("unexpected empty block error: {error:?}"));
+        state
+            .advance_step()
+            .unwrap_or_else(|error| panic!("unexpected damage advance error: {error:?}"));
+        state
+            .lose_life(active, 3)
+            .unwrap_or_else(|error| panic!("unexpected pre-damage life loss error: {error:?}"));
+
+        state
+            .assign_combat_damage(&[CombatDamageAssignmentRequest::new(
+                lifelinker,
+                vec![CombatDamageAssignment::new(
+                    CombatDamageTarget::Player(defender),
+                    3,
+                )],
+            )])
+            .unwrap_or_else(|error| panic!("unexpected lifelink damage error: {error:?}"));
+
+        assert_eq!(state.players()[active.index()].life(), 3);
+        assert!(!state.players()[active.index()].lost());
+        assert_eq!(state.game_outcome(), GameOutcome::InProgress);
+    }
+
+    #[test]
+    fn lethal_combat_damage_moves_creatures_to_owner_graveyards_before_priority() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let defender = state.add_player();
+        let attacker =
+            battlefield_creature(&mut state, active, 221, 2, 2, CreatureKeywords::none());
+        let blocker =
+            battlefield_creature(&mut state, defender, 222, 2, 2, CreatureKeywords::none());
+        start_declare_attackers(&mut state, active);
+        state
+            .declare_attackers(active, &[AttackDeclaration::new(attacker, defender)])
+            .unwrap_or_else(|error| panic!("unexpected attack error: {error:?}"));
+        state
+            .advance_step()
+            .unwrap_or_else(|error| panic!("unexpected blockers advance error: {error:?}"));
+        state
+            .declare_blockers(defender, &[BlockDeclaration::new(blocker, attacker)])
+            .unwrap_or_else(|error| panic!("unexpected block error: {error:?}"));
+        state
+            .advance_step()
+            .unwrap_or_else(|error| panic!("unexpected damage advance error: {error:?}"));
+
+        state
+            .assign_combat_damage(&[
+                CombatDamageAssignmentRequest::new(
+                    attacker,
+                    vec![CombatDamageAssignment::new(
+                        CombatDamageTarget::Object(blocker),
+                        2,
+                    )],
+                ),
+                CombatDamageAssignmentRequest::new(
+                    blocker,
+                    vec![CombatDamageAssignment::new(
+                        CombatDamageTarget::Object(attacker),
+                        2,
+                    )],
+                ),
+            ])
+            .unwrap_or_else(|error| panic!("unexpected lethal combat damage error: {error:?}"));
+
+        assert_eq!(
+            state.object_zone(attacker),
+            Some(ZoneId::new(Some(active), ZoneKind::Graveyard))
+        );
+        assert_eq!(
+            state.object_zone(blocker),
+            Some(ZoneId::new(Some(defender), ZoneKind::Graveyard))
+        );
+        assert_eq!(state.priority_player(), Some(active));
+    }
+
+    #[test]
+    fn first_strike_lethal_damage_removes_blocker_before_regular_damage() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let defender = state.add_player();
+        let striker = battlefield_creature(
+            &mut state,
+            active,
+            223,
+            2,
+            2,
+            CreatureKeywords::none().with_first_strike(),
+        );
+        let blocker =
+            battlefield_creature(&mut state, defender, 224, 2, 2, CreatureKeywords::none());
+        start_declare_attackers(&mut state, active);
+        state
+            .declare_attackers(active, &[AttackDeclaration::new(striker, defender)])
+            .unwrap_or_else(|error| panic!("unexpected first strike attack error: {error:?}"));
+        state
+            .advance_step()
+            .unwrap_or_else(|error| panic!("unexpected blockers advance error: {error:?}"));
+        state
+            .declare_blockers(defender, &[BlockDeclaration::new(blocker, striker)])
+            .unwrap_or_else(|error| panic!("unexpected first strike block error: {error:?}"));
+        state
+            .advance_step()
+            .unwrap_or_else(|error| panic!("unexpected first damage advance error: {error:?}"));
+        state
+            .assign_combat_damage(&[CombatDamageAssignmentRequest::new(
+                striker,
+                vec![CombatDamageAssignment::new(
+                    CombatDamageTarget::Object(blocker),
+                    2,
+                )],
+            )])
+            .unwrap_or_else(|error| panic!("unexpected first strike damage error: {error:?}"));
+
+        assert_eq!(
+            state.object_zone(blocker),
+            Some(ZoneId::new(Some(defender), ZoneKind::Graveyard))
+        );
+        assert!(state.combat_state().attackers()[0].blocked());
+        assert_eq!(
+            state
+                .advance_step()
+                .unwrap_or_else(|error| panic!("unexpected regular damage advance: {error:?}")),
+            Step::CombatDamage
+        );
+        assert_eq!(
+            state.combat_state().damage_step(),
+            Some(CombatDamageStepKind::Regular)
+        );
+        state
+            .assign_combat_damage(&[])
+            .unwrap_or_else(|error| panic!("unexpected empty regular damage error: {error:?}"));
+        assert_eq!(state.players()[defender.index()].life(), 20);
+    }
+
+    #[test]
+    fn deathtouch_damage_does_not_persist_past_one_sba_check() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let defender = state.add_player();
+        let deathtoucher = battlefield_creature(
+            &mut state,
+            active,
+            225,
+            1,
+            1,
+            CreatureKeywords::none().with_deathtouch(),
+        );
+        let large = battlefield_creature(&mut state, defender, 226, 5, 5, CreatureKeywords::none());
+        start_declare_attackers(&mut state, active);
+        state
+            .declare_attackers(active, &[AttackDeclaration::new(deathtoucher, defender)])
+            .unwrap_or_else(|error| panic!("unexpected deathtouch attack error: {error:?}"));
+        state
+            .advance_step()
+            .unwrap_or_else(|error| panic!("unexpected blockers advance error: {error:?}"));
+        state
+            .declare_blockers(defender, &[BlockDeclaration::new(large, deathtoucher)])
+            .unwrap_or_else(|error| panic!("unexpected deathtouch block error: {error:?}"));
+        state
+            .advance_step()
+            .unwrap_or_else(|error| panic!("unexpected damage advance error: {error:?}"));
+        state
+            .assign_combat_damage(&[
+                CombatDamageAssignmentRequest::new(
+                    deathtoucher,
+                    vec![CombatDamageAssignment::new(
+                        CombatDamageTarget::Object(large),
+                        1,
+                    )],
+                ),
+                CombatDamageAssignmentRequest::new(
+                    large,
+                    vec![CombatDamageAssignment::new(
+                        CombatDamageTarget::Object(deathtoucher),
+                        5,
+                    )],
+                ),
+            ])
+            .unwrap_or_else(|error| panic!("unexpected deathtouch damage error: {error:?}"));
+
+        assert_eq!(
+            state.object_zone(large),
+            Some(ZoneId::new(Some(defender), ZoneKind::Graveyard))
+        );
+        state
+            .move_object(large, ZoneId::new(None, ZoneKind::Battlefield))
+            .unwrap_or_else(|error| panic!("unexpected return to battlefield error: {error:?}"));
+        let report = state
+            .check_state_based_actions()
+            .unwrap_or_else(|error| panic!("unexpected stale SBA error: {error:?}"));
+
+        assert_eq!(report.actions_performed(), 0);
+        assert_eq!(
+            state.object_zone(large),
+            Some(ZoneId::new(None, ZoneKind::Battlefield))
+        );
+    }
+
+    #[test]
+    fn zero_toughness_creature_goes_to_owner_graveyard() {
+        let mut state = GameState::new();
+        let player = state.add_player();
+        let doomed = battlefield_creature(&mut state, player, 227, 0, 0, CreatureKeywords::none());
+
+        let report = state
+            .check_state_based_actions()
+            .unwrap_or_else(|error| panic!("unexpected zero toughness SBA error: {error:?}"));
+
+        assert_eq!(report.zero_toughness_creatures(), 1);
+        assert_eq!(
+            state.object_zone(doomed),
+            Some(ZoneId::new(Some(player), ZoneKind::Graveyard))
+        );
+    }
+
+    #[test]
     fn combat_damage_marks_persist_until_cleanup() {
         let mut state = GameState::new();
         let active = state.add_player();
         let defender = state.add_player();
         let attacker =
-            battlefield_creature(&mut state, active, 218, 2, 2, CreatureKeywords::none());
+            battlefield_creature(&mut state, active, 218, 1, 3, CreatureKeywords::none());
         let blocker =
-            battlefield_creature(&mut state, defender, 219, 2, 2, CreatureKeywords::none());
+            battlefield_creature(&mut state, defender, 219, 1, 3, CreatureKeywords::none());
         start_declare_attackers(&mut state, active);
         state
             .declare_attackers(active, &[AttackDeclaration::new(attacker, defender)])
@@ -5959,14 +6869,14 @@ mod tests {
                     attacker,
                     vec![CombatDamageAssignment::new(
                         CombatDamageTarget::Object(blocker),
-                        2,
+                        1,
                     )],
                 ),
                 CombatDamageAssignmentRequest::new(
                     blocker,
                     vec![CombatDamageAssignment::new(
                         CombatDamageTarget::Object(attacker),
-                        2,
+                        1,
                     )],
                 ),
             ])
@@ -5983,7 +6893,7 @@ mod tests {
                 .get(attacker)
                 .unwrap_or_else(|| panic!("missing attacker"))
                 .damage_marked(),
-            2
+            1
         );
         assert_eq!(
             state
@@ -5991,7 +6901,7 @@ mod tests {
                 .get(blocker)
                 .unwrap_or_else(|| panic!("missing blocker"))
                 .damage_marked(),
-            2
+            1
         );
 
         while state.current_step() != Some(Step::Cleanup) {
@@ -6021,6 +6931,7 @@ mod tests {
     fn end_of_turn_durations_survive_end_step_and_expire_during_cleanup() {
         let mut state = GameState::new();
         let active = state.add_player();
+        ensure_library_card(&mut state, active);
         state.add_duration_marker(EffectDuration::UntilEndOfTurn);
         state.add_duration_marker(EffectDuration::ThisTurn);
 
@@ -6058,6 +6969,7 @@ mod tests {
         let next = state.add_player();
         let hand = ZoneId::new(Some(active), ZoneKind::Hand);
         let graveyard = ZoneId::new(Some(active), ZoneKind::Graveyard);
+        ensure_library_card(&mut state, active);
         state
             .set_player_max_hand_size(active, 2)
             .unwrap_or_else(|error| panic!("unexpected max hand size error: {error:?}"));
@@ -6077,7 +6989,7 @@ mod tests {
                 .unwrap_or_else(|error| panic!("unexpected advance error: {error:?}"));
         }
 
-        assert_eq!(state.last_cleanup_report().discarded(), 3);
+        assert_eq!(state.last_cleanup_report().discarded(), 4);
         assert_eq!(state.last_cleanup_report().expired_until_end_of_turn(), 1);
         assert_eq!(
             state
@@ -6093,7 +7005,7 @@ mod tests {
                 .unwrap_or_else(|| panic!("graveyard zone missing"))
                 .objects()
                 .len(),
-            3
+            4
         );
         assert_eq!(state.priority_player(), None);
 
@@ -6110,6 +7022,7 @@ mod tests {
         let mut state = GameState::new();
         let active = state.add_player();
         state.add_player();
+        ensure_library_card(&mut state, active);
         state
             .start_turn(active)
             .unwrap_or_else(|error| panic!("unexpected start error: {error:?}"));
@@ -6123,6 +7036,42 @@ mod tests {
         assert_eq!(state.current_step(), Some(Step::Cleanup));
         assert_eq!(state.cleanup_iteration(), 1);
         assert_eq!(state.priority_player(), Some(active));
+
+        state
+            .advance_step()
+            .unwrap_or_else(|error| panic!("unexpected repeated cleanup advance error: {error:?}"));
+        assert_eq!(state.current_step(), Some(Step::Cleanup));
+        assert_eq!(state.cleanup_iteration(), 2);
+        assert_eq!(state.priority_player(), None);
+    }
+
+    #[test]
+    fn cleanup_state_based_action_grants_priority_and_repeats_cleanup() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        state.add_player();
+        ensure_library_card(&mut state, active);
+        state
+            .start_turn(active)
+            .unwrap_or_else(|error| panic!("unexpected start error: {error:?}"));
+        while state.current_step() != Some(Step::End) {
+            state
+                .advance_step()
+                .unwrap_or_else(|error| panic!("unexpected end-step walk error: {error:?}"));
+        }
+        let doomed = battlefield_creature(&mut state, active, 228, 0, 0, CreatureKeywords::none());
+
+        state
+            .advance_step()
+            .unwrap_or_else(|error| panic!("unexpected cleanup advance error: {error:?}"));
+
+        assert_eq!(state.current_step(), Some(Step::Cleanup));
+        assert_eq!(state.cleanup_iteration(), 1);
+        assert_eq!(state.priority_player(), Some(active));
+        assert_eq!(
+            state.object_zone(doomed),
+            Some(ZoneId::new(Some(active), ZoneKind::Graveyard))
+        );
 
         state
             .advance_step()
@@ -6374,6 +7323,7 @@ mod tests {
     }
 
     fn start_upkeep(state: &mut GameState, active: PlayerId) {
+        ensure_library_card(state, active);
         state
             .start_turn(active)
             .unwrap_or_else(|error| panic!("unexpected start error: {error:?}"));
@@ -6383,6 +7333,7 @@ mod tests {
     }
 
     fn start_declare_attackers(state: &mut GameState, active: PlayerId) {
+        ensure_library_card(state, active);
         state
             .start_turn(active)
             .unwrap_or_else(|error| panic!("unexpected start error: {error:?}"));
@@ -6390,6 +7341,20 @@ mod tests {
             state
                 .advance_step()
                 .unwrap_or_else(|error| panic!("unexpected combat walk error: {error:?}"));
+        }
+    }
+
+    fn ensure_library_card(state: &mut GameState, player: PlayerId) {
+        let library = ZoneId::new(Some(player), ZoneKind::Library);
+        if state
+            .zone(library)
+            .unwrap_or_else(|| panic!("library zone missing"))
+            .objects()
+            .is_empty()
+        {
+            state
+                .create_object(CardId::new(9_999), player, player, library)
+                .unwrap_or_else(|error| panic!("unexpected library seed error: {error:?}"));
         }
     }
 

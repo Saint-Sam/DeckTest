@@ -62,8 +62,14 @@
       "remote_ci": "GitHub Actions ci #10 run 28822340130 passed all required jobs for commit 14ed220"
     },
     "T1.6": {
-      "status": "verified_local",
+      "status": "verified_remote",
       "branch": "task/T1.6-combat",
+      "attempts": 0,
+      "remote_ci": "GitHub Actions ci #11 run 28823362044 passed all required jobs for commit d0f9fd3"
+    },
+    "T1.7": {
+      "status": "verified_local",
+      "branch": "task/T1.7-state-based-actions",
       "attempts": 0
     }
   },
