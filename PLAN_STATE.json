@@ -38,8 +38,14 @@
       "remote_ci": "GitHub Actions ci #6 run 28818490265 passed all required jobs for commit 7f80433"
     },
     "T1.2": {
-      "status": "verified_local",
+      "status": "verified_remote",
       "branch": "task/T1.2-turn-structure",
+      "attempts": 0,
+      "remote_ci": "GitHub Actions ci #7 run 28819302498 passed all required jobs for commit c151cb4"
+    },
+    "T1.3": {
+      "status": "verified_local",
+      "branch": "task/T1.3-priority-stack",
       "attempts": 0
     }
   },

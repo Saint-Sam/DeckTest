@@ -329,6 +329,132 @@ impl DurationMarker {
     }
 }
 
+/// A stable handle for one spell or ability on the stack.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct StackEntryId(u32);
+
+impl StackEntryId {
+    /// Returns the zero-based arena index for this stack entry.
+    #[must_use]
+    pub const fn index(self) -> usize {
+        self.0 as usize
+    }
+
+    /// Returns the raw deterministic stack-entry value.
+    #[must_use]
+    pub const fn get(self) -> u32 {
+        self.0
+    }
+}
+
+/// The coarse kind of object represented by a stack entry.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum StackObjectKind {
+    /// Instant spell. T1.3 resolution moves it to its owner's graveyard.
+    InstantSpell,
+    /// Sorcery spell. T1.3 resolution moves it to its owner's graveyard.
+    SorcerySpell,
+    /// Permanent spell. T1.3 resolution moves it to the battlefield.
+    PermanentSpell,
+    /// Activated ability with no physical card object on the stack.
+    ActivatedAbility,
+    /// Triggered ability with no physical card object on the stack.
+    TriggeredAbility,
+}
+
+impl StackObjectKind {
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::InstantSpell => 0,
+            Self::SorcerySpell => 1,
+            Self::PermanentSpell => 2,
+            Self::ActivatedAbility => 3,
+            Self::TriggeredAbility => 4,
+        }
+    }
+}
+
+/// One spell or ability waiting on the stack.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct StackEntry {
+    id: StackEntryId,
+    controller: PlayerId,
+    object: Option<ObjectId>,
+    kind: StackObjectKind,
+}
+
+impl StackEntry {
+    /// Returns the stable stack-entry ID.
+    #[must_use]
+    pub const fn id(self) -> StackEntryId {
+        self.id
+    }
+
+    /// Returns the controller of the spell or ability on the stack.
+    #[must_use]
+    pub const fn controller(self) -> PlayerId {
+        self.controller
+    }
+
+    /// Returns the physical object on the stack, if this entry is a spell.
+    #[must_use]
+    pub const fn object(self) -> Option<ObjectId> {
+        self.object
+    }
+
+    /// Returns the coarse stack-object kind.
+    #[must_use]
+    pub const fn kind(self) -> StackObjectKind {
+        self.kind
+    }
+}
+
+/// Record of a stack object that resolved.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ResolutionRecord {
+    stack_entry: StackEntryId,
+    controller: PlayerId,
+    object: Option<ObjectId>,
+    kind: StackObjectKind,
+}
+
+impl ResolutionRecord {
+    /// Returns the stack-entry ID that resolved.
+    #[must_use]
+    pub const fn stack_entry(self) -> StackEntryId {
+        self.stack_entry
+    }
+
+    /// Returns the controller of the resolved entry.
+    #[must_use]
+    pub const fn controller(self) -> PlayerId {
+        self.controller
+    }
+
+    /// Returns the physical object that resolved, if any.
+    #[must_use]
+    pub const fn object(self) -> Option<ObjectId> {
+        self.object
+    }
+
+    /// Returns the resolved stack-object kind.
+    #[must_use]
+    pub const fn kind(self) -> StackObjectKind {
+        self.kind
+    }
+}
+
+/// Result of one priority pass.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PriorityOutcome {
+    /// Priority moved to the next player in turn order.
+    PassedTo(PlayerId),
+    /// All players passed and one stack entry resolved.
+    Resolved(StackEntryId),
+    /// All players passed with an empty stack, so the step or phase can end.
+    StepComplete,
+}
+
 /// Scalar state for one player.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PlayerState {
@@ -550,6 +676,19 @@ pub enum StateError {
     NoPlayers,
     /// The deterministic turn counter overflowed.
     TurnNumberOverflow,
+    /// No player currently has priority.
+    NoPriority,
+    /// A player tried to act while another player had priority.
+    PriorityPlayerMismatch {
+        /// The player who currently has priority.
+        expected: PlayerId,
+        /// The player who tried to act.
+        actual: PlayerId,
+    },
+    /// A stack resolution was requested while the stack was empty.
+    EmptyStack,
+    /// A stack entry refers to a spell object that is no longer on the stack.
+    StackObjectNotOnStack(ObjectId),
 }
 
 /// Complete T1 game state.
@@ -559,6 +698,7 @@ pub struct GameState {
     turn_number: u32,
     active_player: Option<PlayerId>,
     priority_player: Option<PlayerId>,
+    priority_pass_count: u32,
     current_step: Option<Step>,
     cleanup_iteration: u32,
     cleanup_priority_requested: bool,
@@ -570,6 +710,9 @@ pub struct GameState {
     zones: Vec<Zone>,
     next_duration_marker: u32,
     duration_markers: Vec<DurationMarker>,
+    next_stack_entry: u32,
+    stack_entries: Vec<StackEntry>,
+    resolution_log: Vec<ResolutionRecord>,
 }
 
 impl Default for GameState {
@@ -587,6 +730,7 @@ impl GameState {
             turn_number: 0,
             active_player: None,
             priority_player: None,
+            priority_pass_count: 0,
             current_step: None,
             cleanup_iteration: 0,
             cleanup_priority_requested: false,
@@ -615,6 +759,9 @@ impl GameState {
             ],
             next_duration_marker: 0,
             duration_markers: Vec::new(),
+            next_stack_entry: 0,
+            stack_entries: Vec::new(),
+            resolution_log: Vec::new(),
         }
     }
 
@@ -645,6 +792,12 @@ impl GameState {
     #[must_use]
     pub const fn priority_player(&self) -> Option<PlayerId> {
         self.priority_player
+    }
+
+    /// Returns the number of consecutive priority passes since the last action.
+    #[must_use]
+    pub const fn priority_pass_count(&self) -> u32 {
+        self.priority_pass_count
     }
 
     /// Returns the current step or main-phase segment, if a turn has started.
@@ -678,6 +831,24 @@ impl GameState {
     #[must_use]
     pub const fn has_priority_window(&self) -> bool {
         self.priority_player.is_some()
+    }
+
+    /// Returns active stack entries in bottom-to-top order.
+    #[must_use]
+    pub fn stack_entries(&self) -> &[StackEntry] {
+        &self.stack_entries
+    }
+
+    /// Returns the current top stack entry.
+    #[must_use]
+    pub fn stack_top(&self) -> Option<StackEntry> {
+        self.stack_entries.last().copied()
+    }
+
+    /// Returns resolved stack entries in resolution order.
+    #[must_use]
+    pub fn resolution_log(&self) -> &[ResolutionRecord] {
+        &self.resolution_log
     }
 
     /// Adds a player and that player's owned zones.
@@ -746,6 +917,7 @@ impl GameState {
         }
         self.active_player = Some(active_player);
         self.priority_player = None;
+        self.priority_pass_count = 0;
         self.turn_number = self
             .turn_number
             .checked_add(1)
@@ -757,9 +929,110 @@ impl GameState {
 
     /// Advances from the current step or main-phase segment to the next one.
     ///
-    /// T1.2 uses an auto-pass empty-stack model. T1.3 replaces that with full
-    /// priority pass tracking and stack resolution while keeping this cursor.
+    /// This remains available for no-priority steps and tests. Steps with a
+    /// priority window should usually end through [`Self::pass_priority`],
+    /// because CR 117.4 requires all players to pass in succession.
     pub fn advance_step(&mut self) -> Result<Step, StateError> {
+        self.advance_step_after_empty_stack()
+    }
+
+    /// Passes priority for the current priority player.
+    ///
+    /// If all players pass in succession, this either resolves the top stack
+    /// entry or completes the current step when the stack is empty.
+    pub fn pass_priority(&mut self, player: PlayerId) -> Result<PriorityOutcome, StateError> {
+        let priority_player = self.priority_player.ok_or(StateError::NoPriority)?;
+        if priority_player != player {
+            return Err(StateError::PriorityPlayerMismatch {
+                expected: priority_player,
+                actual: player,
+            });
+        }
+        self.priority_pass_count = self.priority_pass_count.saturating_add(1);
+        if self.priority_pass_count < self.players.len() as u32 {
+            let next = self.next_player_after(player)?;
+            self.priority_player = Some(next);
+            return Ok(PriorityOutcome::PassedTo(next));
+        }
+
+        self.priority_pass_count = 0;
+        if self.stack_entries.is_empty() {
+            self.advance_step_after_empty_stack()?;
+            Ok(PriorityOutcome::StepComplete)
+        } else {
+            let resolved = self.resolve_top_stack_entry()?;
+            self.grant_priority_after_resolution();
+            Ok(PriorityOutcome::Resolved(resolved))
+        }
+    }
+
+    /// Puts a spell object on the stack for the current priority player.
+    ///
+    /// When `hold_priority` is true, priority remains with the caster as an
+    /// explicit full-control choice. T1.3 keeps the same result either way
+    /// because CR 117.3c gives priority back after a spell is cast.
+    pub fn put_spell_on_stack(
+        &mut self,
+        player: PlayerId,
+        object: ObjectId,
+        kind: StackObjectKind,
+        hold_priority: bool,
+    ) -> Result<StackEntryId, StateError> {
+        self.require_priority_player(player)?;
+        self.require_player(player)?;
+        if self.objects.get(object).is_none() {
+            return Err(StateError::UnknownObject(object));
+        }
+        let stack_zone = ZoneId::new(None, ZoneKind::Stack);
+        if self.object_zone(object) != Some(stack_zone) {
+            self.move_object(object, stack_zone)?;
+        }
+        let id = self.push_stack_entry(player, Some(object), kind);
+        self.after_priority_action(player, hold_priority);
+        Ok(id)
+    }
+
+    /// Puts an ability on top of the stack for the current priority player.
+    pub fn put_ability_on_stack(
+        &mut self,
+        player: PlayerId,
+        kind: StackObjectKind,
+        hold_priority: bool,
+    ) -> Result<StackEntryId, StateError> {
+        self.require_priority_player(player)?;
+        self.require_player(player)?;
+        let id = self.push_stack_entry(player, None, kind);
+        self.after_priority_action(player, hold_priority);
+        Ok(id)
+    }
+
+    /// Puts simultaneous triggered abilities on the stack in APNAP order.
+    ///
+    /// Entries controlled by the active player are placed lowest, followed by
+    /// nonactive players in turn order. Within one controller's entries, the
+    /// provided order is preserved.
+    pub fn put_simultaneous_abilities_apnap(
+        &mut self,
+        abilities: &[PlayerId],
+        kind: StackObjectKind,
+    ) -> Result<Vec<StackEntryId>, StateError> {
+        let active = self.active_player.ok_or(StateError::TurnNotStarted)?;
+        for player in abilities {
+            self.require_player(*player)?;
+        }
+        let mut ids = Vec::with_capacity(abilities.len());
+        for player in self.apnap_players(active)? {
+            for ability_controller in abilities {
+                if *ability_controller == player {
+                    ids.push(self.push_stack_entry(player, None, kind));
+                }
+            }
+        }
+        self.priority_pass_count = 0;
+        Ok(ids)
+    }
+
+    fn advance_step_after_empty_stack(&mut self) -> Result<Step, StateError> {
         let current = self.current_step.ok_or(StateError::TurnNotStarted)?;
         self.end_step(current);
         let next = match current {
@@ -925,6 +1198,7 @@ impl GameState {
         bytes.write_u32(self.turn_number);
         bytes.write_optional_player(self.active_player);
         bytes.write_optional_player(self.priority_player);
+        bytes.write_u32(self.priority_pass_count);
         bytes.write_optional_step(self.current_step);
         bytes.write_u32(self.cleanup_iteration);
         bytes.write_bool(self.cleanup_priority_requested);
@@ -962,6 +1236,15 @@ impl GameState {
             bytes.write_u32(marker.id.0);
             bytes.write_effect_duration(marker.duration);
         }
+        bytes.write_u32(self.next_stack_entry);
+        bytes.write_u32(self.stack_entries.len() as u32);
+        for entry in &self.stack_entries {
+            bytes.write_stack_entry(*entry);
+        }
+        bytes.write_u32(self.resolution_log.len() as u32);
+        for resolution in &self.resolution_log {
+            bytes.write_resolution_record(*resolution);
+        }
         bytes.finish()
     }
 
@@ -973,6 +1256,7 @@ impl GameState {
         hash.write_u32(self.turn_number);
         hash.write_optional_player(self.active_player);
         hash.write_optional_player(self.priority_player);
+        hash.write_u32(self.priority_pass_count);
         hash.write_optional_step(self.current_step);
         hash.write_u32(self.cleanup_iteration);
         hash.write_bool(self.cleanup_priority_requested);
@@ -1011,6 +1295,16 @@ impl GameState {
             hash.write_effect_duration(marker.duration);
         }
 
+        hash.write_u32(self.next_stack_entry);
+        hash.write_u32(self.stack_entries.len() as u32);
+        for entry in &self.stack_entries {
+            hash.write_stack_entry(*entry);
+        }
+        hash.write_u32(self.resolution_log.len() as u32);
+        for resolution in &self.resolution_log {
+            hash.write_resolution_record(*resolution);
+        }
+
         StateHash(hash.finish())
     }
 
@@ -1035,6 +1329,7 @@ impl GameState {
 
     fn end_step(&mut self, step: Step) {
         self.priority_player = None;
+        self.priority_pass_count = 0;
         if step == Step::EndOfCombat {
             self.expire_end_of_combat_markers();
         }
@@ -1087,6 +1382,7 @@ impl GameState {
         } else {
             None
         };
+        self.priority_pass_count = 0;
     }
 
     fn begin_cleanup_step(&mut self) -> Result<(), StateError> {
@@ -1100,7 +1396,80 @@ impl GameState {
         } else {
             None
         };
+        self.priority_pass_count = 0;
         Ok(())
+    }
+
+    fn require_priority_player(&self, player: PlayerId) -> Result<(), StateError> {
+        let priority_player = self.priority_player.ok_or(StateError::NoPriority)?;
+        if priority_player == player {
+            Ok(())
+        } else {
+            Err(StateError::PriorityPlayerMismatch {
+                expected: priority_player,
+                actual: player,
+            })
+        }
+    }
+
+    fn after_priority_action(&mut self, player: PlayerId, _hold_priority: bool) {
+        self.priority_player = Some(player);
+        self.priority_pass_count = 0;
+    }
+
+    fn push_stack_entry(
+        &mut self,
+        controller: PlayerId,
+        object: Option<ObjectId>,
+        kind: StackObjectKind,
+    ) -> StackEntryId {
+        let id = StackEntryId(self.next_stack_entry);
+        self.next_stack_entry = self.next_stack_entry.saturating_add(1);
+        self.stack_entries.push(StackEntry {
+            id,
+            controller,
+            object,
+            kind,
+        });
+        id
+    }
+
+    fn resolve_top_stack_entry(&mut self) -> Result<StackEntryId, StateError> {
+        let entry = self.stack_entries.pop().ok_or(StateError::EmptyStack)?;
+        if let Some(object) = entry.object {
+            if self.object_zone(object) != Some(ZoneId::new(None, ZoneKind::Stack)) {
+                return Err(StateError::StackObjectNotOnStack(object));
+            }
+            let destination = match entry.kind {
+                StackObjectKind::InstantSpell | StackObjectKind::SorcerySpell => {
+                    let owner = self
+                        .objects
+                        .get(object)
+                        .ok_or(StateError::UnknownObject(object))?
+                        .owner();
+                    ZoneId::new(Some(owner), ZoneKind::Graveyard)
+                }
+                StackObjectKind::PermanentSpell => ZoneId::new(None, ZoneKind::Battlefield),
+                StackObjectKind::ActivatedAbility | StackObjectKind::TriggeredAbility => {
+                    ZoneId::new(None, ZoneKind::Stack)
+                }
+            };
+            if destination != ZoneId::new(None, ZoneKind::Stack) {
+                self.move_object(object, destination)?;
+            }
+        }
+        self.resolution_log.push(ResolutionRecord {
+            stack_entry: entry.id,
+            controller: entry.controller,
+            object: entry.object,
+            kind: entry.kind,
+        });
+        Ok(entry.id)
+    }
+
+    fn grant_priority_after_resolution(&mut self) {
+        self.priority_player = self.active_player;
+        self.priority_pass_count = 0;
     }
 
     fn perform_cleanup_actions(&mut self) -> Result<CleanupReport, StateError> {
@@ -1172,6 +1541,20 @@ impl GameState {
         self.require_player(player)?;
         let next_index = (player.index() + 1) % self.players.len();
         Ok(PlayerId(next_index as u32))
+    }
+
+    fn apnap_players(&self, active: PlayerId) -> Result<Vec<PlayerId>, StateError> {
+        if self.players.is_empty() {
+            return Err(StateError::NoPlayers);
+        }
+        self.require_player(active)?;
+        let mut order = Vec::with_capacity(self.players.len());
+        let mut player = active;
+        for _ in 0..self.players.len() {
+            order.push(player);
+            player = self.next_player_after(player)?;
+        }
+        Ok(order)
     }
 
     fn expire_step_begin_markers(&mut self, step: Step) {
@@ -1329,6 +1712,30 @@ impl Fnva64 {
             | EffectDuration::ThisTurn => {}
         }
     }
+
+    fn write_optional_object(&mut self, object: Option<ObjectId>) {
+        match object {
+            Some(object) => {
+                self.write_u8(1);
+                self.write_u32(object.0);
+            }
+            None => self.write_u8(0),
+        }
+    }
+
+    fn write_stack_entry(&mut self, entry: StackEntry) {
+        self.write_u32(entry.id.0);
+        self.write_u32(entry.controller.0);
+        self.write_optional_object(entry.object);
+        self.write_u8(entry.kind.canonical_code());
+    }
+
+    fn write_resolution_record(&mut self, record: ResolutionRecord) {
+        self.write_u32(record.stack_entry.0);
+        self.write_u32(record.controller.0);
+        self.write_optional_object(record.object);
+        self.write_u8(record.kind.canonical_code());
+    }
 }
 
 #[derive(Default)]
@@ -1408,13 +1815,38 @@ impl CanonicalBytes {
             | EffectDuration::ThisTurn => {}
         }
     }
+
+    fn write_optional_object(&mut self, object: Option<ObjectId>) {
+        match object {
+            Some(object) => {
+                self.write_u8(1);
+                self.write_u32(object.0);
+            }
+            None => self.write_u8(0),
+        }
+    }
+
+    fn write_stack_entry(&mut self, entry: StackEntry) {
+        self.write_u32(entry.id.0);
+        self.write_u32(entry.controller.0);
+        self.write_optional_object(entry.object);
+        self.write_u8(entry.kind.canonical_code());
+    }
+
+    fn write_resolution_record(&mut self, record: ResolutionRecord) {
+        self.write_u32(record.stack_entry.0);
+        self.write_u32(record.controller.0);
+        self.write_optional_object(record.object);
+        self.write_u8(record.kind.canonical_code());
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        crate_ready, CardId, EffectDuration, GameState, Phase, StateError, Step, ZoneConservation,
-        ZoneId, ZoneKind, NORMAL_TURN_STEPS,
+        crate_ready, CardId, EffectDuration, GameState, Phase, PlayerId, PriorityOutcome,
+        StackEntryId, StackObjectKind, StateError, Step, ZoneConservation, ZoneId, ZoneKind,
+        NORMAL_TURN_STEPS,
     };
 
     #[test]
@@ -1782,5 +2214,272 @@ mod tests {
         assert_eq!(state.current_step(), Some(Step::Cleanup));
         assert_eq!(state.cleanup_iteration(), 2);
         assert_eq!(state.priority_player(), None);
+    }
+
+    #[test]
+    fn priority_starts_with_active_then_passes_in_turn_order() {
+        let mut state = GameState::new();
+        let first = state.add_player();
+        let active = state.add_player();
+        let third = state.add_player();
+        start_upkeep(&mut state, active);
+
+        assert_eq!(state.priority_player(), Some(active));
+        assert_eq!(
+            state.pass_priority(active),
+            Ok(PriorityOutcome::PassedTo(third))
+        );
+        assert_eq!(
+            state.pass_priority(third),
+            Ok(PriorityOutcome::PassedTo(first))
+        );
+    }
+
+    #[test]
+    fn adding_stack_object_holds_priority_and_resets_passes() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let responder = state.add_player();
+        start_upkeep(&mut state, active);
+        assert_eq!(
+            state.pass_priority(active),
+            Ok(PriorityOutcome::PassedTo(responder))
+        );
+        assert_eq!(state.priority_pass_count(), 1);
+
+        let ability = state
+            .put_ability_on_stack(responder, StackObjectKind::ActivatedAbility, true)
+            .unwrap_or_else(|error| panic!("unexpected ability error: {error:?}"));
+
+        assert_eq!(state.priority_player(), Some(responder));
+        assert_eq!(state.priority_pass_count(), 0);
+        assert_eq!(state.stack_top().map(|entry| entry.id()), Some(ability));
+    }
+
+    #[test]
+    fn passes_in_succession_on_empty_stack_advance_step() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let responder = state.add_player();
+        start_upkeep(&mut state, active);
+
+        assert_eq!(
+            state.pass_priority(active),
+            Ok(PriorityOutcome::PassedTo(responder))
+        );
+        assert_eq!(
+            state.pass_priority(responder),
+            Ok(PriorityOutcome::StepComplete)
+        );
+        assert_eq!(state.current_step(), Some(Step::Draw));
+        assert_eq!(state.priority_player(), Some(active));
+    }
+
+    #[test]
+    fn intervening_action_breaks_pass_succession() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let second = state.add_player();
+        let third = state.add_player();
+        start_upkeep(&mut state, active);
+
+        assert_eq!(
+            state.pass_priority(active),
+            Ok(PriorityOutcome::PassedTo(second))
+        );
+        assert_eq!(
+            state.pass_priority(second),
+            Ok(PriorityOutcome::PassedTo(third))
+        );
+        let ability = state
+            .put_ability_on_stack(third, StackObjectKind::TriggeredAbility, true)
+            .unwrap_or_else(|error| panic!("unexpected ability error: {error:?}"));
+        assert_eq!(state.priority_pass_count(), 0);
+
+        assert_eq!(
+            state.pass_priority(third),
+            Ok(PriorityOutcome::PassedTo(active))
+        );
+        assert_eq!(
+            state.pass_priority(active),
+            Ok(PriorityOutcome::PassedTo(second))
+        );
+        assert_eq!(
+            state.pass_priority(second),
+            Ok(PriorityOutcome::Resolved(ability))
+        );
+        assert_eq!(state.resolution_log()[0].stack_entry(), ability);
+    }
+
+    #[test]
+    fn full_pass_round_resolves_only_one_object() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let responder = state.add_player();
+        let hand = ZoneId::new(Some(active), ZoneKind::Hand);
+        let graveyard = ZoneId::new(Some(active), ZoneKind::Graveyard);
+        let first = state
+            .create_object(CardId::new(21), active, active, hand)
+            .unwrap_or_else(|error| panic!("unexpected create error: {error:?}"));
+        let second = state
+            .create_object(CardId::new(22), active, active, hand)
+            .unwrap_or_else(|error| panic!("unexpected create error: {error:?}"));
+        start_upkeep(&mut state, active);
+        let first_entry = state
+            .put_spell_on_stack(active, first, StackObjectKind::InstantSpell, true)
+            .unwrap_or_else(|error| panic!("unexpected stack error: {error:?}"));
+        let second_entry = state
+            .put_spell_on_stack(active, second, StackObjectKind::InstantSpell, true)
+            .unwrap_or_else(|error| panic!("unexpected stack error: {error:?}"));
+
+        assert_eq!(
+            state.pass_priority(active),
+            Ok(PriorityOutcome::PassedTo(responder))
+        );
+        assert_eq!(
+            state.pass_priority(responder),
+            Ok(PriorityOutcome::Resolved(second_entry))
+        );
+
+        assert_eq!(state.stack_entries().len(), 1);
+        assert_eq!(state.stack_top().map(|entry| entry.id()), Some(first_entry));
+        assert_eq!(state.resolution_log().len(), 1);
+        assert_eq!(state.resolution_log()[0].stack_entry(), second_entry);
+        assert_eq!(state.object_zone(second), Some(graveyard));
+        assert_eq!(state.priority_player(), Some(active));
+    }
+
+    #[test]
+    fn resolved_object_controller_does_not_receive_priority() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let responder = state.add_player();
+        let active_hand = ZoneId::new(Some(active), ZoneKind::Hand);
+        let responder_hand = ZoneId::new(Some(responder), ZoneKind::Hand);
+        let active_spell = state
+            .create_object(CardId::new(30), active, active, active_hand)
+            .unwrap_or_else(|error| panic!("unexpected create error: {error:?}"));
+        let response = state
+            .create_object(CardId::new(31), responder, responder, responder_hand)
+            .unwrap_or_else(|error| panic!("unexpected create error: {error:?}"));
+        start_upkeep(&mut state, active);
+        state
+            .put_spell_on_stack(active, active_spell, StackObjectKind::InstantSpell, true)
+            .unwrap_or_else(|error| panic!("unexpected stack error: {error:?}"));
+        state
+            .pass_priority(active)
+            .unwrap_or_else(|error| panic!("unexpected pass error: {error:?}"));
+        let response_entry = state
+            .put_spell_on_stack(responder, response, StackObjectKind::InstantSpell, true)
+            .unwrap_or_else(|error| panic!("unexpected response error: {error:?}"));
+
+        state
+            .pass_priority(responder)
+            .unwrap_or_else(|error| panic!("unexpected responder pass error: {error:?}"));
+        assert_eq!(
+            state.pass_priority(active),
+            Ok(PriorityOutcome::Resolved(response_entry))
+        );
+        assert_eq!(state.priority_player(), Some(active));
+    }
+
+    #[test]
+    fn three_instant_response_chain_resolves_lifo() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let responder = state.add_player();
+        let active_hand = ZoneId::new(Some(active), ZoneKind::Hand);
+        let responder_hand = ZoneId::new(Some(responder), ZoneKind::Hand);
+        let first = state
+            .create_object(CardId::new(40), active, active, active_hand)
+            .unwrap_or_else(|error| panic!("unexpected create error: {error:?}"));
+        let second = state
+            .create_object(CardId::new(41), responder, responder, responder_hand)
+            .unwrap_or_else(|error| panic!("unexpected create error: {error:?}"));
+        let third = state
+            .create_object(CardId::new(42), active, active, active_hand)
+            .unwrap_or_else(|error| panic!("unexpected create error: {error:?}"));
+        start_upkeep(&mut state, active);
+        let first_entry = state
+            .put_spell_on_stack(active, first, StackObjectKind::InstantSpell, true)
+            .unwrap_or_else(|error| panic!("unexpected first stack error: {error:?}"));
+        state
+            .pass_priority(active)
+            .unwrap_or_else(|error| panic!("unexpected pass error: {error:?}"));
+        let second_entry = state
+            .put_spell_on_stack(responder, second, StackObjectKind::InstantSpell, true)
+            .unwrap_or_else(|error| panic!("unexpected second stack error: {error:?}"));
+        state
+            .pass_priority(responder)
+            .unwrap_or_else(|error| panic!("unexpected pass error: {error:?}"));
+        let third_entry = state
+            .put_spell_on_stack(active, third, StackObjectKind::InstantSpell, true)
+            .unwrap_or_else(|error| panic!("unexpected third stack error: {error:?}"));
+
+        pass_round(&mut state, active, responder, third_entry);
+        pass_round(&mut state, active, responder, second_entry);
+        pass_round(&mut state, active, responder, first_entry);
+
+        let resolved: Vec<StackEntryId> = state
+            .resolution_log()
+            .iter()
+            .map(|record| record.stack_entry())
+            .collect();
+        assert_eq!(resolved, vec![third_entry, second_entry, first_entry]);
+        assert!(state.stack_entries().is_empty());
+    }
+
+    #[test]
+    fn simultaneous_stack_objects_use_apnap_low_to_high() {
+        let mut state = GameState::new();
+        let first = state.add_player();
+        let active = state.add_player();
+        let third = state.add_player();
+        start_upkeep(&mut state, active);
+
+        let ids = state
+            .put_simultaneous_abilities_apnap(
+                &[active, third, first],
+                StackObjectKind::TriggeredAbility,
+            )
+            .unwrap_or_else(|error| panic!("unexpected APNAP stack error: {error:?}"));
+
+        let controllers: Vec<PlayerId> = state
+            .stack_entries()
+            .iter()
+            .map(|entry| entry.controller())
+            .collect();
+        assert_eq!(controllers, vec![active, third, first]);
+        assert_eq!(ids.len(), 3);
+        assert_eq!(
+            state.stack_top().map(|entry| entry.controller()),
+            Some(first)
+        );
+    }
+
+    fn start_upkeep(state: &mut GameState, active: PlayerId) {
+        state
+            .start_turn(active)
+            .unwrap_or_else(|error| panic!("unexpected start error: {error:?}"));
+        state
+            .advance_step()
+            .unwrap_or_else(|error| panic!("unexpected upkeep advance error: {error:?}"));
+    }
+
+    fn pass_round(
+        state: &mut GameState,
+        active: PlayerId,
+        responder: PlayerId,
+        expected: super::StackEntryId,
+    ) {
+        assert_eq!(
+            state.pass_priority(active),
+            Ok(PriorityOutcome::PassedTo(responder))
+        );
+        assert_eq!(
+            state.pass_priority(responder),
+            Ok(PriorityOutcome::Resolved(expected))
+        );
+        assert_eq!(state.priority_player(), Some(active));
     }
 }

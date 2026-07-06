@@ -1,0 +1,28 @@
+id: T1.3
+title: Priority and stack per CR 116/117/405/608
+tier: 1
+tags:
+  - kernel
+  - priority
+  - stack
+  - deterministic-state
+scope_paths:
+  - crates/forge-core/src/lib.rs
+inputs:
+  - FORGE_REBUILD_MASTER_PLAN.md Section 6 T1.3
+  - docs/vendor/comprehensive-rules.txt rules 116, 117, 405, and 608
+acceptance:
+  - GameState tracks current priority player and consecutive pass count
+  - priority passes rotate in active-player turn order
+  - all players passing on an empty stack completes the current step
+  - priority actions reset pass succession and return priority to the acting player
+  - stack entries are ordered bottom-to-top with last-added object resolving first
+  - all players passing with a nonempty stack resolves exactly one top stack entry
+  - after one stack entry resolves, active player receives priority
+  - simultaneous stack insertion follows APNAP low-to-high order
+  - three-response instant chain resolves LIFO in the resolution log
+verify: cargo test -p forge-core && cargo clippy -p forge-core --all-targets -- -D warnings
+retry_policy: 3 attempts then blocker
+depends_on:
+  - T1.2
+parallel_ok: false
