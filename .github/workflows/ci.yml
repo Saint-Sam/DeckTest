@@ -269,6 +269,11 @@ jobs:
           submodules: true
       - uses: Swatinem/rust-cache@v2
         if: ${{ hashFiles('Cargo.toml') != '' }}
+      - name: Install verification-loop coverage tool
+        if: ${{ hashFiles('Cargo.toml') != '' }}
+        run: |
+          rustup component add llvm-tools-preview
+          cargo install cargo-llvm-cov --locked
       - name: Run T0.4 verification loop hook
         run: |
           if [ -x scripts/vl.sh ]; then
