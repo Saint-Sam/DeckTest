@@ -1,5 +1,5 @@
 {
-  "tier": 0,
+  "tier": 1,
   "tasks": {
     "T0.1": {
       "status": "verified",
@@ -29,6 +29,11 @@
     "T0.6": {
       "status": "verified",
       "branch": "task/T0.6-legacy-mining-report",
+      "attempts": 0
+    },
+    "T1.1": {
+      "status": "verified_local",
+      "branch": "task/T1.1-core-state",
       "attempts": 0
     }
   },

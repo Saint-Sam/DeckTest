@@ -1,0 +1,24 @@
+id: T1.1
+title: Core state arenas, zones, IDs, snapshots, and hashing
+tier: 1
+tags:
+  - kernel
+  - deterministic-state
+scope_paths:
+  - crates/forge-core/src/lib.rs
+inputs:
+  - FORGE_REBUILD_MASTER_PLAN.md Section 3.3
+  - FORGE_REBUILD_MASTER_PLAN.md Section 6 T1.1
+  - FORGE_REBUILD_MASTER_PLAN.md Section 13.2
+acceptance:
+  - forge-core exposes typed PlayerId, ObjectId, CardId, ZoneId, and ZoneKind
+  - GameState stores players, object arena records, and explicit shared/player-owned zones
+  - zone transfer API centralizes object movement
+  - zone conservation validates every object appears in exactly one zone
+  - GameSnapshot captures cloned state plus deterministic hash
+  - deterministic hash uses explicit FNV-1a over canonical bytes
+verify: cargo test -p forge-core && cargo clippy -p forge-core --all-targets -- -D warnings
+retry_policy: 3 attempts then blocker
+depends_on:
+  - T0
+parallel_ok: false
