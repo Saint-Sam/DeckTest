@@ -122,6 +122,213 @@ impl ZoneId {
     }
 }
 
+/// The five phases that make up a turn under CR 500.1.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum Phase {
+    /// The beginning phase: untap, upkeep, and draw.
+    Beginning,
+    /// The first main phase of the turn.
+    PrecombatMain,
+    /// The combat phase.
+    Combat,
+    /// The second main phase of the turn.
+    PostcombatMain,
+    /// The ending phase: end and cleanup.
+    Ending,
+}
+
+impl Phase {
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::Beginning => 0,
+            Self::PrecombatMain => 1,
+            Self::Combat => 2,
+            Self::PostcombatMain => 3,
+            Self::Ending => 4,
+        }
+    }
+}
+
+/// Explicit turn step or main-phase segment in CR 500-514 order.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum Step {
+    /// CR 502 untap step.
+    Untap,
+    /// CR 503 upkeep step.
+    Upkeep,
+    /// CR 504 draw step.
+    Draw,
+    /// CR 505 precombat main phase.
+    PrecombatMain,
+    /// CR 507 beginning of combat step.
+    BeginningOfCombat,
+    /// CR 508 declare attackers step.
+    DeclareAttackers,
+    /// CR 509 declare blockers step.
+    DeclareBlockers,
+    /// CR 510 combat damage step.
+    CombatDamage,
+    /// CR 511 end of combat step.
+    EndOfCombat,
+    /// CR 505 postcombat main phase.
+    PostcombatMain,
+    /// CR 513 end step.
+    End,
+    /// CR 514 cleanup step.
+    Cleanup,
+}
+
+impl Step {
+    /// Returns the CR 500.1 phase containing this step or main-phase segment.
+    #[must_use]
+    pub const fn phase(self) -> Phase {
+        match self {
+            Self::Untap | Self::Upkeep | Self::Draw => Phase::Beginning,
+            Self::PrecombatMain => Phase::PrecombatMain,
+            Self::BeginningOfCombat
+            | Self::DeclareAttackers
+            | Self::DeclareBlockers
+            | Self::CombatDamage
+            | Self::EndOfCombat => Phase::Combat,
+            Self::PostcombatMain => Phase::PostcombatMain,
+            Self::End | Self::Cleanup => Phase::Ending,
+        }
+    }
+
+    /// Returns true for steps or main phases where CR 5 normally gives priority.
+    ///
+    /// Untap never gives priority, and cleanup gives priority only via the
+    /// explicit CR 514.3a exception tracked by [`GameState`].
+    #[must_use]
+    pub const fn receives_priority_normally(self) -> bool {
+        !matches!(self, Self::Untap | Self::Cleanup)
+    }
+
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::Untap => 0,
+            Self::Upkeep => 1,
+            Self::Draw => 2,
+            Self::PrecombatMain => 3,
+            Self::BeginningOfCombat => 4,
+            Self::DeclareAttackers => 5,
+            Self::DeclareBlockers => 6,
+            Self::CombatDamage => 7,
+            Self::EndOfCombat => 8,
+            Self::PostcombatMain => 9,
+            Self::End => 10,
+            Self::Cleanup => 11,
+        }
+    }
+}
+
+/// The unskipped CR 5 turn skeleton.
+///
+/// Runtime turn advancement may skip declare-blockers and combat-damage steps
+/// when no attackers exist, and may repeat cleanup under CR 514.3a.
+pub const NORMAL_TURN_STEPS: [Step; 12] = [
+    Step::Untap,
+    Step::Upkeep,
+    Step::Draw,
+    Step::PrecombatMain,
+    Step::BeginningOfCombat,
+    Step::DeclareAttackers,
+    Step::DeclareBlockers,
+    Step::CombatDamage,
+    Step::EndOfCombat,
+    Step::PostcombatMain,
+    Step::End,
+    Step::Cleanup,
+];
+
+/// Summary of the most recent cleanup step's turn-based actions.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct CleanupReport {
+    discarded: u32,
+    expired_until_end_of_turn: u32,
+    expired_this_turn: u32,
+}
+
+impl CleanupReport {
+    /// Returns how many objects were discarded to maximum hand size.
+    #[must_use]
+    pub const fn discarded(self) -> u32 {
+        self.discarded
+    }
+
+    /// Returns how many placeholder "until end of turn" effects expired.
+    #[must_use]
+    pub const fn expired_until_end_of_turn(self) -> u32 {
+        self.expired_until_end_of_turn
+    }
+
+    /// Returns how many placeholder "this turn" effects expired.
+    #[must_use]
+    pub const fn expired_this_turn(self) -> u32 {
+        self.expired_this_turn
+    }
+}
+
+/// Deterministic handle for a placeholder duration marker.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct DurationMarkerId(u32);
+
+impl DurationMarkerId {
+    /// Returns the zero-based arena index for this duration marker.
+    #[must_use]
+    pub const fn index(self) -> usize {
+        self.0 as usize
+    }
+}
+
+/// Duration categories needed by the CR 500-514 turn machine.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum EffectDuration {
+    /// Expires as the named step or main-phase segment begins.
+    UntilStepBegins(Step),
+    /// Expires as the named phase ends.
+    UntilPhaseEnds(Phase),
+    /// Expires at the end of the combat phase, not at beginning of end combat.
+    UntilEndOfCombat,
+    /// Expires during cleanup under CR 514.2.
+    UntilEndOfTurn,
+    /// Expires during cleanup under CR 514.2.
+    ThisTurn,
+}
+
+impl EffectDuration {
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::UntilStepBegins(_) => 0,
+            Self::UntilPhaseEnds(_) => 1,
+            Self::UntilEndOfCombat => 2,
+            Self::UntilEndOfTurn => 3,
+            Self::ThisTurn => 4,
+        }
+    }
+}
+
+/// Placeholder for a future continuous effect with a CR 5 duration.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DurationMarker {
+    id: DurationMarkerId,
+    duration: EffectDuration,
+}
+
+impl DurationMarker {
+    /// Returns the stable marker ID.
+    #[must_use]
+    pub const fn id(self) -> DurationMarkerId {
+        self.id
+    }
+
+    /// Returns the marker's current duration.
+    #[must_use]
+    pub const fn duration(self) -> EffectDuration {
+        self.duration
+    }
+}
+
 /// Scalar state for one player.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PlayerState {
@@ -335,6 +542,14 @@ pub enum StateError {
     DuplicateZoneMembership(ObjectId),
     /// An object appears in no zone.
     MissingZoneMembership(ObjectId),
+    /// A turn is already in progress.
+    TurnAlreadyStarted,
+    /// No turn is currently in progress.
+    TurnNotStarted,
+    /// Turn advancement requires at least one player.
+    NoPlayers,
+    /// The deterministic turn counter overflowed.
+    TurnNumberOverflow,
 }
 
 /// Complete T1 game state.
@@ -344,9 +559,17 @@ pub struct GameState {
     turn_number: u32,
     active_player: Option<PlayerId>,
     priority_player: Option<PlayerId>,
+    current_step: Option<Step>,
+    cleanup_iteration: u32,
+    cleanup_priority_requested: bool,
+    cleanup_repeat_pending: bool,
+    attackers_declared_this_combat: bool,
+    last_cleanup_report: CleanupReport,
     players: Vec<PlayerState>,
     objects: ObjectArena,
     zones: Vec<Zone>,
+    next_duration_marker: u32,
+    duration_markers: Vec<DurationMarker>,
 }
 
 impl Default for GameState {
@@ -364,6 +587,12 @@ impl GameState {
             turn_number: 0,
             active_player: None,
             priority_player: None,
+            current_step: None,
+            cleanup_iteration: 0,
+            cleanup_priority_requested: false,
+            cleanup_repeat_pending: false,
+            attackers_declared_this_combat: false,
+            last_cleanup_report: CleanupReport::default(),
             players: Vec::new(),
             objects: ObjectArena::default(),
             zones: vec![
@@ -384,6 +613,8 @@ impl GameState {
                     objects: Vec::new(),
                 },
             ],
+            next_duration_marker: 0,
+            duration_markers: Vec::new(),
         }
     }
 
@@ -416,6 +647,39 @@ impl GameState {
         self.priority_player
     }
 
+    /// Returns the current step or main-phase segment, if a turn has started.
+    #[must_use]
+    pub const fn current_step(&self) -> Option<Step> {
+        self.current_step
+    }
+
+    /// Returns the current phase, if a turn has started.
+    #[must_use]
+    pub const fn current_phase(&self) -> Option<Phase> {
+        match self.current_step {
+            Some(step) => Some(step.phase()),
+            None => None,
+        }
+    }
+
+    /// Returns how many cleanup steps have begun in the current turn.
+    #[must_use]
+    pub const fn cleanup_iteration(&self) -> u32 {
+        self.cleanup_iteration
+    }
+
+    /// Returns the most recent cleanup action summary.
+    #[must_use]
+    pub const fn last_cleanup_report(&self) -> CleanupReport {
+        self.last_cleanup_report
+    }
+
+    /// Returns true when the current segment currently has a priority window.
+    #[must_use]
+    pub const fn has_priority_window(&self) -> bool {
+        self.priority_player.is_some()
+    }
+
     /// Adds a player and that player's owned zones.
     pub fn add_player(&mut self) -> PlayerId {
         let id = PlayerId(self.players.len() as u32);
@@ -433,6 +697,20 @@ impl GameState {
             objects: Vec::new(),
         });
         id
+    }
+
+    /// Sets a player's maximum hand size.
+    pub fn set_player_max_hand_size(
+        &mut self,
+        player: PlayerId,
+        max_hand_size: u32,
+    ) -> Result<(), StateError> {
+        let player_state = self
+            .players
+            .get_mut(player.index())
+            .ok_or(StateError::UnknownPlayer(player))?;
+        player_state.max_hand_size = max_hand_size;
+        Ok(())
     }
 
     /// Returns the players in arena order.
@@ -458,6 +736,79 @@ impl GameState {
     pub fn zone(&self, id: ZoneId) -> Option<&Zone> {
         let index = self.zone_index(id)?;
         self.zones.get(index)
+    }
+
+    /// Starts a turn for the chosen active player at the untap step.
+    pub fn start_turn(&mut self, active_player: PlayerId) -> Result<(), StateError> {
+        self.require_player(active_player)?;
+        if self.current_step.is_some() {
+            return Err(StateError::TurnAlreadyStarted);
+        }
+        self.active_player = Some(active_player);
+        self.priority_player = None;
+        self.turn_number = self
+            .turn_number
+            .checked_add(1)
+            .ok_or(StateError::TurnNumberOverflow)?;
+        self.cleanup_iteration = 0;
+        self.attackers_declared_this_combat = false;
+        self.begin_step(Step::Untap)
+    }
+
+    /// Advances from the current step or main-phase segment to the next one.
+    ///
+    /// T1.2 uses an auto-pass empty-stack model. T1.3 replaces that with full
+    /// priority pass tracking and stack resolution while keeping this cursor.
+    pub fn advance_step(&mut self) -> Result<Step, StateError> {
+        let current = self.current_step.ok_or(StateError::TurnNotStarted)?;
+        self.end_step(current);
+        let next = match current {
+            Step::Cleanup if self.cleanup_repeat_pending => {
+                self.cleanup_repeat_pending = false;
+                Step::Cleanup
+            }
+            Step::Cleanup => return self.begin_next_turn(),
+            Step::DeclareAttackers if !self.attackers_declared_this_combat => Step::EndOfCombat,
+            step => Self::next_normal_step(step),
+        };
+        self.begin_step(next)?;
+        Ok(next)
+    }
+
+    /// Records whether the current combat has at least one attacker.
+    ///
+    /// This is the T1.2 hook for CR 508.8. Full attack declaration replaces it
+    /// in T1.6, but keeping the flag here makes the step machine testable now.
+    pub fn set_attackers_declared_this_combat(&mut self, attackers_declared: bool) {
+        self.attackers_declared_this_combat = attackers_declared;
+    }
+
+    /// Requests the CR 514.3a cleanup exception after cleanup actions finish.
+    pub fn request_cleanup_priority(&mut self) {
+        self.cleanup_priority_requested = true;
+    }
+
+    /// Adds a placeholder duration marker.
+    pub fn add_duration_marker(&mut self, duration: EffectDuration) -> DurationMarkerId {
+        let id = DurationMarkerId(self.next_duration_marker);
+        self.next_duration_marker = self.next_duration_marker.saturating_add(1);
+        self.duration_markers.push(DurationMarker { id, duration });
+        id
+    }
+
+    /// Returns active duration markers in deterministic arena order.
+    #[must_use]
+    pub fn duration_markers(&self) -> &[DurationMarker] {
+        &self.duration_markers
+    }
+
+    /// Counts active duration markers matching one duration exactly.
+    #[must_use]
+    pub fn duration_marker_count(&self, duration: EffectDuration) -> usize {
+        self.duration_markers
+            .iter()
+            .filter(|marker| marker.duration == duration)
+            .count()
     }
 
     /// Creates one object and places it into a zone.
@@ -574,6 +925,12 @@ impl GameState {
         bytes.write_u32(self.turn_number);
         bytes.write_optional_player(self.active_player);
         bytes.write_optional_player(self.priority_player);
+        bytes.write_optional_step(self.current_step);
+        bytes.write_u32(self.cleanup_iteration);
+        bytes.write_bool(self.cleanup_priority_requested);
+        bytes.write_bool(self.cleanup_repeat_pending);
+        bytes.write_bool(self.attackers_declared_this_combat);
+        bytes.write_cleanup_report(self.last_cleanup_report);
         bytes.write_u32(self.players.len() as u32);
         for player in &self.players {
             bytes.write_u32(player.id.0);
@@ -598,6 +955,13 @@ impl GameState {
                 bytes.write_u32(object.0);
             }
         }
+
+        bytes.write_u32(self.next_duration_marker);
+        bytes.write_u32(self.duration_markers.len() as u32);
+        for marker in &self.duration_markers {
+            bytes.write_u32(marker.id.0);
+            bytes.write_effect_duration(marker.duration);
+        }
         bytes.finish()
     }
 
@@ -609,6 +973,12 @@ impl GameState {
         hash.write_u32(self.turn_number);
         hash.write_optional_player(self.active_player);
         hash.write_optional_player(self.priority_player);
+        hash.write_optional_step(self.current_step);
+        hash.write_u32(self.cleanup_iteration);
+        hash.write_bool(self.cleanup_priority_requested);
+        hash.write_bool(self.cleanup_repeat_pending);
+        hash.write_bool(self.attackers_declared_this_combat);
+        hash.write_cleanup_report(self.last_cleanup_report);
         hash.write_u32(self.players.len() as u32);
         for player in &self.players {
             hash.write_u32(player.id.0);
@@ -634,7 +1004,204 @@ impl GameState {
             }
         }
 
+        hash.write_u32(self.next_duration_marker);
+        hash.write_u32(self.duration_markers.len() as u32);
+        for marker in &self.duration_markers {
+            hash.write_u32(marker.id.0);
+            hash.write_effect_duration(marker.duration);
+        }
+
         StateHash(hash.finish())
+    }
+
+    fn begin_step(&mut self, step: Step) -> Result<(), StateError> {
+        self.current_step = Some(step);
+        self.expire_step_begin_markers(step);
+        match step {
+            Step::Untap => self.priority_player = None,
+            Step::Draw => {
+                self.draw_turn_card()?;
+                self.assign_normal_priority(step);
+            }
+            Step::BeginningOfCombat => {
+                self.attackers_declared_this_combat = false;
+                self.assign_normal_priority(step);
+            }
+            Step::Cleanup => self.begin_cleanup_step()?,
+            _ => self.assign_normal_priority(step),
+        }
+        Ok(())
+    }
+
+    fn end_step(&mut self, step: Step) {
+        self.priority_player = None;
+        if step == Step::EndOfCombat {
+            self.expire_end_of_combat_markers();
+        }
+        if self.phase_ends_after_step(step) {
+            self.expire_phase_end_markers(step.phase());
+        }
+    }
+
+    fn begin_next_turn(&mut self) -> Result<Step, StateError> {
+        let current_active = self.active_player.ok_or(StateError::TurnNotStarted)?;
+        let next_active = self.next_player_after(current_active)?;
+        self.active_player = Some(next_active);
+        self.turn_number = self
+            .turn_number
+            .checked_add(1)
+            .ok_or(StateError::TurnNumberOverflow)?;
+        self.cleanup_iteration = 0;
+        self.attackers_declared_this_combat = false;
+        self.begin_step(Step::Untap)?;
+        Ok(Step::Untap)
+    }
+
+    const fn next_normal_step(step: Step) -> Step {
+        match step {
+            Step::Untap => Step::Upkeep,
+            Step::Upkeep => Step::Draw,
+            Step::Draw => Step::PrecombatMain,
+            Step::PrecombatMain => Step::BeginningOfCombat,
+            Step::BeginningOfCombat => Step::DeclareAttackers,
+            Step::DeclareAttackers => Step::DeclareBlockers,
+            Step::DeclareBlockers => Step::CombatDamage,
+            Step::CombatDamage => Step::EndOfCombat,
+            Step::EndOfCombat => Step::PostcombatMain,
+            Step::PostcombatMain => Step::End,
+            Step::End => Step::Cleanup,
+            Step::Cleanup => Step::Untap,
+        }
+    }
+
+    const fn phase_ends_after_step(&self, step: Step) -> bool {
+        matches!(
+            step,
+            Step::Draw | Step::PrecombatMain | Step::EndOfCombat | Step::PostcombatMain
+        ) || (matches!(step, Step::Cleanup) && !self.cleanup_repeat_pending)
+    }
+
+    fn assign_normal_priority(&mut self, step: Step) {
+        self.priority_player = if step.receives_priority_normally() {
+            self.active_player
+        } else {
+            None
+        };
+    }
+
+    fn begin_cleanup_step(&mut self) -> Result<(), StateError> {
+        self.cleanup_iteration = self.cleanup_iteration.saturating_add(1);
+        self.last_cleanup_report = self.perform_cleanup_actions()?;
+        let grant_priority = self.cleanup_priority_requested;
+        self.cleanup_priority_requested = false;
+        self.cleanup_repeat_pending = grant_priority;
+        self.priority_player = if grant_priority {
+            self.active_player
+        } else {
+            None
+        };
+        Ok(())
+    }
+
+    fn perform_cleanup_actions(&mut self) -> Result<CleanupReport, StateError> {
+        let active = self.active_player.ok_or(StateError::TurnNotStarted)?;
+        let discarded = self.discard_to_max_hand_size(active)?;
+        let expired_until_end_of_turn =
+            self.expire_duration_markers(EffectDuration::UntilEndOfTurn) as u32;
+        let expired_this_turn = self.expire_duration_markers(EffectDuration::ThisTurn) as u32;
+        Ok(CleanupReport {
+            discarded,
+            expired_until_end_of_turn,
+            expired_this_turn,
+        })
+    }
+
+    fn discard_to_max_hand_size(&mut self, player: PlayerId) -> Result<u32, StateError> {
+        let max_hand_size = self
+            .players
+            .get(player.index())
+            .ok_or(StateError::UnknownPlayer(player))?
+            .max_hand_size as usize;
+        let hand = ZoneId::new(Some(player), ZoneKind::Hand);
+        let graveyard = ZoneId::new(Some(player), ZoneKind::Graveyard);
+        let mut discarded = 0;
+        while self.zone_len(hand)? > max_hand_size {
+            if self.move_last_between_zones(hand, graveyard)?.is_some() {
+                discarded += 1;
+            } else {
+                break;
+            }
+        }
+        Ok(discarded)
+    }
+
+    fn draw_turn_card(&mut self) -> Result<(), StateError> {
+        let active = self.active_player.ok_or(StateError::TurnNotStarted)?;
+        let library = ZoneId::new(Some(active), ZoneKind::Library);
+        let hand = ZoneId::new(Some(active), ZoneKind::Hand);
+        let _ = self.move_last_between_zones(library, hand)?;
+        Ok(())
+    }
+
+    fn move_last_between_zones(
+        &mut self,
+        from: ZoneId,
+        to: ZoneId,
+    ) -> Result<Option<ObjectId>, StateError> {
+        self.require_zone(from)?;
+        self.require_zone(to)?;
+        let from_index = self.zone_index(from).ok_or(StateError::UnknownZone(from))?;
+        let Some(object) = self.zones[from_index].objects.pop() else {
+            return Ok(None);
+        };
+        let to_index = self.zone_index(to).ok_or(StateError::UnknownZone(to))?;
+        self.zones[to_index].objects.push(object);
+        Ok(Some(object))
+    }
+
+    fn zone_len(&self, id: ZoneId) -> Result<usize, StateError> {
+        self.require_zone(id)?;
+        let index = self.zone_index(id).ok_or(StateError::UnknownZone(id))?;
+        Ok(self.zones[index].objects.len())
+    }
+
+    fn next_player_after(&self, player: PlayerId) -> Result<PlayerId, StateError> {
+        if self.players.is_empty() {
+            return Err(StateError::NoPlayers);
+        }
+        self.require_player(player)?;
+        let next_index = (player.index() + 1) % self.players.len();
+        Ok(PlayerId(next_index as u32))
+    }
+
+    fn expire_step_begin_markers(&mut self, step: Step) {
+        self.duration_markers.retain(|marker| {
+            !matches!(
+                marker.duration,
+                EffectDuration::UntilStepBegins(marker_step) if marker_step == step
+            )
+        });
+    }
+
+    fn expire_phase_end_markers(&mut self, phase: Phase) {
+        self.duration_markers.retain(|marker| {
+            !matches!(
+                marker.duration,
+                EffectDuration::UntilPhaseEnds(marker_phase) if marker_phase == phase
+            )
+        });
+    }
+
+    fn expire_end_of_combat_markers(&mut self) {
+        self.duration_markers
+            .retain(|marker| marker.duration != EffectDuration::UntilEndOfCombat);
+    }
+
+    fn expire_duration_markers(&mut self, duration: EffectDuration) -> usize {
+        let before = self.duration_markers.len();
+        self.duration_markers
+            .retain(|marker| marker.duration != duration);
+        before - self.duration_markers.len()
     }
 
     fn require_player(&self, id: PlayerId) -> Result<(), StateError> {
@@ -721,6 +1288,26 @@ impl Fnva64 {
         }
     }
 
+    fn write_optional_step(&mut self, step: Option<Step>) {
+        match step {
+            Some(step) => {
+                self.write_u8(1);
+                self.write_u8(step.canonical_code());
+            }
+            None => self.write_u8(0),
+        }
+    }
+
+    fn write_bool(&mut self, value: bool) {
+        self.write_u8(u8::from(value));
+    }
+
+    fn write_cleanup_report(&mut self, report: CleanupReport) {
+        self.write_u32(report.discarded);
+        self.write_u32(report.expired_until_end_of_turn);
+        self.write_u32(report.expired_this_turn);
+    }
+
     fn write_zone_id(&mut self, zone: ZoneId) {
         self.write_u8(zone.kind.canonical_code());
         match zone.owner {
@@ -729,6 +1316,17 @@ impl Fnva64 {
                 self.write_u32(owner.0);
             }
             None => self.write_u8(0),
+        }
+    }
+
+    fn write_effect_duration(&mut self, duration: EffectDuration) {
+        self.write_u8(duration.canonical_code());
+        match duration {
+            EffectDuration::UntilStepBegins(step) => self.write_u8(step.canonical_code()),
+            EffectDuration::UntilPhaseEnds(phase) => self.write_u8(phase.canonical_code()),
+            EffectDuration::UntilEndOfCombat
+            | EffectDuration::UntilEndOfTurn
+            | EffectDuration::ThisTurn => {}
         }
     }
 }
@@ -769,6 +1367,26 @@ impl CanonicalBytes {
         }
     }
 
+    fn write_optional_step(&mut self, step: Option<Step>) {
+        match step {
+            Some(step) => {
+                self.write_u8(1);
+                self.write_u8(step.canonical_code());
+            }
+            None => self.write_u8(0),
+        }
+    }
+
+    fn write_bool(&mut self, value: bool) {
+        self.write_u8(u8::from(value));
+    }
+
+    fn write_cleanup_report(&mut self, report: CleanupReport) {
+        self.write_u32(report.discarded);
+        self.write_u32(report.expired_until_end_of_turn);
+        self.write_u32(report.expired_this_turn);
+    }
+
     fn write_zone_id(&mut self, zone: ZoneId) {
         self.write_u8(zone.kind.canonical_code());
         match zone.owner {
@@ -779,11 +1397,25 @@ impl CanonicalBytes {
             None => self.write_u8(0),
         }
     }
+
+    fn write_effect_duration(&mut self, duration: EffectDuration) {
+        self.write_u8(duration.canonical_code());
+        match duration {
+            EffectDuration::UntilStepBegins(step) => self.write_u8(step.canonical_code()),
+            EffectDuration::UntilPhaseEnds(phase) => self.write_u8(phase.canonical_code()),
+            EffectDuration::UntilEndOfCombat
+            | EffectDuration::UntilEndOfTurn
+            | EffectDuration::ThisTurn => {}
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{crate_ready, CardId, GameState, StateError, ZoneConservation, ZoneId, ZoneKind};
+    use super::{
+        crate_ready, CardId, EffectDuration, GameState, Phase, StateError, Step, ZoneConservation,
+        ZoneId, ZoneKind, NORMAL_TURN_STEPS,
+    };
 
     #[test]
     fn bootstrap_crate_is_ready() {
@@ -884,5 +1516,271 @@ mod tests {
                 ZoneKind::Hand
             )))
         );
+    }
+
+    #[test]
+    fn normal_turn_steps_match_cr5_skeleton() {
+        assert_eq!(
+            NORMAL_TURN_STEPS,
+            [
+                Step::Untap,
+                Step::Upkeep,
+                Step::Draw,
+                Step::PrecombatMain,
+                Step::BeginningOfCombat,
+                Step::DeclareAttackers,
+                Step::DeclareBlockers,
+                Step::CombatDamage,
+                Step::EndOfCombat,
+                Step::PostcombatMain,
+                Step::End,
+                Step::Cleanup,
+            ]
+        );
+        assert_eq!(Step::Untap.phase(), Phase::Beginning);
+        assert_eq!(Step::PrecombatMain.phase(), Phase::PrecombatMain);
+        assert_eq!(Step::EndOfCombat.phase(), Phase::Combat);
+        assert_eq!(Step::Cleanup.phase(), Phase::Ending);
+    }
+
+    #[test]
+    fn untap_has_no_priority_and_upkeep_assigns_active_priority() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+
+        state
+            .start_turn(active)
+            .unwrap_or_else(|error| panic!("unexpected start error: {error:?}"));
+        assert_eq!(state.turn_number(), 1);
+        assert_eq!(state.current_step(), Some(Step::Untap));
+        assert_eq!(state.current_phase(), Some(Phase::Beginning));
+        assert_eq!(state.priority_player(), None);
+        assert!(!state.has_priority_window());
+
+        state
+            .advance_step()
+            .unwrap_or_else(|error| panic!("unexpected advance error: {error:?}"));
+        assert_eq!(state.current_step(), Some(Step::Upkeep));
+        assert_eq!(state.priority_player(), Some(active));
+        assert!(state.has_priority_window());
+    }
+
+    #[test]
+    fn draw_step_draws_before_active_player_gets_priority() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let library = ZoneId::new(Some(active), ZoneKind::Library);
+        let hand = ZoneId::new(Some(active), ZoneKind::Hand);
+        let object = state
+            .create_object(CardId::new(9), active, active, library)
+            .unwrap_or_else(|error| panic!("unexpected create error: {error:?}"));
+
+        state
+            .start_turn(active)
+            .unwrap_or_else(|error| panic!("unexpected start error: {error:?}"));
+        state
+            .advance_step()
+            .unwrap_or_else(|error| panic!("unexpected upkeep advance error: {error:?}"));
+        state
+            .advance_step()
+            .unwrap_or_else(|error| panic!("unexpected draw advance error: {error:?}"));
+
+        assert_eq!(state.current_step(), Some(Step::Draw));
+        assert_eq!(state.priority_player(), Some(active));
+        assert_eq!(
+            state
+                .zone(hand)
+                .unwrap_or_else(|| panic!("hand zone missing"))
+                .objects(),
+            &[object]
+        );
+        assert_eq!(
+            state
+                .zone(library)
+                .unwrap_or_else(|| panic!("library zone missing"))
+                .objects(),
+            &[]
+        );
+    }
+
+    #[test]
+    fn combat_without_attackers_skips_blockers_and_damage() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        state.add_player();
+
+        state
+            .start_turn(active)
+            .unwrap_or_else(|error| panic!("unexpected start error: {error:?}"));
+        for expected in [
+            Step::Upkeep,
+            Step::Draw,
+            Step::PrecombatMain,
+            Step::BeginningOfCombat,
+            Step::DeclareAttackers,
+        ] {
+            let step = state
+                .advance_step()
+                .unwrap_or_else(|error| panic!("unexpected advance error: {error:?}"));
+            assert_eq!(step, expected);
+        }
+
+        let next = state
+            .advance_step()
+            .unwrap_or_else(|error| panic!("unexpected skip advance error: {error:?}"));
+        assert_eq!(next, Step::EndOfCombat);
+        assert_eq!(state.current_phase(), Some(Phase::Combat));
+    }
+
+    #[test]
+    fn combat_with_attackers_visits_blockers_and_damage() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        state.add_player();
+
+        state
+            .start_turn(active)
+            .unwrap_or_else(|error| panic!("unexpected start error: {error:?}"));
+        for expected in [
+            Step::Upkeep,
+            Step::Draw,
+            Step::PrecombatMain,
+            Step::BeginningOfCombat,
+            Step::DeclareAttackers,
+        ] {
+            let step = state
+                .advance_step()
+                .unwrap_or_else(|error| panic!("unexpected advance error: {error:?}"));
+            assert_eq!(step, expected);
+        }
+
+        state.set_attackers_declared_this_combat(true);
+        assert_eq!(
+            state
+                .advance_step()
+                .unwrap_or_else(|error| panic!("unexpected blockers advance error: {error:?}")),
+            Step::DeclareBlockers
+        );
+        assert_eq!(
+            state
+                .advance_step()
+                .unwrap_or_else(|error| panic!("unexpected damage advance error: {error:?}")),
+            Step::CombatDamage
+        );
+    }
+
+    #[test]
+    fn end_of_turn_durations_survive_end_step_and_expire_during_cleanup() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        state.add_duration_marker(EffectDuration::UntilEndOfTurn);
+        state.add_duration_marker(EffectDuration::ThisTurn);
+
+        state
+            .start_turn(active)
+            .unwrap_or_else(|error| panic!("unexpected start error: {error:?}"));
+        while state.current_step() != Some(Step::End) {
+            state
+                .advance_step()
+                .unwrap_or_else(|error| panic!("unexpected advance error: {error:?}"));
+        }
+        assert_eq!(
+            state.duration_marker_count(EffectDuration::UntilEndOfTurn),
+            1
+        );
+        assert_eq!(state.duration_marker_count(EffectDuration::ThisTurn), 1);
+
+        state
+            .advance_step()
+            .unwrap_or_else(|error| panic!("unexpected cleanup advance error: {error:?}"));
+        assert_eq!(state.current_step(), Some(Step::Cleanup));
+        assert_eq!(
+            state.duration_marker_count(EffectDuration::UntilEndOfTurn),
+            0
+        );
+        assert_eq!(state.duration_marker_count(EffectDuration::ThisTurn), 0);
+        assert_eq!(state.last_cleanup_report().expired_until_end_of_turn(), 1);
+        assert_eq!(state.last_cleanup_report().expired_this_turn(), 1);
+    }
+
+    #[test]
+    fn cleanup_discards_to_max_hand_size_before_next_turn() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let next = state.add_player();
+        let hand = ZoneId::new(Some(active), ZoneKind::Hand);
+        let graveyard = ZoneId::new(Some(active), ZoneKind::Graveyard);
+        state
+            .set_player_max_hand_size(active, 2)
+            .unwrap_or_else(|error| panic!("unexpected max hand size error: {error:?}"));
+        for card in 0..5 {
+            state
+                .create_object(CardId::new(card), active, active, hand)
+                .unwrap_or_else(|error| panic!("unexpected create error: {error:?}"));
+        }
+        state.add_duration_marker(EffectDuration::UntilEndOfTurn);
+
+        state
+            .start_turn(active)
+            .unwrap_or_else(|error| panic!("unexpected start error: {error:?}"));
+        while state.current_step() != Some(Step::Cleanup) {
+            state
+                .advance_step()
+                .unwrap_or_else(|error| panic!("unexpected advance error: {error:?}"));
+        }
+
+        assert_eq!(state.last_cleanup_report().discarded(), 3);
+        assert_eq!(state.last_cleanup_report().expired_until_end_of_turn(), 1);
+        assert_eq!(
+            state
+                .zone(hand)
+                .unwrap_or_else(|| panic!("hand zone missing"))
+                .objects()
+                .len(),
+            2
+        );
+        assert_eq!(
+            state
+                .zone(graveyard)
+                .unwrap_or_else(|| panic!("graveyard zone missing"))
+                .objects()
+                .len(),
+            3
+        );
+        assert_eq!(state.priority_player(), None);
+
+        state
+            .advance_step()
+            .unwrap_or_else(|error| panic!("unexpected next turn advance error: {error:?}"));
+        assert_eq!(state.current_step(), Some(Step::Untap));
+        assert_eq!(state.turn_number(), 2);
+        assert_eq!(state.active_player(), Some(next));
+    }
+
+    #[test]
+    fn cleanup_priority_exception_repeats_cleanup_step() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        state.add_player();
+        state
+            .start_turn(active)
+            .unwrap_or_else(|error| panic!("unexpected start error: {error:?}"));
+        state.request_cleanup_priority();
+        while state.current_step() != Some(Step::Cleanup) {
+            state
+                .advance_step()
+                .unwrap_or_else(|error| panic!("unexpected advance error: {error:?}"));
+        }
+
+        assert_eq!(state.current_step(), Some(Step::Cleanup));
+        assert_eq!(state.cleanup_iteration(), 1);
+        assert_eq!(state.priority_player(), Some(active));
+
+        state
+            .advance_step()
+            .unwrap_or_else(|error| panic!("unexpected repeated cleanup advance error: {error:?}"));
+        assert_eq!(state.current_step(), Some(Step::Cleanup));
+        assert_eq!(state.cleanup_iteration(), 2);
+        assert_eq!(state.priority_player(), None);
     }
 }
