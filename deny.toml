@@ -1,0 +1,6 @@
+[licenses]
+version = 2
+confidence-threshold = 0.8
+allow = [
+    "GPL-3.0-only",
+]
