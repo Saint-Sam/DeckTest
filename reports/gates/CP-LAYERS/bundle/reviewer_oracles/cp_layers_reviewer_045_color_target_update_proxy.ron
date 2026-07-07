@@ -1,0 +1,25 @@
+(
+    name: "CP-LAYERS reviewer 045 color_target_update_proxy",
+    setup: (
+        players: 2,
+        objects: [
+            (card: 64450, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "assert_characteristics", object: 0, colors: []),
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "set_colors", colors: ["white"], timestamp: 1),
+        (action: "assert_characteristics", object: 0, colors: ["white"]),
+    ],
+    expect: (
+        characteristics: [
+            (object: 0, colors: ["white"]),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

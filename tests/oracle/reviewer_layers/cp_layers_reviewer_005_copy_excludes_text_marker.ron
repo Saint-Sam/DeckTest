@@ -1,0 +1,28 @@
+(
+    name: "CP-LAYERS reviewer 005 copy_excludes_text_marker",
+    setup: (
+        players: 2,
+        objects: [
+            (card: 64050, owner: 0, controller: 0, zone: "Battlefield"),
+            (card: 64051, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "set_base_creature", object: 0, power: 2, toughness: 4, keywords: []),
+        (action: "set_base_creature", object: 1, power: 1, toughness: 1, keywords: []),
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "set_text_marker", marker: 9, timestamp: 1),
+        (action: "register_continuous_effect", controller: 0, target_object: 1, operation: "copy_base_creature", from_object: 0, timestamp: 2),
+    ],
+    expect: (
+        characteristics: [
+            (object: 0, text_marker: 9),
+            (object: 1, power: 2, toughness: 4, text_marker: 0),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

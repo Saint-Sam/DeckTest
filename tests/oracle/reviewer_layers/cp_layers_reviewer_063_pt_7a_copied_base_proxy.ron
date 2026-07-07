@@ -1,0 +1,26 @@
+(
+    name: "CP-LAYERS reviewer 063 pt_7a_copied_base_proxy",
+    setup: (
+        players: 2,
+        objects: [
+            (card: 64630, owner: 0, controller: 0, zone: "Battlefield"),
+            (card: 64631, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "set_base_creature", object: 0, power: 3, toughness: 7, keywords: []),
+        (action: "set_base_creature", object: 1, power: 1, toughness: 1, keywords: []),
+        (action: "register_continuous_effect", controller: 0, target_object: 1, operation: "copy_base_creature", from_object: 0, timestamp: 1),
+    ],
+    expect: (
+        characteristics: [
+            (object: 1, power: 3, toughness: 7),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

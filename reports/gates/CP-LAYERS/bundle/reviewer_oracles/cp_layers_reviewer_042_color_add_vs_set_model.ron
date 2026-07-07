@@ -1,0 +1,24 @@
+(
+    name: "CP-LAYERS reviewer 042 color_add_vs_set_model",
+    setup: (
+        players: 2,
+        objects: [
+            (card: 64420, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "set_colors", colors: ["red", "green"], timestamp: 1),
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "set_colors", colors: ["blue"], timestamp: 2),
+    ],
+    expect: (
+        characteristics: [
+            (object: 0, colors: ["blue"]),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

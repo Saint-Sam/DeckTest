@@ -1,0 +1,35 @@
+(
+    name: "CP-LAYERS reviewer 016 control_change_allows_attack",
+    setup: (
+        players: 2,
+        libraries: [
+            (player: 0, cards: [74160, 74161]),
+        ],
+        objects: [
+            (card: 64160, owner: 1, controller: 1, zone: "Battlefield"),
+            (card: 64161, owner: 0, controller: 0, zone: "Library", player: 0),
+        ],
+    ),
+    script: [
+        (action: "set_base_creature", object: 0, power: 2, toughness: 2, keywords: []),
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "change_controller", player: 0, timestamp: 1),
+        (action: "start_turn", player: 0),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "declare_attackers", player: 0, attacks: [(attacker: 0, defender: 1)]),
+    ],
+    expect: (
+        characteristics: [
+            (object: 0, controller: 0),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

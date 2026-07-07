@@ -1,0 +1,25 @@
+(
+    name: "CP-LAYERS reviewer 064 pt_7a_with_ability_removal",
+    setup: (
+        players: 2,
+        objects: [
+            (card: 64640, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "set_base_creature", object: 0, power: 2, toughness: 2, keywords: ["flying"]),
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "remove_keywords", keywords: ["flying"], timestamp: 1),
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "set_base_pt", power: 6, toughness: 3, timestamp: 2),
+    ],
+    expect: (
+        characteristics: [
+            (object: 0, power: 6, toughness: 3, keywords: []),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

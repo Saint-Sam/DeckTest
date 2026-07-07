@@ -1,0 +1,26 @@
+(
+    name: "CP-LAYERS reviewer 089 pt_7d_lethal_sba",
+    setup: (
+        players: 2,
+        objects: [
+            (card: 64890, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "set_base_creature", object: 0, power: 0, toughness: 3, keywords: []),
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "switch_pt", timestamp: 1),
+        (action: "check_state_based_actions"),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Battlefield", count: 0),
+            (zone: "Graveyard", player: 0, count: 1),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

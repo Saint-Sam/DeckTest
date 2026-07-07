@@ -1,0 +1,24 @@
+(
+    name: "CP-LAYERS reviewer 062 pt_7a_after_type_animation",
+    setup: (
+        players: 2,
+        objects: [
+            (card: 64620, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "add_types", types: ["creature"], timestamp: 1),
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "set_base_pt", power: 2, toughness: 6, timestamp: 2),
+    ],
+    expect: (
+        characteristics: [
+            (object: 0, is_creature: true, power: 2, toughness: 6),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

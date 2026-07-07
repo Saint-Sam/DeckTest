@@ -1,0 +1,26 @@
+(
+    name: "CP-LAYERS reviewer 010 copy_replay_hash",
+    setup: (
+        players: 2,
+        objects: [
+            (card: 64100, owner: 0, controller: 0, zone: "Battlefield"),
+            (card: 64101, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "set_base_creature", object: 0, power: 5, toughness: 2, keywords: ["trample"]),
+        (action: "set_base_creature", object: 1, power: 1, toughness: 1, keywords: []),
+        (action: "register_continuous_effect", controller: 0, target_object: 1, operation: "copy_base_creature", from_object: 0, timestamp: 1),
+    ],
+    expect: (
+        characteristics: [
+            (object: 1, power: 5, toughness: 2, keywords: ["trample"]),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

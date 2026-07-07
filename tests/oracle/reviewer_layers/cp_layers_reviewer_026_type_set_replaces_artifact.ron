@@ -1,0 +1,25 @@
+(
+    name: "CP-LAYERS reviewer 026 type_set_replaces_artifact",
+    setup: (
+        players: 2,
+        objects: [
+            (card: 64260, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "add_types", types: ["artifact"], timestamp: 1),
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "set_types", types: ["creature"], timestamp: 2),
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "set_pt", power: 2, toughness: 2, timestamp: 3),
+    ],
+    expect: (
+        characteristics: [
+            (object: 0, is_creature: true, types: ["creature"], power: 2, toughness: 2),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

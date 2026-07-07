@@ -110,7 +110,7 @@
       "field": "zones",
       "reason": "fixed shared zones plus per-player copy-on-write memberships",
       "struct": "GameState",
-      "type": "Vec<Zone>"
+      "type": "Arc<Vec<Zone>>"
     },
     {
       "field": "duration_markers",

@@ -1,0 +1,24 @@
+(
+    name: "CP-LAYERS reviewer 021 text_dependency_reorders",
+    setup: (
+        players: 2,
+        objects: [
+            (card: 64210, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "set_text_marker", marker: 3, timestamp: 5),
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "set_text_marker", marker: 4, dependencies: [0], timestamp: 1),
+    ],
+    expect: (
+        characteristics: [
+            (object: 0, text_marker: 4),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

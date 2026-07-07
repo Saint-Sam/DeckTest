@@ -1,0 +1,39 @@
+(
+    name: "CP-LAYERS reviewer 058 ability_flying_loss_allows_block",
+    setup: (
+        players: 2,
+        libraries: [
+            (player: 0, cards: [74580, 74581]),
+        ],
+        objects: [
+            (card: 64580, owner: 0, controller: 0, zone: "Battlefield"),
+            (card: 64581, owner: 1, controller: 1, zone: "Battlefield"),
+            (card: 64582, owner: 0, controller: 0, zone: "Library", player: 0),
+        ],
+    ),
+    script: [
+        (action: "set_base_creature", object: 0, power: 3, toughness: 3, keywords: ["flying"]),
+        (action: "set_base_creature", object: 1, power: 1, toughness: 4, keywords: []),
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "remove_keywords", keywords: ["flying"], timestamp: 1),
+        (action: "start_turn", player: 0),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "declare_attackers", player: 0, attacks: [(attacker: 0, defender: 1)]),
+        (action: "advance_step"),
+        (action: "declare_blockers", player: 1, blocks: [(blocker: 1, attacker: 0)]),
+    ],
+    expect: (
+        characteristics: [
+            (object: 0, keywords: []),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

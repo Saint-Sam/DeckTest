@@ -1,0 +1,26 @@
+(
+    name: "CP-LAYERS reviewer 033 type_specific_then_global",
+    setup: (
+        players: 2,
+        objects: [
+            (card: 64330, owner: 0, controller: 0, zone: "Battlefield"),
+            (card: 64331, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "set_types", types: ["creature"], timestamp: 1),
+        (action: "register_continuous_effect", controller: 0, all_objects: true, operation: "set_types", types: ["land"], timestamp: 2),
+    ],
+    expect: (
+        characteristics: [
+            (object: 0, is_creature: false, types: ["land"]),
+            (object: 1, types: ["land"]),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

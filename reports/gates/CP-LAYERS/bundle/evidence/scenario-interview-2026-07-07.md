@@ -2,8 +2,8 @@
 
 Date: 2026-07-07
 
-Purpose: collect owner-authored scenario intent, then convert it into 15
-reviewer scenarios for owner approval before any CP-LAYERS pass.
+Purpose: collect owner-authored scenario intent, then convert it into reviewer
+scenarios for owner approval before any CP-LAYERS pass.
 
 ## Interview Prompts
 
@@ -27,15 +27,36 @@ Answer these in plain English. Short answers are fine.
    changes whether another effect exists, applies, or changes what it does?
 8. Are any outcomes above intentionally different from legacy Forge behavior?
 
-## Draft Scenario Allocation
+## Owner Answers
 
-After the owner answers, Codex will draft 15 approvable scenarios in this mix:
+Source: Codex thread owner response on 2026-07-07.
 
-- 3 ability-removal or ability-gain scenarios.
-- 3 type/color/text scenarios.
-- 3 P/T sublayer scenarios covering 7a, 7b, 7c, and 7d where applicable.
-- 2 copy/copiable-value scenarios.
-- 2 timestamp or deterministic tie scenarios.
-- 2 same-layer dependency or dependency-cycle scenarios.
+1. Layer interactions: cover literally anything possible, the same way legacy
+   Forge handles the layer system.
+2. Card representation: the owner wants the layer system to be designed toward
+   representing all roughly 100k cards, not only a small named-card sample.
+3. Scenario style: synthetic rules stress tests are preferred; the owner asked
+   why the reviewer packet should stop at 15 and requested 100 scenarios for a
+   closer-to-bulletproof review.
+4. Bug tolerance: ideally zero bugs. If any issue is tolerated, it should be
+   text-only or a visual coloring artifact, not a rules-observable layer,
+   targeting, state-based-action, or gameplay bug.
+5. Difficulty: brutal.
 
-The allocation may change if the owner's answers point at a better risk mix.
+## Approved Scenario Allocation
+
+The original CP-LAYERS minimum was 15 novel reviewer scenarios with at least 14
+passing. The owner requested a stricter packet: 100 brutal scenarios and no
+rules-observable failures. Text-only or visual coloring artifacts are
+non-blocking only if they cannot change game rules, legal actions, targets,
+state-based actions, combat, zones, controller, or deterministic replay.
+
+The owner approved the 100-scenario packet in the Codex thread on 2026-07-07
+with `approve 100 scenarios`. The approved packet is recorded in:
+
+- `reports/gates/CP-LAYERS/reviewer-scenarios-2026-07-07.md`
+
+The 100 scenarios are not a claim that 100 examples literally cover all roughly
+100k cards. They are a reviewer-level rules-family stress packet. Full
+all-card confidence requires a later corpus-driven generation/differential pass
+that maps imported card text/IR patterns onto these layer families.

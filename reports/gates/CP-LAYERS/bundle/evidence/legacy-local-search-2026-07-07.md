@@ -67,7 +67,11 @@ still need human pruning before the 100-card differential set is final.
 
 ## Status
 
-Local legacy evidence is sufficient to build a layered subset without network
-egress. The actual 100-card differential is not complete yet; CP-LAYERS must
-remain pending until the selected subset is run and every divergence is
-adjudicated in writing.
+Local legacy evidence was sufficient to build a layered subset without network
+egress. The selected 100-card subset and script-level divergence adjudication
+are recorded in
+`reports/gates/CP-LAYERS/legacy-100-layered-subset-2026-07-07.md`.
+
+The true engine-vs-engine differential is still blocked because Forge 2.0 has
+no legacy card-script importer/card compiler capable of executing those real
+legacy card scripts in the new engine.

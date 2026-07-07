@@ -1,0 +1,23 @@
+(
+    name: "CP-LAYERS reviewer 019 text_simple_replacement",
+    setup: (
+        players: 2,
+        objects: [
+            (card: 64190, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "set_text_marker", marker: 19, timestamp: 1),
+    ],
+    expect: (
+        characteristics: [
+            (object: 0, text_marker: 19),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

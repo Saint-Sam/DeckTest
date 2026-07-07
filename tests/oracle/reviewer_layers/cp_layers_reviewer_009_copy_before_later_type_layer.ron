@@ -1,0 +1,27 @@
+(
+    name: "CP-LAYERS reviewer 009 copy_before_later_type_layer",
+    setup: (
+        players: 2,
+        objects: [
+            (card: 64090, owner: 0, controller: 0, zone: "Battlefield"),
+            (card: 64091, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "set_base_creature", object: 0, power: 4, toughness: 1, keywords: []),
+        (action: "set_base_creature", object: 1, power: 1, toughness: 1, keywords: []),
+        (action: "register_continuous_effect", controller: 0, target_object: 1, operation: "set_types", types: ["land"], timestamp: 1),
+        (action: "register_continuous_effect", controller: 0, target_object: 1, operation: "copy_base_creature", from_object: 0, timestamp: 99),
+    ],
+    expect: (
+        characteristics: [
+            (object: 1, is_creature: false, types: ["land"]),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

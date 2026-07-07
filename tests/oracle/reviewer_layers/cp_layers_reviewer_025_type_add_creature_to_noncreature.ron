@@ -1,0 +1,24 @@
+(
+    name: "CP-LAYERS reviewer 025 type_add_creature_to_noncreature",
+    setup: (
+        players: 2,
+        objects: [
+            (card: 64250, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "add_types", types: ["creature"], timestamp: 1),
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "set_pt", power: 3, toughness: 3, timestamp: 2),
+    ],
+    expect: (
+        characteristics: [
+            (object: 0, is_creature: true, power: 3, toughness: 3, types: ["creature"]),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

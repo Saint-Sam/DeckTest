@@ -1,0 +1,24 @@
+(
+    name: "CP-LAYERS reviewer 067 pt_7a_replay_hash",
+    setup: (
+        players: 2,
+        objects: [
+            (card: 64670, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "set_base_creature", object: 0, power: 1, toughness: 1, keywords: []),
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "set_base_pt", power: 7, toughness: 2, timestamp: 1),
+    ],
+    expect: (
+        characteristics: [
+            (object: 0, power: 7, toughness: 2),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

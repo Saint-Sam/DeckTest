@@ -43,6 +43,13 @@ if find "$evidence_dir" -maxdepth 1 -type f -name '*.log' -print -quit 2>/dev/nu
   done < <(find "$evidence_dir" -maxdepth 1 -type f -name '*.log' -print0 | sort -z)
 fi
 
+if find "$evidence_dir" -maxdepth 1 -type f -name '*.csv' -print -quit 2>/dev/null | grep -q .; then
+  mkdir -p "$bundle/evidence"
+  while IFS= read -r -d '' csv_file; do
+    cp "$csv_file" "$bundle/evidence/$(basename "$csv_file")"
+  done < <(find "$evidence_dir" -maxdepth 1 -type f -name '*.csv' -print0 | sort -z)
+fi
+
 if [[ -d "${evidence_dir}/replays" ]]; then
   mkdir -p "$bundle/replays"
   cp -R "${evidence_dir}/replays/." "$bundle/replays/"

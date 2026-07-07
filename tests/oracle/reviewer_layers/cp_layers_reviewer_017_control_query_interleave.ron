@@ -1,0 +1,26 @@
+(
+    name: "CP-LAYERS reviewer 017 control_query_interleave",
+    setup: (
+        players: 2,
+        objects: [
+            (card: 64170, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "set_base_creature", object: 0, power: 2, toughness: 2, keywords: []),
+        (action: "assert_characteristics", object: 0, controller: 0),
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "change_controller", player: 1, timestamp: 1),
+        (action: "assert_characteristics", object: 0, controller: 1),
+    ],
+    expect: (
+        characteristics: [
+            (object: 0, controller: 1),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

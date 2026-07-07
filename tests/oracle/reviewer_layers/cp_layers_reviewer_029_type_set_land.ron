@@ -1,0 +1,23 @@
+(
+    name: "CP-LAYERS reviewer 029 type_set_land",
+    setup: (
+        players: 2,
+        objects: [
+            (card: 64290, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "set_types", types: ["land"], timestamp: 1),
+    ],
+    expect: (
+        characteristics: [
+            (object: 0, types: ["land"]),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

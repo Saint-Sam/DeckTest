@@ -1,0 +1,24 @@
+(
+    name: "CP-LAYERS reviewer 024 text_replay_hash",
+    setup: (
+        players: 2,
+        objects: [
+            (card: 64240, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "set_text_marker", marker: 7, timestamp: 1),
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "set_text_marker", marker: 8, timestamp: 2),
+    ],
+    expect: (
+        characteristics: [
+            (object: 0, text_marker: 8),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

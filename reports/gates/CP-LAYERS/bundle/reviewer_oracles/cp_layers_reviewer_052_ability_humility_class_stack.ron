@@ -1,0 +1,26 @@
+(
+    name: "CP-LAYERS reviewer 052 ability_humility_class_stack",
+    setup: (
+        players: 2,
+        objects: [
+            (card: 64520, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "set_base_creature", object: 0, power: 4, toughness: 4, keywords: ["trample"]),
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "remove_keywords", keywords: ["trample", "flying"], timestamp: 1),
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "add_keywords", keywords: ["flying"], timestamp: 2),
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "set_pt", power: 1, toughness: 1, timestamp: 3),
+    ],
+    expect: (
+        characteristics: [
+            (object: 0, power: 1, toughness: 1, keywords: ["flying"]),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

@@ -1,0 +1,25 @@
+(
+    name: "CP-LAYERS reviewer 097 reverse_tie_registration",
+    setup: (
+        players: 2,
+        objects: [
+            (card: 64970, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "set_base_creature", object: 0, power: 1, toughness: 1, keywords: []),
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "set_pt", power: 5, toughness: 5, timestamp: 7),
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "set_pt", power: 2, toughness: 2, timestamp: 7),
+    ],
+    expect: (
+        characteristics: [
+            (object: 0, power: 2, toughness: 2),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

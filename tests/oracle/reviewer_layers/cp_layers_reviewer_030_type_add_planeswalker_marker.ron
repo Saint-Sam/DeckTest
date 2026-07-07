@@ -1,0 +1,23 @@
+(
+    name: "CP-LAYERS reviewer 030 type_add_planeswalker_marker",
+    setup: (
+        players: 2,
+        objects: [
+            (card: 64300, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "add_types", types: ["planeswalker"], timestamp: 1),
+    ],
+    expect: (
+        characteristics: [
+            (object: 0, types: ["planeswalker"]),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

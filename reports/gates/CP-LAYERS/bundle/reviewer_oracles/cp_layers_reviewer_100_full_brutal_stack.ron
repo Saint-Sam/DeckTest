@@ -1,0 +1,35 @@
+(
+    name: "CP-LAYERS reviewer 100 full_brutal_stack",
+    setup: (
+        players: 2,
+        objects: [
+            (card: 65000, owner: 0, controller: 0, zone: "Battlefield"),
+            (card: 65001, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "set_base_creature", object: 0, power: 2, toughness: 5, keywords: ["trample"]),
+        (action: "set_base_creature", object: 1, power: 1, toughness: 1, keywords: []),
+        (action: "register_continuous_effect", controller: 0, target_object: 1, operation: "copy_base_creature", from_object: 0, timestamp: 1),
+        (action: "register_continuous_effect", controller: 0, target_object: 1, operation: "change_controller", player: 1, timestamp: 2),
+        (action: "register_continuous_effect", controller: 0, target_object: 1, operation: "set_text_marker", marker: 100, timestamp: 3),
+        (action: "register_continuous_effect", controller: 0, target_object: 1, operation: "add_types", types: ["artifact"], timestamp: 4),
+        (action: "register_continuous_effect", controller: 0, target_object: 1, operation: "set_colors", colors: ["white", "blue"], timestamp: 5),
+        (action: "register_continuous_effect", controller: 0, target_object: 1, operation: "remove_keywords", keywords: ["trample"], timestamp: 6),
+        (action: "register_continuous_effect", controller: 0, target_object: 1, operation: "add_keywords", keywords: ["flying"], timestamp: 7),
+        (action: "register_continuous_effect", controller: 0, target_object: 1, operation: "set_pt", power: 3, toughness: 6, timestamp: 8),
+        (action: "register_continuous_effect", controller: 0, target_object: 1, operation: "modify_pt", power: 1, toughness: -2, timestamp: 9),
+        (action: "register_continuous_effect", controller: 0, target_object: 1, operation: "switch_pt", timestamp: 10),
+    ],
+    expect: (
+        characteristics: [
+            (object: 1, controller: 1, text_marker: 100, types: ["artifact", "creature"], colors: ["white", "blue"], keywords: ["flying"], power: 4, toughness: 4),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

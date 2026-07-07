@@ -1,0 +1,24 @@
+(
+    name: "CP-LAYERS reviewer 020 text_timestamp_later_wins",
+    setup: (
+        players: 2,
+        objects: [
+            (card: 64200, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "set_text_marker", marker: 1, timestamp: 1),
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "set_text_marker", marker: 2, timestamp: 2),
+    ],
+    expect: (
+        characteristics: [
+            (object: 0, text_marker: 2),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

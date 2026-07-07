@@ -1,0 +1,24 @@
+(
+    name: "CP-LAYERS reviewer 044 color_dependency_reorders",
+    setup: (
+        players: 2,
+        objects: [
+            (card: 64440, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "set_colors", colors: ["red"], timestamp: 5),
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "set_colors", colors: ["green"], dependencies: [0], timestamp: 1),
+    ],
+    expect: (
+        characteristics: [
+            (object: 0, colors: ["green"]),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

@@ -1,0 +1,24 @@
+(
+    name: "CP-LAYERS reviewer 028 type_remove_creature",
+    setup: (
+        players: 2,
+        objects: [
+            (card: 64280, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "set_base_creature", object: 0, power: 2, toughness: 2, keywords: []),
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "remove_types", types: ["creature"], timestamp: 1),
+    ],
+    expect: (
+        characteristics: [
+            (object: 0, is_creature: false, types: []),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

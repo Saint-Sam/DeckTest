@@ -1,0 +1,26 @@
+(
+    name: "CP-LAYERS reviewer 068 pt_7a_zero_toughness_sba",
+    setup: (
+        players: 2,
+        objects: [
+            (card: 64680, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "set_base_creature", object: 0, power: 1, toughness: 1, keywords: []),
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "set_base_pt", power: 1, toughness: 0, timestamp: 1),
+        (action: "check_state_based_actions"),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Battlefield", count: 0),
+            (zone: "Graveyard", player: 0, count: 1),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

@@ -1,0 +1,25 @@
+(
+    name: "CP-LAYERS reviewer 055 ability_type_applicability",
+    setup: (
+        players: 2,
+        objects: [
+            (card: 64550, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "add_keywords", keywords: ["flying"], timestamp: 1),
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "add_types", types: ["creature"], timestamp: 2),
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "set_pt", power: 2, toughness: 2, timestamp: 3),
+    ],
+    expect: (
+        characteristics: [
+            (object: 0, is_creature: true, keywords: ["flying"]),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

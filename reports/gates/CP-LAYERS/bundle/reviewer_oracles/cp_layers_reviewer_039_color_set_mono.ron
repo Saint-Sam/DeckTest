@@ -1,0 +1,23 @@
+(
+    name: "CP-LAYERS reviewer 039 color_set_mono",
+    setup: (
+        players: 2,
+        objects: [
+            (card: 64390, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "set_colors", colors: ["green"], timestamp: 1),
+    ],
+    expect: (
+        characteristics: [
+            (object: 0, colors: ["green"]),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

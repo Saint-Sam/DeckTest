@@ -11,11 +11,30 @@ PASS scripts/vl.sh
 PASS cargo fmt --manifest-path fuzz/Cargo.toml --all --check
 PASS cargo check --manifest-path fuzz/Cargo.toml --bin fuzz_characteristics
 PASS cargo run --manifest-path fuzz/Cargo.toml --bin fuzz_characteristics -- -runs=16
+PASS python3 tools/generate_cp_layers_reviewer_oracles.py
+PASS cargo run -p forge-testkit -- lint tests/oracle/reviewer_layers
+PASS cargo run -p forge-testkit -- oracle --path tests/oracle/reviewer_layers --no-junit
+PASS PYTHONPYCACHEPREFIX=target/tmp/python-cache python3 -m py_compile tools/generate_cp_layers_reviewer_oracles.py
+PASS scripts/vl.sh after reviewer oracle pack
+PASS python3 tools/cp_layers_legacy_subset.py
+PASS PYTHONPYCACHEPREFIX=target/tmp/python-cache python3 -m py_compile tools/cp_layers_legacy_subset.py
 
 Layer oracle path run result:
 oracle scenarios: 80 passed, 0 failed
+
+Reviewer oracle path run result:
+oracle scenarios: 100 passed, 0 failed
 
 T2.4 VL result:
 oracle scenarios: 382 passed, 0 failed
 coverage: 81.65% lines
 perf smoke: 0 regressions
+
+Reviewer-pack VL result:
+oracle scenarios: 482 passed, 0 failed
+coverage: 81.82% lines
+perf smoke: 0 regressions
+
+Legacy 100-card subset result:
+selected 100 local legacy layered card scripts
+true engine-vs-engine differential blocked by missing Forge 2.0 importer/compiler

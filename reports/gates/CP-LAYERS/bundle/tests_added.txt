@@ -14,6 +14,29 @@ Reviewed implementation commit: `81143e1e221ee5d5a01a7691f0adbe380cb357f7`
 
 - `fuzz/fuzz_targets/fuzz_characteristics.rs:1` `fuzz_characteristics`
 
+## Owner-Approved Reviewer Oracle Pack Added During CP-LAYERS Review
+
+- `tools/generate_cp_layers_reviewer_oracles.py:1` regenerates the committed
+  100-scenario reviewer pack.
+- `tests/oracle/reviewer_layers/MANIFEST.md:1` lists R001-R100 executable
+  reviewer scenarios.
+- `tests/oracle/reviewer_layers/cp_layers_reviewer_001_copy_ignores_source_modifier.ron:1`
+  through
+  `tests/oracle/reviewer_layers/cp_layers_reviewer_100_full_brutal_stack.ron:1`
+  contain the owner-approved executable scenarios.
+- `reports/gates/CP-LAYERS/reviewer_oracles/MANIFEST.md:1` mirrors the same
+  pack into the CP-LAYERS evidence bundle source.
+
+## Legacy Differential Evidence Tool Added During CP-LAYERS Review
+
+- `tools/cp_layers_legacy_subset.py:1` selects the local-only 100-card layered
+  subset from vendored legacy Forge scripts and writes script-level divergence
+  adjudication.
+- `reports/gates/CP-LAYERS/legacy-100-layered-subset-2026-07-07.md:1`
+  records the selected subset and divergence categories.
+- `reports/gates/CP-LAYERS/legacy-100-layered-subset-2026-07-07.csv:1`
+  records the machine-readable subset.
+
 ## Layer Oracle Scenarios Added by T2.4
 
 - `tests/oracle/layers/layers_001_pt_set_modify_switch.ron:2` `layers 001 power toughness set modify switch`

@@ -1,0 +1,25 @@
+(
+    name: "CP-LAYERS reviewer 081 pt_7c_type_gating",
+    setup: (
+        players: 2,
+        objects: [
+            (card: 64810, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "set_base_creature", object: 0, power: 2, toughness: 2, keywords: []),
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "remove_types", types: ["creature"], timestamp: 1),
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "modify_pt", power: 7, toughness: 7, timestamp: 2),
+    ],
+    expect: (
+        characteristics: [
+            (object: 0, is_creature: false),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

@@ -18,10 +18,21 @@ evidence recording, and the CP-LAYERS fuzz-target addition.
   matched one non-layer path string.
 - `cargo run -p forge-testkit -- oracle --path tests/oracle/layers --no-junit`:
   PASS after CP-LAYERS prep; 80 layer scenarios passed, 0 failed.
+- `cargo run -p forge-testkit -- lint tests/oracle/reviewer_layers`: PASS
+  after owner approval; 100 CP-LAYERS reviewer scenarios parsed.
+- `cargo run -p forge-testkit -- oracle --path tests/oracle/reviewer_layers --no-junit`:
+  PASS after owner approval; 100 CP-LAYERS reviewer scenarios passed, 0 failed.
 - `scripts/review/clone_surface_guard.sh`: PASS,
   `persistent_allocation_field_count=24`.
 - `scripts/vl.sh`: PASS during T2.4 prep; 382 oracle scenarios passed, 0
   failed, coverage 81.65% lines, and perf smoke reported 0 regressions.
+- `scripts/vl.sh`: PASS after owner-approved reviewer oracle pack; 482 oracle
+  scenarios passed, 0 failed, coverage 81.82% lines, and perf smoke reported 0
+  regressions.
+- `python3 tools/cp_layers_legacy_subset.py`: PASS, selected a local-only
+  100-card legacy layered subset and wrote script-level divergence adjudication.
+- `PYTHONPYCACHEPREFIX=target/tmp/python-cache python3 -m py_compile tools/cp_layers_legacy_subset.py`:
+  PASS.
 
 ## CP-LAYERS Fuzz Target Verification
 
@@ -40,3 +51,8 @@ characteristics are recomputed per query from stored base object state plus the
 registered continuous-effect list. This simplifies invalidation for CP-LAYERS,
 but the checkpoint must still verify that future memoization work does not
 weaken this invariant.
+
+The true 100-card legacy engine differential is blocked by missing card-script
+import/compiler support in Forge 2.0. The local-only subset report adjudicates
+the script-level divergence categories, but it is not a substitute for executing
+those 100 real cards in both engines.

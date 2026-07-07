@@ -242,12 +242,12 @@
       "signoff": "reports/gates/CP-LAYERS/SIGNOFF.md",
       "reviewed_remote_green_commit": "81143e1e221ee5d5a01a7691f0adbe380cb357f7",
       "remote_ci": "GitHub Actions ci #23 run 28891474213 and manual ci #24 run 28892313697 passed for T2.4 commit 81143e1e221ee5d5a01a7691f0adbe380cb357f7; evidence commit ae535189e9543907dd3b8f6144e40b800ac2be3d passed in ci #25 run 28892638060",
-      "review_requirements": "Owner/human CP-LAYERS review must complete Section 15.4: 15 novel layer scenarios with at least 14 passing, legacy differential on 100-card layered subset with written adjudication, memoization-invalidation audit plus fuzz target, and the explicit layer-ordering belief sentence before T2.5+ starts."
+      "review_requirements": "Owner/human CP-LAYERS review must complete Section 15.4 with the owner-approved stricter packet: 100 novel layer scenarios with no rules-observable failures, legacy differential on a 100-card layered subset with written adjudication, memoization-invalidation audit plus fuzz target, and the explicit layer-ordering belief sentence before T2.5+ starts."
     }
   },
   "owner_input": {
     "O1": "complete",
     "O2": "complete",
-    "O5": "CP_LAYERS_decisions_recorded_pending_scenario_interview_fuzz_and_legacy_results"
+    "O5": "CP_LAYERS_100_scenarios_passed_legacy_engine_differential_blocked_pending_owner_decision"
   }
 }
