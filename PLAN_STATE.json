@@ -92,6 +92,12 @@
       "verification": "scripts/vl.sh passed locally with 7 supplemental legacy game-simulation oracle scenarios ported, first-turn draw-skip rule fixed, poison/winner scenario support added, and mapping evidence committed",
       "scope_decision": "Q-2026-07-07-T1.10 resolved by owner Option 1: use broader local forge-gui-desktop game-simulation tests as the T1.10 source set"
     },
+    "T1.11": {
+      "status": "verified_local",
+      "branch": "task/T1.11-forge-cli-terminal-client",
+      "attempts": 0,
+      "verification": "scripts/vl.sh passed locally; `cargo run -p forge-cli -- play --demo --seed 5 --replay-out target/forge-cli/t1_11_demo.frsreplay` finished a game, and `cargo run -p forge-cli -- roundtrip target/forge-cli/t1_11_demo.frsreplay` preserved the seed/action list and final hash"
+    },
     "T1.R1": {
       "status": "verified_local",
       "branch": "remediation/T1.R1-action-surface",
