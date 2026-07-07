@@ -1,0 +1,34 @@
+(
+    name: "T1 generated setup zone conservation 005",
+    setup: (
+        players: 3,
+        objects: [
+            (card: 10050, owner: 2, controller: 2, zone: "Exile"),
+            (card: 10051, owner: 0, controller: 0, zone: "Library", player: 0),
+            (card: 10052, owner: 1, controller: 1, zone: "Stack"),
+            (card: 10053, owner: 2, controller: 2, zone: "Graveyard", player: 2),
+            (card: 10054, owner: 0, controller: 0, zone: "Exile"),
+        ],
+    ),
+    script: [
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Exile", count: 2),
+            (zone: "Graveyard", player: 2, count: 1),
+            (zone: "Library", player: 0, count: 1),
+            (zone: "Stack", count: 1),
+        ],
+        players: [
+            (player: 0, life: 20, poison: 0),
+            (player: 1, life: 20, poison: 0),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "life_poison_sanity",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

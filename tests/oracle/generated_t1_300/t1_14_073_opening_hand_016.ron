@@ -1,0 +1,34 @@
+(
+    name: "T1 generated opening hand counts 016",
+    setup: (
+        seed: 2016,
+        players: 2,
+        libraries: [
+            (player: 0, cards: [13600, 13601, 13602, 13603, 13604, 13605, 13606, 13607]),
+            (player: 1, cards: [14600, 14601, 14602, 14603, 14604, 14605, 14606, 14607, 14608]),
+        ],
+    ),
+    script: [
+        (action: "decide_turn_order"),
+        (action: "draw_opening_hands"),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Hand", player: 0, count: 7),
+            (zone: "Hand", player: 1, count: 7),
+            (zone: "Library", player: 0, count: 1),
+            (zone: "Library", player: 1, count: 2),
+        ],
+        players: [
+            (player: 0, life: 20, poison: 0),
+            (player: 1, life: 20, poison: 0),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "life_poison_sanity",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

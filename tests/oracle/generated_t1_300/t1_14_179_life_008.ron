@@ -1,0 +1,23 @@
+(
+    name: "T1 generated life SBA 008",
+    setup: (
+        players: 2,
+    ),
+    script: [
+        (action: "set_life", player: 0, life: 28),
+        (action: "lose_life", player: 0, amount: 2),
+        (action: "check_state_based_actions"),
+    ],
+    expect: (
+        players: [
+            (player: 0, life: 26),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "life_poison_sanity",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

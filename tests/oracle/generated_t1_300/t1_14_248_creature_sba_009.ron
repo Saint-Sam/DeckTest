@@ -1,0 +1,27 @@
+(
+    name: "T1 generated creature SBA 009",
+    setup: (
+        players: 2,
+        objects: [
+            (card: 15009, owner: 1, controller: 1, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "set_base_creature", object: 0, power: 4, toughness: 5, keywords: ["vigilance"]),
+        (action: "mark_damage", object: 0, amount: 4),
+        (action: "check_state_based_actions"),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Battlefield", count: 1),
+            (zone: "Graveyard", player: 1, count: 0),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "life_poison_sanity",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

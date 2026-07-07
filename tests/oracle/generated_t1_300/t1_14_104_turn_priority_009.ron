@@ -1,0 +1,37 @@
+(
+    name: "T1 generated turn priority window 009",
+    setup: (
+        players: 3,
+        libraries: [
+            (player: 0, cards: [14090, 14091, 14092, 14093, 14094]),
+        ],
+    ),
+    script: [
+        (action: "start_turn", player: 0),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Hand", player: 0, count: 1),
+            (zone: "Library", player: 0, count: 4),
+        ],
+        outcome: "in_progress",
+        active_player: 0,
+        priority_player: "none",
+        current_step: "Cleanup",
+        invariants: [
+            "zone_conservation",
+            "life_poison_sanity",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

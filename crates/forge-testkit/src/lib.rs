@@ -8,8 +8,9 @@
 //! tests exercise the same public mutation boundary as application code.
 
 use forge_core::{
-    apply, Action, CardId, GameOutcome, GameState, ObjectId, Outcome, PlayerId, StateHash, ZoneId,
-    ZoneKind,
+    apply, auto_payment_plan, Action, BaseCreatureCharacteristics, CardId, CreatureKeywords,
+    GameOutcome, GameState, ManaCost, ManaKind, ManaPool, ObjectId, Outcome, PlayerId, StateHash,
+    Step, ZoneId, ZoneKind,
 };
 use std::{fs, path::Path};
 
@@ -466,6 +467,64 @@ pub enum ScenarioStep {
         /// Number of poison counters to add.
         amount: u32,
     },
+    /// Add mana to a player's mana pool.
+    AddMana {
+        /// Zero-based scenario player index.
+        player: usize,
+        /// Mana to add.
+        mana: ManaSpec,
+    },
+    /// Clear a player's mana pool.
+    ClearMana {
+        /// Zero-based scenario player index.
+        player: usize,
+    },
+    /// Pay mana using the kernel's preferred deterministic payment plan.
+    PayManaAuto {
+        /// Zero-based scenario player index.
+        player: usize,
+        /// Cost to pay.
+        cost: ManaCostSpec,
+    },
+    /// Move a scenario object to another zone.
+    MoveObject {
+        /// Scenario object index.
+        object: usize,
+        /// Destination zone.
+        zone: ZoneSpec,
+    },
+    /// Set an object's base creature characteristics.
+    SetBaseCreature {
+        /// Scenario object index.
+        object: usize,
+        /// Base power.
+        power: i32,
+        /// Base toughness.
+        toughness: i32,
+        /// Static combat keywords.
+        keywords: CreatureKeywordSpec,
+    },
+    /// Clear an object's base creature characteristics.
+    ClearBaseCreature {
+        /// Scenario object index.
+        object: usize,
+    },
+    /// Set an object's tapped status.
+    SetObjectTapped {
+        /// Scenario object index.
+        object: usize,
+        /// New tapped status.
+        tapped: bool,
+    },
+    /// Mark damage on a creature object.
+    MarkDamage {
+        /// Scenario object index.
+        object: usize,
+        /// Damage amount.
+        amount: u32,
+    },
+    /// Request the cleanup-step priority exception.
+    RequestCleanupPriority,
 }
 
 impl ScenarioStep {
@@ -485,8 +544,184 @@ impl ScenarioStep {
             Self::AddPoisonCounters { player, .. } => {
                 format!("add_poison_counters[{player}]")
             }
+            Self::AddMana { player, .. } => format!("add_mana[{player}]"),
+            Self::ClearMana { player } => format!("clear_mana[{player}]"),
+            Self::PayManaAuto { player, .. } => format!("pay_mana_auto[{player}]"),
+            Self::MoveObject { object, .. } => format!("move_object[{object}]"),
+            Self::SetBaseCreature { object, .. } => format!("set_base_creature[{object}]"),
+            Self::ClearBaseCreature { object } => format!("clear_base_creature[{object}]"),
+            Self::SetObjectTapped { object, .. } => format!("set_object_tapped[{object}]"),
+            Self::MarkDamage { object, .. } => format!("mark_damage[{object}]"),
+            Self::RequestCleanupPriority => "request_cleanup_priority".to_owned(),
         }
     }
+}
+
+/// A mana-pool or mana-payment quantity in WUBRG plus colorless order.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct ManaSpec {
+    white: u32,
+    blue: u32,
+    black: u32,
+    red: u32,
+    green: u32,
+    colorless: u32,
+}
+
+impl ManaSpec {
+    /// Converts this scenario quantity to the kernel mana-pool type.
+    #[must_use]
+    pub const fn to_pool(self) -> ManaPool {
+        ManaPool::new(
+            self.white,
+            self.blue,
+            self.black,
+            self.red,
+            self.green,
+            self.colorless,
+        )
+    }
+
+    fn from_ron_value(value: RonValue) -> Result<Self, ScenarioError> {
+        let map = value.into_map("mana")?;
+        Ok(Self {
+            white: map.optional_u32("white")?.unwrap_or(0),
+            blue: map.optional_u32("blue")?.unwrap_or(0),
+            black: map.optional_u32("black")?.unwrap_or(0),
+            red: map.optional_u32("red")?.unwrap_or(0),
+            green: map.optional_u32("green")?.unwrap_or(0),
+            colorless: map.optional_u32("colorless")?.unwrap_or(0),
+        })
+    }
+}
+
+/// A mana-cost quantity in WUBRG plus generic and X components.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct ManaCostSpec {
+    white: u32,
+    blue: u32,
+    black: u32,
+    red: u32,
+    green: u32,
+    generic: u32,
+    x_count: u32,
+    x_value: u32,
+}
+
+impl ManaCostSpec {
+    fn to_cost(self) -> ManaCost {
+        ManaCost::new(
+            self.white,
+            self.blue,
+            self.black,
+            self.red,
+            self.green,
+            self.generic,
+        )
+        .with_x(self.x_count, self.x_value)
+    }
+
+    fn from_ron_value(value: RonValue) -> Result<Self, ScenarioError> {
+        let map = value.into_map("mana cost")?;
+        Ok(Self {
+            white: map.optional_u32("white")?.unwrap_or(0),
+            blue: map.optional_u32("blue")?.unwrap_or(0),
+            black: map.optional_u32("black")?.unwrap_or(0),
+            red: map.optional_u32("red")?.unwrap_or(0),
+            green: map.optional_u32("green")?.unwrap_or(0),
+            generic: map.optional_u32("generic")?.unwrap_or(0),
+            x_count: map.optional_u32("x_count")?.unwrap_or(0),
+            x_value: map.optional_u32("x_value")?.unwrap_or(0),
+        })
+    }
+}
+
+/// Static combat keywords for a scenario creature.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct CreatureKeywordSpec {
+    first_strike: bool,
+    double_strike: bool,
+    trample: bool,
+    deathtouch: bool,
+    lifelink: bool,
+    flying: bool,
+    reach: bool,
+    menace: bool,
+    vigilance: bool,
+    haste: bool,
+}
+
+impl CreatureKeywordSpec {
+    fn to_keywords(self) -> CreatureKeywords {
+        let mut keywords = CreatureKeywords::none();
+        if self.first_strike {
+            keywords = keywords.with_first_strike();
+        }
+        if self.double_strike {
+            keywords = keywords.with_double_strike();
+        }
+        if self.trample {
+            keywords = keywords.with_trample();
+        }
+        if self.deathtouch {
+            keywords = keywords.with_deathtouch();
+        }
+        if self.lifelink {
+            keywords = keywords.with_lifelink();
+        }
+        if self.flying {
+            keywords = keywords.with_flying();
+        }
+        if self.reach {
+            keywords = keywords.with_reach();
+        }
+        if self.menace {
+            keywords = keywords.with_menace();
+        }
+        if self.vigilance {
+            keywords = keywords.with_vigilance();
+        }
+        if self.haste {
+            keywords = keywords.with_haste();
+        }
+        keywords
+    }
+
+    fn from_ron_value(value: RonValue) -> Result<Self, ScenarioError> {
+        let mut spec = Self::default();
+        for value in value.into_list("keywords")? {
+            match value.into_string("keyword")?.as_str() {
+                "first_strike" => spec.first_strike = true,
+                "double_strike" => spec.double_strike = true,
+                "trample" => spec.trample = true,
+                "deathtouch" => spec.deathtouch = true,
+                "lifelink" => spec.lifelink = true,
+                "flying" => spec.flying = true,
+                "reach" => spec.reach = true,
+                "menace" => spec.menace = true,
+                "vigilance" => spec.vigilance = true,
+                "haste" => spec.haste = true,
+                other => {
+                    return Err(ScenarioError::schema(format!(
+                        "unsupported creature keyword `{other}`"
+                    )));
+                }
+            }
+        }
+        Ok(spec)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum MaybePlayerExpectation {
+    None,
+    Player(usize),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum MaybeStepExpectation {
+    None,
+    Step(Step),
 }
 
 /// Expected final scenario facts.
@@ -495,6 +730,9 @@ pub struct ScenarioExpect {
     zone_counts: Vec<ZoneCountExpectation>,
     players: Vec<PlayerExpectation>,
     outcome: Option<OutcomeExpectation>,
+    active_player: Option<MaybePlayerExpectation>,
+    priority_player: Option<MaybePlayerExpectation>,
+    current_step: Option<MaybeStepExpectation>,
     invariants: Vec<Invariant>,
     hash_determinism: bool,
 }
@@ -591,6 +829,15 @@ impl ScenarioExpect {
         if let Some(outcome) = map.optional("outcome")? {
             expect = expect.with_outcome(OutcomeExpectation::from_ron_value(outcome)?);
         }
+        if let Some(active_player) = map.optional("active_player")? {
+            expect.active_player = Some(parse_maybe_player(active_player, "active_player")?);
+        }
+        if let Some(priority_player) = map.optional("priority_player")? {
+            expect.priority_player = Some(parse_maybe_player(priority_player, "priority_player")?);
+        }
+        if let Some(current_step) = map.optional("current_step")? {
+            expect.current_step = Some(parse_maybe_step(current_step)?);
+        }
         if let Some(invariants) = map.optional("invariants")? {
             for value in invariants.into_list("expect.invariants")? {
                 expect = expect.with_invariant(Invariant::parse(&value.into_string("invariant")?)?);
@@ -642,6 +889,7 @@ pub struct PlayerExpectation {
     player: usize,
     life: Option<i32>,
     poison: Option<u32>,
+    mana: Option<ManaSpec>,
 }
 
 impl PlayerExpectation {
@@ -652,6 +900,7 @@ impl PlayerExpectation {
             player,
             life: None,
             poison: None,
+            mana: None,
         }
     }
 
@@ -669,6 +918,13 @@ impl PlayerExpectation {
         self
     }
 
+    /// Returns this expectation with a mana-pool assertion.
+    #[must_use]
+    pub const fn with_mana(mut self, mana: ManaSpec) -> Self {
+        self.mana = Some(mana);
+        self
+    }
+
     fn from_ron_value(value: RonValue) -> Result<Self, ScenarioError> {
         let map = value.into_map("player expectation")?;
         let mut expectation = Self::new(map.required_usize("player")?);
@@ -677,6 +933,9 @@ impl PlayerExpectation {
         }
         if let Some(poison) = map.optional_u32("poison")? {
             expectation = expectation.with_poison(poison);
+        }
+        if let Some(mana) = map.optional("mana")? {
+            expectation = expectation.with_mana(ManaSpec::from_ron_value(mana)?);
         }
         Ok(expectation)
     }
@@ -1097,6 +1356,61 @@ fn action_for_step(step: &ScenarioStep, context: &RunContext) -> Result<Action, 
             player: player_id(&context.players, *player, "add_poison_counters")?,
             amount: *amount,
         }),
+        ScenarioStep::AddMana { player, mana } => Ok(Action::AddManaToPool {
+            player: player_id(&context.players, *player, "add_mana")?,
+            mana: mana.to_pool(),
+        }),
+        ScenarioStep::ClearMana { player } => Ok(Action::ClearManaPool {
+            player: player_id(&context.players, *player, "clear_mana")?,
+        }),
+        ScenarioStep::PayManaAuto { player, cost } => {
+            let player_id = player_id(&context.players, *player, "pay_mana_auto")?;
+            let cost = cost.to_cost();
+            let available = context
+                .state
+                .mana_pool(player_id)
+                .map_err(|error| ScenarioError::schema(format!("mana pool failed: {error:?}")))?;
+            let plan = auto_payment_plan(available, cost)
+                .map_err(|error| {
+                    ScenarioError::schema(format!("payment planning failed: {error:?}"))
+                })?
+                .ok_or_else(|| {
+                    ScenarioError::schema("pay_mana_auto has no valid payment plan".to_owned())
+                })?;
+            Ok(Action::PayMana {
+                player: player_id,
+                cost,
+                plan,
+            })
+        }
+        ScenarioStep::MoveObject { object, zone } => Ok(Action::MoveObject {
+            object: object_id(&context.objects, *object, "move_object")?,
+            to: zone.zone_id(&context.players)?,
+        }),
+        ScenarioStep::SetBaseCreature {
+            object,
+            power,
+            toughness,
+            keywords,
+        } => Ok(Action::SetBaseCreatureCharacteristics {
+            object: object_id(&context.objects, *object, "set_base_creature")?,
+            base: BaseCreatureCharacteristics::new(*power, *toughness)
+                .with_keywords(keywords.to_keywords()),
+        }),
+        ScenarioStep::ClearBaseCreature { object } => {
+            Ok(Action::ClearBaseCreatureCharacteristics {
+                object: object_id(&context.objects, *object, "clear_base_creature")?,
+            })
+        }
+        ScenarioStep::SetObjectTapped { object, tapped } => Ok(Action::SetObjectTapped {
+            object: object_id(&context.objects, *object, "set_object_tapped")?,
+            tapped: *tapped,
+        }),
+        ScenarioStep::MarkDamage { object, amount } => Ok(Action::MarkDamageOnObject {
+            object: object_id(&context.objects, *object, "mark_damage")?,
+            amount: *amount,
+        }),
+        ScenarioStep::RequestCleanupPriority => Ok(Action::RequestCleanupPriority),
     }
 }
 
@@ -1217,6 +1531,24 @@ fn check_expectations_for(scenario: &Scenario, context: &mut RunContext) {
                         ));
                     }
                 }
+                if let Some(mana) = expectation.mana {
+                    match context.state.mana_pool(player) {
+                        Ok(actual) if actual == mana.to_pool() => {}
+                        Ok(actual) => context.failures.push(ScenarioFailure::new(
+                            "expect.players",
+                            format!(
+                                "player {} expected mana {}, found {}",
+                                expectation.player,
+                                format_mana_pool(mana.to_pool()),
+                                format_mana_pool(actual)
+                            ),
+                        )),
+                        Err(error) => context.failures.push(ScenarioFailure::new(
+                            "expect.players",
+                            format!("player {} mana check failed: {error:?}", expectation.player),
+                        )),
+                    }
+                }
             }
             Err(error) => context
                 .failures
@@ -1225,6 +1557,73 @@ fn check_expectations_for(scenario: &Scenario, context: &mut RunContext) {
     }
     if let Some(outcome) = scenario.expect.outcome {
         check_outcome(outcome, context);
+    }
+    if let Some(active_player) = scenario.expect.active_player {
+        check_maybe_player(
+            "expect.active_player",
+            active_player,
+            context.state.active_player(),
+            context,
+        );
+    }
+    if let Some(priority_player) = scenario.expect.priority_player {
+        check_maybe_player(
+            "expect.priority_player",
+            priority_player,
+            context.state.priority_player(),
+            context,
+        );
+    }
+    if let Some(current_step) = scenario.expect.current_step {
+        check_maybe_step(current_step, context);
+    }
+}
+
+fn check_maybe_player(
+    phase: &str,
+    expectation: MaybePlayerExpectation,
+    actual: Option<PlayerId>,
+    context: &mut RunContext,
+) {
+    match expectation {
+        MaybePlayerExpectation::None if actual.is_none() => {}
+        MaybePlayerExpectation::None => context.failures.push(ScenarioFailure::new(
+            phase,
+            format!("expected no player, found {actual:?}"),
+        )),
+        MaybePlayerExpectation::Player(player) => {
+            match player_id(&context.players, player, phase) {
+                Ok(expected) if actual == Some(expected) => {}
+                Ok(expected) => context.failures.push(ScenarioFailure::new(
+                    phase,
+                    format!("expected player {}, found {actual:?}", expected.index()),
+                )),
+                Err(error) => context
+                    .failures
+                    .push(ScenarioFailure::new(phase, error.to_string())),
+            }
+        }
+    }
+}
+
+fn check_maybe_step(expectation: MaybeStepExpectation, context: &mut RunContext) {
+    match expectation {
+        MaybeStepExpectation::None if context.state.current_step().is_none() => {}
+        MaybeStepExpectation::None => context.failures.push(ScenarioFailure::new(
+            "expect.current_step",
+            format!(
+                "expected no current step, found {:?}",
+                context.state.current_step()
+            ),
+        )),
+        MaybeStepExpectation::Step(step) if context.state.current_step() == Some(step) => {}
+        MaybeStepExpectation::Step(step) => context.failures.push(ScenarioFailure::new(
+            "expect.current_step",
+            format!(
+                "expected current step {step:?}, found {:?}",
+                context.state.current_step()
+            ),
+        )),
     }
 }
 
@@ -1330,6 +1729,42 @@ fn parse_script(value: RonValue) -> Result<Vec<ScenarioStep>, ScenarioError> {
                 player: map.required_usize("player")?,
                 amount: map.required_u32("amount")?,
             },
+            "add_mana" => ScenarioStep::AddMana {
+                player: map.required_usize("player")?,
+                mana: ManaSpec::from_ron_value(map.required("mana")?)?,
+            },
+            "clear_mana" => ScenarioStep::ClearMana {
+                player: map.required_usize("player")?,
+            },
+            "pay_mana_auto" => ScenarioStep::PayManaAuto {
+                player: map.required_usize("player")?,
+                cost: ManaCostSpec::from_ron_value(map.required("cost")?)?,
+            },
+            "move_object" => ScenarioStep::MoveObject {
+                object: map.required_usize("object")?,
+                zone: parse_zone_from_map(&map)?,
+            },
+            "set_base_creature" => ScenarioStep::SetBaseCreature {
+                object: map.required_usize("object")?,
+                power: map.required_i32("power")?,
+                toughness: map.required_i32("toughness")?,
+                keywords: match map.optional("keywords")? {
+                    Some(value) => CreatureKeywordSpec::from_ron_value(value)?,
+                    None => CreatureKeywordSpec::default(),
+                },
+            },
+            "clear_base_creature" => ScenarioStep::ClearBaseCreature {
+                object: map.required_usize("object")?,
+            },
+            "set_object_tapped" => ScenarioStep::SetObjectTapped {
+                object: map.required_usize("object")?,
+                tapped: map.optional_bool("tapped")?.unwrap_or(true),
+            },
+            "mark_damage" => ScenarioStep::MarkDamage {
+                object: map.required_usize("object")?,
+                amount: map.required_u32("amount")?,
+            },
+            "request_cleanup_priority" => ScenarioStep::RequestCleanupPriority,
             _ => {
                 return Err(ScenarioError::schema(format!(
                     "unsupported script action `{action}`"
@@ -1364,6 +1799,64 @@ fn parse_zone_from_map(map: &RonMap) -> Result<ZoneSpec, ScenarioError> {
         "Command" | "command" => Ok(ZoneSpec::Command),
         _ => Err(ScenarioError::schema(format!("unsupported zone `{zone}`"))),
     }
+}
+
+fn parse_maybe_player(
+    value: RonValue,
+    label: &str,
+) -> Result<MaybePlayerExpectation, ScenarioError> {
+    match value {
+        RonValue::String(input) if matches!(input.as_str(), "none" | "None") => {
+            Ok(MaybePlayerExpectation::None)
+        }
+        RonValue::String(input) => input
+            .parse::<usize>()
+            .map(MaybePlayerExpectation::Player)
+            .map_err(|_| {
+                ScenarioError::schema(format!("{label} must be a player index or string `none`"))
+            }),
+        other => Ok(MaybePlayerExpectation::Player(other.into_usize(label)?)),
+    }
+}
+
+fn parse_maybe_step(value: RonValue) -> Result<MaybeStepExpectation, ScenarioError> {
+    let input = value.into_string("current_step")?;
+    if matches!(input.as_str(), "none" | "None") {
+        return Ok(MaybeStepExpectation::None);
+    }
+    Ok(MaybeStepExpectation::Step(parse_step(&input)?))
+}
+
+fn parse_step(input: &str) -> Result<Step, ScenarioError> {
+    match input {
+        "Untap" | "untap" => Ok(Step::Untap),
+        "Upkeep" | "upkeep" => Ok(Step::Upkeep),
+        "Draw" | "draw" => Ok(Step::Draw),
+        "PrecombatMain" | "precombat_main" => Ok(Step::PrecombatMain),
+        "BeginningOfCombat" | "beginning_of_combat" => Ok(Step::BeginningOfCombat),
+        "DeclareAttackers" | "declare_attackers" => Ok(Step::DeclareAttackers),
+        "DeclareBlockers" | "declare_blockers" => Ok(Step::DeclareBlockers),
+        "CombatDamage" | "combat_damage" => Ok(Step::CombatDamage),
+        "EndOfCombat" | "end_of_combat" => Ok(Step::EndOfCombat),
+        "PostcombatMain" | "postcombat_main" => Ok(Step::PostcombatMain),
+        "End" | "end" => Ok(Step::End),
+        "Cleanup" | "cleanup" => Ok(Step::Cleanup),
+        _ => Err(ScenarioError::schema(format!(
+            "unsupported current_step `{input}`"
+        ))),
+    }
+}
+
+fn format_mana_pool(pool: ManaPool) -> String {
+    format!(
+        "W{} U{} B{} R{} G{} C{}",
+        pool.get(ManaKind::White),
+        pool.get(ManaKind::Blue),
+        pool.get(ManaKind::Black),
+        pool.get(ManaKind::Red),
+        pool.get(ManaKind::Green),
+        pool.get(ManaKind::Colorless)
+    )
 }
 
 fn parse_u32_list(value: RonValue, label: &str) -> Result<Vec<u32>, ScenarioError> {

@@ -1,0 +1,22 @@
+(
+    name: "T1 generated poison SBA 000",
+    setup: (
+        players: 2,
+    ),
+    script: [
+        (action: "add_poison_counters", player: 0, amount: 0),
+        (action: "check_state_based_actions"),
+    ],
+    expect: (
+        players: [
+            (player: 0, poison: 0),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "life_poison_sanity",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

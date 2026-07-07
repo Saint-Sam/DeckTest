@@ -1,0 +1,21 @@
+(
+    name: "T1 generated mana pool payment 007",
+    setup: (
+        players: 2,
+    ),
+    script: [
+        (action: "add_mana", player: 1, mana: (black: 1, colorless: 1)),
+    ],
+    expect: (
+        players: [
+            (player: 1, mana: (black: 1, colorless: 1)),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "life_poison_sanity",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

@@ -1,0 +1,34 @@
+(
+    name: "T1 generated cleanup priority 002",
+    setup: (
+        players: 2,
+        libraries: [
+            (player: 0, cards: [16020, 16021, 16022]),
+        ],
+    ),
+    script: [
+        (action: "start_turn", player: 0),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "request_cleanup_priority"),
+        (action: "advance_step"),
+    ],
+    expect: (
+        outcome: "in_progress",
+        active_player: 0,
+        priority_player: 0,
+        current_step: "Cleanup",
+        invariants: [
+            "zone_conservation",
+            "life_poison_sanity",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

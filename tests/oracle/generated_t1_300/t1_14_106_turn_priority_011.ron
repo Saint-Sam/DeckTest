@@ -1,0 +1,24 @@
+(
+    name: "T1 generated turn priority window 011",
+    setup: (
+        players: 3,
+        libraries: [
+            (player: 2, cards: [14110, 14111, 14112, 14113, 14114]),
+        ],
+    ),
+    script: [
+        (action: "start_turn", player: 2),
+    ],
+    expect: (
+        outcome: "in_progress",
+        active_player: 2,
+        priority_player: "none",
+        current_step: "Untap",
+        invariants: [
+            "zone_conservation",
+            "life_poison_sanity",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

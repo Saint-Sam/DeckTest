@@ -1,0 +1,25 @@
+(
+    name: "T1 generated object move 018",
+    setup: (
+        players: 2,
+        objects: [
+            (card: 11018, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "move_object", object: 0, zone: "Exile"),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Battlefield", count: 0),
+            (zone: "Exile", count: 1),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "life_poison_sanity",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

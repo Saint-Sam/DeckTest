@@ -1,0 +1,25 @@
+(
+    name: "T1 generated object move 010",
+    setup: (
+        players: 2,
+        objects: [
+            (card: 11010, owner: 0, controller: 0, zone: "Hand", player: 0),
+        ],
+    ),
+    script: [
+        (action: "move_object", object: 0, zone: "Hand", player: 1),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Hand", player: 0, count: 0),
+            (zone: "Hand", player: 1, count: 1),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "life_poison_sanity",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)
