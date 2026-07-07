@@ -64,6 +64,9 @@ pub const PAYMENT_PLAN_LIMIT: usize = 64;
 /// Maximum number of state-based-action loops before declaring nontermination.
 pub const SBA_FIXPOINT_LIMIT: u32 = 64;
 
+/// Number of cards drawn for a normal Magic opening hand and each London mulligan.
+pub const OPENING_HAND_SIZE: u32 = 7;
+
 const MANA_KIND_COUNT: usize = 6;
 const COLORED_MANA_KINDS: [ManaKind; 5] = [
     ManaKind::White,
@@ -2200,6 +2203,8 @@ pub struct PlayerState {
     poison: u32,
     lost: bool,
     max_hand_size: u32,
+    mulligans_taken: u32,
+    opening_hand_kept: bool,
     mana_pool: ManaPool,
 }
 
@@ -2213,6 +2218,8 @@ impl PlayerState {
             poison: 0,
             lost: false,
             max_hand_size: 7,
+            mulligans_taken: 0,
+            opening_hand_kept: false,
             mana_pool: ManaPool::empty(),
         }
     }
@@ -2245,6 +2252,18 @@ impl PlayerState {
     #[must_use]
     pub const fn max_hand_size(self) -> u32 {
         self.max_hand_size
+    }
+
+    /// Returns how many London mulligans this player has taken.
+    #[must_use]
+    pub const fn mulligans_taken(self) -> u32 {
+        self.mulligans_taken
+    }
+
+    /// Returns whether this player has kept their current opening hand.
+    #[must_use]
+    pub const fn opening_hand_kept(self) -> bool {
+        self.opening_hand_kept
     }
 
     /// Returns the player's current mana pool.
@@ -2460,6 +2479,8 @@ pub struct PlayerView {
     observer: PlayerId,
     turn_number: u32,
     outcome: GameOutcome,
+    starting_player: Option<PlayerId>,
+    opening_hands_drawn: bool,
     active_player: Option<PlayerId>,
     priority_player: Option<PlayerId>,
     current_step: Option<Step>,
@@ -2484,6 +2505,18 @@ impl PlayerView {
     #[must_use]
     pub const fn game_outcome(&self) -> GameOutcome {
         self.outcome
+    }
+
+    /// Returns the visible starting player chosen during setup.
+    #[must_use]
+    pub const fn starting_player(&self) -> Option<PlayerId> {
+        self.starting_player
+    }
+
+    /// Returns whether setup has drawn visible-count opening hands.
+    #[must_use]
+    pub const fn opening_hands_drawn(&self) -> bool {
+        self.opening_hands_drawn
     }
 
     /// Returns the visible active player.
@@ -2577,6 +2610,45 @@ pub enum StateError {
     TurnNotStarted,
     /// Turn advancement requires at least one player.
     NoPlayers,
+    /// Turn order has already been decided.
+    TurnOrderAlreadyDecided,
+    /// Opening-hand setup requires turn order to be decided first.
+    TurnOrderNotDecided,
+    /// Turn structure tried to start with a player other than the setup starter.
+    StartingPlayerMismatch {
+        /// Player chosen by setup to start.
+        expected: PlayerId,
+        /// Player passed to start-turn.
+        actual: PlayerId,
+    },
+    /// Opening hands have already been drawn.
+    OpeningHandsAlreadyDrawn,
+    /// A mulligan or keep decision was requested before opening hands were drawn.
+    OpeningHandsNotDrawn,
+    /// A player tried to mulligan after keeping an opening hand.
+    MulliganAfterKeep(PlayerId),
+    /// A player tried to keep an opening hand more than once.
+    OpeningHandAlreadyKept(PlayerId),
+    /// A turn was requested before a player kept their opening hand.
+    OpeningHandKeepPending(PlayerId),
+    /// A London mulligan count overflowed.
+    MulliganCountOverflow,
+    /// A London keep provided the wrong number of bottomed cards.
+    InvalidOpeningHandBottomCount {
+        /// Required bottomed-card count.
+        expected: u32,
+        /// Actual bottomed-card count.
+        actual: u32,
+    },
+    /// A bottomed-card list named the same object more than once.
+    DuplicateOpeningHandBottomCard(ObjectId),
+    /// A bottomed card was not in the player's hand.
+    OpeningHandBottomCardNotInHand {
+        /// Player making the keep decision.
+        player: PlayerId,
+        /// Object that was not in that player's hand.
+        object: ObjectId,
+    },
     /// The deterministic turn counter overflowed.
     TurnNumberOverflow,
     /// No player currently has priority.
@@ -2670,6 +2742,22 @@ pub enum Action {
     },
     /// Add one player and that player's zones.
     AddPlayer,
+    /// Randomly choose the starting player from the deterministic seed stream.
+    DecideTurnOrder,
+    /// Draw opening hands for all players in starting-player turn order.
+    DrawOpeningHands,
+    /// Take one London mulligan for a player.
+    TakeMulligan {
+        /// Player taking a mulligan.
+        player: PlayerId,
+    },
+    /// Keep a London opening hand and put mulligan-count cards on the library bottom.
+    KeepOpeningHand {
+        /// Player keeping the hand.
+        player: PlayerId,
+        /// Cards to put on the bottom, in bottom-to-top order.
+        bottom: Vec<ObjectId>,
+    },
     /// Set a player's maximum hand size.
     SetPlayerMaxHandSize {
         /// Player to update.
@@ -2892,6 +2980,8 @@ pub enum Outcome {
     Applied,
     /// A player was added.
     PlayerAdded(PlayerId),
+    /// Turn order was decided and this player starts.
+    TurnOrderDecided(PlayerId),
     /// An object was created.
     ObjectCreated(ObjectId),
     /// A step advanced.
@@ -2930,6 +3020,24 @@ pub fn apply(state: &mut GameState, action: Action) -> Outcome {
             Outcome::Applied
         }
         Action::AddPlayer => Outcome::PlayerAdded(state.add_player()),
+        Action::DecideTurnOrder => match state.decide_turn_order() {
+            Ok(player) => Outcome::TurnOrderDecided(player),
+            Err(error) => Outcome::Failed(error),
+        },
+        Action::DrawOpeningHands => match state.draw_opening_hands() {
+            Ok(()) => Outcome::Applied,
+            Err(error) => Outcome::Failed(error),
+        },
+        Action::TakeMulligan { player } => match state.take_mulligan(player) {
+            Ok(()) => Outcome::Applied,
+            Err(error) => Outcome::Failed(error),
+        },
+        Action::KeepOpeningHand { player, bottom } => {
+            match state.keep_opening_hand(player, &bottom) {
+                Ok(()) => Outcome::Applied,
+                Err(error) => Outcome::Failed(error),
+            }
+        }
         Action::SetPlayerMaxHandSize {
             player,
             max_hand_size,
@@ -3100,8 +3208,11 @@ enum PendingStateBasedAction {
 #[derive(Clone, Eq, PartialEq)]
 pub struct GameState {
     seed: u64,
+    rng_state: u64,
     turn_number: u32,
     outcome: GameOutcome,
+    starting_player: Option<PlayerId>,
+    opening_hands_drawn: bool,
     active_player: Option<PlayerId>,
     priority_player: Option<PlayerId>,
     priority_pass_count: u32,
@@ -3143,8 +3254,11 @@ impl GameState {
     pub fn new() -> Self {
         Self {
             seed: 0,
+            rng_state: 0,
             turn_number: 0,
             outcome: GameOutcome::InProgress,
+            starting_player: None,
+            opening_hands_drawn: false,
             active_player: None,
             priority_player: None,
             priority_pass_count: 0,
@@ -3187,12 +3301,25 @@ impl GameState {
     /// Sets the deterministic game seed.
     fn set_seed(&mut self, seed: u64) {
         self.seed = seed;
+        self.rng_state = seed;
     }
 
     /// Returns the deterministic game seed.
     #[must_use]
     pub const fn seed(&self) -> u64 {
         self.seed
+    }
+
+    /// Returns the player chosen to take the first turn, if setup has decided one.
+    #[must_use]
+    pub const fn starting_player(&self) -> Option<PlayerId> {
+        self.starting_player
+    }
+
+    /// Returns whether setup has drawn opening hands.
+    #[must_use]
+    pub const fn opening_hands_drawn(&self) -> bool {
+        self.opening_hands_drawn
     }
 
     /// Returns the current turn number.
@@ -3484,6 +3611,103 @@ impl GameState {
         self.perform_state_based_actions()
     }
 
+    fn decide_turn_order(&mut self) -> Result<PlayerId, StateError> {
+        if self.players.is_empty() {
+            return Err(StateError::NoPlayers);
+        }
+        if self.starting_player.is_some() {
+            return Err(StateError::TurnOrderAlreadyDecided);
+        }
+        let player = PlayerId(self.random_below(self.players.len()) as u32);
+        self.starting_player = Some(player);
+        Ok(player)
+    }
+
+    fn draw_opening_hands(&mut self) -> Result<(), StateError> {
+        if self.opening_hands_drawn {
+            return Err(StateError::OpeningHandsAlreadyDrawn);
+        }
+        let starting = self
+            .starting_player
+            .ok_or(StateError::TurnOrderNotDecided)?;
+        let players = self.apnap_players(starting)?;
+        for player in players {
+            self.draw_cards(player, OPENING_HAND_SIZE)?;
+        }
+        self.opening_hands_drawn = true;
+        Ok(())
+    }
+
+    fn take_mulligan(&mut self, player: PlayerId) -> Result<(), StateError> {
+        self.require_player(player)?;
+        if !self.opening_hands_drawn {
+            return Err(StateError::OpeningHandsNotDrawn);
+        }
+        let player_state = self
+            .players
+            .get(player.index())
+            .ok_or(StateError::UnknownPlayer(player))?;
+        if player_state.opening_hand_kept {
+            return Err(StateError::MulliganAfterKeep(player));
+        }
+        let next_mulligans = player_state
+            .mulligans_taken
+            .checked_add(1)
+            .ok_or(StateError::MulliganCountOverflow)?;
+        let library = ZoneId::new(Some(player), ZoneKind::Library);
+        let hand = ZoneId::new(Some(player), ZoneKind::Hand);
+
+        self.move_all_between_zones(hand, library)?;
+        self.shuffle_zone(library)?;
+        self.draw_cards(player, OPENING_HAND_SIZE)?;
+        self.players[player.index()].mulligans_taken = next_mulligans;
+        Ok(())
+    }
+
+    fn keep_opening_hand(
+        &mut self,
+        player: PlayerId,
+        bottom: &[ObjectId],
+    ) -> Result<(), StateError> {
+        self.require_player(player)?;
+        if !self.opening_hands_drawn {
+            return Err(StateError::OpeningHandsNotDrawn);
+        }
+        let player_state = self
+            .players
+            .get(player.index())
+            .ok_or(StateError::UnknownPlayer(player))?;
+        if player_state.opening_hand_kept {
+            return Err(StateError::OpeningHandAlreadyKept(player));
+        }
+        let actual = u32::try_from(bottom.len()).unwrap_or(u32::MAX);
+        if player_state.mulligans_taken != actual {
+            return Err(StateError::InvalidOpeningHandBottomCount {
+                expected: player_state.mulligans_taken,
+                actual,
+            });
+        }
+
+        let hand = ZoneId::new(Some(player), ZoneKind::Hand);
+        let mut seen = Vec::with_capacity(bottom.len());
+        for object in bottom {
+            if seen.contains(object) {
+                return Err(StateError::DuplicateOpeningHandBottomCard(*object));
+            }
+            seen.push(*object);
+            if self.object_zone(*object) != Some(hand) {
+                return Err(StateError::OpeningHandBottomCardNotInHand {
+                    player,
+                    object: *object,
+                });
+            }
+        }
+
+        self.put_hand_cards_on_library_bottom(player, bottom)?;
+        self.players[player.index()].opening_hand_kept = true;
+        Ok(())
+    }
+
     /// Returns the players in arena order.
     #[must_use]
     pub fn players(&self) -> &[PlayerState] {
@@ -3539,6 +3763,8 @@ impl GameState {
             observer,
             turn_number: self.turn_number,
             outcome: self.outcome,
+            starting_player: self.starting_player,
+            opening_hands_drawn: self.opening_hands_drawn,
             active_player: self.active_player,
             priority_player: self.priority_player,
             current_step: self.current_step,
@@ -3550,6 +3776,25 @@ impl GameState {
     /// Starts a turn for the chosen active player at the untap step.
     fn start_turn(&mut self, active_player: PlayerId) -> Result<(), StateError> {
         self.require_player(active_player)?;
+        if let Some(starting_player) = self.starting_player {
+            if active_player != starting_player {
+                return Err(StateError::StartingPlayerMismatch {
+                    expected: starting_player,
+                    actual: active_player,
+                });
+            }
+            if !self.opening_hands_drawn {
+                return Err(StateError::OpeningHandsNotDrawn);
+            }
+            if let Some(player) = self
+                .players
+                .iter()
+                .find(|player| !player.opening_hand_kept())
+                .map(|player| player.id())
+            {
+                return Err(StateError::OpeningHandKeepPending(player));
+            }
+        }
         if self.current_step.is_some() {
             return Err(StateError::TurnAlreadyStarted);
         }
@@ -4048,8 +4293,11 @@ impl GameState {
     fn canonical_bytes(&self) -> Vec<u8> {
         let mut bytes = CanonicalBytes::default();
         bytes.write_u64(self.seed);
+        bytes.write_u64(self.rng_state);
         bytes.write_u32(self.turn_number);
         bytes.write_game_outcome(self.outcome);
+        bytes.write_optional_player(self.starting_player);
+        bytes.write_bool(self.opening_hands_drawn);
         bytes.write_optional_player(self.active_player);
         bytes.write_optional_player(self.priority_player);
         bytes.write_u32(self.priority_pass_count);
@@ -4066,6 +4314,8 @@ impl GameState {
             bytes.write_u32(player.poison);
             bytes.write_bool(player.lost);
             bytes.write_u32(player.max_hand_size);
+            bytes.write_u32(player.mulligans_taken);
+            bytes.write_bool(player.opening_hand_kept);
             bytes.write_mana_pool(player.mana_pool);
         }
 
@@ -4121,8 +4371,11 @@ impl GameState {
     pub fn deterministic_hash_streaming(&self) -> StateHash {
         let mut hash = Fnva64::new();
         hash.write_u64(self.seed);
+        hash.write_u64(self.rng_state);
         hash.write_u32(self.turn_number);
         hash.write_game_outcome(self.outcome);
+        hash.write_optional_player(self.starting_player);
+        hash.write_bool(self.opening_hands_drawn);
         hash.write_optional_player(self.active_player);
         hash.write_optional_player(self.priority_player);
         hash.write_u32(self.priority_pass_count);
@@ -4139,6 +4392,8 @@ impl GameState {
             hash.write_u32(player.poison);
             hash.write_bool(player.lost);
             hash.write_u32(player.max_hand_size);
+            hash.write_u32(player.mulligans_taken);
+            hash.write_bool(player.opening_hand_kept);
             hash.write_mana_pool(player.mana_pool);
         }
 
@@ -5194,13 +5449,56 @@ impl GameState {
 
     fn draw_turn_card(&mut self) -> Result<(), StateError> {
         let active = self.active_player.ok_or(StateError::TurnNotStarted)?;
-        let library = ZoneId::new(Some(active), ZoneKind::Library);
-        let hand = ZoneId::new(Some(active), ZoneKind::Hand);
-        if self.move_last_between_zones(library, hand)?.is_none()
-            && !self.empty_library_draws_since_sba.contains(&active)
-        {
-            self.empty_library_draws_since_sba.push(active);
+        self.draw_cards(active, 1)
+    }
+
+    fn draw_cards(&mut self, player: PlayerId, count: u32) -> Result<(), StateError> {
+        self.require_player(player)?;
+        let library = ZoneId::new(Some(player), ZoneKind::Library);
+        let hand = ZoneId::new(Some(player), ZoneKind::Hand);
+        for _ in 0..count {
+            if self.move_last_between_zones(library, hand)?.is_none()
+                && !self.empty_library_draws_since_sba.contains(&player)
+            {
+                self.empty_library_draws_since_sba.push(player);
+            }
         }
+        Ok(())
+    }
+
+    fn put_hand_cards_on_library_bottom(
+        &mut self,
+        player: PlayerId,
+        bottom: &[ObjectId],
+    ) -> Result<(), StateError> {
+        let hand = ZoneId::new(Some(player), ZoneKind::Hand);
+        let library = ZoneId::new(Some(player), ZoneKind::Library);
+        self.require_zone(hand)?;
+        self.require_zone(library)?;
+        let hand_index = self.zone_index(hand).ok_or(StateError::UnknownZone(hand))?;
+        let library_index = self
+            .zone_index(library)
+            .ok_or(StateError::UnknownZone(library))?;
+        let mut moved = Vec::with_capacity(bottom.len());
+        for object in bottom {
+            let position = self.zones[hand_index]
+                .objects
+                .iter()
+                .position(|candidate| candidate == object)
+                .ok_or(StateError::OpeningHandBottomCardNotInHand {
+                    player,
+                    object: *object,
+                })?;
+            moved.push(self.zones[hand_index].objects.remove(position));
+        }
+        for (offset, object) in moved.into_iter().enumerate() {
+            self.zones[library_index].objects.insert(offset, object);
+        }
+        Ok(())
+    }
+
+    fn move_all_between_zones(&mut self, from: ZoneId, to: ZoneId) -> Result<(), StateError> {
+        while self.move_last_between_zones(from, to)?.is_some() {}
         Ok(())
     }
 
@@ -5218,6 +5516,31 @@ impl GameState {
         let to_index = self.zone_index(to).ok_or(StateError::UnknownZone(to))?;
         self.zones[to_index].objects.push(object);
         Ok(Some(object))
+    }
+
+    fn shuffle_zone(&mut self, zone: ZoneId) -> Result<(), StateError> {
+        self.require_zone(zone)?;
+        let zone_index = self.zone_index(zone).ok_or(StateError::UnknownZone(zone))?;
+        let len = self.zones[zone_index].objects.len();
+        for index in (1..len).rev() {
+            let swap_with = self.random_below(index + 1);
+            self.zones[zone_index].objects.swap(index, swap_with);
+        }
+        Ok(())
+    }
+
+    fn random_below(&mut self, upper: usize) -> usize {
+        debug_assert!(upper > 0);
+        let random = self.next_random_u64();
+        ((u128::from(random) * (upper as u128)) >> 64) as usize
+    }
+
+    fn next_random_u64(&mut self) -> u64 {
+        self.rng_state = self.rng_state.wrapping_add(0x9e37_79b9_7f4a_7c15);
+        let mut value = self.rng_state;
+        value = (value ^ (value >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+        value = (value ^ (value >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+        value ^ (value >> 31)
     }
 
     fn zone_len(&self, id: ZoneId) -> Result<usize, StateError> {
@@ -5875,7 +6198,7 @@ mod tests {
         ObjectView, Outcome, PaymentError, Phase, PlayerId, PriorityOutcome, ResolutionOutcome,
         SpellTiming, StackEntryId, StackObjectKind, StateBasedActionKind, StateBasedActionReport,
         StateError, Step, TargetChoice, TargetKind, TargetRequirement, ZoneConservation, ZoneId,
-        ZoneKind, NORMAL_TURN_STEPS, PAYMENT_PLAN_LIMIT,
+        ZoneKind, NORMAL_TURN_STEPS, OPENING_HAND_SIZE, PAYMENT_PLAN_LIMIT,
     };
 
     #[test]
@@ -6126,6 +6449,296 @@ mod tests {
             state.player_view(PlayerId(99)),
             Err(StateError::UnknownPlayer(PlayerId(99)))
         );
+    }
+
+    #[test]
+    fn turn_order_decision_is_deterministic_from_seed() {
+        let mut left = GameState::new();
+        let mut right = GameState::new();
+        for state in [&mut left, &mut right] {
+            assert_eq!(
+                apply(state, Action::SetSeed { seed: 103 }),
+                Outcome::Applied
+            );
+            add_player_action(state);
+            add_player_action(state);
+        }
+
+        let left_start = apply(&mut left, Action::DecideTurnOrder);
+        let right_start = apply(&mut right, Action::DecideTurnOrder);
+
+        assert_eq!(left_start, right_start);
+        assert_eq!(left.starting_player(), right.starting_player());
+        assert_eq!(left.deterministic_hash(), right.deterministic_hash());
+        assert_eq!(
+            left.deterministic_hash(),
+            left.deterministic_hash_streaming()
+        );
+        assert_eq!(
+            apply(&mut left, Action::DecideTurnOrder),
+            Outcome::Failed(StateError::TurnOrderAlreadyDecided)
+        );
+    }
+
+    #[test]
+    fn opening_hands_draw_in_seeded_turn_order() {
+        let mut state = GameState::new();
+        let alice = add_player_action(&mut state);
+        let bob = add_player_action(&mut state);
+        seed_library_cards(&mut state, alice, 1_000, OPENING_HAND_SIZE);
+        seed_library_cards(&mut state, bob, 2_000, OPENING_HAND_SIZE);
+
+        assert_eq!(
+            apply(&mut state, Action::SetSeed { seed: 777 }),
+            Outcome::Applied
+        );
+        let starting = match apply(&mut state, Action::DecideTurnOrder) {
+            Outcome::TurnOrderDecided(player) => player,
+            other => panic!("unexpected turn-order outcome: {other:?}"),
+        };
+        assert_eq!(state.starting_player(), Some(starting));
+        assert_eq!(
+            apply(&mut state, Action::DrawOpeningHands),
+            Outcome::Applied
+        );
+
+        assert!(state.opening_hands_drawn());
+        for player in [alice, bob] {
+            assert_eq!(
+                state
+                    .zone(ZoneId::new(Some(player), ZoneKind::Hand))
+                    .unwrap_or_else(|| panic!("hand zone missing"))
+                    .objects()
+                    .len(),
+                OPENING_HAND_SIZE as usize
+            );
+            assert_eq!(
+                state
+                    .zone(ZoneId::new(Some(player), ZoneKind::Library))
+                    .unwrap_or_else(|| panic!("library zone missing"))
+                    .objects()
+                    .len(),
+                0
+            );
+            assert_eq!(state.players()[player.index()].mulligans_taken(), 0);
+            assert!(!state.players()[player.index()].opening_hand_kept());
+        }
+        assert_eq!(
+            apply(&mut state, Action::DrawOpeningHands),
+            Outcome::Failed(StateError::OpeningHandsAlreadyDrawn)
+        );
+        assert_eq!(
+            state.deterministic_hash(),
+            state.deterministic_hash_streaming()
+        );
+    }
+
+    #[test]
+    fn london_mulligan_redraws_and_bottoms_mulligan_count() {
+        let mut state = GameState::new();
+        let player = add_player_action(&mut state);
+        seed_library_cards(&mut state, player, 3_000, OPENING_HAND_SIZE + 1);
+
+        assert_eq!(
+            apply(&mut state, Action::SetSeed { seed: 91 }),
+            Outcome::Applied
+        );
+        assert!(matches!(
+            apply(&mut state, Action::DecideTurnOrder),
+            Outcome::TurnOrderDecided(_)
+        ));
+        assert_eq!(
+            apply(&mut state, Action::DrawOpeningHands),
+            Outcome::Applied
+        );
+        assert_eq!(
+            apply(&mut state, Action::TakeMulligan { player }),
+            Outcome::Applied
+        );
+
+        let hand = ZoneId::new(Some(player), ZoneKind::Hand);
+        let library = ZoneId::new(Some(player), ZoneKind::Library);
+        assert_eq!(state.players()[player.index()].mulligans_taken(), 1);
+        assert_eq!(
+            state
+                .zone(hand)
+                .unwrap_or_else(|| panic!("hand zone missing"))
+                .objects()
+                .len(),
+            OPENING_HAND_SIZE as usize
+        );
+        assert_eq!(
+            state
+                .zone(library)
+                .unwrap_or_else(|| panic!("library zone missing"))
+                .objects()
+                .len(),
+            1
+        );
+
+        let bottom = state
+            .zone(hand)
+            .unwrap_or_else(|| panic!("hand zone missing"))
+            .objects()[0];
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::KeepOpeningHand {
+                    player,
+                    bottom: vec![bottom],
+                },
+            ),
+            Outcome::Applied
+        );
+
+        assert_eq!(state.players()[player.index()].mulligans_taken(), 1);
+        assert!(state.players()[player.index()].opening_hand_kept());
+        assert_eq!(
+            state
+                .zone(hand)
+                .unwrap_or_else(|| panic!("hand zone missing"))
+                .objects()
+                .len(),
+            (OPENING_HAND_SIZE - 1) as usize
+        );
+        assert_eq!(
+            state
+                .zone(library)
+                .unwrap_or_else(|| panic!("library zone missing"))
+                .objects()[0],
+            bottom
+        );
+        assert_eq!(
+            apply(&mut state, Action::TakeMulligan { player }),
+            Outcome::Failed(StateError::MulliganAfterKeep(player))
+        );
+        assert_eq!(
+            state.deterministic_hash(),
+            state.deterministic_hash_streaming()
+        );
+    }
+
+    #[test]
+    fn setup_start_turn_respects_keeps_and_chosen_starter() {
+        let mut state = GameState::new();
+        let alice = add_player_action(&mut state);
+        let bob = add_player_action(&mut state);
+        seed_library_cards(&mut state, alice, 3_500, OPENING_HAND_SIZE);
+        seed_library_cards(&mut state, bob, 3_600, OPENING_HAND_SIZE);
+
+        assert_eq!(
+            apply(&mut state, Action::SetSeed { seed: 144 }),
+            Outcome::Applied
+        );
+        let starting = match apply(&mut state, Action::DecideTurnOrder) {
+            Outcome::TurnOrderDecided(player) => player,
+            other => panic!("unexpected turn-order outcome: {other:?}"),
+        };
+        let other = if starting == alice { bob } else { alice };
+        assert_eq!(
+            apply(&mut state, Action::DrawOpeningHands),
+            Outcome::Applied
+        );
+
+        assert!(matches!(
+            apply(
+                &mut state,
+                Action::StartTurn {
+                    active_player: starting
+                },
+            ),
+            Outcome::Failed(StateError::OpeningHandKeepPending(_))
+        ));
+        for player in [alice, bob] {
+            assert_eq!(
+                apply(
+                    &mut state,
+                    Action::KeepOpeningHand {
+                        player,
+                        bottom: Vec::new(),
+                    },
+                ),
+                Outcome::Applied
+            );
+        }
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::StartTurn {
+                    active_player: other
+                },
+            ),
+            Outcome::Failed(StateError::StartingPlayerMismatch {
+                expected: starting,
+                actual: other,
+            })
+        );
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::StartTurn {
+                    active_player: starting
+                },
+            ),
+            Outcome::Applied
+        );
+        assert_eq!(state.active_player(), Some(starting));
+    }
+
+    #[test]
+    fn opening_hand_player_view_hides_opponent_hand_and_libraries() {
+        let mut state = GameState::new();
+        let alice = add_player_action(&mut state);
+        let bob = add_player_action(&mut state);
+        seed_library_cards(&mut state, alice, 4_000, OPENING_HAND_SIZE + 1);
+        seed_library_cards(&mut state, bob, 5_000, OPENING_HAND_SIZE + 1);
+
+        assert_eq!(
+            apply(&mut state, Action::SetSeed { seed: 43 }),
+            Outcome::Applied
+        );
+        assert!(matches!(
+            apply(&mut state, Action::DecideTurnOrder),
+            Outcome::TurnOrderDecided(_)
+        ));
+        assert_eq!(
+            apply(&mut state, Action::DrawOpeningHands),
+            Outcome::Applied
+        );
+
+        let view = state
+            .player_view(alice)
+            .unwrap_or_else(|error| panic!("unexpected player view error: {error:?}"));
+        let alice_hand = view
+            .zone(ZoneId::new(Some(alice), ZoneKind::Hand))
+            .unwrap_or_else(|| panic!("missing alice hand view"));
+        let alice_library = view
+            .zone(ZoneId::new(Some(alice), ZoneKind::Library))
+            .unwrap_or_else(|| panic!("missing alice library view"));
+        let bob_hand = view
+            .zone(ZoneId::new(Some(bob), ZoneKind::Hand))
+            .unwrap_or_else(|| panic!("missing bob hand view"));
+        let bob_library = view
+            .zone(ZoneId::new(Some(bob), ZoneKind::Library))
+            .unwrap_or_else(|| panic!("missing bob library view"));
+
+        assert_eq!(alice_hand.objects().len(), OPENING_HAND_SIZE as usize);
+        assert!(alice_hand
+            .objects()
+            .iter()
+            .all(|object| object.known().is_some()));
+        assert_eq!(alice_library.objects().len(), 1);
+        assert!(alice_library
+            .objects()
+            .iter()
+            .all(|object| object.is_hidden()));
+        assert_eq!(bob_hand.objects().len(), OPENING_HAND_SIZE as usize);
+        assert!(bob_hand.objects().iter().all(|object| object.is_hidden()));
+        assert_eq!(bob_library.objects().len(), 1);
+        assert!(bob_library
+            .objects()
+            .iter()
+            .all(|object| object.is_hidden()));
     }
 
     #[test]
@@ -8185,6 +8798,31 @@ mod tests {
             state.stack_top().map(|entry| entry.controller()),
             Some(first)
         );
+    }
+
+    fn add_player_action(state: &mut GameState) -> PlayerId {
+        match apply(state, Action::AddPlayer) {
+            Outcome::PlayerAdded(player) => player,
+            other => panic!("unexpected add-player outcome: {other:?}"),
+        }
+    }
+
+    fn seed_library_cards(state: &mut GameState, player: PlayerId, first_card: u32, count: u32) {
+        let library = ZoneId::new(Some(player), ZoneKind::Library);
+        for offset in 0..count {
+            match apply(
+                state,
+                Action::CreateObject {
+                    card: CardId::new(first_card + offset),
+                    owner: player,
+                    controller: player,
+                    zone: library,
+                },
+            ) {
+                Outcome::ObjectCreated(_) => {}
+                other => panic!("unexpected library seed outcome: {other:?}"),
+            }
+        }
     }
 
     fn start_upkeep(state: &mut GameState, active: PlayerId) {

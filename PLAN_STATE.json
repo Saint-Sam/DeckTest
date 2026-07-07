@@ -73,6 +73,12 @@
       "attempts": 0,
       "remote_ci": "GitHub Actions ci #12 run 28824832805 passed all required jobs for commit 6491d5f"
     },
+    "T1.8": {
+      "status": "verified_local",
+      "branch": "task/T1.8-opening-hands-mulligans",
+      "attempts": 0,
+      "verification": "scripts/vl.sh passed locally with deterministic turn-order decision, opening-hand draw, London mulligan redraw/keep/bottoming, setup-aware StartTurn guard, canonical hash coverage, and PlayerView hidden hand/library canaries"
+    },
     "T1.R1": {
       "status": "verified_local",
       "branch": "remediation/T1.R1-action-surface",
