@@ -133,6 +133,36 @@
       "branch": "remediation/T1.R4-clone-guard",
       "attempts": 0,
       "verification": "scripts/vl.sh and scripts/gates/gate_T1.sh passed locally with clone_surface_guard baseline persistent_allocation_field_count=18 and clone budget 112.292 ns per 200-card state"
+    },
+    "T1.R5": {
+      "status": "resolved_local",
+      "branch": "remediation/T1.R5-combat-oracle-coverage",
+      "attempts": 0,
+      "verification": "scripts/gates/gate_T1.sh passed locally with 300 oracle scenarios and 60 combat scenarios covering T1.6 feature requirements"
+    },
+    "T1.R6": {
+      "status": "resolved_local",
+      "branch": "remediation/T1.R6-blocker-hygiene",
+      "attempts": 0,
+      "verification": "reports/blockers/T1-combat-lifelink-blocked-schema.md records and closes the combat/lifelink schema blocker with linked oracle evidence"
+    },
+    "T1.R7": {
+      "status": "pending_final_commit_clean_gate",
+      "branch": "remediation/T1.R7-exact-tree-gate-evidence",
+      "attempts": 0,
+      "verification": "pending final reviewer evidence commit and clean-checkout gate packaging"
+    },
+    "T1.R8": {
+      "status": "resolved_local",
+      "branch": "remediation/T1.R8-live-reviewer-checks",
+      "attempts": 0,
+      "verification": "reviewer live checks passed: three mutation checks caught mutants, five reviewer oracle scenarios passed, determinism replay passed 10 archived replays, live address-sanitizer fuzz passed two 1801-second targets, and seeds 11/14/20 spot replays matched"
+    },
+    "T1.R9": {
+      "status": "pending_owner_push_remote_ci",
+      "branch": "remediation/T1.R9-final-tree-remote-ci",
+      "attempts": 0,
+      "verification": "GitHub Actions ci #17 run 28877442664 passed for combat remediation commit 0d2eef5f874a1120f6643c8556d65bc10717250b; final reviewer evidence/tooling commit still needs owner push and exact-hash CI"
     }
   },
   "gates_passed": [
@@ -168,6 +198,18 @@
         "T1.R4": "verified_local: removed full-state snapshot surface, documented clone-surface invariants, and added clone_surface_guard baseline persistent_allocation_field_count=18"
       },
       "re_review": "PASS at d7fcb03; scoped re-review of T1.R1-T1.R4 plus fresh G1 verification found no blockers"
+    },
+    "T1": {
+      "status": "conditional_pass_local",
+      "bundle": "reports/gates/T1/bundle",
+      "signoff": "reports/gates/T1/SIGNOFF.md",
+      "reviewed_remote_green_commit": "0d2eef5f874a1120f6643c8556d65bc10717250b",
+      "remote_ci": "GitHub Actions ci #17 run 28877442664 passed all required jobs for combat remediation commit 0d2eef5f874a1120f6643c8556d65bc10717250b",
+      "conditions": {
+        "T1.R7": "final reviewer evidence commit plus clean-checkout gate packaging",
+        "T1.R9": "owner push through GitHub Desktop and exact final-tree green GitHub Actions run"
+      },
+      "re_review": "Local reviewer checks passed on 2026-07-07; T1 intentionally not added to gates_passed until exact final-tree remote CI is green."
     }
   },
   "owner_input": {

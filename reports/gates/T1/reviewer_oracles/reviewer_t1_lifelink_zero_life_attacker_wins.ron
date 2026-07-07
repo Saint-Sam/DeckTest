@@ -1,0 +1,44 @@
+(
+    name: "T1 reviewer lifelink applies before zero-life SBA and can win combat",
+    setup: (
+        players: 2,
+        libraries: [
+            (player: 0, cards: [30410, 30411]),
+        ],
+        objects: [
+            (card: 30400, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "set_base_creature", object: 0, power: 3, toughness: 3, keywords: ["lifelink"]),
+        (action: "start_turn", player: 0),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "declare_attackers", player: 0, attacks: [(attacker: 0, defender: 1)]),
+        (action: "advance_step"),
+        (action: "declare_blockers", player: 1, blocks: []),
+        (action: "advance_step"),
+        (action: "set_life", player: 0, life: 0),
+        (action: "set_life", player: 1, life: 3),
+        (action: "assign_combat_damage", assignments: [(source: 0, assignments: [(player: 1, amount: 3)])]),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Battlefield", count: 1),
+        ],
+        players: [
+            (player: 0, life: 3),
+            (player: 1, life: 0),
+        ],
+        outcome: (status: "won", player: 0),
+        invariants: [
+            "zone_conservation",
+            "life_poison_sanity",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

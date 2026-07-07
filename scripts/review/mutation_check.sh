@@ -28,6 +28,30 @@ if [[ "$test_cmd" == cargo* ]] && ! command -v cargo >/dev/null 2>&1; then
   exit 0
 fi
 
+if [[ -n "${MUTATION_EDIT_CMD:-}" ]]; then
+  tmpdir="$(mktemp -d "${TMPDIR:-/tmp}/forge_mutation_edit_worktree.XXXXXX")"
+  cleanup_edit() {
+    git worktree remove -f "$tmpdir" >/dev/null 2>&1 || rm -rf "$tmpdir"
+  }
+  trap cleanup_edit EXIT
+
+  echo "==> baseline test command"
+  sh -c "$test_cmd"
+
+  git worktree add -q --detach "$tmpdir" HEAD
+  echo "==> mutation edit command"
+  (cd "$tmpdir" && sh -c "$MUTATION_EDIT_CMD")
+
+  echo "==> mutated test command (expected to fail)"
+  if (cd "$tmpdir" && sh -c "$test_cmd"); then
+    echo "ERROR: tests still pass after mutation edit" >&2
+    exit 1
+  fi
+
+  echo "PASS mutation_check.sh"
+  exit 0
+fi
+
 if [[ -z "$base" ]]; then
   echo "ERROR: mutation_check.sh needs a base ref or PR ref; pass one arg or set MUTATION_BASE" >&2
   exit 2

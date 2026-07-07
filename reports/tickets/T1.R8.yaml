@@ -2,6 +2,7 @@ id: T1.R8
 title: Complete Section 15 live reviewer checks
 tier: 1
 priority: P0
+status: resolved_local
 tags:
   - remediation
   - t1-gate
@@ -25,3 +26,21 @@ retry_policy: 3 attempts then blocker
 depends_on:
   - T1.R5
 parallel_ok: false
+closure:
+  date: 2026-07-07
+  evidence:
+    - reports/gates/T1/reviewer-live-checks-2026-07-07.md
+    - reports/gates/T1/mutation-double-block-order-2026-07-07.log
+    - reports/gates/T1/mutation-lifelink-before-sba-2026-07-07.log
+    - reports/gates/T1/mutation-combat-scenario-dsl-2026-07-07.log
+    - reports/gates/T1/reviewer-oracles-2026-07-07.log
+    - reports/gates/T1/determinism-review-2026-07-07.log
+    - reports/gates/T1/spot-replay-seed-11-2026-07-07.log
+    - reports/gates/T1/spot-replay-seed-14-2026-07-07.log
+    - reports/gates/T1/spot-replay-seed-20-2026-07-07.log
+  notes:
+    - three targeted mutation checks caught their mutants
+    - five reviewer-authored oracle scenarios passed
+    - determinism replay passed 10 archived T1 replays
+    - live address-sanitizer fuzz passed fuzz_apply and fuzz_scenarioparse for 1801 seconds each
+    - seeds 11, 14, and 20 spot replays matched final hashes and outcomes

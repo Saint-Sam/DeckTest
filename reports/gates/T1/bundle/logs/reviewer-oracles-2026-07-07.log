@@ -1,0 +1,14 @@
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-vDDf3kfp' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-CHeINABE' (errno=Operation not permitted)
+
+warning: `forge-testkit` (bin "forge-testkit") generated 1 warning
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running `target/debug/forge-testkit oracle --path reports/gates/T1/reviewer_oracles --no-junit`
+PASS reports/gates/T1/reviewer_oracles/reviewer_t1_double_strike_unblocked_twice.ron
+PASS reports/gates/T1/reviewer_oracles/reviewer_t1_first_strike_removes_blocker.ron
+PASS reports/gates/T1/reviewer_oracles/reviewer_t1_lifelink_zero_life_attacker_wins.ron
+PASS reports/gates/T1/reviewer_oracles/reviewer_t1_menace_two_blockers.ron
+PASS reports/gates/T1/reviewer_oracles/reviewer_t1_trample_lethal_without_deathtouch.ron
+oracle scenarios: 5 passed, 0 failed

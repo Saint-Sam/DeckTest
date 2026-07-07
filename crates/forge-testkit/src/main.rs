@@ -62,6 +62,7 @@ fn lint_command(args: &[String]) -> Result<(), String> {
 fn oracle_command(args: &[String]) -> Result<(), String> {
     let mut mode = OracleMode::All;
     let mut filter = None;
+    let mut path = PathBuf::from("tests/oracle");
     let mut junit = Some(PathBuf::from("target/forge-testkit/oracle-junit.xml"));
     let mut index = 0;
     while let Some(arg) = args.get(index) {
@@ -73,6 +74,13 @@ fn oracle_command(args: &[String]) -> Result<(), String> {
                     return Err("--filter requires a value".to_owned());
                 };
                 filter = Some(value.clone());
+                index += 1;
+            }
+            "--path" => {
+                let Some(value) = args.get(index + 1) else {
+                    return Err("--path requires a value".to_owned());
+                };
+                path = PathBuf::from(value);
                 index += 1;
             }
             "--junit" => {
@@ -88,7 +96,7 @@ fn oracle_command(args: &[String]) -> Result<(), String> {
         index += 1;
     }
 
-    let mut files = scenario_files(Path::new("tests/oracle"))?;
+    let mut files = scenario_files(&path)?;
     if matches!(mode, OracleMode::Changed) {
         println!("INFO: --changed currently falls back to all oracle scenarios");
     }
@@ -178,7 +186,7 @@ fn collect_scenario_files(path: &Path, files: &mut Vec<PathBuf>) -> Result<(), S
 
 fn print_usage() {
     println!(
-        "forge-testkit commands:\n  lint [path]\n  oracle [--all|--changed] [--filter TEXT] [--junit PATH|--no-junit]"
+        "forge-testkit commands:\n  lint [path]\n  oracle [--all|--changed] [--path PATH] [--filter TEXT] [--junit PATH|--no-junit]"
     );
 }
 
@@ -224,6 +232,19 @@ mod tests {
     }
 
     #[test]
+    fn oracle_path_succeeds() {
+        assert!(run(vec![
+            "oracle".to_owned(),
+            "--path".to_owned(),
+            "tests/oracle".to_owned(),
+            "--filter".to_owned(),
+            "t1_9".to_owned(),
+            "--no-junit".to_owned(),
+        ])
+        .is_ok());
+    }
+
+    #[test]
     fn oracle_changed_succeeds_with_junit() {
         assert!(run(vec!["oracle".to_owned(), "--changed".to_owned()]).is_ok());
     }
@@ -236,6 +257,7 @@ mod tests {
     #[test]
     fn malformed_oracle_option_is_an_error() {
         assert!(run(vec!["oracle".to_owned(), "--filter".to_owned()]).is_err());
+        assert!(run(vec!["oracle".to_owned(), "--path".to_owned()]).is_err());
         assert!(run(vec!["oracle".to_owned(), "--junit".to_owned()]).is_err());
         assert!(run(vec!["oracle".to_owned(), "--surprise".to_owned()]).is_err());
     }

@@ -36,9 +36,21 @@ for artifact in test_log.txt tests_added.txt fuzz_report.md quarantine_report.md
   fi
 done
 
+if find "$evidence_dir" -maxdepth 1 -type f -name '*.log' -print -quit 2>/dev/null | grep -q .; then
+  mkdir -p "$bundle/logs"
+  while IFS= read -r -d '' log_file; do
+    cp "$log_file" "$bundle/logs/$(basename "$log_file")"
+  done < <(find "$evidence_dir" -maxdepth 1 -type f -name '*.log' -print0 | sort -z)
+fi
+
 if [[ -d "${evidence_dir}/replays" ]]; then
   mkdir -p "$bundle/replays"
   cp -R "${evidence_dir}/replays/." "$bundle/replays/"
+fi
+
+if [[ -d "${evidence_dir}/reviewer_oracles" ]]; then
+  mkdir -p "$bundle/reviewer_oracles"
+  cp -R "${evidence_dir}/reviewer_oracles/." "$bundle/reviewer_oracles/"
 fi
 
 if [[ -f "metrics/coverage.json" ]]; then

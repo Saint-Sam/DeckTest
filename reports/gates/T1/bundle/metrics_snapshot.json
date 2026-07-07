@@ -23,19 +23,19 @@
   },
   "coverage": {
     "lines": {
-      "count": 9139,
-      "covered": 7652,
-      "percent": 83.7290732027574
+      "count": 9157,
+      "covered": 7670,
+      "percent": 83.76105711477558
     },
     "regions": {
-      "count": 14239,
-      "covered": 11751,
-      "percent": 82.52686284149168
+      "count": 14274,
+      "covered": 11786,
+      "percent": 82.5697071598711
     },
     "functions": {
-      "count": 1169,
-      "covered": 745,
-      "percent": 63.729683490162536
+      "count": 1170,
+      "covered": 746,
+      "percent": 63.760683760683754
     }
   },
   "perf": {
@@ -77,10 +77,33 @@
     "roundtrip": "ok",
     "bundle_replay_count": 10
   },
+  "reviewer_live_checks": {
+    "mutation_checks": 3,
+    "novel_oracle_scenarios": 5,
+    "novel_oracle_passed": 5,
+    "determinism_replays": 10,
+    "spot_replays": 3,
+    "live_fuzz": {
+      "aggregate_seconds": 3602,
+      "sanitizer": "address",
+      "targets": {
+        "fuzz_apply": {
+          "seed": 445226698,
+          "runs": 1845413,
+          "seconds": 1801
+        },
+        "fuzz_scenarioparse": {
+          "seed": 2248302062,
+          "runs": 219668185,
+          "seconds": 1801
+        }
+      }
+    }
+  },
   "remote_ci": {
-    "latest_checked_commit": "c9e333e",
-    "latest_checked_run_id": 28872149729,
+    "latest_checked_commit": "0d2eef5f874a1120f6643c8556d65bc10717250b",
+    "latest_checked_run_id": 28877442664,
     "latest_checked_result": "pass",
-    "current_local_perf_remediation_pending_remote_ci": true
+    "current_local_review_evidence_pending_remote_ci": true
   }
 }
