@@ -86,11 +86,11 @@
       "verification": "scripts/vl.sh passed locally with dependency-free RON scenario parsing, scenario runner, invariant assertions, hash determinism checks, JUnit-style XML output, CLI lint/oracle commands, and a smoke oracle scenario"
     },
     "T1.10": {
-      "status": "blocked_owner_decision",
+      "status": "verified_local",
       "branch": "task/T1.10-legacy-oracle-port",
       "attempts": 0,
       "verification": "scripts/vl.sh passed locally with 7 supplemental legacy game-simulation oracle scenarios ported, first-turn draw-skip rule fixed, poison/winner scenario support added, and mapping evidence committed",
-      "blocker": "Only 3 @Test methods exist under vendored legacy forge-game/src/test/java; no top-100 ranking metadata is present. See Q-2026-07-07-T1.10."
+      "scope_decision": "Q-2026-07-07-T1.10 resolved by owner Option 1: use broader local forge-gui-desktop game-simulation tests as the T1.10 source set"
     },
     "T1.R1": {
       "status": "verified_local",

@@ -16,8 +16,8 @@ that path.
 Because the exact source set is too small, this artifact records all exact
 `forge-game` tests and then separately records T1-relevant supplemental legacy
 game-simulation tests from `forge-gui-desktop/src/test/java/forge/gamesimulationtests`.
-Treat that supplemental source as a proposed mapping extension, not as a silent
-change to the T1.10 scope.
+Owner decision `Q-2026-07-07-T1.10` approved using that broader local
+game-simulation source set for T1.10.
 
 ## Exact `forge-game/src/test` Mapping
 
@@ -51,14 +51,11 @@ behavior through `forge-testkit` scenarios.
 | S14 | `ComprehensiveRulesSection104.test_104_3f_if_a_player_would_win_and_lose_simultaneously_he_loses` | `vendor/legacy-forge/forge-gui-desktop/src/test/java/forge/gamesimulationtests/comprehensiverules/ComprehensiveRulesSection104.java:180` | Simultaneous win/loss resolves as loss. | n/a | `blocked_legacy_disabled` | CR 104.3f | Disabled in legacy and requires multiple unsupported card effects. |
 | S15 | `ReplacementHandlerTest.testPerpetualEntersTappedReplacementEffect` | `vendor/legacy-forge/forge-gui-desktop/src/test/java/forge/gamesimulationtests/ReplacementHandlerTest.java:39` | Perpetual replacement effect enters tapped without recursion. | n/a | `blocked_later_tier` | Replacement effects/perpetual effects | Not a T1 kernel rule surface. |
 
-## Open Decision
+## Owner Decision
 
-T1.10 cannot be completed as written from the local vendored source because the
-exact `forge-game/src/test` corpus has only 3 test methods. Finishing the
-"top 100" requirement needs one of these owner decisions:
+Decision: Option 1 accepted in the owner channel on 2026-07-07. T1.10 uses the
+broader local `forge-gui-desktop` game-simulation tests as its legacy source set.
 
-1. Provide or approve fetching a fuller upstream legacy test corpus.
-2. Approve a scope change allowing T1.10 to use the broader legacy
-   `forge-gui-desktop` game-simulation tests as the source set.
-3. Keep the exact `forge-game/src/test` scope and mark the remaining 97 rows as
-   blocked by missing source evidence.
+Result: all currently available source rows in that approved set are mapped.
+Rows that cannot honestly run in the T1 kernel are left as blocked/deferred in
+the mapping table with the required future capability named.
