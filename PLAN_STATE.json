@@ -104,6 +104,12 @@
       "attempts": 0,
       "verification": "cargo +nightly fuzz check passed; scripts/fuzz_nightly.sh --t1-gate completed a clean sanitizer-backed 6-hour aggregate run with fuzz_apply 6,530,854 runs in 10,801 seconds and fuzz_scenarioparse 895,666,102 runs in 10,801 seconds"
     },
+    "T1.13": {
+      "status": "verified_local",
+      "branch": "task/T1.13-criterion-benches",
+      "attempts": 0,
+      "verification": "scripts/vl.sh passed locally with Criterion kernel benches for clone, legal_actions, apply, and full playout; metrics/perf_baseline.json is committed, tools/criterion_to_perf.py exports Criterion estimates, perf_diff.py is wired into VL with missing-baseline metric failures, scripts/run_oracle.sh --all passed 8 scenarios, and cargo run -p forge-arena -- --smoke 10000 --random passed with 0 invariant violations"
+    },
     "T1.R1": {
       "status": "verified_local",
       "branch": "remediation/T1.R1-action-surface",

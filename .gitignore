@@ -3,6 +3,7 @@ target/
 *.tmp
 *.log
 metrics/*.tmp.json
+metrics/perf_current.json
 fuzz/artifacts/
 fuzz/corpus/
 fuzz/target/

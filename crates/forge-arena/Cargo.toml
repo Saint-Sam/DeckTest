@@ -5,6 +5,8 @@ edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 
+[dependencies]
+forge-core = { path = "../forge-core" }
+
 [lints]
 workspace = true
-

@@ -163,6 +163,14 @@ def run(baseline_path: Path, current_path: Path, threshold: float, summary_out: 
     if not common:
         print("ERROR: no overlapping perf metric names between baseline and current", file=sys.stderr)
         return 2
+    if missing:
+        print(
+            f"ERROR: {len(missing)} baseline perf metric(s) missing from current run",
+            file=sys.stderr,
+        )
+        for name in missing:
+            print(f"missing: {name}", file=sys.stderr)
+        return 1
 
     if regressions:
         print(f"ERROR: {len(regressions)} perf regression(s) exceed {threshold:.1%}", file=sys.stderr)

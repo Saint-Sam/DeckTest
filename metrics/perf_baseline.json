@@ -1,0 +1,6 @@
+{
+  "kernel_apply_pass_priority_x64": 6162.290642527219,
+  "kernel_clone_200_card_state_x64": 28434.49629275321,
+  "kernel_full_playout_four_turns": 879007.1706111111,
+  "kernel_legal_actions_priority_x128": 6027.066622811897
+}

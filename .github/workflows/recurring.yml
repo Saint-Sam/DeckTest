@@ -105,14 +105,13 @@ jobs:
             echo "Cargo.toml is not present yet; skipping until T0.2 lands."
             exit 0
           fi
-          cargo bench --workspace
-          if [ -x tools/perf_diff.py ]; then
-            tools/perf_diff.py
-          elif [ -e tools/perf_diff.py ]; then
-            echo "::error::tools/perf_diff.py exists but is not executable."
+          if [ -x scripts/perf_smoke.sh ]; then
+            scripts/perf_smoke.sh
+          elif [ -e scripts/perf_smoke.sh ]; then
+            echo "::error::scripts/perf_smoke.sh exists but is not executable."
             exit 1
           else
-            echo "tools/perf_diff.py is not present/executable yet; T0.4 owns this hook."
+            echo "scripts/perf_smoke.sh is not present/executable yet; T0.4 owns this hook."
           fi
 
   card-corpus:

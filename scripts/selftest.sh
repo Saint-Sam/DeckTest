@@ -40,6 +40,7 @@ scripts=(
 
 tools=(
   tools/perf_diff.py
+  tools/criterion_to_perf.py
   tools/metrics_write.py
 )
 
