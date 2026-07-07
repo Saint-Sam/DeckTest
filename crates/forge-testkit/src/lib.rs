@@ -11,7 +11,9 @@ use forge_core::{
     apply, auto_payment_plan, Action, AttackDeclaration, BaseCreatureCharacteristics,
     BlockDeclaration, CardId, CombatDamageAssignment, CombatDamageAssignmentRequest,
     CombatDamageTarget, CreatureKeywords, GameOutcome, GameState, ManaCost, ManaKind, ManaPool,
-    ObjectId, Outcome, PlayerId, StateHash, Step, ZoneId, ZoneKind,
+    ObjectId, Outcome, PlayerId, ReplacementCondition, ReplacementDamageTargetFilter,
+    ReplacementDefinition, ReplacementDuration, ReplacementEffectId, ReplacementOperation,
+    ReplacementSourceFilter, StateHash, Step, ZoneId, ZoneKind,
 };
 use std::{fs, path::Path};
 
@@ -524,6 +526,34 @@ pub enum ScenarioStep {
         /// Damage amount.
         amount: u32,
     },
+    /// Register a damage replacement/prevention effect.
+    RegisterDamageReplacement {
+        /// Zero-based scenario controller index.
+        controller: usize,
+        /// Optional scenario source object index.
+        source_object: Option<usize>,
+        /// Optional zero-based target-player index.
+        target_player: Option<usize>,
+        /// Optional target-object index.
+        target_object: Option<usize>,
+        /// Whether only combat damage matches.
+        combat_only: bool,
+        /// Operation name: prevent_all, prevent, add, double, or set.
+        operation: String,
+        /// Operation amount for prevent/add/set.
+        amount: Option<u32>,
+        /// Whether the effect is removed after it applies once.
+        once: bool,
+        /// Whether this effect is a self-replacement effect.
+        self_replacement: bool,
+    },
+    /// Set a player's replacement effect application order.
+    SetReplacementOrder {
+        /// Zero-based scenario chooser index.
+        chooser: usize,
+        /// Replacement registration indexes in preferred order.
+        order: Vec<usize>,
+    },
     /// Declare attackers during the declare attackers step.
     DeclareAttackers {
         /// Zero-based scenario attacking-player index.
@@ -572,6 +602,12 @@ impl ScenarioStep {
             Self::ClearBaseCreature { object } => format!("clear_base_creature[{object}]"),
             Self::SetObjectTapped { object, .. } => format!("set_object_tapped[{object}]"),
             Self::MarkDamage { object, .. } => format!("mark_damage[{object}]"),
+            Self::RegisterDamageReplacement { controller, .. } => {
+                format!("register_damage_replacement[{controller}]")
+            }
+            Self::SetReplacementOrder { chooser, .. } => {
+                format!("set_replacement_order[{chooser}]")
+            }
             Self::DeclareAttackers { player, .. } => format!("declare_attackers[{player}]"),
             Self::DeclareBlockers { player, .. } => format!("declare_blockers[{player}]"),
             Self::AssignCombatDamage { .. } => "assign_combat_damage".to_owned(),
@@ -1288,6 +1324,7 @@ struct RunContext {
     state: GameState,
     players: Vec<PlayerId>,
     objects: Vec<ObjectId>,
+    replacements: Vec<ReplacementEffectId>,
     failures: Vec<ScenarioFailure>,
     steps: Vec<StepRecord>,
 }
@@ -1297,6 +1334,7 @@ fn execute_scenario(scenario: &Scenario, check_expectations: bool) -> ScenarioRe
         state: GameState::new(),
         players: Vec::new(),
         objects: Vec::new(),
+        replacements: Vec::new(),
         failures: Vec::new(),
         steps: Vec::new(),
     };
@@ -1429,11 +1467,17 @@ fn execute_step(step: &ScenarioStep, context: &mut RunContext) {
         }
     };
     let outcome = apply(&mut context.state, action);
-    if let Outcome::Failed(error) = outcome {
-        context.failures.push(ScenarioFailure::new(
-            label.clone(),
-            format!("action failed: {error:?}"),
-        ));
+    match &outcome {
+        Outcome::Failed(error) => {
+            context.failures.push(ScenarioFailure::new(
+                label.clone(),
+                format!("action failed: {error:?}"),
+            ));
+        }
+        Outcome::ReplacementEffectRegistered(replacement) => {
+            context.replacements.push(*replacement);
+        }
+        _ => {}
     }
     record_outcome(&label, outcome, context);
 }
@@ -1533,6 +1577,68 @@ fn action_for_step(step: &ScenarioStep, context: &RunContext) -> Result<Action, 
             object: object_id(&context.objects, *object, "mark_damage")?,
             amount: *amount,
         }),
+        ScenarioStep::RegisterDamageReplacement {
+            controller,
+            source_object,
+            target_player,
+            target_object,
+            combat_only,
+            operation,
+            amount,
+            once,
+            self_replacement,
+        } => {
+            let controller = player_id(&context.players, *controller, "register_replacement")?;
+            let source_filter = match source_object {
+                Some(index) => ReplacementSourceFilter::Object(object_id(
+                    &context.objects,
+                    *index,
+                    "register_replacement.source_object",
+                )?),
+                None => ReplacementSourceFilter::Any,
+            };
+            let target = replacement_target_filter(
+                &context.players,
+                &context.objects,
+                *target_player,
+                *target_object,
+            )?;
+            let condition = ReplacementCondition::DamageWouldBeDealt {
+                source: source_filter,
+                target,
+                combat_only: *combat_only,
+            };
+            let operation = replacement_operation(operation, *amount)?;
+            let mut definition = ReplacementDefinition::new(controller, condition, operation);
+            if let Some(index) = source_object {
+                definition = definition.with_source(object_id(
+                    &context.objects,
+                    *index,
+                    "register_replacement.source_object",
+                )?);
+            }
+            if *once {
+                definition = definition.with_duration(ReplacementDuration::Once);
+            }
+            if *self_replacement {
+                definition = definition.with_self_replacement();
+            }
+            Ok(Action::RegisterReplacementEffect { definition })
+        }
+        ScenarioStep::SetReplacementOrder { chooser, order } => {
+            let mut ids = Vec::with_capacity(order.len());
+            for index in order {
+                ids.push(replacement_id(
+                    &context.replacements,
+                    *index,
+                    "set_replacement_order",
+                )?);
+            }
+            Ok(Action::SetReplacementChoiceOrder {
+                chooser: player_id(&context.players, *chooser, "set_replacement_order")?,
+                order: ids,
+            })
+        }
         ScenarioStep::DeclareAttackers { player, attacks } => {
             let mut declarations = Vec::with_capacity(attacks.len());
             for attack in attacks {
@@ -1875,6 +1981,63 @@ fn object_id(objects: &[ObjectId], index: usize, phase: &str) -> Result<ObjectId
         .ok_or_else(|| ScenarioError::schema(format!("{phase}: unknown object index {index}")))
 }
 
+fn replacement_id(
+    replacements: &[ReplacementEffectId],
+    index: usize,
+    phase: &str,
+) -> Result<ReplacementEffectId, ScenarioError> {
+    replacements
+        .get(index)
+        .copied()
+        .ok_or_else(|| ScenarioError::schema(format!("{phase}: unknown replacement index {index}")))
+}
+
+fn replacement_target_filter(
+    players: &[PlayerId],
+    objects: &[ObjectId],
+    target_player: Option<usize>,
+    target_object: Option<usize>,
+) -> Result<ReplacementDamageTargetFilter, ScenarioError> {
+    match (target_player, target_object) {
+        (Some(_), Some(_)) => Err(ScenarioError::schema(
+            "register_replacement cannot target both player and object".to_owned(),
+        )),
+        (Some(index), None) => Ok(ReplacementDamageTargetFilter::Player(player_id(
+            players,
+            index,
+            "register_replacement.target_player",
+        )?)),
+        (None, Some(index)) => Ok(ReplacementDamageTargetFilter::Object(object_id(
+            objects,
+            index,
+            "register_replacement.target_object",
+        )?)),
+        (None, None) => Ok(ReplacementDamageTargetFilter::Any),
+    }
+}
+
+fn replacement_operation(
+    operation: &str,
+    amount: Option<u32>,
+) -> Result<ReplacementOperation, ScenarioError> {
+    match operation {
+        "prevent_all" => Ok(ReplacementOperation::PreventAllDamage),
+        "prevent" => Ok(ReplacementOperation::PreventDamage(amount.ok_or_else(
+            || ScenarioError::schema("prevent replacement requires `amount`".to_owned()),
+        )?)),
+        "add" => Ok(ReplacementOperation::AddDamage(amount.ok_or_else(
+            || ScenarioError::schema("add replacement requires `amount`".to_owned()),
+        )?)),
+        "double" => Ok(ReplacementOperation::DoubleDamage),
+        "set" => Ok(ReplacementOperation::SetDamage(amount.ok_or_else(
+            || ScenarioError::schema("set replacement requires `amount`".to_owned()),
+        )?)),
+        other => Err(ScenarioError::schema(format!(
+            "unsupported replacement operation `{other}`"
+        ))),
+    }
+}
+
 fn parse_script(value: RonValue) -> Result<Vec<ScenarioStep>, ScenarioError> {
     let mut script = Vec::new();
     for value in value.into_list("script")? {
@@ -1952,6 +2115,25 @@ fn parse_script(value: RonValue) -> Result<Vec<ScenarioStep>, ScenarioError> {
             "mark_damage" => ScenarioStep::MarkDamage {
                 object: map.required_usize("object")?,
                 amount: map.required_u32("amount")?,
+            },
+            "register_damage_replacement" => ScenarioStep::RegisterDamageReplacement {
+                controller: map.required_usize("controller")?,
+                source_object: map.optional_usize("source_object")?,
+                target_player: map.optional_usize("target_player")?,
+                target_object: map.optional_usize("target_object")?,
+                combat_only: map.optional_bool("combat_only")?.unwrap_or(false),
+                operation: map.required_string("operation")?,
+                amount: map.optional_u32("amount")?,
+                once: map.optional_bool("once")?.unwrap_or(false),
+                self_replacement: map.optional_bool("self_replacement")?.unwrap_or(false),
+            },
+            "set_replacement_order" => ScenarioStep::SetReplacementOrder {
+                chooser: map.required_usize("chooser")?,
+                order: parse_usize_list(
+                    map.optional("order")?
+                        .unwrap_or_else(|| RonValue::List(Vec::new())),
+                    "set_replacement_order.order",
+                )?,
             },
             "declare_attackers" => ScenarioStep::DeclareAttackers {
                 player: map.required_usize("player")?,

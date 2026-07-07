@@ -172,10 +172,17 @@
       "remote_ci": "GitHub Actions ci #20 run 28885668849 passed all required jobs for commit 848f7002290aec7d168b66865f7341c831bfeae1"
     },
     "T2.2": {
-      "status": "verified_local",
+      "status": "verified_remote",
       "branch": "task/T2.2-triggered-abilities",
       "attempts": 0,
-      "verification": "scripts/vl.sh passed locally with data-only TriggerDefinition subscriptions over GameEvent/GameEventKind, pending-trigger queueing, APNAP stack placement, intervening-if gating, delayed-once retirement, priority blocking until triggers are stacked, trigger canonical hash coverage, clone-surface baseline persistent_allocation_field_count=21, 300 oracle scenarios green, and perf_diff reporting 0 regressions"
+      "verification": "scripts/vl.sh passed locally with data-only TriggerDefinition subscriptions over GameEvent/GameEventKind, pending-trigger queueing, APNAP stack placement, intervening-if gating, delayed-once retirement, priority blocking until triggers are stacked, trigger canonical hash coverage, clone-surface baseline persistent_allocation_field_count=21, 300 oracle scenarios green, and perf_diff reporting 0 regressions",
+      "remote_ci": "GitHub Actions ci #21 run 28887007796 passed all required jobs for commit 0dd68591784b832e6fdf9c123471c1a44f1ee40b"
+    },
+    "T2.3": {
+      "status": "verified_local",
+      "branch": "task/T2.3-replacement-prevention",
+      "attempts": 0,
+      "verification": "scripts/vl.sh passed locally with data-only ReplacementDefinition effects, damage interception before final mutation, self-replacement precedence, affected-player/object-controller replacement ordering, once-only retirement, final combat damage records for lifelink/deathtouch/SBA consequences, replacement canonical hash coverage, clone-surface baseline persistent_allocation_field_count=23, 302 oracle scenarios green including 2 T2.3 replacement/prevention scenarios, and perf_diff reporting 0 regressions"
     }
   },
   "gates_passed": [

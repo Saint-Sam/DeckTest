@@ -14,6 +14,7 @@
     "PaymentEnumeration",
     "PaymentSearch",
     "PlayerView",
+    "ReplacementChoiceOrder",
     "ResolutionRecord",
     "StackEntry",
     "Zone",
@@ -30,7 +31,7 @@
   "full_state_snapshot_surface": false,
   "game_state_debug": false,
   "guard": "static persistent allocation field count",
-  "persistent_allocation_field_count": 21,
+  "persistent_allocation_field_count": 23,
   "persistent_allocation_fields": [
     {
       "field": "targets",
@@ -139,6 +140,18 @@
       "reason": "Copy trigger instances drained before priority",
       "struct": "GameState",
       "type": "Vec<PendingTriggeredAbility>"
+    },
+    {
+      "field": "replacement_effects",
+      "reason": "data-only Copy replacement/prevention definitions compiled from card IR",
+      "struct": "GameState",
+      "type": "Vec<ReplacementSubscription>"
+    },
+    {
+      "field": "replacement_choice_orders",
+      "reason": "per-player replacement order preferences bounded by active effects",
+      "struct": "GameState",
+      "type": "Vec<ReplacementChoiceOrder>"
     },
     {
       "field": "turn_events",

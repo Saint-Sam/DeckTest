@@ -1,0 +1,49 @@
+(
+    name: "T2.3 prevention stops combat damage consequences",
+    setup: (
+        players: 2,
+        libraries: [
+            (player: 0, cards: [62003, 62004]),
+        ],
+        objects: [
+            (card: 62011, owner: 0, controller: 0, zone: "Battlefield"),
+            (card: 62012, owner: 1, controller: 1, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "set_base_creature", object: 0, power: 3, toughness: 3, keywords: ["deathtouch", "lifelink"]),
+        (action: "set_base_creature", object: 1, power: 2, toughness: 2, keywords: []),
+        (action: "register_damage_replacement", controller: 1, target_object: 1, combat_only: true, operation: "prevent_all"),
+        (action: "start_turn", player: 0),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "declare_attackers", player: 0, attacks: [(attacker: 0, defender: 1)]),
+        (action: "advance_step"),
+        (action: "declare_blockers", player: 1, blocks: [(blocker: 1, attacker: 0)]),
+        (action: "advance_step"),
+        (action: "assign_combat_damage", assignments: [
+            (source: 0, assignments: [(object: 1, amount: 3)]),
+            (source: 1, assignments: [(object: 0, amount: 2)]),
+        ]),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Battlefield", count: 2),
+            (zone: "Graveyard", player: 1, count: 0),
+        ],
+        players: [
+            (player: 0, life: 20),
+            (player: 1, life: 20),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "life_poison_sanity",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

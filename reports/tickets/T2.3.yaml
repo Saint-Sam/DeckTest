@@ -1,0 +1,37 @@
+id: T2.3
+title: Replacement and prevention effects
+tier: 2
+tags:
+  - kernel
+  - replacement
+  - prevention
+  - combat
+  - oracle
+scope_paths:
+  - crates/forge-core/src/lib.rs
+  - crates/forge-testkit/src/lib.rs
+  - tests/oracle/t2_3_replacement_order_damage.ron
+  - tests/oracle/t2_3_prevent_all_combat_damage.ron
+  - docs/specs/T2.3.md
+  - reports/tickets/T2.3.yaml
+inputs:
+  - FORGE_REBUILD_MASTER_PLAN.md Section 7 T2.3
+  - docs/specs/T2.1.md
+  - docs/specs/T2.2.md
+  - docs/specs/T2.3.md
+acceptance:
+  - replacement/prevention definitions are data-only and interpreted without closures or card-specific engine code
+  - damage events pass through an interception pipeline before final mutation
+  - self-replacement effects apply before normal replacement choices
+  - affected player or affected object's controller determines normal replacement ordering through deterministic choice-order state
+  - final combat damage records, lifelink, deathtouch, and SBA consequences use post-replacement damage
+  - once-only replacement effects retire after applying
+  - replacement state and lifecycle/application events participate in canonical hashes
+  - oracle scenarios cover damage prevention vs replacement stacking
+  - clone-surface guard baseline accounts for replacement definition and choice-order vectors
+verify: cargo test -p forge-core && cargo test -p forge-testkit && cargo clippy -p forge-core --all-targets -- -D warnings && scripts/vl.sh
+retry_policy: 3 attempts then blocker
+depends_on:
+  - T2.1
+  - T2.2
+parallel_ok: false

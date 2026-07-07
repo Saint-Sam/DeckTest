@@ -84,6 +84,8 @@ allowed = {
     ("GameState", "resolution_log"): "deterministic replay audit log",
     ("GameState", "trigger_subscriptions"): "data-only Copy trigger definitions compiled from card IR",
     ("GameState", "pending_triggers"): "Copy trigger instances drained before priority",
+    ("GameState", "replacement_effects"): "data-only Copy replacement/prevention definitions compiled from card IR",
+    ("GameState", "replacement_choice_orders"): "per-player replacement order preferences bounded by active effects",
     ("GameState", "turn_events"): "current-turn Copy event records bounded by EVENT_RING_CAPACITY",
     ("GameState", "combat"): "CombatState wrapper cleared between combats",
     ("GameState", "empty_library_draws_since_sba"): "player IDs drained by SBA processing",

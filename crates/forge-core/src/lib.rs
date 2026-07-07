@@ -1090,6 +1090,24 @@ impl TriggerId {
     }
 }
 
+/// A stable handle for one registered replacement/prevention effect definition.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct ReplacementEffectId(u32);
+
+impl ReplacementEffectId {
+    /// Returns the zero-based replacement-effect index.
+    #[must_use]
+    pub const fn index(self) -> usize {
+        self.0 as usize
+    }
+
+    /// Returns the raw deterministic replacement-effect value.
+    #[must_use]
+    pub const fn get(self) -> u32 {
+        self.0
+    }
+}
+
 /// The coarse kind of object represented by a stack entry.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum StackObjectKind {
@@ -1210,6 +1228,12 @@ pub enum GameEventKind {
     TriggeredAbilityQueued,
     /// A queued triggered ability was put on the stack.
     TriggeredAbilityPutOnStack,
+    /// A replacement/prevention effect definition was registered.
+    ReplacementEffectRegistered,
+    /// A player's deterministic replacement ordering preference changed.
+    ReplacementChoiceOrderSet,
+    /// A replacement/prevention effect modified an event.
+    ReplacementEffectApplied,
 }
 
 impl GameEventKind {
@@ -1260,6 +1284,9 @@ impl GameEventKind {
             Self::TriggeredAbilityRegistered => 42,
             Self::TriggeredAbilityQueued => 43,
             Self::TriggeredAbilityPutOnStack => 44,
+            Self::ReplacementEffectRegistered => 45,
+            Self::ReplacementChoiceOrderSet => 46,
+            Self::ReplacementEffectApplied => 47,
         }
     }
 }
@@ -1619,6 +1646,229 @@ impl TriggerDefinition {
     #[must_use]
     pub const fn duration(self) -> TriggerDuration {
         self.duration
+    }
+}
+
+/// Damage source selector used by declarative replacement predicates.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum ReplacementSourceFilter {
+    /// Any source, including source-less test damage.
+    Any,
+    /// The registered replacement effect's source object.
+    Source,
+    /// One exact object.
+    Object(ObjectId),
+}
+
+impl ReplacementSourceFilter {
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::Any => 0,
+            Self::Source => 1,
+            Self::Object(_) => 2,
+        }
+    }
+}
+
+/// Damage target selector used by declarative replacement predicates.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum ReplacementDamageTargetFilter {
+    /// Any player or object.
+    Any,
+    /// One exact player.
+    Player(PlayerId),
+    /// One exact object.
+    Object(ObjectId),
+}
+
+impl ReplacementDamageTargetFilter {
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::Any => 0,
+            Self::Player(_) => 1,
+            Self::Object(_) => 2,
+        }
+    }
+}
+
+/// Declarative event predicate for replacement/prevention effects.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum ReplacementCondition {
+    /// Match damage that would be dealt to a selected target.
+    DamageWouldBeDealt {
+        /// Damage source selector.
+        source: ReplacementSourceFilter,
+        /// Damage target selector.
+        target: ReplacementDamageTargetFilter,
+        /// Whether only combat damage matches.
+        combat_only: bool,
+    },
+}
+
+impl ReplacementCondition {
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::DamageWouldBeDealt { .. } => 0,
+        }
+    }
+}
+
+/// Data-only replacement/prevention operation.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum ReplacementOperation {
+    /// Prevent all matching damage.
+    PreventAllDamage,
+    /// Prevent up to the given amount of matching damage.
+    PreventDamage(u32),
+    /// Increase matching damage by the given amount.
+    AddDamage(u32),
+    /// Double matching damage.
+    DoubleDamage,
+    /// Set matching damage to the given amount.
+    SetDamage(u32),
+}
+
+impl ReplacementOperation {
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::PreventAllDamage => 0,
+            Self::PreventDamage(_) => 1,
+            Self::AddDamage(_) => 2,
+            Self::DoubleDamage => 3,
+            Self::SetDamage(_) => 4,
+        }
+    }
+}
+
+/// Lifetime of a registered replacement/prevention effect.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum ReplacementDuration {
+    /// The effect remains active until explicitly unsupported future removal.
+    Persistent,
+    /// The effect is removed after it applies once.
+    Once,
+}
+
+impl ReplacementDuration {
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::Persistent => 0,
+            Self::Once => 1,
+        }
+    }
+}
+
+/// Data-only replacement/prevention definition produced by card IR compilation.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct ReplacementDefinition {
+    controller: PlayerId,
+    source: Option<ObjectId>,
+    condition: ReplacementCondition,
+    operation: ReplacementOperation,
+    duration: ReplacementDuration,
+    self_replacement: bool,
+}
+
+impl ReplacementDefinition {
+    /// Creates a persistent replacement/prevention definition with no source object.
+    #[must_use]
+    pub const fn new(
+        controller: PlayerId,
+        condition: ReplacementCondition,
+        operation: ReplacementOperation,
+    ) -> Self {
+        Self {
+            controller,
+            source: None,
+            condition,
+            operation,
+            duration: ReplacementDuration::Persistent,
+            self_replacement: false,
+        }
+    }
+
+    /// Sets the source object for source-relative predicates.
+    #[must_use]
+    pub const fn with_source(mut self, source: ObjectId) -> Self {
+        self.source = Some(source);
+        self
+    }
+
+    /// Sets the replacement effect duration.
+    #[must_use]
+    pub const fn with_duration(mut self, duration: ReplacementDuration) -> Self {
+        self.duration = duration;
+        self
+    }
+
+    /// Marks this effect as a self-replacement effect applied before normal choices.
+    #[must_use]
+    pub const fn with_self_replacement(mut self) -> Self {
+        self.self_replacement = true;
+        self
+    }
+
+    /// Returns the effect controller.
+    #[must_use]
+    pub const fn controller(self) -> PlayerId {
+        self.controller
+    }
+
+    /// Returns the optional effect source object.
+    #[must_use]
+    pub const fn source(self) -> Option<ObjectId> {
+        self.source
+    }
+
+    /// Returns the event predicate.
+    #[must_use]
+    pub const fn condition(self) -> ReplacementCondition {
+        self.condition
+    }
+
+    /// Returns the effect operation.
+    #[must_use]
+    pub const fn operation(self) -> ReplacementOperation {
+        self.operation
+    }
+
+    /// Returns the effect duration.
+    #[must_use]
+    pub const fn duration(self) -> ReplacementDuration {
+        self.duration
+    }
+
+    /// Returns true when this is a self-replacement effect.
+    #[must_use]
+    pub const fn self_replacement(self) -> bool {
+        self.self_replacement
+    }
+}
+
+/// Stored deterministic ordering preference for replacement choices.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ReplacementChoiceOrder {
+    chooser: PlayerId,
+    order: Vec<ReplacementEffectId>,
+}
+
+impl ReplacementChoiceOrder {
+    /// Creates a replacement ordering preference for one chooser.
+    #[must_use]
+    pub fn new(chooser: PlayerId, order: Vec<ReplacementEffectId>) -> Self {
+        Self { chooser, order }
+    }
+
+    /// Returns the player whose choices are represented.
+    #[must_use]
+    pub const fn chooser(&self) -> PlayerId {
+        self.chooser
+    }
+
+    /// Returns effect IDs in preferred application order.
+    #[must_use]
+    pub fn order(&self) -> &[ReplacementEffectId] {
+        &self.order
     }
 }
 
@@ -3153,6 +3403,10 @@ pub enum StateError {
     },
     /// Triggered abilities must be put on the stack before priority actions.
     PendingTriggeredAbilities,
+    /// The requested replacement/prevention effect ID does not exist.
+    UnknownReplacementEffect(ReplacementEffectId),
+    /// A replacement ordering preference named the same effect more than once.
+    DuplicateReplacementEffect(ReplacementEffectId),
     /// A stack resolution was requested while the stack was empty.
     EmptyStack,
     /// A stack entry refers to a spell object that is no longer on the stack.
@@ -3390,6 +3644,18 @@ pub enum Action {
     },
     /// Put all currently pending triggered abilities on the stack in APNAP order.
     PutPendingTriggeredAbilitiesOnStack,
+    /// Register one declarative replacement/prevention effect definition.
+    RegisterReplacementEffect {
+        /// Data-only replacement/prevention definition.
+        definition: ReplacementDefinition,
+    },
+    /// Set one affected player's deterministic replacement application order.
+    SetReplacementChoiceOrder {
+        /// Player who makes replacement ordering choices.
+        chooser: PlayerId,
+        /// Effect IDs in preferred order; omitted applicable effects use ID order.
+        order: Vec<ReplacementEffectId>,
+    },
     /// Record whether attackers were declared in this combat.
     SetAttackersDeclaredThisCombat {
         /// True if at least one attacker was declared.
@@ -3539,6 +3805,8 @@ pub enum Outcome {
     StackEntriesAdded(Vec<StackEntryId>),
     /// A triggered ability definition was registered.
     TriggerRegistered(TriggerId),
+    /// A replacement/prevention effect definition was registered.
+    ReplacementEffectRegistered(ReplacementEffectId),
     /// Combat damage was assigned and dealt.
     CombatDamageAssigned(Vec<CombatDamageRecord>),
     /// State-based actions were checked.
@@ -3706,6 +3974,18 @@ pub fn apply(state: &mut GameState, action: Action) -> Outcome {
         Action::PutPendingTriggeredAbilitiesOnStack => {
             match state.put_pending_triggered_abilities_on_stack() {
                 Ok(entries) => Outcome::StackEntriesAdded(entries),
+                Err(error) => Outcome::Failed(error),
+            }
+        }
+        Action::RegisterReplacementEffect { definition } => {
+            match state.register_replacement_effect(definition) {
+                Ok(replacement) => Outcome::ReplacementEffectRegistered(replacement),
+                Err(error) => Outcome::Failed(error),
+            }
+        }
+        Action::SetReplacementChoiceOrder { chooser, order } => {
+            match state.set_replacement_choice_order(chooser, order) {
+                Ok(()) => Outcome::Applied,
                 Err(error) => Outcome::Failed(error),
             }
         }
@@ -4117,6 +4397,45 @@ pub enum GameEvent {
         /// Trigger controller.
         controller: PlayerId,
     },
+    /// A replacement/prevention effect definition was registered.
+    ReplacementEffectRegistered {
+        /// Registered replacement/prevention effect.
+        replacement: ReplacementEffectId,
+        /// Effect controller.
+        controller: PlayerId,
+        /// Optional effect source object.
+        source: Option<ObjectId>,
+        /// Effect operation.
+        operation: ReplacementOperation,
+        /// Effect duration.
+        duration: ReplacementDuration,
+        /// Whether this is a self-replacement effect.
+        self_replacement: bool,
+    },
+    /// A player's deterministic replacement ordering preference changed.
+    ReplacementChoiceOrderSet {
+        /// Player making replacement ordering choices.
+        chooser: PlayerId,
+        /// Number of ordered effect IDs stored.
+        count: u32,
+    },
+    /// A replacement/prevention effect modified a damage event.
+    ReplacementEffectApplied {
+        /// Effect that applied.
+        replacement: ReplacementEffectId,
+        /// Player whose affected-object choice selected this effect.
+        chooser: PlayerId,
+        /// Damage source, if known.
+        source: Option<ObjectId>,
+        /// Damage target.
+        target: CombatDamageTarget,
+        /// Effect operation.
+        operation: ReplacementOperation,
+        /// Damage amount before applying this effect.
+        original_amount: u32,
+        /// Damage amount after applying this effect.
+        resulting_amount: u32,
+    },
 }
 
 impl GameEvent {
@@ -4167,6 +4486,9 @@ impl GameEvent {
             Self::TriggeredAbilityRegistered { .. } => 42,
             Self::TriggeredAbilityQueued { .. } => 43,
             Self::TriggeredAbilityPutOnStack { .. } => 44,
+            Self::ReplacementEffectRegistered { .. } => 45,
+            Self::ReplacementChoiceOrderSet { .. } => 46,
+            Self::ReplacementEffectApplied { .. } => 47,
         }
     }
 
@@ -4227,6 +4549,9 @@ impl GameEvent {
             Self::TriggeredAbilityRegistered { .. } => GameEventKind::TriggeredAbilityRegistered,
             Self::TriggeredAbilityQueued { .. } => GameEventKind::TriggeredAbilityQueued,
             Self::TriggeredAbilityPutOnStack { .. } => GameEventKind::TriggeredAbilityPutOnStack,
+            Self::ReplacementEffectRegistered { .. } => GameEventKind::ReplacementEffectRegistered,
+            Self::ReplacementChoiceOrderSet { .. } => GameEventKind::ReplacementChoiceOrderSet,
+            Self::ReplacementEffectApplied { .. } => GameEventKind::ReplacementEffectApplied,
         }
     }
 }
@@ -4308,6 +4633,20 @@ struct TriggerSubscription {
     event_kind: GameEventKind,
 }
 
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+struct ReplacementSubscription {
+    id: ReplacementEffectId,
+    definition: ReplacementDefinition,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+struct DamageReplacementEvent {
+    source: Option<ObjectId>,
+    target: CombatDamageTarget,
+    amount: u32,
+    combat: bool,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum PendingStateBasedAction {
     PlayerLoses {
@@ -4357,6 +4696,11 @@ pub struct GameState {
     trigger_subscriptions: Vec<TriggerSubscription>,
     // clone_surface: Copy trigger instances waiting for the next priority window.
     pending_triggers: Vec<PendingTriggeredAbility>,
+    next_replacement: u32,
+    // clone_surface: data-only replacement/prevention definitions compiled from card IR.
+    replacement_effects: Vec<ReplacementSubscription>,
+    // clone_surface: per-player replacement order preferences; bounded by active effects.
+    replacement_choice_orders: Vec<ReplacementChoiceOrder>,
     deferred_priority_player: Option<PlayerId>,
     next_event_sequence: u64,
     // clone_surface: current-turn Copy event records for trigger/replay consumers.
@@ -4396,6 +4740,9 @@ impl Clone for GameState {
             next_trigger: self.next_trigger,
             trigger_subscriptions: self.trigger_subscriptions.clone(),
             pending_triggers: self.pending_triggers.clone(),
+            next_replacement: self.next_replacement,
+            replacement_effects: self.replacement_effects.clone(),
+            replacement_choice_orders: self.replacement_choice_orders.clone(),
             deferred_priority_player: self.deferred_priority_player,
             next_event_sequence: self.next_event_sequence,
             turn_events: Arc::clone(&self.turn_events),
@@ -4459,6 +4806,9 @@ impl GameState {
             next_trigger: 0,
             trigger_subscriptions: Vec::new(),
             pending_triggers: Vec::new(),
+            next_replacement: 0,
+            replacement_effects: Vec::new(),
+            replacement_choice_orders: Vec::new(),
             deferred_priority_player: None,
             next_event_sequence: 0,
             turn_events: Arc::new(Vec::with_capacity(EVENT_DEEP_CLONE_LIMIT)),
@@ -4586,6 +4936,21 @@ impl GameState {
     #[must_use]
     pub fn pending_triggers(&self) -> &[PendingTriggeredAbility] {
         &self.pending_triggers
+    }
+
+    /// Returns registered replacement/prevention effects in deterministic ID order.
+    pub fn replacement_effects(
+        &self,
+    ) -> impl Iterator<Item = (ReplacementEffectId, ReplacementDefinition)> + '_ {
+        self.replacement_effects
+            .iter()
+            .map(|subscription| (subscription.id, subscription.definition))
+    }
+
+    /// Returns stored replacement ordering preferences.
+    #[must_use]
+    pub fn replacement_choice_orders(&self) -> &[ReplacementChoiceOrder] {
+        &self.replacement_choice_orders
     }
 
     /// Returns typed mutation events emitted during the current turn.
@@ -4895,6 +5260,30 @@ impl GameState {
 
     /// Marks damage on a creature object.
     fn mark_damage_on_object(&mut self, object: ObjectId, amount: u32) -> Result<(), StateError> {
+        let record = self
+            .objects
+            .get(object)
+            .ok_or(StateError::UnknownObject(object))?;
+        if record.base_creature.is_none() {
+            return Err(StateError::NotACreature(object));
+        }
+        let replaced = self.apply_damage_replacement_effects(DamageReplacementEvent {
+            source: None,
+            target: CombatDamageTarget::Object(object),
+            amount,
+            combat: false,
+        })?;
+        if amount > 0 && replaced.amount == 0 {
+            return Ok(());
+        }
+        self.mark_damage_on_object_unreplaced(object, replaced.amount)
+    }
+
+    fn mark_damage_on_object_unreplaced(
+        &mut self,
+        object: ObjectId,
+        amount: u32,
+    ) -> Result<(), StateError> {
         let record = self
             .objects
             .get_mut(object)
@@ -5532,6 +5921,255 @@ impl GameState {
         }
     }
 
+    /// Registers one data-only replacement/prevention effect.
+    fn register_replacement_effect(
+        &mut self,
+        definition: ReplacementDefinition,
+    ) -> Result<ReplacementEffectId, StateError> {
+        self.validate_replacement_definition(definition)?;
+        let id = ReplacementEffectId(self.next_replacement);
+        self.next_replacement = self.next_replacement.saturating_add(1);
+        self.replacement_effects
+            .push(ReplacementSubscription { id, definition });
+        self.emit_event_without_triggers(GameEvent::ReplacementEffectRegistered {
+            replacement: id,
+            controller: definition.controller(),
+            source: definition.source(),
+            operation: definition.operation(),
+            duration: definition.duration(),
+            self_replacement: definition.self_replacement(),
+        });
+        Ok(id)
+    }
+
+    fn validate_replacement_definition(
+        &self,
+        definition: ReplacementDefinition,
+    ) -> Result<(), StateError> {
+        self.require_player(definition.controller())?;
+        if let Some(source) = definition.source() {
+            if self.objects.get(source).is_none() {
+                return Err(StateError::UnknownObject(source));
+            }
+        }
+        match definition.condition() {
+            ReplacementCondition::DamageWouldBeDealt { source, target, .. } => {
+                if let ReplacementSourceFilter::Object(object) = source {
+                    if self.objects.get(object).is_none() {
+                        return Err(StateError::UnknownObject(object));
+                    }
+                }
+                match target {
+                    ReplacementDamageTargetFilter::Any => {}
+                    ReplacementDamageTargetFilter::Player(player) => self.require_player(player)?,
+                    ReplacementDamageTargetFilter::Object(object) => {
+                        if self.objects.get(object).is_none() {
+                            return Err(StateError::UnknownObject(object));
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn set_replacement_choice_order(
+        &mut self,
+        chooser: PlayerId,
+        order: Vec<ReplacementEffectId>,
+    ) -> Result<(), StateError> {
+        self.require_player(chooser)?;
+        let mut seen = Vec::with_capacity(order.len());
+        for replacement in &order {
+            if seen.contains(replacement) {
+                return Err(StateError::DuplicateReplacementEffect(*replacement));
+            }
+            if !self.replacement_effect_exists(*replacement) {
+                return Err(StateError::UnknownReplacementEffect(*replacement));
+            }
+            seen.push(*replacement);
+        }
+        if let Some(existing) = self
+            .replacement_choice_orders
+            .iter_mut()
+            .find(|existing| existing.chooser == chooser)
+        {
+            existing.order = order;
+        } else {
+            self.replacement_choice_orders
+                .push(ReplacementChoiceOrder::new(chooser, order));
+        }
+        let count = self
+            .replacement_choice_orders
+            .iter()
+            .find(|existing| existing.chooser == chooser)
+            .map_or(0, |existing| existing.order.len() as u32);
+        self.emit_event_without_triggers(GameEvent::ReplacementChoiceOrderSet { chooser, count });
+        Ok(())
+    }
+
+    fn replacement_effect_exists(&self, id: ReplacementEffectId) -> bool {
+        self.replacement_effects
+            .iter()
+            .any(|subscription| subscription.id == id)
+    }
+
+    fn apply_damage_replacement_effects(
+        &mut self,
+        mut event: DamageReplacementEvent,
+    ) -> Result<DamageReplacementEvent, StateError> {
+        if event.amount == 0 || self.replacement_effects.is_empty() {
+            return Ok(event);
+        }
+        let chooser = self.damage_replacement_chooser(event.target)?;
+        let mut applied = Vec::new();
+        let mut consumed_once = Vec::new();
+
+        while event.amount > 0 {
+            let Some((id, definition)) = self.next_damage_replacement(event, chooser, &applied)
+            else {
+                break;
+            };
+            let original_amount = event.amount;
+            event.amount = Self::apply_replacement_operation(definition.operation(), event.amount)?;
+            applied.push(id);
+            if definition.duration() == ReplacementDuration::Once {
+                consumed_once.push(id);
+            }
+            self.emit_event(GameEvent::ReplacementEffectApplied {
+                replacement: id,
+                chooser,
+                source: event.source,
+                target: event.target,
+                operation: definition.operation(),
+                original_amount,
+                resulting_amount: event.amount,
+            });
+        }
+
+        if !consumed_once.is_empty() {
+            self.replacement_effects
+                .retain(|subscription| !consumed_once.contains(&subscription.id));
+        }
+        Ok(event)
+    }
+
+    fn next_damage_replacement(
+        &self,
+        event: DamageReplacementEvent,
+        chooser: PlayerId,
+        applied: &[ReplacementEffectId],
+    ) -> Option<(ReplacementEffectId, ReplacementDefinition)> {
+        let mut candidates = Vec::new();
+        for subscription in &self.replacement_effects {
+            if applied.contains(&subscription.id) {
+                continue;
+            }
+            if self.replacement_condition_matches(subscription.definition, event) {
+                candidates.push((subscription.id, subscription.definition));
+            }
+        }
+        candidates.sort_by_key(|(id, definition)| {
+            (
+                u8::from(!definition.self_replacement()),
+                self.replacement_order_rank(chooser, *id),
+                id.0,
+            )
+        });
+        candidates.into_iter().next()
+    }
+
+    fn replacement_order_rank(&self, chooser: PlayerId, id: ReplacementEffectId) -> usize {
+        self.replacement_choice_orders
+            .iter()
+            .find(|order| order.chooser == chooser)
+            .and_then(|order| order.order.iter().position(|ordered| *ordered == id))
+            .unwrap_or(usize::MAX)
+    }
+
+    fn replacement_condition_matches(
+        &self,
+        definition: ReplacementDefinition,
+        event: DamageReplacementEvent,
+    ) -> bool {
+        match definition.condition() {
+            ReplacementCondition::DamageWouldBeDealt {
+                source,
+                target,
+                combat_only,
+            } => {
+                (!combat_only || event.combat)
+                    && Self::replacement_source_matches(definition, source, event.source)
+                    && Self::replacement_target_matches(target, event.target)
+            }
+        }
+    }
+
+    fn replacement_source_matches(
+        definition: ReplacementDefinition,
+        filter: ReplacementSourceFilter,
+        source: Option<ObjectId>,
+    ) -> bool {
+        match filter {
+            ReplacementSourceFilter::Any => true,
+            ReplacementSourceFilter::Source => source == definition.source(),
+            ReplacementSourceFilter::Object(expected) => source == Some(expected),
+        }
+    }
+
+    fn replacement_target_matches(
+        filter: ReplacementDamageTargetFilter,
+        target: CombatDamageTarget,
+    ) -> bool {
+        match (filter, target) {
+            (ReplacementDamageTargetFilter::Any, _) => true,
+            (
+                ReplacementDamageTargetFilter::Player(expected),
+                CombatDamageTarget::Player(player),
+            ) => player == expected,
+            (
+                ReplacementDamageTargetFilter::Object(expected),
+                CombatDamageTarget::Object(object),
+            ) => object == expected,
+            (ReplacementDamageTargetFilter::Player(_), CombatDamageTarget::Object(_))
+            | (ReplacementDamageTargetFilter::Object(_), CombatDamageTarget::Player(_)) => false,
+        }
+    }
+
+    fn damage_replacement_chooser(
+        &self,
+        target: CombatDamageTarget,
+    ) -> Result<PlayerId, StateError> {
+        match target {
+            CombatDamageTarget::Player(player) => {
+                self.require_player(player)?;
+                Ok(player)
+            }
+            CombatDamageTarget::Object(object) => Ok(self
+                .objects
+                .get(object)
+                .ok_or(StateError::UnknownObject(object))?
+                .controller()),
+        }
+    }
+
+    fn apply_replacement_operation(
+        operation: ReplacementOperation,
+        amount: u32,
+    ) -> Result<u32, StateError> {
+        match operation {
+            ReplacementOperation::PreventAllDamage => Ok(0),
+            ReplacementOperation::PreventDamage(prevented) => Ok(amount.saturating_sub(prevented)),
+            ReplacementOperation::AddDamage(added) => amount
+                .checked_add(added)
+                .ok_or(StateError::CombatDamageOverflow),
+            ReplacementOperation::DoubleDamage => amount
+                .checked_mul(2)
+                .ok_or(StateError::CombatDamageOverflow),
+            ReplacementOperation::SetDamage(replacement) => Ok(replacement),
+        }
+    }
+
     fn advance_step_after_empty_stack(&mut self) -> Result<Step, StateError> {
         let current = self.current_step.ok_or(StateError::TurnNotStarted)?;
         self.end_step(current);
@@ -5723,9 +6361,10 @@ impl GameState {
                     source_had_deathtouch: keywords.deathtouch(),
                     source_had_lifelink: keywords.lifelink(),
                 };
-                self.apply_combat_damage(record)?;
-                self.emit_event(GameEvent::CombatDamageDealt { record });
-                records.push(record);
+                if let Some(record) = self.apply_combat_damage(record)? {
+                    self.emit_event(GameEvent::CombatDamageDealt { record });
+                    records.push(record);
+                }
             }
         }
         self.combat.damage_records.extend(records.iter().copied());
@@ -5969,6 +6608,15 @@ impl GameState {
         for trigger in &self.pending_triggers {
             bytes.write_pending_trigger(*trigger);
         }
+        bytes.write_u32(self.next_replacement);
+        bytes.write_u32(self.replacement_effects.len() as u32);
+        for replacement in &self.replacement_effects {
+            bytes.write_replacement_subscription(*replacement);
+        }
+        bytes.write_u32(self.replacement_choice_orders.len() as u32);
+        for order in &self.replacement_choice_orders {
+            bytes.write_replacement_choice_order(order);
+        }
         bytes.write_optional_player(self.deferred_priority_player);
         bytes.write_u64(self.next_event_sequence);
         bytes.write_u32(self.turn_events.len() as u32);
@@ -6062,6 +6710,15 @@ impl GameState {
         hash.write_u32(self.pending_triggers.len() as u32);
         for trigger in &self.pending_triggers {
             hash.write_pending_trigger(*trigger);
+        }
+        hash.write_u32(self.next_replacement);
+        hash.write_u32(self.replacement_effects.len() as u32);
+        for replacement in &self.replacement_effects {
+            hash.write_replacement_subscription(*replacement);
+        }
+        hash.write_u32(self.replacement_choice_orders.len() as u32);
+        for order in &self.replacement_choice_orders {
+            hash.write_replacement_choice_order(order);
         }
         hash.write_optional_player(self.deferred_priority_player);
         hash.write_u64(self.next_event_sequence);
@@ -6558,13 +7215,26 @@ impl GameState {
         Err(StateError::IllegalCombatDamageAssignment(source))
     }
 
-    fn apply_combat_damage(&mut self, record: CombatDamageRecord) -> Result<(), StateError> {
+    fn apply_combat_damage(
+        &mut self,
+        mut record: CombatDamageRecord,
+    ) -> Result<Option<CombatDamageRecord>, StateError> {
+        let replaced = self.apply_damage_replacement_effects(DamageReplacementEvent {
+            source: Some(record.source),
+            target: record.target,
+            amount: record.amount,
+            combat: true,
+        })?;
+        if replaced.amount == 0 {
+            return Ok(None);
+        }
+        record.amount = replaced.amount;
         match record.target {
             CombatDamageTarget::Player(player) => {
                 self.lose_life(player, record.amount)?;
             }
             CombatDamageTarget::Object(object) => {
-                self.mark_damage_on_object(object, record.amount)?;
+                self.mark_damage_on_object_unreplaced(object, record.amount)?;
                 if record.source_had_deathtouch && record.amount > 0 {
                     self.objects
                         .get_mut(object)
@@ -6581,7 +7251,7 @@ impl GameState {
                 .controller();
             self.gain_life(controller, record.amount)?;
         }
-        Ok(())
+        Ok(Some(record))
     }
 
     fn active_combat_creatures(&self) -> Vec<ObjectId> {
@@ -7752,6 +8422,73 @@ impl Fnva64 {
         self.write_u32(trigger.event_turn);
     }
 
+    fn write_replacement_source_filter(&mut self, filter: ReplacementSourceFilter) {
+        self.write_u8(filter.canonical_code());
+        if let ReplacementSourceFilter::Object(object) = filter {
+            self.write_u32(object.0);
+        }
+    }
+
+    fn write_replacement_damage_target_filter(&mut self, filter: ReplacementDamageTargetFilter) {
+        self.write_u8(filter.canonical_code());
+        match filter {
+            ReplacementDamageTargetFilter::Any => {}
+            ReplacementDamageTargetFilter::Player(player) => self.write_u32(player.0),
+            ReplacementDamageTargetFilter::Object(object) => self.write_u32(object.0),
+        }
+    }
+
+    fn write_replacement_condition(&mut self, condition: ReplacementCondition) {
+        self.write_u8(condition.canonical_code());
+        match condition {
+            ReplacementCondition::DamageWouldBeDealt {
+                source,
+                target,
+                combat_only,
+            } => {
+                self.write_replacement_source_filter(source);
+                self.write_replacement_damage_target_filter(target);
+                self.write_bool(combat_only);
+            }
+        }
+    }
+
+    fn write_replacement_operation(&mut self, operation: ReplacementOperation) {
+        self.write_u8(operation.canonical_code());
+        match operation {
+            ReplacementOperation::PreventAllDamage | ReplacementOperation::DoubleDamage => {}
+            ReplacementOperation::PreventDamage(amount)
+            | ReplacementOperation::AddDamage(amount)
+            | ReplacementOperation::SetDamage(amount) => self.write_u32(amount),
+        }
+    }
+
+    fn write_replacement_duration(&mut self, duration: ReplacementDuration) {
+        self.write_u8(duration.canonical_code());
+    }
+
+    fn write_replacement_definition(&mut self, definition: ReplacementDefinition) {
+        self.write_u32(definition.controller.0);
+        self.write_optional_object(definition.source);
+        self.write_replacement_condition(definition.condition);
+        self.write_replacement_operation(definition.operation);
+        self.write_replacement_duration(definition.duration);
+        self.write_bool(definition.self_replacement);
+    }
+
+    fn write_replacement_subscription(&mut self, subscription: ReplacementSubscription) {
+        self.write_u32(subscription.id.0);
+        self.write_replacement_definition(subscription.definition);
+    }
+
+    fn write_replacement_choice_order(&mut self, order: &ReplacementChoiceOrder) {
+        self.write_u32(order.chooser.0);
+        self.write_u32(order.order.len() as u32);
+        for replacement in &order.order {
+            self.write_u32(replacement.0);
+        }
+    }
+
     fn write_stack_entry(&mut self, entry: &StackEntry) {
         self.write_u32(entry.id.0);
         self.write_u32(entry.controller.0);
@@ -7996,6 +8733,42 @@ impl Fnva64 {
                 self.write_u32(trigger.0);
                 self.write_u32(entry.0);
                 self.write_u32(controller.0);
+            }
+            GameEvent::ReplacementEffectRegistered {
+                replacement,
+                controller,
+                source,
+                operation,
+                duration,
+                self_replacement,
+            } => {
+                self.write_u32(replacement.0);
+                self.write_u32(controller.0);
+                self.write_optional_object(source);
+                self.write_replacement_operation(operation);
+                self.write_replacement_duration(duration);
+                self.write_bool(self_replacement);
+            }
+            GameEvent::ReplacementChoiceOrderSet { chooser, count } => {
+                self.write_u32(chooser.0);
+                self.write_u32(count);
+            }
+            GameEvent::ReplacementEffectApplied {
+                replacement,
+                chooser,
+                source,
+                target,
+                operation,
+                original_amount,
+                resulting_amount,
+            } => {
+                self.write_u32(replacement.0);
+                self.write_u32(chooser.0);
+                self.write_optional_object(source);
+                self.write_combat_damage_target(target);
+                self.write_replacement_operation(operation);
+                self.write_u32(original_amount);
+                self.write_u32(resulting_amount);
             }
         }
     }
@@ -8357,6 +9130,73 @@ impl CanonicalBytes {
         self.write_u32(trigger.event_turn);
     }
 
+    fn write_replacement_source_filter(&mut self, filter: ReplacementSourceFilter) {
+        self.write_u8(filter.canonical_code());
+        if let ReplacementSourceFilter::Object(object) = filter {
+            self.write_u32(object.0);
+        }
+    }
+
+    fn write_replacement_damage_target_filter(&mut self, filter: ReplacementDamageTargetFilter) {
+        self.write_u8(filter.canonical_code());
+        match filter {
+            ReplacementDamageTargetFilter::Any => {}
+            ReplacementDamageTargetFilter::Player(player) => self.write_u32(player.0),
+            ReplacementDamageTargetFilter::Object(object) => self.write_u32(object.0),
+        }
+    }
+
+    fn write_replacement_condition(&mut self, condition: ReplacementCondition) {
+        self.write_u8(condition.canonical_code());
+        match condition {
+            ReplacementCondition::DamageWouldBeDealt {
+                source,
+                target,
+                combat_only,
+            } => {
+                self.write_replacement_source_filter(source);
+                self.write_replacement_damage_target_filter(target);
+                self.write_bool(combat_only);
+            }
+        }
+    }
+
+    fn write_replacement_operation(&mut self, operation: ReplacementOperation) {
+        self.write_u8(operation.canonical_code());
+        match operation {
+            ReplacementOperation::PreventAllDamage | ReplacementOperation::DoubleDamage => {}
+            ReplacementOperation::PreventDamage(amount)
+            | ReplacementOperation::AddDamage(amount)
+            | ReplacementOperation::SetDamage(amount) => self.write_u32(amount),
+        }
+    }
+
+    fn write_replacement_duration(&mut self, duration: ReplacementDuration) {
+        self.write_u8(duration.canonical_code());
+    }
+
+    fn write_replacement_definition(&mut self, definition: ReplacementDefinition) {
+        self.write_u32(definition.controller.0);
+        self.write_optional_object(definition.source);
+        self.write_replacement_condition(definition.condition);
+        self.write_replacement_operation(definition.operation);
+        self.write_replacement_duration(definition.duration);
+        self.write_bool(definition.self_replacement);
+    }
+
+    fn write_replacement_subscription(&mut self, subscription: ReplacementSubscription) {
+        self.write_u32(subscription.id.0);
+        self.write_replacement_definition(subscription.definition);
+    }
+
+    fn write_replacement_choice_order(&mut self, order: &ReplacementChoiceOrder) {
+        self.write_u32(order.chooser.0);
+        self.write_u32(order.order.len() as u32);
+        for replacement in &order.order {
+            self.write_u32(replacement.0);
+        }
+    }
+
     fn write_stack_entry(&mut self, entry: &StackEntry) {
         self.write_u32(entry.id.0);
         self.write_u32(entry.controller.0);
@@ -8602,6 +9442,42 @@ impl CanonicalBytes {
                 self.write_u32(entry.0);
                 self.write_u32(controller.0);
             }
+            GameEvent::ReplacementEffectRegistered {
+                replacement,
+                controller,
+                source,
+                operation,
+                duration,
+                self_replacement,
+            } => {
+                self.write_u32(replacement.0);
+                self.write_u32(controller.0);
+                self.write_optional_object(source);
+                self.write_replacement_operation(operation);
+                self.write_replacement_duration(duration);
+                self.write_bool(self_replacement);
+            }
+            GameEvent::ReplacementChoiceOrderSet { chooser, count } => {
+                self.write_u32(chooser.0);
+                self.write_u32(count);
+            }
+            GameEvent::ReplacementEffectApplied {
+                replacement,
+                chooser,
+                source,
+                target,
+                operation,
+                original_amount,
+                resulting_amount,
+            } => {
+                self.write_u32(replacement.0);
+                self.write_u32(chooser.0);
+                self.write_optional_object(source);
+                self.write_combat_damage_target(target);
+                self.write_replacement_operation(operation);
+                self.write_u32(original_amount);
+                self.write_u32(resulting_amount);
+            }
         }
     }
 
@@ -8678,6 +9554,8 @@ mod tests {
         CombatDamageStepKind, CombatDamageTarget, CreatureCharacteristics, CreatureKeywords,
         EffectDuration, EventReplayError, GameEvent, GameOutcome, GameState, ManaCost, ManaKind,
         ManaPool, ManaSource, ObjectView, Outcome, PaymentError, Phase, PlayerId, PriorityOutcome,
+        ReplacementCondition, ReplacementDamageTargetFilter, ReplacementDefinition,
+        ReplacementDuration, ReplacementEffectId, ReplacementOperation, ReplacementSourceFilter,
         ResolutionOutcome, SpellTiming, StackEntryId, StackObjectKind, StateBasedActionKind,
         StateBasedActionReport, StateError, Step, TargetChoice, TargetKind, TargetRequirement,
         TriggerCondition, TriggerDefinition, TriggerInterveningIf, TriggerObjectFilter,
@@ -9123,6 +10001,248 @@ mod tests {
             Outcome::Applied
         );
         assert_eq!(state.pending_triggers().len(), 1);
+        assert_eq!(
+            state.deterministic_hash(),
+            state.deterministic_hash_streaming()
+        );
+    }
+
+    #[test]
+    fn affected_player_orders_damage_replacements() {
+        let mut default_order = GameState::new();
+        let source_controller = default_order.add_player();
+        let affected = default_order.add_player();
+        let source = battlefield_creature(
+            &mut default_order,
+            source_controller,
+            2_301,
+            3,
+            3,
+            CreatureKeywords::default(),
+        );
+        let condition = ReplacementCondition::DamageWouldBeDealt {
+            source: ReplacementSourceFilter::Any,
+            target: ReplacementDamageTargetFilter::Player(affected),
+            combat_only: true,
+        };
+        let double = register_replacement(
+            &mut default_order,
+            ReplacementDefinition::new(affected, condition, ReplacementOperation::DoubleDamage),
+        );
+        let prevent = register_replacement(
+            &mut default_order,
+            ReplacementDefinition::new(affected, condition, ReplacementOperation::PreventDamage(2)),
+        );
+        let record = combat_damage_record(source, CombatDamageTarget::Player(affected), 3);
+        let final_record = default_order
+            .apply_combat_damage(record)
+            .unwrap_or_else(|error| panic!("unexpected combat damage error: {error:?}"))
+            .unwrap_or_else(|| panic!("damage should remain after default replacements"));
+        assert_eq!(final_record.amount(), 4);
+        assert_eq!(default_order.players()[affected.index()].life(), 16);
+        assert_eq!(
+            replacement_applications(&default_order),
+            vec![double, prevent]
+        );
+
+        let mut chosen_order = GameState::new();
+        let source_controller = chosen_order.add_player();
+        let affected = chosen_order.add_player();
+        let source = battlefield_creature(
+            &mut chosen_order,
+            source_controller,
+            2_302,
+            3,
+            3,
+            CreatureKeywords::default(),
+        );
+        let double = register_replacement(
+            &mut chosen_order,
+            ReplacementDefinition::new(affected, condition, ReplacementOperation::DoubleDamage),
+        );
+        let prevent = register_replacement(
+            &mut chosen_order,
+            ReplacementDefinition::new(affected, condition, ReplacementOperation::PreventDamage(2)),
+        );
+        assert_eq!(
+            apply(
+                &mut chosen_order,
+                Action::SetReplacementChoiceOrder {
+                    chooser: affected,
+                    order: vec![prevent, double],
+                },
+            ),
+            Outcome::Applied
+        );
+        let final_record = chosen_order
+            .apply_combat_damage(combat_damage_record(
+                source,
+                CombatDamageTarget::Player(affected),
+                3,
+            ))
+            .unwrap_or_else(|error| panic!("unexpected chosen combat damage error: {error:?}"))
+            .unwrap_or_else(|| panic!("damage should remain after chosen replacements"));
+        assert_eq!(final_record.amount(), 2);
+        assert_eq!(chosen_order.players()[affected.index()].life(), 18);
+        assert_eq!(
+            replacement_applications(&chosen_order),
+            vec![prevent, double]
+        );
+    }
+
+    #[test]
+    fn self_replacement_applies_before_affected_choice_order() {
+        let mut state = GameState::new();
+        let source_controller = state.add_player();
+        let affected = state.add_player();
+        let source = battlefield_creature(
+            &mut state,
+            source_controller,
+            2_303,
+            3,
+            3,
+            CreatureKeywords::default(),
+        );
+        let condition = ReplacementCondition::DamageWouldBeDealt {
+            source: ReplacementSourceFilter::Any,
+            target: ReplacementDamageTargetFilter::Player(affected),
+            combat_only: true,
+        };
+        let prevent = register_replacement(
+            &mut state,
+            ReplacementDefinition::new(affected, condition, ReplacementOperation::PreventDamage(2)),
+        );
+        let self_double = register_replacement(
+            &mut state,
+            ReplacementDefinition::new(affected, condition, ReplacementOperation::DoubleDamage)
+                .with_self_replacement(),
+        );
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::SetReplacementChoiceOrder {
+                    chooser: affected,
+                    order: vec![prevent, self_double],
+                },
+            ),
+            Outcome::Applied
+        );
+
+        let final_record = state
+            .apply_combat_damage(combat_damage_record(
+                source,
+                CombatDamageTarget::Player(affected),
+                3,
+            ))
+            .unwrap_or_else(|error| panic!("unexpected self replacement error: {error:?}"))
+            .unwrap_or_else(|| panic!("damage should remain after self replacement"));
+        assert_eq!(final_record.amount(), 4);
+        assert_eq!(state.players()[affected.index()].life(), 16);
+        assert_eq!(replacement_applications(&state), vec![self_double, prevent]);
+    }
+
+    #[test]
+    fn prevent_all_combat_damage_blocks_lifelink_deathtouch_and_damage_marking() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let defender = state.add_player();
+        let source =
+            battlefield_creature(&mut state, active, 2_304, 3, 3, CreatureKeywords::default());
+        let target = battlefield_creature(
+            &mut state,
+            defender,
+            2_305,
+            3,
+            3,
+            CreatureKeywords::default(),
+        );
+        let prevention = register_replacement(
+            &mut state,
+            ReplacementDefinition::new(
+                defender,
+                ReplacementCondition::DamageWouldBeDealt {
+                    source: ReplacementSourceFilter::Any,
+                    target: ReplacementDamageTargetFilter::Object(target),
+                    combat_only: true,
+                },
+                ReplacementOperation::PreventAllDamage,
+            ),
+        );
+
+        let final_record = state
+            .apply_combat_damage(super::CombatDamageRecord {
+                source,
+                target: CombatDamageTarget::Object(target),
+                amount: 3,
+                step: CombatDamageStepKind::Regular,
+                source_had_deathtouch: true,
+                source_had_lifelink: true,
+            })
+            .unwrap_or_else(|error| panic!("unexpected prevention error: {error:?}"));
+        assert_eq!(final_record, None);
+        let target_record = state
+            .objects()
+            .get(target)
+            .unwrap_or_else(|| panic!("missing target creature"));
+        assert_eq!(target_record.damage_marked(), 0);
+        assert!(!target_record.deathtouch_damage_marked());
+        assert_eq!(state.players()[active.index()].life(), 20);
+        assert_eq!(replacement_applications(&state), vec![prevention]);
+        assert!(!state
+            .events_this_turn()
+            .iter()
+            .any(|record| matches!(record.event(), GameEvent::DamageMarked { .. })));
+    }
+
+    #[test]
+    fn replacement_state_participates_in_canonical_hashes() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let affected = state.add_player();
+        let source =
+            battlefield_creature(&mut state, active, 2_306, 2, 2, CreatureKeywords::default());
+        let replacement = register_replacement(
+            &mut state,
+            ReplacementDefinition::new(
+                affected,
+                ReplacementCondition::DamageWouldBeDealt {
+                    source: ReplacementSourceFilter::Any,
+                    target: ReplacementDamageTargetFilter::Player(affected),
+                    combat_only: true,
+                },
+                ReplacementOperation::PreventDamage(1),
+            )
+            .with_duration(ReplacementDuration::Once),
+        );
+        assert_eq!(
+            state.deterministic_hash(),
+            state.deterministic_hash_streaming()
+        );
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::SetReplacementChoiceOrder {
+                    chooser: affected,
+                    order: vec![replacement],
+                },
+            ),
+            Outcome::Applied
+        );
+        assert_eq!(
+            state.deterministic_hash(),
+            state.deterministic_hash_streaming()
+        );
+
+        let final_record = state
+            .apply_combat_damage(combat_damage_record(
+                source,
+                CombatDamageTarget::Player(affected),
+                2,
+            ))
+            .unwrap_or_else(|error| panic!("unexpected once replacement error: {error:?}"))
+            .unwrap_or_else(|| panic!("one damage should remain"));
+        assert_eq!(final_record.amount(), 1);
+        assert_eq!(state.replacement_effects().count(), 0);
         assert_eq!(
             state.deterministic_hash(),
             state.deterministic_hash_streaming()
@@ -11915,6 +13035,42 @@ mod tests {
             )
             .unwrap_or_else(|error| panic!("unexpected creature characteristics error: {error:?}"));
         object
+    }
+
+    fn register_replacement(
+        state: &mut GameState,
+        definition: ReplacementDefinition,
+    ) -> ReplacementEffectId {
+        match apply(state, Action::RegisterReplacementEffect { definition }) {
+            Outcome::ReplacementEffectRegistered(replacement) => replacement,
+            other => panic!("unexpected replacement registration outcome: {other:?}"),
+        }
+    }
+
+    fn combat_damage_record(
+        source: super::ObjectId,
+        target: CombatDamageTarget,
+        amount: u32,
+    ) -> super::CombatDamageRecord {
+        super::CombatDamageRecord {
+            source,
+            target,
+            amount,
+            step: CombatDamageStepKind::Regular,
+            source_had_deathtouch: false,
+            source_had_lifelink: false,
+        }
+    }
+
+    fn replacement_applications(state: &GameState) -> Vec<ReplacementEffectId> {
+        state
+            .events_this_turn()
+            .iter()
+            .filter_map(|record| match record.event() {
+                GameEvent::ReplacementEffectApplied { replacement, .. } => Some(replacement),
+                _ => None,
+            })
+            .collect()
     }
 
     fn zero_payment(cost: ManaCost) -> super::PaymentPlan {
