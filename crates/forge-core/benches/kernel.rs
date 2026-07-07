@@ -164,9 +164,9 @@ fn bench_playout(c: &mut Criterion) {
 criterion_group! {
     name = benches;
     config = Criterion::default()
-        .sample_size(10)
-        .warm_up_time(Duration::from_millis(100))
-        .measurement_time(Duration::from_millis(300));
+        .sample_size(30)
+        .warm_up_time(Duration::from_millis(200))
+        .measurement_time(Duration::from_secs(1));
     targets = bench_clone, bench_legal_actions, bench_apply, bench_playout
 }
 criterion_main!(benches);
