@@ -1,0 +1,20 @@
+(
+    name: "T1.10 CR 103.3 players start at 20 life",
+    setup: (
+        players: 2,
+    ),
+    script: [],
+    expect: (
+        players: [
+            (player: 0, life: 20, poison: 0),
+            (player: 1, life: 20, poison: 0),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "life_poison_sanity",
+            "hash_consistency",
+            "hash_determinism",
+        ],
+    ),
+)

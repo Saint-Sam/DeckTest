@@ -1,0 +1,35 @@
+(
+    name: "T1.10 CR 103.7a starting player skips first draw",
+    setup: (
+        seed: 3,
+        players: 2,
+        libraries: [
+            (player: 0, cards: [100, 101, 102, 103, 104, 105, 106, 107]),
+            (player: 1, cards: [200, 201, 202, 203, 204, 205, 206]),
+        ],
+    ),
+    script: [
+        (action: "decide_turn_order"),
+        (action: "draw_opening_hands"),
+        (action: "keep_opening_hand", player: 0, bottom: []),
+        (action: "keep_opening_hand", player: 1, bottom: []),
+        (action: "start_turn", player: 0),
+        (action: "advance_step"),
+        (action: "advance_step"),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Hand", player: 0, count: 7),
+            (zone: "Library", player: 0, count: 1),
+            (zone: "Hand", player: 1, count: 7),
+            (zone: "Library", player: 1, count: 0),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "life_poison_sanity",
+            "hash_consistency",
+            "hash_determinism",
+        ],
+    ),
+)

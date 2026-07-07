@@ -459,6 +459,13 @@ pub enum ScenarioStep {
         /// Life amount to gain.
         amount: u32,
     },
+    /// Add poison counters to a player.
+    AddPoisonCounters {
+        /// Zero-based scenario player index.
+        player: usize,
+        /// Number of poison counters to add.
+        amount: u32,
+    },
 }
 
 impl ScenarioStep {
@@ -475,6 +482,9 @@ impl ScenarioStep {
             Self::SetLife { player, .. } => format!("set_life[{player}]"),
             Self::LoseLife { player, .. } => format!("lose_life[{player}]"),
             Self::GainLife { player, .. } => format!("gain_life[{player}]"),
+            Self::AddPoisonCounters { player, .. } => {
+                format!("add_poison_counters[{player}]")
+            }
         }
     }
 }
@@ -578,8 +588,8 @@ impl ScenarioExpect {
                 expect = expect.with_player(PlayerExpectation::from_ron_value(value)?);
             }
         }
-        if let Some(outcome) = map.optional_string("outcome")? {
-            expect = expect.with_outcome(OutcomeExpectation::parse(&outcome)?);
+        if let Some(outcome) = map.optional("outcome")? {
+            expect = expect.with_outcome(OutcomeExpectation::from_ron_value(outcome)?);
         }
         if let Some(invariants) = map.optional("invariants")? {
             for value in invariants.into_list("expect.invariants")? {
@@ -687,6 +697,24 @@ pub enum OutcomeExpectation {
 }
 
 impl OutcomeExpectation {
+    fn from_ron_value(value: RonValue) -> Result<Self, ScenarioError> {
+        match value {
+            RonValue::String(input) => Self::parse(&input),
+            RonValue::Map(map) => {
+                let status = map.required_string("status")?;
+                match status.as_str() {
+                    "won" | "Won" => Ok(Self::Won {
+                        player: map.required_usize("player")?,
+                    }),
+                    _ => Self::parse(&status),
+                }
+            }
+            _ => Err(ScenarioError::schema(
+                "outcome must be a string or map".to_owned(),
+            )),
+        }
+    }
+
     fn parse(input: &str) -> Result<Self, ScenarioError> {
         match input {
             "in_progress" | "InProgress" => Ok(Self::InProgress),
@@ -1065,6 +1093,10 @@ fn action_for_step(step: &ScenarioStep, context: &RunContext) -> Result<Action, 
             player: player_id(&context.players, *player, "gain_life")?,
             amount: *amount,
         }),
+        ScenarioStep::AddPoisonCounters { player, amount } => Ok(Action::AddPoisonCounters {
+            player: player_id(&context.players, *player, "add_poison_counters")?,
+            amount: *amount,
+        }),
     }
 }
 
@@ -1291,6 +1323,10 @@ fn parse_script(value: RonValue) -> Result<Vec<ScenarioStep>, ScenarioError> {
                 amount: map.required_u32("amount")?,
             },
             "gain_life" => ScenarioStep::GainLife {
+                player: map.required_usize("player")?,
+                amount: map.required_u32("amount")?,
+            },
+            "add_poison_counters" => ScenarioStep::AddPoisonCounters {
                 player: map.required_usize("player")?,
                 amount: map.required_u32("amount")?,
             },
@@ -1846,5 +1882,29 @@ mod tests {
         assert!(!report.passed());
         assert_eq!(report.failures().len(), 1);
         assert!(report.to_junit_xml().contains("<failure"));
+    }
+
+    #[test]
+    fn ron_scenario_asserts_poison_loss_winner() {
+        let input = r#"
+        (
+            name: "poison loss",
+            setup: (players: 2),
+            script: [
+                (action: "add_poison_counters", player: 1, amount: 10),
+                (action: "check_state_based_actions"),
+            ],
+            expect: (
+                players: [(player: 1, poison: 10)],
+                outcome: (status: "won", player: 0),
+                invariants: ["zone_conservation", "hash_consistency"],
+            ),
+        )
+        "#;
+
+        let report =
+            run_scenario_ron(input).unwrap_or_else(|error| panic!("unexpected run error: {error}"));
+
+        assert!(report.passed(), "{:?}", report.failures());
     }
 }

@@ -1,0 +1,22 @@
+(
+    name: "T1.10 CR 104.3b player with negative life loses",
+    setup: (
+        players: 2,
+    ),
+    script: [
+        (action: "set_life", player: 1, life: -1),
+        (action: "check_state_based_actions"),
+    ],
+    expect: (
+        players: [
+            (player: 1, life: -1, poison: 0),
+        ],
+        outcome: (status: "won", player: 0),
+        invariants: [
+            "zone_conservation",
+            "life_poison_sanity",
+            "hash_consistency",
+            "hash_determinism",
+        ],
+    ),
+)

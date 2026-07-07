@@ -4452,7 +4452,9 @@ impl GameState {
         match step {
             Step::Untap => self.priority_player = None,
             Step::Draw => {
-                self.draw_turn_card()?;
+                if !self.should_skip_first_turn_draw() {
+                    self.draw_turn_card()?;
+                }
                 self.assign_normal_priority(step)?;
             }
             Step::BeginningOfCombat => {
@@ -4468,6 +4470,13 @@ impl GameState {
             _ => self.assign_normal_priority(step)?,
         }
         Ok(())
+    }
+
+    fn should_skip_first_turn_draw(&self) -> bool {
+        self.turn_number == 1
+            && self.players.len() > 1
+            && self.starting_player.is_some()
+            && self.active_player == self.starting_player
     }
 
     fn end_step(&mut self, step: Step) {
@@ -6683,6 +6692,80 @@ mod tests {
             Outcome::Applied
         );
         assert_eq!(state.active_player(), Some(starting));
+    }
+
+    #[test]
+    fn starting_player_skips_first_turn_draw_step_after_turn_order_setup() {
+        let mut state = GameState::new();
+        let alice = add_player_action(&mut state);
+        let bob = add_player_action(&mut state);
+        let alice_library = ZoneId::new(Some(alice), ZoneKind::Library);
+        let alice_hand = ZoneId::new(Some(alice), ZoneKind::Hand);
+        seed_library_cards(&mut state, alice, 3_700, OPENING_HAND_SIZE + 1);
+        seed_library_cards(&mut state, bob, 3_800, OPENING_HAND_SIZE);
+
+        assert_eq!(
+            apply(&mut state, Action::SetSeed { seed: 3 }),
+            Outcome::Applied
+        );
+        let starting = match apply(&mut state, Action::DecideTurnOrder) {
+            Outcome::TurnOrderDecided(player) => player,
+            other => panic!("unexpected turn-order outcome: {other:?}"),
+        };
+        assert_eq!(starting, alice);
+        assert_eq!(
+            apply(&mut state, Action::DrawOpeningHands),
+            Outcome::Applied
+        );
+        for player in [alice, bob] {
+            assert_eq!(
+                apply(
+                    &mut state,
+                    Action::KeepOpeningHand {
+                        player,
+                        bottom: Vec::new(),
+                    },
+                ),
+                Outcome::Applied
+            );
+        }
+
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::StartTurn {
+                    active_player: alice,
+                },
+            ),
+            Outcome::Applied
+        );
+        assert_eq!(
+            apply(&mut state, Action::AdvanceStep),
+            Outcome::StepAdvanced(Step::Upkeep)
+        );
+        assert_eq!(
+            apply(&mut state, Action::AdvanceStep),
+            Outcome::StepAdvanced(Step::Draw)
+        );
+
+        assert_eq!(state.current_step(), Some(Step::Draw));
+        assert_eq!(state.priority_player(), Some(alice));
+        assert_eq!(
+            state
+                .zone(alice_hand)
+                .unwrap_or_else(|| panic!("alice hand missing"))
+                .objects()
+                .len(),
+            OPENING_HAND_SIZE as usize
+        );
+        assert_eq!(
+            state
+                .zone(alice_library)
+                .unwrap_or_else(|| panic!("alice library missing"))
+                .objects()
+                .len(),
+            1
+        );
     }
 
     #[test]

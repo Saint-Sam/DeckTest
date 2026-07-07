@@ -1,0 +1,22 @@
+(
+    name: "T1.10 CR 104.3d player with ten poison counters loses",
+    setup: (
+        players: 2,
+    ),
+    script: [
+        (action: "add_poison_counters", player: 1, amount: 10),
+        (action: "check_state_based_actions"),
+    ],
+    expect: (
+        players: [
+            (player: 1, life: 20, poison: 10),
+        ],
+        outcome: (status: "won", player: 0),
+        invariants: [
+            "zone_conservation",
+            "life_poison_sanity",
+            "hash_consistency",
+            "hash_determinism",
+        ],
+    ),
+)

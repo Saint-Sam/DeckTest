@@ -1,0 +1,20 @@
+(
+    name: "T1.10 CR 104.3c empty-library draw loses",
+    setup: (
+        players: 2,
+    ),
+    script: [
+        (action: "start_turn", player: 0),
+        (action: "advance_step"),
+        (action: "advance_step"),
+    ],
+    expect: (
+        outcome: (status: "won", player: 1),
+        invariants: [
+            "zone_conservation",
+            "life_poison_sanity",
+            "hash_consistency",
+            "hash_determinism",
+        ],
+    ),
+)
