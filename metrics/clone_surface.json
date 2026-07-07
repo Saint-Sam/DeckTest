@@ -83,15 +83,15 @@
     },
     {
       "field": "records",
-      "reason": "single Copy ObjectRecord arena",
+      "reason": "copy-on-write Copy ObjectRecord arena shared across GameState clones",
       "struct": "ObjectArena",
-      "type": "Vec<ObjectRecord>"
+      "type": "Arc<Vec<ObjectRecord>>"
     },
     {
       "field": "objects",
-      "reason": "object IDs only; total zone membership equals object count",
+      "reason": "copy-on-write object IDs only; total zone membership equals object count",
       "struct": "Zone",
-      "type": "Vec<ObjectId>"
+      "type": "Arc<Vec<ObjectId>>"
     },
     {
       "field": "players",
@@ -101,13 +101,13 @@
     },
     {
       "field": "objects",
-      "reason": "ObjectArena wrapper with one Copy-record arena",
+      "reason": "ObjectArena wrapper with one copy-on-write Copy-record arena",
       "struct": "GameState",
       "type": "ObjectArena"
     },
     {
       "field": "zones",
-      "reason": "fixed shared zones plus per-player zones",
+      "reason": "fixed shared zones plus per-player copy-on-write memberships",
       "struct": "GameState",
       "type": "Vec<Zone>"
     },

@@ -66,8 +66,8 @@ for struct_name in copy_required:
         raise SystemExit(f"ERROR: {struct_name} must remain Copy for the clone-surface invariant")
 
 allowed = {
-    ("ObjectArena", "records"): "single Copy ObjectRecord arena",
-    ("Zone", "objects"): "object IDs only; total zone membership equals object count",
+    ("ObjectArena", "records"): "copy-on-write Copy ObjectRecord arena shared across GameState clones",
+    ("Zone", "objects"): "copy-on-write object IDs only; total zone membership equals object count",
     ("StackEntry", "targets"): "Copy TargetSnapshot records bounded by target requirements",
     ("ResolutionRecord", "targets"): "Copy TargetSnapshot records copied from a stack entry",
     ("ResolutionRecord", "legal_targets"): "one bool per target snapshot",
@@ -77,8 +77,8 @@ allowed = {
     ("CombatState", "damage_records"): "current-combat Copy damage records",
     ("CombatState", "first_strike_participants"): "object IDs bounded by current combat",
     ("GameState", "players"): "player scalar arena bounded by player count",
-    ("GameState", "objects"): "ObjectArena wrapper with one Copy-record arena",
-    ("GameState", "zones"): "fixed shared zones plus per-player zones",
+    ("GameState", "objects"): "ObjectArena wrapper with one copy-on-write Copy-record arena",
+    ("GameState", "zones"): "fixed shared zones plus per-player copy-on-write memberships",
     ("GameState", "duration_markers"): "Copy records bounded by active effects",
     ("GameState", "stack_entries"): "bounded by current stack depth",
     ("GameState", "resolution_log"): "deterministic replay audit log",

@@ -2400,4 +2400,148 @@ mod tests {
 
         assert!(report.passed(), "{:?}", report.failures());
     }
+
+    #[test]
+    fn ron_scenario_covers_mana_and_object_movement() {
+        let input = r#"
+        (
+            name: "mana and move",
+            setup: (
+                players: 2,
+                objects: [
+                    (card: 10, owner: 0, controller: 0, zone: "Battlefield"),
+                ],
+            ),
+            script: [
+                (action: "add_mana", player: 0, mana: (white: 2, blue: 1, colorless: 2)),
+                (action: "pay_mana_auto", player: 0, cost: (white: 1, generic: 1)),
+                (action: "add_mana", player: 1, mana: (red: 1)),
+                (action: "clear_mana", player: 1),
+                (action: "set_base_creature", object: 0, power: 2, toughness: 2, keywords: ["vigilance", "flying"]),
+                (action: "set_object_tapped", object: 0, tapped: true),
+                (action: "clear_base_creature", object: 0),
+                (action: "move_object", object: 0, zone: "Exile"),
+            ],
+            expect: (
+                zone_counts: [
+                    (zone: "Battlefield", count: 0),
+                    (zone: "Exile", count: 1),
+                ],
+                players: [
+                    (player: 0, mana: (white: 1, blue: 1, colorless: 1)),
+                    (player: 1, mana: ()),
+                ],
+                outcome: "in_progress",
+                invariants: ["zone_conservation", "hash_consistency"],
+            ),
+        )
+        "#;
+
+        let report =
+            run_scenario_ron(input).unwrap_or_else(|error| panic!("unexpected run error: {error}"));
+
+        assert!(report.passed(), "{:?}", report.failures());
+    }
+
+    #[test]
+    fn ron_scenario_covers_creature_damage_sba() {
+        let input = r#"
+        (
+            name: "creature lethal damage",
+            setup: (
+                players: 2,
+                objects: [
+                    (card: 20, owner: 1, controller: 1, zone: "Battlefield"),
+                ],
+            ),
+            script: [
+                (action: "set_base_creature", object: 0, power: 3, toughness: 3, keywords: ["reach"]),
+                (action: "mark_damage", object: 0, amount: 3),
+                (action: "check_state_based_actions"),
+            ],
+            expect: (
+                zone_counts: [
+                    (zone: "Battlefield", count: 0),
+                    (zone: "Graveyard", player: 1, count: 1),
+                ],
+                outcome: "in_progress",
+                invariants: ["zone_conservation", "hash_consistency"],
+            ),
+        )
+        "#;
+
+        let report =
+            run_scenario_ron(input).unwrap_or_else(|error| panic!("unexpected run error: {error}"));
+
+        assert!(report.passed(), "{:?}", report.failures());
+    }
+
+    #[test]
+    fn ron_scenario_asserts_turn_priority_and_cleanup_exception() {
+        let input = r#"
+        (
+            name: "cleanup priority expectation",
+            setup: (
+                players: 2,
+                libraries: [(player: 0, cards: [31, 32])],
+            ),
+            script: [
+                (action: "start_turn", player: 0),
+                (action: "advance_step"),
+                (action: "advance_step"),
+                (action: "advance_step"),
+                (action: "advance_step"),
+                (action: "advance_step"),
+                (action: "advance_step"),
+                (action: "advance_step"),
+                (action: "advance_step"),
+                (action: "request_cleanup_priority"),
+                (action: "advance_step"),
+            ],
+            expect: (
+                active_player: 0,
+                priority_player: 0,
+                current_step: "Cleanup",
+                outcome: "in_progress",
+                invariants: ["zone_conservation", "hash_consistency"],
+            ),
+        )
+        "#;
+
+        let report =
+            run_scenario_ron(input).unwrap_or_else(|error| panic!("unexpected run error: {error}"));
+
+        assert!(report.passed(), "{:?}", report.failures());
+    }
+
+    #[test]
+    fn ron_parser_rejects_new_surface_mistakes() {
+        let bad_keyword = r#"
+        (
+            setup: (players: 1, objects: [(card: 1, owner: 0, zone: "Battlefield")]),
+            script: [
+                (action: "set_base_creature", object: 0, power: 1, toughness: 1, keywords: ["surprise"]),
+            ],
+            expect: (outcome: "in_progress"),
+        )
+        "#;
+        let bad_step = r#"
+        (
+            setup: (players: 1),
+            script: [],
+            expect: (current_step: "TeaBreak"),
+        )
+        "#;
+        let bad_priority_player = r#"
+        (
+            setup: (players: 1),
+            script: [],
+            expect: (priority_player: "left"),
+        )
+        "#;
+
+        assert!(parse_scenario_ron(bad_keyword).is_err());
+        assert!(parse_scenario_ron(bad_step).is_err());
+        assert!(parse_scenario_ron(bad_priority_player).is_err());
+    }
 }

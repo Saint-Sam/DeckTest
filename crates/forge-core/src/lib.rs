@@ -7,6 +7,8 @@
 //! contains no card behavior yet; it provides the stable arenas, typed IDs,
 //! zones, snapshots, invariants, and hashing that later rules systems build on.
 
+use std::sync::Arc;
+
 /// Returns true when the bootstrap crate is linked correctly.
 #[must_use]
 pub const fn crate_ready() -> bool {
@@ -2344,10 +2346,18 @@ impl ObjectRecord {
 }
 
 /// Arena storage for game objects.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ObjectArena {
-    // clone_surface: single object arena of Copy records; one allocation per state clone.
-    records: Vec<ObjectRecord>,
+    // clone_surface: Copy-on-write object arena; GameState clones share until mutation.
+    records: Arc<Vec<ObjectRecord>>,
+}
+
+impl Default for ObjectArena {
+    fn default() -> Self {
+        Self {
+            records: Arc::new(Vec::new()),
+        }
+    }
 }
 
 impl ObjectArena {
@@ -2381,8 +2391,9 @@ impl ObjectArena {
         controller: PlayerId,
         controlled_since_turn: u32,
     ) -> ObjectId {
-        let id = ObjectId(self.records.len() as u32);
-        self.records.push(ObjectRecord {
+        let records = Arc::make_mut(&mut self.records);
+        let id = ObjectId(records.len() as u32);
+        records.push(ObjectRecord {
             id,
             card,
             owner,
@@ -2397,7 +2408,11 @@ impl ObjectArena {
     }
 
     fn get_mut(&mut self, id: ObjectId) -> Option<&mut ObjectRecord> {
-        self.records.get_mut(id.index())
+        Arc::make_mut(&mut self.records).get_mut(id.index())
+    }
+
+    fn records_mut(&mut self) -> &mut Vec<ObjectRecord> {
+        Arc::make_mut(&mut self.records)
     }
 }
 
@@ -2405,8 +2420,8 @@ impl ObjectArena {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Zone {
     id: ZoneId,
-    // clone_surface: zone membership stores object IDs only; total entries equal object count.
-    objects: Vec<ObjectId>,
+    // clone_surface: Copy-on-write zone membership; IDs are shared across state clones.
+    objects: Arc<Vec<ObjectId>>,
 }
 
 impl Zone {
@@ -2419,7 +2434,11 @@ impl Zone {
     /// Returns the objects in zone order.
     #[must_use]
     pub fn objects(&self) -> &[ObjectId] {
-        &self.objects
+        self.objects.as_slice()
+    }
+
+    fn objects_mut(&mut self) -> &mut Vec<ObjectId> {
+        Arc::make_mut(&mut self.objects)
     }
 }
 
@@ -3273,19 +3292,19 @@ impl GameState {
             zones: vec![
                 Zone {
                     id: ZoneId::new(None, ZoneKind::Battlefield),
-                    objects: Vec::new(),
+                    objects: Arc::new(Vec::new()),
                 },
                 Zone {
                     id: ZoneId::new(None, ZoneKind::Exile),
-                    objects: Vec::new(),
+                    objects: Arc::new(Vec::new()),
                 },
                 Zone {
                     id: ZoneId::new(None, ZoneKind::Stack),
-                    objects: Vec::new(),
+                    objects: Arc::new(Vec::new()),
                 },
                 Zone {
                     id: ZoneId::new(None, ZoneKind::Command),
-                    objects: Vec::new(),
+                    objects: Arc::new(Vec::new()),
                 },
             ],
             next_duration_marker: 0,
@@ -3415,15 +3434,15 @@ impl GameState {
         self.players.push(PlayerState::new(id));
         self.zones.push(Zone {
             id: ZoneId::new(Some(id), ZoneKind::Library),
-            objects: Vec::new(),
+            objects: Arc::new(Vec::new()),
         });
         self.zones.push(Zone {
             id: ZoneId::new(Some(id), ZoneKind::Hand),
-            objects: Vec::new(),
+            objects: Arc::new(Vec::new()),
         });
         self.zones.push(Zone {
             id: ZoneId::new(Some(id), ZoneKind::Graveyard),
-            objects: Vec::new(),
+            objects: Arc::new(Vec::new()),
         });
         id
     }
@@ -3740,7 +3759,7 @@ impl GameState {
                 _ => false,
             };
             let mut objects = Vec::with_capacity(zone.objects.len());
-            for object in &zone.objects {
+            for object in zone.objects.iter() {
                 let record = self
                     .objects
                     .get(*object)
@@ -4188,7 +4207,7 @@ impl GameState {
         self.require_player(controller)?;
         self.require_zone(zone)?;
         let object = self.objects.push(card, owner, controller, self.turn_number);
-        self.zone_mut(zone)?.objects.push(object);
+        self.zone_mut(zone)?.objects_mut().push(object);
         Ok(object)
     }
 
@@ -4213,8 +4232,8 @@ impl GameState {
             .iter()
             .position(|candidate| *candidate == object)
             .ok_or(StateError::MissingZoneMembership(object))?;
-        self.zones[from_index].objects.remove(from_position);
-        self.zone_mut(to)?.objects.push(object);
+        self.zones[from_index].objects_mut().remove(from_position);
+        self.zone_mut(to)?.objects_mut().push(object);
         if from_zone_id == battlefield && to != battlefield {
             self.remove_object_from_combat(object);
             if let Some(record) = self.objects.get_mut(object) {
@@ -4246,7 +4265,7 @@ impl GameState {
         let mut memberships = vec![0_u8; self.objects.len()];
         for zone in &self.zones {
             self.validate_zone_id(zone.id)?;
-            for object in &zone.objects {
+            for object in zone.objects.iter() {
                 if self.objects.get(*object).is_none() {
                     return Err(StateError::InvalidZoneObject {
                         zone: zone.id,
@@ -4338,7 +4357,7 @@ impl GameState {
         for zone in &self.zones {
             bytes.write_zone_id(zone.id);
             bytes.write_u32(zone.objects.len() as u32);
-            for object in &zone.objects {
+            for object in zone.objects.iter() {
                 bytes.write_u32(object.0);
             }
         }
@@ -4416,7 +4435,7 @@ impl GameState {
         for zone in &self.zones {
             hash.write_zone_id(zone.id);
             hash.write_u32(zone.objects.len() as u32);
-            for object in &zone.objects {
+            for object in zone.objects.iter() {
                 hash.write_u32(object.0);
             }
         }
@@ -4978,7 +4997,14 @@ impl GameState {
     }
 
     fn clear_damage_marked(&mut self) {
-        for record in &mut self.objects.records {
+        if !self
+            .objects
+            .iter()
+            .any(|record| record.damage_marked() > 0 || record.deathtouch_damage_marked())
+        {
+            return;
+        }
+        for record in self.objects.records_mut() {
             record.damage_marked = 0;
             record.deathtouch_damage_marked = false;
         }
@@ -5218,7 +5244,14 @@ impl GameState {
 
     fn clear_since_last_sba_markers(&mut self) {
         self.empty_library_draws_since_sba.clear();
-        for object in &mut self.objects.records {
+        if !self
+            .objects
+            .iter()
+            .any(ObjectRecord::deathtouch_damage_marked)
+        {
+            return;
+        }
+        for object in self.objects.records_mut() {
             object.deathtouch_damage_marked = false;
         }
     }
@@ -5498,10 +5531,12 @@ impl GameState {
                     player,
                     object: *object,
                 })?;
-            moved.push(self.zones[hand_index].objects.remove(position));
+            moved.push(self.zones[hand_index].objects_mut().remove(position));
         }
         for (offset, object) in moved.into_iter().enumerate() {
-            self.zones[library_index].objects.insert(offset, object);
+            self.zones[library_index]
+                .objects_mut()
+                .insert(offset, object);
         }
         Ok(())
     }
@@ -5519,11 +5554,11 @@ impl GameState {
         self.require_zone(from)?;
         self.require_zone(to)?;
         let from_index = self.zone_index(from).ok_or(StateError::UnknownZone(from))?;
-        let Some(object) = self.zones[from_index].objects.pop() else {
+        let Some(object) = self.zones[from_index].objects_mut().pop() else {
             return Ok(None);
         };
         let to_index = self.zone_index(to).ok_or(StateError::UnknownZone(to))?;
-        self.zones[to_index].objects.push(object);
+        self.zones[to_index].objects_mut().push(object);
         Ok(Some(object))
     }
 
@@ -5533,7 +5568,7 @@ impl GameState {
         let len = self.zones[zone_index].objects.len();
         for index in (1..len).rev() {
             let swap_with = self.random_below(index + 1);
-            self.zones[zone_index].objects.swap(index, swap_with);
+            self.zones[zone_index].objects_mut().swap(index, swap_with);
         }
         Ok(())
     }
