@@ -60,6 +60,9 @@ version = "0.0.0"
 [[package]]
 name = "forge-testkit"
 version = "0.0.0"
+dependencies = [
+ "forge-core",
+]
 
 [[package]]
 name = "forge-ui"

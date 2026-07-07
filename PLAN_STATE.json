@@ -79,6 +79,12 @@
       "attempts": 0,
       "verification": "scripts/vl.sh passed locally with deterministic turn-order decision, opening-hand draw, London mulligan redraw/keep/bottoming, setup-aware StartTurn guard, canonical hash coverage, and PlayerView hidden hand/library canaries"
     },
+    "T1.9": {
+      "status": "verified_local",
+      "branch": "task/T1.9-forge-testkit-scenarios",
+      "attempts": 0,
+      "verification": "scripts/vl.sh passed locally with dependency-free RON scenario parsing, scenario runner, invariant assertions, hash determinism checks, JUnit-style XML output, CLI lint/oracle commands, and a smoke oracle scenario"
+    },
     "T1.R1": {
       "status": "verified_local",
       "branch": "remediation/T1.R1-action-surface",
