@@ -1,0 +1,31 @@
+id: T2.2
+title: Triggered abilities
+tier: 2
+tags:
+  - kernel
+  - triggers
+  - events
+  - stack
+scope_paths:
+  - crates/forge-core/src/lib.rs
+  - docs/specs/T2.2.md
+  - reports/tickets/T2.2.yaml
+inputs:
+  - FORGE_REBUILD_MASTER_PLAN.md Section 7 T2.2
+  - docs/specs/T2.1.md
+  - docs/specs/T2.2.md
+acceptance:
+  - triggered ability definitions are data-only and compiled as declarative predicates over GameEvent
+  - trigger subscriptions are keyed by GameEventKind and interpreted without closures or card-specific code
+  - matching events queue PendingTriggeredAbility instances
+  - intervening-if predicates gate queueing
+  - delayed-once subscriptions retire after their first queued trigger
+  - pending triggers block normal priority actions until stacked
+  - pending triggers are put onto the stack in APNAP order as triggered abilities
+  - trigger state and lifecycle events participate in canonical hashes
+  - clone-surface guard baseline accounts for trigger subscription and pending trigger vectors
+verify: cargo test -p forge-core && cargo clippy -p forge-core --all-targets -- -D warnings && scripts/vl.sh
+retry_policy: 3 attempts then blocker
+depends_on:
+  - T2.1
+parallel_ok: false

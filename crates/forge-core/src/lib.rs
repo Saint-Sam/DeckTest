@@ -1072,6 +1072,24 @@ impl StackEntryId {
     }
 }
 
+/// A stable handle for one registered triggered ability definition.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct TriggerId(u32);
+
+impl TriggerId {
+    /// Returns the zero-based trigger-definition index.
+    #[must_use]
+    pub const fn index(self) -> usize {
+        self.0 as usize
+    }
+
+    /// Returns the raw deterministic trigger value.
+    #[must_use]
+    pub const fn get(self) -> u32 {
+        self.0
+    }
+}
+
 /// The coarse kind of object represented by a stack entry.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum StackObjectKind {
@@ -1095,6 +1113,153 @@ impl StackObjectKind {
             Self::PermanentSpell => 2,
             Self::ActivatedAbility => 3,
             Self::TriggeredAbility => 4,
+        }
+    }
+}
+
+/// The coarse variant of a [`GameEvent`] used by trigger subscription tables.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum GameEventKind {
+    /// The deterministic seed changed.
+    SeedSet,
+    /// A player and that player's zones were added.
+    PlayerAdded,
+    /// The starting player was selected.
+    TurnOrderDecided,
+    /// Opening hands were drawn.
+    OpeningHandsDrawn,
+    /// A player took a mulligan.
+    MulliganTaken,
+    /// A player kept an opening hand.
+    OpeningHandKept,
+    /// One opening-hand card was bottomed.
+    OpeningHandCardBottomed,
+    /// A player's maximum hand size changed.
+    PlayerMaxHandSizeSet,
+    /// A player's life total was set directly.
+    LifeTotalSet,
+    /// A player lost life.
+    LifeLost,
+    /// A player gained life.
+    LifeGained,
+    /// Poison counters were added to a player.
+    PoisonCountersAdded,
+    /// A mana pool changed.
+    ManaPoolChanged,
+    /// Mana was paid.
+    ManaPaid,
+    /// An object was created.
+    ObjectCreated,
+    /// An object moved zones.
+    ObjectMoved,
+    /// A zone was shuffled.
+    ZoneShuffled,
+    /// Base creature characteristics were set.
+    BaseCreatureCharacteristicsSet,
+    /// Base creature characteristics were cleared.
+    BaseCreatureCharacteristicsCleared,
+    /// An object's tapped status changed.
+    ObjectTapped,
+    /// Damage was marked on an object.
+    DamageMarked,
+    /// A turn began.
+    TurnStarted,
+    /// A step ended.
+    StepEnded,
+    /// A step began.
+    StepBegan,
+    /// Priority was passed.
+    PriorityPassed,
+    /// The priority holder changed.
+    PriorityChanged,
+    /// A stack entry was added.
+    StackEntryAdded,
+    /// A stack entry resolved.
+    StackEntryResolved,
+    /// Attackers were declared.
+    AttackersDeclared,
+    /// One attacker was declared.
+    AttackDeclared,
+    /// Blockers were declared.
+    BlockersDeclared,
+    /// One blocker was declared.
+    BlockDeclared,
+    /// Combat damage was dealt.
+    CombatDamageDealt,
+    /// A player lost due to a state-based action.
+    PlayerLostByStateBasedAction,
+    /// A permanent moved due to a state-based action.
+    PermanentMovedByStateBasedAction,
+    /// The game outcome changed.
+    GameOutcomeChanged,
+    /// Cleanup priority was requested.
+    CleanupPriorityRequested,
+    /// A duration marker was added.
+    DurationMarkerAdded,
+    /// Duration markers expired.
+    DurationMarkersExpired,
+    /// Cleanup actions were performed.
+    CleanupPerformed,
+    /// Mana pools were cleared.
+    ManaPoolsCleared,
+    /// A player tried to draw from an empty library.
+    EmptyLibraryDraw,
+    /// A triggered ability definition was registered.
+    TriggeredAbilityRegistered,
+    /// A triggered ability instance was queued.
+    TriggeredAbilityQueued,
+    /// A queued triggered ability was put on the stack.
+    TriggeredAbilityPutOnStack,
+}
+
+impl GameEventKind {
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::SeedSet => 0,
+            Self::PlayerAdded => 1,
+            Self::TurnOrderDecided => 2,
+            Self::OpeningHandsDrawn => 3,
+            Self::MulliganTaken => 4,
+            Self::OpeningHandKept => 5,
+            Self::OpeningHandCardBottomed => 6,
+            Self::PlayerMaxHandSizeSet => 7,
+            Self::LifeTotalSet => 8,
+            Self::LifeLost => 9,
+            Self::LifeGained => 10,
+            Self::PoisonCountersAdded => 11,
+            Self::ManaPoolChanged => 12,
+            Self::ManaPaid => 13,
+            Self::ObjectCreated => 14,
+            Self::ObjectMoved => 15,
+            Self::ZoneShuffled => 16,
+            Self::BaseCreatureCharacteristicsSet => 17,
+            Self::BaseCreatureCharacteristicsCleared => 18,
+            Self::ObjectTapped => 19,
+            Self::DamageMarked => 20,
+            Self::TurnStarted => 21,
+            Self::StepEnded => 22,
+            Self::StepBegan => 23,
+            Self::PriorityPassed => 24,
+            Self::PriorityChanged => 25,
+            Self::StackEntryAdded => 26,
+            Self::StackEntryResolved => 27,
+            Self::AttackersDeclared => 28,
+            Self::AttackDeclared => 29,
+            Self::BlockersDeclared => 30,
+            Self::BlockDeclared => 31,
+            Self::CombatDamageDealt => 32,
+            Self::PlayerLostByStateBasedAction => 33,
+            Self::PermanentMovedByStateBasedAction => 34,
+            Self::GameOutcomeChanged => 35,
+            Self::CleanupPriorityRequested => 36,
+            Self::DurationMarkerAdded => 37,
+            Self::DurationMarkersExpired => 38,
+            Self::CleanupPerformed => 39,
+            Self::ManaPoolsCleared => 40,
+            Self::EmptyLibraryDraw => 41,
+            Self::TriggeredAbilityRegistered => 42,
+            Self::TriggeredAbilityQueued => 43,
+            Self::TriggeredAbilityPutOnStack => 44,
         }
     }
 }
@@ -1192,6 +1357,268 @@ impl TargetSnapshot {
     #[must_use]
     pub const fn original_zone(self) -> Option<ZoneId> {
         self.original_zone
+    }
+}
+
+/// Object selector used by declarative trigger predicates.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum TriggerObjectFilter {
+    /// Any object.
+    Any,
+    /// The registered trigger's source object.
+    Source,
+    /// One exact object.
+    Object(ObjectId),
+}
+
+impl TriggerObjectFilter {
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::Any => 0,
+            Self::Source => 1,
+            Self::Object(_) => 2,
+        }
+    }
+}
+
+/// Player selector used by declarative trigger predicates.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum TriggerPlayerFilter {
+    /// Any player.
+    Any,
+    /// The registered trigger's controller.
+    Controller,
+    /// Any opponent of the registered trigger's controller.
+    OpponentOfController,
+    /// One exact player.
+    Player(PlayerId),
+}
+
+impl TriggerPlayerFilter {
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::Any => 0,
+            Self::Controller => 1,
+            Self::OpponentOfController => 2,
+            Self::Player(_) => 3,
+        }
+    }
+}
+
+/// Zone selector used by declarative trigger predicates.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum TriggerZoneFilter {
+    /// Any zone.
+    Any,
+    /// One exact zone.
+    Exact(ZoneId),
+    /// Any zone with this kind.
+    Kind(ZoneKind),
+    /// A zone of this kind belonging to a selected player.
+    Owned {
+        /// Player selector for the zone owner.
+        owner: TriggerPlayerFilter,
+        /// Required zone kind.
+        kind: ZoneKind,
+    },
+}
+
+impl TriggerZoneFilter {
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::Any => 0,
+            Self::Exact(_) => 1,
+            Self::Kind(_) => 2,
+            Self::Owned { .. } => 3,
+        }
+    }
+}
+
+/// Declarative event predicate for T2.2 triggered abilities.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum TriggerCondition {
+    /// Match any event with the given coarse kind.
+    EventKind(GameEventKind),
+    /// Match an object moving between selected zones.
+    ObjectMoved {
+        /// Object selector.
+        object: TriggerObjectFilter,
+        /// Source-zone selector.
+        from: TriggerZoneFilter,
+        /// Destination-zone selector.
+        to: TriggerZoneFilter,
+    },
+    /// Match the beginning of one step.
+    StepBegan {
+        /// Step that must begin.
+        step: Step,
+    },
+    /// Match life loss by a selected player.
+    LifeLost {
+        /// Player selector.
+        player: TriggerPlayerFilter,
+    },
+    /// Match life gain by a selected player.
+    LifeGained {
+        /// Player selector.
+        player: TriggerPlayerFilter,
+    },
+    /// Match damage marked on a selected object.
+    DamageMarked {
+        /// Object selector.
+        object: TriggerObjectFilter,
+    },
+    /// Match stack resolution with optional kind/outcome filters.
+    StackEntryResolved {
+        /// Optional stack-object kind filter.
+        kind: Option<StackObjectKind>,
+        /// Optional resolution-outcome filter.
+        outcome: Option<ResolutionOutcome>,
+    },
+}
+
+impl TriggerCondition {
+    /// Returns the event kind this condition subscribes to.
+    #[must_use]
+    pub const fn subscribed_event_kind(self) -> GameEventKind {
+        match self {
+            Self::EventKind(kind) => kind,
+            Self::ObjectMoved { .. } => GameEventKind::ObjectMoved,
+            Self::StepBegan { .. } => GameEventKind::StepBegan,
+            Self::LifeLost { .. } => GameEventKind::LifeLost,
+            Self::LifeGained { .. } => GameEventKind::LifeGained,
+            Self::DamageMarked { .. } => GameEventKind::DamageMarked,
+            Self::StackEntryResolved { .. } => GameEventKind::StackEntryResolved,
+        }
+    }
+
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::EventKind(_) => 0,
+            Self::ObjectMoved { .. } => 1,
+            Self::StepBegan { .. } => 2,
+            Self::LifeLost { .. } => 3,
+            Self::LifeGained { .. } => 4,
+            Self::DamageMarked { .. } => 5,
+            Self::StackEntryResolved { .. } => 6,
+        }
+    }
+}
+
+/// Declarative intervening-if predicate checked when an event would trigger.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum TriggerInterveningIf {
+    /// Always true.
+    Always,
+    /// The trigger source must currently be in the selected zone.
+    SourceInZone(ZoneId),
+    /// The trigger controller must still control the source.
+    ControllerControlsSource,
+    /// The trigger controller's life total must be at or below this value.
+    ControllerLifeAtMost(i32),
+}
+
+impl TriggerInterveningIf {
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::Always => 0,
+            Self::SourceInZone(_) => 1,
+            Self::ControllerControlsSource => 2,
+            Self::ControllerLifeAtMost(_) => 3,
+        }
+    }
+}
+
+/// Lifetime of a registered trigger subscription.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum TriggerDuration {
+    /// The subscription remains until explicitly unsupported future removal.
+    Persistent,
+    /// The subscription is removed after the first matching event queues it.
+    DelayedOnce,
+}
+
+impl TriggerDuration {
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::Persistent => 0,
+            Self::DelayedOnce => 1,
+        }
+    }
+}
+
+/// Data-only triggered ability definition produced by card IR compilation.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct TriggerDefinition {
+    controller: PlayerId,
+    source: Option<ObjectId>,
+    condition: TriggerCondition,
+    intervening_if: TriggerInterveningIf,
+    duration: TriggerDuration,
+}
+
+impl TriggerDefinition {
+    /// Creates a persistent triggered ability definition with no source object.
+    #[must_use]
+    pub const fn new(controller: PlayerId, condition: TriggerCondition) -> Self {
+        Self {
+            controller,
+            source: None,
+            condition,
+            intervening_if: TriggerInterveningIf::Always,
+            duration: TriggerDuration::Persistent,
+        }
+    }
+
+    /// Sets the source object for source-relative predicates.
+    #[must_use]
+    pub const fn with_source(mut self, source: ObjectId) -> Self {
+        self.source = Some(source);
+        self
+    }
+
+    /// Sets the intervening-if predicate.
+    #[must_use]
+    pub const fn with_intervening_if(mut self, intervening_if: TriggerInterveningIf) -> Self {
+        self.intervening_if = intervening_if;
+        self
+    }
+
+    /// Marks this definition as a delayed trigger that queues only once.
+    #[must_use]
+    pub const fn delayed_once(mut self) -> Self {
+        self.duration = TriggerDuration::DelayedOnce;
+        self
+    }
+
+    /// Returns the trigger controller.
+    #[must_use]
+    pub const fn controller(self) -> PlayerId {
+        self.controller
+    }
+
+    /// Returns the optional trigger source object.
+    #[must_use]
+    pub const fn source(self) -> Option<ObjectId> {
+        self.source
+    }
+
+    /// Returns the event predicate.
+    #[must_use]
+    pub const fn condition(self) -> TriggerCondition {
+        self.condition
+    }
+
+    /// Returns the intervening-if predicate.
+    #[must_use]
+    pub const fn intervening_if(self) -> TriggerInterveningIf {
+        self.intervening_if
+    }
+
+    /// Returns the trigger duration.
+    #[must_use]
+    pub const fn duration(self) -> TriggerDuration {
+        self.duration
     }
 }
 
@@ -1298,6 +1725,7 @@ pub struct StackEntry {
     id: StackEntryId,
     controller: PlayerId,
     object: Option<ObjectId>,
+    trigger: Option<TriggerId>,
     kind: StackObjectKind,
     // clone_surface: target snapshots are Copy records bounded by target requirements.
     targets: Vec<TargetSnapshot>,
@@ -1321,6 +1749,12 @@ impl StackEntry {
     #[must_use]
     pub const fn object(&self) -> Option<ObjectId> {
         self.object
+    }
+
+    /// Returns the trigger definition that created this entry, if any.
+    #[must_use]
+    pub const fn trigger(&self) -> Option<TriggerId> {
+        self.trigger
     }
 
     /// Returns the coarse stack-object kind.
@@ -1348,6 +1782,7 @@ pub struct ResolutionRecord {
     stack_entry: StackEntryId,
     controller: PlayerId,
     object: Option<ObjectId>,
+    trigger: Option<TriggerId>,
     kind: StackObjectKind,
     // clone_surface: copied target snapshots are bounded by the resolving entry.
     targets: Vec<TargetSnapshot>,
@@ -1373,6 +1808,12 @@ impl ResolutionRecord {
     #[must_use]
     pub const fn object(&self) -> Option<ObjectId> {
         self.object
+    }
+
+    /// Returns the trigger definition that created this entry, if any.
+    #[must_use]
+    pub const fn trigger(&self) -> Option<TriggerId> {
+        self.trigger
     }
 
     /// Returns the resolved stack-object kind.
@@ -2710,6 +3151,8 @@ pub enum StateError {
         /// The player who tried to act.
         actual: PlayerId,
     },
+    /// Triggered abilities must be put on the stack before priority actions.
+    PendingTriggeredAbilities,
     /// A stack resolution was requested while the stack was empty.
     EmptyStack,
     /// A stack entry refers to a spell object that is no longer on the stack.
@@ -2940,6 +3383,13 @@ pub enum Action {
         /// Stack-object kind.
         kind: StackObjectKind,
     },
+    /// Register one declarative triggered ability definition.
+    RegisterTriggeredAbility {
+        /// Data-only trigger definition.
+        definition: TriggerDefinition,
+    },
+    /// Put all currently pending triggered abilities on the stack in APNAP order.
+    PutPendingTriggeredAbilitiesOnStack,
     /// Record whether attackers were declared in this combat.
     SetAttackersDeclaredThisCombat {
         /// True if at least one attacker was declared.
@@ -3087,6 +3537,8 @@ pub enum Outcome {
     StackEntryAdded(StackEntryId),
     /// Multiple stack entries were created.
     StackEntriesAdded(Vec<StackEntryId>),
+    /// A triggered ability definition was registered.
+    TriggerRegistered(TriggerId),
     /// Combat damage was assigned and dealt.
     CombatDamageAssigned(Vec<CombatDamageRecord>),
     /// State-based actions were checked.
@@ -3101,6 +3553,9 @@ pub enum Outcome {
 #[must_use]
 #[inline]
 pub fn legal_actions(state: &GameState) -> ActionList {
+    if !state.pending_triggers().is_empty() {
+        return ActionList::single(Action::PutPendingTriggeredAbilitiesOnStack);
+    }
     if let Some(player) = state.priority_player() {
         return ActionList::single(Action::PassPriority { player });
     }
@@ -3238,6 +3693,18 @@ pub fn apply(state: &mut GameState, action: Action) -> Outcome {
         },
         Action::PutSimultaneousAbilitiesApnap { abilities, kind } => {
             match state.put_simultaneous_abilities_apnap(&abilities, kind) {
+                Ok(entries) => Outcome::StackEntriesAdded(entries),
+                Err(error) => Outcome::Failed(error),
+            }
+        }
+        Action::RegisterTriggeredAbility { definition } => {
+            match state.register_triggered_ability(definition) {
+                Ok(trigger) => Outcome::TriggerRegistered(trigger),
+                Err(error) => Outcome::Failed(error),
+            }
+        }
+        Action::PutPendingTriggeredAbilitiesOnStack => {
+            match state.put_pending_triggered_abilities_on_stack() {
                 Ok(entries) => Outcome::StackEntriesAdded(entries),
                 Err(error) => Outcome::Failed(error),
             }
@@ -3619,6 +4086,37 @@ pub enum GameEvent {
         /// Player who tried to draw.
         player: PlayerId,
     },
+    /// A triggered ability definition was registered.
+    TriggeredAbilityRegistered {
+        /// Registered trigger.
+        trigger: TriggerId,
+        /// Trigger controller.
+        controller: PlayerId,
+        /// Optional trigger source object.
+        source: Option<ObjectId>,
+        /// Subscribed event kind.
+        event_kind: GameEventKind,
+        /// Whether this is a delayed-once trigger.
+        duration: TriggerDuration,
+    },
+    /// A triggered ability was queued by a matching event.
+    TriggeredAbilityQueued {
+        /// Queued trigger.
+        trigger: TriggerId,
+        /// Trigger controller.
+        controller: PlayerId,
+        /// Sequence number of the event that caused the trigger.
+        event_sequence: u64,
+    },
+    /// A queued triggered ability was put onto the stack.
+    TriggeredAbilityPutOnStack {
+        /// Queued trigger.
+        trigger: TriggerId,
+        /// New stack entry.
+        entry: StackEntryId,
+        /// Trigger controller.
+        controller: PlayerId,
+    },
 }
 
 impl GameEvent {
@@ -3666,6 +4164,69 @@ impl GameEvent {
             Self::CleanupPerformed { .. } => 39,
             Self::ManaPoolsCleared => 40,
             Self::EmptyLibraryDraw { .. } => 41,
+            Self::TriggeredAbilityRegistered { .. } => 42,
+            Self::TriggeredAbilityQueued { .. } => 43,
+            Self::TriggeredAbilityPutOnStack { .. } => 44,
+        }
+    }
+
+    /// Returns the coarse event kind used by trigger subscription tables.
+    #[must_use]
+    pub const fn kind(self) -> GameEventKind {
+        match self {
+            Self::SeedSet { .. } => GameEventKind::SeedSet,
+            Self::PlayerAdded { .. } => GameEventKind::PlayerAdded,
+            Self::TurnOrderDecided { .. } => GameEventKind::TurnOrderDecided,
+            Self::OpeningHandsDrawn => GameEventKind::OpeningHandsDrawn,
+            Self::MulliganTaken { .. } => GameEventKind::MulliganTaken,
+            Self::OpeningHandKept { .. } => GameEventKind::OpeningHandKept,
+            Self::OpeningHandCardBottomed { .. } => GameEventKind::OpeningHandCardBottomed,
+            Self::PlayerMaxHandSizeSet { .. } => GameEventKind::PlayerMaxHandSizeSet,
+            Self::LifeTotalSet { .. } => GameEventKind::LifeTotalSet,
+            Self::LifeLost { .. } => GameEventKind::LifeLost,
+            Self::LifeGained { .. } => GameEventKind::LifeGained,
+            Self::PoisonCountersAdded { .. } => GameEventKind::PoisonCountersAdded,
+            Self::ManaPoolChanged { .. } => GameEventKind::ManaPoolChanged,
+            Self::ManaPaid { .. } => GameEventKind::ManaPaid,
+            Self::ObjectCreated { .. } => GameEventKind::ObjectCreated,
+            Self::ObjectMoved { .. } => GameEventKind::ObjectMoved,
+            Self::ZoneShuffled { .. } => GameEventKind::ZoneShuffled,
+            Self::BaseCreatureCharacteristicsSet { .. } => {
+                GameEventKind::BaseCreatureCharacteristicsSet
+            }
+            Self::BaseCreatureCharacteristicsCleared { .. } => {
+                GameEventKind::BaseCreatureCharacteristicsCleared
+            }
+            Self::ObjectTapped { .. } => GameEventKind::ObjectTapped,
+            Self::DamageMarked { .. } => GameEventKind::DamageMarked,
+            Self::TurnStarted { .. } => GameEventKind::TurnStarted,
+            Self::StepEnded { .. } => GameEventKind::StepEnded,
+            Self::StepBegan { .. } => GameEventKind::StepBegan,
+            Self::PriorityPassed { .. } => GameEventKind::PriorityPassed,
+            Self::PriorityChanged { .. } => GameEventKind::PriorityChanged,
+            Self::StackEntryAdded { .. } => GameEventKind::StackEntryAdded,
+            Self::StackEntryResolved { .. } => GameEventKind::StackEntryResolved,
+            Self::AttackersDeclared { .. } => GameEventKind::AttackersDeclared,
+            Self::AttackDeclared { .. } => GameEventKind::AttackDeclared,
+            Self::BlockersDeclared { .. } => GameEventKind::BlockersDeclared,
+            Self::BlockDeclared { .. } => GameEventKind::BlockDeclared,
+            Self::CombatDamageDealt { .. } => GameEventKind::CombatDamageDealt,
+            Self::PlayerLostByStateBasedAction { .. } => {
+                GameEventKind::PlayerLostByStateBasedAction
+            }
+            Self::PermanentMovedByStateBasedAction { .. } => {
+                GameEventKind::PermanentMovedByStateBasedAction
+            }
+            Self::GameOutcomeChanged { .. } => GameEventKind::GameOutcomeChanged,
+            Self::CleanupPriorityRequested => GameEventKind::CleanupPriorityRequested,
+            Self::DurationMarkerAdded { .. } => GameEventKind::DurationMarkerAdded,
+            Self::DurationMarkersExpired { .. } => GameEventKind::DurationMarkersExpired,
+            Self::CleanupPerformed { .. } => GameEventKind::CleanupPerformed,
+            Self::ManaPoolsCleared => GameEventKind::ManaPoolsCleared,
+            Self::EmptyLibraryDraw { .. } => GameEventKind::EmptyLibraryDraw,
+            Self::TriggeredAbilityRegistered { .. } => GameEventKind::TriggeredAbilityRegistered,
+            Self::TriggeredAbilityQueued { .. } => GameEventKind::TriggeredAbilityQueued,
+            Self::TriggeredAbilityPutOnStack { .. } => GameEventKind::TriggeredAbilityPutOnStack,
         }
     }
 }
@@ -3696,6 +4257,55 @@ impl EventRecord {
     pub const fn event(self) -> GameEvent {
         self.event
     }
+}
+
+/// One queued triggered ability waiting to be put on the stack.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct PendingTriggeredAbility {
+    trigger: TriggerId,
+    controller: PlayerId,
+    source: Option<ObjectId>,
+    event_sequence: u64,
+    event_turn: u32,
+}
+
+impl PendingTriggeredAbility {
+    /// Returns the registered trigger definition.
+    #[must_use]
+    pub const fn trigger(self) -> TriggerId {
+        self.trigger
+    }
+
+    /// Returns the ability controller.
+    #[must_use]
+    pub const fn controller(self) -> PlayerId {
+        self.controller
+    }
+
+    /// Returns the source object, if this trigger has one.
+    #[must_use]
+    pub const fn source(self) -> Option<ObjectId> {
+        self.source
+    }
+
+    /// Returns the sequence number of the event that queued this trigger.
+    #[must_use]
+    pub const fn event_sequence(self) -> u64 {
+        self.event_sequence
+    }
+
+    /// Returns the turn number of the event that queued this trigger.
+    #[must_use]
+    pub const fn event_turn(self) -> u32 {
+        self.event_turn
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+struct TriggerSubscription {
+    id: TriggerId,
+    definition: TriggerDefinition,
+    event_kind: GameEventKind,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -3742,6 +4352,12 @@ pub struct GameState {
     stack_entries: Vec<StackEntry>,
     // clone_surface: append-only resolution audit for deterministic replay diagnostics.
     resolution_log: Vec<ResolutionRecord>,
+    next_trigger: u32,
+    // clone_surface: data-only trigger definitions compiled from card IR.
+    trigger_subscriptions: Vec<TriggerSubscription>,
+    // clone_surface: Copy trigger instances waiting for the next priority window.
+    pending_triggers: Vec<PendingTriggeredAbility>,
+    deferred_priority_player: Option<PlayerId>,
     next_event_sequence: u64,
     // clone_surface: current-turn Copy event records for trigger/replay consumers.
     turn_events: Arc<Vec<EventRecord>>,
@@ -3777,6 +4393,10 @@ impl Clone for GameState {
             next_stack_entry: self.next_stack_entry,
             stack_entries: self.stack_entries.clone(),
             resolution_log: self.resolution_log.clone(),
+            next_trigger: self.next_trigger,
+            trigger_subscriptions: self.trigger_subscriptions.clone(),
+            pending_triggers: self.pending_triggers.clone(),
+            deferred_priority_player: self.deferred_priority_player,
             next_event_sequence: self.next_event_sequence,
             turn_events: Arc::clone(&self.turn_events),
             combat: self.combat.clone(),
@@ -3836,6 +4456,10 @@ impl GameState {
             next_stack_entry: 0,
             stack_entries: Vec::new(),
             resolution_log: Vec::new(),
+            next_trigger: 0,
+            trigger_subscriptions: Vec::new(),
+            pending_triggers: Vec::new(),
+            deferred_priority_player: None,
             next_event_sequence: 0,
             turn_events: Arc::new(Vec::with_capacity(EVENT_DEEP_CLONE_LIMIT)),
             combat: CombatState::new(),
@@ -3949,6 +4573,21 @@ impl GameState {
         &self.resolution_log
     }
 
+    /// Returns registered trigger subscriptions in deterministic ID order.
+    pub fn trigger_subscriptions(
+        &self,
+    ) -> impl Iterator<Item = (TriggerId, TriggerDefinition)> + '_ {
+        self.trigger_subscriptions
+            .iter()
+            .map(|subscription| (subscription.id, subscription.definition))
+    }
+
+    /// Returns queued triggered abilities waiting to be put on the stack.
+    #[must_use]
+    pub fn pending_triggers(&self) -> &[PendingTriggeredAbility] {
+        &self.pending_triggers
+    }
+
     /// Returns typed mutation events emitted during the current turn.
     #[must_use]
     pub fn events_this_turn(&self) -> &[EventRecord] {
@@ -4003,6 +4642,15 @@ impl GameState {
     }
 
     fn emit_event(&mut self, event: GameEvent) {
+        let record = self.append_event(event);
+        self.queue_triggered_abilities(record);
+    }
+
+    fn emit_event_without_triggers(&mut self, event: GameEvent) {
+        self.append_event(event);
+    }
+
+    fn append_event(&mut self, event: GameEvent) -> EventRecord {
         let record = EventRecord {
             sequence: self.next_event_sequence,
             turn: self.turn_number,
@@ -4014,6 +4662,7 @@ impl GameState {
         if events.len() > EVENT_RING_CAPACITY {
             events.remove(0);
         }
+        record
     }
 
     fn reset_turn_events(&mut self) {
@@ -4499,6 +5148,9 @@ impl GameState {
     /// entry or completes the current step when the stack is empty.
     #[inline]
     fn pass_priority(&mut self, player: PlayerId) -> Result<PriorityOutcome, StateError> {
+        if !self.pending_triggers.is_empty() {
+            return Err(StateError::PendingTriggeredAbilities);
+        }
         let priority_player = self.priority_player.ok_or(StateError::NoPriority)?;
         if priority_player != player {
             return Err(StateError::PriorityPlayerMismatch {
@@ -4574,6 +5226,7 @@ impl GameState {
         let id = self.push_stack_entry(
             player,
             Some(object),
+            None,
             request.kind(),
             target_snapshots,
             Some(request.payment()),
@@ -4607,7 +5260,7 @@ impl GameState {
         if self.object_zone(object) != Some(stack_zone) {
             self.move_object(object, stack_zone)?;
         }
-        let id = self.push_stack_entry(player, Some(object), kind, Vec::new(), None);
+        let id = self.push_stack_entry(player, Some(object), None, kind, Vec::new(), None);
         self.after_priority_action(player, hold_priority)?;
         Ok(id)
     }
@@ -4621,7 +5274,7 @@ impl GameState {
     ) -> Result<StackEntryId, StateError> {
         self.require_priority_player(player)?;
         self.require_player(player)?;
-        let id = self.push_stack_entry(player, None, kind, Vec::new(), None);
+        let id = self.push_stack_entry(player, None, None, kind, Vec::new(), None);
         self.after_priority_action(player, hold_priority)?;
         Ok(id)
     }
@@ -4644,12 +5297,239 @@ impl GameState {
         for player in self.apnap_players(active)? {
             for ability_controller in abilities {
                 if *ability_controller == player {
-                    ids.push(self.push_stack_entry(player, None, kind, Vec::new(), None));
+                    ids.push(self.push_stack_entry(player, None, None, kind, Vec::new(), None));
                 }
             }
         }
         self.priority_pass_count = 0;
         Ok(ids)
+    }
+
+    /// Registers one data-only triggered ability subscription.
+    fn register_triggered_ability(
+        &mut self,
+        definition: TriggerDefinition,
+    ) -> Result<TriggerId, StateError> {
+        self.require_player(definition.controller())?;
+        if let Some(source) = definition.source() {
+            if self.objects.get(source).is_none() {
+                return Err(StateError::UnknownObject(source));
+            }
+        }
+        let id = TriggerId(self.next_trigger);
+        self.next_trigger = self.next_trigger.saturating_add(1);
+        let event_kind = definition.condition().subscribed_event_kind();
+        self.trigger_subscriptions.push(TriggerSubscription {
+            id,
+            definition,
+            event_kind,
+        });
+        self.emit_event_without_triggers(GameEvent::TriggeredAbilityRegistered {
+            trigger: id,
+            controller: definition.controller(),
+            source: definition.source(),
+            event_kind,
+            duration: definition.duration(),
+        });
+        Ok(id)
+    }
+
+    /// Puts pending triggered abilities onto the stack using APNAP ordering.
+    fn put_pending_triggered_abilities_on_stack(
+        &mut self,
+    ) -> Result<Vec<StackEntryId>, StateError> {
+        let active = self.active_player.ok_or(StateError::TurnNotStarted)?;
+        let pending = core::mem::take(&mut self.pending_triggers);
+        if pending.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let mut ids = Vec::with_capacity(pending.len());
+        for player in self.apnap_players(active)? {
+            for trigger in &pending {
+                if trigger.controller() == player {
+                    let id = self.push_stack_entry(
+                        player,
+                        None,
+                        Some(trigger.trigger()),
+                        StackObjectKind::TriggeredAbility,
+                        Vec::new(),
+                        None,
+                    );
+                    self.emit_event_without_triggers(GameEvent::TriggeredAbilityPutOnStack {
+                        trigger: trigger.trigger(),
+                        entry: id,
+                        controller: player,
+                    });
+                    ids.push(id);
+                }
+            }
+        }
+        let priority = self.deferred_priority_player.or(self.active_player);
+        self.deferred_priority_player = None;
+        self.grant_priority_to(priority)?;
+        Ok(ids)
+    }
+
+    fn queue_triggered_abilities(&mut self, record: EventRecord) {
+        if self.trigger_subscriptions.is_empty() {
+            return;
+        }
+        let mut queued = Vec::new();
+        let mut consumed_delayed = Vec::new();
+        for subscription in &self.trigger_subscriptions {
+            if subscription.event_kind != record.event().kind() {
+                continue;
+            }
+            if !self.trigger_condition_matches(subscription.definition, record.event()) {
+                continue;
+            }
+            if !self.trigger_intervening_if_matches(subscription.definition) {
+                continue;
+            }
+            queued.push(PendingTriggeredAbility {
+                trigger: subscription.id,
+                controller: subscription.definition.controller(),
+                source: subscription.definition.source(),
+                event_sequence: record.sequence(),
+                event_turn: record.turn(),
+            });
+            if subscription.definition.duration() == TriggerDuration::DelayedOnce {
+                consumed_delayed.push(subscription.id);
+            }
+        }
+        if !consumed_delayed.is_empty() {
+            self.trigger_subscriptions
+                .retain(|subscription| !consumed_delayed.contains(&subscription.id));
+        }
+        for trigger in queued {
+            self.pending_triggers.push(trigger);
+            self.emit_event_without_triggers(GameEvent::TriggeredAbilityQueued {
+                trigger: trigger.trigger(),
+                controller: trigger.controller(),
+                event_sequence: trigger.event_sequence(),
+            });
+        }
+    }
+
+    fn trigger_condition_matches(&self, definition: TriggerDefinition, event: GameEvent) -> bool {
+        match definition.condition() {
+            TriggerCondition::EventKind(kind) => event.kind() == kind,
+            TriggerCondition::ObjectMoved { object, from, to } => {
+                if let GameEvent::ObjectMoved {
+                    object: moved,
+                    from: event_from,
+                    to: event_to,
+                } = event
+                {
+                    self.trigger_object_matches(definition, object, moved)
+                        && self.trigger_zone_matches(definition, from, event_from)
+                        && self.trigger_zone_matches(definition, to, event_to)
+                } else {
+                    false
+                }
+            }
+            TriggerCondition::StepBegan { step } => {
+                matches!(event, GameEvent::StepBegan { step: event_step } if event_step == step)
+            }
+            TriggerCondition::LifeLost { player } => {
+                matches!(event, GameEvent::LifeLost { player: event_player, .. }
+                    if self.trigger_player_matches(definition, player, event_player))
+            }
+            TriggerCondition::LifeGained { player } => {
+                matches!(event, GameEvent::LifeGained { player: event_player, .. }
+                    if self.trigger_player_matches(definition, player, event_player))
+            }
+            TriggerCondition::DamageMarked { object } => {
+                matches!(event, GameEvent::DamageMarked { object: event_object, .. }
+                    if self.trigger_object_matches(definition, object, event_object))
+            }
+            TriggerCondition::StackEntryResolved { kind, outcome } => {
+                if let GameEvent::StackEntryResolved {
+                    entry,
+                    outcome: event_outcome,
+                } = event
+                {
+                    let kind_matches = kind.map_or(true, |expected| {
+                        self.resolution_log
+                            .iter()
+                            .find(|record| record.stack_entry() == entry)
+                            .is_some_and(|record| record.kind() == expected)
+                    });
+                    let outcome_matches =
+                        outcome.map_or(true, |expected| expected == event_outcome);
+                    kind_matches && outcome_matches
+                } else {
+                    false
+                }
+            }
+        }
+    }
+
+    fn trigger_intervening_if_matches(&self, definition: TriggerDefinition) -> bool {
+        match definition.intervening_if() {
+            TriggerInterveningIf::Always => true,
+            TriggerInterveningIf::SourceInZone(zone) => definition
+                .source()
+                .is_some_and(|source| self.object_zone(source) == Some(zone)),
+            TriggerInterveningIf::ControllerControlsSource => {
+                definition.source().is_some_and(|source| {
+                    self.objects
+                        .get(source)
+                        .is_some_and(|record| record.controller() == definition.controller())
+                })
+            }
+            TriggerInterveningIf::ControllerLifeAtMost(max_life) => self
+                .players
+                .get(definition.controller().index())
+                .is_some_and(|player| player.life <= max_life),
+        }
+    }
+
+    fn trigger_object_matches(
+        &self,
+        definition: TriggerDefinition,
+        filter: TriggerObjectFilter,
+        object: ObjectId,
+    ) -> bool {
+        match filter {
+            TriggerObjectFilter::Any => true,
+            TriggerObjectFilter::Source => definition.source() == Some(object),
+            TriggerObjectFilter::Object(expected) => object == expected,
+        }
+    }
+
+    fn trigger_player_matches(
+        &self,
+        definition: TriggerDefinition,
+        filter: TriggerPlayerFilter,
+        player: PlayerId,
+    ) -> bool {
+        match filter {
+            TriggerPlayerFilter::Any => true,
+            TriggerPlayerFilter::Controller => player == definition.controller(),
+            TriggerPlayerFilter::OpponentOfController => player != definition.controller(),
+            TriggerPlayerFilter::Player(expected) => player == expected,
+        }
+    }
+
+    fn trigger_zone_matches(
+        &self,
+        definition: TriggerDefinition,
+        filter: TriggerZoneFilter,
+        zone: ZoneId,
+    ) -> bool {
+        match filter {
+            TriggerZoneFilter::Any => true,
+            TriggerZoneFilter::Exact(expected) => zone == expected,
+            TriggerZoneFilter::Kind(kind) => zone.kind() == kind,
+            TriggerZoneFilter::Owned { owner, kind } => {
+                zone.kind() == kind
+                    && zone.owner().is_some_and(|zone_owner| {
+                        self.trigger_player_matches(definition, owner, zone_owner)
+                    })
+            }
+        }
     }
 
     fn advance_step_after_empty_stack(&mut self) -> Result<Step, StateError> {
@@ -5080,6 +5960,16 @@ impl GameState {
         for resolution in &self.resolution_log {
             bytes.write_resolution_record(resolution);
         }
+        bytes.write_u32(self.next_trigger);
+        bytes.write_u32(self.trigger_subscriptions.len() as u32);
+        for subscription in &self.trigger_subscriptions {
+            bytes.write_trigger_subscription(*subscription);
+        }
+        bytes.write_u32(self.pending_triggers.len() as u32);
+        for trigger in &self.pending_triggers {
+            bytes.write_pending_trigger(*trigger);
+        }
+        bytes.write_optional_player(self.deferred_priority_player);
         bytes.write_u64(self.next_event_sequence);
         bytes.write_u32(self.turn_events.len() as u32);
         for event in self.turn_events.iter() {
@@ -5164,6 +6054,16 @@ impl GameState {
         for resolution in &self.resolution_log {
             hash.write_resolution_record(resolution);
         }
+        hash.write_u32(self.next_trigger);
+        hash.write_u32(self.trigger_subscriptions.len() as u32);
+        for subscription in &self.trigger_subscriptions {
+            hash.write_trigger_subscription(*subscription);
+        }
+        hash.write_u32(self.pending_triggers.len() as u32);
+        for trigger in &self.pending_triggers {
+            hash.write_pending_trigger(*trigger);
+        }
+        hash.write_optional_player(self.deferred_priority_player);
         hash.write_u64(self.next_event_sequence);
         hash.write_u32(self.turn_events.len() as u32);
         for event in self.turn_events.iter() {
@@ -5817,11 +6717,24 @@ impl GameState {
 
     fn grant_priority_to(&mut self, player: Option<PlayerId>) -> Result<(), StateError> {
         self.perform_state_based_actions()?;
+        if self.outcome != GameOutcome::InProgress {
+            self.deferred_priority_player = None;
+            self.priority_player = None;
+            self.priority_pass_count = 0;
+            return Ok(());
+        }
+        if !self.pending_triggers.is_empty() {
+            self.deferred_priority_player = player;
+            self.priority_player = None;
+            self.priority_pass_count = 0;
+            return Ok(());
+        }
         let new_priority = if self.outcome == GameOutcome::InProgress {
             player
         } else {
             None
         };
+        self.deferred_priority_player = None;
         self.priority_player = new_priority;
         self.priority_pass_count = 0;
         Ok(())
@@ -6156,6 +7069,7 @@ impl GameState {
         &mut self,
         controller: PlayerId,
         object: Option<ObjectId>,
+        trigger: Option<TriggerId>,
         kind: StackObjectKind,
         targets: Vec<TargetSnapshot>,
         payment: Option<PaymentPlan>,
@@ -6166,6 +7080,7 @@ impl GameState {
             id,
             controller,
             object,
+            trigger,
             kind,
             targets,
             payment,
@@ -6234,6 +7149,7 @@ impl GameState {
             stack_entry: entry.id(),
             controller: entry.controller(),
             object: entry.object(),
+            trigger: entry.trigger(),
             kind: entry.kind(),
             targets: entry.targets().to_vec(),
             legal_targets,
@@ -6672,6 +7588,16 @@ impl Fnva64 {
         }
     }
 
+    fn write_optional_trigger(&mut self, trigger: Option<TriggerId>) {
+        match trigger {
+            Some(trigger) => {
+                self.write_u8(1);
+                self.write_u32(trigger.0);
+            }
+            None => self.write_u8(0),
+        }
+    }
+
     fn write_target_kind(&mut self, kind: TargetKind) {
         self.write_u8(kind.canonical_code());
         if let TargetKind::ObjectInZone(zone) = kind {
@@ -6725,10 +7651,112 @@ impl Fnva64 {
         }
     }
 
+    fn write_game_event_kind(&mut self, kind: GameEventKind) {
+        self.write_u8(kind.canonical_code());
+    }
+
+    fn write_trigger_object_filter(&mut self, filter: TriggerObjectFilter) {
+        self.write_u8(filter.canonical_code());
+        if let TriggerObjectFilter::Object(object) = filter {
+            self.write_u32(object.0);
+        }
+    }
+
+    fn write_trigger_player_filter(&mut self, filter: TriggerPlayerFilter) {
+        self.write_u8(filter.canonical_code());
+        if let TriggerPlayerFilter::Player(player) = filter {
+            self.write_u32(player.0);
+        }
+    }
+
+    fn write_trigger_zone_filter(&mut self, filter: TriggerZoneFilter) {
+        self.write_u8(filter.canonical_code());
+        match filter {
+            TriggerZoneFilter::Any => {}
+            TriggerZoneFilter::Exact(zone) => self.write_zone_id(zone),
+            TriggerZoneFilter::Kind(kind) => self.write_u8(kind.canonical_code()),
+            TriggerZoneFilter::Owned { owner, kind } => {
+                self.write_trigger_player_filter(owner);
+                self.write_u8(kind.canonical_code());
+            }
+        }
+    }
+
+    fn write_trigger_condition(&mut self, condition: TriggerCondition) {
+        self.write_u8(condition.canonical_code());
+        match condition {
+            TriggerCondition::EventKind(kind) => self.write_game_event_kind(kind),
+            TriggerCondition::ObjectMoved { object, from, to } => {
+                self.write_trigger_object_filter(object);
+                self.write_trigger_zone_filter(from);
+                self.write_trigger_zone_filter(to);
+            }
+            TriggerCondition::StepBegan { step } => self.write_u8(step.canonical_code()),
+            TriggerCondition::LifeLost { player } | TriggerCondition::LifeGained { player } => {
+                self.write_trigger_player_filter(player);
+            }
+            TriggerCondition::DamageMarked { object } => {
+                self.write_trigger_object_filter(object);
+            }
+            TriggerCondition::StackEntryResolved { kind, outcome } => {
+                match kind {
+                    Some(kind) => {
+                        self.write_u8(1);
+                        self.write_u8(kind.canonical_code());
+                    }
+                    None => self.write_u8(0),
+                }
+                match outcome {
+                    Some(outcome) => {
+                        self.write_u8(1);
+                        self.write_u8(outcome.canonical_code());
+                    }
+                    None => self.write_u8(0),
+                }
+            }
+        }
+    }
+
+    fn write_trigger_intervening_if(&mut self, intervening_if: TriggerInterveningIf) {
+        self.write_u8(intervening_if.canonical_code());
+        match intervening_if {
+            TriggerInterveningIf::Always | TriggerInterveningIf::ControllerControlsSource => {}
+            TriggerInterveningIf::SourceInZone(zone) => self.write_zone_id(zone),
+            TriggerInterveningIf::ControllerLifeAtMost(life) => self.write_i32(life),
+        }
+    }
+
+    fn write_trigger_duration(&mut self, duration: TriggerDuration) {
+        self.write_u8(duration.canonical_code());
+    }
+
+    fn write_trigger_definition(&mut self, definition: TriggerDefinition) {
+        self.write_u32(definition.controller.0);
+        self.write_optional_object(definition.source);
+        self.write_trigger_condition(definition.condition);
+        self.write_trigger_intervening_if(definition.intervening_if);
+        self.write_trigger_duration(definition.duration);
+    }
+
+    fn write_trigger_subscription(&mut self, subscription: TriggerSubscription) {
+        self.write_u32(subscription.id.0);
+        self.write_trigger_definition(subscription.definition);
+        self.write_game_event_kind(subscription.event_kind);
+    }
+
+    fn write_pending_trigger(&mut self, trigger: PendingTriggeredAbility) {
+        self.write_u32(trigger.trigger.0);
+        self.write_u32(trigger.controller.0);
+        self.write_optional_object(trigger.source);
+        self.write_u64(trigger.event_sequence);
+        self.write_u32(trigger.event_turn);
+    }
+
     fn write_stack_entry(&mut self, entry: &StackEntry) {
         self.write_u32(entry.id.0);
         self.write_u32(entry.controller.0);
         self.write_optional_object(entry.object);
+        self.write_optional_trigger(entry.trigger);
         self.write_u8(entry.kind.canonical_code());
         self.write_u32(entry.targets.len() as u32);
         for target in &entry.targets {
@@ -6741,6 +7769,7 @@ impl Fnva64 {
         self.write_u32(record.stack_entry.0);
         self.write_u32(record.controller.0);
         self.write_optional_object(record.object);
+        self.write_optional_trigger(record.trigger);
         self.write_u8(record.kind.canonical_code());
         self.write_u32(record.targets.len() as u32);
         for target in &record.targets {
@@ -6937,6 +7966,37 @@ impl Fnva64 {
                 self.write_u32(count);
             }
             GameEvent::CleanupPerformed { report } => self.write_cleanup_report(report),
+            GameEvent::TriggeredAbilityRegistered {
+                trigger,
+                controller,
+                source,
+                event_kind,
+                duration,
+            } => {
+                self.write_u32(trigger.0);
+                self.write_u32(controller.0);
+                self.write_optional_object(source);
+                self.write_game_event_kind(event_kind);
+                self.write_trigger_duration(duration);
+            }
+            GameEvent::TriggeredAbilityQueued {
+                trigger,
+                controller,
+                event_sequence,
+            } => {
+                self.write_u32(trigger.0);
+                self.write_u32(controller.0);
+                self.write_u64(event_sequence);
+            }
+            GameEvent::TriggeredAbilityPutOnStack {
+                trigger,
+                entry,
+                controller,
+            } => {
+                self.write_u32(trigger.0);
+                self.write_u32(entry.0);
+                self.write_u32(controller.0);
+            }
         }
     }
 
@@ -7034,6 +8094,16 @@ impl CanonicalBytes {
             Some(player) => {
                 self.write_u8(1);
                 self.write_u32(player.0);
+            }
+            None => self.write_u8(0),
+        }
+    }
+
+    fn write_optional_trigger(&mut self, trigger: Option<TriggerId>) {
+        match trigger {
+            Some(trigger) => {
+                self.write_u8(1);
+                self.write_u32(trigger.0);
             }
             None => self.write_u8(0),
         }
@@ -7186,10 +8256,112 @@ impl CanonicalBytes {
         }
     }
 
+    fn write_game_event_kind(&mut self, kind: GameEventKind) {
+        self.write_u8(kind.canonical_code());
+    }
+
+    fn write_trigger_object_filter(&mut self, filter: TriggerObjectFilter) {
+        self.write_u8(filter.canonical_code());
+        if let TriggerObjectFilter::Object(object) = filter {
+            self.write_u32(object.0);
+        }
+    }
+
+    fn write_trigger_player_filter(&mut self, filter: TriggerPlayerFilter) {
+        self.write_u8(filter.canonical_code());
+        if let TriggerPlayerFilter::Player(player) = filter {
+            self.write_u32(player.0);
+        }
+    }
+
+    fn write_trigger_zone_filter(&mut self, filter: TriggerZoneFilter) {
+        self.write_u8(filter.canonical_code());
+        match filter {
+            TriggerZoneFilter::Any => {}
+            TriggerZoneFilter::Exact(zone) => self.write_zone_id(zone),
+            TriggerZoneFilter::Kind(kind) => self.write_u8(kind.canonical_code()),
+            TriggerZoneFilter::Owned { owner, kind } => {
+                self.write_trigger_player_filter(owner);
+                self.write_u8(kind.canonical_code());
+            }
+        }
+    }
+
+    fn write_trigger_condition(&mut self, condition: TriggerCondition) {
+        self.write_u8(condition.canonical_code());
+        match condition {
+            TriggerCondition::EventKind(kind) => self.write_game_event_kind(kind),
+            TriggerCondition::ObjectMoved { object, from, to } => {
+                self.write_trigger_object_filter(object);
+                self.write_trigger_zone_filter(from);
+                self.write_trigger_zone_filter(to);
+            }
+            TriggerCondition::StepBegan { step } => self.write_u8(step.canonical_code()),
+            TriggerCondition::LifeLost { player } | TriggerCondition::LifeGained { player } => {
+                self.write_trigger_player_filter(player);
+            }
+            TriggerCondition::DamageMarked { object } => {
+                self.write_trigger_object_filter(object);
+            }
+            TriggerCondition::StackEntryResolved { kind, outcome } => {
+                match kind {
+                    Some(kind) => {
+                        self.write_u8(1);
+                        self.write_u8(kind.canonical_code());
+                    }
+                    None => self.write_u8(0),
+                }
+                match outcome {
+                    Some(outcome) => {
+                        self.write_u8(1);
+                        self.write_u8(outcome.canonical_code());
+                    }
+                    None => self.write_u8(0),
+                }
+            }
+        }
+    }
+
+    fn write_trigger_intervening_if(&mut self, intervening_if: TriggerInterveningIf) {
+        self.write_u8(intervening_if.canonical_code());
+        match intervening_if {
+            TriggerInterveningIf::Always | TriggerInterveningIf::ControllerControlsSource => {}
+            TriggerInterveningIf::SourceInZone(zone) => self.write_zone_id(zone),
+            TriggerInterveningIf::ControllerLifeAtMost(life) => self.write_i32(life),
+        }
+    }
+
+    fn write_trigger_duration(&mut self, duration: TriggerDuration) {
+        self.write_u8(duration.canonical_code());
+    }
+
+    fn write_trigger_definition(&mut self, definition: TriggerDefinition) {
+        self.write_u32(definition.controller.0);
+        self.write_optional_object(definition.source);
+        self.write_trigger_condition(definition.condition);
+        self.write_trigger_intervening_if(definition.intervening_if);
+        self.write_trigger_duration(definition.duration);
+    }
+
+    fn write_trigger_subscription(&mut self, subscription: TriggerSubscription) {
+        self.write_u32(subscription.id.0);
+        self.write_trigger_definition(subscription.definition);
+        self.write_game_event_kind(subscription.event_kind);
+    }
+
+    fn write_pending_trigger(&mut self, trigger: PendingTriggeredAbility) {
+        self.write_u32(trigger.trigger.0);
+        self.write_u32(trigger.controller.0);
+        self.write_optional_object(trigger.source);
+        self.write_u64(trigger.event_sequence);
+        self.write_u32(trigger.event_turn);
+    }
+
     fn write_stack_entry(&mut self, entry: &StackEntry) {
         self.write_u32(entry.id.0);
         self.write_u32(entry.controller.0);
         self.write_optional_object(entry.object);
+        self.write_optional_trigger(entry.trigger);
         self.write_u8(entry.kind.canonical_code());
         self.write_u32(entry.targets.len() as u32);
         for target in &entry.targets {
@@ -7202,6 +8374,7 @@ impl CanonicalBytes {
         self.write_u32(record.stack_entry.0);
         self.write_u32(record.controller.0);
         self.write_optional_object(record.object);
+        self.write_optional_trigger(record.trigger);
         self.write_u8(record.kind.canonical_code());
         self.write_u32(record.targets.len() as u32);
         for target in &record.targets {
@@ -7398,6 +8571,37 @@ impl CanonicalBytes {
                 self.write_u32(count);
             }
             GameEvent::CleanupPerformed { report } => self.write_cleanup_report(report),
+            GameEvent::TriggeredAbilityRegistered {
+                trigger,
+                controller,
+                source,
+                event_kind,
+                duration,
+            } => {
+                self.write_u32(trigger.0);
+                self.write_u32(controller.0);
+                self.write_optional_object(source);
+                self.write_game_event_kind(event_kind);
+                self.write_trigger_duration(duration);
+            }
+            GameEvent::TriggeredAbilityQueued {
+                trigger,
+                controller,
+                event_sequence,
+            } => {
+                self.write_u32(trigger.0);
+                self.write_u32(controller.0);
+                self.write_u64(event_sequence);
+            }
+            GameEvent::TriggeredAbilityPutOnStack {
+                trigger,
+                entry,
+                controller,
+            } => {
+                self.write_u32(trigger.0);
+                self.write_u32(entry.0);
+                self.write_u32(controller.0);
+            }
         }
     }
 
@@ -7476,8 +8680,9 @@ mod tests {
         ManaPool, ManaSource, ObjectView, Outcome, PaymentError, Phase, PlayerId, PriorityOutcome,
         ResolutionOutcome, SpellTiming, StackEntryId, StackObjectKind, StateBasedActionKind,
         StateBasedActionReport, StateError, Step, TargetChoice, TargetKind, TargetRequirement,
-        ZoneConservation, ZoneId, ZoneKind, EVENT_RING_CAPACITY, NORMAL_TURN_STEPS,
-        OPENING_HAND_SIZE, PAYMENT_PLAN_LIMIT,
+        TriggerCondition, TriggerDefinition, TriggerInterveningIf, TriggerObjectFilter,
+        TriggerPlayerFilter, TriggerZoneFilter, ZoneConservation, ZoneId, ZoneKind,
+        EVENT_RING_CAPACITY, NORMAL_TURN_STEPS, OPENING_HAND_SIZE, PAYMENT_PLAN_LIMIT,
     };
 
     #[test]
@@ -7668,6 +8873,259 @@ mod tests {
                 },
                 GameEvent::StepBegan { step: Step::Untap },
             ]
+        );
+    }
+
+    #[test]
+    fn triggered_object_move_queues_and_stacks_before_priority() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let controller = state.add_player();
+        let hand = ZoneId::new(Some(active), ZoneKind::Hand);
+        let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+        let object = state
+            .create_object(CardId::new(2_201), active, active, hand)
+            .unwrap_or_else(|error| panic!("unexpected create error: {error:?}"));
+        state
+            .start_turn(active)
+            .unwrap_or_else(|error| panic!("unexpected start error: {error:?}"));
+        state
+            .advance_step()
+            .unwrap_or_else(|error| panic!("unexpected upkeep advance error: {error:?}"));
+
+        let trigger = match apply(
+            &mut state,
+            Action::RegisterTriggeredAbility {
+                definition: TriggerDefinition::new(
+                    controller,
+                    TriggerCondition::ObjectMoved {
+                        object: TriggerObjectFilter::Object(object),
+                        from: TriggerZoneFilter::Exact(hand),
+                        to: TriggerZoneFilter::Exact(battlefield),
+                    },
+                ),
+            },
+        ) {
+            Outcome::TriggerRegistered(trigger) => trigger,
+            other => panic!("unexpected trigger registration outcome: {other:?}"),
+        };
+
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::MoveObject {
+                    object,
+                    to: battlefield,
+                },
+            ),
+            Outcome::Applied
+        );
+
+        assert_eq!(state.pending_triggers().len(), 1);
+        assert_eq!(state.pending_triggers()[0].trigger(), trigger);
+        assert_eq!(state.pending_triggers()[0].controller(), controller);
+        assert_eq!(
+            legal_actions(&state).actions(),
+            &[Action::PutPendingTriggeredAbilitiesOnStack]
+        );
+        assert_eq!(
+            apply(&mut state, Action::PassPriority { player: active }),
+            Outcome::Failed(StateError::PendingTriggeredAbilities)
+        );
+
+        let entries = match apply(&mut state, Action::PutPendingTriggeredAbilitiesOnStack) {
+            Outcome::StackEntriesAdded(entries) => entries,
+            other => panic!("unexpected pending trigger stack outcome: {other:?}"),
+        };
+        assert_eq!(entries.len(), 1);
+        let top = state
+            .stack_top()
+            .unwrap_or_else(|| panic!("missing trigger stack entry"));
+        assert_eq!(top.id(), entries[0]);
+        assert_eq!(top.controller(), controller);
+        assert_eq!(top.trigger(), Some(trigger));
+        assert_eq!(top.kind(), StackObjectKind::TriggeredAbility);
+        assert_eq!(state.priority_player(), Some(active));
+        assert_eq!(
+            state.events_this_turn().last().map(|record| record.event()),
+            Some(GameEvent::TriggeredAbilityPutOnStack {
+                trigger,
+                entry: entries[0],
+                controller,
+            })
+        );
+    }
+
+    #[test]
+    fn triggered_abilities_use_apnap_stack_order() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let second = state.add_player();
+        let third = state.add_player();
+        state
+            .start_turn(active)
+            .unwrap_or_else(|error| panic!("unexpected start error: {error:?}"));
+
+        for controller in [third, active, second] {
+            assert!(matches!(
+                apply(
+                    &mut state,
+                    Action::RegisterTriggeredAbility {
+                        definition: TriggerDefinition::new(
+                            controller,
+                            TriggerCondition::LifeLost {
+                                player: TriggerPlayerFilter::Any,
+                            },
+                        ),
+                    },
+                ),
+                Outcome::TriggerRegistered(_)
+            ));
+        }
+
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::LoseLife {
+                    player: second,
+                    amount: 1,
+                },
+            ),
+            Outcome::Applied
+        );
+        assert_eq!(state.pending_triggers().len(), 3);
+
+        let entries = match apply(&mut state, Action::PutPendingTriggeredAbilitiesOnStack) {
+            Outcome::StackEntriesAdded(entries) => entries,
+            other => panic!("unexpected APNAP stack outcome: {other:?}"),
+        };
+        assert_eq!(entries.len(), 3);
+        let controllers: Vec<PlayerId> = state
+            .stack_entries()
+            .iter()
+            .map(|entry| entry.controller())
+            .collect();
+        assert_eq!(controllers, vec![active, second, third]);
+        assert_eq!(
+            state.stack_top().map(|entry| entry.controller()),
+            Some(third)
+        );
+    }
+
+    #[test]
+    fn intervening_if_blocks_and_delayed_trigger_retires() {
+        let mut blocked = GameState::new();
+        let active = blocked.add_player();
+        let source = blocked
+            .create_object(
+                CardId::new(2_202),
+                active,
+                active,
+                ZoneId::new(Some(active), ZoneKind::Hand),
+            )
+            .unwrap_or_else(|error| panic!("unexpected source create error: {error:?}"));
+        assert!(matches!(
+            apply(
+                &mut blocked,
+                Action::RegisterTriggeredAbility {
+                    definition: TriggerDefinition::new(
+                        active,
+                        TriggerCondition::StepBegan { step: Step::Upkeep },
+                    )
+                    .with_source(source)
+                    .with_intervening_if(TriggerInterveningIf::SourceInZone(ZoneId::new(
+                        None,
+                        ZoneKind::Battlefield,
+                    ))),
+                },
+            ),
+            Outcome::TriggerRegistered(_)
+        ));
+        blocked
+            .start_turn(active)
+            .unwrap_or_else(|error| panic!("unexpected blocked start error: {error:?}"));
+        blocked
+            .advance_step()
+            .unwrap_or_else(|error| panic!("unexpected blocked upkeep error: {error:?}"));
+        assert!(blocked.pending_triggers().is_empty());
+        assert_eq!(blocked.priority_player(), Some(active));
+
+        let mut delayed = GameState::new();
+        let active = delayed.add_player();
+        let source = delayed
+            .create_object(
+                CardId::new(2_203),
+                active,
+                active,
+                ZoneId::new(None, ZoneKind::Battlefield),
+            )
+            .unwrap_or_else(|error| panic!("unexpected delayed source create error: {error:?}"));
+        let trigger = match apply(
+            &mut delayed,
+            Action::RegisterTriggeredAbility {
+                definition: TriggerDefinition::new(
+                    active,
+                    TriggerCondition::StepBegan { step: Step::Upkeep },
+                )
+                .with_source(source)
+                .with_intervening_if(TriggerInterveningIf::ControllerControlsSource)
+                .delayed_once(),
+            },
+        ) {
+            Outcome::TriggerRegistered(trigger) => trigger,
+            other => panic!("unexpected delayed registration outcome: {other:?}"),
+        };
+        delayed
+            .start_turn(active)
+            .unwrap_or_else(|error| panic!("unexpected delayed start error: {error:?}"));
+        delayed
+            .advance_step()
+            .unwrap_or_else(|error| panic!("unexpected delayed upkeep error: {error:?}"));
+
+        assert_eq!(delayed.pending_triggers().len(), 1);
+        assert_eq!(delayed.pending_triggers()[0].trigger(), trigger);
+        assert_eq!(delayed.trigger_subscriptions().count(), 0);
+        assert_eq!(delayed.priority_player(), None);
+    }
+
+    #[test]
+    fn trigger_state_participates_in_canonical_hashes() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        assert!(matches!(
+            apply(
+                &mut state,
+                Action::RegisterTriggeredAbility {
+                    definition: TriggerDefinition::new(
+                        active,
+                        TriggerCondition::LifeGained {
+                            player: TriggerPlayerFilter::Controller,
+                        },
+                    )
+                    .with_intervening_if(TriggerInterveningIf::ControllerLifeAtMost(25)),
+                },
+            ),
+            Outcome::TriggerRegistered(_)
+        ));
+        assert_eq!(
+            state.deterministic_hash(),
+            state.deterministic_hash_streaming()
+        );
+
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::GainLife {
+                    player: active,
+                    amount: 1,
+                },
+            ),
+            Outcome::Applied
+        );
+        assert_eq!(state.pending_triggers().len(), 1);
+        assert_eq!(
+            state.deterministic_hash(),
+            state.deterministic_hash_streaming()
         );
     }
 

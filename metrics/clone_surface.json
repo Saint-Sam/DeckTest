@@ -30,7 +30,7 @@
   "full_state_snapshot_surface": false,
   "game_state_debug": false,
   "guard": "static persistent allocation field count",
-  "persistent_allocation_field_count": 19,
+  "persistent_allocation_field_count": 21,
   "persistent_allocation_fields": [
     {
       "field": "targets",
@@ -127,6 +127,18 @@
       "reason": "deterministic replay audit log",
       "struct": "GameState",
       "type": "Vec<ResolutionRecord>"
+    },
+    {
+      "field": "trigger_subscriptions",
+      "reason": "data-only Copy trigger definitions compiled from card IR",
+      "struct": "GameState",
+      "type": "Vec<TriggerSubscription>"
+    },
+    {
+      "field": "pending_triggers",
+      "reason": "Copy trigger instances drained before priority",
+      "struct": "GameState",
+      "type": "Vec<PendingTriggeredAbility>"
     },
     {
       "field": "turn_events",
