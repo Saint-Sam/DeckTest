@@ -1,0 +1,98 @@
+# CP-LAYERS Test Inventory
+
+Reviewed implementation commit: `81143e1e221ee5d5a01a7691f0adbe380cb357f7`
+
+## Core Unit Tests Added by T2.4
+
+- `crates/forge-core/src/lib.rs:11376` `same_layer_dependency_overrides_timestamp_order`
+- `crates/forge-core/src/lib.rs:11422` `power_toughness_sublayers_apply_in_cr_order`
+- `crates/forge-core/src/lib.rs:11475` `copy_layer_uses_base_copiable_values`
+- `crates/forge-core/src/lib.rs:11527` `control_layer_updates_effective_controller`
+- `crates/forge-core/src/lib.rs:11555` `continuous_effect_state_participates_in_hashes`
+
+## CP-LAYERS Fuzz Target Added During Checkpoint Prep
+
+- `fuzz/fuzz_targets/fuzz_characteristics.rs:1` `fuzz_characteristics`
+
+## Layer Oracle Scenarios Added by T2.4
+
+- `tests/oracle/layers/layers_001_pt_set_modify_switch.ron:2` `layers 001 power toughness set modify switch`
+- `tests/oracle/layers/layers_002_double_switch_cancels.ron:2` `layers 002 double switch cancels`
+- `tests/oracle/layers/layers_003_cda_set_modify.ron:2` `layers 003 cda set modify`
+- `tests/oracle/layers/layers_004_set_pt_timestamp_later_wins.ron:2` `layers 004 set pt timestamp later wins`
+- `tests/oracle/layers/layers_005_modify_after_set.ron:2` `layers 005 modify after set`
+- `tests/oracle/layers/layers_006_add_flying_after_remove.ron:2` `layers 006 add flying after remove`
+- `tests/oracle/layers/layers_007_remove_flying_after_add.ron:2` `layers 007 remove flying after add`
+- `tests/oracle/layers/layers_008_keyword_mixed_add_remove.ron:2` `layers 008 keyword mixed add remove`
+- `tests/oracle/layers/layers_009_remove_all_combat_keywords.ron:2` `layers 009 remove all combat keywords`
+- `tests/oracle/layers/layers_010_add_creature_type_to_noncreature.ron:2` `layers 010 add creature type to noncreature`
+- `tests/oracle/layers/layers_011_remove_creature_type.ron:2` `layers 011 remove creature type`
+- `tests/oracle/layers/layers_012_set_artifact_creature_types.ron:2` `layers 012 set artifact creature types`
+- `tests/oracle/layers/layers_013_add_artifact_to_creature.ron:2` `layers 013 add artifact to creature`
+- `tests/oracle/layers/layers_014_set_color_later_wins.ron:2` `layers 014 set color later wins`
+- `tests/oracle/layers/layers_015_set_multicolor.ron:2` `layers 015 set multicolor`
+- `tests/oracle/layers/layers_016_text_marker_timestamp.ron:2` `layers 016 text marker timestamp`
+- `tests/oracle/layers/layers_017_change_controller.ron:2` `layers 017 change controller`
+- `tests/oracle/layers/layers_018_control_timestamp_later_wins.ron:2` `layers 018 control timestamp later wins`
+- `tests/oracle/layers/layers_019_same_layer_dependency_reorders.ron:2` `layers 019 same layer dependency reorders`
+- `tests/oracle/layers/layers_020_same_layer_timestamp_without_dependency.ron:2` `layers 020 same layer timestamp without dependency`
+- `tests/oracle/layers/layers_021_copy_ignores_source_modifier.ron:2` `layers 021 copy ignores source modifier`
+- `tests/oracle/layers/layers_022_copy_noncreature_removes_creature.ron:2` `layers 022 copy noncreature removes creature`
+- `tests/oracle/layers/layers_023_all_objects_color.ron:2` `layers 023 all objects color`
+- `tests/oracle/layers/layers_024_all_objects_add_flying.ron:2` `layers 024 all objects add flying`
+- `tests/oracle/layers/layers_025_all_objects_modify_pt.ron:2` `layers 025 all objects modify pt`
+- `tests/oracle/layers/layers_026_query_then_invalidate.ron:2` `layers 026 query then invalidate`
+- `tests/oracle/layers/layers_027_toughness_buff_prevents_lethal_sba.ron:2` `layers 027 toughness buff prevents lethal sba`
+- `tests/oracle/layers/layers_028_toughness_set_causes_lethal_sba.ron:2` `layers 028 toughness set causes lethal sba`
+- `tests/oracle/layers/layers_029_control_effect_allows_attack.ron:2` `layers 029 control effect allows attack`
+- `tests/oracle/layers/layers_030_colorless_expectation.ron:2` `layers 030 colorless expectation`
+- `tests/oracle/layers/layers_031_set_land_type_noncreature.ron:2` `layers 031 set land type noncreature`
+- `tests/oracle/layers/layers_032_set_types_removes_creature.ron:2` `layers 032 set types removes creature`
+- `tests/oracle/layers/layers_033_add_creature_after_set_artifact.ron:2` `layers 033 add creature after set artifact`
+- `tests/oracle/layers/layers_034_pt_negative_modifier.ron:2` `layers 034 pt negative modifier`
+- `tests/oracle/layers/layers_035_zero_toughness_from_layer_sba.ron:2` `layers 035 zero toughness from layer sba`
+- `tests/oracle/layers/layers_036_switch_after_negative_modifier.ron:2` `layers 036 switch after negative modifier`
+- `tests/oracle/layers/layers_037_dependency_on_color_layer.ron:2` `layers 037 dependency on color layer`
+- `tests/oracle/layers/layers_038_dependency_not_cross_sublayer.ron:2` `layers 038 dependency not cross sublayer`
+- `tests/oracle/layers/layers_039_all_objects_type_then_pt.ron:2` `layers 039 all objects type then pt`
+- `tests/oracle/layers/layers_040_controller_hash_determinism.ron:2` `layers 040 controller hash determinism`
+- `tests/oracle/layers/layers_041_type_set_timestamp.ron:2` `layers 041 type set timestamp`
+- `tests/oracle/layers/layers_042_add_remove_artifact.ron:2` `layers 042 add remove artifact`
+- `tests/oracle/layers/layers_043_remove_then_add_artifact.ron:2` `layers 043 remove then add artifact`
+- `tests/oracle/layers/layers_044_all_color_specific_later.ron:2` `layers 044 all color specific later`
+- `tests/oracle/layers/layers_045_all_color_later_overrides_specific.ron:2` `layers 045 all color later overrides specific`
+- `tests/oracle/layers/layers_046_text_dependency.ron:2` `layers 046 text dependency`
+- `tests/oracle/layers/layers_047_text_timestamp_without_dependency.ron:2` `layers 047 text timestamp without dependency`
+- `tests/oracle/layers/layers_048_control_dependency.ron:2` `layers 048 control dependency`
+- `tests/oracle/layers/layers_049_control_timestamp_without_dependency.ron:2` `layers 049 control timestamp without dependency`
+- `tests/oracle/layers/layers_050_copy_then_remove_keyword.ron:2` `layers 050 copy then remove keyword`
+- `tests/oracle/layers/layers_051_copy_then_add_keyword.ron:2` `layers 051 copy then add keyword`
+- `tests/oracle/layers/layers_052_type_before_ability.ron:2` `layers 052 type before ability`
+- `tests/oracle/layers/layers_053_remove_creature_before_ability.ron:2` `layers 053 remove creature before ability`
+- `tests/oracle/layers/layers_054_type_add_remove_sequence.ron:2` `layers 054 type add remove sequence`
+- `tests/oracle/layers/layers_055_late_set_replaces_added_type.ron:2` `layers 055 late set replaces added type`
+- `tests/oracle/layers/layers_056_late_set_creature_replaces_artifact.ron:2` `layers 056 late set creature replaces artifact`
+- `tests/oracle/layers/layers_057_all_objects_change_controller.ron:2` `layers 057 all objects change controller`
+- `tests/oracle/layers/layers_058_specific_control_later_than_all.ron:2` `layers 058 specific control later than all`
+- `tests/oracle/layers/layers_059_all_control_later_than_specific.ron:2` `layers 059 all control later than specific`
+- `tests/oracle/layers/layers_060_multicolor_then_colorless.ron:2` `layers 060 multicolor then colorless`
+- `tests/oracle/layers/layers_061_tied_timestamp_id_order.ron:2` `layers 061 tied timestamp id order`
+- `tests/oracle/layers/layers_062_tied_timestamp_reverse_registration.ron:2` `layers 062 tied timestamp reverse registration`
+- `tests/oracle/layers/layers_063_cda_set_switch.ron:2` `layers 063 cda set switch`
+- `tests/oracle/layers/layers_064_multiple_modifiers.ron:2` `layers 064 multiple modifiers`
+- `tests/oracle/layers/layers_065_switch_layer_after_set.ron:2` `layers 065 switch layer after set`
+- `tests/oracle/layers/layers_066_remove_creature_add_land.ron:2` `layers 066 remove creature add land`
+- `tests/oracle/layers/layers_067_land_creature_set_pt.ron:2` `layers 067 land creature set pt`
+- `tests/oracle/layers/layers_068_copy_source_loses_creature_type.ron:2` `layers 068 copy source loses creature type`
+- `tests/oracle/layers/layers_069_all_remove_creature_after_copy.ron:2` `layers 069 all remove creature after copy`
+- `tests/oracle/layers/layers_070_copy_noncreature_then_all_creature.ron:2` `layers 070 copy noncreature then all creature`
+- `tests/oracle/layers/layers_071_set_pt_dependency_chain.ron:2` `layers 071 set pt dependency chain`
+- `tests/oracle/layers/layers_072_set_pt_timestamp_chain.ron:2` `layers 072 set pt timestamp chain`
+- `tests/oracle/layers/layers_073_targeted_effects_do_not_bleed.ron:2` `layers 073 targeted effects do not bleed`
+- `tests/oracle/layers/layers_074_all_keywords_specific_remove.ron:2` `layers 074 all keywords specific remove`
+- `tests/oracle/layers/layers_075_all_color_target_colorless.ron:2` `layers 075 all color target colorless`
+- `tests/oracle/layers/layers_076_all_text_target_later.ron:2` `layers 076 all text target later`
+- `tests/oracle/layers/layers_077_all_control_target_dependency.ron:2` `layers 077 all control target dependency`
+- `tests/oracle/layers/layers_078_all_artifact_target_set_creature.ron:2` `layers 078 all artifact target set creature`
+- `tests/oracle/layers/layers_079_all_creature_adds_to_artifact.ron:2` `layers 079 all creature adds to artifact`
+- `tests/oracle/layers/layers_080_dependency_nonapplicable_to_target.ron:2` `layers 080 dependency nonapplicable to target`

@@ -26,4 +26,11 @@ test = false
 doc = false
 bench = false
 
+[[bin]]
+name = "fuzz_characteristics"
+path = "fuzz_targets/fuzz_characteristics.rs"
+test = false
+doc = false
+bench = false
+
 [workspace]

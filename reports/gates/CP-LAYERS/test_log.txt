@@ -1,0 +1,21 @@
+CP-LAYERS checkpoint-prep local test summary, 2026-07-07
+
+PASS cargo fmt --all --check
+PASS cargo test -p forge-core layers::
+PASS cargo test -p forge-core
+PASS cargo test -p forge-testkit
+PASS cargo clippy --workspace --all-targets --all-features -- -D warnings
+PASS cargo run -p forge-testkit -- oracle --path tests/oracle/layers --no-junit
+PASS scripts/review/clone_surface_guard.sh
+PASS scripts/vl.sh
+PASS cargo fmt --manifest-path fuzz/Cargo.toml --all --check
+PASS cargo check --manifest-path fuzz/Cargo.toml --bin fuzz_characteristics
+PASS cargo run --manifest-path fuzz/Cargo.toml --bin fuzz_characteristics -- -runs=16
+
+Layer oracle path run result:
+oracle scenarios: 80 passed, 0 failed
+
+T2.4 VL result:
+oracle scenarios: 382 passed, 0 failed
+coverage: 81.65% lines
+perf smoke: 0 regressions
