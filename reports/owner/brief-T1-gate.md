@@ -10,12 +10,9 @@ path, fuzz targets, performance benches, and 300 oracle scenarios. The T1 gate
 reviewer originally failed the packet because the 300-scenario corpus did not
 prove the required combat oracle surface. That gap is now locally remediated:
 the scenario runner supports combat actions, the bounded oracle pack includes
-60 combat scenarios, the live reviewer checks passed, and GitHub Actions passed
-for the combat remediation commit `0d2eef5`.
-
-The remaining hold is procedural: the final evidence/log-archive commit must be
-pushed and GitHub Actions must pass for that exact hash before T1 can be marked
-fully passed.
+60 combat scenarios, the live reviewer checks passed, the clean-checkout gate
+passed, and GitHub Actions passed for the exact T1 gate evidence commit
+`2198493`.
 
 ## 2. WHAT YOU SHOULD SEE - TRY IT YOURSELF
 
@@ -35,6 +32,10 @@ fully passed.
 - EXPECT: three mutation checks caught mutants, five reviewer oracle scenarios
   passed, determinism replay passed, live sanitizer fuzz passed, and three spot
   replays matched recorded hashes.
+
+- DO: open `reports/gates/T1/remote-ci-2026-07-07.md`
+- EXPECT: GitHub Actions `ci #18`, run ID `28883217715`, passed for commit
+  `2198493284299d9721d59ab3a23e3b2a2ab71f56`.
 
 ## 3. NUMBERS THAT MATTER
 
@@ -58,12 +59,10 @@ come later. The current replay demo is intentionally tiny and deterministic.
 
 ## 5. WHAT YOU SHOULD EXPECT NEXT
 
-I will create the final local log-archive commit. After you push it through
-GitHub Desktop, GitHub Actions should run on that exact commit. A green run lets
-us close T1.R9, move `T1` into `gates_passed`, and open Tier 2. T1.R7 clean
-checkout evidence is already locally resolved.
+Tier 1 is pass-recorded locally. The next plan work is Tier 2, with CP-LAYERS
+remaining the next human-heavy checkpoint.
 
 ## 6. WHAT WE NEED FROM YOU
 
-After I create the local gate packet commit, please push it through GitHub
-Desktop so remote CI can validate the exact T1 gate state.
+Push this small pass-record commit through GitHub Desktop so the remote repo has
+the same T1 PASS state as the local repo.

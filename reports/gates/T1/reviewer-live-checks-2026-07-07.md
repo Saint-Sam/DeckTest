@@ -4,8 +4,9 @@ Date: 2026-07-07
 
 Reviewer: Codex Gate Reviewer for T1 re-review
 
-Result: PASS local reviewer checks. Exact final-tree remote CI remains pending
-until the next evidence/tooling commit is pushed.
+Result: PASS local reviewer checks. Exact final-tree remote CI later passed as
+GitHub Actions `ci #18`, run ID `28883217715`, for commit
+`2198493284299d9721d59ab3a23e3b2a2ab71f56`.
 
 ## Mutation Checks
 

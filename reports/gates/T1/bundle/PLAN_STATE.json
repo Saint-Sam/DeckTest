@@ -159,15 +159,16 @@
       "verification": "reviewer live checks passed: three mutation checks caught mutants, five reviewer oracle scenarios passed, determinism replay passed 10 archived replays, live address-sanitizer fuzz passed two 1801-second targets, and seeds 11/14/20 spot replays matched"
     },
     "T1.R9": {
-      "status": "pending_owner_push_remote_ci",
+      "status": "resolved_remote",
       "branch": "remediation/T1.R9-final-tree-remote-ci",
       "attempts": 0,
-      "verification": "GitHub Actions ci #17 run 28877442664 passed for combat remediation commit 0d2eef5f874a1120f6643c8556d65bc10717250b; final reviewer evidence/tooling commit still needs owner push and exact-hash CI"
+      "verification": "GitHub Actions ci #18 run 28883217715 passed all required jobs for exact T1 gate evidence commit 2198493284299d9721d59ab3a23e3b2a2ab71f56"
     }
   },
   "gates_passed": [
     "T0",
-    "CP-KERNEL"
+    "CP-KERNEL",
+    "T1"
   ],
   "metrics_snapshot": "metrics/legacy_inventory.json",
   "gate_reviews": {
@@ -200,15 +201,12 @@
       "re_review": "PASS at d7fcb03; scoped re-review of T1.R1-T1.R4 plus fresh G1 verification found no blockers"
     },
     "T1": {
-      "status": "conditional_pass_local",
+      "status": "passed",
       "bundle": "reports/gates/T1/bundle",
       "signoff": "reports/gates/T1/SIGNOFF.md",
-      "reviewed_remote_green_commit": "0d2eef5f874a1120f6643c8556d65bc10717250b",
-      "remote_ci": "GitHub Actions ci #17 run 28877442664 passed all required jobs for combat remediation commit 0d2eef5f874a1120f6643c8556d65bc10717250b",
-      "conditions": {
-        "T1.R9": "owner push through GitHub Desktop and exact final-tree green GitHub Actions run"
-      },
-      "re_review": "Local reviewer checks passed on 2026-07-07; T1 intentionally not added to gates_passed until exact final-tree remote CI is green."
+      "reviewed_remote_green_commit": "2198493284299d9721d59ab3a23e3b2a2ab71f56",
+      "remote_ci": "GitHub Actions ci #18 run 28883217715 passed all required jobs for exact T1 gate evidence commit 2198493284299d9721d59ab3a23e3b2a2ab71f56",
+      "re_review": "PASS on 2026-07-07 after combat oracle remediation, live reviewer checks, clean-checkout gate evidence, and exact-commit remote CI."
     }
   },
   "owner_input": {

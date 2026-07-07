@@ -4,7 +4,7 @@ Date: 2026-07-07
 
 Reviewer: Codex Gate Reviewer for T1 re-review
 
-Verdict: CONDITIONAL PASS LOCAL - exact final-tree remote CI pending.
+Verdict: PASS
 
 ## Reviewed Tree State
 
@@ -16,8 +16,9 @@ Verdict: CONDITIONAL PASS LOCAL - exact final-tree remote CI pending.
   (`T1 gate: close live review evidence`)
 - Clean-checkout gate result: PASS; archived in
   `reports/gates/T1/clean-checkout-gate-bde958c-2026-07-07.log`.
-- Exact final local evidence/log-archive commit remote CI: pending owner push
-  through GitHub Desktop.
+- Exact final T1 gate evidence commit remote CI: GitHub Actions `ci #18`, run
+  ID `28883217715`, passed for commit
+  `2198493284299d9721d59ab3a23e3b2a2ab71f56`.
 - Product-code edits by this reviewer: `forge-testkit oracle --path PATH` and
   review tooling fixes only; no rules-kernel product behavior changed in this
   re-review pass.
@@ -59,16 +60,14 @@ Verdict: CONDITIONAL PASS LOCAL - exact final-tree remote CI pending.
 | G8 ADR/spec consistency | PASS | T1.6 now has 60 combat oracle scenarios covering the required features, and the gate script verifies that surface explicitly. |
 | G9 Question Queue clear | PASS | `reports/questions/QUEUE.md` has only resolved `Q-2026-07-07-T1.10`; no open T1 owner questions remain. |
 | G10 Scope integrity | PASS | Changes are confined to T1 combat oracle remediation, gate evidence/status, review scripts, and a reviewer-only oracle path option. |
-| G11 Owner Brief delivered | PASS | `reports/owner/brief-T1-gate.md` exists, includes try-it-yourself commands, status, known rough edges, and the remaining remote-CI caveat. |
+| G11 Owner Brief delivered | PASS | `reports/owner/brief-T1-gate.md` exists, includes try-it-yourself commands, status, known rough edges, and the remote-CI pass. |
 
 ## Remaining Remediation
 
-T1.R9 - Pending green GitHub Actions run for the exact final local evidence
-commit after owner push through GitHub Desktop.
+None.
 
 ## Closing Note
 
-The original T1 gate failure is substantively remediated locally. The only
-remaining release-quality hold is procedural: push the final local evidence
-commit and require GitHub Actions to pass for that exact hash before adding
-`T1` to `gates_passed`.
+The original T1 gate failure is remediated. The T1 gate evidence commit passed
+local review, clean-checkout gate review, and exact-commit remote CI. T1 may be
+added to `gates_passed`.

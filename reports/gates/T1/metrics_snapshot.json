@@ -109,9 +109,10 @@
     "clone_ns_per_200_card_state": 107.583
   },
   "remote_ci": {
-    "latest_checked_commit": "0d2eef5f874a1120f6643c8556d65bc10717250b",
-    "latest_checked_run_id": 28877442664,
+    "latest_checked_commit": "2198493284299d9721d59ab3a23e3b2a2ab71f56",
+    "latest_checked_workflow": "ci #18",
+    "latest_checked_run_id": 28883217715,
     "latest_checked_result": "pass",
-    "current_local_review_evidence_pending_remote_ci": true
+    "final_gate_remote_ci_green": true
   }
 }
