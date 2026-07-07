@@ -96,6 +96,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         if: ${{ hashFiles('Cargo.toml') != '' }}
       - name: Run perf suite
+        env:
+          FORGE_PERF_BASELINE: metrics/perf_baseline.ci-ubuntu.json
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.suite }}" = "weekly" ]; then
             echo "Skipping nightly perf for weekly-only dispatch."

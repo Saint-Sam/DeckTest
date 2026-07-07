@@ -12,6 +12,7 @@ if [[ "${1:-}" == "--self-test" ]]; then
 fi
 
 threshold="${FORGE_PERF_THRESHOLD:-0.05}"
+baseline="${FORGE_PERF_BASELINE:-metrics/perf_baseline.json}"
 target_dir="${CARGO_TARGET_DIR:-target}"
 criterion_root="$target_dir/criterion"
 stamp="$ROOT/metrics/perf_bench_start.tmp"
@@ -25,5 +26,6 @@ if [[ "${FORGE_PERF_RUN_BENCHES:-1}" != "0" ]]; then
 fi
 
 python3 "$ROOT/tools/perf_diff.py" \
+  --baseline "$baseline" \
   --threshold "$threshold" \
   --summary-out "$ROOT/metrics/perf_summary.tmp.json"

@@ -275,6 +275,8 @@ jobs:
           rustup component add llvm-tools-preview
           cargo install cargo-llvm-cov --locked
       - name: Run T0.4 verification loop hook
+        env:
+          FORGE_PERF_BASELINE: metrics/perf_baseline.ci-ubuntu.json
         run: |
           if [ -x scripts/vl.sh ]; then
             scripts/vl.sh
