@@ -4510,6 +4510,38 @@ pub fn legal_actions(state: &GameState) -> ActionList {
 /// Applies one external action through the kernel boundary.
 #[inline]
 pub fn apply(state: &mut GameState, action: Action) -> Outcome {
+    if let Action::PassPriority { player } = action {
+        return apply_pass_priority(state, player);
+    }
+    apply_fallback(state, action)
+}
+
+#[inline(always)]
+fn apply_pass_priority(state: &mut GameState, player: PlayerId) -> Outcome {
+    if state.pending_triggers.is_empty() && state.priority_player == Some(player) {
+        let pass_count = state.priority_pass_count + 1;
+        let player_count = state.players.len() as u32;
+        if pass_count < player_count {
+            state.priority_pass_count = pass_count;
+            let next_index = player.0 + 1;
+            let next_index = if next_index == player_count {
+                0
+            } else {
+                next_index
+            };
+            let next = PlayerId(next_index);
+            state.priority_player = Some(next);
+            return Outcome::Priority(PriorityOutcome::PassedTo(next));
+        }
+    }
+    match state.pass_priority(player) {
+        Ok(outcome) => Outcome::Priority(outcome),
+        Err(error) => Outcome::Failed(error),
+    }
+}
+
+#[inline(never)]
+fn apply_fallback(state: &mut GameState, action: Action) -> Outcome {
     match action {
         Action::SetSeed { seed } => {
             state.set_seed(seed);
@@ -4607,10 +4639,7 @@ pub fn apply(state: &mut GameState, action: Action) -> Outcome {
             Ok(step) => Outcome::StepAdvanced(step),
             Err(error) => Outcome::Failed(error),
         },
-        Action::PassPriority { player } => match state.pass_priority(player) {
-            Ok(outcome) => Outcome::Priority(outcome),
-            Err(error) => Outcome::Failed(error),
-        },
+        Action::PassPriority { player } => apply_pass_priority(state, player),
         Action::CastSpell {
             player,
             object,
@@ -5390,7 +5419,7 @@ pub struct GameState {
     // clone_surface: object storage wrapper with one Copy-record arena.
     objects: ObjectArena,
     // clone_surface: fixed shared zones plus per-player zones; membership IDs live in Zone.
-    zones: Vec<Zone>,
+    zones: Arc<Vec<Zone>>,
     next_duration_marker: u32,
     // clone_surface: duration markers are Copy records, bounded by active effects.
     duration_markers: Vec<DurationMarker>,
@@ -5442,7 +5471,7 @@ impl Clone for GameState {
             last_cleanup_report: self.last_cleanup_report,
             players: self.players.clone(),
             objects: self.objects.clone(),
-            zones: self.zones.clone(),
+            zones: Arc::clone(&self.zones),
             next_duration_marker: self.next_duration_marker,
             duration_markers: self.duration_markers.clone(),
             next_stack_entry: self.next_stack_entry,
@@ -5493,7 +5522,7 @@ impl GameState {
             last_cleanup_report: CleanupReport::default(),
             players: Vec::new(),
             objects: ObjectArena::default(),
-            zones: vec![
+            zones: Arc::new(vec![
                 Zone {
                     id: ZoneId::new(None, ZoneKind::Battlefield),
                     objects: Arc::new(Vec::new()),
@@ -5510,7 +5539,7 @@ impl GameState {
                     id: ZoneId::new(None, ZoneKind::Command),
                     objects: Arc::new(Vec::new()),
                 },
-            ],
+            ]),
             next_duration_marker: 0,
             duration_markers: Vec::new(),
             next_stack_entry: 0,
@@ -5766,15 +5795,16 @@ impl GameState {
     fn add_player(&mut self) -> PlayerId {
         let id = PlayerId(self.players.len() as u32);
         self.players.push(PlayerState::new(id));
-        self.zones.push(Zone {
+        let zones = Arc::make_mut(&mut self.zones);
+        zones.push(Zone {
             id: ZoneId::new(Some(id), ZoneKind::Library),
             objects: Arc::new(Vec::new()),
         });
-        self.zones.push(Zone {
+        zones.push(Zone {
             id: ZoneId::new(Some(id), ZoneKind::Hand),
             objects: Arc::new(Vec::new()),
         });
-        self.zones.push(Zone {
+        zones.push(Zone {
             id: ZoneId::new(Some(id), ZoneKind::Graveyard),
             objects: Arc::new(Vec::new()),
         });
@@ -6164,7 +6194,7 @@ impl GameState {
     pub fn player_view(&self, observer: PlayerId) -> Result<PlayerView, StateError> {
         self.require_player(observer)?;
         let mut zones = Vec::with_capacity(self.zones.len());
-        for zone in &self.zones {
+        for zone in self.zones.iter() {
             let hidden_from_observer = match zone.id.kind() {
                 ZoneKind::Hand => zone.id.owner() != Some(observer),
                 ZoneKind::Library => true,
@@ -6259,7 +6289,7 @@ impl GameState {
     ///
     /// If all players pass in succession, this either resolves the top stack
     /// entry or completes the current step when the stack is empty.
-    #[inline]
+    #[inline(always)]
     fn pass_priority(&mut self, player: PlayerId) -> Result<PriorityOutcome, StateError> {
         if !self.pending_triggers.is_empty() {
             return Err(StateError::PendingTriggeredAbilities);
@@ -7236,7 +7266,9 @@ impl GameState {
             .iter()
             .position(|candidate| *candidate == object)
             .ok_or(StateError::MissingZoneMembership(object))?;
-        self.zones[from_index].objects_mut().remove(from_position);
+        Arc::make_mut(&mut self.zones)[from_index]
+            .objects_mut()
+            .remove(from_position);
         self.zone_mut(to)?.objects_mut().push(object);
         if from_zone_id == battlefield && to != battlefield {
             self.remove_object_from_combat(object);
@@ -7272,7 +7304,7 @@ impl GameState {
     /// Validates that every object appears in exactly one zone.
     pub fn validate_zone_conservation(&self) -> Result<ZoneConservation, StateError> {
         let mut memberships = vec![0_u8; self.objects.len()];
-        for zone in &self.zones {
+        for zone in self.zones.iter() {
             self.validate_zone_id(zone.id)?;
             for object in zone.objects.iter() {
                 if self.objects.get(*object).is_none() {
@@ -7361,7 +7393,7 @@ impl GameState {
         }
 
         bytes.write_u32(self.zones.len() as u32);
-        for zone in &self.zones {
+        for zone in self.zones.iter() {
             bytes.write_zone_id(zone.id);
             bytes.write_u32(zone.objects.len() as u32);
             for object in zone.objects.iter() {
@@ -7466,7 +7498,7 @@ impl GameState {
         }
 
         hash.write_u32(self.zones.len() as u32);
-        for zone in &self.zones {
+        for zone in self.zones.iter() {
             hash.write_zone_id(zone.id);
             hash.write_u32(zone.objects.len() as u32);
             for object in zone.objects.iter() {
@@ -8880,10 +8912,14 @@ impl GameState {
                     player,
                     object: *object,
                 })?;
-            moved.push(self.zones[hand_index].objects_mut().remove(position));
+            moved.push(
+                Arc::make_mut(&mut self.zones)[hand_index]
+                    .objects_mut()
+                    .remove(position),
+            );
         }
         for (offset, object) in moved.into_iter().enumerate() {
-            self.zones[library_index]
+            Arc::make_mut(&mut self.zones)[library_index]
                 .objects_mut()
                 .insert(offset, object);
             self.emit_event(GameEvent::ObjectMoved {
@@ -8909,11 +8945,16 @@ impl GameState {
         self.require_zone(from)?;
         self.require_zone(to)?;
         let from_index = self.zone_index(from).ok_or(StateError::UnknownZone(from))?;
-        let Some(object) = self.zones[from_index].objects_mut().pop() else {
+        let Some(object) = Arc::make_mut(&mut self.zones)[from_index]
+            .objects_mut()
+            .pop()
+        else {
             return Ok(None);
         };
         let to_index = self.zone_index(to).ok_or(StateError::UnknownZone(to))?;
-        self.zones[to_index].objects_mut().push(object);
+        Arc::make_mut(&mut self.zones)[to_index]
+            .objects_mut()
+            .push(object);
         self.emit_event(GameEvent::ObjectMoved { object, from, to });
         Ok(Some(object))
     }
@@ -8924,7 +8965,9 @@ impl GameState {
         let len = self.zones[zone_index].objects.len();
         for index in (1..len).rev() {
             let swap_with = self.random_below(index + 1);
-            self.zones[zone_index].objects_mut().swap(index, swap_with);
+            Arc::make_mut(&mut self.zones)[zone_index]
+                .objects_mut()
+                .swap(index, swap_with);
         }
         self.emit_event(GameEvent::ZoneShuffled { zone });
         Ok(())
@@ -9065,7 +9108,7 @@ impl GameState {
 
     fn zone_mut(&mut self, id: ZoneId) -> Result<&mut Zone, StateError> {
         let index = self.zone_index(id).ok_or(StateError::UnknownZone(id))?;
-        Ok(&mut self.zones[index])
+        Ok(&mut Arc::make_mut(&mut self.zones)[index])
     }
 }
 
