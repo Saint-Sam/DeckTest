@@ -6,6 +6,7 @@ cd "$ROOT"
 
 if [[ "${1:-}" == "--self-test" ]]; then
   [[ -x "$ROOT/scripts/check_coverage.sh" ]]
+  [[ -x "$ROOT/scripts/review/clone_surface_guard.sh" ]]
   [[ -x "$ROOT/scripts/run_oracle_subset.sh" ]]
   [[ -x "$ROOT/scripts/perf_smoke.sh" ]]
   echo "PASS vl.sh self-test"
@@ -37,6 +38,7 @@ else
 fi
 
 step "public GameState mutator review" "$ROOT/scripts/review/no_public_mutating_gamestate.sh"
+step "clone surface guard" "$ROOT/scripts/review/clone_surface_guard.sh"
 step "coverage floor" "$ROOT/scripts/check_coverage.sh" 80
 step "oracle subset" "$ROOT/scripts/run_oracle_subset.sh"
 step "perf smoke" "$ROOT/scripts/perf_smoke.sh"

@@ -1,11 +1,21 @@
 ==> cargo fmt
 ==> cargo clippy
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.32s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.04s
 ==> cargo build
 warning: output of `xcrun` while finding MacOSX.sdk
   |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-vopQYIpe' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-OqVoMYjB' (errno=Operation not permitted)
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-aJ7ZsTDV' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-W3DgZki7' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-5fKIPwe4' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-AC7kBXy4' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-vLM3gxsS' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-dCiRJKyR' (errno=Operation not permitted)
 
 warning: output of `xcrun` while finding MacOSX.sdk
   |
@@ -19,13 +29,23 @@ warning: output of `xcrun` while finding MacOSX.sdk
 
 warning: output of `xcrun` while finding MacOSX.sdk
   |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-vLM3gxsS' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-dCiRJKyR' (errno=Operation not permitted)
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-nBmROImc' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-gxmH8RKP' (errno=Operation not permitted)
 
 warning: output of `xcrun` while finding MacOSX.sdk
   |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-F76LoHWf' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-qP4NfxZL' (errno=Operation not permitted)
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-HEOm6fQj' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-MV3tVwte' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-vopQYIpe' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-OqVoMYjB' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-zf3lIICp' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-jwh47xnX' (errno=Operation not permitted)
 
 warning: output of `xcrun` while finding MacOSX.sdk
   |
@@ -42,72 +62,22 @@ warning: output of `xcrun` while finding MacOSX.sdk
   = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-Vjtdnz9I' (errno=Operation not permitted)
           xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-Win3UjZz' (errno=Operation not permitted)
 
-warning: output of `xcrun` while finding MacOSX.sdk
-  |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-A59RgpRK' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-RDOSxYZK' (errno=Operation not permitted)
-
-warning: output of `xcrun` while finding MacOSX.sdk
-  |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-Vaw6kuiL' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-DQyAZKgs' (errno=Operation not permitted)
-
-warning: output of `xcrun` while finding MacOSX.sdk
-  |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-HEOm6fQj' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-MV3tVwte' (errno=Operation not permitted)
-
-warning: output of `xcrun` while finding MacOSX.sdk
-  |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-5fKIPwe4' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-AC7kBXy4' (errno=Operation not permitted)
-
-warning: output of `xcrun` while finding MacOSX.sdk
-  |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-7R8i5dY1' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-wgWgRenj' (errno=Operation not permitted)
-
-warning: `forge-arena` (lib test) generated 1 warning
+warning: `forge-ai` (lib test) generated 1 warning
+warning: `forge-app-desktop` (lib test) generated 1 warning
+warning: `forge-cards` (lib test) generated 1 warning
 warning: `forge-cardc` (lib test) generated 1 warning
 warning: `forge-testkit` (lib test) generated 1 warning
-warning: `forge-cards` (lib test) generated 1 warning
-warning: `forge-app-android` (lib test) generated 1 warning
+warning: `forge-net` (lib test) generated 1 warning
+warning: `forge-app-wasm` (lib test) generated 1 warning
+warning: `forge-arena` (lib test) generated 1 warning
+warning: `forge-carddef` (lib test) generated 1 warning
 warning: `forge-app-ios` (lib test) generated 1 warning
 warning: `forge-porttools` (lib test) generated 1 warning
 warning: `forge-cli` (lib test) generated 1 warning
-warning: `forge-ai` (lib test) generated 1 warning
-warning: `forge-core` (lib test) generated 1 warning
-warning: `forge-app-wasm` (lib test) generated 1 warning
-warning: `forge-app-desktop` (lib test) generated 1 warning
-warning: `forge-ui` (lib test) generated 1 warning
 warning: output of `xcrun` while finding MacOSX.sdk
   |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-zf3lIICp' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-jwh47xnX' (errno=Operation not permitted)
-
-warning: output of `xcrun` while finding MacOSX.sdk
-  |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-nBmROImc' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-gxmH8RKP' (errno=Operation not permitted)
-
-warning: `forge-carddef` (lib test) generated 1 warning
-warning: `forge-net` (lib test) generated 1 warning
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.29s
-==> cargo test
-warning: output of `xcrun` while finding MacOSX.sdk
-  |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-nBmROImc' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-gxmH8RKP' (errno=Operation not permitted)
-
-warning: output of `xcrun` while finding MacOSX.sdk
-  |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-ZmqvmtWk' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-2Z77P5hb' (errno=Operation not permitted)
-
-warning: output of `xcrun` while finding MacOSX.sdk
-  |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-zf3lIICp' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-jwh47xnX' (errno=Operation not permitted)
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-v9dD77vD' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-iBK3yhkb' (errno=Operation not permitted)
 
 warning: output of `xcrun` while finding MacOSX.sdk
   |
@@ -116,8 +86,38 @@ warning: output of `xcrun` while finding MacOSX.sdk
 
 warning: output of `xcrun` while finding MacOSX.sdk
   |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-Vaw6kuiL' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-DQyAZKgs' (errno=Operation not permitted)
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-F76LoHWf' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-qP4NfxZL' (errno=Operation not permitted)
+
+warning: `forge-core` (lib test) generated 1 warning
+warning: `forge-ui` (lib test) generated 1 warning
+warning: `forge-app-android` (lib test) generated 1 warning
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.06s
+==> cargo test
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-aJ7ZsTDV' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-W3DgZki7' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-ZmqvmtWk' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-2Z77P5hb' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-v9dD77vD' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-iBK3yhkb' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-OhIE9T08' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-S999H3KZ' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-1D6LH0Js' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-oSw083G0' (errno=Operation not permitted)
 
 warning: output of `xcrun` while finding MacOSX.sdk
   |
@@ -136,13 +136,18 @@ warning: output of `xcrun` while finding MacOSX.sdk
 
 warning: output of `xcrun` while finding MacOSX.sdk
   |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-5fKIPwe4' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-AC7kBXy4' (errno=Operation not permitted)
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-F76LoHWf' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-qP4NfxZL' (errno=Operation not permitted)
 
 warning: output of `xcrun` while finding MacOSX.sdk
   |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-Vjtdnz9I' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-Win3UjZz' (errno=Operation not permitted)
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-7R8i5dY1' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-wgWgRenj' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-nBmROImc' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-gxmH8RKP' (errno=Operation not permitted)
 
 warning: output of `xcrun` while finding MacOSX.sdk
   |
@@ -151,28 +156,23 @@ warning: output of `xcrun` while finding MacOSX.sdk
 
 warning: output of `xcrun` while finding MacOSX.sdk
   |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-OhIE9T08' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-S999H3KZ' (errno=Operation not permitted)
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-zf3lIICp' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-jwh47xnX' (errno=Operation not permitted)
 
 warning: output of `xcrun` while finding MacOSX.sdk
   |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-F76LoHWf' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-qP4NfxZL' (errno=Operation not permitted)
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-5fKIPwe4' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-AC7kBXy4' (errno=Operation not permitted)
 
 warning: output of `xcrun` while finding MacOSX.sdk
   |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-A59RgpRK' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-RDOSxYZK' (errno=Operation not permitted)
-
-warning: output of `xcrun` while finding MacOSX.sdk
-  |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-1D6LH0Js' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-oSw083G0' (errno=Operation not permitted)
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-Vjtdnz9I' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-Win3UjZz' (errno=Operation not permitted)
 
 
-running 1 test
-.
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+running 2 tests
+..
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
 
 running 1 test
@@ -220,9 +220,9 @@ running 1 test
 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
 
-running 60 tests
-............................................................
-test result: ok. 60 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+running 65 tests
+.................................................................
+test result: ok. 65 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
 
 running 1 test
@@ -322,13 +322,8 @@ test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 ==> cargo slow tests
 warning: output of `xcrun` while finding MacOSX.sdk
   |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-eOedUybN' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-AANgTLP0' (errno=Operation not permitted)
-
-warning: output of `xcrun` while finding MacOSX.sdk
-  |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-VqFSUfn9' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-FU5lxONm' (errno=Operation not permitted)
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-NFyxyhwy' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-FjxzTa6q' (errno=Operation not permitted)
 
 warning: output of `xcrun` while finding MacOSX.sdk
   |
@@ -337,18 +332,8 @@ warning: output of `xcrun` while finding MacOSX.sdk
 
 warning: output of `xcrun` while finding MacOSX.sdk
   |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-kmPb0F35' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-SD1rp1vT' (errno=Operation not permitted)
-
-warning: output of `xcrun` while finding MacOSX.sdk
-  |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-JFF6Lj2c' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-o0gVrTRy' (errno=Operation not permitted)
-
-warning: output of `xcrun` while finding MacOSX.sdk
-  |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-8LszX0hn' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-MX3t3B8Z' (errno=Operation not permitted)
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-eOedUybN' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-AANgTLP0' (errno=Operation not permitted)
 
 warning: output of `xcrun` while finding MacOSX.sdk
   |
@@ -357,13 +342,18 @@ warning: output of `xcrun` while finding MacOSX.sdk
 
 warning: output of `xcrun` while finding MacOSX.sdk
   |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-srna8Rtd' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-XF2v4a6F' (errno=Operation not permitted)
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-YMZuYYIi' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-FSNwNT5G' (errno=Operation not permitted)
 
 warning: output of `xcrun` while finding MacOSX.sdk
   |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-YMZuYYIi' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-FSNwNT5G' (errno=Operation not permitted)
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-JFF6Lj2c' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-o0gVrTRy' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-rJrG0mJk' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-ZgnBN0Gd' (errno=Operation not permitted)
 
 warning: output of `xcrun` while finding MacOSX.sdk
   |
@@ -377,13 +367,23 @@ warning: output of `xcrun` while finding MacOSX.sdk
 
 warning: output of `xcrun` while finding MacOSX.sdk
   |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-D6uXl4hS' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-MvMtnsmT' (errno=Operation not permitted)
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-1fghuO4s' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-Y7Z24Whe' (errno=Operation not permitted)
 
 warning: output of `xcrun` while finding MacOSX.sdk
   |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-1fghuO4s' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-Y7Z24Whe' (errno=Operation not permitted)
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-8LszX0hn' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-MX3t3B8Z' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-zKx1dOSo' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-hJAfSIm2' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-srna8Rtd' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-XF2v4a6F' (errno=Operation not permitted)
 
 warning: output of `xcrun` while finding MacOSX.sdk
   |
@@ -392,8 +392,13 @@ warning: output of `xcrun` while finding MacOSX.sdk
 
 warning: output of `xcrun` while finding MacOSX.sdk
   |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-zKx1dOSo' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-hJAfSIm2' (errno=Operation not permitted)
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-D6uXl4hS' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-MvMtnsmT' (errno=Operation not permitted)
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
 
 
 running 0 tests
@@ -443,12 +448,7 @@ test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; fini
 
 running 0 tests
 
-test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
-
-
-running 0 tests
-
-test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 65 filtered out; finished in 0.00s
 
 
 running 0 tests
@@ -545,120 +545,127 @@ running 0 tests
 
 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
+==> public GameState mutator review
+PASS no_public_mutating_gamestate.sh
+==> clone surface guard
+python3: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-9cJPablq' (errno=Operation not permitted)
+python3: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-2VcjYtk9' (errno=Operation not permitted)
+PASS clone_surface_guard.sh persistent_allocation_field_count=18 metrics=metrics/clone_surface.json
 ==> coverage floor
 info: cargo-llvm-cov currently setting cfg(coverage); you can opt-out it by passing --no-cfg-coverage
-   Compiling forge-cards v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-cards)
-   Compiling forge-net v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-net)
-   Compiling forge-cli v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-cli)
-   Compiling forge-porttools v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-porttools)
    Compiling forge-core v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-core)
+   Compiling forge-cli v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-cli)
+   Compiling forge-app-desktop v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-app-desktop)
+   Compiling forge-cards v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-cards)
+   Compiling forge-testkit v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-testkit)
    Compiling forge-cardc v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-cardc)
-   Compiling forge-ai v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-ai)
-   Compiling forge-app-wasm v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-app-wasm)
-   Compiling forge-carddef v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-carddef)
    Compiling forge-app-ios v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-app-ios)
    Compiling forge-app-android v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-app-android)
-   Compiling forge-arena v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-arena)
-   Compiling forge-testkit v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-testkit)
+   Compiling forge-carddef v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-carddef)
+   Compiling forge-app-wasm v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-app-wasm)
+   Compiling forge-porttools v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-porttools)
    Compiling forge-ui v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-ui)
-   Compiling forge-app-desktop v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-app-desktop)
+   Compiling forge-net v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-net)
+   Compiling forge-arena v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-arena)
 warning: output of `xcrun` while finding MacOSX.sdk
   |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-IRpLu5BC' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-BRwhiaSu' (errno=Operation not permitted)
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-BkEQKNaQ' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-eO4nuAZj' (errno=Operation not permitted)
 
 warning: output of `xcrun` while finding MacOSX.sdk
   |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-LcEShM6U' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-CO9UDRhi' (errno=Operation not permitted)
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-Umht9PT9' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-nov06EwG' (errno=Operation not permitted)
 
 warning: output of `xcrun` while finding MacOSX.sdk
   |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-R5qHNXWn' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-UOQAejae' (errno=Operation not permitted)
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-zFRWdMF1' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-OxlsGMuM' (errno=Operation not permitted)
 
 warning: output of `xcrun` while finding MacOSX.sdk
   |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-yPc2QLem' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-yCvO49gM' (errno=Operation not permitted)
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-W4Ogyztu' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-HkeatZol' (errno=Operation not permitted)
 
 warning: output of `xcrun` while finding MacOSX.sdk
   |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-OnqZq1Vf' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-GeYz90rQ' (errno=Operation not permitted)
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-6WYKUZMn' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-9vjK6yQ0' (errno=Operation not permitted)
 
 warning: output of `xcrun` while finding MacOSX.sdk
   |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-pTD6YmDo' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-gitr33tG' (errno=Operation not permitted)
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-kBZxIvp4' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-BxGwWd5W' (errno=Operation not permitted)
 
 warning: output of `xcrun` while finding MacOSX.sdk
   |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-qkYj1LFw' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-KPQHIRXR' (errno=Operation not permitted)
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-IaCF2b6Z' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-AYY25hHF' (errno=Operation not permitted)
 
 warning: output of `xcrun` while finding MacOSX.sdk
   |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-v4q8xQP1' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-TZbm62FV' (errno=Operation not permitted)
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-eXMsCukY' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-4s3Ap8by' (errno=Operation not permitted)
 
 warning: output of `xcrun` while finding MacOSX.sdk
   |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-1XUQgCnJ' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-MmJaxkK2' (errno=Operation not permitted)
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-PdgAiI5L' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-tsBgqyL0' (errno=Operation not permitted)
 
 warning: output of `xcrun` while finding MacOSX.sdk
   |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-sQw1O7z3' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-Sicxy9PE' (errno=Operation not permitted)
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-fxvtU23H' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-Ib0vrq5y' (errno=Operation not permitted)
 
 warning: output of `xcrun` while finding MacOSX.sdk
   |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-pCNdegEP' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-sZaetxlr' (errno=Operation not permitted)
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-SvMBrBdw' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-lhj2SbEg' (errno=Operation not permitted)
 
 warning: output of `xcrun` while finding MacOSX.sdk
   |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-ZqkrrWxZ' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-yNXYearp' (errno=Operation not permitted)
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-rCAsKVRG' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-6GeEww6V' (errno=Operation not permitted)
 
 warning: output of `xcrun` while finding MacOSX.sdk
   |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-OZmsv3YW' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-UHV3chjz' (errno=Operation not permitted)
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-m8EscCrc' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-FHxutz5e' (errno=Operation not permitted)
 
-warning: output of `xcrun` while finding MacOSX.sdk
-  |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-gKlKE0WP' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-E0N5d2Xw' (errno=Operation not permitted)
-
-warning: `forge-cli` (lib test) generated 1 warning
-warning: `forge-cards` (lib test) generated 1 warning
 warning: `forge-carddef` (lib test) generated 1 warning
-warning: `forge-cardc` (lib test) generated 1 warning
-warning: `forge-net` (lib test) generated 1 warning
-warning: `forge-testkit` (lib test) generated 1 warning
-warning: `forge-app-desktop` (lib test) generated 1 warning
-warning: `forge-app-ios` (lib test) generated 1 warning
-warning: `forge-ui` (lib test) generated 1 warning
-warning: `forge-ai` (lib test) generated 1 warning
 warning: `forge-app-android` (lib test) generated 1 warning
-warning: `forge-arena` (lib test) generated 1 warning
+warning: `forge-app-ios` (lib test) generated 1 warning
+warning: `forge-testkit` (lib test) generated 1 warning
 warning: `forge-porttools` (lib test) generated 1 warning
+warning: `forge-ui` (lib test) generated 1 warning
+warning: `forge-app-desktop` (lib test) generated 1 warning
+warning: `forge-cli` (lib test) generated 1 warning
+warning: `forge-net` (lib test) generated 1 warning
+warning: `forge-cards` (lib test) generated 1 warning
+warning: `forge-arena` (lib test) generated 1 warning
+warning: `forge-cardc` (lib test) generated 1 warning
 warning: `forge-app-wasm` (lib test) generated 1 warning
+   Compiling forge-ai v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-ai)
 warning: output of `xcrun` while finding MacOSX.sdk
   |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-UvXxcHus' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-0mXpAdx2' (errno=Operation not permitted)
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-aWU3nayU' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-n0t6FQCO' (errno=Operation not permitted)
+
+warning: `forge-ai` (lib test) generated 1 warning
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-pZZYGNpH' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-tmp6trmb' (errno=Operation not permitted)
 
 warning: `forge-core` (lib test) generated 1 warning
-    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.22s
-     Running unittests src/lib.rs (target/llvm-cov-target/debug/deps/forge_ai-770af9a360be1c5b)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.12s
+     Running unittests src/lib.rs (target/llvm-cov-target/debug/deps/forge_ai-86ecff62ffb147b4)
 
-running 1 test
+running 2 tests
 test tests::bootstrap_crate_is_ready ... ok
+test tests::ai_entrypoint_accepts_player_view ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
      Running unittests src/lib.rs (target/llvm-cov-target/debug/deps/forge_app_android-ed66ab851fe4de73)
 
@@ -725,69 +732,74 @@ test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 
      Running unittests src/lib.rs (target/llvm-cov-target/debug/deps/forge_core-885e35960e440f26)
 
-running 60 tests
-test tests::bootstrap_crate_is_ready ... ok
+running 65 tests
+test tests::action_surface_creates_setup_state_without_public_mutators ... ok
 test tests::auto_tap_keeps_equivalent_sources_distinct ... ok
 test tests::auto_tap_prefers_exact_sources_with_minimal_waste ... ok
-test tests::cleanup_priority_exception_repeats_cleanup_step ... ok
+test tests::base_characteristics_are_derived_before_rules_use ... ok
+test tests::bootstrap_crate_is_ready ... ok
 test tests::adding_stack_object_holds_priority_and_resets_passes ... ok
-test tests::all_targets_illegal_before_resolution_counter_spell_by_rules ... ok
 test tests::blocked_attacker_remains_blocked_after_blocker_leaves ... ok
+test tests::all_targets_illegal_before_resolution_counter_spell_by_rules ... ok
+test tests::cleanup_priority_exception_repeats_cleanup_step ... ok
 test tests::combat_with_attackers_visits_blockers_and_damage ... ok
 test tests::combat_without_attackers_skips_blockers_and_damage ... ok
-test tests::explicit_payment_plan_is_validated_and_applied ... ok
 test tests::cleanup_state_based_action_grants_priority_and_repeats_cleanup ... ok
-test tests::draw_step_draws_before_active_player_gets_priority ... ok
 test tests::empty_library_draw_step_loses_before_priority ... ok
 test tests::declare_no_attackers_skips_blockers_and_damage ... ok
+test tests::draw_step_draws_before_active_player_gets_priority ... ok
+test tests::explicit_payment_plan_is_validated_and_applied ... ok
 test tests::cleanup_discards_to_max_hand_size_before_next_turn ... ok
 test tests::deterministic_hash_is_canonical_and_sensitive_to_ordered_state ... ok
-test tests::generic_cost_uses_colorless_before_colored_mana ... ok
-test tests::declare_attackers_taps_nonvigilance_and_preserves_vigilance ... ok
 test tests::end_of_turn_durations_survive_end_step_and_expire_during_cleanup ... ok
-test tests::combat_damage_marks_persist_until_cleanup ... ok
-test tests::insufficient_colored_mana_has_no_payment_plans ... ok
-test tests::deathtouch_damage_does_not_persist_past_one_sba_check ... ok
 test tests::double_strike_creates_two_damage_steps ... ok
+test tests::declare_attackers_taps_nonvigilance_and_preserves_vigilance ... ok
+test tests::generic_cost_uses_colorless_before_colored_mana ... ok
+test tests::combat_damage_marks_persist_until_cleanup ... ok
 test tests::full_pass_round_resolves_only_one_object ... ok
+test tests::deathtouch_damage_does_not_persist_past_one_sba_check ... ok
+test tests::insufficient_colored_mana_has_no_payment_plans ... ok
 test tests::illegal_target_during_announcement_leaves_state_unchanged ... ok
 test tests::intervening_action_breaks_pass_succession ... ok
 test tests::invalid_explicit_payment_is_rejected ... ok
 test tests::first_strike_lethal_damage_removes_blocker_before_regular_damage ... ok
-test tests::invalid_zone_owner_is_rejected ... ok
 test tests::illegal_attack_declarations_leave_state_unchanged ... ok
+test tests::invalid_zone_owner_is_rejected ... ok
 test tests::invalid_payment_during_cast_leaves_state_unchanged ... ok
+test tests::legal_actions_return_actions_that_apply_accepts ... ok
 test tests::flying_reach_and_menace_block_legality_is_enforced ... ok
-test tests::lethal_combat_damage_moves_creatures_to_owner_graveyards_before_priority ... ok
 test tests::life_total_sba_causes_loss_and_win_before_priority ... ok
+test tests::lethal_combat_damage_moves_creatures_to_owner_graveyards_before_priority ... ok
 test tests::lifelink_combat_damage_gains_life_as_damage_is_dealt ... ok
 test tests::lifelink_is_applied_before_loss_state_based_actions ... ok
-test tests::mana_pool_empties_when_step_ends ... ok
 test tests::mana_pool_changes_state_hash_and_matches_streaming_hash ... ok
+test tests::mana_pool_empties_when_step_ends ... ok
 test tests::normal_turn_steps_match_cr5_skeleton ... ok
 test tests::objects_move_between_zones_and_conserve_membership ... ok
 test tests::one_legal_target_allows_spell_to_resolve ... ok
 test tests::passes_in_succession_on_empty_stack_advance_step ... ok
-test tests::players_receive_owned_zones ... ok
 test tests::payment_enumeration_caps_at_sixty_four_distinct_plans ... ok
+test tests::player_view_hides_opponent_hand_and_library_objects ... ok
+test tests::player_view_rejects_unknown_observer ... ok
+test tests::players_receive_owned_zones ... ok
 test tests::poison_sba_causes_loss ... ok
 test tests::priority_starts_with_active_then_passes_in_turn_order ... ok
 test tests::resolved_object_controller_does_not_receive_priority ... ok
 test tests::simultaneous_lethal_life_loss_is_a_draw ... ok
 test tests::simultaneous_stack_objects_use_apnap_low_to_high ... ok
-test tests::state_based_action_table_tracks_cr_704_rows ... ok
 test tests::sorcery_timing_rejects_non_main_phase_and_nonempty_stack ... ok
+test tests::state_based_action_table_tracks_cr_704_rows ... ok
 test tests::successful_instant_cast_pays_cost_and_records_target_snapshot ... ok
 test tests::three_instant_response_chain_resolves_lifo ... ok
 test tests::untap_has_no_priority_and_upkeep_assigns_active_priority ... ok
 test tests::target_choices_affect_canonical_hash ... ok
 test tests::x_cost_is_added_to_generic_requirement ... ok
-test tests::x_cost_overflow_is_reported ... ok
-test tests::zero_toughness_creature_goes_to_owner_graveyard ... ok
 test tests::trample_with_deathtouch_allows_one_damage_to_each_blocker ... ok
 test tests::trample_without_lethal_blocker_damage_is_rejected ... ok
+test tests::x_cost_overflow_is_reported ... ok
+test tests::zero_toughness_creature_goes_to_owner_graveyard ... ok
 
-test result: ok. 60 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 65 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
      Running unittests src/lib.rs (target/llvm-cov-target/debug/deps/forge_net-a7a9a2a47151fde6)
 
@@ -822,7 +834,7 @@ test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 ==> oracle subset
 SKIP: no oracle scenarios are present yet
 ==> perf smoke
-python3: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-ZN4cyYFO' (errno=Operation not permitted)
-python3: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-2CnNFPC6' (errno=Operation not permitted)
+python3: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-xwVrssz9' (errno=Operation not permitted)
+python3: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-IWVyMzzw' (errno=Operation not permitted)
 SKIP: perf baseline missing: metrics/perf_baseline.json
 ALL CHECKS PASSED

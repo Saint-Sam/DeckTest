@@ -27,6 +27,14 @@ else
   printf '{\n  "status": "no metrics yet"\n}\n' > "$bundle/metrics_snapshot.json"
 fi
 
+if [[ -f "metrics/coverage.json" ]]; then
+  cp "metrics/coverage.json" "$bundle/coverage.json"
+fi
+
+if [[ -f "metrics/clone_surface.json" ]]; then
+  cp "metrics/clone_surface.json" "$bundle/clone_surface.json"
+fi
+
 {
   echo "# Open Questions"
   echo

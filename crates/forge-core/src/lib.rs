@@ -1294,6 +1294,7 @@ pub struct StackEntry {
     controller: PlayerId,
     object: Option<ObjectId>,
     kind: StackObjectKind,
+    // clone_surface: target snapshots are Copy records bounded by target requirements.
     targets: Vec<TargetSnapshot>,
     payment: Option<PaymentPlan>,
 }
@@ -1343,7 +1344,9 @@ pub struct ResolutionRecord {
     controller: PlayerId,
     object: Option<ObjectId>,
     kind: StackObjectKind,
+    // clone_surface: copied target snapshots are bounded by the resolving entry.
     targets: Vec<TargetSnapshot>,
+    // clone_surface: one bool per target snapshot; paired with `targets`.
     legal_targets: Vec<bool>,
     outcome: ResolutionOutcome,
 }
@@ -1875,6 +1878,7 @@ pub struct AttackingCreature {
     object: ObjectId,
     defending_player: PlayerId,
     blocked: bool,
+    // clone_surface: blocker IDs are bounded by current combat declarations.
     blockers: Vec<ObjectId>,
 }
 
@@ -1928,10 +1932,14 @@ impl BlockingCreature {
 /// Current combat state, cleared at the beginning and end of combat.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct CombatState {
+    // clone_surface: current-combat attacker records are cleared between combats.
     attackers: Vec<AttackingCreature>,
+    // clone_surface: current-combat blocking records are cleared between combats.
     blockers: Vec<BlockingCreature>,
+    // clone_surface: damage records are Copy records for the current combat step.
     damage_records: Vec<CombatDamageRecord>,
     damage_step: Option<CombatDamageStepKind>,
+    // clone_surface: object IDs only, bounded by attackers/blockers in combat.
     first_strike_participants: Vec<ObjectId>,
 }
 
@@ -2319,6 +2327,7 @@ impl ObjectRecord {
 /// Arena storage for game objects.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ObjectArena {
+    // clone_surface: single object arena of Copy records; one allocation per state clone.
     records: Vec<ObjectRecord>,
 }
 
@@ -2377,6 +2386,7 @@ impl ObjectArena {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Zone {
     id: ZoneId,
+    // clone_surface: zone membership stores object IDs only; total entries equal object count.
     objects: Vec<ObjectId>,
 }
 
@@ -3101,15 +3111,23 @@ pub struct GameState {
     cleanup_repeat_pending: bool,
     attackers_declared_this_combat: bool,
     last_cleanup_report: CleanupReport,
+    // clone_surface: player scalar arena; bounded by game player count.
     players: Vec<PlayerState>,
+    // clone_surface: object storage wrapper with one Copy-record arena.
     objects: ObjectArena,
+    // clone_surface: fixed shared zones plus per-player zones; membership IDs live in Zone.
     zones: Vec<Zone>,
     next_duration_marker: u32,
+    // clone_surface: duration markers are Copy records, bounded by active effects.
     duration_markers: Vec<DurationMarker>,
     next_stack_entry: u32,
+    // clone_surface: stack entries are bounded by current stack depth.
     stack_entries: Vec<StackEntry>,
+    // clone_surface: append-only resolution audit for deterministic replay diagnostics.
     resolution_log: Vec<ResolutionRecord>,
+    // clone_surface: current combat wrapper; cleared between combats.
     combat: CombatState,
+    // clone_surface: player IDs only, drained by state-based-action processing.
     empty_library_draws_since_sba: Vec<PlayerId>,
 }
 

@@ -92,9 +92,10 @@
       "verification": "scripts/vl.sh passed locally with PlayerView redaction, forge-ai view entrypoint, no public full snapshot, and hidden library/hand canary coverage"
     },
     "T1.R4": {
-      "status": "queued",
+      "status": "verified_local",
       "branch": "remediation/T1.R4-clone-guard",
-      "attempts": 0
+      "attempts": 0,
+      "verification": "scripts/vl.sh passed locally with clone_surface_guard baseline persistent_allocation_field_count=18"
     }
   },
   "gates_passed": [
@@ -125,7 +126,7 @@
         "T1.R1": "verified_local: sealed the kernel behind legal_actions/apply and added public mutator review script",
         "T1.R2": "verified_local: ObjectRecord stores base creature characteristics and rules code uses derived creature_characteristics query",
         "T1.R3": "verified_local: PlayerView redacts hidden hand/library identities, forge-ai accepts PlayerView instead of GameState, and full-information snapshots/canonical bytes are not public consumer APIs",
-        "T1.R4": "queued: flatten or guard GameState clone surface"
+        "T1.R4": "verified_local: removed full-state snapshot surface, documented clone-surface invariants, and added clone_surface_guard baseline persistent_allocation_field_count=18"
       }
     }
   },

@@ -1,0 +1,147 @@
+{
+  "allocation_bearing_wrappers": [
+    "ActionList",
+    "AttackingCreature",
+    "AutoTapPaymentEnumeration",
+    "AutoTapPaymentPlan",
+    "AutoTapSearch",
+    "CanonicalBytes",
+    "CastSpellRequest",
+    "CombatDamageAssignmentRequest",
+    "CombatDamageProfile",
+    "CombatState",
+    "GameState",
+    "ObjectArena",
+    "PaymentEnumeration",
+    "PaymentSearch",
+    "PlayerView",
+    "ResolutionRecord",
+    "StackEntry",
+    "Zone",
+    "ZoneView"
+  ],
+  "copy_required_structs": [
+    "PlayerState",
+    "ObjectRecord",
+    "DurationMarker",
+    "TargetSnapshot",
+    "BlockingCreature",
+    "CombatDamageRecord"
+  ],
+  "full_state_snapshot_surface": false,
+  "game_state_debug": false,
+  "guard": "static persistent allocation field count",
+  "persistent_allocation_field_count": 18,
+  "persistent_allocation_fields": [
+    {
+      "field": "targets",
+      "reason": "Copy TargetSnapshot records bounded by target requirements",
+      "struct": "StackEntry",
+      "type": "Vec<TargetSnapshot>"
+    },
+    {
+      "field": "targets",
+      "reason": "Copy TargetSnapshot records copied from a stack entry",
+      "struct": "ResolutionRecord",
+      "type": "Vec<TargetSnapshot>"
+    },
+    {
+      "field": "legal_targets",
+      "reason": "one bool per target snapshot",
+      "struct": "ResolutionRecord",
+      "type": "Vec<bool>"
+    },
+    {
+      "field": "blockers",
+      "reason": "object IDs bounded by current combat declarations",
+      "struct": "AttackingCreature",
+      "type": "Vec<ObjectId>"
+    },
+    {
+      "field": "attackers",
+      "reason": "current-combat records cleared between combats",
+      "struct": "CombatState",
+      "type": "Vec<AttackingCreature>"
+    },
+    {
+      "field": "blockers",
+      "reason": "current-combat Copy records cleared between combats",
+      "struct": "CombatState",
+      "type": "Vec<BlockingCreature>"
+    },
+    {
+      "field": "damage_records",
+      "reason": "current-combat Copy damage records",
+      "struct": "CombatState",
+      "type": "Vec<CombatDamageRecord>"
+    },
+    {
+      "field": "first_strike_participants",
+      "reason": "object IDs bounded by current combat",
+      "struct": "CombatState",
+      "type": "Vec<ObjectId>"
+    },
+    {
+      "field": "records",
+      "reason": "single Copy ObjectRecord arena",
+      "struct": "ObjectArena",
+      "type": "Vec<ObjectRecord>"
+    },
+    {
+      "field": "objects",
+      "reason": "object IDs only; total zone membership equals object count",
+      "struct": "Zone",
+      "type": "Vec<ObjectId>"
+    },
+    {
+      "field": "players",
+      "reason": "player scalar arena bounded by player count",
+      "struct": "GameState",
+      "type": "Vec<PlayerState>"
+    },
+    {
+      "field": "objects",
+      "reason": "ObjectArena wrapper with one Copy-record arena",
+      "struct": "GameState",
+      "type": "ObjectArena"
+    },
+    {
+      "field": "zones",
+      "reason": "fixed shared zones plus per-player zones",
+      "struct": "GameState",
+      "type": "Vec<Zone>"
+    },
+    {
+      "field": "duration_markers",
+      "reason": "Copy records bounded by active effects",
+      "struct": "GameState",
+      "type": "Vec<DurationMarker>"
+    },
+    {
+      "field": "stack_entries",
+      "reason": "bounded by current stack depth",
+      "struct": "GameState",
+      "type": "Vec<StackEntry>"
+    },
+    {
+      "field": "resolution_log",
+      "reason": "deterministic replay audit log",
+      "struct": "GameState",
+      "type": "Vec<ResolutionRecord>"
+    },
+    {
+      "field": "combat",
+      "reason": "CombatState wrapper cleared between combats",
+      "struct": "GameState",
+      "type": "CombatState"
+    },
+    {
+      "field": "empty_library_draws_since_sba",
+      "reason": "player IDs drained by SBA processing",
+      "struct": "GameState",
+      "type": "Vec<PlayerId>"
+    }
+  ],
+  "schema": "forge.clone_surface.v1",
+  "source": "crates/forge-core/src/lib.rs"
+}
