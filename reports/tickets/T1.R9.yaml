@@ -1,0 +1,25 @@
+id: T1.R9
+title: Obtain exact final-tree remote CI
+tier: 1
+priority: P0
+tags:
+  - remediation
+  - t1-gate
+  - ci
+  - evidence
+scope_paths:
+  - reports/gates/T1/
+  - reports/status/
+inputs:
+  - reports/gates/T1/SIGNOFF.md
+acceptance:
+  - the final local T1 remediation tree is pushed to GitHub as a named commit
+  - GitHub Actions passes for that exact commit hash after the final local tree is pushed
+  - T1 evidence records the run id, commit hash, branch or PR, result, and completion timestamp
+  - stale CI runs for earlier commits are not used as final-tree gate evidence
+verify: gh run view --exit-status
+retry_policy: 3 attempts then blocker
+depends_on:
+  - T1.R7
+  - T1.R8
+parallel_ok: false

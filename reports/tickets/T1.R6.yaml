@@ -1,0 +1,38 @@
+id: T1.R6
+title: Make the combat schema gap visible
+tier: 1
+priority: P0
+status: resolved_local
+tags:
+  - remediation
+  - t1-gate
+  - blocker-hygiene
+  - combat
+scope_paths:
+  - reports/blockers/
+  - reports/questions/QUEUE.md
+  - docs/t1_10_legacy_test_oracle_mapping.md
+  - reports/gates/T1/SIGNOFF.md
+inputs:
+  - reports/gates/T1/SIGNOFF.md
+  - docs/t1_10_legacy_test_oracle_mapping.md
+acceptance:
+  - the current blocked_schema combat and lifelink gap is recorded as an open blocker or Question Queue item linked to T1.R5 and mapping row S8
+  - the visible blocker states that it closes only when combat oracle scenarios land with linked passing evidence
+  - T1 gate evidence and owner-facing status do not claim no blockers while this combat oracle schema gap remains open
+  - closure evidence links the landed combat oracle scenarios and includes the combat plus lifelink SBA case from the legacy mapping
+verify: test -f reports/blockers/T1-combat-lifelink-blocked-schema.md || rg -n "combat.*lifelink.*blocked_schema" reports/questions/QUEUE.md
+retry_policy: 3 attempts then blocker
+depends_on:
+  - T1.R5
+parallel_ok: true
+closure:
+  date: 2026-07-07
+  evidence:
+    - reports/blockers/T1-combat-lifelink-blocked-schema.md
+    - docs/t1_10_legacy_test_oracle_mapping.md
+    - tests/oracle/generated_t1_300/t1_14_273_combat_lifelink_unblocked_000.ron
+    - reports/gates/T1/test_log.txt
+  notes:
+    - blocker was recorded while schema gap was open, then closed after linked combat oracle evidence landed
+    - mapping row S8 now references the lifelink-before-loss-SBA oracle instead of blocked_schema

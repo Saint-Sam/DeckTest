@@ -16,15 +16,29 @@ if [[ -z "$gate_id" ]]; then
 fi
 
 bundle="reports/gates/${gate_id}/bundle"
+evidence_dir="reports/gates/${gate_id}"
 mkdir -p "$bundle"
 
 cp PLAN_STATE.json "$bundle/PLAN_STATE.json"
-if [[ -f "metrics/legacy_inventory.json" ]]; then
+if [[ -f "${evidence_dir}/metrics_snapshot.json" ]]; then
+  cp "${evidence_dir}/metrics_snapshot.json" "$bundle/metrics_snapshot.json"
+elif [[ -f "metrics/legacy_inventory.json" ]]; then
   cp "metrics/legacy_inventory.json" "$bundle/metrics_snapshot.json"
 elif [[ -f "metrics/metrics.json" ]]; then
   cp "metrics/metrics.json" "$bundle/metrics_snapshot.json"
 else
   printf '{\n  "status": "no metrics yet"\n}\n' > "$bundle/metrics_snapshot.json"
+fi
+
+for artifact in test_log.txt tests_added.txt fuzz_report.md quarantine_report.md divergences.md; do
+  if [[ -f "${evidence_dir}/${artifact}" ]]; then
+    cp "${evidence_dir}/${artifact}" "$bundle/${artifact}"
+  fi
+done
+
+if [[ -d "${evidence_dir}/replays" ]]; then
+  mkdir -p "$bundle/replays"
+  cp -R "${evidence_dir}/replays/." "$bundle/replays/"
 fi
 
 if [[ -f "metrics/coverage.json" ]]; then
@@ -55,7 +69,6 @@ fi
   fi
 } > "$bundle/blockers_history.md"
 
-evidence_dir="reports/gates/${gate_id}"
 if find "$evidence_dir" -maxdepth 1 -type f -name '*.md' ! -name 'SIGNOFF.md' -print -quit 2>/dev/null | grep -q .; then
   mkdir -p "$bundle/evidence"
   while IFS= read -r -d '' evidence_file; do

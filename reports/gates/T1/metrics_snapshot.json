@@ -1,0 +1,86 @@
+{
+  "schema": "forge.gate_metrics.v1",
+  "gate": "T1",
+  "date": "2026-07-07",
+  "source": "reports/gates/T1/test_log.txt",
+  "oracle": {
+    "scenario_files": 300,
+    "passed": 300,
+    "failed": 0,
+    "combat_scenario_files": 60,
+    "combat_features": [
+      "attack/block legality",
+      "damage assignment order",
+      "first_strike",
+      "double_strike",
+      "trample+deathtouch",
+      "lifelink before loss SBA",
+      "flying",
+      "reach",
+      "menace",
+      "vigilance"
+    ]
+  },
+  "coverage": {
+    "lines": {
+      "count": 9139,
+      "covered": 7652,
+      "percent": 83.7290732027574
+    },
+    "regions": {
+      "count": 14239,
+      "covered": 11751,
+      "percent": 82.52686284149168
+    },
+    "functions": {
+      "count": 1169,
+      "covered": 745,
+      "percent": 63.729683490162536
+    }
+  },
+  "perf": {
+    "threshold": 0.05,
+    "regressions": 0,
+    "current_ns": {
+      "kernel_apply_pass_priority_x64": 6353.432736827738,
+      "kernel_clone_200_card_state_x64": 7186.716537538402,
+      "kernel_full_playout_four_turns": 13808.742193706628,
+      "kernel_legal_actions_priority_x128": 120.39142290324594
+    },
+    "clone_ns_per_200_card_state": 112.29244589903753
+  },
+  "clone_surface": {
+    "persistent_allocation_field_count": 18,
+    "full_state_snapshot_surface": false,
+    "game_state_debug": false
+  },
+  "fuzz": {
+    "aggregate_seconds": 21602,
+    "targets": {
+      "fuzz_apply": {
+        "runs": 6530854,
+        "seconds": 10801
+      },
+      "fuzz_scenarioparse": {
+        "runs": 895666102,
+        "seconds": 10801
+      }
+    }
+  },
+  "arena": {
+    "random_smoke_games": 10000,
+    "invariant_violations": 0
+  },
+  "replay": {
+    "demo_seed": 11,
+    "final_hash": 17913199206715572167,
+    "roundtrip": "ok",
+    "bundle_replay_count": 10
+  },
+  "remote_ci": {
+    "latest_checked_commit": "c9e333e",
+    "latest_checked_run_id": 28872149729,
+    "latest_checked_result": "pass",
+    "current_local_perf_remediation_pending_remote_ci": true
+  }
+}

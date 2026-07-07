@@ -1,0 +1,1770 @@
+python3: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-8Sx2JF9u' (errno=Operation not permitted)
+python3: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-JbWMb9kl' (errno=Operation not permitted)
+PASS combat oracle surface: 60 scenario(s) cover T1.6 combat feature requirements
+==> cargo fmt
+==> cargo clippy
+    Checking forge-core v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-core)
+    Checking forge-cli v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-cli)
+    Checking forge-testkit v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-testkit)
+    Checking forge-arena v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-arena)
+    Checking forge-ai v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-ai)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.05s
+==> cargo build
+   Compiling forge-core v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-core)
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-7R8i5dY1' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-wgWgRenj' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-F76LoHWf' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-qP4NfxZL' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-vLM3gxsS' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-dCiRJKyR' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-5fKIPwe4' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-AC7kBXy4' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-zf3lIICp' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-jwh47xnX' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-OhIE9T08' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-S999H3KZ' (errno=Operation not permitted)
+
+warning: `forge-ui` (lib test) generated 1 warning
+warning: `forge-app-android` (lib test) generated 1 warning
+warning: `forge-cards` (lib test) generated 1 warning
+warning: `forge-app-desktop` (lib test) generated 1 warning
+warning: `forge-carddef` (lib test) generated 1 warning
+warning: `forge-cardc` (lib test) generated 1 warning
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-nBmROImc' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-gxmH8RKP' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-HEOm6fQj' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-MV3tVwte' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-rtwceZEh' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-piOQvczQ' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-1D6LH0Js' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-oSw083G0' (errno=Operation not permitted)
+
+warning: `forge-net` (lib test) generated 1 warning
+warning: `forge-app-wasm` (lib test) generated 1 warning
+warning: `forge-porttools` (lib test) generated 1 warning
+warning: `forge-app-ios` (lib test) generated 1 warning
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-ygQG7QfM' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-yh1pkPmd' (errno=Operation not permitted)
+
+warning: `forge-core` (lib test) generated 1 warning
+   Compiling forge-cli v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-cli)
+   Compiling forge-arena v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-arena)
+   Compiling forge-testkit v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-testkit)
+   Compiling forge-ai v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-ai)
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-oIkTLTPl' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-KUpuIElm' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-E3mATA99' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-QSljxysc' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-RVeceXu1' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-G74TRAC8' (errno=Operation not permitted)
+
+warning: `forge-arena` (lib test) generated 1 warning
+warning: `forge-cli` (bin "forge-cli" test) generated 1 warning
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-Wm8ijQzS' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-b4E72j2T' (errno=Operation not permitted)
+
+warning: `forge-cli` (bin "forge-cli") generated 1 warning
+warning: `forge-ai` (lib test) generated 1 warning
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-fk0DhBUt' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-TndYHZWL' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-B0jx9swX' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-NUTVU2je' (errno=Operation not permitted)
+
+warning: `forge-arena` (bin "forge-arena" test) generated 1 warning
+warning: `forge-arena` (bin "forge-arena") generated 1 warning
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-zR6SeHs1' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-vJ4aLbry' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-8cA4t0TH' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-4bAL2JYQ' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-cmRXmFVx' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-dF1e6PPh' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-fghnM0VN' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-UKUyyTh7' (errno=Operation not permitted)
+
+warning: `forge-testkit` (bin "forge-testkit" test) generated 1 warning
+warning: `forge-testkit` (bin "forge-testkit") generated 1 warning
+warning: `forge-cli` (lib test) generated 1 warning
+warning: `forge-testkit` (lib test) generated 1 warning
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-6mlYRGpe' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-Rw6OJsnD' (errno=Operation not permitted)
+
+warning: `forge-core` (bench "kernel") generated 1 warning
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.89s
+==> cargo test
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-oIkTLTPl' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-KUpuIElm' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-B0jx9swX' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-NUTVU2je' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-8cA4t0TH' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-4bAL2JYQ' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-E3mATA99' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-QSljxysc' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-Wm8ijQzS' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-b4E72j2T' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-fghnM0VN' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-UKUyyTh7' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-cmRXmFVx' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-dF1e6PPh' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-rtwceZEh' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-piOQvczQ' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-OhIE9T08' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-S999H3KZ' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-1D6LH0Js' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-oSw083G0' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-5fKIPwe4' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-AC7kBXy4' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-F76LoHWf' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-qP4NfxZL' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-zf3lIICp' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-jwh47xnX' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-7R8i5dY1' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-wgWgRenj' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-nBmROImc' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-gxmH8RKP' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-HEOm6fQj' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-MV3tVwte' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-vLM3gxsS' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-dCiRJKyR' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-ygQG7QfM' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-yh1pkPmd' (errno=Operation not permitted)
+
+
+running 2 tests
+..
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 2 tests
+..
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 6 tests
+......
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 72 tests
+........................................................................
+test result: ok. 72 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 10 tests
+..........
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 8 tests
+........
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+==> cargo slow tests
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-zKx1dOSo' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-hJAfSIm2' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-mKZh7AiM' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-waUWUgd6' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-A6AM2bwZ' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-dqYwAXR3' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-tRDt8ypL' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-h8UCMsKh' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-1fghuO4s' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-Y7Z24Whe' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-wmqLjkdu' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-YYEXlBZS' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-YMZuYYIi' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-FSNwNT5G' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-eOedUybN' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-AANgTLP0' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-8LszX0hn' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-MX3t3B8Z' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-JFF6Lj2c' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-o0gVrTRy' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-l6OiPaJk' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-XuQw6x0k' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-ZxV3awNR' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-CXHsLepV' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-PZucY4Xx' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-sIdsVtlJ' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-LzYyc2Bx' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-fCy8TVkL' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-pJ0A1H4n' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-i8P9gAAX' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-5iEQNv5f' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-C2lqO7jm' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-OA0e61vY' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-k5DbuMM2' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-y2VSOpb6' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-YbETvmN4' (errno=Operation not permitted)
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 72 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.01s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 10 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+==> public GameState mutator review
+PASS no_public_mutating_gamestate.sh
+==> clone surface guard
+python3: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-nLa5SPix' (errno=Operation not permitted)
+python3: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-pLmKxFVX' (errno=Operation not permitted)
+PASS clone_surface_guard.sh persistent_allocation_field_count=18 metrics=metrics/clone_surface.json
+==> coverage floor
+info: cargo-llvm-cov currently setting cfg(coverage); you can opt-out it by passing --no-cfg-coverage
+   Compiling forge-core v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-core)
+   Compiling forge-app-ios v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-app-ios)
+   Compiling forge-app-desktop v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-app-desktop)
+   Compiling forge-carddef v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-carddef)
+   Compiling forge-ui v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-ui)
+   Compiling forge-porttools v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-porttools)
+   Compiling forge-cardc v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-cardc)
+   Compiling forge-cards v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-cards)
+   Compiling forge-net v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-net)
+   Compiling forge-app-wasm v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-app-wasm)
+   Compiling forge-app-android v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-app-android)
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-cHYaLnbH' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-8GtxdMtl' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-mIj1si6r' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-MwmNpgzO' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-OqVS9T8M' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-jDfIvPDP' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-cupgZqYL' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-I4HjeMuX' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-SJqbR4BF' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-uErhUvgw' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-TzTAMVvI' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-RQe78X80' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-8uGDuHSH' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-IEIfa4Ts' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-2FJjvABK' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-gPJHXtKz' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-08ymHhJn' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-Yx1ml33T' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-GB1yyBvL' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-X39sq6W6' (errno=Operation not permitted)
+
+   Compiling forge-arena v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-arena)
+   Compiling forge-testkit v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-testkit)
+   Compiling forge-cli v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-cli)
+warning: `forge-app-desktop` (lib test) generated 1 warning
+warning: `forge-ui` (lib test) generated 1 warning
+warning: `forge-porttools` (lib test) generated 1 warning
+warning: `forge-app-wasm` (lib test) generated 1 warning
+warning: `forge-app-ios` (lib test) generated 1 warning
+warning: `forge-net` (lib test) generated 1 warning
+warning: `forge-app-android` (lib test) generated 1 warning
+warning: `forge-cards` (lib test) generated 1 warning
+warning: `forge-carddef` (lib test) generated 1 warning
+warning: `forge-cardc` (lib test) generated 1 warning
+   Compiling forge-ai v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-ai)
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-xgLAYjZ9' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-eTWlFMhR' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-sFtfnpru' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-O4PgVb6R' (errno=Operation not permitted)
+
+warning: `forge-cli` (bin "forge-cli" test) generated 1 warning
+warning: `forge-arena` (lib test) generated 1 warning
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-A1WmPwqm' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-Se3pVfme' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-G9XAsdw9' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-pl78Q6cu' (errno=Operation not permitted)
+
+warning: `forge-ai` (lib test) generated 1 warning
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-pJBS83Sc' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-ZYWsT9bZ' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-0eUASTZ4' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-XEf50Dq8' (errno=Operation not permitted)
+
+warning: `forge-arena` (bin "forge-arena" test) generated 1 warning
+warning: `forge-core` (lib test) generated 1 warning
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-tyV1Y8k2' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-WjFB79Ly' (errno=Operation not permitted)
+
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-WMeRQ1jX' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-QfoIlrWn' (errno=Operation not permitted)
+
+warning: `forge-testkit` (bin "forge-testkit" test) generated 1 warning
+warning: `forge-cli` (lib test) generated 1 warning
+warning: `forge-testkit` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.83s
+     Running unittests src/lib.rs (target/llvm-cov-target/debug/deps/forge_ai-86ecff62ffb147b4)
+
+running 2 tests
+test tests::bootstrap_crate_is_ready ... ok
+test tests::ai_entrypoint_accepts_player_view ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/llvm-cov-target/debug/deps/forge_app_android-ed66ab851fe4de73)
+
+running 1 test
+test tests::bootstrap_crate_is_ready ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/llvm-cov-target/debug/deps/forge_app_desktop-a3f87cd45c63551d)
+
+running 1 test
+test tests::bootstrap_crate_is_ready ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/llvm-cov-target/debug/deps/forge_app_ios-746ca6315241136c)
+
+running 1 test
+test tests::bootstrap_crate_is_ready ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/llvm-cov-target/debug/deps/forge_app_wasm-36113c5a8ca41e61)
+
+running 1 test
+test tests::bootstrap_crate_is_ready ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/llvm-cov-target/debug/deps/forge_arena-2327a5c03c8befbe)
+
+running 1 test
+test tests::bootstrap_crate_is_ready ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/llvm-cov-target/debug/deps/forge_arena-5af9bdb0c02e0f30)
+
+running 2 tests
+test tests::ladder_placeholder_is_non_failing ... ok
+test tests::smoke_two_games_passes ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/lib.rs (target/llvm-cov-target/debug/deps/forge_cardc-7da18489b1188a6c)
+
+running 1 test
+test tests::bootstrap_crate_is_ready ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/llvm-cov-target/debug/deps/forge_carddef-794508f668009caa)
+
+running 1 test
+test tests::bootstrap_crate_is_ready ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/llvm-cov-target/debug/deps/forge_cards-0753ddb751fb7f99)
+
+running 1 test
+test tests::bootstrap_crate_is_ready ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/llvm-cov-target/debug/deps/forge_cli-f87d6a4026e7d579)
+
+running 6 tests
+test tests::bootstrap_crate_is_ready ... ok
+test tests::cli_rejects_unknown_command ... ok
+test tests::replay_parser_rejects_bad_magic ... ok
+test tests::scripted_starter_game_finishes ... ok
+test tests::replay_text_round_trips ... ok
+test tests::cli_demo_writes_replay_and_roundtrips ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/llvm-cov-target/debug/deps/forge_cli-145d6916b4c1a765)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/llvm-cov-target/debug/deps/forge_core-4212ded4013ba52d)
+
+running 72 tests
+test tests::action_surface_creates_setup_state_without_public_mutators ... ok
+test tests::bootstrap_crate_is_ready ... ok
+test tests::auto_tap_keeps_equivalent_sources_distinct ... ok
+test tests::auto_tap_prefers_exact_sources_with_minimal_waste ... ok
+test tests::all_targets_illegal_before_resolution_counter_spell_by_rules ... ok
+test tests::base_characteristics_are_derived_before_rules_use ... ok
+test tests::adding_stack_object_holds_priority_and_resets_passes ... ok
+test tests::cleanup_priority_exception_repeats_cleanup_step ... ok
+test tests::blocked_attacker_remains_blocked_after_blocker_leaves ... ok
+test tests::cleanup_discards_to_max_hand_size_before_next_turn ... ok
+test tests::cleanup_state_based_action_grants_priority_and_repeats_cleanup ... ok
+test tests::combat_with_attackers_visits_blockers_and_damage ... ok
+test tests::combat_damage_marks_persist_until_cleanup ... ok
+test tests::combat_without_attackers_skips_blockers_and_damage ... ok
+test tests::declare_no_attackers_skips_blockers_and_damage ... ok
+test tests::deathtouch_damage_does_not_persist_past_one_sba_check ... ok
+test tests::draw_step_draws_before_active_player_gets_priority ... ok
+test tests::empty_library_draw_step_loses_before_priority ... ok
+test tests::double_strike_creates_two_damage_steps ... ok
+test tests::end_of_turn_durations_survive_end_step_and_expire_during_cleanup ... ok
+test tests::explicit_payment_plan_is_validated_and_applied ... ok
+test tests::declare_attackers_taps_nonvigilance_and_preserves_vigilance ... ok
+test tests::deterministic_hash_is_canonical_and_sensitive_to_ordered_state ... ok
+test tests::double_block_damage_must_follow_blocker_order ... ok
+test tests::first_strike_lethal_damage_removes_blocker_before_regular_damage ... ok
+test tests::full_pass_round_resolves_only_one_object ... ok
+test tests::generic_cost_uses_colorless_before_colored_mana ... ok
+test tests::flying_reach_and_menace_block_legality_is_enforced ... ok
+test tests::illegal_attack_declarations_leave_state_unchanged ... ok
+test tests::insufficient_colored_mana_has_no_payment_plans ... ok
+test tests::illegal_target_during_announcement_leaves_state_unchanged ... ok
+test tests::intervening_action_breaks_pass_succession ... ok
+test tests::invalid_explicit_payment_is_rejected ... ok
+test tests::invalid_zone_owner_is_rejected ... ok
+test tests::invalid_payment_during_cast_leaves_state_unchanged ... ok
+test tests::legal_actions_return_actions_that_apply_accepts ... ok
+test tests::lethal_combat_damage_moves_creatures_to_owner_graveyards_before_priority ... ok
+test tests::life_total_sba_causes_loss_and_win_before_priority ... ok
+test tests::lifelink_combat_damage_gains_life_as_damage_is_dealt ... ok
+test tests::lifelink_is_applied_before_loss_state_based_actions ... ok
+test tests::london_mulligan_redraws_and_bottoms_mulligan_count ... ok
+test tests::mana_pool_changes_state_hash_and_matches_streaming_hash ... ok
+test tests::normal_turn_steps_match_cr5_skeleton ... ok
+test tests::mana_pool_empties_when_step_ends ... ok
+test tests::objects_move_between_zones_and_conserve_membership ... ok
+test tests::one_legal_target_allows_spell_to_resolve ... ok
+test tests::passes_in_succession_on_empty_stack_advance_step ... ok
+test tests::opening_hand_player_view_hides_opponent_hand_and_libraries ... ok
+test tests::payment_enumeration_caps_at_sixty_four_distinct_plans ... ok
+test tests::player_view_hides_opponent_hand_and_library_objects ... ok
+test tests::opening_hands_draw_in_seeded_turn_order ... ok
+test tests::player_view_rejects_unknown_observer ... ok
+test tests::players_receive_owned_zones ... ok
+test tests::poison_sba_causes_loss ... ok
+test tests::priority_starts_with_active_then_passes_in_turn_order ... ok
+test tests::resolved_object_controller_does_not_receive_priority ... ok
+test tests::setup_start_turn_respects_keeps_and_chosen_starter ... ok
+test tests::simultaneous_lethal_life_loss_is_a_draw ... ok
+test tests::simultaneous_stack_objects_use_apnap_low_to_high ... ok
+test tests::sorcery_timing_rejects_non_main_phase_and_nonempty_stack ... ok
+test tests::starting_player_skips_first_turn_draw_step_after_turn_order_setup ... ok
+test tests::state_based_action_table_tracks_cr_704_rows ... ok
+test tests::successful_instant_cast_pays_cost_and_records_target_snapshot ... ok
+test tests::three_instant_response_chain_resolves_lifo ... ok
+test tests::target_choices_affect_canonical_hash ... ok
+test tests::turn_order_decision_is_deterministic_from_seed ... ok
+test tests::untap_has_no_priority_and_upkeep_assigns_active_priority ... ok
+test tests::trample_with_deathtouch_allows_one_damage_to_each_blocker ... ok
+test tests::x_cost_is_added_to_generic_requirement ... ok
+test tests::trample_without_lethal_blocker_damage_is_rejected ... ok
+test tests::x_cost_overflow_is_reported ... ok
+test tests::zero_toughness_creature_goes_to_owner_graveyard ... ok
+
+test result: ok. 72 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/llvm-cov-target/debug/deps/forge_net-a7a9a2a47151fde6)
+
+running 1 test
+test tests::bootstrap_crate_is_ready ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/llvm-cov-target/debug/deps/forge_porttools-d945ab3c1bf4cccb)
+
+running 1 test
+test tests::bootstrap_crate_is_ready ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/llvm-cov-target/debug/deps/forge_testkit-3f3cc36bb1b0b8d4)
+
+running 10 tests
+test tests::bootstrap_crate_is_ready ... ok
+test tests::ron_parser_rejects_new_surface_mistakes ... ok
+test tests::ron_scenario_asserts_poison_loss_winner ... ok
+test tests::run_scenario_ron_records_failed_expectation ... ok
+test tests::constructed_scenario_runs_opening_hand_setup ... ok
+test tests::ron_scenario_covers_creature_damage_sba ... ok
+test tests::ron_scenario_asserts_turn_priority_and_cleanup_exception ... ok
+test tests::ron_scenario_covers_mana_and_object_movement ... ok
+test tests::ron_scenario_runs_and_reports_junit ... ok
+test tests::ron_scenario_covers_combat_actions ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/main.rs (target/llvm-cov-target/debug/deps/forge_testkit-8b241f7707d2a0ce)
+
+running 8 tests
+test tests::absent_scenario_path_is_empty ... ok
+test tests::lint_oracle_directory_succeeds ... ok
+test tests::oracle_changed_succeeds_with_junit ... ok
+test tests::oracle_all_succeeds_without_junit ... ok
+test tests::help_command_succeeds ... ok
+test tests::oracle_filter_succeeds ... ok
+test tests::malformed_oracle_option_is_an_error ... ok
+test tests::unknown_command_is_an_error ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/llvm-cov-target/debug/deps/forge_ui-8179ce94c3d4c33a)
+
+running 1 test
+test tests::bootstrap_crate_is_ready ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+    Finished report saved to metrics/coverage.json
+==> oracle subset
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-zR6SeHs1' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-vJ4aLbry' (errno=Operation not permitted)
+
+warning: `forge-testkit` (bin "forge-testkit") generated 1 warning
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.04s
+     Running `target/debug/forge-testkit oracle --changed`
+INFO: --changed currently falls back to all oracle scenarios
+PASS tests/oracle/generated_t1_300/t1_14_001_setup_zone_000.ron
+PASS tests/oracle/generated_t1_300/t1_14_002_setup_zone_001.ron
+PASS tests/oracle/generated_t1_300/t1_14_003_setup_zone_002.ron
+PASS tests/oracle/generated_t1_300/t1_14_004_setup_zone_003.ron
+PASS tests/oracle/generated_t1_300/t1_14_005_setup_zone_004.ron
+PASS tests/oracle/generated_t1_300/t1_14_006_setup_zone_005.ron
+PASS tests/oracle/generated_t1_300/t1_14_007_setup_zone_006.ron
+PASS tests/oracle/generated_t1_300/t1_14_008_setup_zone_007.ron
+PASS tests/oracle/generated_t1_300/t1_14_009_setup_zone_008.ron
+PASS tests/oracle/generated_t1_300/t1_14_010_setup_zone_009.ron
+PASS tests/oracle/generated_t1_300/t1_14_011_setup_zone_010.ron
+PASS tests/oracle/generated_t1_300/t1_14_012_setup_zone_011.ron
+PASS tests/oracle/generated_t1_300/t1_14_013_setup_zone_012.ron
+PASS tests/oracle/generated_t1_300/t1_14_014_setup_zone_013.ron
+PASS tests/oracle/generated_t1_300/t1_14_015_setup_zone_014.ron
+PASS tests/oracle/generated_t1_300/t1_14_016_setup_zone_015.ron
+PASS tests/oracle/generated_t1_300/t1_14_017_setup_zone_016.ron
+PASS tests/oracle/generated_t1_300/t1_14_018_setup_zone_017.ron
+PASS tests/oracle/generated_t1_300/t1_14_019_setup_zone_018.ron
+PASS tests/oracle/generated_t1_300/t1_14_020_setup_zone_019.ron
+PASS tests/oracle/generated_t1_300/t1_14_021_setup_zone_020.ron
+PASS tests/oracle/generated_t1_300/t1_14_022_setup_zone_021.ron
+PASS tests/oracle/generated_t1_300/t1_14_023_setup_zone_022.ron
+PASS tests/oracle/generated_t1_300/t1_14_024_setup_zone_023.ron
+PASS tests/oracle/generated_t1_300/t1_14_025_zone_move_000.ron
+PASS tests/oracle/generated_t1_300/t1_14_026_zone_move_001.ron
+PASS tests/oracle/generated_t1_300/t1_14_027_zone_move_002.ron
+PASS tests/oracle/generated_t1_300/t1_14_028_zone_move_003.ron
+PASS tests/oracle/generated_t1_300/t1_14_029_zone_move_004.ron
+PASS tests/oracle/generated_t1_300/t1_14_030_zone_move_005.ron
+PASS tests/oracle/generated_t1_300/t1_14_031_zone_move_006.ron
+PASS tests/oracle/generated_t1_300/t1_14_032_zone_move_007.ron
+PASS tests/oracle/generated_t1_300/t1_14_033_zone_move_008.ron
+PASS tests/oracle/generated_t1_300/t1_14_034_zone_move_009.ron
+PASS tests/oracle/generated_t1_300/t1_14_035_zone_move_010.ron
+PASS tests/oracle/generated_t1_300/t1_14_036_zone_move_011.ron
+PASS tests/oracle/generated_t1_300/t1_14_037_zone_move_012.ron
+PASS tests/oracle/generated_t1_300/t1_14_038_zone_move_013.ron
+PASS tests/oracle/generated_t1_300/t1_14_039_zone_move_014.ron
+PASS tests/oracle/generated_t1_300/t1_14_040_zone_move_015.ron
+PASS tests/oracle/generated_t1_300/t1_14_041_zone_move_016.ron
+PASS tests/oracle/generated_t1_300/t1_14_042_zone_move_017.ron
+PASS tests/oracle/generated_t1_300/t1_14_043_zone_move_018.ron
+PASS tests/oracle/generated_t1_300/t1_14_044_zone_move_019.ron
+PASS tests/oracle/generated_t1_300/t1_14_045_zone_move_020.ron
+PASS tests/oracle/generated_t1_300/t1_14_046_zone_move_021.ron
+PASS tests/oracle/generated_t1_300/t1_14_047_zone_move_022.ron
+PASS tests/oracle/generated_t1_300/t1_14_048_zone_move_023.ron
+PASS tests/oracle/generated_t1_300/t1_14_049_zone_move_024.ron
+PASS tests/oracle/generated_t1_300/t1_14_050_zone_move_025.ron
+PASS tests/oracle/generated_t1_300/t1_14_051_zone_move_026.ron
+PASS tests/oracle/generated_t1_300/t1_14_052_zone_move_027.ron
+PASS tests/oracle/generated_t1_300/t1_14_053_zone_move_028.ron
+PASS tests/oracle/generated_t1_300/t1_14_054_zone_move_029.ron
+PASS tests/oracle/generated_t1_300/t1_14_055_zone_move_030.ron
+PASS tests/oracle/generated_t1_300/t1_14_056_zone_move_031.ron
+PASS tests/oracle/generated_t1_300/t1_14_057_opening_hand_000.ron
+PASS tests/oracle/generated_t1_300/t1_14_058_opening_hand_001.ron
+PASS tests/oracle/generated_t1_300/t1_14_059_opening_hand_002.ron
+PASS tests/oracle/generated_t1_300/t1_14_060_opening_hand_003.ron
+PASS tests/oracle/generated_t1_300/t1_14_061_opening_hand_004.ron
+PASS tests/oracle/generated_t1_300/t1_14_062_opening_hand_005.ron
+PASS tests/oracle/generated_t1_300/t1_14_063_opening_hand_006.ron
+PASS tests/oracle/generated_t1_300/t1_14_064_opening_hand_007.ron
+PASS tests/oracle/generated_t1_300/t1_14_065_opening_hand_008.ron
+PASS tests/oracle/generated_t1_300/t1_14_066_opening_hand_009.ron
+PASS tests/oracle/generated_t1_300/t1_14_067_opening_hand_010.ron
+PASS tests/oracle/generated_t1_300/t1_14_068_opening_hand_011.ron
+PASS tests/oracle/generated_t1_300/t1_14_069_opening_hand_012.ron
+PASS tests/oracle/generated_t1_300/t1_14_070_opening_hand_013.ron
+PASS tests/oracle/generated_t1_300/t1_14_071_opening_hand_014.ron
+PASS tests/oracle/generated_t1_300/t1_14_072_opening_hand_015.ron
+PASS tests/oracle/generated_t1_300/t1_14_073_opening_hand_016.ron
+PASS tests/oracle/generated_t1_300/t1_14_074_opening_hand_017.ron
+PASS tests/oracle/generated_t1_300/t1_14_075_opening_hand_018.ron
+PASS tests/oracle/generated_t1_300/t1_14_076_opening_hand_019.ron
+PASS tests/oracle/generated_t1_300/t1_14_077_opening_hand_020.ron
+PASS tests/oracle/generated_t1_300/t1_14_078_opening_hand_021.ron
+PASS tests/oracle/generated_t1_300/t1_14_079_opening_hand_022.ron
+PASS tests/oracle/generated_t1_300/t1_14_080_opening_hand_023.ron
+PASS tests/oracle/generated_t1_300/t1_14_081_opening_hand_024.ron
+PASS tests/oracle/generated_t1_300/t1_14_082_opening_hand_025.ron
+PASS tests/oracle/generated_t1_300/t1_14_083_opening_hand_026.ron
+PASS tests/oracle/generated_t1_300/t1_14_084_opening_hand_027.ron
+PASS tests/oracle/generated_t1_300/t1_14_085_opening_hand_028.ron
+PASS tests/oracle/generated_t1_300/t1_14_086_opening_hand_029.ron
+PASS tests/oracle/generated_t1_300/t1_14_087_turn_priority_000.ron
+PASS tests/oracle/generated_t1_300/t1_14_088_turn_priority_001.ron
+PASS tests/oracle/generated_t1_300/t1_14_089_turn_priority_002.ron
+PASS tests/oracle/generated_t1_300/t1_14_090_turn_priority_003.ron
+PASS tests/oracle/generated_t1_300/t1_14_091_turn_priority_004.ron
+PASS tests/oracle/generated_t1_300/t1_14_092_turn_priority_005.ron
+PASS tests/oracle/generated_t1_300/t1_14_093_turn_priority_006.ron
+PASS tests/oracle/generated_t1_300/t1_14_094_turn_priority_007.ron
+PASS tests/oracle/generated_t1_300/t1_14_095_turn_priority_008.ron
+PASS tests/oracle/generated_t1_300/t1_14_096_turn_priority_009.ron
+PASS tests/oracle/generated_t1_300/t1_14_097_turn_priority_010.ron
+PASS tests/oracle/generated_t1_300/t1_14_098_turn_priority_011.ron
+PASS tests/oracle/generated_t1_300/t1_14_099_turn_priority_012.ron
+PASS tests/oracle/generated_t1_300/t1_14_100_turn_priority_013.ron
+PASS tests/oracle/generated_t1_300/t1_14_101_turn_priority_014.ron
+PASS tests/oracle/generated_t1_300/t1_14_102_turn_priority_015.ron
+PASS tests/oracle/generated_t1_300/t1_14_103_turn_priority_016.ron
+PASS tests/oracle/generated_t1_300/t1_14_104_turn_priority_017.ron
+PASS tests/oracle/generated_t1_300/t1_14_105_turn_priority_018.ron
+PASS tests/oracle/generated_t1_300/t1_14_106_turn_priority_019.ron
+PASS tests/oracle/generated_t1_300/t1_14_107_turn_priority_020.ron
+PASS tests/oracle/generated_t1_300/t1_14_108_turn_priority_021.ron
+PASS tests/oracle/generated_t1_300/t1_14_109_turn_priority_022.ron
+PASS tests/oracle/generated_t1_300/t1_14_110_turn_priority_023.ron
+PASS tests/oracle/generated_t1_300/t1_14_111_turn_priority_024.ron
+PASS tests/oracle/generated_t1_300/t1_14_112_turn_priority_025.ron
+PASS tests/oracle/generated_t1_300/t1_14_113_turn_priority_026.ron
+PASS tests/oracle/generated_t1_300/t1_14_114_turn_priority_027.ron
+PASS tests/oracle/generated_t1_300/t1_14_115_turn_priority_028.ron
+PASS tests/oracle/generated_t1_300/t1_14_116_turn_priority_029.ron
+PASS tests/oracle/generated_t1_300/t1_14_117_mana_000.ron
+PASS tests/oracle/generated_t1_300/t1_14_118_mana_001.ron
+PASS tests/oracle/generated_t1_300/t1_14_119_mana_002.ron
+PASS tests/oracle/generated_t1_300/t1_14_120_mana_003.ron
+PASS tests/oracle/generated_t1_300/t1_14_121_mana_004.ron
+PASS tests/oracle/generated_t1_300/t1_14_122_mana_005.ron
+PASS tests/oracle/generated_t1_300/t1_14_123_mana_006.ron
+PASS tests/oracle/generated_t1_300/t1_14_124_mana_007.ron
+PASS tests/oracle/generated_t1_300/t1_14_125_mana_008.ron
+PASS tests/oracle/generated_t1_300/t1_14_126_mana_009.ron
+PASS tests/oracle/generated_t1_300/t1_14_127_mana_010.ron
+PASS tests/oracle/generated_t1_300/t1_14_128_mana_011.ron
+PASS tests/oracle/generated_t1_300/t1_14_129_mana_012.ron
+PASS tests/oracle/generated_t1_300/t1_14_130_mana_013.ron
+PASS tests/oracle/generated_t1_300/t1_14_131_mana_014.ron
+PASS tests/oracle/generated_t1_300/t1_14_132_mana_015.ron
+PASS tests/oracle/generated_t1_300/t1_14_133_mana_016.ron
+PASS tests/oracle/generated_t1_300/t1_14_134_mana_017.ron
+PASS tests/oracle/generated_t1_300/t1_14_135_mana_018.ron
+PASS tests/oracle/generated_t1_300/t1_14_136_mana_019.ron
+PASS tests/oracle/generated_t1_300/t1_14_137_mana_020.ron
+PASS tests/oracle/generated_t1_300/t1_14_138_mana_021.ron
+PASS tests/oracle/generated_t1_300/t1_14_139_mana_022.ron
+PASS tests/oracle/generated_t1_300/t1_14_140_mana_023.ron
+PASS tests/oracle/generated_t1_300/t1_14_141_life_000.ron
+PASS tests/oracle/generated_t1_300/t1_14_142_life_001.ron
+PASS tests/oracle/generated_t1_300/t1_14_143_life_002.ron
+PASS tests/oracle/generated_t1_300/t1_14_144_life_003.ron
+PASS tests/oracle/generated_t1_300/t1_14_145_life_004.ron
+PASS tests/oracle/generated_t1_300/t1_14_146_life_005.ron
+PASS tests/oracle/generated_t1_300/t1_14_147_life_006.ron
+PASS tests/oracle/generated_t1_300/t1_14_148_life_007.ron
+PASS tests/oracle/generated_t1_300/t1_14_149_life_008.ron
+PASS tests/oracle/generated_t1_300/t1_14_150_life_009.ron
+PASS tests/oracle/generated_t1_300/t1_14_151_life_010.ron
+PASS tests/oracle/generated_t1_300/t1_14_152_life_011.ron
+PASS tests/oracle/generated_t1_300/t1_14_153_life_012.ron
+PASS tests/oracle/generated_t1_300/t1_14_154_life_013.ron
+PASS tests/oracle/generated_t1_300/t1_14_155_life_014.ron
+PASS tests/oracle/generated_t1_300/t1_14_156_life_015.ron
+PASS tests/oracle/generated_t1_300/t1_14_157_life_016.ron
+PASS tests/oracle/generated_t1_300/t1_14_158_life_017.ron
+PASS tests/oracle/generated_t1_300/t1_14_159_life_018.ron
+PASS tests/oracle/generated_t1_300/t1_14_160_life_019.ron
+PASS tests/oracle/generated_t1_300/t1_14_161_life_020.ron
+PASS tests/oracle/generated_t1_300/t1_14_162_life_021.ron
+PASS tests/oracle/generated_t1_300/t1_14_163_life_022.ron
+PASS tests/oracle/generated_t1_300/t1_14_164_life_023.ron
+PASS tests/oracle/generated_t1_300/t1_14_165_life_024.ron
+PASS tests/oracle/generated_t1_300/t1_14_166_life_025.ron
+PASS tests/oracle/generated_t1_300/t1_14_167_life_026.ron
+PASS tests/oracle/generated_t1_300/t1_14_168_life_027.ron
+PASS tests/oracle/generated_t1_300/t1_14_169_life_028.ron
+PASS tests/oracle/generated_t1_300/t1_14_170_life_029.ron
+PASS tests/oracle/generated_t1_300/t1_14_171_poison_000.ron
+PASS tests/oracle/generated_t1_300/t1_14_172_poison_001.ron
+PASS tests/oracle/generated_t1_300/t1_14_173_poison_002.ron
+PASS tests/oracle/generated_t1_300/t1_14_174_poison_003.ron
+PASS tests/oracle/generated_t1_300/t1_14_175_poison_004.ron
+PASS tests/oracle/generated_t1_300/t1_14_176_poison_005.ron
+PASS tests/oracle/generated_t1_300/t1_14_177_poison_006.ron
+PASS tests/oracle/generated_t1_300/t1_14_178_poison_007.ron
+PASS tests/oracle/generated_t1_300/t1_14_179_poison_008.ron
+PASS tests/oracle/generated_t1_300/t1_14_180_poison_009.ron
+PASS tests/oracle/generated_t1_300/t1_14_181_poison_010.ron
+PASS tests/oracle/generated_t1_300/t1_14_182_poison_011.ron
+PASS tests/oracle/generated_t1_300/t1_14_183_poison_012.ron
+PASS tests/oracle/generated_t1_300/t1_14_184_poison_013.ron
+PASS tests/oracle/generated_t1_300/t1_14_185_poison_014.ron
+PASS tests/oracle/generated_t1_300/t1_14_186_poison_015.ron
+PASS tests/oracle/generated_t1_300/t1_14_187_poison_016.ron
+PASS tests/oracle/generated_t1_300/t1_14_188_poison_017.ron
+PASS tests/oracle/generated_t1_300/t1_14_189_poison_018.ron
+PASS tests/oracle/generated_t1_300/t1_14_190_poison_019.ron
+PASS tests/oracle/generated_t1_300/t1_14_191_poison_020.ron
+PASS tests/oracle/generated_t1_300/t1_14_192_poison_021.ron
+PASS tests/oracle/generated_t1_300/t1_14_193_creature_sba_000.ron
+PASS tests/oracle/generated_t1_300/t1_14_194_creature_sba_001.ron
+PASS tests/oracle/generated_t1_300/t1_14_195_creature_sba_002.ron
+PASS tests/oracle/generated_t1_300/t1_14_196_creature_sba_003.ron
+PASS tests/oracle/generated_t1_300/t1_14_197_creature_sba_004.ron
+PASS tests/oracle/generated_t1_300/t1_14_198_creature_sba_005.ron
+PASS tests/oracle/generated_t1_300/t1_14_199_creature_sba_006.ron
+PASS tests/oracle/generated_t1_300/t1_14_200_creature_sba_007.ron
+PASS tests/oracle/generated_t1_300/t1_14_201_creature_sba_008.ron
+PASS tests/oracle/generated_t1_300/t1_14_202_creature_sba_009.ron
+PASS tests/oracle/generated_t1_300/t1_14_203_creature_sba_010.ron
+PASS tests/oracle/generated_t1_300/t1_14_204_creature_sba_011.ron
+PASS tests/oracle/generated_t1_300/t1_14_205_creature_sba_012.ron
+PASS tests/oracle/generated_t1_300/t1_14_206_creature_sba_013.ron
+PASS tests/oracle/generated_t1_300/t1_14_207_creature_sba_014.ron
+PASS tests/oracle/generated_t1_300/t1_14_208_creature_sba_015.ron
+PASS tests/oracle/generated_t1_300/t1_14_209_creature_sba_016.ron
+PASS tests/oracle/generated_t1_300/t1_14_210_creature_sba_017.ron
+PASS tests/oracle/generated_t1_300/t1_14_211_creature_sba_018.ron
+PASS tests/oracle/generated_t1_300/t1_14_212_creature_sba_019.ron
+PASS tests/oracle/generated_t1_300/t1_14_213_creature_sba_020.ron
+PASS tests/oracle/generated_t1_300/t1_14_214_creature_sba_021.ron
+PASS tests/oracle/generated_t1_300/t1_14_215_creature_sba_022.ron
+PASS tests/oracle/generated_t1_300/t1_14_216_creature_sba_023.ron
+PASS tests/oracle/generated_t1_300/t1_14_217_creature_sba_024.ron
+PASS tests/oracle/generated_t1_300/t1_14_218_creature_sba_025.ron
+PASS tests/oracle/generated_t1_300/t1_14_219_creature_sba_026.ron
+PASS tests/oracle/generated_t1_300/t1_14_220_creature_sba_027.ron
+PASS tests/oracle/generated_t1_300/t1_14_221_creature_sba_028.ron
+PASS tests/oracle/generated_t1_300/t1_14_222_creature_sba_029.ron
+PASS tests/oracle/generated_t1_300/t1_14_223_combat_unblocked_vigilance_000.ron
+PASS tests/oracle/generated_t1_300/t1_14_224_combat_unblocked_vigilance_001.ron
+PASS tests/oracle/generated_t1_300/t1_14_225_combat_unblocked_vigilance_002.ron
+PASS tests/oracle/generated_t1_300/t1_14_226_combat_unblocked_vigilance_003.ron
+PASS tests/oracle/generated_t1_300/t1_14_227_combat_unblocked_vigilance_004.ron
+PASS tests/oracle/generated_t1_300/t1_14_228_combat_unblocked_vigilance_005.ron
+PASS tests/oracle/generated_t1_300/t1_14_229_combat_unblocked_vigilance_006.ron
+PASS tests/oracle/generated_t1_300/t1_14_230_combat_unblocked_vigilance_007.ron
+PASS tests/oracle/generated_t1_300/t1_14_231_combat_unblocked_vigilance_008.ron
+PASS tests/oracle/generated_t1_300/t1_14_232_combat_unblocked_vigilance_009.ron
+PASS tests/oracle/generated_t1_300/t1_14_233_combat_evasion_block_legality_000.ron
+PASS tests/oracle/generated_t1_300/t1_14_234_combat_evasion_block_legality_001.ron
+PASS tests/oracle/generated_t1_300/t1_14_235_combat_evasion_block_legality_002.ron
+PASS tests/oracle/generated_t1_300/t1_14_236_combat_evasion_block_legality_003.ron
+PASS tests/oracle/generated_t1_300/t1_14_237_combat_evasion_block_legality_004.ron
+PASS tests/oracle/generated_t1_300/t1_14_238_combat_evasion_block_legality_005.ron
+PASS tests/oracle/generated_t1_300/t1_14_239_combat_evasion_block_legality_006.ron
+PASS tests/oracle/generated_t1_300/t1_14_240_combat_evasion_block_legality_007.ron
+PASS tests/oracle/generated_t1_300/t1_14_241_combat_evasion_block_legality_008.ron
+PASS tests/oracle/generated_t1_300/t1_14_242_combat_evasion_block_legality_009.ron
+PASS tests/oracle/generated_t1_300/t1_14_243_combat_strike_steps_000.ron
+PASS tests/oracle/generated_t1_300/t1_14_244_combat_strike_steps_001.ron
+PASS tests/oracle/generated_t1_300/t1_14_245_combat_strike_steps_002.ron
+PASS tests/oracle/generated_t1_300/t1_14_246_combat_strike_steps_003.ron
+PASS tests/oracle/generated_t1_300/t1_14_247_combat_strike_steps_004.ron
+PASS tests/oracle/generated_t1_300/t1_14_248_combat_strike_steps_005.ron
+PASS tests/oracle/generated_t1_300/t1_14_249_combat_strike_steps_006.ron
+PASS tests/oracle/generated_t1_300/t1_14_250_combat_strike_steps_007.ron
+PASS tests/oracle/generated_t1_300/t1_14_251_combat_strike_steps_008.ron
+PASS tests/oracle/generated_t1_300/t1_14_252_combat_strike_steps_009.ron
+PASS tests/oracle/generated_t1_300/t1_14_253_combat_double_block_order_000.ron
+PASS tests/oracle/generated_t1_300/t1_14_254_combat_double_block_order_001.ron
+PASS tests/oracle/generated_t1_300/t1_14_255_combat_double_block_order_002.ron
+PASS tests/oracle/generated_t1_300/t1_14_256_combat_double_block_order_003.ron
+PASS tests/oracle/generated_t1_300/t1_14_257_combat_double_block_order_004.ron
+PASS tests/oracle/generated_t1_300/t1_14_258_combat_double_block_order_005.ron
+PASS tests/oracle/generated_t1_300/t1_14_259_combat_double_block_order_006.ron
+PASS tests/oracle/generated_t1_300/t1_14_260_combat_double_block_order_007.ron
+PASS tests/oracle/generated_t1_300/t1_14_261_combat_double_block_order_008.ron
+PASS tests/oracle/generated_t1_300/t1_14_262_combat_double_block_order_009.ron
+PASS tests/oracle/generated_t1_300/t1_14_263_combat_trample_deathtouch_000.ron
+PASS tests/oracle/generated_t1_300/t1_14_264_combat_trample_deathtouch_001.ron
+PASS tests/oracle/generated_t1_300/t1_14_265_combat_trample_deathtouch_002.ron
+PASS tests/oracle/generated_t1_300/t1_14_266_combat_trample_deathtouch_003.ron
+PASS tests/oracle/generated_t1_300/t1_14_267_combat_trample_deathtouch_004.ron
+PASS tests/oracle/generated_t1_300/t1_14_268_combat_trample_deathtouch_005.ron
+PASS tests/oracle/generated_t1_300/t1_14_269_combat_trample_deathtouch_006.ron
+PASS tests/oracle/generated_t1_300/t1_14_270_combat_trample_deathtouch_007.ron
+PASS tests/oracle/generated_t1_300/t1_14_271_combat_trample_deathtouch_008.ron
+PASS tests/oracle/generated_t1_300/t1_14_272_combat_trample_deathtouch_009.ron
+PASS tests/oracle/generated_t1_300/t1_14_273_combat_lifelink_unblocked_000.ron
+PASS tests/oracle/generated_t1_300/t1_14_274_combat_lifelink_unblocked_001.ron
+PASS tests/oracle/generated_t1_300/t1_14_275_combat_lifelink_unblocked_002.ron
+PASS tests/oracle/generated_t1_300/t1_14_276_combat_lifelink_unblocked_003.ron
+PASS tests/oracle/generated_t1_300/t1_14_277_combat_lifelink_unblocked_004.ron
+PASS tests/oracle/generated_t1_300/t1_14_278_combat_lifelink_unblocked_005.ron
+PASS tests/oracle/generated_t1_300/t1_14_279_combat_lifelink_unblocked_006.ron
+PASS tests/oracle/generated_t1_300/t1_14_280_combat_lifelink_unblocked_007.ron
+PASS tests/oracle/generated_t1_300/t1_14_281_combat_lifelink_unblocked_008.ron
+PASS tests/oracle/generated_t1_300/t1_14_282_combat_lifelink_unblocked_009.ron
+PASS tests/oracle/generated_t1_300/t1_14_283_cleanup_000.ron
+PASS tests/oracle/generated_t1_300/t1_14_284_cleanup_001.ron
+PASS tests/oracle/generated_t1_300/t1_14_285_cleanup_002.ron
+PASS tests/oracle/generated_t1_300/t1_14_286_cleanup_003.ron
+PASS tests/oracle/generated_t1_300/t1_14_287_cleanup_004.ron
+PASS tests/oracle/generated_t1_300/t1_14_288_cleanup_005.ron
+PASS tests/oracle/generated_t1_300/t1_14_289_cleanup_006.ron
+PASS tests/oracle/generated_t1_300/t1_14_290_cleanup_007.ron
+PASS tests/oracle/generated_t1_300/t1_14_291_cleanup_008.ron
+PASS tests/oracle/generated_t1_300/t1_14_292_cleanup_009.ron
+PASS tests/oracle/t1_10_cr_103_3_players_start_at_20_life.ron
+PASS tests/oracle/t1_10_cr_103_7a_starting_player_skips_first_draw.ron
+PASS tests/oracle/t1_10_cr_104_3b_negative_life_loses.ron
+PASS tests/oracle/t1_10_cr_104_3b_zero_life_loses.ron
+PASS tests/oracle/t1_10_cr_104_3c_empty_library_draw_loses.ron
+PASS tests/oracle/t1_10_cr_104_3d_more_than_ten_poison_loses.ron
+PASS tests/oracle/t1_10_cr_104_3d_ten_poison_loses.ron
+PASS tests/oracle/t1_9_opening_hand.ron
+WROTE target/forge-testkit/oracle-junit.xml
+oracle scenarios: 300 passed, 0 failed
+==> perf smoke
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-rB1qgP74' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-HIcnMP2V' (errno=Operation not permitted)
+
+warning: `forge-core` (bench "kernel") generated 1 warning
+    Finished `bench` profile [optimized] target(s) in 0.14s
+     Running benches/kernel.rs (target/release/deps/kernel-4b777c2e73322c1b)
+Gnuplot not found, using plotters backend
+Benchmarking kernel/clone_200_card_state_x64
+Benchmarking kernel/clone_200_card_state_x64: Warming up for 100.00 ms
+Benchmarking kernel/clone_200_card_state_x64: Collecting 10 samples in estimated 300.29 ms (41k iterations)
+Benchmarking kernel/clone_200_card_state_x64: Analyzing
+kernel/clone_200_card_state_x64
+                        time:   [7.0238 µs 7.1693 µs 7.4155 µs]
+
+Benchmarking kernel/legal_actions_priority_x128
+Benchmarking kernel/legal_actions_priority_x128: Warming up for 100.00 ms
+Benchmarking kernel/legal_actions_priority_x128: Collecting 10 samples in estimated 300.00 ms (2.6M iterations)
+Benchmarking kernel/legal_actions_priority_x128: Analyzing
+kernel/legal_actions_priority_x128
+                        time:   [110.56 ns 114.55 ns 118.82 ns]
+
+Benchmarking kernel/apply_pass_priority_x64
+Benchmarking kernel/apply_pass_priority_x64: Warming up for 100.00 ms
+Benchmarking kernel/apply_pass_priority_x64: Collecting 10 samples in estimated 300.07 ms (23k iterations)
+Benchmarking kernel/apply_pass_priority_x64: Analyzing
+kernel/apply_pass_priority_x64
+                        time:   [6.3173 µs 6.7998 µs 7.1145 µs]
+
+Benchmarking kernel/full_playout_four_turns
+Benchmarking kernel/full_playout_four_turns: Warming up for 100.00 ms
+Benchmarking kernel/full_playout_four_turns: Collecting 10 samples in estimated 300.57 ms (21k iterations)
+Benchmarking kernel/full_playout_four_turns: Analyzing
+kernel/full_playout_four_turns
+                        time:   [13.767 µs 14.069 µs 14.431 µs]
+
+python3: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-EkeszUq7' (errno=Operation not permitted)
+python3: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-UlcSqW2N' (errno=Operation not permitted)
+PASS criterion_to_perf.py wrote 4 metric(s) to /Users/juanlopez2016/Desktop/Forge 2.0/metrics/perf_current.json
+python3: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-5RGNg1Ly' (errno=Operation not permitted)
+python3: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-paijqPlz' (errno=Operation not permitted)
+PASS perf_diff.py (4 metric(s), threshold 5.0%)
+ALL CHECKS PASSED
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-zR6SeHs1' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-vJ4aLbry' (errno=Operation not permitted)
+
+warning: `forge-testkit` (bin "forge-testkit") generated 1 warning
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running `target/debug/forge-testkit oracle --all`
+PASS tests/oracle/generated_t1_300/t1_14_001_setup_zone_000.ron
+PASS tests/oracle/generated_t1_300/t1_14_002_setup_zone_001.ron
+PASS tests/oracle/generated_t1_300/t1_14_003_setup_zone_002.ron
+PASS tests/oracle/generated_t1_300/t1_14_004_setup_zone_003.ron
+PASS tests/oracle/generated_t1_300/t1_14_005_setup_zone_004.ron
+PASS tests/oracle/generated_t1_300/t1_14_006_setup_zone_005.ron
+PASS tests/oracle/generated_t1_300/t1_14_007_setup_zone_006.ron
+PASS tests/oracle/generated_t1_300/t1_14_008_setup_zone_007.ron
+PASS tests/oracle/generated_t1_300/t1_14_009_setup_zone_008.ron
+PASS tests/oracle/generated_t1_300/t1_14_010_setup_zone_009.ron
+PASS tests/oracle/generated_t1_300/t1_14_011_setup_zone_010.ron
+PASS tests/oracle/generated_t1_300/t1_14_012_setup_zone_011.ron
+PASS tests/oracle/generated_t1_300/t1_14_013_setup_zone_012.ron
+PASS tests/oracle/generated_t1_300/t1_14_014_setup_zone_013.ron
+PASS tests/oracle/generated_t1_300/t1_14_015_setup_zone_014.ron
+PASS tests/oracle/generated_t1_300/t1_14_016_setup_zone_015.ron
+PASS tests/oracle/generated_t1_300/t1_14_017_setup_zone_016.ron
+PASS tests/oracle/generated_t1_300/t1_14_018_setup_zone_017.ron
+PASS tests/oracle/generated_t1_300/t1_14_019_setup_zone_018.ron
+PASS tests/oracle/generated_t1_300/t1_14_020_setup_zone_019.ron
+PASS tests/oracle/generated_t1_300/t1_14_021_setup_zone_020.ron
+PASS tests/oracle/generated_t1_300/t1_14_022_setup_zone_021.ron
+PASS tests/oracle/generated_t1_300/t1_14_023_setup_zone_022.ron
+PASS tests/oracle/generated_t1_300/t1_14_024_setup_zone_023.ron
+PASS tests/oracle/generated_t1_300/t1_14_025_zone_move_000.ron
+PASS tests/oracle/generated_t1_300/t1_14_026_zone_move_001.ron
+PASS tests/oracle/generated_t1_300/t1_14_027_zone_move_002.ron
+PASS tests/oracle/generated_t1_300/t1_14_028_zone_move_003.ron
+PASS tests/oracle/generated_t1_300/t1_14_029_zone_move_004.ron
+PASS tests/oracle/generated_t1_300/t1_14_030_zone_move_005.ron
+PASS tests/oracle/generated_t1_300/t1_14_031_zone_move_006.ron
+PASS tests/oracle/generated_t1_300/t1_14_032_zone_move_007.ron
+PASS tests/oracle/generated_t1_300/t1_14_033_zone_move_008.ron
+PASS tests/oracle/generated_t1_300/t1_14_034_zone_move_009.ron
+PASS tests/oracle/generated_t1_300/t1_14_035_zone_move_010.ron
+PASS tests/oracle/generated_t1_300/t1_14_036_zone_move_011.ron
+PASS tests/oracle/generated_t1_300/t1_14_037_zone_move_012.ron
+PASS tests/oracle/generated_t1_300/t1_14_038_zone_move_013.ron
+PASS tests/oracle/generated_t1_300/t1_14_039_zone_move_014.ron
+PASS tests/oracle/generated_t1_300/t1_14_040_zone_move_015.ron
+PASS tests/oracle/generated_t1_300/t1_14_041_zone_move_016.ron
+PASS tests/oracle/generated_t1_300/t1_14_042_zone_move_017.ron
+PASS tests/oracle/generated_t1_300/t1_14_043_zone_move_018.ron
+PASS tests/oracle/generated_t1_300/t1_14_044_zone_move_019.ron
+PASS tests/oracle/generated_t1_300/t1_14_045_zone_move_020.ron
+PASS tests/oracle/generated_t1_300/t1_14_046_zone_move_021.ron
+PASS tests/oracle/generated_t1_300/t1_14_047_zone_move_022.ron
+PASS tests/oracle/generated_t1_300/t1_14_048_zone_move_023.ron
+PASS tests/oracle/generated_t1_300/t1_14_049_zone_move_024.ron
+PASS tests/oracle/generated_t1_300/t1_14_050_zone_move_025.ron
+PASS tests/oracle/generated_t1_300/t1_14_051_zone_move_026.ron
+PASS tests/oracle/generated_t1_300/t1_14_052_zone_move_027.ron
+PASS tests/oracle/generated_t1_300/t1_14_053_zone_move_028.ron
+PASS tests/oracle/generated_t1_300/t1_14_054_zone_move_029.ron
+PASS tests/oracle/generated_t1_300/t1_14_055_zone_move_030.ron
+PASS tests/oracle/generated_t1_300/t1_14_056_zone_move_031.ron
+PASS tests/oracle/generated_t1_300/t1_14_057_opening_hand_000.ron
+PASS tests/oracle/generated_t1_300/t1_14_058_opening_hand_001.ron
+PASS tests/oracle/generated_t1_300/t1_14_059_opening_hand_002.ron
+PASS tests/oracle/generated_t1_300/t1_14_060_opening_hand_003.ron
+PASS tests/oracle/generated_t1_300/t1_14_061_opening_hand_004.ron
+PASS tests/oracle/generated_t1_300/t1_14_062_opening_hand_005.ron
+PASS tests/oracle/generated_t1_300/t1_14_063_opening_hand_006.ron
+PASS tests/oracle/generated_t1_300/t1_14_064_opening_hand_007.ron
+PASS tests/oracle/generated_t1_300/t1_14_065_opening_hand_008.ron
+PASS tests/oracle/generated_t1_300/t1_14_066_opening_hand_009.ron
+PASS tests/oracle/generated_t1_300/t1_14_067_opening_hand_010.ron
+PASS tests/oracle/generated_t1_300/t1_14_068_opening_hand_011.ron
+PASS tests/oracle/generated_t1_300/t1_14_069_opening_hand_012.ron
+PASS tests/oracle/generated_t1_300/t1_14_070_opening_hand_013.ron
+PASS tests/oracle/generated_t1_300/t1_14_071_opening_hand_014.ron
+PASS tests/oracle/generated_t1_300/t1_14_072_opening_hand_015.ron
+PASS tests/oracle/generated_t1_300/t1_14_073_opening_hand_016.ron
+PASS tests/oracle/generated_t1_300/t1_14_074_opening_hand_017.ron
+PASS tests/oracle/generated_t1_300/t1_14_075_opening_hand_018.ron
+PASS tests/oracle/generated_t1_300/t1_14_076_opening_hand_019.ron
+PASS tests/oracle/generated_t1_300/t1_14_077_opening_hand_020.ron
+PASS tests/oracle/generated_t1_300/t1_14_078_opening_hand_021.ron
+PASS tests/oracle/generated_t1_300/t1_14_079_opening_hand_022.ron
+PASS tests/oracle/generated_t1_300/t1_14_080_opening_hand_023.ron
+PASS tests/oracle/generated_t1_300/t1_14_081_opening_hand_024.ron
+PASS tests/oracle/generated_t1_300/t1_14_082_opening_hand_025.ron
+PASS tests/oracle/generated_t1_300/t1_14_083_opening_hand_026.ron
+PASS tests/oracle/generated_t1_300/t1_14_084_opening_hand_027.ron
+PASS tests/oracle/generated_t1_300/t1_14_085_opening_hand_028.ron
+PASS tests/oracle/generated_t1_300/t1_14_086_opening_hand_029.ron
+PASS tests/oracle/generated_t1_300/t1_14_087_turn_priority_000.ron
+PASS tests/oracle/generated_t1_300/t1_14_088_turn_priority_001.ron
+PASS tests/oracle/generated_t1_300/t1_14_089_turn_priority_002.ron
+PASS tests/oracle/generated_t1_300/t1_14_090_turn_priority_003.ron
+PASS tests/oracle/generated_t1_300/t1_14_091_turn_priority_004.ron
+PASS tests/oracle/generated_t1_300/t1_14_092_turn_priority_005.ron
+PASS tests/oracle/generated_t1_300/t1_14_093_turn_priority_006.ron
+PASS tests/oracle/generated_t1_300/t1_14_094_turn_priority_007.ron
+PASS tests/oracle/generated_t1_300/t1_14_095_turn_priority_008.ron
+PASS tests/oracle/generated_t1_300/t1_14_096_turn_priority_009.ron
+PASS tests/oracle/generated_t1_300/t1_14_097_turn_priority_010.ron
+PASS tests/oracle/generated_t1_300/t1_14_098_turn_priority_011.ron
+PASS tests/oracle/generated_t1_300/t1_14_099_turn_priority_012.ron
+PASS tests/oracle/generated_t1_300/t1_14_100_turn_priority_013.ron
+PASS tests/oracle/generated_t1_300/t1_14_101_turn_priority_014.ron
+PASS tests/oracle/generated_t1_300/t1_14_102_turn_priority_015.ron
+PASS tests/oracle/generated_t1_300/t1_14_103_turn_priority_016.ron
+PASS tests/oracle/generated_t1_300/t1_14_104_turn_priority_017.ron
+PASS tests/oracle/generated_t1_300/t1_14_105_turn_priority_018.ron
+PASS tests/oracle/generated_t1_300/t1_14_106_turn_priority_019.ron
+PASS tests/oracle/generated_t1_300/t1_14_107_turn_priority_020.ron
+PASS tests/oracle/generated_t1_300/t1_14_108_turn_priority_021.ron
+PASS tests/oracle/generated_t1_300/t1_14_109_turn_priority_022.ron
+PASS tests/oracle/generated_t1_300/t1_14_110_turn_priority_023.ron
+PASS tests/oracle/generated_t1_300/t1_14_111_turn_priority_024.ron
+PASS tests/oracle/generated_t1_300/t1_14_112_turn_priority_025.ron
+PASS tests/oracle/generated_t1_300/t1_14_113_turn_priority_026.ron
+PASS tests/oracle/generated_t1_300/t1_14_114_turn_priority_027.ron
+PASS tests/oracle/generated_t1_300/t1_14_115_turn_priority_028.ron
+PASS tests/oracle/generated_t1_300/t1_14_116_turn_priority_029.ron
+PASS tests/oracle/generated_t1_300/t1_14_117_mana_000.ron
+PASS tests/oracle/generated_t1_300/t1_14_118_mana_001.ron
+PASS tests/oracle/generated_t1_300/t1_14_119_mana_002.ron
+PASS tests/oracle/generated_t1_300/t1_14_120_mana_003.ron
+PASS tests/oracle/generated_t1_300/t1_14_121_mana_004.ron
+PASS tests/oracle/generated_t1_300/t1_14_122_mana_005.ron
+PASS tests/oracle/generated_t1_300/t1_14_123_mana_006.ron
+PASS tests/oracle/generated_t1_300/t1_14_124_mana_007.ron
+PASS tests/oracle/generated_t1_300/t1_14_125_mana_008.ron
+PASS tests/oracle/generated_t1_300/t1_14_126_mana_009.ron
+PASS tests/oracle/generated_t1_300/t1_14_127_mana_010.ron
+PASS tests/oracle/generated_t1_300/t1_14_128_mana_011.ron
+PASS tests/oracle/generated_t1_300/t1_14_129_mana_012.ron
+PASS tests/oracle/generated_t1_300/t1_14_130_mana_013.ron
+PASS tests/oracle/generated_t1_300/t1_14_131_mana_014.ron
+PASS tests/oracle/generated_t1_300/t1_14_132_mana_015.ron
+PASS tests/oracle/generated_t1_300/t1_14_133_mana_016.ron
+PASS tests/oracle/generated_t1_300/t1_14_134_mana_017.ron
+PASS tests/oracle/generated_t1_300/t1_14_135_mana_018.ron
+PASS tests/oracle/generated_t1_300/t1_14_136_mana_019.ron
+PASS tests/oracle/generated_t1_300/t1_14_137_mana_020.ron
+PASS tests/oracle/generated_t1_300/t1_14_138_mana_021.ron
+PASS tests/oracle/generated_t1_300/t1_14_139_mana_022.ron
+PASS tests/oracle/generated_t1_300/t1_14_140_mana_023.ron
+PASS tests/oracle/generated_t1_300/t1_14_141_life_000.ron
+PASS tests/oracle/generated_t1_300/t1_14_142_life_001.ron
+PASS tests/oracle/generated_t1_300/t1_14_143_life_002.ron
+PASS tests/oracle/generated_t1_300/t1_14_144_life_003.ron
+PASS tests/oracle/generated_t1_300/t1_14_145_life_004.ron
+PASS tests/oracle/generated_t1_300/t1_14_146_life_005.ron
+PASS tests/oracle/generated_t1_300/t1_14_147_life_006.ron
+PASS tests/oracle/generated_t1_300/t1_14_148_life_007.ron
+PASS tests/oracle/generated_t1_300/t1_14_149_life_008.ron
+PASS tests/oracle/generated_t1_300/t1_14_150_life_009.ron
+PASS tests/oracle/generated_t1_300/t1_14_151_life_010.ron
+PASS tests/oracle/generated_t1_300/t1_14_152_life_011.ron
+PASS tests/oracle/generated_t1_300/t1_14_153_life_012.ron
+PASS tests/oracle/generated_t1_300/t1_14_154_life_013.ron
+PASS tests/oracle/generated_t1_300/t1_14_155_life_014.ron
+PASS tests/oracle/generated_t1_300/t1_14_156_life_015.ron
+PASS tests/oracle/generated_t1_300/t1_14_157_life_016.ron
+PASS tests/oracle/generated_t1_300/t1_14_158_life_017.ron
+PASS tests/oracle/generated_t1_300/t1_14_159_life_018.ron
+PASS tests/oracle/generated_t1_300/t1_14_160_life_019.ron
+PASS tests/oracle/generated_t1_300/t1_14_161_life_020.ron
+PASS tests/oracle/generated_t1_300/t1_14_162_life_021.ron
+PASS tests/oracle/generated_t1_300/t1_14_163_life_022.ron
+PASS tests/oracle/generated_t1_300/t1_14_164_life_023.ron
+PASS tests/oracle/generated_t1_300/t1_14_165_life_024.ron
+PASS tests/oracle/generated_t1_300/t1_14_166_life_025.ron
+PASS tests/oracle/generated_t1_300/t1_14_167_life_026.ron
+PASS tests/oracle/generated_t1_300/t1_14_168_life_027.ron
+PASS tests/oracle/generated_t1_300/t1_14_169_life_028.ron
+PASS tests/oracle/generated_t1_300/t1_14_170_life_029.ron
+PASS tests/oracle/generated_t1_300/t1_14_171_poison_000.ron
+PASS tests/oracle/generated_t1_300/t1_14_172_poison_001.ron
+PASS tests/oracle/generated_t1_300/t1_14_173_poison_002.ron
+PASS tests/oracle/generated_t1_300/t1_14_174_poison_003.ron
+PASS tests/oracle/generated_t1_300/t1_14_175_poison_004.ron
+PASS tests/oracle/generated_t1_300/t1_14_176_poison_005.ron
+PASS tests/oracle/generated_t1_300/t1_14_177_poison_006.ron
+PASS tests/oracle/generated_t1_300/t1_14_178_poison_007.ron
+PASS tests/oracle/generated_t1_300/t1_14_179_poison_008.ron
+PASS tests/oracle/generated_t1_300/t1_14_180_poison_009.ron
+PASS tests/oracle/generated_t1_300/t1_14_181_poison_010.ron
+PASS tests/oracle/generated_t1_300/t1_14_182_poison_011.ron
+PASS tests/oracle/generated_t1_300/t1_14_183_poison_012.ron
+PASS tests/oracle/generated_t1_300/t1_14_184_poison_013.ron
+PASS tests/oracle/generated_t1_300/t1_14_185_poison_014.ron
+PASS tests/oracle/generated_t1_300/t1_14_186_poison_015.ron
+PASS tests/oracle/generated_t1_300/t1_14_187_poison_016.ron
+PASS tests/oracle/generated_t1_300/t1_14_188_poison_017.ron
+PASS tests/oracle/generated_t1_300/t1_14_189_poison_018.ron
+PASS tests/oracle/generated_t1_300/t1_14_190_poison_019.ron
+PASS tests/oracle/generated_t1_300/t1_14_191_poison_020.ron
+PASS tests/oracle/generated_t1_300/t1_14_192_poison_021.ron
+PASS tests/oracle/generated_t1_300/t1_14_193_creature_sba_000.ron
+PASS tests/oracle/generated_t1_300/t1_14_194_creature_sba_001.ron
+PASS tests/oracle/generated_t1_300/t1_14_195_creature_sba_002.ron
+PASS tests/oracle/generated_t1_300/t1_14_196_creature_sba_003.ron
+PASS tests/oracle/generated_t1_300/t1_14_197_creature_sba_004.ron
+PASS tests/oracle/generated_t1_300/t1_14_198_creature_sba_005.ron
+PASS tests/oracle/generated_t1_300/t1_14_199_creature_sba_006.ron
+PASS tests/oracle/generated_t1_300/t1_14_200_creature_sba_007.ron
+PASS tests/oracle/generated_t1_300/t1_14_201_creature_sba_008.ron
+PASS tests/oracle/generated_t1_300/t1_14_202_creature_sba_009.ron
+PASS tests/oracle/generated_t1_300/t1_14_203_creature_sba_010.ron
+PASS tests/oracle/generated_t1_300/t1_14_204_creature_sba_011.ron
+PASS tests/oracle/generated_t1_300/t1_14_205_creature_sba_012.ron
+PASS tests/oracle/generated_t1_300/t1_14_206_creature_sba_013.ron
+PASS tests/oracle/generated_t1_300/t1_14_207_creature_sba_014.ron
+PASS tests/oracle/generated_t1_300/t1_14_208_creature_sba_015.ron
+PASS tests/oracle/generated_t1_300/t1_14_209_creature_sba_016.ron
+PASS tests/oracle/generated_t1_300/t1_14_210_creature_sba_017.ron
+PASS tests/oracle/generated_t1_300/t1_14_211_creature_sba_018.ron
+PASS tests/oracle/generated_t1_300/t1_14_212_creature_sba_019.ron
+PASS tests/oracle/generated_t1_300/t1_14_213_creature_sba_020.ron
+PASS tests/oracle/generated_t1_300/t1_14_214_creature_sba_021.ron
+PASS tests/oracle/generated_t1_300/t1_14_215_creature_sba_022.ron
+PASS tests/oracle/generated_t1_300/t1_14_216_creature_sba_023.ron
+PASS tests/oracle/generated_t1_300/t1_14_217_creature_sba_024.ron
+PASS tests/oracle/generated_t1_300/t1_14_218_creature_sba_025.ron
+PASS tests/oracle/generated_t1_300/t1_14_219_creature_sba_026.ron
+PASS tests/oracle/generated_t1_300/t1_14_220_creature_sba_027.ron
+PASS tests/oracle/generated_t1_300/t1_14_221_creature_sba_028.ron
+PASS tests/oracle/generated_t1_300/t1_14_222_creature_sba_029.ron
+PASS tests/oracle/generated_t1_300/t1_14_223_combat_unblocked_vigilance_000.ron
+PASS tests/oracle/generated_t1_300/t1_14_224_combat_unblocked_vigilance_001.ron
+PASS tests/oracle/generated_t1_300/t1_14_225_combat_unblocked_vigilance_002.ron
+PASS tests/oracle/generated_t1_300/t1_14_226_combat_unblocked_vigilance_003.ron
+PASS tests/oracle/generated_t1_300/t1_14_227_combat_unblocked_vigilance_004.ron
+PASS tests/oracle/generated_t1_300/t1_14_228_combat_unblocked_vigilance_005.ron
+PASS tests/oracle/generated_t1_300/t1_14_229_combat_unblocked_vigilance_006.ron
+PASS tests/oracle/generated_t1_300/t1_14_230_combat_unblocked_vigilance_007.ron
+PASS tests/oracle/generated_t1_300/t1_14_231_combat_unblocked_vigilance_008.ron
+PASS tests/oracle/generated_t1_300/t1_14_232_combat_unblocked_vigilance_009.ron
+PASS tests/oracle/generated_t1_300/t1_14_233_combat_evasion_block_legality_000.ron
+PASS tests/oracle/generated_t1_300/t1_14_234_combat_evasion_block_legality_001.ron
+PASS tests/oracle/generated_t1_300/t1_14_235_combat_evasion_block_legality_002.ron
+PASS tests/oracle/generated_t1_300/t1_14_236_combat_evasion_block_legality_003.ron
+PASS tests/oracle/generated_t1_300/t1_14_237_combat_evasion_block_legality_004.ron
+PASS tests/oracle/generated_t1_300/t1_14_238_combat_evasion_block_legality_005.ron
+PASS tests/oracle/generated_t1_300/t1_14_239_combat_evasion_block_legality_006.ron
+PASS tests/oracle/generated_t1_300/t1_14_240_combat_evasion_block_legality_007.ron
+PASS tests/oracle/generated_t1_300/t1_14_241_combat_evasion_block_legality_008.ron
+PASS tests/oracle/generated_t1_300/t1_14_242_combat_evasion_block_legality_009.ron
+PASS tests/oracle/generated_t1_300/t1_14_243_combat_strike_steps_000.ron
+PASS tests/oracle/generated_t1_300/t1_14_244_combat_strike_steps_001.ron
+PASS tests/oracle/generated_t1_300/t1_14_245_combat_strike_steps_002.ron
+PASS tests/oracle/generated_t1_300/t1_14_246_combat_strike_steps_003.ron
+PASS tests/oracle/generated_t1_300/t1_14_247_combat_strike_steps_004.ron
+PASS tests/oracle/generated_t1_300/t1_14_248_combat_strike_steps_005.ron
+PASS tests/oracle/generated_t1_300/t1_14_249_combat_strike_steps_006.ron
+PASS tests/oracle/generated_t1_300/t1_14_250_combat_strike_steps_007.ron
+PASS tests/oracle/generated_t1_300/t1_14_251_combat_strike_steps_008.ron
+PASS tests/oracle/generated_t1_300/t1_14_252_combat_strike_steps_009.ron
+PASS tests/oracle/generated_t1_300/t1_14_253_combat_double_block_order_000.ron
+PASS tests/oracle/generated_t1_300/t1_14_254_combat_double_block_order_001.ron
+PASS tests/oracle/generated_t1_300/t1_14_255_combat_double_block_order_002.ron
+PASS tests/oracle/generated_t1_300/t1_14_256_combat_double_block_order_003.ron
+PASS tests/oracle/generated_t1_300/t1_14_257_combat_double_block_order_004.ron
+PASS tests/oracle/generated_t1_300/t1_14_258_combat_double_block_order_005.ron
+PASS tests/oracle/generated_t1_300/t1_14_259_combat_double_block_order_006.ron
+PASS tests/oracle/generated_t1_300/t1_14_260_combat_double_block_order_007.ron
+PASS tests/oracle/generated_t1_300/t1_14_261_combat_double_block_order_008.ron
+PASS tests/oracle/generated_t1_300/t1_14_262_combat_double_block_order_009.ron
+PASS tests/oracle/generated_t1_300/t1_14_263_combat_trample_deathtouch_000.ron
+PASS tests/oracle/generated_t1_300/t1_14_264_combat_trample_deathtouch_001.ron
+PASS tests/oracle/generated_t1_300/t1_14_265_combat_trample_deathtouch_002.ron
+PASS tests/oracle/generated_t1_300/t1_14_266_combat_trample_deathtouch_003.ron
+PASS tests/oracle/generated_t1_300/t1_14_267_combat_trample_deathtouch_004.ron
+PASS tests/oracle/generated_t1_300/t1_14_268_combat_trample_deathtouch_005.ron
+PASS tests/oracle/generated_t1_300/t1_14_269_combat_trample_deathtouch_006.ron
+PASS tests/oracle/generated_t1_300/t1_14_270_combat_trample_deathtouch_007.ron
+PASS tests/oracle/generated_t1_300/t1_14_271_combat_trample_deathtouch_008.ron
+PASS tests/oracle/generated_t1_300/t1_14_272_combat_trample_deathtouch_009.ron
+PASS tests/oracle/generated_t1_300/t1_14_273_combat_lifelink_unblocked_000.ron
+PASS tests/oracle/generated_t1_300/t1_14_274_combat_lifelink_unblocked_001.ron
+PASS tests/oracle/generated_t1_300/t1_14_275_combat_lifelink_unblocked_002.ron
+PASS tests/oracle/generated_t1_300/t1_14_276_combat_lifelink_unblocked_003.ron
+PASS tests/oracle/generated_t1_300/t1_14_277_combat_lifelink_unblocked_004.ron
+PASS tests/oracle/generated_t1_300/t1_14_278_combat_lifelink_unblocked_005.ron
+PASS tests/oracle/generated_t1_300/t1_14_279_combat_lifelink_unblocked_006.ron
+PASS tests/oracle/generated_t1_300/t1_14_280_combat_lifelink_unblocked_007.ron
+PASS tests/oracle/generated_t1_300/t1_14_281_combat_lifelink_unblocked_008.ron
+PASS tests/oracle/generated_t1_300/t1_14_282_combat_lifelink_unblocked_009.ron
+PASS tests/oracle/generated_t1_300/t1_14_283_cleanup_000.ron
+PASS tests/oracle/generated_t1_300/t1_14_284_cleanup_001.ron
+PASS tests/oracle/generated_t1_300/t1_14_285_cleanup_002.ron
+PASS tests/oracle/generated_t1_300/t1_14_286_cleanup_003.ron
+PASS tests/oracle/generated_t1_300/t1_14_287_cleanup_004.ron
+PASS tests/oracle/generated_t1_300/t1_14_288_cleanup_005.ron
+PASS tests/oracle/generated_t1_300/t1_14_289_cleanup_006.ron
+PASS tests/oracle/generated_t1_300/t1_14_290_cleanup_007.ron
+PASS tests/oracle/generated_t1_300/t1_14_291_cleanup_008.ron
+PASS tests/oracle/generated_t1_300/t1_14_292_cleanup_009.ron
+PASS tests/oracle/t1_10_cr_103_3_players_start_at_20_life.ron
+PASS tests/oracle/t1_10_cr_103_7a_starting_player_skips_first_draw.ron
+PASS tests/oracle/t1_10_cr_104_3b_negative_life_loses.ron
+PASS tests/oracle/t1_10_cr_104_3b_zero_life_loses.ron
+PASS tests/oracle/t1_10_cr_104_3c_empty_library_draw_loses.ron
+PASS tests/oracle/t1_10_cr_104_3d_more_than_ten_poison_loses.ron
+PASS tests/oracle/t1_10_cr_104_3d_ten_poison_loses.ron
+PASS tests/oracle/t1_9_opening_hand.ron
+WROTE target/forge-testkit/oracle-junit.xml
+oracle scenarios: 300 passed, 0 failed
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-rB1qgP74' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-HIcnMP2V' (errno=Operation not permitted)
+
+warning: `forge-core` (bench "kernel") generated 1 warning
+    Finished `bench` profile [optimized] target(s) in 0.12s
+     Running benches/kernel.rs (target/release/deps/kernel-4b777c2e73322c1b)
+Gnuplot not found, using plotters backend
+Benchmarking kernel/clone_200_card_state_x64
+Benchmarking kernel/clone_200_card_state_x64: Warming up for 100.00 ms
+Benchmarking kernel/clone_200_card_state_x64: Collecting 10 samples in estimated 300.36 ms (41k iterations)
+Benchmarking kernel/clone_200_card_state_x64: Analyzing
+kernel/clone_200_card_state_x64
+                        time:   [6.9616 µs 7.2194 µs 7.4342 µs]
+
+Benchmarking kernel/legal_actions_priority_x128
+Benchmarking kernel/legal_actions_priority_x128: Warming up for 100.00 ms
+Benchmarking kernel/legal_actions_priority_x128: Collecting 10 samples in estimated 300.00 ms (2.5M iterations)
+Benchmarking kernel/legal_actions_priority_x128: Analyzing
+kernel/legal_actions_priority_x128
+                        time:   [116.86 ns 119.99 ns 123.21 ns]
+
+Benchmarking kernel/apply_pass_priority_x64
+Benchmarking kernel/apply_pass_priority_x64: Warming up for 100.00 ms
+Benchmarking kernel/apply_pass_priority_x64: Collecting 10 samples in estimated 300.26 ms (22k iterations)
+Benchmarking kernel/apply_pass_priority_x64: Analyzing
+kernel/apply_pass_priority_x64
+                        time:   [6.3215 µs 6.7316 µs 7.0418 µs]
+
+Benchmarking kernel/full_playout_four_turns
+Benchmarking kernel/full_playout_four_turns: Warming up for 100.00 ms
+Benchmarking kernel/full_playout_four_turns: Collecting 10 samples in estimated 300.02 ms (22k iterations)
+Benchmarking kernel/full_playout_four_turns: Analyzing
+kernel/full_playout_four_turns
+                        time:   [13.849 µs 14.185 µs 14.466 µs]
+
+python3: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-0b8fJ0WC' (errno=Operation not permitted)
+python3: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-fXGLHb8v' (errno=Operation not permitted)
+PASS criterion_to_perf.py wrote 4 metric(s) to /Users/juanlopez2016/Desktop/Forge 2.0/metrics/perf_current.json
+python3: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-6GQPnEFN' (errno=Operation not permitted)
+python3: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-Bj0bPzUx' (errno=Operation not permitted)
+PASS perf_diff.py (4 metric(s), threshold 5.0%)
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-fk0DhBUt' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-TndYHZWL' (errno=Operation not permitted)
+
+warning: `forge-arena` (bin "forge-arena") generated 1 warning
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.03s
+     Running `target/debug/forge-arena --smoke 10000 --random`
+PASS arena smoke: 10000 game(s), 0 invariant violations
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-RVeceXu1' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-G74TRAC8' (errno=Operation not permitted)
+
+warning: `forge-cli` (bin "forge-cli") generated 1 warning
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.03s
+     Running `target/debug/forge-cli play --demo --seed 11 --replay-out target/gates/T1/replays/demo-seed-11.frsreplay`
+demo complete
+seed: 11
+turn: 1
+final_hash: 17913199206715572167
+outcome: won player 0
+actions: 14
+players:
+  player 0 life=19 poison=0 lost=false
+  player 1 life=-5 poison=0 lost=true
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-RVeceXu1' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-G74TRAC8' (errno=Operation not permitted)
+
+warning: `forge-cli` (bin "forge-cli") generated 1 warning
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running `target/debug/forge-cli roundtrip target/gates/T1/replays/demo-seed-11.frsreplay`
+roundtrip ok
+seed: 11
+actions: 14
+final_hash: 17913199206715572167
+outcome: won player 0
+python3: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-VSXSl2vT' (errno=Operation not permitted)
+python3: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-C88NIrbh' (errno=Operation not permitted)
+python3: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-IcTcA527' (errno=Operation not permitted)
+python3: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-oOn7pLQC' (errno=Operation not permitted)
+PASS clone budget: 112.292 ns per 200-card state
+PASS gate_T1.sh

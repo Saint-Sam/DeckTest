@@ -1,0 +1,41 @@
+(
+    name: "T1 generated combat unblocked vigilance damage 005",
+    setup: (
+        players: 2,
+        libraries: [
+            (player: 0, cards: [50050, 50051]),
+        ],
+        objects: [
+            (card: 17005, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "set_base_creature", object: 0, power: 3, toughness: 3, keywords: ["vigilance"]),
+        (action: "start_turn", player: 0),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "declare_attackers", player: 0, attacks: [(attacker: 0, defender: 1)]),
+        (action: "advance_step"),
+        (action: "declare_blockers", player: 1, blocks: []),
+        (action: "advance_step"),
+        (action: "assign_combat_damage", assignments: [(source: 0, assignments: [(player: 1, amount: 3)])]),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Battlefield", count: 1),
+        ],
+        players: [
+            (player: 1, life: 17),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "life_poison_sanity",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

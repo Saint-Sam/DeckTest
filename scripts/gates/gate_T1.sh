@@ -25,6 +25,55 @@ if [[ "$oracle_count" -lt 250 ]]; then
   failures=$((failures + 1))
 fi
 
+python3 - <<'PY' || failures=$((failures + 1))
+from pathlib import Path
+
+paths = sorted(Path("tests/oracle").rglob("*.ron"))
+combat = []
+for path in paths:
+    text = path.read_text(encoding="utf-8")
+    if (
+        'action: "declare_attackers"' in text
+        and 'action: "declare_blockers"' in text
+        and 'action: "assign_combat_damage"' in text
+    ):
+        combat.append((path, text))
+
+if len(combat) < 60:
+    raise SystemExit(
+        f"ERROR: T1 gate requires >=60 combat oracle scenarios; found {len(combat)}"
+    )
+
+corpus = "\n".join(text for _, text in combat)
+missing = []
+for feature in [
+    '"first_strike"',
+    '"double_strike"',
+    '"trample"',
+    '"deathtouch"',
+    '"lifelink"',
+    '"flying"',
+    '"reach"',
+    '"menace"',
+    '"vigilance"',
+]:
+    if feature not in corpus:
+        missing.append(feature.strip('"'))
+if not any("double-block ordering" in text for _, text in combat):
+    missing.append("double-block ordering")
+if not any('"trample"' in text and '"deathtouch"' in text for _, text in combat):
+    missing.append("trample+deathtouch")
+if missing:
+    raise SystemExit(
+        "ERROR: T1 combat oracle surface missing " + ", ".join(sorted(missing))
+    )
+
+print(
+    "PASS combat oracle surface: "
+    f"{len(combat)} scenario(s) cover T1.6 combat feature requirements"
+)
+PY
+
 "$ROOT/scripts/vl.sh"
 "$ROOT/scripts/run_oracle.sh" --all
 "$ROOT/scripts/perf_smoke.sh"

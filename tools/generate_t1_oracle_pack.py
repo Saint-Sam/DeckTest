@@ -153,6 +153,65 @@ def setup_block(
     return "\n".join(lines)
 
 
+def creature_step(
+    object_index: int,
+    power: int,
+    toughness: int,
+    keywords: str = "[]",
+) -> str:
+    return step(
+        "set_base_creature",
+        object=object_index,
+        power=power,
+        toughness=toughness,
+        keywords=keywords,
+    )
+
+
+def combat_setup(index: int, objects: list[str]) -> str:
+    return setup_block(
+        libraries=[library(0, 50_000 + index * 10, 2)],
+        objects=objects,
+    )
+
+
+def enter_declare_attackers(player: int = 0) -> list[str]:
+    scripts = [step("start_turn", player=player)]
+    scripts.extend(step("advance_step") for _ in range(5))
+    return scripts
+
+
+def declare_attackers(attacker: int, defender: int = 1, player: int = 0) -> str:
+    return step(
+        "declare_attackers",
+        player=player,
+        attacks=f"[(attacker: {attacker}, defender: {defender})]",
+    )
+
+
+def declare_blockers(blocks: list[tuple[int, int]], player: int = 1) -> str:
+    rendered = ", ".join(
+        f"(blocker: {blocker}, attacker: {attacker})" for blocker, attacker in blocks
+    )
+    return step("declare_blockers", player=player, blocks=f"[{rendered}]")
+
+
+def damage_to_player(player: int, amount: int) -> str:
+    return f"(player: {player}, amount: {amount})"
+
+
+def damage_to_object(object_index: int, amount: int) -> str:
+    return f"(object: {object_index}, amount: {amount})"
+
+
+def combat_damage_request(source: int, assignments: list[str]) -> str:
+    return f"(source: {source}, assignments: [{', '.join(assignments)}])"
+
+
+def assign_combat_damage(requests: list[str]) -> str:
+    return step("assign_combat_damage", assignments=f"[{', '.join(requests)}]")
+
+
 def render_scenario(scenario: Scenario) -> str:
     lines = [
         "(",
@@ -259,7 +318,7 @@ def zone_move_scenarios() -> list[Scenario]:
 
 def opening_hand_scenarios() -> list[Scenario]:
     scenarios = []
-    for index in range(38):
+    for index in range(30):
         extra_a = index % 5
         extra_b = (index * 2) % 5
         seed = 2_000 + index
@@ -315,7 +374,7 @@ def turn_priority_scenarios() -> list[Scenario]:
         "Cleanup",
         "Untap",
     ]
-    for index in range(44):
+    for index in range(30):
         player_count = 2 + (index % 2)
         active = index % player_count
         advances = index % len(step_names)
@@ -353,7 +412,7 @@ def turn_priority_scenarios() -> list[Scenario]:
 def mana_scenarios() -> list[Scenario]:
     scenarios = []
     colors = ["white", "blue", "black", "red", "green"]
-    for index in range(32):
+    for index in range(24):
         player = index % 2
         color = colors[index % len(colors)]
         scripts = []
@@ -395,7 +454,7 @@ def mana_scenarios() -> list[Scenario]:
 
 def life_scenarios() -> list[Scenario]:
     scenarios = []
-    for index in range(44):
+    for index in range(30):
         mode = index % 4
         if mode == 0:
             player = index % 2
@@ -452,7 +511,7 @@ def life_scenarios() -> list[Scenario]:
 
 def poison_scenarios() -> list[Scenario]:
     scenarios = []
-    for index in range(24):
+    for index in range(22):
         mode = index % 3
         if mode == 0:
             player = index % 2
@@ -498,7 +557,7 @@ def poison_scenarios() -> list[Scenario]:
 def creature_sba_scenarios() -> list[Scenario]:
     scenarios = []
     keyword_sets = ["[]", '["vigilance"]', '["flying"]', '["reach"]']
-    for index in range(44):
+    for index in range(30):
         owner = index % 2
         toughness = (index % 5) + 1
         mode = index % 4
@@ -532,6 +591,282 @@ def creature_sba_scenarios() -> list[Scenario]:
                 ),
             )
         )
+    return scenarios
+
+
+def combat_scenarios() -> list[Scenario]:
+    scenarios = []
+
+    for index in range(10):
+        power = 2 + (index % 4)
+        keywords = '["vigilance"]' if index % 2 else "[]"
+        script = [
+            creature_step(0, power, 3, keywords),
+            *enter_declare_attackers(),
+            declare_attackers(0),
+            step("advance_step"),
+            declare_blockers([]),
+            step("advance_step"),
+            assign_combat_damage(
+                [combat_damage_request(0, [damage_to_player(1, power)])]
+            ),
+        ]
+        scenarios.append(
+            Scenario(
+                slug=f"combat_unblocked_vigilance_{index:03d}",
+                name=f"T1 generated combat unblocked vigilance damage {index:03d}",
+                setup=combat_setup(
+                    index,
+                    [object_setup(17_000 + index, 0, "Battlefield")],
+                ),
+                script=script,
+                expect=expect_block(
+                    zones=[zone_count("Battlefield", 1)],
+                    players=[f"(player: 1, life: {20 - power})"],
+                ),
+            )
+        )
+
+    for index in range(10):
+        if index < 5:
+            objects = [
+                object_setup(18_000 + index * 2, 0, "Battlefield"),
+                object_setup(18_001 + index * 2, 1, "Battlefield"),
+            ]
+            script = [
+                creature_step(0, 3, 3, '["flying"]'),
+                creature_step(1, 0, 3, '["reach"]'),
+                *enter_declare_attackers(),
+                declare_attackers(0),
+                step("advance_step"),
+                declare_blockers([(1, 0)]),
+                step("advance_step"),
+                assign_combat_damage(
+                    [combat_damage_request(0, [damage_to_object(1, 3)])]
+                ),
+            ]
+            zones = [
+                zone_count("Battlefield", 1),
+                zone_count("Graveyard", 1, 1),
+            ]
+        else:
+            objects = [
+                object_setup(18_000 + index * 3, 0, "Battlefield"),
+                object_setup(18_001 + index * 3, 1, "Battlefield"),
+                object_setup(18_002 + index * 3, 1, "Battlefield"),
+            ]
+            script = [
+                creature_step(0, 4, 4, '["menace"]'),
+                creature_step(1, 0, 2),
+                creature_step(2, 0, 2),
+                *enter_declare_attackers(),
+                declare_attackers(0),
+                step("advance_step"),
+                declare_blockers([(1, 0), (2, 0)]),
+                step("advance_step"),
+                assign_combat_damage(
+                    [
+                        combat_damage_request(
+                            0,
+                            [damage_to_object(1, 2), damage_to_object(2, 2)],
+                        )
+                    ]
+                ),
+            ]
+            zones = [
+                zone_count("Battlefield", 1),
+                zone_count("Graveyard", 2, 1),
+            ]
+        scenarios.append(
+            Scenario(
+                slug=f"combat_evasion_block_legality_{index:03d}",
+                name=f"T1 generated combat flying reach menace legality {index:03d}",
+                setup=combat_setup(20 + index, objects),
+                script=script,
+                expect=expect_block(zones=zones),
+            )
+        )
+
+    for index in range(10):
+        if index % 2 == 0:
+            script = [
+                creature_step(0, 2, 2, '["first_strike"]'),
+                creature_step(1, 2, 2),
+                *enter_declare_attackers(),
+                declare_attackers(0),
+                step("advance_step"),
+                declare_blockers([(1, 0)]),
+                step("advance_step"),
+                assign_combat_damage(
+                    [combat_damage_request(0, [damage_to_object(1, 2)])]
+                ),
+            ]
+            objects = [
+                object_setup(19_000 + index * 2, 0, "Battlefield"),
+                object_setup(19_001 + index * 2, 1, "Battlefield"),
+            ]
+            expect = expect_block(
+                zones=[
+                    zone_count("Battlefield", 1),
+                    zone_count("Graveyard", 1, 1),
+                ]
+            )
+        else:
+            script = [
+                creature_step(0, 2, 2, '["double_strike"]'),
+                *enter_declare_attackers(),
+                declare_attackers(0),
+                step("advance_step"),
+                declare_blockers([]),
+                step("advance_step"),
+                assign_combat_damage(
+                    [combat_damage_request(0, [damage_to_player(1, 2)])]
+                ),
+                step("advance_step"),
+                assign_combat_damage(
+                    [combat_damage_request(0, [damage_to_player(1, 2)])]
+                ),
+            ]
+            objects = [object_setup(19_000 + index, 0, "Battlefield")]
+            expect = expect_block(
+                zones=[zone_count("Battlefield", 1)],
+                players=["(player: 1, life: 16)"],
+            )
+        scenarios.append(
+            Scenario(
+                slug=f"combat_strike_steps_{index:03d}",
+                name=f"T1 generated combat first and double strike steps {index:03d}",
+                setup=combat_setup(40 + index, objects),
+                script=script,
+                expect=expect,
+            )
+        )
+
+    for index in range(10):
+        first_toughness = 2
+        second_toughness = 3
+        script = [
+            creature_step(0, first_toughness + second_toughness, 5),
+            creature_step(1, 0, first_toughness),
+            creature_step(2, 0, second_toughness),
+            *enter_declare_attackers(),
+            declare_attackers(0),
+            step("advance_step"),
+            declare_blockers([(1, 0), (2, 0)]),
+            step("advance_step"),
+            assign_combat_damage(
+                [
+                    combat_damage_request(
+                        0,
+                        [
+                            damage_to_object(1, first_toughness),
+                            damage_to_object(2, second_toughness),
+                        ],
+                    )
+                ]
+            ),
+        ]
+        scenarios.append(
+            Scenario(
+                slug=f"combat_double_block_order_{index:03d}",
+                name=f"T1 generated combat double-block ordering {index:03d}",
+                setup=combat_setup(
+                    60 + index,
+                    [
+                        object_setup(20_000 + index * 3, 0, "Battlefield"),
+                        object_setup(20_001 + index * 3, 1, "Battlefield"),
+                        object_setup(20_002 + index * 3, 1, "Battlefield"),
+                    ],
+                ),
+                script=script,
+                expect=expect_block(
+                    zones=[
+                        zone_count("Battlefield", 1),
+                        zone_count("Graveyard", 2, 1),
+                    ],
+                ),
+            )
+        )
+
+    for index in range(10):
+        script = [
+            creature_step(0, 5, 5, '["trample", "deathtouch"]'),
+            creature_step(1, 3, 3),
+            *enter_declare_attackers(),
+            declare_attackers(0),
+            step("advance_step"),
+            declare_blockers([(1, 0)]),
+            step("advance_step"),
+            assign_combat_damage(
+                [
+                    combat_damage_request(
+                        0,
+                        [damage_to_object(1, 1), damage_to_player(1, 4)],
+                    ),
+                    combat_damage_request(1, [damage_to_object(0, 3)]),
+                ]
+            ),
+        ]
+        scenarios.append(
+            Scenario(
+                slug=f"combat_trample_deathtouch_{index:03d}",
+                name=f"T1 generated combat trample plus deathtouch {index:03d}",
+                setup=combat_setup(
+                    80 + index,
+                    [
+                        object_setup(21_000 + index * 2, 0, "Battlefield"),
+                        object_setup(21_001 + index * 2, 1, "Battlefield"),
+                    ],
+                ),
+                script=script,
+                expect=expect_block(
+                    zones=[
+                        zone_count("Battlefield", 1),
+                        zone_count("Graveyard", 1, 1),
+                    ],
+                    players=["(player: 1, life: 16)"],
+                ),
+            )
+        )
+
+    for index in range(10):
+        power = 2 + (index % 3)
+        script = [
+            creature_step(0, power, 3, '["lifelink"]'),
+            *enter_declare_attackers(),
+            declare_attackers(0),
+            step("advance_step"),
+            declare_blockers([]),
+            step("advance_step"),
+        ]
+        active_life = 20 + power
+        if index == 0:
+            script.append(step("set_life", player=0, life=0))
+            active_life = power
+        script.append(
+            assign_combat_damage(
+                [combat_damage_request(0, [damage_to_player(1, power)])]
+            )
+        )
+        scenarios.append(
+            Scenario(
+                slug=f"combat_lifelink_unblocked_{index:03d}",
+                name=f"T1 generated combat lifelink damage {index:03d}",
+                setup=combat_setup(
+                    100 + index,
+                    [object_setup(22_000 + index, 0, "Battlefield")],
+                ),
+                script=script,
+                expect=expect_block(
+                    zones=[zone_count("Battlefield", 1)],
+                    players=[
+                        f"(player: 0, life: {active_life})",
+                        f"(player: 1, life: {20 - power})",
+                    ],
+                ),
+            )
+        )
+
     return scenarios
 
 
@@ -571,6 +906,7 @@ def generated_scenarios() -> list[Scenario]:
     scenarios.extend(life_scenarios())
     scenarios.extend(poison_scenarios())
     scenarios.extend(creature_sba_scenarios())
+    scenarios.extend(combat_scenarios())
     scenarios.extend(cleanup_scenarios())
     return scenarios
 

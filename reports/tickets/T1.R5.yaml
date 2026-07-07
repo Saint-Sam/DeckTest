@@ -1,0 +1,41 @@
+id: T1.R5
+title: Restore T1.6 oracle coverage
+tier: 1
+priority: P0
+status: resolved_local
+tags:
+  - remediation
+  - t1-gate
+  - oracle
+  - combat
+scope_paths:
+  - tests/oracle/
+  - crates/forge-testkit/src/lib.rs
+  - crates/forge-core/src/lib.rs
+inputs:
+  - reports/gates/T1/SIGNOFF.md
+  - FORGE_REBUILD_MASTER_PLAN.md Section 6 T1.6
+  - docs/t1_10_legacy_test_oracle_mapping.md
+acceptance:
+  - at least 60 combat oracle scenarios pass through the forge-testkit oracle runner
+  - combat oracle scenarios cover double-block ordering, attack and block legality, first-strike and double-strike damage rounds, flying, reach, menace, vigilance, trample with deathtouch, and lifelink
+  - if the scenario DSL cannot express combat setup or combat actions, forge-testkit is extended first and parser/runner tests cover the new schema
+  - Rust unit tests may support the evidence but are not counted as substitutes for the required combat oracle scenarios
+  - T1 gate evidence reports the combat oracle count separately from the total oracle scenario count
+verify: cargo test -p forge-core && cargo test -p forge-testkit && scripts/gates/gate_T1.sh
+retry_policy: 3 attempts then blocker
+depends_on:
+  - T1.6
+  - T1.7
+parallel_ok: false
+closure:
+  date: 2026-07-07
+  evidence:
+    - reports/gates/T1/test_log.txt
+    - reports/gates/T1/metrics_snapshot.json
+    - tests/oracle/generated_t1_300/t1_14_223_combat_unblocked_vigilance_000.ron
+    - tests/oracle/generated_t1_300/t1_14_282_combat_lifelink_unblocked_009.ron
+    - scripts/gates/gate_T1.sh
+  notes:
+    - forge-testkit now exposes combat RON actions for attackers, blockers, and combat damage assignment
+    - local T1 gate passed with 60 combat oracle scenarios and explicit T1.6 feature coverage check

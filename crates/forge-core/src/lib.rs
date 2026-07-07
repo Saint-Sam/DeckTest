@@ -2995,6 +2995,7 @@ impl ActionList {
 
     /// Creates an empty action list.
     #[must_use]
+    #[inline]
     pub fn empty() -> Self {
         Self {
             storage: ActionListStorage::Empty,
@@ -3003,6 +3004,7 @@ impl ActionList {
 
     /// Creates an action list containing exactly one action.
     #[must_use]
+    #[inline]
     pub fn single(action: Action) -> Self {
         Self {
             storage: ActionListStorage::One([action]),
@@ -3011,6 +3013,7 @@ impl ActionList {
 
     /// Returns the legal actions in deterministic order.
     #[must_use]
+    #[inline]
     pub fn actions(&self) -> &[Action] {
         match &self.storage {
             ActionListStorage::Empty => &[],
@@ -3021,12 +3024,14 @@ impl ActionList {
 
     /// Returns the number of actions.
     #[must_use]
+    #[inline]
     pub fn len(&self) -> usize {
         self.actions().len()
     }
 
     /// Returns true if there are no actions.
     #[must_use]
+    #[inline]
     pub fn is_empty(&self) -> bool {
         matches!(self.storage, ActionListStorage::Empty)
     }
@@ -3063,6 +3068,7 @@ pub enum Outcome {
 
 /// Returns the currently legal external actions in deterministic order.
 #[must_use]
+#[inline]
 pub fn legal_actions(state: &GameState) -> ActionList {
     if let Some(player) = state.priority_player() {
         return ActionList::single(Action::PassPriority { player });
@@ -3071,6 +3077,7 @@ pub fn legal_actions(state: &GameState) -> ActionList {
 }
 
 /// Applies one external action through the kernel boundary.
+#[inline]
 pub fn apply(state: &mut GameState, action: Action) -> Outcome {
     match action {
         Action::SetSeed { seed } => {
@@ -3881,6 +3888,7 @@ impl GameState {
     ///
     /// If all players pass in succession, this either resolves the top stack
     /// entry or completes the current step when the stack is empty.
+    #[inline]
     fn pass_priority(&mut self, player: PlayerId) -> Result<PriorityOutcome, StateError> {
         let priority_player = self.priority_player.ok_or(StateError::NoPriority)?;
         if priority_player != player {
@@ -3889,9 +3897,16 @@ impl GameState {
                 actual: player,
             });
         }
-        self.priority_pass_count = self.priority_pass_count.saturating_add(1);
-        if self.priority_pass_count < self.players.len() as u32 {
-            let next = self.next_player_after(player)?;
+        self.priority_pass_count += 1;
+        let player_count = self.players.len() as u32;
+        if self.priority_pass_count < player_count {
+            let next_index = player.0 + 1;
+            let next_index = if next_index == player_count {
+                0
+            } else {
+                next_index
+            };
+            let next = PlayerId(next_index);
             self.priority_player = Some(next);
             return Ok(PriorityOutcome::PassedTo(next));
         }
@@ -4795,6 +4810,7 @@ impl GameState {
         if total != profile.required_total {
             return Err(StateError::IllegalCombatDamageAssignment(request.source()));
         }
+        self.validate_blocker_assignment_order(request)?;
         if !profile.trample_blockers.is_empty() {
             self.validate_trample_assignment(request, &profile)?;
         }
@@ -4824,6 +4840,62 @@ impl GameState {
                 .map(|assignment| assignment.amount())
                 .sum();
             if assigned_to_blocker < self.lethal_damage_required(*blocker, source_keywords)? {
+                return Err(StateError::IllegalCombatDamageAssignment(request.source()));
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_blocker_assignment_order(
+        &self,
+        request: &CombatDamageAssignmentRequest,
+    ) -> Result<(), StateError> {
+        let Some(attacker) = self
+            .combat
+            .attackers
+            .iter()
+            .find(|attacker| attacker.object == request.source())
+        else {
+            return Ok(());
+        };
+        if !attacker.blocked {
+            return Ok(());
+        }
+        let current_blockers: Vec<ObjectId> = attacker
+            .blockers
+            .iter()
+            .copied()
+            .filter(|blocker| self.is_active_blocking_creature(*blocker))
+            .collect();
+        if current_blockers.len() < 2 {
+            return Ok(());
+        }
+
+        let source_keywords = self.creature_keywords(request.source())?;
+        let assigned_to = |target: CombatDamageTarget| -> u32 {
+            request
+                .assignments()
+                .iter()
+                .filter(|assignment| assignment.target() == target)
+                .map(|assignment| assignment.amount())
+                .sum()
+        };
+        let assigned_to_defender =
+            assigned_to(CombatDamageTarget::Player(attacker.defending_player));
+        for (index, blocker) in current_blockers
+            .iter()
+            .copied()
+            .enumerate()
+            .take(current_blockers.len() - 1)
+        {
+            let later_has_damage = assigned_to_defender > 0
+                || current_blockers[index + 1..]
+                    .iter()
+                    .any(|later| assigned_to(CombatDamageTarget::Object(*later)) > 0);
+            if later_has_damage
+                && assigned_to(CombatDamageTarget::Object(blocker))
+                    < self.lethal_damage_required(blocker, source_keywords)?
+            {
                 return Err(StateError::IllegalCombatDamageAssignment(request.source()));
             }
         }
@@ -5187,11 +5259,14 @@ impl GameState {
         kind: StateBasedActionKind,
         actions: &mut Vec<PendingStateBasedAction>,
     ) {
-        let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
-        for object in self.objects.iter() {
-            if self.object_zone(object.id()) != Some(battlefield) {
+        let Some(battlefield_index) = self.zone_index(ZoneId::new(None, ZoneKind::Battlefield))
+        else {
+            return;
+        };
+        for object_id in self.zones[battlefield_index].objects.iter().copied() {
+            let Some(object) = self.objects.get(object_id) else {
                 continue;
-            }
+            };
             let Ok(creature) = self.creature_characteristics(object.id()) else {
                 continue;
             };
@@ -8112,6 +8187,70 @@ mod tests {
             Err(StateError::IllegalCombatDamageAssignment(trampler))
         );
         assert_eq!(state.canonical_bytes(), before);
+    }
+
+    #[test]
+    fn double_block_damage_must_follow_blocker_order() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let defender = state.add_player();
+        let attacker =
+            battlefield_creature(&mut state, active, 217, 4, 4, CreatureKeywords::none());
+        let first_blocker =
+            battlefield_creature(&mut state, defender, 218, 0, 2, CreatureKeywords::none());
+        let second_blocker =
+            battlefield_creature(&mut state, defender, 219, 0, 2, CreatureKeywords::none());
+        start_declare_attackers(&mut state, active);
+        state
+            .declare_attackers(active, &[AttackDeclaration::new(attacker, defender)])
+            .unwrap_or_else(|error| panic!("unexpected attack error: {error:?}"));
+        state
+            .advance_step()
+            .unwrap_or_else(|error| panic!("unexpected blockers advance error: {error:?}"));
+        state
+            .declare_blockers(
+                defender,
+                &[
+                    BlockDeclaration::new(first_blocker, attacker),
+                    BlockDeclaration::new(second_blocker, attacker),
+                ],
+            )
+            .unwrap_or_else(|error| panic!("unexpected block error: {error:?}"));
+        state
+            .advance_step()
+            .unwrap_or_else(|error| panic!("unexpected damage advance error: {error:?}"));
+        let before = state.canonical_bytes();
+
+        assert_eq!(
+            state.assign_combat_damage(&[CombatDamageAssignmentRequest::new(
+                attacker,
+                vec![CombatDamageAssignment::new(
+                    CombatDamageTarget::Object(second_blocker),
+                    4,
+                )],
+            )]),
+            Err(StateError::IllegalCombatDamageAssignment(attacker))
+        );
+        assert_eq!(state.canonical_bytes(), before);
+
+        state
+            .assign_combat_damage(&[CombatDamageAssignmentRequest::new(
+                attacker,
+                vec![
+                    CombatDamageAssignment::new(CombatDamageTarget::Object(first_blocker), 2),
+                    CombatDamageAssignment::new(CombatDamageTarget::Object(second_blocker), 2),
+                ],
+            )])
+            .unwrap_or_else(|error| panic!("unexpected ordered damage error: {error:?}"));
+
+        assert_eq!(
+            state.object_zone(first_blocker),
+            Some(ZoneId::new(Some(defender), ZoneKind::Graveyard))
+        );
+        assert_eq!(
+            state.object_zone(second_blocker),
+            Some(ZoneId::new(Some(defender), ZoneKind::Graveyard))
+        );
     }
 
     #[test]

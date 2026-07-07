@@ -1,0 +1,25 @@
+id: T1.R7
+title: Produce exact-tree gate evidence
+tier: 1
+priority: P0
+tags:
+  - remediation
+  - t1-gate
+  - evidence
+  - clean-checkout
+scope_paths:
+  - reports/gates/T1/
+  - scripts/gates/gate_T1.sh
+inputs:
+  - reports/gates/T1/SIGNOFF.md
+acceptance:
+  - final local remediation and evidence changes are committed before gate rerun
+  - scripts/gates/gate_T1.sh is run from a fresh clone or reviewer-commanded clean checkout of the exact final commit
+  - the clean-checkout gate log is archived in the T1 bundle and ends in PASS gate_T1.sh
+  - the T1 evidence records the exact commit hash, checkout source, command, date, and reviewer who ran the clean gate
+verify: scripts/gates/gate_T1.sh
+retry_policy: 3 attempts then blocker
+depends_on:
+  - T1.R5
+  - T1.R6
+parallel_ok: false

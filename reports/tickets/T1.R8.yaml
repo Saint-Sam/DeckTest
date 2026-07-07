@@ -1,0 +1,27 @@
+id: T1.R8
+title: Complete Section 15 live reviewer checks
+tier: 1
+priority: P0
+tags:
+  - remediation
+  - t1-gate
+  - reviewer-checks
+  - adversarial-review
+scope_paths:
+  - reports/gates/T1/
+  - scripts/review/
+  - tests/oracle/
+inputs:
+  - reports/gates/T1/SIGNOFF.md
+  - FORGE_REBUILD_MASTER_PLAN.md Section 15.3
+acceptance:
+  - mutation checks are run on three sampled tests and the sampled tests are named in T1 evidence
+  - the Gate Reviewer authors at least five novel oracle scenarios during re-review and at least four pass
+  - scripts/review/determinism.sh is rerun and its log is archived in T1 evidence
+  - the required 1-hour live fuzz check is completed and archived with seed, command, duration, and result
+  - at least three bundle replay files are step-replayed and the replay ids, final hashes, and outcomes are recorded
+verify: scripts/review/determinism.sh && scripts/gates/gate_T1.sh
+retry_policy: 3 attempts then blocker
+depends_on:
+  - T1.R5
+parallel_ok: false

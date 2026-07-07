@@ -1,0 +1,41 @@
+(
+    name: "T1 generated combat first and double strike steps 008",
+    setup: (
+        players: 2,
+        libraries: [
+            (player: 0, cards: [50480, 50481]),
+        ],
+        objects: [
+            (card: 19016, owner: 0, controller: 0, zone: "Battlefield"),
+            (card: 19017, owner: 1, controller: 1, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "set_base_creature", object: 0, power: 2, toughness: 2, keywords: ["first_strike"]),
+        (action: "set_base_creature", object: 1, power: 2, toughness: 2, keywords: []),
+        (action: "start_turn", player: 0),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "declare_attackers", player: 0, attacks: [(attacker: 0, defender: 1)]),
+        (action: "advance_step"),
+        (action: "declare_blockers", player: 1, blocks: [(blocker: 1, attacker: 0)]),
+        (action: "advance_step"),
+        (action: "assign_combat_damage", assignments: [(source: 0, assignments: [(object: 1, amount: 2)])]),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Battlefield", count: 1),
+            (zone: "Graveyard", player: 1, count: 1),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "life_poison_sanity",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

@@ -8,9 +8,10 @@
 //! tests exercise the same public mutation boundary as application code.
 
 use forge_core::{
-    apply, auto_payment_plan, Action, BaseCreatureCharacteristics, CardId, CreatureKeywords,
-    GameOutcome, GameState, ManaCost, ManaKind, ManaPool, ObjectId, Outcome, PlayerId, StateHash,
-    Step, ZoneId, ZoneKind,
+    apply, auto_payment_plan, Action, AttackDeclaration, BaseCreatureCharacteristics,
+    BlockDeclaration, CardId, CombatDamageAssignment, CombatDamageAssignmentRequest,
+    CombatDamageTarget, CreatureKeywords, GameOutcome, GameState, ManaCost, ManaKind, ManaPool,
+    ObjectId, Outcome, PlayerId, StateHash, Step, ZoneId, ZoneKind,
 };
 use std::{fs, path::Path};
 
@@ -523,6 +524,25 @@ pub enum ScenarioStep {
         /// Damage amount.
         amount: u32,
     },
+    /// Declare attackers during the declare attackers step.
+    DeclareAttackers {
+        /// Zero-based scenario attacking-player index.
+        player: usize,
+        /// Attack declarations.
+        attacks: Vec<ScenarioAttackDeclaration>,
+    },
+    /// Declare blockers during the declare blockers step.
+    DeclareBlockers {
+        /// Zero-based scenario defending-player index.
+        player: usize,
+        /// Block declarations.
+        blocks: Vec<ScenarioBlockDeclaration>,
+    },
+    /// Assign and deal combat damage during the combat damage step.
+    AssignCombatDamage {
+        /// Damage assignment requests.
+        assignments: Vec<ScenarioCombatDamageRequest>,
+    },
     /// Request the cleanup-step priority exception.
     RequestCleanupPriority,
 }
@@ -552,8 +572,111 @@ impl ScenarioStep {
             Self::ClearBaseCreature { object } => format!("clear_base_creature[{object}]"),
             Self::SetObjectTapped { object, .. } => format!("set_object_tapped[{object}]"),
             Self::MarkDamage { object, .. } => format!("mark_damage[{object}]"),
+            Self::DeclareAttackers { player, .. } => format!("declare_attackers[{player}]"),
+            Self::DeclareBlockers { player, .. } => format!("declare_blockers[{player}]"),
+            Self::AssignCombatDamage { .. } => "assign_combat_damage".to_owned(),
             Self::RequestCleanupPriority => "request_cleanup_priority".to_owned(),
         }
+    }
+}
+
+/// One scenario attack declaration.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ScenarioAttackDeclaration {
+    attacker: usize,
+    defender: usize,
+}
+
+impl ScenarioAttackDeclaration {
+    fn from_ron_value(value: RonValue) -> Result<Self, ScenarioError> {
+        let map = value.into_map("attack declaration")?;
+        Ok(Self {
+            attacker: map.required_usize("attacker")?,
+            defender: map.required_usize("defender")?,
+        })
+    }
+}
+
+/// One scenario block declaration.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ScenarioBlockDeclaration {
+    blocker: usize,
+    attacker: usize,
+}
+
+impl ScenarioBlockDeclaration {
+    fn from_ron_value(value: RonValue) -> Result<Self, ScenarioError> {
+        let map = value.into_map("block declaration")?;
+        Ok(Self {
+            blocker: map.required_usize("blocker")?,
+            attacker: map.required_usize("attacker")?,
+        })
+    }
+}
+
+/// A scenario combat-damage target.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ScenarioCombatDamageTarget {
+    /// Damage assigned to a player by scenario player index.
+    Player(usize),
+    /// Damage assigned to an object by scenario object index.
+    Object(usize),
+}
+
+/// One scenario combat-damage target and amount.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ScenarioCombatDamageAssignment {
+    target: ScenarioCombatDamageTarget,
+    amount: u32,
+}
+
+impl ScenarioCombatDamageAssignment {
+    fn from_ron_value(value: RonValue) -> Result<Self, ScenarioError> {
+        let map = value.into_map("combat damage assignment")?;
+        let player = map.optional_usize("player")?;
+        let object = map.optional_usize("object")?;
+        let target = match (player, object) {
+            (Some(index), None) => ScenarioCombatDamageTarget::Player(index),
+            (None, Some(index)) => ScenarioCombatDamageTarget::Object(index),
+            (None, None) => {
+                return Err(ScenarioError::schema(
+                    "combat damage assignment requires `player` or `object`".to_owned(),
+                ));
+            }
+            (Some(_), Some(_)) => {
+                return Err(ScenarioError::schema(
+                    "combat damage assignment cannot target both player and object".to_owned(),
+                ));
+            }
+        };
+        Ok(Self {
+            target,
+            amount: map.required_u32("amount")?,
+        })
+    }
+}
+
+/// All scenario combat damage assigned by one source.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ScenarioCombatDamageRequest {
+    source: usize,
+    assignments: Vec<ScenarioCombatDamageAssignment>,
+}
+
+impl ScenarioCombatDamageRequest {
+    fn from_ron_value(value: RonValue) -> Result<Self, ScenarioError> {
+        let map = value.into_map("combat damage request")?;
+        let mut assignments = Vec::new();
+        for value in map
+            .required("assignments")?
+            .into_list("combat damage assignments")?
+        {
+            assignments.push(ScenarioCombatDamageAssignment::from_ron_value(value)?);
+        }
+        Ok(Self {
+            source: map.required_usize("source")?,
+            assignments,
+        })
     }
 }
 
@@ -1214,6 +1337,21 @@ fn setup_scenario(scenario: &Scenario, context: &mut RunContext) {
             )),
         }
     }
+    for object in &scenario.setup.objects {
+        match object.zone.zone_id(&context.players) {
+            Ok(zone) => create_object(
+                context,
+                object.card,
+                object.owner,
+                object.controller,
+                zone,
+                "object setup",
+            ),
+            Err(error) => context
+                .failures
+                .push(ScenarioFailure::new("object setup", error.to_string())),
+        }
+    }
     for library in &scenario.setup.libraries {
         let Ok(player) = player_id(&context.players, library.player, "library setup") else {
             context.failures.push(ScenarioFailure::new(
@@ -1232,21 +1370,6 @@ fn setup_scenario(scenario: &Scenario, context: &mut RunContext) {
                 zone,
                 "library setup",
             );
-        }
-    }
-    for object in &scenario.setup.objects {
-        match object.zone.zone_id(&context.players) {
-            Ok(zone) => create_object(
-                context,
-                object.card,
-                object.owner,
-                object.controller,
-                zone,
-                "object setup",
-            ),
-            Err(error) => context
-                .failures
-                .push(ScenarioFailure::new("object setup", error.to_string())),
         }
     }
 }
@@ -1410,6 +1533,72 @@ fn action_for_step(step: &ScenarioStep, context: &RunContext) -> Result<Action, 
             object: object_id(&context.objects, *object, "mark_damage")?,
             amount: *amount,
         }),
+        ScenarioStep::DeclareAttackers { player, attacks } => {
+            let mut declarations = Vec::with_capacity(attacks.len());
+            for attack in attacks {
+                declarations.push(AttackDeclaration::new(
+                    object_id(
+                        &context.objects,
+                        attack.attacker,
+                        "declare_attackers.attacker",
+                    )?,
+                    player_id(
+                        &context.players,
+                        attack.defender,
+                        "declare_attackers.defender",
+                    )?,
+                ));
+            }
+            Ok(Action::DeclareAttackers {
+                player: player_id(&context.players, *player, "declare_attackers.player")?,
+                attacks: declarations,
+            })
+        }
+        ScenarioStep::DeclareBlockers { player, blocks } => {
+            let mut declarations = Vec::with_capacity(blocks.len());
+            for block in blocks {
+                declarations.push(BlockDeclaration::new(
+                    object_id(&context.objects, block.blocker, "declare_blockers.blocker")?,
+                    object_id(
+                        &context.objects,
+                        block.attacker,
+                        "declare_blockers.attacker",
+                    )?,
+                ));
+            }
+            Ok(Action::DeclareBlockers {
+                defending_player: player_id(&context.players, *player, "declare_blockers.player")?,
+                blocks: declarations,
+            })
+        }
+        ScenarioStep::AssignCombatDamage { assignments } => {
+            let mut requests = Vec::with_capacity(assignments.len());
+            for request in assignments {
+                let mut damage_assignments = Vec::with_capacity(request.assignments.len());
+                for assignment in &request.assignments {
+                    let target = match assignment.target {
+                        ScenarioCombatDamageTarget::Player(index) => CombatDamageTarget::Player(
+                            player_id(&context.players, index, "assign_combat_damage.player")?,
+                        ),
+                        ScenarioCombatDamageTarget::Object(index) => CombatDamageTarget::Object(
+                            object_id(&context.objects, index, "assign_combat_damage.object")?,
+                        ),
+                    };
+                    damage_assignments.push(CombatDamageAssignment::new(target, assignment.amount));
+                }
+                requests.push(CombatDamageAssignmentRequest::new(
+                    object_id(
+                        &context.objects,
+                        request.source,
+                        "assign_combat_damage.source",
+                    )?,
+                    damage_assignments,
+                ));
+            }
+            Ok(Action::AssignCombatDamage {
+                assignments: requests,
+            })
+        }
         ScenarioStep::RequestCleanupPriority => Ok(Action::RequestCleanupPriority),
     }
 }
@@ -1764,6 +1953,17 @@ fn parse_script(value: RonValue) -> Result<Vec<ScenarioStep>, ScenarioError> {
                 object: map.required_usize("object")?,
                 amount: map.required_u32("amount")?,
             },
+            "declare_attackers" => ScenarioStep::DeclareAttackers {
+                player: map.required_usize("player")?,
+                attacks: parse_attack_declarations(map.required("attacks")?)?,
+            },
+            "declare_blockers" => ScenarioStep::DeclareBlockers {
+                player: map.required_usize("player")?,
+                blocks: parse_block_declarations(map.required("blocks")?)?,
+            },
+            "assign_combat_damage" => ScenarioStep::AssignCombatDamage {
+                assignments: parse_combat_damage_requests(map.required("assignments")?)?,
+            },
             "request_cleanup_priority" => ScenarioStep::RequestCleanupPriority,
             _ => {
                 return Err(ScenarioError::schema(format!(
@@ -1773,6 +1973,36 @@ fn parse_script(value: RonValue) -> Result<Vec<ScenarioStep>, ScenarioError> {
         });
     }
     Ok(script)
+}
+
+fn parse_attack_declarations(
+    value: RonValue,
+) -> Result<Vec<ScenarioAttackDeclaration>, ScenarioError> {
+    value
+        .into_list("attack declarations")?
+        .into_iter()
+        .map(ScenarioAttackDeclaration::from_ron_value)
+        .collect()
+}
+
+fn parse_block_declarations(
+    value: RonValue,
+) -> Result<Vec<ScenarioBlockDeclaration>, ScenarioError> {
+    value
+        .into_list("block declarations")?
+        .into_iter()
+        .map(ScenarioBlockDeclaration::from_ron_value)
+        .collect()
+}
+
+fn parse_combat_damage_requests(
+    value: RonValue,
+) -> Result<Vec<ScenarioCombatDamageRequest>, ScenarioError> {
+    value
+        .into_list("combat damage requests")?
+        .into_iter()
+        .map(ScenarioCombatDamageRequest::from_ron_value)
+        .collect()
 }
 
 fn parse_zone_from_map(map: &RonMap) -> Result<ZoneSpec, ScenarioError> {
@@ -2466,6 +2696,59 @@ mod tests {
                 ],
                 outcome: "in_progress",
                 invariants: ["zone_conservation", "hash_consistency"],
+            ),
+        )
+        "#;
+
+        let report =
+            run_scenario_ron(input).unwrap_or_else(|error| panic!("unexpected run error: {error}"));
+
+        assert!(report.passed(), "{:?}", report.failures());
+    }
+
+    #[test]
+    fn ron_scenario_covers_combat_actions() {
+        let input = r#"
+        (
+            name: "combat trample deathtouch",
+            setup: (
+                players: 2,
+                libraries: [(player: 0, cards: [41, 42])],
+                objects: [
+                    (card: 30, owner: 0, controller: 0, zone: "Battlefield"),
+                    (card: 31, owner: 1, controller: 1, zone: "Battlefield"),
+                ],
+            ),
+            script: [
+                (action: "set_base_creature", object: 0, power: 5, toughness: 5, keywords: ["trample", "deathtouch"]),
+                (action: "set_base_creature", object: 1, power: 3, toughness: 3),
+                (action: "start_turn", player: 0),
+                (action: "advance_step"),
+                (action: "advance_step"),
+                (action: "advance_step"),
+                (action: "advance_step"),
+                (action: "advance_step"),
+                (action: "declare_attackers", player: 0, attacks: [(attacker: 0, defender: 1)]),
+                (action: "advance_step"),
+                (action: "declare_blockers", player: 1, blocks: [(blocker: 1, attacker: 0)]),
+                (action: "advance_step"),
+                (action: "assign_combat_damage", assignments: [
+                    (source: 0, assignments: [(object: 1, amount: 1), (player: 1, amount: 4)]),
+                    (source: 1, assignments: [(object: 0, amount: 3)]),
+                ]),
+            ],
+            expect: (
+                zone_counts: [
+                    (zone: "Battlefield", count: 1),
+                    (zone: "Graveyard", player: 1, count: 1),
+                ],
+                players: [
+                    (player: 0, life: 20),
+                    (player: 1, life: 16),
+                ],
+                outcome: "in_progress",
+                invariants: ["zone_conservation", "life_poison_sanity", "hash_consistency"],
+                hash_determinism: true,
             ),
         )
         "#;

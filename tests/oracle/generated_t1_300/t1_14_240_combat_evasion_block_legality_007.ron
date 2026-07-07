@@ -1,0 +1,43 @@
+(
+    name: "T1 generated combat flying reach menace legality 007",
+    setup: (
+        players: 2,
+        libraries: [
+            (player: 0, cards: [50270, 50271]),
+        ],
+        objects: [
+            (card: 18021, owner: 0, controller: 0, zone: "Battlefield"),
+            (card: 18022, owner: 1, controller: 1, zone: "Battlefield"),
+            (card: 18023, owner: 1, controller: 1, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "set_base_creature", object: 0, power: 4, toughness: 4, keywords: ["menace"]),
+        (action: "set_base_creature", object: 1, power: 0, toughness: 2, keywords: []),
+        (action: "set_base_creature", object: 2, power: 0, toughness: 2, keywords: []),
+        (action: "start_turn", player: 0),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "declare_attackers", player: 0, attacks: [(attacker: 0, defender: 1)]),
+        (action: "advance_step"),
+        (action: "declare_blockers", player: 1, blocks: [(blocker: 1, attacker: 0), (blocker: 2, attacker: 0)]),
+        (action: "advance_step"),
+        (action: "assign_combat_damage", assignments: [(source: 0, assignments: [(object: 1, amount: 2), (object: 2, amount: 2)])]),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Battlefield", count: 1),
+            (zone: "Graveyard", player: 1, count: 2),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "life_poison_sanity",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

@@ -1,0 +1,430 @@
+# T1 Tests And Oracle Scenarios
+
+Generated from checked-in test attributes and oracle scenario files after the local T1 gate run on 2026-07-07.
+
+Summary:
+- Rust test functions: 111
+- Fuzz targets: 2
+- Oracle scenarios: 300 total, including 60 combat scenarios covering T1.6.
+
+## Rust Unit/Integration Tests
+
+crates/forge-ai/src/lib.rs:26 - fn bootstrap_crate_is_ready()
+crates/forge-ai/src/lib.rs:31 - fn ai_entrypoint_accepts_player_view()
+crates/forge-app-android/src/lib.rs:17 - fn bootstrap_crate_is_ready()
+crates/forge-app-desktop/src/lib.rs:17 - fn bootstrap_crate_is_ready()
+crates/forge-app-ios/src/lib.rs:17 - fn bootstrap_crate_is_ready()
+crates/forge-app-wasm/src/lib.rs:17 - fn bootstrap_crate_is_ready()
+crates/forge-arena/src/lib.rs:17 - fn bootstrap_crate_is_ready()
+crates/forge-arena/src/main.rs:279 - fn smoke_two_games_passes()
+crates/forge-arena/src/main.rs:289 - fn ladder_placeholder_is_non_failing()
+crates/forge-cardc/src/lib.rs:17 - fn bootstrap_crate_is_ready()
+crates/forge-carddef/src/lib.rs:17 - fn bootstrap_crate_is_ready()
+crates/forge-cards/src/lib.rs:17 - fn bootstrap_crate_is_ready()
+crates/forge-cli/src/lib.rs:607 - fn bootstrap_crate_is_ready()
+crates/forge-cli/src/lib.rs:612 - fn scripted_starter_game_finishes()
+crates/forge-cli/src/lib.rs:628 - fn replay_text_round_trips()
+crates/forge-cli/src/lib.rs:644 - fn cli_demo_writes_replay_and_roundtrips()
+crates/forge-cli/src/lib.rs:667 - fn replay_parser_rejects_bad_magic()
+crates/forge-cli/src/lib.rs:675 - fn cli_rejects_unknown_command()
+crates/forge-core/src/lib.rs:6363 - fn bootstrap_crate_is_ready()
+crates/forge-core/src/lib.rs:6368 - fn action_surface_creates_setup_state_without_public_mutators()
+crates/forge-core/src/lib.rs:6398 - fn legal_actions_return_actions_that_apply_accepts()
+crates/forge-core/src/lib.rs:6420 - fn base_characteristics_are_derived_before_rules_use()
+crates/forge-core/src/lib.rs:6481 - fn player_view_hides_opponent_hand_and_library_objects()
+crates/forge-core/src/lib.rs:6603 - fn player_view_rejects_unknown_observer()
+crates/forge-core/src/lib.rs:6613 - fn turn_order_decision_is_deterministic_from_seed()
+crates/forge-core/src/lib.rs:6642 - fn opening_hands_draw_in_seeded_turn_order()
+crates/forge-core/src/lib.rs:6695 - fn london_mulligan_redraws_and_bottoms_mulligan_count()
+crates/forge-core/src/lib.rs:6780 - fn setup_start_turn_respects_keeps_and_chosen_starter()
+crates/forge-core/src/lib.rs:6847 - fn starting_player_skips_first_turn_draw_step_after_turn_order_setup()
+crates/forge-core/src/lib.rs:6921 - fn opening_hand_player_view_hides_opponent_hand_and_libraries()
+crates/forge-core/src/lib.rs:6977 - fn state_based_action_table_tracks_cr_704_rows()
+crates/forge-core/src/lib.rs:6988 - fn players_receive_owned_zones()
+crates/forge-core/src/lib.rs:7008 - fn objects_move_between_zones_and_conserve_membership()
+crates/forge-core/src/lib.rs:7030 - fn deterministic_hash_is_canonical_and_sensitive_to_ordered_state()
+crates/forge-core/src/lib.rs:7062 - fn invalid_zone_owner_is_rejected()
+crates/forge-core/src/lib.rs:7082 - fn insufficient_colored_mana_has_no_payment_plans()
+crates/forge-core/src/lib.rs:7094 - fn generic_cost_uses_colorless_before_colored_mana()
+crates/forge-core/src/lib.rs:7114 - fn x_cost_is_added_to_generic_requirement()
+crates/forge-core/src/lib.rs:7128 - fn x_cost_overflow_is_reported()
+crates/forge-core/src/lib.rs:7138 - fn explicit_payment_plan_is_validated_and_applied()
+crates/forge-core/src/lib.rs:7162 - fn invalid_explicit_payment_is_rejected()
+crates/forge-core/src/lib.rs:7173 - fn payment_enumeration_caps_at_sixty_four_distinct_plans()
+crates/forge-core/src/lib.rs:7189 - fn auto_tap_prefers_exact_sources_with_minimal_waste()
+crates/forge-core/src/lib.rs:7221 - fn auto_tap_keeps_equivalent_sources_distinct()
+crates/forge-core/src/lib.rs:7249 - fn mana_pool_changes_state_hash_and_matches_streaming_hash()
+crates/forge-core/src/lib.rs:7266 - fn mana_pool_empties_when_step_ends()
+crates/forge-core/src/lib.rs:7300 - fn successful_instant_cast_pays_cost_and_records_target_snapshot()
+crates/forge-core/src/lib.rs:7364 - fn illegal_target_during_announcement_leaves_state_unchanged()
+crates/forge-core/src/lib.rs:7400 - fn invalid_payment_during_cast_leaves_state_unchanged()
+crates/forge-core/src/lib.rs:7437 - fn sorcery_timing_rejects_non_main_phase_and_nonempty_stack()
+crates/forge-core/src/lib.rs:7482 - fn all_targets_illegal_before_resolution_counter_spell_by_rules()
+crates/forge-core/src/lib.rs:7526 - fn one_legal_target_allows_spell_to_resolve()
+crates/forge-core/src/lib.rs:7578 - fn target_choices_affect_canonical_hash()
+crates/forge-core/src/lib.rs:7639 - fn normal_turn_steps_match_cr5_skeleton()
+crates/forge-core/src/lib.rs:7664 - fn untap_has_no_priority_and_upkeep_assigns_active_priority()
+crates/forge-core/src/lib.rs:7686 - fn draw_step_draws_before_active_player_gets_priority()
+crates/forge-core/src/lib.rs:7724 - fn combat_without_attackers_skips_blockers_and_damage()
+crates/forge-core/src/lib.rs:7754 - fn combat_with_attackers_visits_blockers_and_damage()
+crates/forge-core/src/lib.rs:7792 - fn declare_attackers_taps_nonvigilance_and_preserves_vigilance()
+crates/forge-core/src/lib.rs:7837 - fn illegal_attack_declarations_leave_state_unchanged()
+crates/forge-core/src/lib.rs:7874 - fn declare_no_attackers_skips_blockers_and_damage()
+crates/forge-core/src/lib.rs:7892 - fn flying_reach_and_menace_block_legality_is_enforced()
+crates/forge-core/src/lib.rs:7994 - fn blocked_attacker_remains_blocked_after_blocker_leaves()
+crates/forge-core/src/lib.rs:8025 - fn double_strike_creates_two_damage_steps()
+crates/forge-core/src/lib.rs:8087 - fn trample_with_deathtouch_allows_one_damage_to_each_blocker()
+crates/forge-core/src/lib.rs:8150 - fn trample_without_lethal_blocker_damage_is_rejected()
+crates/forge-core/src/lib.rs:8193 - fn double_block_damage_must_follow_blocker_order()
+crates/forge-core/src/lib.rs:8257 - fn lifelink_combat_damage_gains_life_as_damage_is_dealt()
+crates/forge-core/src/lib.rs:8300 - fn life_total_sba_causes_loss_and_win_before_priority()
+crates/forge-core/src/lib.rs:8317 - fn poison_sba_causes_loss()
+crates/forge-core/src/lib.rs:8335 - fn simultaneous_lethal_life_loss_is_a_draw()
+crates/forge-core/src/lib.rs:8357 - fn empty_library_draw_step_loses_before_priority()
+crates/forge-core/src/lib.rs:8378 - fn lifelink_is_applied_before_loss_state_based_actions()
+crates/forge-core/src/lib.rs:8426 - fn lethal_combat_damage_moves_creatures_to_owner_graveyards_before_priority()
+crates/forge-core/src/lib.rs:8479 - fn first_strike_lethal_damage_removes_blocker_before_regular_damage()
+crates/forge-core/src/lib.rs:8538 - fn deathtouch_damage_does_not_persist_past_one_sba_check()
+crates/forge-core/src/lib.rs:8602 - fn zero_toughness_creature_goes_to_owner_graveyard()
+crates/forge-core/src/lib.rs:8619 - fn combat_damage_marks_persist_until_cleanup()
+crates/forge-core/src/lib.rs:8705 - fn end_of_turn_durations_survive_end_step_and_expire_during_cleanup()
+crates/forge-core/src/lib.rs:8740 - fn cleanup_discards_to_max_hand_size_before_next_turn()
+crates/forge-core/src/lib.rs:8795 - fn cleanup_priority_exception_repeats_cleanup_step()
+crates/forge-core/src/lib.rs:8823 - fn cleanup_state_based_action_grants_priority_and_repeats_cleanup()
+crates/forge-core/src/lib.rs:8859 - fn priority_starts_with_active_then_passes_in_turn_order()
+crates/forge-core/src/lib.rs:8878 - fn adding_stack_object_holds_priority_and_resets_passes()
+crates/forge-core/src/lib.rs:8899 - fn passes_in_succession_on_empty_stack_advance_step()
+crates/forge-core/src/lib.rs:8918 - fn intervening_action_breaks_pass_succession()
+crates/forge-core/src/lib.rs:8954 - fn full_pass_round_resolves_only_one_object()
+crates/forge-core/src/lib.rs:8992 - fn resolved_object_controller_does_not_receive_priority()
+crates/forge-core/src/lib.rs:9026 - fn three_instant_response_chain_resolves_lifo()
+crates/forge-core/src/lib.rs:9072 - fn simultaneous_stack_objects_use_apnap_low_to_high()
+crates/forge-net/src/lib.rs:17 - fn bootstrap_crate_is_ready()
+crates/forge-porttools/src/lib.rs:17 - fn bootstrap_crate_is_ready()
+crates/forge-testkit/src/lib.rs:2505 - fn bootstrap_crate_is_ready()
+crates/forge-testkit/src/lib.rs:2510 - fn constructed_scenario_runs_opening_hand_setup()
+crates/forge-testkit/src/lib.rs:2543 - fn ron_scenario_runs_and_reports_junit()
+crates/forge-testkit/src/lib.rs:2586 - fn run_scenario_ron_records_failed_expectation()
+crates/forge-testkit/src/lib.rs:2611 - fn ron_scenario_asserts_poison_loss_winner()
+crates/forge-testkit/src/lib.rs:2635 - fn ron_scenario_covers_mana_and_object_movement()
+crates/forge-testkit/src/lib.rs:2677 - fn ron_scenario_covers_creature_damage_sba()
+crates/forge-testkit/src/lib.rs:2710 - fn ron_scenario_covers_combat_actions()
+crates/forge-testkit/src/lib.rs:2763 - fn ron_scenario_asserts_turn_priority_and_cleanup_exception()
+crates/forge-testkit/src/lib.rs:2801 - fn ron_parser_rejects_new_surface_mistakes()
+crates/forge-testkit/src/main.rs:196 - fn help_command_succeeds()
+crates/forge-testkit/src/main.rs:201 - fn lint_oracle_directory_succeeds()
+crates/forge-testkit/src/main.rs:206 - fn oracle_all_succeeds_without_junit()
+crates/forge-testkit/src/main.rs:216 - fn oracle_filter_succeeds()
+crates/forge-testkit/src/main.rs:227 - fn oracle_changed_succeeds_with_junit()
+crates/forge-testkit/src/main.rs:232 - fn unknown_command_is_an_error()
+crates/forge-testkit/src/main.rs:237 - fn malformed_oracle_option_is_an_error()
+crates/forge-testkit/src/main.rs:244 - fn absent_scenario_path_is_empty()
+crates/forge-ui/src/lib.rs:17 - fn bootstrap_crate_is_ready()
+
+## Fuzz Targets
+
+fuzz/fuzz_targets/fuzz_apply.rs:1 - cargo-fuzz target for kernel action sequences
+fuzz/fuzz_targets/fuzz_scenarioparse.rs:1 - cargo-fuzz target for scenario parser/runner robustness
+
+## Oracle Scenarios
+
+tests/oracle/generated_t1_300/t1_14_001_setup_zone_000.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_002_setup_zone_001.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_003_setup_zone_002.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_004_setup_zone_003.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_005_setup_zone_004.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_006_setup_zone_005.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_007_setup_zone_006.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_008_setup_zone_007.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_009_setup_zone_008.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_010_setup_zone_009.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_011_setup_zone_010.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_012_setup_zone_011.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_013_setup_zone_012.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_014_setup_zone_013.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_015_setup_zone_014.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_016_setup_zone_015.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_017_setup_zone_016.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_018_setup_zone_017.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_019_setup_zone_018.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_020_setup_zone_019.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_021_setup_zone_020.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_022_setup_zone_021.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_023_setup_zone_022.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_024_setup_zone_023.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_025_zone_move_000.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_026_zone_move_001.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_027_zone_move_002.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_028_zone_move_003.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_029_zone_move_004.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_030_zone_move_005.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_031_zone_move_006.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_032_zone_move_007.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_033_zone_move_008.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_034_zone_move_009.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_035_zone_move_010.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_036_zone_move_011.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_037_zone_move_012.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_038_zone_move_013.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_039_zone_move_014.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_040_zone_move_015.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_041_zone_move_016.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_042_zone_move_017.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_043_zone_move_018.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_044_zone_move_019.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_045_zone_move_020.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_046_zone_move_021.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_047_zone_move_022.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_048_zone_move_023.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_049_zone_move_024.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_050_zone_move_025.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_051_zone_move_026.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_052_zone_move_027.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_053_zone_move_028.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_054_zone_move_029.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_055_zone_move_030.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_056_zone_move_031.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_057_opening_hand_000.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_058_opening_hand_001.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_059_opening_hand_002.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_060_opening_hand_003.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_061_opening_hand_004.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_062_opening_hand_005.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_063_opening_hand_006.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_064_opening_hand_007.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_065_opening_hand_008.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_066_opening_hand_009.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_067_opening_hand_010.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_068_opening_hand_011.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_069_opening_hand_012.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_070_opening_hand_013.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_071_opening_hand_014.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_072_opening_hand_015.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_073_opening_hand_016.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_074_opening_hand_017.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_075_opening_hand_018.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_076_opening_hand_019.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_077_opening_hand_020.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_078_opening_hand_021.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_079_opening_hand_022.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_080_opening_hand_023.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_081_opening_hand_024.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_082_opening_hand_025.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_083_opening_hand_026.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_084_opening_hand_027.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_085_opening_hand_028.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_086_opening_hand_029.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_087_turn_priority_000.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_088_turn_priority_001.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_089_turn_priority_002.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_090_turn_priority_003.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_091_turn_priority_004.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_092_turn_priority_005.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_093_turn_priority_006.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_094_turn_priority_007.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_095_turn_priority_008.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_096_turn_priority_009.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_097_turn_priority_010.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_098_turn_priority_011.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_099_turn_priority_012.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_100_turn_priority_013.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_101_turn_priority_014.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_102_turn_priority_015.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_103_turn_priority_016.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_104_turn_priority_017.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_105_turn_priority_018.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_106_turn_priority_019.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_107_turn_priority_020.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_108_turn_priority_021.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_109_turn_priority_022.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_110_turn_priority_023.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_111_turn_priority_024.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_112_turn_priority_025.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_113_turn_priority_026.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_114_turn_priority_027.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_115_turn_priority_028.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_116_turn_priority_029.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_117_mana_000.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_118_mana_001.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_119_mana_002.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_120_mana_003.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_121_mana_004.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_122_mana_005.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_123_mana_006.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_124_mana_007.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_125_mana_008.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_126_mana_009.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_127_mana_010.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_128_mana_011.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_129_mana_012.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_130_mana_013.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_131_mana_014.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_132_mana_015.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_133_mana_016.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_134_mana_017.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_135_mana_018.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_136_mana_019.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_137_mana_020.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_138_mana_021.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_139_mana_022.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_140_mana_023.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_141_life_000.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_142_life_001.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_143_life_002.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_144_life_003.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_145_life_004.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_146_life_005.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_147_life_006.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_148_life_007.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_149_life_008.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_150_life_009.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_151_life_010.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_152_life_011.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_153_life_012.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_154_life_013.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_155_life_014.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_156_life_015.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_157_life_016.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_158_life_017.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_159_life_018.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_160_life_019.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_161_life_020.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_162_life_021.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_163_life_022.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_164_life_023.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_165_life_024.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_166_life_025.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_167_life_026.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_168_life_027.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_169_life_028.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_170_life_029.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_171_poison_000.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_172_poison_001.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_173_poison_002.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_174_poison_003.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_175_poison_004.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_176_poison_005.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_177_poison_006.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_178_poison_007.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_179_poison_008.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_180_poison_009.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_181_poison_010.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_182_poison_011.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_183_poison_012.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_184_poison_013.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_185_poison_014.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_186_poison_015.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_187_poison_016.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_188_poison_017.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_189_poison_018.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_190_poison_019.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_191_poison_020.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_192_poison_021.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_193_creature_sba_000.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_194_creature_sba_001.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_195_creature_sba_002.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_196_creature_sba_003.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_197_creature_sba_004.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_198_creature_sba_005.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_199_creature_sba_006.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_200_creature_sba_007.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_201_creature_sba_008.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_202_creature_sba_009.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_203_creature_sba_010.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_204_creature_sba_011.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_205_creature_sba_012.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_206_creature_sba_013.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_207_creature_sba_014.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_208_creature_sba_015.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_209_creature_sba_016.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_210_creature_sba_017.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_211_creature_sba_018.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_212_creature_sba_019.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_213_creature_sba_020.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_214_creature_sba_021.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_215_creature_sba_022.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_216_creature_sba_023.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_217_creature_sba_024.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_218_creature_sba_025.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_219_creature_sba_026.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_220_creature_sba_027.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_221_creature_sba_028.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_222_creature_sba_029.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_223_combat_unblocked_vigilance_000.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_224_combat_unblocked_vigilance_001.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_225_combat_unblocked_vigilance_002.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_226_combat_unblocked_vigilance_003.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_227_combat_unblocked_vigilance_004.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_228_combat_unblocked_vigilance_005.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_229_combat_unblocked_vigilance_006.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_230_combat_unblocked_vigilance_007.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_231_combat_unblocked_vigilance_008.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_232_combat_unblocked_vigilance_009.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_233_combat_evasion_block_legality_000.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_234_combat_evasion_block_legality_001.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_235_combat_evasion_block_legality_002.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_236_combat_evasion_block_legality_003.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_237_combat_evasion_block_legality_004.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_238_combat_evasion_block_legality_005.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_239_combat_evasion_block_legality_006.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_240_combat_evasion_block_legality_007.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_241_combat_evasion_block_legality_008.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_242_combat_evasion_block_legality_009.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_243_combat_strike_steps_000.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_244_combat_strike_steps_001.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_245_combat_strike_steps_002.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_246_combat_strike_steps_003.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_247_combat_strike_steps_004.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_248_combat_strike_steps_005.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_249_combat_strike_steps_006.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_250_combat_strike_steps_007.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_251_combat_strike_steps_008.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_252_combat_strike_steps_009.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_253_combat_double_block_order_000.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_254_combat_double_block_order_001.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_255_combat_double_block_order_002.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_256_combat_double_block_order_003.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_257_combat_double_block_order_004.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_258_combat_double_block_order_005.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_259_combat_double_block_order_006.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_260_combat_double_block_order_007.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_261_combat_double_block_order_008.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_262_combat_double_block_order_009.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_263_combat_trample_deathtouch_000.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_264_combat_trample_deathtouch_001.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_265_combat_trample_deathtouch_002.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_266_combat_trample_deathtouch_003.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_267_combat_trample_deathtouch_004.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_268_combat_trample_deathtouch_005.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_269_combat_trample_deathtouch_006.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_270_combat_trample_deathtouch_007.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_271_combat_trample_deathtouch_008.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_272_combat_trample_deathtouch_009.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_273_combat_lifelink_unblocked_000.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_274_combat_lifelink_unblocked_001.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_275_combat_lifelink_unblocked_002.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_276_combat_lifelink_unblocked_003.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_277_combat_lifelink_unblocked_004.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_278_combat_lifelink_unblocked_005.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_279_combat_lifelink_unblocked_006.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_280_combat_lifelink_unblocked_007.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_281_combat_lifelink_unblocked_008.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_282_combat_lifelink_unblocked_009.ron:1 - combat oracle scenario
+tests/oracle/generated_t1_300/t1_14_283_cleanup_000.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_284_cleanup_001.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_285_cleanup_002.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_286_cleanup_003.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_287_cleanup_004.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_288_cleanup_005.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_289_cleanup_006.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_290_cleanup_007.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_291_cleanup_008.ron:1 - oracle scenario
+tests/oracle/generated_t1_300/t1_14_292_cleanup_009.ron:1 - oracle scenario
+tests/oracle/t1_10_cr_103_3_players_start_at_20_life.ron:1 - oracle scenario
+tests/oracle/t1_10_cr_103_7a_starting_player_skips_first_draw.ron:1 - oracle scenario
+tests/oracle/t1_10_cr_104_3b_negative_life_loses.ron:1 - oracle scenario
+tests/oracle/t1_10_cr_104_3b_zero_life_loses.ron:1 - oracle scenario
+tests/oracle/t1_10_cr_104_3c_empty_library_draw_loses.ron:1 - oracle scenario
+tests/oracle/t1_10_cr_104_3d_more_than_ten_poison_loses.ron:1 - oracle scenario
+tests/oracle/t1_10_cr_104_3d_ten_poison_loses.ron:1 - oracle scenario
+tests/oracle/t1_9_opening_hand.ron:1 - oracle scenario

@@ -1,0 +1,16 @@
+forge-replay-v1
+seed 14
+action add_player
+action add_player
+action seed_library 0 1000 8
+action seed_library 1 2000 8
+action decide_turn_order
+action draw_opening_hands
+action keep_opening_hand 0
+action keep_opening_hand 1
+action start_decided_player
+action advance_step
+action advance_step
+action bot_random
+action lose_life 1 25
+action check_state_based_actions
