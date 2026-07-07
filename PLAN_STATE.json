@@ -80,9 +80,10 @@
       "verification": "scripts/vl.sh passed locally with public GameState mutator review for action/apply surface"
     },
     "T1.R2": {
-      "status": "queued",
+      "status": "verified_local",
       "branch": "remediation/T1.R2-characteristics-boundary",
-      "attempts": 0
+      "attempts": 0,
+      "verification": "scripts/vl.sh passed locally with base creature characteristics and derived query path"
     },
     "T1.R3": {
       "status": "queued",
@@ -121,7 +122,7 @@
       "reviewed_commit": "6491d5fd12887eb5f5b7ad8d57eda83e1ff17783",
       "remediation": {
         "T1.R1": "verified_local: sealed the kernel behind legal_actions/apply and added public mutator review script",
-        "T1.R2": "queued: replace stored creature characteristics with computed boundary",
+        "T1.R2": "verified_local: ObjectRecord stores base creature characteristics and rules code uses derived creature_characteristics query",
         "T1.R3": "queued: land hidden-information PlayerView before T1.8",
         "T1.R4": "queued: flatten or guard GameState clone surface"
       }

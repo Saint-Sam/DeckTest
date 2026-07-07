@@ -1569,7 +1569,7 @@ impl CreatureKeywords {
     }
 }
 
-/// Power, toughness, and combat keywords for a creature object.
+/// Derived power, toughness, and combat keywords for a creature object.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct CreatureCharacteristics {
     power: i32,
@@ -1611,6 +1611,59 @@ impl CreatureCharacteristics {
     #[must_use]
     pub const fn keywords(self) -> CreatureKeywords {
         self.keywords
+    }
+}
+
+/// Base printed creature characteristics before continuous effects.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct BaseCreatureCharacteristics {
+    power: i32,
+    toughness: i32,
+    keywords: CreatureKeywords,
+}
+
+impl BaseCreatureCharacteristics {
+    /// Creates base printed creature characteristics with no keywords.
+    #[must_use]
+    pub const fn new(power: i32, toughness: i32) -> Self {
+        Self {
+            power,
+            toughness,
+            keywords: CreatureKeywords::none(),
+        }
+    }
+
+    /// Returns this base characteristic set with the provided keyword set.
+    #[must_use]
+    pub const fn with_keywords(mut self, keywords: CreatureKeywords) -> Self {
+        self.keywords = keywords;
+        self
+    }
+
+    /// Returns the base printed power.
+    #[must_use]
+    pub const fn power(self) -> i32 {
+        self.power
+    }
+
+    /// Returns the base printed toughness.
+    #[must_use]
+    pub const fn toughness(self) -> i32 {
+        self.toughness
+    }
+
+    /// Returns the base printed combat keywords.
+    #[must_use]
+    pub const fn keywords(self) -> CreatureKeywords {
+        self.keywords
+    }
+
+    const fn derived(self) -> CreatureCharacteristics {
+        CreatureCharacteristics {
+            power: self.power,
+            toughness: self.toughness,
+            keywords: self.keywords,
+        }
     }
 }
 
@@ -2201,7 +2254,7 @@ pub struct ObjectRecord {
     owner: PlayerId,
     controller: PlayerId,
     tapped: bool,
-    creature: Option<CreatureCharacteristics>,
+    base_creature: Option<BaseCreatureCharacteristics>,
     damage_marked: u32,
     deathtouch_damage_marked: bool,
     controlled_since_turn: u32,
@@ -2238,10 +2291,10 @@ impl ObjectRecord {
         self.tapped
     }
 
-    /// Returns creature characteristics, if this object is currently a creature.
+    /// Returns base printed creature characteristics, if this object is a creature.
     #[must_use]
-    pub const fn creature(self) -> Option<CreatureCharacteristics> {
-        self.creature
+    pub const fn base_creature(self) -> Option<BaseCreatureCharacteristics> {
+        self.base_creature
     }
 
     /// Returns damage currently marked on this object.
@@ -2307,7 +2360,7 @@ impl ObjectArena {
             owner,
             controller,
             tapped: false,
-            creature: None,
+            base_creature: None,
             damage_marked: 0,
             deathtouch_damage_marked: false,
             controlled_since_turn,
@@ -2565,15 +2618,15 @@ pub enum Action {
         /// Payment plan to apply.
         plan: PaymentPlan,
     },
-    /// Set temporary T1 creature characteristics for one object.
-    SetCreatureCharacteristics {
+    /// Set T1 base printed creature characteristics for one object.
+    SetBaseCreatureCharacteristics {
         /// Object to update.
         object: ObjectId,
-        /// Characteristics to set.
-        characteristics: CreatureCharacteristics,
+        /// Base printed characteristics to set.
+        base: BaseCreatureCharacteristics,
     },
-    /// Clear temporary T1 creature characteristics from one object.
-    ClearCreatureCharacteristics {
+    /// Clear T1 base printed creature characteristics from one object.
+    ClearBaseCreatureCharacteristics {
         /// Object to update.
         object: ObjectId,
     },
@@ -2806,15 +2859,14 @@ pub fn apply(state: &mut GameState, action: Action) -> Outcome {
             Ok(()) => Outcome::Applied,
             Err(error) => Outcome::Failed(error),
         },
-        Action::SetCreatureCharacteristics {
-            object,
-            characteristics,
-        } => match state.set_creature_characteristics(object, characteristics) {
-            Ok(()) => Outcome::Applied,
-            Err(error) => Outcome::Failed(error),
-        },
-        Action::ClearCreatureCharacteristics { object } => {
-            match state.clear_creature_characteristics(object) {
+        Action::SetBaseCreatureCharacteristics { object, base } => {
+            match state.set_base_creature_characteristics(object, base) {
+                Ok(()) => Outcome::Applied,
+                Err(error) => Outcome::Failed(error),
+            }
+        }
+        Action::ClearBaseCreatureCharacteristics { object } => {
+            match state.clear_base_creature_characteristics(object) {
                 Ok(()) => Outcome::Applied,
                 Err(error) => Outcome::Failed(error),
             }
@@ -3260,27 +3312,27 @@ impl GameState {
         Ok(())
     }
 
-    /// Sets or replaces creature characteristics for one object.
-    fn set_creature_characteristics(
+    /// Sets or replaces base printed creature characteristics for one object.
+    fn set_base_creature_characteristics(
         &mut self,
         object: ObjectId,
-        characteristics: CreatureCharacteristics,
+        base: BaseCreatureCharacteristics,
     ) -> Result<(), StateError> {
         let record = self
             .objects
             .get_mut(object)
             .ok_or(StateError::UnknownObject(object))?;
-        record.creature = Some(characteristics);
+        record.base_creature = Some(base);
         Ok(())
     }
 
-    /// Clears creature characteristics from one object.
-    fn clear_creature_characteristics(&mut self, object: ObjectId) -> Result<(), StateError> {
+    /// Clears base printed creature characteristics from one object.
+    fn clear_base_creature_characteristics(&mut self, object: ObjectId) -> Result<(), StateError> {
         let record = self
             .objects
             .get_mut(object)
             .ok_or(StateError::UnknownObject(object))?;
-        record.creature = None;
+        record.base_creature = None;
         self.remove_object_from_combat(object);
         Ok(())
     }
@@ -3301,7 +3353,7 @@ impl GameState {
             .objects
             .get_mut(object)
             .ok_or(StateError::UnknownObject(object))?;
-        if record.creature.is_none() {
+        if record.base_creature.is_none() {
             return Err(StateError::NotACreature(object));
         }
         record.damage_marked = record
@@ -3879,7 +3931,9 @@ impl GameState {
             bytes.write_u32(object.owner.0);
             bytes.write_u32(object.controller.0);
             bytes.write_bool(object.tapped);
-            bytes.write_optional_creature_characteristics(object.creature);
+            bytes.write_optional_creature_characteristics(
+                self.creature_characteristics(object.id()).ok(),
+            );
             bytes.write_u32(object.damage_marked);
             bytes.write_bool(object.deathtouch_damage_marked);
             bytes.write_u32(object.controlled_since_turn);
@@ -3950,7 +4004,9 @@ impl GameState {
             hash.write_u32(object.owner.0);
             hash.write_u32(object.controller.0);
             hash.write_bool(object.tapped);
-            hash.write_optional_creature_characteristics(object.creature);
+            hash.write_optional_creature_characteristics(
+                self.creature_characteristics(object.id()).ok(),
+            );
             hash.write_u32(object.damage_marked);
             hash.write_bool(object.deathtouch_damage_marked);
             hash.write_u32(object.controlled_since_turn);
@@ -4118,9 +4174,7 @@ impl GameState {
         {
             return Err(StateError::IllegalAttack(attack.attacker()));
         }
-        let Some(creature) = record.creature() else {
-            return Err(StateError::NotACreature(attack.attacker()));
-        };
+        let creature = self.creature_characteristics(attack.attacker())?;
         if record.tapped() {
             return Err(StateError::CreatureTapped(attack.attacker()));
         }
@@ -4151,9 +4205,7 @@ impl GameState {
                 attacker: block.attacker(),
             });
         }
-        if blocker.creature().is_none() {
-            return Err(StateError::NotACreature(block.blocker()));
-        }
+        self.creature_characteristics(block.blocker())?;
         if blocker.tapped() {
             return Err(StateError::CreatureTapped(block.blocker()));
         }
@@ -4444,10 +4496,7 @@ impl GameState {
             .iter()
             .any(|attacker| attacker.object == object)
             && self.object_zone(object) == Some(ZoneId::new(None, ZoneKind::Battlefield))
-            && self
-                .objects
-                .get(object)
-                .is_some_and(|record| record.creature().is_some())
+            && self.creature_characteristics(object).is_ok()
     }
 
     fn is_active_blocking_creature(&self, object: ObjectId) -> bool {
@@ -4456,13 +4505,14 @@ impl GameState {
             .iter()
             .any(|blocker| blocker.object == object)
             && self.object_zone(object) == Some(ZoneId::new(None, ZoneKind::Battlefield))
-            && self
-                .objects
-                .get(object)
-                .is_some_and(|record| record.creature().is_some())
+            && self.creature_characteristics(object).is_ok()
     }
 
-    fn creature_characteristics(
+    /// Computes current creature characteristics from stored base data.
+    ///
+    /// T1 has no continuous effects yet, so derived values equal base printed
+    /// values. T2.4 will insert the CR 613 layer calculation behind this query.
+    pub fn creature_characteristics(
         &self,
         object: ObjectId,
     ) -> Result<CreatureCharacteristics, StateError> {
@@ -4470,7 +4520,10 @@ impl GameState {
             .objects
             .get(object)
             .ok_or(StateError::UnknownObject(object))?;
-        record.creature().ok_or(StateError::NotACreature(object))
+        record
+            .base_creature()
+            .map(BaseCreatureCharacteristics::derived)
+            .ok_or(StateError::NotACreature(object))
     }
 
     fn creature_keywords(&self, object: ObjectId) -> Result<CreatureKeywords, StateError> {
@@ -4490,9 +4543,7 @@ impl GameState {
             .objects
             .get(object)
             .ok_or(StateError::UnknownObject(object))?;
-        let Some(creature) = record.creature() else {
-            return Err(StateError::NotACreature(object));
-        };
+        let creature = self.creature_characteristics(object)?;
         if source_keywords.deathtouch() {
             return Ok(1);
         }
@@ -4667,7 +4718,7 @@ impl GameState {
             if self.object_zone(object.id()) != Some(battlefield) {
                 continue;
             }
-            let Some(creature) = object.creature() else {
+            let Ok(creature) = self.creature_characteristics(object.id()) else {
                 continue;
             };
             let applies = match kind {
@@ -5672,13 +5723,14 @@ mod tests {
     use super::{
         apply, auto_payment_plan, crate_ready, enumerate_auto_tap_payment_plans,
         enumerate_payment_plans, legal_actions, state_based_action_table, validate_payment_plan,
-        Action, AttackDeclaration, BlockDeclaration, CardId, CastSpellRequest,
-        CombatDamageAssignment, CombatDamageAssignmentRequest, CombatDamageStepKind,
-        CombatDamageTarget, CreatureCharacteristics, CreatureKeywords, EffectDuration, GameOutcome,
-        GameState, ManaCost, ManaKind, ManaPool, ManaSource, Outcome, PaymentError, Phase,
-        PlayerId, PriorityOutcome, ResolutionOutcome, SpellTiming, StackEntryId, StackObjectKind,
-        StateBasedActionKind, StateError, Step, TargetChoice, TargetKind, TargetRequirement,
-        ZoneConservation, ZoneId, ZoneKind, NORMAL_TURN_STEPS, PAYMENT_PLAN_LIMIT,
+        Action, AttackDeclaration, BaseCreatureCharacteristics, BlockDeclaration, CardId,
+        CastSpellRequest, CombatDamageAssignment, CombatDamageAssignmentRequest,
+        CombatDamageStepKind, CombatDamageTarget, CreatureCharacteristics, CreatureKeywords,
+        EffectDuration, GameOutcome, GameState, ManaCost, ManaKind, ManaPool, ManaSource, Outcome,
+        PaymentError, Phase, PlayerId, PriorityOutcome, ResolutionOutcome, SpellTiming,
+        StackEntryId, StackObjectKind, StateBasedActionKind, StateBasedActionReport, StateError,
+        Step, TargetChoice, TargetKind, TargetRequirement, ZoneConservation, ZoneId, ZoneKind,
+        NORMAL_TURN_STEPS, PAYMENT_PLAN_LIMIT,
     };
 
     #[test]
@@ -5735,6 +5787,67 @@ mod tests {
         assert_eq!(
             apply(&mut state, actions.actions()[0].clone()),
             Outcome::Priority(PriorityOutcome::PassedTo(next))
+        );
+    }
+
+    #[test]
+    fn base_characteristics_are_derived_before_rules_use() {
+        let mut state = GameState::new();
+        let player = match apply(&mut state, Action::AddPlayer) {
+            Outcome::PlayerAdded(player) => player,
+            other => panic!("unexpected player outcome: {other:?}"),
+        };
+        let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+        let object = match apply(
+            &mut state,
+            Action::CreateObject {
+                card: CardId::new(701),
+                owner: player,
+                controller: player,
+                zone: battlefield,
+            },
+        ) {
+            Outcome::ObjectCreated(object) => object,
+            other => panic!("unexpected object outcome: {other:?}"),
+        };
+        let base = BaseCreatureCharacteristics::new(2, 0)
+            .with_keywords(CreatureKeywords::none().with_vigilance());
+
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::SetBaseCreatureCharacteristics { object, base }
+            ),
+            Outcome::Applied
+        );
+        assert_eq!(
+            state
+                .objects()
+                .get(object)
+                .and_then(|record| record.base_creature()),
+            Some(base)
+        );
+        assert_eq!(
+            state.creature_characteristics(object),
+            Ok(CreatureCharacteristics::new(2, 0)
+                .with_keywords(CreatureKeywords::none().with_vigilance()))
+        );
+        assert_eq!(
+            apply(&mut state, Action::CheckStateBasedActions),
+            Outcome::StateBasedActions(StateBasedActionReport {
+                iterations: 1,
+                actions_performed: 1,
+                players_lost: 0,
+                permanents_moved_to_graveyard: 1,
+                empty_library_draw_losses: 0,
+                zero_toughness_creatures: 1,
+                lethal_damage_creatures: 0,
+                deathtouch_damage_creatures: 0,
+            })
+        );
+        assert_eq!(
+            state.object_zone(object),
+            Some(ZoneId::new(Some(player), ZoneKind::Graveyard))
         );
     }
 
@@ -6627,7 +6740,7 @@ mod tests {
             )
             .unwrap_or_else(|error| panic!("unexpected fresh create error: {error:?}"));
         state
-            .set_creature_characteristics(fresh, CreatureCharacteristics::new(2, 2))
+            .set_base_creature_characteristics(fresh, BaseCreatureCharacteristics::new(2, 2))
             .unwrap_or_else(|error| panic!("unexpected fresh creature error: {error:?}"));
         let before = state.canonical_bytes();
         assert_eq!(
@@ -7852,9 +7965,9 @@ mod tests {
             )
             .unwrap_or_else(|error| panic!("unexpected battlefield create error: {error:?}"));
         state
-            .set_creature_characteristics(
+            .set_base_creature_characteristics(
                 object,
-                CreatureCharacteristics::new(power, toughness).with_keywords(keywords),
+                BaseCreatureCharacteristics::new(power, toughness).with_keywords(keywords),
             )
             .unwrap_or_else(|error| panic!("unexpected creature characteristics error: {error:?}"));
         object
