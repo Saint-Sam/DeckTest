@@ -98,6 +98,12 @@
       "attempts": 0,
       "verification": "scripts/vl.sh passed locally; `cargo run -p forge-cli -- play --demo --seed 5 --replay-out target/forge-cli/t1_11_demo.frsreplay` finished a game, and `cargo run -p forge-cli -- roundtrip target/forge-cli/t1_11_demo.frsreplay` preserved the seed/action list and final hash"
     },
+    "T1.12": {
+      "status": "verified_local",
+      "branch": "task/T1.12-fuzz-targets",
+      "attempts": 0,
+      "verification": "cargo +nightly fuzz check passed; scripts/fuzz_nightly.sh --t1-gate completed a clean sanitizer-backed 6-hour aggregate run with fuzz_apply 6,530,854 runs in 10,801 seconds and fuzz_scenarioparse 895,666,102 runs in 10,801 seconds"
+    },
     "T1.R1": {
       "status": "verified_local",
       "branch": "remediation/T1.R1-action-surface",

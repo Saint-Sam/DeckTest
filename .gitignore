@@ -3,3 +3,6 @@ target/
 *.tmp
 *.log
 metrics/*.tmp.json
+fuzz/artifacts/
+fuzz/corpus/
+fuzz/target/
