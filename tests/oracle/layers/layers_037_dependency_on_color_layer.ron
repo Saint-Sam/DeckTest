@@ -1,0 +1,10 @@
+(
+    name: "layers 037 dependency on color layer",
+    setup: (players: 2, objects: [(card: 63042, owner: 0, controller: 0, zone: "Battlefield")]),
+    script: [
+        (action: "set_base_creature", object: 0, power: 2, toughness: 2, keywords: []),
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "set_colors", colors: ["black"], timestamp: 4),
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "set_colors", colors: ["green"], timestamp: 2, dependencies: [0]),
+    ],
+    expect: (characteristics: [(object: 0, colors: ["green"])], outcome: "in_progress", invariants: ["zone_conservation", "hash_consistency"], hash_determinism: true),
+)

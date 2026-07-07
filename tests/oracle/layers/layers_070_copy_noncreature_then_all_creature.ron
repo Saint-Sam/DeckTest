@@ -1,0 +1,11 @@
+(
+    name: "layers 070 copy noncreature then all creature",
+    setup: (players: 2, objects: [(card: 63085, owner: 0, controller: 0, zone: "Battlefield"), (card: 63086, owner: 0, controller: 0, zone: "Battlefield")]),
+    script: [
+        (action: "set_base_creature", object: 1, power: 7, toughness: 7, keywords: []),
+        (action: "register_continuous_effect", controller: 0, target_object: 1, operation: "copy_base_creature", from_object: 0, timestamp: 1),
+        (action: "register_continuous_effect", controller: 0, all_objects: true, operation: "add_types", types: ["creature"], timestamp: 2),
+        (action: "register_continuous_effect", controller: 0, all_objects: true, operation: "set_pt", power: 2, toughness: 2, timestamp: 3),
+    ],
+    expect: (characteristics: [(object: 0, is_creature: true, power: 2, toughness: 2), (object: 1, is_creature: true, power: 2, toughness: 2)], outcome: "in_progress", invariants: ["zone_conservation", "hash_consistency"], hash_determinism: true),
+)

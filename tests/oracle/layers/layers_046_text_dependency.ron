@@ -1,0 +1,9 @@
+(
+    name: "layers 046 text dependency",
+    setup: (players: 2, objects: [(card: 63054, owner: 0, controller: 0, zone: "Battlefield")]),
+    script: [
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "set_text_marker", marker: 1, timestamp: 5),
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "set_text_marker", marker: 9, timestamp: 1, dependencies: [0]),
+    ],
+    expect: (characteristics: [(object: 0, text_marker: 9)], outcome: "in_progress", invariants: ["zone_conservation", "hash_consistency"], hash_determinism: true),
+)

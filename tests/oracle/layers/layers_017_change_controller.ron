@@ -1,0 +1,9 @@
+(
+    name: "layers 017 change controller",
+    setup: (players: 2, objects: [(card: 63017, owner: 0, controller: 0, zone: "Battlefield")]),
+    script: [
+        (action: "set_base_creature", object: 0, power: 2, toughness: 2, keywords: []),
+        (action: "register_continuous_effect", controller: 1, target_object: 0, operation: "change_controller", player: 1, timestamp: 1),
+    ],
+    expect: (characteristics: [(object: 0, controller: 1, is_creature: true, power: 2, toughness: 2)], outcome: "in_progress", invariants: ["zone_conservation", "hash_consistency"], hash_determinism: true),
+)

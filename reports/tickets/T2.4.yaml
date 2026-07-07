@@ -1,0 +1,43 @@
+id: T2.4
+title: Continuous-effects layer system CR 613 layers 1-7 core
+tier: 2
+tags:
+  - kernel
+  - continuous-effects
+  - layers
+  - cr-613
+  - oracle
+scope_paths:
+  - crates/forge-core/src/lib.rs
+  - crates/forge-testkit/src/lib.rs
+  - tests/oracle/layers/
+  - docs/specs/T2.4.md
+  - reports/tickets/T2.4.yaml
+inputs:
+  - FORGE_REBUILD_MASTER_PLAN.md Section 7 T2.4
+  - docs/vendor/comprehensive-rules.txt Section 613
+  - docs/specs/T2.1.md
+  - docs/specs/T2.2.md
+  - docs/specs/T2.3.md
+acceptance:
+  - continuous-effect definitions are data-only and interpreted without closures or card-specific engine code
+  - object characteristics are computed from base object state plus registered continuous effects
+  - layers 1 through 7d apply in CR 613 order
+  - same-layer ordering supports timestamps, deterministic tie breaks, and explicit dependency edges
+  - copy effects copy base copiable creature values rather than later modifiers
+  - control-changing effects feed gameplay controller checks
+  - type, color, ability, and power/toughness effects feed creature queries, combat, and state-based actions
+  - continuous-effect state and registration events participate in canonical hashes
+  - testkit RON supports registering effects and asserting characteristics through public queries
+  - at least 80 layer oracle scenarios pass
+  - cargo test -p forge-core layers:: passes
+  - clone-surface guard baseline accounts for continuous-effect definitions
+verify: cargo test -p forge-core layers:: && cargo run -p forge-testkit -- oracle --filter layers --no-junit && scripts/vl.sh
+retry_policy: 3 attempts then CP-LAYERS design review
+depends_on:
+  - T2.1
+  - T2.2
+  - T2.3
+parallel_ok: false
+checkpoint:
+  - CP-LAYERS owner/reviewer signoff is required before T2.5+ starts

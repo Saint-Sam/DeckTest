@@ -1,0 +1,10 @@
+(
+    name: "layers 023 all objects color",
+    setup: (players: 2, objects: [(card: 63025, owner: 0, controller: 0, zone: "Battlefield"), (card: 63026, owner: 1, controller: 1, zone: "Battlefield")]),
+    script: [
+        (action: "set_base_creature", object: 0, power: 1, toughness: 1, keywords: []),
+        (action: "set_base_creature", object: 1, power: 2, toughness: 2, keywords: []),
+        (action: "register_continuous_effect", controller: 0, all_objects: true, operation: "set_colors", colors: ["red"], timestamp: 1),
+    ],
+    expect: (characteristics: [(object: 0, colors: ["red"]), (object: 1, colors: ["red"])], outcome: "in_progress", invariants: ["zone_conservation", "hash_consistency"], hash_determinism: true),
+)

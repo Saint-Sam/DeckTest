@@ -1,0 +1,11 @@
+(
+    name: "layers 071 set pt dependency chain",
+    setup: (players: 2, objects: [(card: 63087, owner: 0, controller: 0, zone: "Battlefield")]),
+    script: [
+        (action: "set_base_creature", object: 0, power: 1, toughness: 1, keywords: []),
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "set_pt", power: 2, toughness: 2, timestamp: 4),
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "set_pt", power: 4, toughness: 4, timestamp: 2, dependencies: [0]),
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "set_pt", power: 6, toughness: 6, timestamp: 1, dependencies: [1]),
+    ],
+    expect: (characteristics: [(object: 0, power: 6, toughness: 6)], outcome: "in_progress", invariants: ["zone_conservation", "hash_consistency"], hash_determinism: true),
+)

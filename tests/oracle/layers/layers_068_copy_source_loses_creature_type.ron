@@ -1,0 +1,11 @@
+(
+    name: "layers 068 copy source loses creature type",
+    setup: (players: 2, objects: [(card: 63081, owner: 0, controller: 0, zone: "Battlefield"), (card: 63082, owner: 0, controller: 0, zone: "Battlefield")]),
+    script: [
+        (action: "set_base_creature", object: 0, power: 6, toughness: 1, keywords: ["haste"]),
+        (action: "set_base_creature", object: 1, power: 1, toughness: 1, keywords: []),
+        (action: "register_continuous_effect", controller: 0, target_object: 1, operation: "copy_base_creature", from_object: 0, timestamp: 1),
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "remove_types", types: ["creature"], timestamp: 2),
+    ],
+    expect: (characteristics: [(object: 0, is_creature: false), (object: 1, is_creature: true, power: 6, toughness: 1, keywords: ["haste"])], outcome: "in_progress", invariants: ["zone_conservation", "hash_consistency"], hash_determinism: true),
+)

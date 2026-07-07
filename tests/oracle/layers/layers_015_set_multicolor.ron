@@ -1,0 +1,9 @@
+(
+    name: "layers 015 set multicolor",
+    setup: (players: 2, objects: [(card: 63015, owner: 0, controller: 0, zone: "Battlefield")]),
+    script: [
+        (action: "set_base_creature", object: 0, power: 2, toughness: 2, keywords: []),
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "set_colors", colors: ["white", "green"], timestamp: 1),
+    ],
+    expect: (characteristics: [(object: 0, is_creature: true, colors: ["white", "green"])], outcome: "in_progress", invariants: ["zone_conservation", "hash_consistency"], hash_determinism: true),
+)

@@ -1,0 +1,10 @@
+(
+    name: "layers 024 all objects add flying",
+    setup: (players: 2, objects: [(card: 63027, owner: 0, controller: 0, zone: "Battlefield"), (card: 63028, owner: 1, controller: 1, zone: "Battlefield")]),
+    script: [
+        (action: "set_base_creature", object: 0, power: 1, toughness: 1, keywords: []),
+        (action: "set_base_creature", object: 1, power: 2, toughness: 2, keywords: ["reach"]),
+        (action: "register_continuous_effect", controller: 0, all_objects: true, operation: "add_keywords", keywords: ["flying"], timestamp: 1),
+    ],
+    expect: (characteristics: [(object: 0, keywords: ["flying"]), (object: 1, keywords: ["flying", "reach"])], outcome: "in_progress", invariants: ["zone_conservation", "hash_consistency"], hash_determinism: true),
+)

@@ -1108,6 +1108,278 @@ impl ReplacementEffectId {
     }
 }
 
+/// A stable handle for one registered continuous effect definition.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct ContinuousEffectId(u32);
+
+impl ContinuousEffectId {
+    /// Returns the zero-based continuous-effect index.
+    #[must_use]
+    pub const fn index(self) -> usize {
+        self.0 as usize
+    }
+
+    /// Returns the raw deterministic continuous-effect value.
+    #[must_use]
+    pub const fn get(self) -> u32 {
+        self.0
+    }
+}
+
+/// Magic object colors represented by the layer engine.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub struct ObjectColors {
+    white: bool,
+    blue: bool,
+    black: bool,
+    red: bool,
+    green: bool,
+}
+
+impl ObjectColors {
+    /// Creates an empty color set, which represents colorless.
+    #[must_use]
+    pub const fn none() -> Self {
+        Self {
+            white: false,
+            blue: false,
+            black: false,
+            red: false,
+            green: false,
+        }
+    }
+
+    /// Returns this set with white enabled.
+    #[must_use]
+    pub const fn with_white(mut self) -> Self {
+        self.white = true;
+        self
+    }
+
+    /// Returns this set with blue enabled.
+    #[must_use]
+    pub const fn with_blue(mut self) -> Self {
+        self.blue = true;
+        self
+    }
+
+    /// Returns this set with black enabled.
+    #[must_use]
+    pub const fn with_black(mut self) -> Self {
+        self.black = true;
+        self
+    }
+
+    /// Returns this set with red enabled.
+    #[must_use]
+    pub const fn with_red(mut self) -> Self {
+        self.red = true;
+        self
+    }
+
+    /// Returns this set with green enabled.
+    #[must_use]
+    pub const fn with_green(mut self) -> Self {
+        self.green = true;
+        self
+    }
+
+    /// Returns true if white is present.
+    #[must_use]
+    pub const fn white(self) -> bool {
+        self.white
+    }
+
+    /// Returns true if blue is present.
+    #[must_use]
+    pub const fn blue(self) -> bool {
+        self.blue
+    }
+
+    /// Returns true if black is present.
+    #[must_use]
+    pub const fn black(self) -> bool {
+        self.black
+    }
+
+    /// Returns true if red is present.
+    #[must_use]
+    pub const fn red(self) -> bool {
+        self.red
+    }
+
+    /// Returns true if green is present.
+    #[must_use]
+    pub const fn green(self) -> bool {
+        self.green
+    }
+
+    /// Returns true when no colors are present.
+    #[must_use]
+    pub const fn colorless(self) -> bool {
+        !self.white && !self.blue && !self.black && !self.red && !self.green
+    }
+
+    const fn canonical_bits(self) -> u8 {
+        (self.white as u8)
+            | ((self.blue as u8) << 1)
+            | ((self.black as u8) << 2)
+            | ((self.red as u8) << 3)
+            | ((self.green as u8) << 4)
+    }
+}
+
+/// Magic object card types represented by the layer engine.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub struct ObjectTypes {
+    artifact: bool,
+    creature: bool,
+    enchantment: bool,
+    instant: bool,
+    land: bool,
+    planeswalker: bool,
+    sorcery: bool,
+}
+
+impl ObjectTypes {
+    /// Creates an empty type set.
+    #[must_use]
+    pub const fn none() -> Self {
+        Self {
+            artifact: false,
+            creature: false,
+            enchantment: false,
+            instant: false,
+            land: false,
+            planeswalker: false,
+            sorcery: false,
+        }
+    }
+
+    /// Returns this set with artifact enabled.
+    #[must_use]
+    pub const fn with_artifact(mut self) -> Self {
+        self.artifact = true;
+        self
+    }
+
+    /// Returns this set with creature enabled.
+    #[must_use]
+    pub const fn with_creature(mut self) -> Self {
+        self.creature = true;
+        self
+    }
+
+    /// Returns this set with enchantment enabled.
+    #[must_use]
+    pub const fn with_enchantment(mut self) -> Self {
+        self.enchantment = true;
+        self
+    }
+
+    /// Returns this set with instant enabled.
+    #[must_use]
+    pub const fn with_instant(mut self) -> Self {
+        self.instant = true;
+        self
+    }
+
+    /// Returns this set with land enabled.
+    #[must_use]
+    pub const fn with_land(mut self) -> Self {
+        self.land = true;
+        self
+    }
+
+    /// Returns this set with planeswalker enabled.
+    #[must_use]
+    pub const fn with_planeswalker(mut self) -> Self {
+        self.planeswalker = true;
+        self
+    }
+
+    /// Returns this set with sorcery enabled.
+    #[must_use]
+    pub const fn with_sorcery(mut self) -> Self {
+        self.sorcery = true;
+        self
+    }
+
+    /// Returns true if artifact is present.
+    #[must_use]
+    pub const fn artifact(self) -> bool {
+        self.artifact
+    }
+
+    /// Returns true if creature is present.
+    #[must_use]
+    pub const fn creature(self) -> bool {
+        self.creature
+    }
+
+    /// Returns true if enchantment is present.
+    #[must_use]
+    pub const fn enchantment(self) -> bool {
+        self.enchantment
+    }
+
+    /// Returns true if instant is present.
+    #[must_use]
+    pub const fn instant(self) -> bool {
+        self.instant
+    }
+
+    /// Returns true if land is present.
+    #[must_use]
+    pub const fn land(self) -> bool {
+        self.land
+    }
+
+    /// Returns true if planeswalker is present.
+    #[must_use]
+    pub const fn planeswalker(self) -> bool {
+        self.planeswalker
+    }
+
+    /// Returns true if sorcery is present.
+    #[must_use]
+    pub const fn sorcery(self) -> bool {
+        self.sorcery
+    }
+
+    const fn without(mut self, remove: Self) -> Self {
+        self.artifact &= !remove.artifact;
+        self.creature &= !remove.creature;
+        self.enchantment &= !remove.enchantment;
+        self.instant &= !remove.instant;
+        self.land &= !remove.land;
+        self.planeswalker &= !remove.planeswalker;
+        self.sorcery &= !remove.sorcery;
+        self
+    }
+
+    const fn union(mut self, add: Self) -> Self {
+        self.artifact |= add.artifact;
+        self.creature |= add.creature;
+        self.enchantment |= add.enchantment;
+        self.instant |= add.instant;
+        self.land |= add.land;
+        self.planeswalker |= add.planeswalker;
+        self.sorcery |= add.sorcery;
+        self
+    }
+
+    const fn canonical_bits(self) -> u8 {
+        (self.artifact as u8)
+            | ((self.creature as u8) << 1)
+            | ((self.enchantment as u8) << 2)
+            | ((self.instant as u8) << 3)
+            | ((self.land as u8) << 4)
+            | ((self.planeswalker as u8) << 5)
+            | ((self.sorcery as u8) << 6)
+    }
+}
+
 /// The coarse kind of object represented by a stack entry.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum StackObjectKind {
@@ -1234,6 +1506,8 @@ pub enum GameEventKind {
     ReplacementChoiceOrderSet,
     /// A replacement/prevention effect modified an event.
     ReplacementEffectApplied,
+    /// A continuous effect definition was registered.
+    ContinuousEffectRegistered,
 }
 
 impl GameEventKind {
@@ -1287,6 +1561,7 @@ impl GameEventKind {
             Self::ReplacementEffectRegistered => 45,
             Self::ReplacementChoiceOrderSet => 46,
             Self::ReplacementEffectApplied => 47,
+            Self::ContinuousEffectRegistered => 48,
         }
     }
 }
@@ -2266,6 +2541,34 @@ impl CreatureKeywords {
             | ((self.vigilance as u16) << 8)
             | ((self.haste as u16) << 9)
     }
+
+    const fn without(mut self, remove: Self) -> Self {
+        self.first_strike &= !remove.first_strike;
+        self.double_strike &= !remove.double_strike;
+        self.trample &= !remove.trample;
+        self.deathtouch &= !remove.deathtouch;
+        self.lifelink &= !remove.lifelink;
+        self.flying &= !remove.flying;
+        self.reach &= !remove.reach;
+        self.menace &= !remove.menace;
+        self.vigilance &= !remove.vigilance;
+        self.haste &= !remove.haste;
+        self
+    }
+
+    const fn union(mut self, add: Self) -> Self {
+        self.first_strike |= add.first_strike;
+        self.double_strike |= add.double_strike;
+        self.trample |= add.trample;
+        self.deathtouch |= add.deathtouch;
+        self.lifelink |= add.lifelink;
+        self.flying |= add.flying;
+        self.reach |= add.reach;
+        self.menace |= add.menace;
+        self.vigilance |= add.vigilance;
+        self.haste |= add.haste;
+        self
+    }
 }
 
 /// Derived power, toughness, and combat keywords for a creature object.
@@ -2363,6 +2666,369 @@ impl BaseCreatureCharacteristics {
             toughness: self.toughness,
             keywords: self.keywords,
         }
+    }
+}
+
+/// Effective object characteristics after CR 613 continuous effects.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct ObjectCharacteristics {
+    controller: PlayerId,
+    colors: ObjectColors,
+    types: ObjectTypes,
+    creature: Option<CreatureCharacteristics>,
+    text_marker: u32,
+}
+
+impl ObjectCharacteristics {
+    /// Creates base characteristics from one stored object record.
+    #[must_use]
+    pub const fn new(
+        controller: PlayerId,
+        colors: ObjectColors,
+        types: ObjectTypes,
+        creature: Option<CreatureCharacteristics>,
+    ) -> Self {
+        Self {
+            controller,
+            colors,
+            types,
+            creature,
+            text_marker: 0,
+        }
+    }
+
+    /// Returns the effective controller after layer 2.
+    #[must_use]
+    pub const fn controller(self) -> PlayerId {
+        self.controller
+    }
+
+    /// Returns the effective colors after layer 5.
+    #[must_use]
+    pub const fn colors(self) -> ObjectColors {
+        self.colors
+    }
+
+    /// Returns the effective types after layer 4.
+    #[must_use]
+    pub const fn types(self) -> ObjectTypes {
+        self.types
+    }
+
+    /// Returns effective creature characteristics, if this object is a creature.
+    #[must_use]
+    pub const fn creature(self) -> Option<CreatureCharacteristics> {
+        self.creature
+    }
+
+    /// Returns the deterministic text-effect marker after layer 3.
+    #[must_use]
+    pub const fn text_marker(self) -> u32 {
+        self.text_marker
+    }
+
+    /// Returns true if this object is currently a creature.
+    #[must_use]
+    pub const fn is_creature(self) -> bool {
+        self.types.creature()
+    }
+
+    fn sync_creature_type(&mut self) {
+        if self.types.creature() && self.creature.is_none() {
+            self.creature = Some(CreatureCharacteristics::new(0, 0));
+        }
+        if !self.types.creature() {
+            self.creature = None;
+        }
+    }
+}
+
+/// Which objects a continuous effect can affect.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum ContinuousEffectTarget {
+    /// Only the named object is affected.
+    Object(ObjectId),
+    /// Every object is affected.
+    AllObjects,
+}
+
+impl ContinuousEffectTarget {
+    fn matches(self, object: ObjectId) -> bool {
+        match self {
+            Self::Object(target) => target == object,
+            Self::AllObjects => true,
+        }
+    }
+
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::Object(_) => 0,
+            Self::AllObjects => 1,
+        }
+    }
+}
+
+/// The CR 613 layer or sublayer for a continuous effect operation.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum ContinuousEffectLayer {
+    /// Layer 1: copy effects.
+    Copy,
+    /// Layer 2: control-changing effects.
+    Control,
+    /// Layer 3: text-changing effects.
+    Text,
+    /// Layer 4: type-changing effects.
+    Type,
+    /// Layer 5: color-changing effects.
+    Color,
+    /// Layer 6: ability-adding/removing effects.
+    Ability,
+    /// Layer 7a: characteristic-defining power/toughness effects.
+    PowerToughnessCda,
+    /// Layer 7b: power/toughness set effects.
+    PowerToughnessSet,
+    /// Layer 7c: power/toughness modify effects.
+    PowerToughnessModify,
+    /// Layer 7d: power/toughness switch effects.
+    PowerToughnessSwitch,
+}
+
+impl ContinuousEffectLayer {
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::Copy => 1,
+            Self::Control => 2,
+            Self::Text => 3,
+            Self::Type => 4,
+            Self::Color => 5,
+            Self::Ability => 6,
+            Self::PowerToughnessCda => 70,
+            Self::PowerToughnessSet => 71,
+            Self::PowerToughnessModify => 72,
+            Self::PowerToughnessSwitch => 73,
+        }
+    }
+}
+
+/// One data-only continuous-effect operation.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum ContinuousEffectOperation {
+    /// Layer 1: copy base creature copiable values from another object.
+    CopyBaseCreature {
+        /// Source object whose base creature values are copied.
+        from: ObjectId,
+    },
+    /// Layer 2: change effective controller.
+    ChangeController {
+        /// New effective controller.
+        controller: PlayerId,
+    },
+    /// Layer 3: set a deterministic text marker for card-compiler tests.
+    SetTextMarker {
+        /// Deterministic marker standing in for text-changing output.
+        marker: u32,
+    },
+    /// Layer 4: replace all represented object types.
+    SetTypes {
+        /// Replacement type set.
+        types: ObjectTypes,
+    },
+    /// Layer 4: add represented object types.
+    AddTypes {
+        /// Types to add.
+        types: ObjectTypes,
+    },
+    /// Layer 4: remove represented object types.
+    RemoveTypes {
+        /// Types to remove.
+        types: ObjectTypes,
+    },
+    /// Layer 5: replace colors.
+    SetColors {
+        /// Replacement color set.
+        colors: ObjectColors,
+    },
+    /// Layer 6: add combat keywords.
+    AddKeywords {
+        /// Keywords to add.
+        keywords: CreatureKeywords,
+    },
+    /// Layer 6: remove combat keywords.
+    RemoveKeywords {
+        /// Keywords to remove.
+        keywords: CreatureKeywords,
+    },
+    /// Layer 7a: set characteristic-defining power/toughness.
+    SetBasePowerToughness {
+        /// Characteristic-defining power.
+        power: i32,
+        /// Characteristic-defining toughness.
+        toughness: i32,
+    },
+    /// Layer 7b: set power/toughness.
+    SetPowerToughness {
+        /// Set power.
+        power: i32,
+        /// Set toughness.
+        toughness: i32,
+    },
+    /// Layer 7c: modify power/toughness.
+    ModifyPowerToughness {
+        /// Power delta.
+        power: i32,
+        /// Toughness delta.
+        toughness: i32,
+    },
+    /// Layer 7d: switch power and toughness.
+    SwitchPowerToughness,
+}
+
+impl ContinuousEffectOperation {
+    const fn layer(self) -> ContinuousEffectLayer {
+        match self {
+            Self::CopyBaseCreature { .. } => ContinuousEffectLayer::Copy,
+            Self::ChangeController { .. } => ContinuousEffectLayer::Control,
+            Self::SetTextMarker { .. } => ContinuousEffectLayer::Text,
+            Self::SetTypes { .. } | Self::AddTypes { .. } | Self::RemoveTypes { .. } => {
+                ContinuousEffectLayer::Type
+            }
+            Self::SetColors { .. } => ContinuousEffectLayer::Color,
+            Self::AddKeywords { .. } | Self::RemoveKeywords { .. } => {
+                ContinuousEffectLayer::Ability
+            }
+            Self::SetBasePowerToughness { .. } => ContinuousEffectLayer::PowerToughnessCda,
+            Self::SetPowerToughness { .. } => ContinuousEffectLayer::PowerToughnessSet,
+            Self::ModifyPowerToughness { .. } => ContinuousEffectLayer::PowerToughnessModify,
+            Self::SwitchPowerToughness => ContinuousEffectLayer::PowerToughnessSwitch,
+        }
+    }
+
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::CopyBaseCreature { .. } => 0,
+            Self::ChangeController { .. } => 1,
+            Self::SetTextMarker { .. } => 2,
+            Self::SetTypes { .. } => 3,
+            Self::AddTypes { .. } => 4,
+            Self::RemoveTypes { .. } => 5,
+            Self::SetColors { .. } => 6,
+            Self::AddKeywords { .. } => 7,
+            Self::RemoveKeywords { .. } => 8,
+            Self::SetBasePowerToughness { .. } => 9,
+            Self::SetPowerToughness { .. } => 10,
+            Self::ModifyPowerToughness { .. } => 11,
+            Self::SwitchPowerToughness => 12,
+        }
+    }
+}
+
+/// Duration for a continuous effect.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum ContinuousEffectDuration {
+    /// The effect remains until explicitly absent from state.
+    Persistent,
+}
+
+impl ContinuousEffectDuration {
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::Persistent => 0,
+        }
+    }
+}
+
+/// Declarative continuous-effect definition consumed by the CR 613 layer engine.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct ContinuousEffectDefinition {
+    controller: PlayerId,
+    source: Option<ObjectId>,
+    target: ContinuousEffectTarget,
+    operation: ContinuousEffectOperation,
+    duration: ContinuousEffectDuration,
+    timestamp: u64,
+    dependencies: Vec<ContinuousEffectId>,
+}
+
+impl ContinuousEffectDefinition {
+    /// Creates a persistent continuous effect with no source or dependencies.
+    #[must_use]
+    pub fn new(
+        controller: PlayerId,
+        target: ContinuousEffectTarget,
+        operation: ContinuousEffectOperation,
+    ) -> Self {
+        Self {
+            controller,
+            source: None,
+            target,
+            operation,
+            duration: ContinuousEffectDuration::Persistent,
+            timestamp: 0,
+            dependencies: Vec::new(),
+        }
+    }
+
+    /// Returns this definition with a source object.
+    #[must_use]
+    pub const fn with_source(mut self, source: ObjectId) -> Self {
+        self.source = Some(source);
+        self
+    }
+
+    /// Returns this definition with an explicit CR timestamp.
+    #[must_use]
+    pub const fn with_timestamp(mut self, timestamp: u64) -> Self {
+        self.timestamp = timestamp;
+        self
+    }
+
+    /// Returns this definition with explicit CR 613.8 dependency edges.
+    #[must_use]
+    pub fn with_dependencies(mut self, dependencies: Vec<ContinuousEffectId>) -> Self {
+        self.dependencies = dependencies;
+        self
+    }
+
+    /// Returns the controller of the effect.
+    #[must_use]
+    pub const fn controller(&self) -> PlayerId {
+        self.controller
+    }
+
+    /// Returns the source object, if any.
+    #[must_use]
+    pub const fn source(&self) -> Option<ObjectId> {
+        self.source
+    }
+
+    /// Returns the target filter.
+    #[must_use]
+    pub const fn target(&self) -> ContinuousEffectTarget {
+        self.target
+    }
+
+    /// Returns the operation.
+    #[must_use]
+    pub const fn operation(&self) -> ContinuousEffectOperation {
+        self.operation
+    }
+
+    /// Returns the duration.
+    #[must_use]
+    pub const fn duration(&self) -> ContinuousEffectDuration {
+        self.duration
+    }
+
+    /// Returns the CR timestamp. Zero means registration order assigns it.
+    #[must_use]
+    pub const fn timestamp(&self) -> u64 {
+        self.timestamp
+    }
+
+    /// Returns explicit CR 613.8 dependencies.
+    #[must_use]
+    pub fn dependencies(&self) -> &[ContinuousEffectId] {
+        &self.dependencies
     }
 }
 
@@ -3407,6 +4073,10 @@ pub enum StateError {
     UnknownReplacementEffect(ReplacementEffectId),
     /// A replacement ordering preference named the same effect more than once.
     DuplicateReplacementEffect(ReplacementEffectId),
+    /// The requested continuous effect ID does not exist.
+    UnknownContinuousEffect(ContinuousEffectId),
+    /// A continuous-effect definition named the same dependency more than once.
+    DuplicateContinuousEffectDependency(ContinuousEffectId),
     /// A stack resolution was requested while the stack was empty.
     EmptyStack,
     /// A stack entry refers to a spell object that is no longer on the stack.
@@ -3656,6 +4326,11 @@ pub enum Action {
         /// Effect IDs in preferred order; omitted applicable effects use ID order.
         order: Vec<ReplacementEffectId>,
     },
+    /// Register one declarative continuous effect definition.
+    RegisterContinuousEffect {
+        /// Data-only continuous effect definition.
+        definition: ContinuousEffectDefinition,
+    },
     /// Record whether attackers were declared in this combat.
     SetAttackersDeclaredThisCombat {
         /// True if at least one attacker was declared.
@@ -3807,6 +4482,8 @@ pub enum Outcome {
     TriggerRegistered(TriggerId),
     /// A replacement/prevention effect definition was registered.
     ReplacementEffectRegistered(ReplacementEffectId),
+    /// A continuous effect definition was registered.
+    ContinuousEffectRegistered(ContinuousEffectId),
     /// Combat damage was assigned and dealt.
     CombatDamageAssigned(Vec<CombatDamageRecord>),
     /// State-based actions were checked.
@@ -3986,6 +4663,12 @@ pub fn apply(state: &mut GameState, action: Action) -> Outcome {
         Action::SetReplacementChoiceOrder { chooser, order } => {
             match state.set_replacement_choice_order(chooser, order) {
                 Ok(()) => Outcome::Applied,
+                Err(error) => Outcome::Failed(error),
+            }
+        }
+        Action::RegisterContinuousEffect { definition } => {
+            match state.register_continuous_effect(definition) {
+                Ok(effect) => Outcome::ContinuousEffectRegistered(effect),
                 Err(error) => Outcome::Failed(error),
             }
         }
@@ -4436,6 +5119,23 @@ pub enum GameEvent {
         /// Damage amount after applying this effect.
         resulting_amount: u32,
     },
+    /// A continuous effect definition was registered.
+    ContinuousEffectRegistered {
+        /// Registered continuous effect.
+        effect: ContinuousEffectId,
+        /// Effect controller.
+        controller: PlayerId,
+        /// Optional effect source object.
+        source: Option<ObjectId>,
+        /// Target filter.
+        target: ContinuousEffectTarget,
+        /// Effect operation.
+        operation: ContinuousEffectOperation,
+        /// CR 613 layer.
+        layer: ContinuousEffectLayer,
+        /// Effect timestamp.
+        timestamp: u64,
+    },
 }
 
 impl GameEvent {
@@ -4489,6 +5189,7 @@ impl GameEvent {
             Self::ReplacementEffectRegistered { .. } => 45,
             Self::ReplacementChoiceOrderSet { .. } => 46,
             Self::ReplacementEffectApplied { .. } => 47,
+            Self::ContinuousEffectRegistered { .. } => 48,
         }
     }
 
@@ -4552,6 +5253,7 @@ impl GameEvent {
             Self::ReplacementEffectRegistered { .. } => GameEventKind::ReplacementEffectRegistered,
             Self::ReplacementChoiceOrderSet { .. } => GameEventKind::ReplacementChoiceOrderSet,
             Self::ReplacementEffectApplied { .. } => GameEventKind::ReplacementEffectApplied,
+            Self::ContinuousEffectRegistered { .. } => GameEventKind::ContinuousEffectRegistered,
         }
     }
 }
@@ -4639,6 +5341,12 @@ struct ReplacementSubscription {
     definition: ReplacementDefinition,
 }
 
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+struct ContinuousEffectSubscription {
+    id: ContinuousEffectId,
+    definition: ContinuousEffectDefinition,
+}
+
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 struct DamageReplacementEvent {
     source: Option<ObjectId>,
@@ -4701,6 +5409,9 @@ pub struct GameState {
     replacement_effects: Vec<ReplacementSubscription>,
     // clone_surface: per-player replacement order preferences; bounded by active effects.
     replacement_choice_orders: Vec<ReplacementChoiceOrder>,
+    next_continuous_effect: u32,
+    // clone_surface: data-only continuous effects compiled from card IR.
+    continuous_effects: Vec<ContinuousEffectSubscription>,
     deferred_priority_player: Option<PlayerId>,
     next_event_sequence: u64,
     // clone_surface: current-turn Copy event records for trigger/replay consumers.
@@ -4743,6 +5454,8 @@ impl Clone for GameState {
             next_replacement: self.next_replacement,
             replacement_effects: self.replacement_effects.clone(),
             replacement_choice_orders: self.replacement_choice_orders.clone(),
+            next_continuous_effect: self.next_continuous_effect,
+            continuous_effects: self.continuous_effects.clone(),
             deferred_priority_player: self.deferred_priority_player,
             next_event_sequence: self.next_event_sequence,
             turn_events: Arc::clone(&self.turn_events),
@@ -4809,6 +5522,8 @@ impl GameState {
             next_replacement: 0,
             replacement_effects: Vec::new(),
             replacement_choice_orders: Vec::new(),
+            next_continuous_effect: 0,
+            continuous_effects: Vec::new(),
             deferred_priority_player: None,
             next_event_sequence: 0,
             turn_events: Arc::new(Vec::with_capacity(EVENT_DEEP_CLONE_LIMIT)),
@@ -4951,6 +5666,15 @@ impl GameState {
     #[must_use]
     pub fn replacement_choice_orders(&self) -> &[ReplacementChoiceOrder] {
         &self.replacement_choice_orders
+    }
+
+    /// Returns registered continuous effects in deterministic ID order.
+    pub fn continuous_effects(
+        &self,
+    ) -> impl Iterator<Item = (ContinuousEffectId, &ContinuousEffectDefinition)> + '_ {
+        self.continuous_effects
+            .iter()
+            .map(|subscription| (subscription.id, &subscription.definition))
     }
 
     /// Returns typed mutation events emitted during the current turn.
@@ -5586,11 +6310,7 @@ impl GameState {
     ) -> Result<StackEntryId, StateError> {
         self.require_priority_player(player)?;
         self.require_player(player)?;
-        let record = self
-            .objects
-            .get(object)
-            .ok_or(StateError::UnknownObject(object))?;
-        if record.controller() != player
+        if self.object_controller(object)? != player
             || self.object_zone(object) != Some(ZoneId::new(Some(player), ZoneKind::Hand))
         {
             return Err(StateError::ObjectNotCastable(object));
@@ -5863,9 +6583,7 @@ impl GameState {
                 .is_some_and(|source| self.object_zone(source) == Some(zone)),
             TriggerInterveningIf::ControllerControlsSource => {
                 definition.source().is_some_and(|source| {
-                    self.objects
-                        .get(source)
-                        .is_some_and(|record| record.controller() == definition.controller())
+                    matches!(self.object_controller(source), Ok(controller) if controller == definition.controller())
                 })
             }
             TriggerInterveningIf::ControllerLifeAtMost(max_life) => self
@@ -6012,6 +6730,75 @@ impl GameState {
         self.replacement_effects
             .iter()
             .any(|subscription| subscription.id == id)
+    }
+
+    /// Registers one data-only continuous effect.
+    fn register_continuous_effect(
+        &mut self,
+        mut definition: ContinuousEffectDefinition,
+    ) -> Result<ContinuousEffectId, StateError> {
+        self.validate_continuous_effect_definition(&definition)?;
+        let id = ContinuousEffectId(self.next_continuous_effect);
+        self.next_continuous_effect = self.next_continuous_effect.saturating_add(1);
+        if definition.timestamp == 0 {
+            definition.timestamp = u64::from(id.get()) + 1;
+        }
+        self.continuous_effects.push(ContinuousEffectSubscription {
+            id,
+            definition: definition.clone(),
+        });
+        self.emit_event_without_triggers(GameEvent::ContinuousEffectRegistered {
+            effect: id,
+            controller: definition.controller(),
+            source: definition.source(),
+            target: definition.target(),
+            operation: definition.operation(),
+            layer: definition.operation().layer(),
+            timestamp: definition.timestamp(),
+        });
+        Ok(id)
+    }
+
+    fn validate_continuous_effect_definition(
+        &self,
+        definition: &ContinuousEffectDefinition,
+    ) -> Result<(), StateError> {
+        self.require_player(definition.controller())?;
+        if let Some(source) = definition.source() {
+            if self.objects.get(source).is_none() {
+                return Err(StateError::UnknownObject(source));
+            }
+        }
+        match definition.target() {
+            ContinuousEffectTarget::Object(object) => {
+                if self.objects.get(object).is_none() {
+                    return Err(StateError::UnknownObject(object));
+                }
+            }
+            ContinuousEffectTarget::AllObjects => {}
+        }
+        if let ContinuousEffectOperation::CopyBaseCreature { from } = definition.operation() {
+            if self.objects.get(from).is_none() {
+                return Err(StateError::UnknownObject(from));
+            }
+        }
+        let mut seen = Vec::with_capacity(definition.dependencies().len());
+        for dependency in definition.dependencies() {
+            if seen.contains(dependency) {
+                return Err(StateError::DuplicateContinuousEffectDependency(*dependency));
+            }
+            if !self.continuous_effect_exists(*dependency) {
+                return Err(StateError::UnknownContinuousEffect(*dependency));
+            }
+            seen.push(*dependency);
+        }
+        Ok(())
+    }
+
+    fn continuous_effect_exists(&self, effect: ContinuousEffectId) -> bool {
+        self.continuous_effects
+            .iter()
+            .any(|subscription| subscription.id == effect)
     }
 
     fn apply_damage_replacement_effects(
@@ -6567,9 +7354,7 @@ impl GameState {
             bytes.write_u32(object.owner.0);
             bytes.write_u32(object.controller.0);
             bytes.write_bool(object.tapped);
-            bytes.write_optional_creature_characteristics(
-                self.creature_characteristics(object.id()).ok(),
-            );
+            bytes.write_optional_base_creature_characteristics(object.base_creature());
             bytes.write_u32(object.damage_marked);
             bytes.write_bool(object.deathtouch_damage_marked);
             bytes.write_u32(object.controlled_since_turn);
@@ -6616,6 +7401,11 @@ impl GameState {
         bytes.write_u32(self.replacement_choice_orders.len() as u32);
         for order in &self.replacement_choice_orders {
             bytes.write_replacement_choice_order(order);
+        }
+        bytes.write_u32(self.next_continuous_effect);
+        bytes.write_u32(self.continuous_effects.len() as u32);
+        for effect in &self.continuous_effects {
+            bytes.write_continuous_effect_subscription(effect);
         }
         bytes.write_optional_player(self.deferred_priority_player);
         bytes.write_u64(self.next_event_sequence);
@@ -6669,9 +7459,7 @@ impl GameState {
             hash.write_u32(object.owner.0);
             hash.write_u32(object.controller.0);
             hash.write_bool(object.tapped);
-            hash.write_optional_creature_characteristics(
-                self.creature_characteristics(object.id()).ok(),
-            );
+            hash.write_optional_base_creature_characteristics(object.base_creature());
             hash.write_u32(object.damage_marked);
             hash.write_bool(object.deathtouch_damage_marked);
             hash.write_u32(object.controlled_since_turn);
@@ -6719,6 +7507,11 @@ impl GameState {
         hash.write_u32(self.replacement_choice_orders.len() as u32);
         for order in &self.replacement_choice_orders {
             hash.write_replacement_choice_order(order);
+        }
+        hash.write_u32(self.next_continuous_effect);
+        hash.write_u32(self.continuous_effects.len() as u32);
+        for effect in &self.continuous_effects {
+            hash.write_continuous_effect_subscription(effect);
         }
         hash.write_optional_player(self.deferred_priority_player);
         hash.write_u64(self.next_event_sequence);
@@ -6878,7 +7671,7 @@ impl GameState {
             .objects
             .get(attack.attacker())
             .ok_or(StateError::UnknownObject(attack.attacker()))?;
-        if record.controller() != player
+        if self.object_controller(attack.attacker())? != player
             || self.object_zone(attack.attacker()) != Some(ZoneId::new(None, ZoneKind::Battlefield))
         {
             return Err(StateError::IllegalAttack(attack.attacker()));
@@ -6906,7 +7699,7 @@ impl GameState {
             .objects
             .get(block.blocker())
             .ok_or(StateError::UnknownObject(block.blocker()))?;
-        if blocker.controller() != defending_player
+        if self.object_controller(block.blocker())? != defending_player
             || self.object_zone(block.blocker()) != Some(ZoneId::new(None, ZoneKind::Battlefield))
         {
             return Err(StateError::IllegalBlock {
@@ -7287,22 +8080,183 @@ impl GameState {
             && self.creature_characteristics(object).is_ok()
     }
 
-    /// Computes current creature characteristics from stored base data.
-    ///
-    /// T1 has no continuous effects yet, so derived values equal base printed
-    /// values. T2.4 will insert the CR 613 layer calculation behind this query.
-    pub fn creature_characteristics(
+    /// Computes current object characteristics through the CR 613 layer system.
+    pub fn object_characteristics(
         &self,
         object: ObjectId,
-    ) -> Result<CreatureCharacteristics, StateError> {
+    ) -> Result<ObjectCharacteristics, StateError> {
         let record = self
             .objects
             .get(object)
             .ok_or(StateError::UnknownObject(object))?;
-        record
+        let base_creature = record
             .base_creature()
-            .map(BaseCreatureCharacteristics::derived)
+            .map(BaseCreatureCharacteristics::derived);
+        let base_types = if base_creature.is_some() {
+            ObjectTypes::none().with_creature()
+        } else {
+            ObjectTypes::none()
+        };
+        let mut characteristics = ObjectCharacteristics::new(
+            record.controller(),
+            ObjectColors::none(),
+            base_types,
+            base_creature,
+        );
+
+        for layer in [
+            ContinuousEffectLayer::Copy,
+            ContinuousEffectLayer::Control,
+            ContinuousEffectLayer::Text,
+            ContinuousEffectLayer::Type,
+            ContinuousEffectLayer::Color,
+            ContinuousEffectLayer::Ability,
+            ContinuousEffectLayer::PowerToughnessCda,
+            ContinuousEffectLayer::PowerToughnessSet,
+            ContinuousEffectLayer::PowerToughnessModify,
+            ContinuousEffectLayer::PowerToughnessSwitch,
+        ] {
+            for effect in self.ordered_continuous_effects_for_layer(object, layer) {
+                self.apply_continuous_effect(object, &mut characteristics, effect)?;
+            }
+        }
+
+        Ok(characteristics)
+    }
+
+    /// Computes the effective controller after CR 613 layer 2.
+    pub fn object_controller(&self, object: ObjectId) -> Result<PlayerId, StateError> {
+        Ok(self.object_characteristics(object)?.controller())
+    }
+
+    /// Computes current creature characteristics through the CR 613 layer system.
+    pub fn creature_characteristics(
+        &self,
+        object: ObjectId,
+    ) -> Result<CreatureCharacteristics, StateError> {
+        self.object_characteristics(object)?
+            .creature()
             .ok_or(StateError::NotACreature(object))
+    }
+
+    fn ordered_continuous_effects_for_layer(
+        &self,
+        object: ObjectId,
+        layer: ContinuousEffectLayer,
+    ) -> Vec<&ContinuousEffectSubscription> {
+        let mut pending = self
+            .continuous_effects
+            .iter()
+            .filter(|subscription| {
+                subscription.definition.operation().layer() == layer
+                    && subscription.definition.target().matches(object)
+            })
+            .collect::<Vec<_>>();
+        pending.sort_by_key(|subscription| (subscription.definition.timestamp(), subscription.id));
+        let mut ordered = Vec::with_capacity(pending.len());
+        while !pending.is_empty() {
+            if let Some(index) = pending.iter().position(|candidate| {
+                candidate
+                    .definition
+                    .dependencies()
+                    .iter()
+                    .all(|dependency| !pending.iter().any(|other| other.id == *dependency))
+            }) {
+                ordered.push(pending.remove(index));
+            } else {
+                ordered.push(pending.remove(0));
+            }
+        }
+        ordered
+    }
+
+    fn apply_continuous_effect(
+        &self,
+        object: ObjectId,
+        characteristics: &mut ObjectCharacteristics,
+        effect: &ContinuousEffectSubscription,
+    ) -> Result<(), StateError> {
+        match effect.definition.operation() {
+            ContinuousEffectOperation::CopyBaseCreature { from } => {
+                let source = self
+                    .objects
+                    .get(from)
+                    .ok_or(StateError::UnknownObject(from))?;
+                if let Some(base) = source.base_creature() {
+                    characteristics.types = characteristics
+                        .types
+                        .union(ObjectTypes::none().with_creature());
+                    characteristics.creature = Some(base.derived());
+                } else if object != from {
+                    characteristics.types = characteristics
+                        .types
+                        .without(ObjectTypes::none().with_creature());
+                    characteristics.sync_creature_type();
+                }
+            }
+            ContinuousEffectOperation::ChangeController { controller } => {
+                characteristics.controller = controller;
+            }
+            ContinuousEffectOperation::SetTextMarker { marker } => {
+                characteristics.text_marker = marker;
+            }
+            ContinuousEffectOperation::SetTypes { types } => {
+                characteristics.types = types;
+                characteristics.sync_creature_type();
+            }
+            ContinuousEffectOperation::AddTypes { types } => {
+                characteristics.types = characteristics.types.union(types);
+                characteristics.sync_creature_type();
+            }
+            ContinuousEffectOperation::RemoveTypes { types } => {
+                characteristics.types = characteristics.types.without(types);
+                characteristics.sync_creature_type();
+            }
+            ContinuousEffectOperation::SetColors { colors } => {
+                characteristics.colors = colors;
+            }
+            ContinuousEffectOperation::AddKeywords { keywords } => {
+                if let Some(creature) = characteristics.creature {
+                    characteristics.creature =
+                        Some(creature.with_keywords(creature.keywords().union(keywords)));
+                }
+            }
+            ContinuousEffectOperation::RemoveKeywords { keywords } => {
+                if let Some(creature) = characteristics.creature {
+                    characteristics.creature =
+                        Some(creature.with_keywords(creature.keywords().without(keywords)));
+                }
+            }
+            ContinuousEffectOperation::SetBasePowerToughness { power, toughness }
+            | ContinuousEffectOperation::SetPowerToughness { power, toughness } => {
+                if let Some(creature) = characteristics.creature {
+                    characteristics.creature = Some(
+                        CreatureCharacteristics::new(power, toughness)
+                            .with_keywords(creature.keywords()),
+                    );
+                }
+            }
+            ContinuousEffectOperation::ModifyPowerToughness { power, toughness } => {
+                if let Some(creature) = characteristics.creature {
+                    characteristics.creature = Some(
+                        CreatureCharacteristics::new(
+                            creature.power().saturating_add(power),
+                            creature.toughness().saturating_add(toughness),
+                        )
+                        .with_keywords(creature.keywords()),
+                    );
+                }
+            }
+            ContinuousEffectOperation::SwitchPowerToughness => {
+                if let Some(creature) = characteristics.creature {
+                    characteristics.creature = Some(
+                        CreatureCharacteristics::new(creature.toughness(), creature.power())
+                            .with_keywords(creature.keywords()),
+                    );
+                }
+            }
+        }
+        Ok(())
     }
 
     fn creature_keywords(&self, object: ObjectId) -> Result<CreatureKeywords, StateError> {
@@ -8201,10 +9155,12 @@ impl Fnva64 {
         self.write_u32(u32::from(keywords.canonical_bits()));
     }
 
-    fn write_creature_characteristics(&mut self, creature: CreatureCharacteristics) {
-        self.write_i32(creature.power);
-        self.write_i32(creature.toughness);
-        self.write_creature_keywords(creature.keywords);
+    fn write_object_colors(&mut self, colors: ObjectColors) {
+        self.write_u8(colors.canonical_bits());
+    }
+
+    fn write_object_types(&mut self, types: ObjectTypes) {
+        self.write_u8(types.canonical_bits());
     }
 
     fn write_base_creature_characteristics(&mut self, base: BaseCreatureCharacteristics) {
@@ -8213,14 +9169,14 @@ impl Fnva64 {
         self.write_creature_keywords(base.keywords);
     }
 
-    fn write_optional_creature_characteristics(
+    fn write_optional_base_creature_characteristics(
         &mut self,
-        creature: Option<CreatureCharacteristics>,
+        base: Option<BaseCreatureCharacteristics>,
     ) {
-        match creature {
-            Some(creature) => {
+        match base {
+            Some(base) => {
                 self.write_u8(1);
-                self.write_creature_characteristics(creature);
+                self.write_base_creature_characteristics(base);
             }
             None => self.write_u8(0),
         }
@@ -8487,6 +9443,69 @@ impl Fnva64 {
         for replacement in &order.order {
             self.write_u32(replacement.0);
         }
+    }
+
+    fn write_continuous_effect_target(&mut self, target: ContinuousEffectTarget) {
+        self.write_u8(target.canonical_code());
+        if let ContinuousEffectTarget::Object(object) = target {
+            self.write_u32(object.0);
+        }
+    }
+
+    fn write_continuous_effect_layer(&mut self, layer: ContinuousEffectLayer) {
+        self.write_u8(layer.canonical_code());
+    }
+
+    fn write_continuous_effect_duration(&mut self, duration: ContinuousEffectDuration) {
+        self.write_u8(duration.canonical_code());
+    }
+
+    fn write_continuous_effect_operation(&mut self, operation: ContinuousEffectOperation) {
+        self.write_u8(operation.canonical_code());
+        self.write_continuous_effect_layer(operation.layer());
+        match operation {
+            ContinuousEffectOperation::CopyBaseCreature { from } => self.write_u32(from.0),
+            ContinuousEffectOperation::ChangeController { controller } => {
+                self.write_u32(controller.0);
+            }
+            ContinuousEffectOperation::SetTextMarker { marker } => self.write_u32(marker),
+            ContinuousEffectOperation::SetTypes { types }
+            | ContinuousEffectOperation::AddTypes { types }
+            | ContinuousEffectOperation::RemoveTypes { types } => self.write_object_types(types),
+            ContinuousEffectOperation::SetColors { colors } => self.write_object_colors(colors),
+            ContinuousEffectOperation::AddKeywords { keywords }
+            | ContinuousEffectOperation::RemoveKeywords { keywords } => {
+                self.write_creature_keywords(keywords);
+            }
+            ContinuousEffectOperation::SetBasePowerToughness { power, toughness }
+            | ContinuousEffectOperation::SetPowerToughness { power, toughness }
+            | ContinuousEffectOperation::ModifyPowerToughness { power, toughness } => {
+                self.write_i32(power);
+                self.write_i32(toughness);
+            }
+            ContinuousEffectOperation::SwitchPowerToughness => {}
+        }
+    }
+
+    fn write_continuous_effect_definition(&mut self, definition: &ContinuousEffectDefinition) {
+        self.write_u32(definition.controller.0);
+        self.write_optional_object(definition.source);
+        self.write_continuous_effect_target(definition.target);
+        self.write_continuous_effect_operation(definition.operation);
+        self.write_continuous_effect_duration(definition.duration);
+        self.write_u64(definition.timestamp);
+        self.write_u32(definition.dependencies.len() as u32);
+        for dependency in &definition.dependencies {
+            self.write_u32(dependency.0);
+        }
+    }
+
+    fn write_continuous_effect_subscription(
+        &mut self,
+        subscription: &ContinuousEffectSubscription,
+    ) {
+        self.write_u32(subscription.id.0);
+        self.write_continuous_effect_definition(&subscription.definition);
     }
 
     fn write_stack_entry(&mut self, entry: &StackEntry) {
@@ -8769,6 +9788,23 @@ impl Fnva64 {
                 self.write_replacement_operation(operation);
                 self.write_u32(original_amount);
                 self.write_u32(resulting_amount);
+            }
+            GameEvent::ContinuousEffectRegistered {
+                effect,
+                controller,
+                source,
+                target,
+                operation,
+                layer,
+                timestamp,
+            } => {
+                self.write_u32(effect.0);
+                self.write_u32(controller.0);
+                self.write_optional_object(source);
+                self.write_continuous_effect_target(target);
+                self.write_continuous_effect_operation(operation);
+                self.write_continuous_effect_layer(layer);
+                self.write_u64(timestamp);
             }
         }
     }
@@ -8919,10 +9955,12 @@ impl CanonicalBytes {
         self.write_u32(u32::from(keywords.canonical_bits()));
     }
 
-    fn write_creature_characteristics(&mut self, creature: CreatureCharacteristics) {
-        self.write_i32(creature.power);
-        self.write_i32(creature.toughness);
-        self.write_creature_keywords(creature.keywords);
+    fn write_object_colors(&mut self, colors: ObjectColors) {
+        self.write_u8(colors.canonical_bits());
+    }
+
+    fn write_object_types(&mut self, types: ObjectTypes) {
+        self.write_u8(types.canonical_bits());
     }
 
     fn write_base_creature_characteristics(&mut self, base: BaseCreatureCharacteristics) {
@@ -8931,14 +9969,14 @@ impl CanonicalBytes {
         self.write_creature_keywords(base.keywords);
     }
 
-    fn write_optional_creature_characteristics(
+    fn write_optional_base_creature_characteristics(
         &mut self,
-        creature: Option<CreatureCharacteristics>,
+        base: Option<BaseCreatureCharacteristics>,
     ) {
-        match creature {
-            Some(creature) => {
+        match base {
+            Some(base) => {
                 self.write_u8(1);
-                self.write_creature_characteristics(creature);
+                self.write_base_creature_characteristics(base);
             }
             None => self.write_u8(0),
         }
@@ -9195,6 +10233,69 @@ impl CanonicalBytes {
         for replacement in &order.order {
             self.write_u32(replacement.0);
         }
+    }
+
+    fn write_continuous_effect_target(&mut self, target: ContinuousEffectTarget) {
+        self.write_u8(target.canonical_code());
+        if let ContinuousEffectTarget::Object(object) = target {
+            self.write_u32(object.0);
+        }
+    }
+
+    fn write_continuous_effect_layer(&mut self, layer: ContinuousEffectLayer) {
+        self.write_u8(layer.canonical_code());
+    }
+
+    fn write_continuous_effect_duration(&mut self, duration: ContinuousEffectDuration) {
+        self.write_u8(duration.canonical_code());
+    }
+
+    fn write_continuous_effect_operation(&mut self, operation: ContinuousEffectOperation) {
+        self.write_u8(operation.canonical_code());
+        self.write_continuous_effect_layer(operation.layer());
+        match operation {
+            ContinuousEffectOperation::CopyBaseCreature { from } => self.write_u32(from.0),
+            ContinuousEffectOperation::ChangeController { controller } => {
+                self.write_u32(controller.0);
+            }
+            ContinuousEffectOperation::SetTextMarker { marker } => self.write_u32(marker),
+            ContinuousEffectOperation::SetTypes { types }
+            | ContinuousEffectOperation::AddTypes { types }
+            | ContinuousEffectOperation::RemoveTypes { types } => self.write_object_types(types),
+            ContinuousEffectOperation::SetColors { colors } => self.write_object_colors(colors),
+            ContinuousEffectOperation::AddKeywords { keywords }
+            | ContinuousEffectOperation::RemoveKeywords { keywords } => {
+                self.write_creature_keywords(keywords);
+            }
+            ContinuousEffectOperation::SetBasePowerToughness { power, toughness }
+            | ContinuousEffectOperation::SetPowerToughness { power, toughness }
+            | ContinuousEffectOperation::ModifyPowerToughness { power, toughness } => {
+                self.write_i32(power);
+                self.write_i32(toughness);
+            }
+            ContinuousEffectOperation::SwitchPowerToughness => {}
+        }
+    }
+
+    fn write_continuous_effect_definition(&mut self, definition: &ContinuousEffectDefinition) {
+        self.write_u32(definition.controller.0);
+        self.write_optional_object(definition.source);
+        self.write_continuous_effect_target(definition.target);
+        self.write_continuous_effect_operation(definition.operation);
+        self.write_continuous_effect_duration(definition.duration);
+        self.write_u64(definition.timestamp);
+        self.write_u32(definition.dependencies.len() as u32);
+        for dependency in &definition.dependencies {
+            self.write_u32(dependency.0);
+        }
+    }
+
+    fn write_continuous_effect_subscription(
+        &mut self,
+        subscription: &ContinuousEffectSubscription,
+    ) {
+        self.write_u32(subscription.id.0);
+        self.write_continuous_effect_definition(&subscription.definition);
     }
 
     fn write_stack_entry(&mut self, entry: &StackEntry) {
@@ -9478,6 +10579,23 @@ impl CanonicalBytes {
                 self.write_u32(original_amount);
                 self.write_u32(resulting_amount);
             }
+            GameEvent::ContinuousEffectRegistered {
+                effect,
+                controller,
+                source,
+                target,
+                operation,
+                layer,
+                timestamp,
+            } => {
+                self.write_u32(effect.0);
+                self.write_u32(controller.0);
+                self.write_optional_object(source);
+                self.write_continuous_effect_target(target);
+                self.write_continuous_effect_operation(operation);
+                self.write_continuous_effect_layer(layer);
+                self.write_u64(timestamp);
+            }
         }
     }
 
@@ -9551,16 +10669,18 @@ mod tests {
         enumerate_payment_plans, legal_actions, state_based_action_table, validate_payment_plan,
         Action, AttackDeclaration, BaseCreatureCharacteristics, BlockDeclaration, CardId,
         CastSpellRequest, CombatDamageAssignment, CombatDamageAssignmentRequest,
-        CombatDamageStepKind, CombatDamageTarget, CreatureCharacteristics, CreatureKeywords,
-        EffectDuration, EventReplayError, GameEvent, GameOutcome, GameState, ManaCost, ManaKind,
-        ManaPool, ManaSource, ObjectView, Outcome, PaymentError, Phase, PlayerId, PriorityOutcome,
-        ReplacementCondition, ReplacementDamageTargetFilter, ReplacementDefinition,
-        ReplacementDuration, ReplacementEffectId, ReplacementOperation, ReplacementSourceFilter,
-        ResolutionOutcome, SpellTiming, StackEntryId, StackObjectKind, StateBasedActionKind,
-        StateBasedActionReport, StateError, Step, TargetChoice, TargetKind, TargetRequirement,
-        TriggerCondition, TriggerDefinition, TriggerInterveningIf, TriggerObjectFilter,
-        TriggerPlayerFilter, TriggerZoneFilter, ZoneConservation, ZoneId, ZoneKind,
-        EVENT_RING_CAPACITY, NORMAL_TURN_STEPS, OPENING_HAND_SIZE, PAYMENT_PLAN_LIMIT,
+        CombatDamageStepKind, CombatDamageTarget, ContinuousEffectDefinition, ContinuousEffectId,
+        ContinuousEffectOperation, ContinuousEffectTarget, CreatureCharacteristics,
+        CreatureKeywords, EffectDuration, EventReplayError, GameEvent, GameOutcome, GameState,
+        ManaCost, ManaKind, ManaPool, ManaSource, ObjectColors, ObjectTypes, ObjectView, Outcome,
+        PaymentError, Phase, PlayerId, PriorityOutcome, ReplacementCondition,
+        ReplacementDamageTargetFilter, ReplacementDefinition, ReplacementDuration,
+        ReplacementEffectId, ReplacementOperation, ReplacementSourceFilter, ResolutionOutcome,
+        SpellTiming, StackEntryId, StackObjectKind, StateBasedActionKind, StateBasedActionReport,
+        StateError, Step, TargetChoice, TargetKind, TargetRequirement, TriggerCondition,
+        TriggerDefinition, TriggerInterveningIf, TriggerObjectFilter, TriggerPlayerFilter,
+        TriggerZoneFilter, ZoneConservation, ZoneId, ZoneKind, EVENT_RING_CAPACITY,
+        NORMAL_TURN_STEPS, OPENING_HAND_SIZE, PAYMENT_PLAN_LIMIT,
     };
 
     #[test]
@@ -10247,6 +11367,221 @@ mod tests {
             state.deterministic_hash(),
             state.deterministic_hash_streaming()
         );
+    }
+
+    mod layers {
+        use super::*;
+
+        #[test]
+        fn same_layer_dependency_overrides_timestamp_order() {
+            let mut state = GameState::new();
+            let controller = state.add_player();
+            let object = battlefield_creature(
+                &mut state,
+                controller,
+                2_401,
+                2,
+                2,
+                CreatureKeywords::none(),
+            );
+            let black = register_continuous(
+                &mut state,
+                ContinuousEffectDefinition::new(
+                    controller,
+                    ContinuousEffectTarget::Object(object),
+                    ContinuousEffectOperation::SetColors {
+                        colors: ObjectColors::none().with_black(),
+                    },
+                )
+                .with_timestamp(10),
+            );
+            register_continuous(
+                &mut state,
+                ContinuousEffectDefinition::new(
+                    controller,
+                    ContinuousEffectTarget::Object(object),
+                    ContinuousEffectOperation::SetColors {
+                        colors: ObjectColors::none().with_green(),
+                    },
+                )
+                .with_timestamp(1)
+                .with_dependencies(vec![black]),
+            );
+
+            let characteristics = state
+                .object_characteristics(object)
+                .unwrap_or_else(|error| panic!("unexpected characteristics error: {error:?}"));
+            assert_eq!(characteristics.colors(), ObjectColors::none().with_green());
+            assert_eq!(
+                state.deterministic_hash(),
+                state.deterministic_hash_streaming()
+            );
+        }
+
+        #[test]
+        fn power_toughness_sublayers_apply_in_cr_order() {
+            let mut state = GameState::new();
+            let controller = state.add_player();
+            let object = battlefield_creature(
+                &mut state,
+                controller,
+                2_402,
+                1,
+                4,
+                CreatureKeywords::none(),
+            );
+            register_continuous(
+                &mut state,
+                ContinuousEffectDefinition::new(
+                    controller,
+                    ContinuousEffectTarget::Object(object),
+                    ContinuousEffectOperation::SwitchPowerToughness,
+                )
+                .with_timestamp(2),
+            );
+            register_continuous(
+                &mut state,
+                ContinuousEffectDefinition::new(
+                    controller,
+                    ContinuousEffectTarget::Object(object),
+                    ContinuousEffectOperation::ModifyPowerToughness {
+                        power: 2,
+                        toughness: -1,
+                    },
+                )
+                .with_timestamp(1),
+            );
+            register_continuous(
+                &mut state,
+                ContinuousEffectDefinition::new(
+                    controller,
+                    ContinuousEffectTarget::Object(object),
+                    ContinuousEffectOperation::SetPowerToughness {
+                        power: 3,
+                        toughness: 5,
+                    },
+                )
+                .with_timestamp(5),
+            );
+
+            let creature = state
+                .creature_characteristics(object)
+                .unwrap_or_else(|error| panic!("unexpected creature error: {error:?}"));
+            assert_eq!(creature.power(), 4);
+            assert_eq!(creature.toughness(), 5);
+        }
+
+        #[test]
+        fn copy_layer_uses_base_copiable_values() {
+            let mut state = GameState::new();
+            let controller = state.add_player();
+            let source = battlefield_creature(
+                &mut state,
+                controller,
+                2_403,
+                2,
+                3,
+                CreatureKeywords::none(),
+            );
+            let target = battlefield_creature(
+                &mut state,
+                controller,
+                2_404,
+                1,
+                1,
+                CreatureKeywords::none(),
+            );
+            register_continuous(
+                &mut state,
+                ContinuousEffectDefinition::new(
+                    controller,
+                    ContinuousEffectTarget::Object(source),
+                    ContinuousEffectOperation::ModifyPowerToughness {
+                        power: 7,
+                        toughness: 7,
+                    },
+                ),
+            );
+            register_continuous(
+                &mut state,
+                ContinuousEffectDefinition::new(
+                    controller,
+                    ContinuousEffectTarget::Object(target),
+                    ContinuousEffectOperation::CopyBaseCreature { from: source },
+                ),
+            );
+
+            let source_creature = state
+                .creature_characteristics(source)
+                .unwrap_or_else(|error| panic!("unexpected source creature error: {error:?}"));
+            let target_creature = state
+                .creature_characteristics(target)
+                .unwrap_or_else(|error| panic!("unexpected target creature error: {error:?}"));
+            assert_eq!(source_creature.power(), 9);
+            assert_eq!(source_creature.toughness(), 10);
+            assert_eq!(target_creature.power(), 2);
+            assert_eq!(target_creature.toughness(), 3);
+        }
+
+        #[test]
+        fn control_layer_updates_effective_controller() {
+            let mut state = GameState::new();
+            let original = state.add_player();
+            let new_controller = state.add_player();
+            let object =
+                battlefield_creature(&mut state, original, 2_405, 2, 2, CreatureKeywords::none());
+            register_continuous(
+                &mut state,
+                ContinuousEffectDefinition::new(
+                    new_controller,
+                    ContinuousEffectTarget::Object(object),
+                    ContinuousEffectOperation::ChangeController {
+                        controller: new_controller,
+                    },
+                ),
+            );
+
+            assert_eq!(state.object_controller(object), Ok(new_controller));
+            assert_ne!(
+                state
+                    .objects()
+                    .get(object)
+                    .map(|record| record.controller()),
+                Some(new_controller)
+            );
+        }
+
+        #[test]
+        fn continuous_effect_state_participates_in_hashes() {
+            let mut state = GameState::new();
+            let controller = state.add_player();
+            let object = battlefield_creature(
+                &mut state,
+                controller,
+                2_406,
+                2,
+                2,
+                CreatureKeywords::none(),
+            );
+            let before = state.deterministic_hash();
+
+            register_continuous(
+                &mut state,
+                ContinuousEffectDefinition::new(
+                    controller,
+                    ContinuousEffectTarget::Object(object),
+                    ContinuousEffectOperation::SetTypes {
+                        types: ObjectTypes::none().with_artifact().with_creature(),
+                    },
+                ),
+            );
+
+            assert_ne!(state.deterministic_hash(), before);
+            assert_eq!(
+                state.deterministic_hash(),
+                state.deterministic_hash_streaming()
+            );
+        }
     }
 
     #[test]
@@ -13044,6 +14379,16 @@ mod tests {
         match apply(state, Action::RegisterReplacementEffect { definition }) {
             Outcome::ReplacementEffectRegistered(replacement) => replacement,
             other => panic!("unexpected replacement registration outcome: {other:?}"),
+        }
+    }
+
+    fn register_continuous(
+        state: &mut GameState,
+        definition: ContinuousEffectDefinition,
+    ) -> ContinuousEffectId {
+        match apply(state, Action::RegisterContinuousEffect { definition }) {
+            Outcome::ContinuousEffectRegistered(effect) => effect,
+            other => panic!("unexpected continuous effect registration outcome: {other:?}"),
         }
     }
 

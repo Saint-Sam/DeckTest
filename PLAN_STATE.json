@@ -179,10 +179,17 @@
       "remote_ci": "GitHub Actions ci #21 run 28887007796 passed all required jobs for commit 0dd68591784b832e6fdf9c123471c1a44f1ee40b"
     },
     "T2.3": {
-      "status": "verified_local",
+      "status": "verified_remote",
       "branch": "task/T2.3-replacement-prevention",
       "attempts": 0,
-      "verification": "scripts/vl.sh passed locally with data-only ReplacementDefinition effects, damage interception before final mutation, self-replacement precedence, affected-player/object-controller replacement ordering, once-only retirement, final combat damage records for lifelink/deathtouch/SBA consequences, replacement canonical hash coverage, clone-surface baseline persistent_allocation_field_count=23, 302 oracle scenarios green including 2 T2.3 replacement/prevention scenarios, and perf_diff reporting 0 regressions"
+      "verification": "scripts/vl.sh passed locally with data-only ReplacementDefinition effects, damage interception before final mutation, self-replacement precedence, affected-player/object-controller replacement ordering, once-only retirement, final combat damage records for lifelink/deathtouch/SBA consequences, replacement canonical hash coverage, clone-surface baseline persistent_allocation_field_count=23, 302 oracle scenarios green including 2 T2.3 replacement/prevention scenarios, and perf_diff reporting 0 regressions",
+      "remote_ci": "GitHub Actions ci #22 run 28888565460 passed all required jobs for commit 241e2f5efb224113ed89630b80333a5babac0a1d"
+    },
+    "T2.4": {
+      "status": "verified_local",
+      "branch": "task/T2.4-layers",
+      "attempts": 0,
+      "verification": "scripts/vl.sh passed locally with data-only ContinuousEffectDefinition effects, CR 613 layer ordering through 7d, timestamp and same-layer dependency ordering, effective controller/characteristics queries feeding gameplay and SBAs, continuous-effect canonical hash coverage, clone-surface baseline persistent_allocation_field_count=24, 382 oracle scenarios green including 80 layer scenarios, coverage floor restored at 81.65% by running layer oracles under coverage, and perf_diff reporting 0 regressions"
     }
   },
   "gates_passed": [

@@ -1,0 +1,9 @@
+(
+    name: "layers 030 colorless expectation",
+    setup: (players: 2, objects: [(card: 63035, owner: 0, controller: 0, zone: "Battlefield")]),
+    script: [
+        (action: "set_base_creature", object: 0, power: 2, toughness: 2, keywords: []),
+        (action: "assert_characteristics", object: 0, colors: []),
+    ],
+    expect: (characteristics: [(object: 0, colors: [])], outcome: "in_progress", invariants: ["zone_conservation", "hash_consistency"], hash_determinism: true),
+)

@@ -1,0 +1,11 @@
+(
+    name: "layers 027 toughness buff prevents lethal sba",
+    setup: (players: 2, objects: [(card: 63032, owner: 0, controller: 0, zone: "Battlefield")]),
+    script: [
+        (action: "set_base_creature", object: 0, power: 2, toughness: 2, keywords: []),
+        (action: "mark_damage", object: 0, amount: 3),
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "modify_pt", power: 0, toughness: 2, timestamp: 1),
+        (action: "check_state_based_actions"),
+    ],
+    expect: (zone_counts: [(zone: "Battlefield", count: 1)], characteristics: [(object: 0, toughness: 4)], outcome: "in_progress", invariants: ["zone_conservation", "hash_consistency"], hash_determinism: true),
+)

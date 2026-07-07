@@ -1,0 +1,10 @@
+(
+    name: "layers 042 add remove artifact",
+    setup: (players: 2, objects: [(card: 63048, owner: 0, controller: 0, zone: "Battlefield")]),
+    script: [
+        (action: "set_base_creature", object: 0, power: 2, toughness: 2, keywords: []),
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "add_types", types: ["artifact"], timestamp: 1),
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "remove_types", types: ["artifact"], timestamp: 2),
+    ],
+    expect: (characteristics: [(object: 0, is_creature: true, types: ["creature"], power: 2, toughness: 2)], outcome: "in_progress", invariants: ["zone_conservation", "hash_consistency"], hash_determinism: true),
+)

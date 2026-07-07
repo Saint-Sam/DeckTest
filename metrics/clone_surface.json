@@ -9,6 +9,7 @@
     "CombatDamageAssignmentRequest",
     "CombatDamageProfile",
     "CombatState",
+    "ContinuousEffectDefinition",
     "GameState",
     "ObjectArena",
     "PaymentEnumeration",
@@ -31,7 +32,7 @@
   "full_state_snapshot_surface": false,
   "game_state_debug": false,
   "guard": "static persistent allocation field count",
-  "persistent_allocation_field_count": 23,
+  "persistent_allocation_field_count": 24,
   "persistent_allocation_fields": [
     {
       "field": "targets",
@@ -152,6 +153,12 @@
       "reason": "per-player replacement order preferences bounded by active effects",
       "struct": "GameState",
       "type": "Vec<ReplacementChoiceOrder>"
+    },
+    {
+      "field": "continuous_effects",
+      "reason": "data-only continuous effects compiled from card IR; dependency edges are explicit CR 613 records",
+      "struct": "GameState",
+      "type": "Vec<ContinuousEffectSubscription>"
     },
     {
       "field": "turn_events",

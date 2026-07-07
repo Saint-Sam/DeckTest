@@ -1,0 +1,10 @@
+(
+    name: "layers 054 type add remove sequence",
+    setup: (players: 2, objects: [(card: 63064, owner: 0, controller: 0, zone: "Battlefield")]),
+    script: [
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "set_types", types: ["artifact"], timestamp: 1),
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "add_types", types: ["creature"], timestamp: 2),
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "remove_types", types: ["creature"], timestamp: 3),
+    ],
+    expect: (characteristics: [(object: 0, is_creature: false, types: ["artifact"])], outcome: "in_progress", invariants: ["zone_conservation", "hash_consistency"], hash_determinism: true),
+)

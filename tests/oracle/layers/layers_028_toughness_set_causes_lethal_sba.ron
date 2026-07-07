@@ -1,0 +1,11 @@
+(
+    name: "layers 028 toughness set causes lethal sba",
+    setup: (players: 2, objects: [(card: 63033, owner: 0, controller: 0, zone: "Battlefield")]),
+    script: [
+        (action: "set_base_creature", object: 0, power: 2, toughness: 4, keywords: []),
+        (action: "mark_damage", object: 0, amount: 2),
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "set_pt", power: 2, toughness: 1, timestamp: 1),
+        (action: "check_state_based_actions"),
+    ],
+    expect: (zone_counts: [(zone: "Battlefield", count: 0), (zone: "Graveyard", player: 0, count: 1)], outcome: "in_progress", invariants: ["zone_conservation", "hash_consistency"], hash_determinism: true),
+)

@@ -31,4 +31,7 @@ if ! cargo llvm-cov --version >/dev/null 2>&1; then
 fi
 
 mkdir -p metrics
-cargo llvm-cov --workspace --fail-under-lines "$floor" --json --output-path metrics/coverage.json
+cargo llvm-cov clean --workspace
+cargo llvm-cov --workspace --no-report
+cargo llvm-cov run -p forge-testkit --bin forge-testkit --no-report -- oracle --filter layers --no-junit
+cargo llvm-cov report --fail-under-lines "$floor" --json --output-path metrics/coverage.json

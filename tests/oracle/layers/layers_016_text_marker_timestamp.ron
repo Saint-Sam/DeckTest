@@ -1,0 +1,9 @@
+(
+    name: "layers 016 text marker timestamp",
+    setup: (players: 2, objects: [(card: 63016, owner: 0, controller: 0, zone: "Battlefield")]),
+    script: [
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "set_text_marker", marker: 10, timestamp: 1),
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "set_text_marker", marker: 22, timestamp: 2),
+    ],
+    expect: (characteristics: [(object: 0, text_marker: 22)], outcome: "in_progress", invariants: ["zone_conservation", "hash_consistency"], hash_determinism: true),
+)

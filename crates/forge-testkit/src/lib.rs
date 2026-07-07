@@ -10,10 +10,11 @@
 use forge_core::{
     apply, auto_payment_plan, Action, AttackDeclaration, BaseCreatureCharacteristics,
     BlockDeclaration, CardId, CombatDamageAssignment, CombatDamageAssignmentRequest,
-    CombatDamageTarget, CreatureKeywords, GameOutcome, GameState, ManaCost, ManaKind, ManaPool,
-    ObjectId, Outcome, PlayerId, ReplacementCondition, ReplacementDamageTargetFilter,
-    ReplacementDefinition, ReplacementDuration, ReplacementEffectId, ReplacementOperation,
-    ReplacementSourceFilter, StateHash, Step, ZoneId, ZoneKind,
+    CombatDamageTarget, ContinuousEffectDefinition, ContinuousEffectId, ContinuousEffectOperation,
+    ContinuousEffectTarget, CreatureKeywords, GameOutcome, GameState, ManaCost, ManaKind, ManaPool,
+    ObjectColors, ObjectId, ObjectTypes, Outcome, PlayerId, ReplacementCondition,
+    ReplacementDamageTargetFilter, ReplacementDefinition, ReplacementDuration, ReplacementEffectId,
+    ReplacementOperation, ReplacementSourceFilter, StateHash, Step, ZoneId, ZoneKind,
 };
 use std::{fs, path::Path};
 
@@ -554,6 +555,16 @@ pub enum ScenarioStep {
         /// Replacement registration indexes in preferred order.
         order: Vec<usize>,
     },
+    /// Register a continuous effect.
+    RegisterContinuousEffect {
+        /// Continuous-effect registration spec.
+        spec: ContinuousEffectSpec,
+    },
+    /// Assert current derived object characteristics.
+    AssertCharacteristics {
+        /// Expected effective characteristics.
+        expectation: CharacteristicExpectation,
+    },
     /// Declare attackers during the declare attackers step.
     DeclareAttackers {
         /// Zero-based scenario attacking-player index.
@@ -607,6 +618,12 @@ impl ScenarioStep {
             }
             Self::SetReplacementOrder { chooser, .. } => {
                 format!("set_replacement_order[{chooser}]")
+            }
+            Self::RegisterContinuousEffect { spec } => {
+                format!("register_continuous_effect[{}]", spec.controller)
+            }
+            Self::AssertCharacteristics { expectation } => {
+                format!("assert_characteristics[{}]", expectation.object)
             }
             Self::DeclareAttackers { player, .. } => format!("declare_attackers[{player}]"),
             Self::DeclareBlockers { player, .. } => format!("declare_blockers[{player}]"),
@@ -871,6 +888,213 @@ impl CreatureKeywordSpec {
     }
 }
 
+/// Scenario color set for layer assertions and effects.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct ColorSpec {
+    white: bool,
+    blue: bool,
+    black: bool,
+    red: bool,
+    green: bool,
+}
+
+impl ColorSpec {
+    fn to_colors(self) -> ObjectColors {
+        let mut colors = ObjectColors::none();
+        if self.white {
+            colors = colors.with_white();
+        }
+        if self.blue {
+            colors = colors.with_blue();
+        }
+        if self.black {
+            colors = colors.with_black();
+        }
+        if self.red {
+            colors = colors.with_red();
+        }
+        if self.green {
+            colors = colors.with_green();
+        }
+        colors
+    }
+
+    fn from_ron_value(value: RonValue) -> Result<Self, ScenarioError> {
+        let mut spec = Self::default();
+        for value in value.into_list("colors")? {
+            match value.into_string("color")?.as_str() {
+                "white" => spec.white = true,
+                "blue" => spec.blue = true,
+                "black" => spec.black = true,
+                "red" => spec.red = true,
+                "green" => spec.green = true,
+                other => {
+                    return Err(ScenarioError::schema(format!(
+                        "unsupported color `{other}`"
+                    )));
+                }
+            }
+        }
+        Ok(spec)
+    }
+}
+
+/// Scenario object-type set for layer assertions and effects.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct TypeSpec {
+    artifact: bool,
+    creature: bool,
+    enchantment: bool,
+    instant: bool,
+    land: bool,
+    planeswalker: bool,
+    sorcery: bool,
+}
+
+impl TypeSpec {
+    fn to_types(self) -> ObjectTypes {
+        let mut types = ObjectTypes::none();
+        if self.artifact {
+            types = types.with_artifact();
+        }
+        if self.creature {
+            types = types.with_creature();
+        }
+        if self.enchantment {
+            types = types.with_enchantment();
+        }
+        if self.instant {
+            types = types.with_instant();
+        }
+        if self.land {
+            types = types.with_land();
+        }
+        if self.planeswalker {
+            types = types.with_planeswalker();
+        }
+        if self.sorcery {
+            types = types.with_sorcery();
+        }
+        types
+    }
+
+    fn from_ron_value(value: RonValue) -> Result<Self, ScenarioError> {
+        let mut spec = Self::default();
+        for value in value.into_list("types")? {
+            match value.into_string("type")?.as_str() {
+                "artifact" => spec.artifact = true,
+                "creature" => spec.creature = true,
+                "enchantment" => spec.enchantment = true,
+                "instant" => spec.instant = true,
+                "land" => spec.land = true,
+                "planeswalker" => spec.planeswalker = true,
+                "sorcery" => spec.sorcery = true,
+                other => {
+                    return Err(ScenarioError::schema(format!(
+                        "unsupported object type `{other}`"
+                    )));
+                }
+            }
+        }
+        Ok(spec)
+    }
+}
+
+/// Expected effective object characteristics.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct CharacteristicExpectation {
+    object: usize,
+    controller: Option<usize>,
+    is_creature: Option<bool>,
+    power: Option<i32>,
+    toughness: Option<i32>,
+    keywords: Option<CreatureKeywordSpec>,
+    colors: Option<ColorSpec>,
+    types: Option<TypeSpec>,
+    text_marker: Option<u32>,
+}
+
+impl CharacteristicExpectation {
+    fn from_ron_value(value: RonValue) -> Result<Self, ScenarioError> {
+        let map = value.into_map("characteristics expectation")?;
+        Ok(Self {
+            object: map.required_usize("object")?,
+            controller: map.optional_usize("controller")?,
+            is_creature: map.optional_bool("is_creature")?,
+            power: map.optional_i32("power")?,
+            toughness: map.optional_i32("toughness")?,
+            keywords: match map.optional("keywords")? {
+                Some(value) => Some(CreatureKeywordSpec::from_ron_value(value)?),
+                None => None,
+            },
+            colors: match map.optional("colors")? {
+                Some(value) => Some(ColorSpec::from_ron_value(value)?),
+                None => None,
+            },
+            types: match map.optional("types")? {
+                Some(value) => Some(TypeSpec::from_ron_value(value)?),
+                None => None,
+            },
+            text_marker: map.optional_u32("text_marker")?,
+        })
+    }
+}
+
+/// Scenario continuous-effect registration.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct ContinuousEffectSpec {
+    controller: usize,
+    source_object: Option<usize>,
+    target_object: Option<usize>,
+    all_objects: bool,
+    operation: String,
+    from_object: Option<usize>,
+    player: Option<usize>,
+    marker: Option<u32>,
+    types: Option<TypeSpec>,
+    colors: Option<ColorSpec>,
+    keywords: Option<CreatureKeywordSpec>,
+    power: Option<i32>,
+    toughness: Option<i32>,
+    timestamp: Option<u64>,
+    dependencies: Vec<usize>,
+}
+
+impl ContinuousEffectSpec {
+    fn from_map(map: &RonMap) -> Result<Self, ScenarioError> {
+        Ok(Self {
+            controller: map.required_usize("controller")?,
+            source_object: map.optional_usize("source_object")?,
+            target_object: map.optional_usize("target_object")?,
+            all_objects: map.optional_bool("all_objects")?.unwrap_or(false),
+            operation: map.required_string("operation")?,
+            from_object: map.optional_usize("from_object")?,
+            player: map.optional_usize("player")?,
+            marker: map.optional_u32("marker")?,
+            types: match map.optional("types")? {
+                Some(value) => Some(TypeSpec::from_ron_value(value)?),
+                None => None,
+            },
+            colors: match map.optional("colors")? {
+                Some(value) => Some(ColorSpec::from_ron_value(value)?),
+                None => None,
+            },
+            keywords: match map.optional("keywords")? {
+                Some(value) => Some(CreatureKeywordSpec::from_ron_value(value)?),
+                None => None,
+            },
+            power: map.optional_i32("power")?,
+            toughness: map.optional_i32("toughness")?,
+            timestamp: map.optional_u64("timestamp")?,
+            dependencies: parse_usize_list(
+                map.optional("dependencies")?
+                    .unwrap_or_else(|| RonValue::List(Vec::new())),
+                "register_continuous_effect.dependencies",
+            )?,
+        })
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum MaybePlayerExpectation {
     None,
@@ -888,6 +1112,7 @@ enum MaybeStepExpectation {
 pub struct ScenarioExpect {
     zone_counts: Vec<ZoneCountExpectation>,
     players: Vec<PlayerExpectation>,
+    characteristics: Vec<CharacteristicExpectation>,
     outcome: Option<OutcomeExpectation>,
     active_player: Option<MaybePlayerExpectation>,
     priority_player: Option<MaybePlayerExpectation>,
@@ -914,6 +1139,13 @@ impl ScenarioExpect {
     #[must_use]
     pub fn with_player(mut self, expectation: PlayerExpectation) -> Self {
         self.players.push(expectation);
+        self
+    }
+
+    /// Returns expectations with one object-characteristics assertion appended.
+    #[must_use]
+    pub fn with_characteristics(mut self, expectation: CharacteristicExpectation) -> Self {
+        self.characteristics.push(expectation);
         self
     }
 
@@ -954,6 +1186,12 @@ impl ScenarioExpect {
         &self.players
     }
 
+    /// Returns final object-characteristics expectations.
+    #[must_use]
+    pub fn characteristics(&self) -> &[CharacteristicExpectation] {
+        &self.characteristics
+    }
+
     /// Returns the final outcome expectation, if any.
     #[must_use]
     pub const fn outcome(&self) -> Option<OutcomeExpectation> {
@@ -983,6 +1221,12 @@ impl ScenarioExpect {
         if let Some(players) = map.optional("players")? {
             for value in players.into_list("expect.players")? {
                 expect = expect.with_player(PlayerExpectation::from_ron_value(value)?);
+            }
+        }
+        if let Some(characteristics) = map.optional("characteristics")? {
+            for value in characteristics.into_list("expect.characteristics")? {
+                expect =
+                    expect.with_characteristics(CharacteristicExpectation::from_ron_value(value)?);
             }
         }
         if let Some(outcome) = map.optional("outcome")? {
@@ -1325,6 +1569,7 @@ struct RunContext {
     players: Vec<PlayerId>,
     objects: Vec<ObjectId>,
     replacements: Vec<ReplacementEffectId>,
+    continuous_effects: Vec<ContinuousEffectId>,
     failures: Vec<ScenarioFailure>,
     steps: Vec<StepRecord>,
 }
@@ -1335,6 +1580,7 @@ fn execute_scenario(scenario: &Scenario, check_expectations: bool) -> ScenarioRe
         players: Vec::new(),
         objects: Vec::new(),
         replacements: Vec::new(),
+        continuous_effects: Vec::new(),
         failures: Vec::new(),
         steps: Vec::new(),
     };
@@ -1457,6 +1703,11 @@ fn create_object(
 
 fn execute_step(step: &ScenarioStep, context: &mut RunContext) {
     let label = step.label();
+    if let ScenarioStep::AssertCharacteristics { expectation } = step {
+        check_characteristic_expectation(&label, expectation, context);
+        record_outcome(&label, Outcome::Applied, context);
+        return;
+    }
     let action = match action_for_step(step, context) {
         Ok(action) => action,
         Err(error) => {
@@ -1476,6 +1727,9 @@ fn execute_step(step: &ScenarioStep, context: &mut RunContext) {
         }
         Outcome::ReplacementEffectRegistered(replacement) => {
             context.replacements.push(*replacement);
+        }
+        Outcome::ContinuousEffectRegistered(effect) => {
+            context.continuous_effects.push(*effect);
         }
         _ => {}
     }
@@ -1639,6 +1893,11 @@ fn action_for_step(step: &ScenarioStep, context: &RunContext) -> Result<Action, 
                 order: ids,
             })
         }
+        ScenarioStep::RegisterContinuousEffect { spec } => {
+            let definition = continuous_effect_definition(spec, context)?;
+            Ok(Action::RegisterContinuousEffect { definition })
+        }
+        ScenarioStep::AssertCharacteristics { .. } => Ok(Action::CheckStateBasedActions),
         ScenarioStep::DeclareAttackers { player, attacks } => {
             let mut declarations = Vec::with_capacity(attacks.len());
             for attack in attacks {
@@ -1850,6 +2109,9 @@ fn check_expectations_for(scenario: &Scenario, context: &mut RunContext) {
                 .push(ScenarioFailure::new("expect.players", error.to_string())),
         }
     }
+    for expectation in &scenario.expect.characteristics {
+        check_characteristic_expectation("expect.characteristics", expectation, context);
+    }
     if let Some(outcome) = scenario.expect.outcome {
         check_outcome(outcome, context);
     }
@@ -1919,6 +2181,167 @@ fn check_maybe_step(expectation: MaybeStepExpectation, context: &mut RunContext)
                 context.state.current_step()
             ),
         )),
+    }
+}
+
+fn check_characteristic_expectation(
+    phase: &str,
+    expectation: &CharacteristicExpectation,
+    context: &mut RunContext,
+) {
+    let object = match object_id(&context.objects, expectation.object, phase) {
+        Ok(object) => object,
+        Err(error) => {
+            context
+                .failures
+                .push(ScenarioFailure::new(phase, error.to_string()));
+            return;
+        }
+    };
+    let actual = match context.state.object_characteristics(object) {
+        Ok(actual) => actual,
+        Err(error) => {
+            context.failures.push(ScenarioFailure::new(
+                phase,
+                format!(
+                    "object {} characteristics failed: {error:?}",
+                    expectation.object
+                ),
+            ));
+            return;
+        }
+    };
+    if let Some(controller) = expectation.controller {
+        match player_id(&context.players, controller, phase) {
+            Ok(expected) if actual.controller() == expected => {}
+            Ok(expected) => context.failures.push(ScenarioFailure::new(
+                phase,
+                format!(
+                    "object {} expected controller {}, found {}",
+                    expectation.object,
+                    expected.index(),
+                    actual.controller().index()
+                ),
+            )),
+            Err(error) => context
+                .failures
+                .push(ScenarioFailure::new(phase, error.to_string())),
+        }
+    }
+    if let Some(is_creature) = expectation.is_creature {
+        if actual.is_creature() != is_creature {
+            context.failures.push(ScenarioFailure::new(
+                phase,
+                format!(
+                    "object {} expected is_creature {}, found {}",
+                    expectation.object,
+                    is_creature,
+                    actual.is_creature()
+                ),
+            ));
+        }
+    }
+    if let Some(power) = expectation.power {
+        match actual.creature() {
+            Some(creature) if creature.power() == power => {}
+            Some(creature) => context.failures.push(ScenarioFailure::new(
+                phase,
+                format!(
+                    "object {} expected power {}, found {}",
+                    expectation.object,
+                    power,
+                    creature.power()
+                ),
+            )),
+            None => context.failures.push(ScenarioFailure::new(
+                phase,
+                format!(
+                    "object {} expected power {}, found noncreature",
+                    expectation.object, power
+                ),
+            )),
+        }
+    }
+    if let Some(toughness) = expectation.toughness {
+        match actual.creature() {
+            Some(creature) if creature.toughness() == toughness => {}
+            Some(creature) => context.failures.push(ScenarioFailure::new(
+                phase,
+                format!(
+                    "object {} expected toughness {}, found {}",
+                    expectation.object,
+                    toughness,
+                    creature.toughness()
+                ),
+            )),
+            None => context.failures.push(ScenarioFailure::new(
+                phase,
+                format!(
+                    "object {} expected toughness {}, found noncreature",
+                    expectation.object, toughness
+                ),
+            )),
+        }
+    }
+    if let Some(keywords) = expectation.keywords {
+        match actual.creature() {
+            Some(creature) if creature.keywords() == keywords.to_keywords() => {}
+            Some(creature) => context.failures.push(ScenarioFailure::new(
+                phase,
+                format!(
+                    "object {} expected keywords {:?}, found {:?}",
+                    expectation.object,
+                    keywords.to_keywords(),
+                    creature.keywords()
+                ),
+            )),
+            None => context.failures.push(ScenarioFailure::new(
+                phase,
+                format!(
+                    "object {} expected creature keywords, found noncreature",
+                    expectation.object
+                ),
+            )),
+        }
+    }
+    if let Some(colors) = expectation.colors {
+        if actual.colors() != colors.to_colors() {
+            context.failures.push(ScenarioFailure::new(
+                phase,
+                format!(
+                    "object {} expected colors {:?}, found {:?}",
+                    expectation.object,
+                    colors.to_colors(),
+                    actual.colors()
+                ),
+            ));
+        }
+    }
+    if let Some(types) = expectation.types {
+        if actual.types() != types.to_types() {
+            context.failures.push(ScenarioFailure::new(
+                phase,
+                format!(
+                    "object {} expected types {:?}, found {:?}",
+                    expectation.object,
+                    types.to_types(),
+                    actual.types()
+                ),
+            ));
+        }
+    }
+    if let Some(text_marker) = expectation.text_marker {
+        if actual.text_marker() != text_marker {
+            context.failures.push(ScenarioFailure::new(
+                phase,
+                format!(
+                    "object {} expected text marker {}, found {}",
+                    expectation.object,
+                    text_marker,
+                    actual.text_marker()
+                ),
+            ));
+        }
     }
 }
 
@@ -1992,6 +2415,16 @@ fn replacement_id(
         .ok_or_else(|| ScenarioError::schema(format!("{phase}: unknown replacement index {index}")))
 }
 
+fn continuous_effect_id(
+    effects: &[ContinuousEffectId],
+    index: usize,
+    phase: &str,
+) -> Result<ContinuousEffectId, ScenarioError> {
+    effects.get(index).copied().ok_or_else(|| {
+        ScenarioError::schema(format!("{phase}: unknown continuous effect index {index}"))
+    })
+}
+
 fn replacement_target_filter(
     players: &[PlayerId],
     objects: &[ObjectId],
@@ -2034,6 +2467,157 @@ fn replacement_operation(
         )?)),
         other => Err(ScenarioError::schema(format!(
             "unsupported replacement operation `{other}`"
+        ))),
+    }
+}
+
+fn continuous_effect_definition(
+    spec: &ContinuousEffectSpec,
+    context: &RunContext,
+) -> Result<ContinuousEffectDefinition, ScenarioError> {
+    let controller = player_id(
+        &context.players,
+        spec.controller,
+        "register_continuous_effect.controller",
+    )?;
+    let target = match (spec.all_objects, spec.target_object) {
+        (true, None) => ContinuousEffectTarget::AllObjects,
+        (false, Some(index)) => ContinuousEffectTarget::Object(object_id(
+            &context.objects,
+            index,
+            "register_continuous_effect.target_object",
+        )?),
+        (true, Some(_)) => {
+            return Err(ScenarioError::schema(
+                "register_continuous_effect cannot set both all_objects and target_object"
+                    .to_owned(),
+            ));
+        }
+        (false, None) => {
+            return Err(ScenarioError::schema(
+                "register_continuous_effect requires target_object or all_objects".to_owned(),
+            ));
+        }
+    };
+    let operation = continuous_effect_operation(spec, context)?;
+    let mut definition = ContinuousEffectDefinition::new(controller, target, operation);
+    if let Some(index) = spec.source_object {
+        definition = definition.with_source(object_id(
+            &context.objects,
+            index,
+            "register_continuous_effect.source_object",
+        )?);
+    }
+    if let Some(timestamp) = spec.timestamp {
+        definition = definition.with_timestamp(timestamp);
+    }
+    if !spec.dependencies.is_empty() {
+        let mut dependencies = Vec::with_capacity(spec.dependencies.len());
+        for index in &spec.dependencies {
+            dependencies.push(continuous_effect_id(
+                &context.continuous_effects,
+                *index,
+                "register_continuous_effect.dependencies",
+            )?);
+        }
+        definition = definition.with_dependencies(dependencies);
+    }
+    Ok(definition)
+}
+
+fn continuous_effect_operation(
+    spec: &ContinuousEffectSpec,
+    context: &RunContext,
+) -> Result<ContinuousEffectOperation, ScenarioError> {
+    match spec.operation.as_str() {
+        "copy_base_creature" => Ok(ContinuousEffectOperation::CopyBaseCreature {
+            from: object_id(
+                &context.objects,
+                spec.from_object.ok_or_else(|| {
+                    ScenarioError::schema("copy_base_creature requires from_object".to_owned())
+                })?,
+                "register_continuous_effect.from_object",
+            )?,
+        }),
+        "change_controller" => Ok(ContinuousEffectOperation::ChangeController {
+            controller: player_id(
+                &context.players,
+                spec.player.ok_or_else(|| {
+                    ScenarioError::schema("change_controller requires player".to_owned())
+                })?,
+                "register_continuous_effect.player",
+            )?,
+        }),
+        "set_text_marker" => Ok(ContinuousEffectOperation::SetTextMarker {
+            marker: spec.marker.ok_or_else(|| {
+                ScenarioError::schema("set_text_marker requires marker".to_owned())
+            })?,
+        }),
+        "set_types" => Ok(ContinuousEffectOperation::SetTypes {
+            types: spec
+                .types
+                .ok_or_else(|| ScenarioError::schema("set_types requires types".to_owned()))?
+                .to_types(),
+        }),
+        "add_types" => Ok(ContinuousEffectOperation::AddTypes {
+            types: spec
+                .types
+                .ok_or_else(|| ScenarioError::schema("add_types requires types".to_owned()))?
+                .to_types(),
+        }),
+        "remove_types" => Ok(ContinuousEffectOperation::RemoveTypes {
+            types: spec
+                .types
+                .ok_or_else(|| ScenarioError::schema("remove_types requires types".to_owned()))?
+                .to_types(),
+        }),
+        "set_colors" => Ok(ContinuousEffectOperation::SetColors {
+            colors: spec
+                .colors
+                .ok_or_else(|| ScenarioError::schema("set_colors requires colors".to_owned()))?
+                .to_colors(),
+        }),
+        "add_keywords" => Ok(ContinuousEffectOperation::AddKeywords {
+            keywords: spec
+                .keywords
+                .ok_or_else(|| ScenarioError::schema("add_keywords requires keywords".to_owned()))?
+                .to_keywords(),
+        }),
+        "remove_keywords" => Ok(ContinuousEffectOperation::RemoveKeywords {
+            keywords: spec
+                .keywords
+                .ok_or_else(|| {
+                    ScenarioError::schema("remove_keywords requires keywords".to_owned())
+                })?
+                .to_keywords(),
+        }),
+        "set_base_pt" => Ok(ContinuousEffectOperation::SetBasePowerToughness {
+            power: spec
+                .power
+                .ok_or_else(|| ScenarioError::schema("set_base_pt requires power".to_owned()))?,
+            toughness: spec.toughness.ok_or_else(|| {
+                ScenarioError::schema("set_base_pt requires toughness".to_owned())
+            })?,
+        }),
+        "set_pt" => Ok(ContinuousEffectOperation::SetPowerToughness {
+            power: spec
+                .power
+                .ok_or_else(|| ScenarioError::schema("set_pt requires power".to_owned()))?,
+            toughness: spec
+                .toughness
+                .ok_or_else(|| ScenarioError::schema("set_pt requires toughness".to_owned()))?,
+        }),
+        "modify_pt" => Ok(ContinuousEffectOperation::ModifyPowerToughness {
+            power: spec
+                .power
+                .ok_or_else(|| ScenarioError::schema("modify_pt requires power".to_owned()))?,
+            toughness: spec
+                .toughness
+                .ok_or_else(|| ScenarioError::schema("modify_pt requires toughness".to_owned()))?,
+        }),
+        "switch_pt" => Ok(ContinuousEffectOperation::SwitchPowerToughness),
+        other => Err(ScenarioError::schema(format!(
+            "unsupported continuous effect operation `{other}`"
         ))),
     }
 }
@@ -2134,6 +2718,12 @@ fn parse_script(value: RonValue) -> Result<Vec<ScenarioStep>, ScenarioError> {
                         .unwrap_or_else(|| RonValue::List(Vec::new())),
                     "set_replacement_order.order",
                 )?,
+            },
+            "register_continuous_effect" => ScenarioStep::RegisterContinuousEffect {
+                spec: ContinuousEffectSpec::from_map(&map)?,
+            },
+            "assert_characteristics" => ScenarioStep::AssertCharacteristics {
+                expectation: CharacteristicExpectation::from_ron_value(RonValue::Map(map))?,
             },
             "declare_attackers" => ScenarioStep::DeclareAttackers {
                 player: map.required_usize("player")?,

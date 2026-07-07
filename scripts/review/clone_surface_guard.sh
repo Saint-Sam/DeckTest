@@ -86,6 +86,7 @@ allowed = {
     ("GameState", "pending_triggers"): "Copy trigger instances drained before priority",
     ("GameState", "replacement_effects"): "data-only Copy replacement/prevention definitions compiled from card IR",
     ("GameState", "replacement_choice_orders"): "per-player replacement order preferences bounded by active effects",
+    ("GameState", "continuous_effects"): "data-only continuous effects compiled from card IR; dependency edges are explicit CR 613 records",
     ("GameState", "turn_events"): "current-turn Copy event records bounded by EVENT_RING_CAPACITY",
     ("GameState", "combat"): "CombatState wrapper cleared between combats",
     ("GameState", "empty_library_draws_since_sba"): "player IDs drained by SBA processing",
