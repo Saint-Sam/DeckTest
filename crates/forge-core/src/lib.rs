@@ -2961,34 +2961,74 @@ pub enum Action {
 }
 
 /// Ordered set of currently legal actions.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ActionList {
-    actions: Vec<Action>,
+    storage: ActionListStorage,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+enum ActionListStorage {
+    #[default]
+    Empty,
+    One([Action; 1]),
+    Many(Vec<Action>),
 }
 
 impl ActionList {
     /// Creates an action list from canonical actions.
     #[must_use]
     pub fn new(actions: Vec<Action>) -> Self {
-        Self { actions }
+        let storage = match actions.len() {
+            0 => ActionListStorage::Empty,
+            1 => {
+                let mut actions = actions;
+                if let Some(action) = actions.pop() {
+                    ActionListStorage::One([action])
+                } else {
+                    ActionListStorage::Empty
+                }
+            }
+            _ => ActionListStorage::Many(actions),
+        };
+        Self { storage }
+    }
+
+    /// Creates an empty action list.
+    #[must_use]
+    pub fn empty() -> Self {
+        Self {
+            storage: ActionListStorage::Empty,
+        }
+    }
+
+    /// Creates an action list containing exactly one action.
+    #[must_use]
+    pub fn single(action: Action) -> Self {
+        Self {
+            storage: ActionListStorage::One([action]),
+        }
     }
 
     /// Returns the legal actions in deterministic order.
     #[must_use]
     pub fn actions(&self) -> &[Action] {
-        &self.actions
+        match &self.storage {
+            ActionListStorage::Empty => &[],
+            ActionListStorage::One(actions) => actions,
+            ActionListStorage::Many(actions) => actions,
+        }
     }
 
     /// Returns the number of actions.
     #[must_use]
     pub fn len(&self) -> usize {
-        self.actions.len()
+        self.actions().len()
     }
 
     /// Returns true if there are no actions.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.actions.is_empty()
+        matches!(self.storage, ActionListStorage::Empty)
     }
 }
 
@@ -3024,11 +3064,10 @@ pub enum Outcome {
 /// Returns the currently legal external actions in deterministic order.
 #[must_use]
 pub fn legal_actions(state: &GameState) -> ActionList {
-    let mut actions = Vec::new();
     if let Some(player) = state.priority_player() {
-        actions.push(Action::PassPriority { player });
+        return ActionList::single(Action::PassPriority { player });
     }
-    ActionList::new(actions)
+    ActionList::empty()
 }
 
 /// Applies one external action through the kernel boundary.

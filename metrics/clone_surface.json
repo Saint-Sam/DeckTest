@@ -1,6 +1,5 @@
 {
   "allocation_bearing_wrappers": [
-    "ActionList",
     "AttackingCreature",
     "AutoTapPaymentEnumeration",
     "AutoTapPaymentPlan",
