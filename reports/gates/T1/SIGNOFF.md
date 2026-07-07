@@ -12,8 +12,11 @@ Verdict: CONDITIONAL PASS LOCAL - exact final-tree remote CI pending.
 - Baseline remote-green remediation commit reviewed: `0d2eef5f874a1120f6643c8556d65bc10717250b` (`T1 gate: add combat oracle remediation`)
 - Remote CI evidence for that commit: GitHub Actions `ci #17`, run ID
   `28877442664`, passed all required jobs.
-- Current local review tree adds reviewer evidence/tooling on top of `0d2eef5`.
-- Exact final local evidence/tooling commit remote CI: pending owner push
+- Clean-checkout gate target: `bde958c770cc03b7a1fe4c80b2ae1c2df9e38f75`
+  (`T1 gate: close live review evidence`)
+- Clean-checkout gate result: PASS; archived in
+  `reports/gates/T1/clean-checkout-gate-bde958c-2026-07-07.log`.
+- Exact final local evidence/log-archive commit remote CI: pending owner push
   through GitHub Desktop.
 - Product-code edits by this reviewer: `forge-testkit oracle --path PATH` and
   review tooling fixes only; no rules-kernel product behavior changed in this
@@ -46,7 +49,7 @@ Verdict: CONDITIONAL PASS LOCAL - exact final-tree remote CI pending.
 
 | Gate | Result | Review notes |
 | --- | --- | --- |
-| G1 Gate script green from scratch | PENDING | Local gate log is green, but exact final evidence/tooling commit and clean-checkout rerun are pending packaging. |
+| G1 Gate script green from scratch | PASS | `scripts/gates/gate_T1.sh` passed from local clean clone `/private/tmp/forge-t1-bde958c770cc-clean` at commit `bde958c770cc03b7a1fe4c80b2ae1c2df9e38f75`; log archived in T1 evidence. |
 | G2 Exit metrics meet targets | PASS | T1 exit metrics meet gate targets: 300 scenarios, 60 combat scenarios, sanitizer fuzz evidence, clone budget below 200 ns, CLI demo/roundtrip, and arena smoke. |
 | G3 Test-quality audit | PASS | Three targeted mutation checks caught meaningful regressions in double-block ordering, lifelink before loss SBAs, and combat scenario parsing. |
 | G4 Adversarial probe | PASS | The reviewer authored five novel oracle scenarios and all five passed with `forge-testkit oracle --path`. |
@@ -60,15 +63,12 @@ Verdict: CONDITIONAL PASS LOCAL - exact final-tree remote CI pending.
 
 ## Remaining Remediation
 
-T1.R7 - Pending exact final local evidence commit and clean-checkout gate
-evidence packaging.
-
 T1.R9 - Pending green GitHub Actions run for the exact final local evidence
 commit after owner push through GitHub Desktop.
 
 ## Closing Note
 
 The original T1 gate failure is substantively remediated locally. The only
-remaining release-quality hold is procedural: make the final local evidence
-commit, push it, and require GitHub Actions to pass for that exact hash before
-adding `T1` to `gates_passed`.
+remaining release-quality hold is procedural: push the final local evidence
+commit and require GitHub Actions to pass for that exact hash before adding
+`T1` to `gates_passed`.

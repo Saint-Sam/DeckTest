@@ -13,9 +13,9 @@ the scenario runner supports combat actions, the bounded oracle pack includes
 60 combat scenarios, the live reviewer checks passed, and GitHub Actions passed
 for the combat remediation commit `0d2eef5`.
 
-The remaining hold is procedural: the new reviewer evidence/tooling commit must
-be pushed and GitHub Actions must pass for that exact hash before T1 can be
-marked fully passed.
+The remaining hold is procedural: the final evidence/log-archive commit must be
+pushed and GitHub Actions must pass for that exact hash before T1 can be marked
+fully passed.
 
 ## 2. WHAT YOU SHOULD SEE - TRY IT YOURSELF
 
@@ -58,9 +58,10 @@ come later. The current replay demo is intentionally tiny and deterministic.
 
 ## 5. WHAT YOU SHOULD EXPECT NEXT
 
-I will create the local reviewer evidence commit. After you push it through
+I will create the final local log-archive commit. After you push it through
 GitHub Desktop, GitHub Actions should run on that exact commit. A green run lets
-us close T1.R9, move `T1` into `gates_passed`, and open Tier 2.
+us close T1.R9, move `T1` into `gates_passed`, and open Tier 2. T1.R7 clean
+checkout evidence is already locally resolved.
 
 ## 6. WHAT WE NEED FROM YOU
 

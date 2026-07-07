@@ -147,10 +147,10 @@
       "verification": "reports/blockers/T1-combat-lifelink-blocked-schema.md records and closes the combat/lifelink schema blocker with linked oracle evidence"
     },
     "T1.R7": {
-      "status": "pending_final_commit_clean_gate",
+      "status": "resolved_local",
       "branch": "remediation/T1.R7-exact-tree-gate-evidence",
       "attempts": 0,
-      "verification": "pending final reviewer evidence commit and clean-checkout gate packaging"
+      "verification": "local clean clone at /private/tmp/forge-t1-bde958c770cc-clean checked out bde958c770cc03b7a1fe4c80b2ae1c2df9e38f75 and scripts/gates/gate_T1.sh ended with PASS gate_T1.sh"
     },
     "T1.R8": {
       "status": "resolved_local",
@@ -206,7 +206,6 @@
       "reviewed_remote_green_commit": "0d2eef5f874a1120f6643c8556d65bc10717250b",
       "remote_ci": "GitHub Actions ci #17 run 28877442664 passed all required jobs for combat remediation commit 0d2eef5f874a1120f6643c8556d65bc10717250b",
       "conditions": {
-        "T1.R7": "final reviewer evidence commit plus clean-checkout gate packaging",
         "T1.R9": "owner push through GitHub Desktop and exact final-tree green GitHub Actions run"
       },
       "re_review": "Local reviewer checks passed on 2026-07-07; T1 intentionally not added to gates_passed until exact final-tree remote CI is green."

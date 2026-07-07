@@ -100,6 +100,14 @@
       }
     }
   },
+  "clean_checkout": {
+    "commit": "bde958c770cc03b7a1fe4c80b2ae1c2df9e38f75",
+    "path": "/private/tmp/forge-t1-bde958c770cc-clean",
+    "command": "scripts/gates/gate_T1.sh",
+    "result": "pass",
+    "log": "reports/gates/T1/clean-checkout-gate-bde958c-2026-07-07.log",
+    "clone_ns_per_200_card_state": 107.583
+  },
   "remote_ci": {
     "latest_checked_commit": "0d2eef5f874a1120f6643c8556d65bc10717250b",
     "latest_checked_run_id": 28877442664,
