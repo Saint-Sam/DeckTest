@@ -1,0 +1,30 @@
+id: T2.1
+title: Event system substrate
+tier: 2
+tags:
+  - kernel
+  - events
+  - triggers
+  - replay
+scope_paths:
+  - crates/forge-core/src/lib.rs
+  - docs/specs/T2.1.md
+  - reports/tickets/T2.1.yaml
+inputs:
+  - FORGE_REBUILD_MASTER_PLAN.md Section 7 T2.1
+  - FORGE_REBUILD_MASTER_PLAN.md Section 15.4 CP-LAYERS boundary
+  - docs/specs/T2.1.md
+acceptance:
+  - forge-core exposes typed, data-only GameEvent and EventRecord records
+  - GameState retains a bounded current-turn event ring
+  - successful semantic kernel mutations emit ordered events from private mutation helpers
+  - failed actions do not emit events or advance event cursors
+  - event cursors can replay current-turn events and reject stale, future, or previous-turn cursors
+  - new turns reset the current-turn event ring after preserving monotonic sequence numbers
+  - event records participate in canonical bytes and deterministic hashes
+  - no closures, callbacks, card names, external crates, or public mutating GameState APIs are introduced
+verify: cargo test -p forge-core && cargo clippy -p forge-core --all-targets -- -D warnings && scripts/vl.sh
+retry_policy: 3 attempts then blocker
+depends_on:
+  - T1
+parallel_ok: false

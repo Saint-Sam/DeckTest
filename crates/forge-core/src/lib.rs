@@ -967,7 +967,7 @@ pub const NORMAL_TURN_STEPS: [Step; 12] = [
 ];
 
 /// Summary of the most recent cleanup step's turn-based actions.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub struct CleanupReport {
     discarded: u32,
     expired_until_end_of_turn: u32,
@@ -2058,6 +2058,37 @@ pub enum StateBasedActionKind {
     DuplicateRole,
     /// CR 704.5z: start your engines! gives speed 1.
     StartYourEnginesNoSpeed,
+}
+
+impl StateBasedActionKind {
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::PlayerZeroOrLessLife => 0,
+            Self::PlayerDrewFromEmptyLibrary => 1,
+            Self::PlayerTenOrMorePoison => 2,
+            Self::TokenOffBattlefield => 3,
+            Self::CopyOutOfAllowedZone => 4,
+            Self::CreatureZeroOrLessToughness => 5,
+            Self::CreatureLethalDamage => 6,
+            Self::CreatureDeathtouchDamage => 7,
+            Self::PlaneswalkerZeroLoyalty => 8,
+            Self::LegendRule => 9,
+            Self::WorldRule => 10,
+            Self::AuraIllegalOrUnattached => 11,
+            Self::EquipmentOrFortificationIllegalAttachment => 12,
+            Self::BattleCreatureOrOtherIllegalAttachment => 13,
+            Self::CounterPairCancellation => 14,
+            Self::CounterMaximum => 15,
+            Self::SagaFinalChapter => 16,
+            Self::DungeonCompleted => 17,
+            Self::SpaceSculptorDesignation => 18,
+            Self::BattleZeroDefense => 19,
+            Self::BattleMissingProtector => 20,
+            Self::SiegeControllerProtector => 21,
+            Self::DuplicateRole => 22,
+            Self::StartYourEnginesNoSpeed => 23,
+        }
+    }
 }
 
 const STATE_BASED_ACTION_TABLE: [StateBasedActionKind; 24] = [
@@ -3257,6 +3288,416 @@ pub fn apply(state: &mut GameState, action: Action) -> Outcome {
     }
 }
 
+/// Maximum number of event records retained for the current turn.
+pub const EVENT_RING_CAPACITY: usize = 1024;
+
+const EVENT_DEEP_CLONE_LIMIT: usize = 16;
+
+/// A replay cursor into the current-turn event ring.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct EventCursor {
+    turn: u32,
+    next_sequence: u64,
+}
+
+impl EventCursor {
+    /// Returns the turn this cursor belongs to.
+    #[must_use]
+    pub const fn turn(self) -> u32 {
+        self.turn
+    }
+
+    /// Returns the first event sequence not yet consumed by this cursor.
+    #[must_use]
+    pub const fn next_sequence(self) -> u64 {
+        self.next_sequence
+    }
+}
+
+/// Error returned when replaying from an event cursor.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum EventReplayError {
+    /// The cursor was created for a different turn.
+    CursorTurnMismatch {
+        /// Cursor turn.
+        cursor_turn: u32,
+        /// Current game turn.
+        current_turn: u32,
+    },
+    /// The cursor points before the oldest retained event.
+    CursorTooOld {
+        /// Requested sequence.
+        requested: u64,
+        /// Oldest retained sequence.
+        oldest_retained: u64,
+    },
+    /// The cursor points after the next event sequence.
+    CursorInFuture {
+        /// Requested sequence.
+        requested: u64,
+        /// Next sequence that will be assigned.
+        next_sequence: u64,
+    },
+}
+
+/// One typed mutation event emitted by the rules kernel.
+///
+/// T2.1 keeps events as inert data. Later trigger and replacement systems can
+/// subscribe to these variants without closures or card-specific engine code.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum GameEvent {
+    /// The deterministic seed changed.
+    SeedSet {
+        /// New seed value.
+        seed: u64,
+    },
+    /// A player and that player's zones were added.
+    PlayerAdded {
+        /// Added player.
+        player: PlayerId,
+    },
+    /// The starting player was selected.
+    TurnOrderDecided {
+        /// Player selected to start the game.
+        starting_player: PlayerId,
+    },
+    /// Opening hands were drawn for all players.
+    OpeningHandsDrawn,
+    /// A player took a London mulligan.
+    MulliganTaken {
+        /// Player taking the mulligan.
+        player: PlayerId,
+        /// Total mulligans taken by that player after this event.
+        mulligans_taken: u32,
+    },
+    /// A player kept an opening hand.
+    OpeningHandKept {
+        /// Player keeping the hand.
+        player: PlayerId,
+    },
+    /// One opening-hand card was put on the bottom of its owner's library.
+    OpeningHandCardBottomed {
+        /// Player bottoming the card.
+        player: PlayerId,
+        /// Object put on the bottom.
+        object: ObjectId,
+    },
+    /// A player's maximum hand size changed.
+    PlayerMaxHandSizeSet {
+        /// Player whose hand-size limit changed.
+        player: PlayerId,
+        /// New maximum hand size.
+        max_hand_size: u32,
+    },
+    /// A player's life total was set directly.
+    LifeTotalSet {
+        /// Player whose life changed.
+        player: PlayerId,
+        /// New life total.
+        life: i32,
+    },
+    /// A player lost life.
+    LifeLost {
+        /// Player losing life.
+        player: PlayerId,
+        /// Amount of life lost.
+        amount: u32,
+        /// Resulting life total.
+        life: i32,
+    },
+    /// A player gained life.
+    LifeGained {
+        /// Player gaining life.
+        player: PlayerId,
+        /// Amount of life gained.
+        amount: u32,
+        /// Resulting life total.
+        life: i32,
+    },
+    /// Poison counters were added to a player.
+    PoisonCountersAdded {
+        /// Player receiving poison counters.
+        player: PlayerId,
+        /// Number of counters added.
+        amount: u32,
+        /// Resulting poison-counter total.
+        poison: u32,
+    },
+    /// A player's mana pool changed to a known value.
+    ManaPoolChanged {
+        /// Player whose pool changed.
+        player: PlayerId,
+        /// New mana pool.
+        mana_pool: ManaPool,
+    },
+    /// A player paid mana.
+    ManaPaid {
+        /// Player paying mana.
+        player: PlayerId,
+        /// Canonical payment plan consumed.
+        payment: PaymentPlan,
+        /// Resulting mana pool.
+        mana_pool: ManaPool,
+    },
+    /// One object was created in a zone.
+    ObjectCreated {
+        /// Created object.
+        object: ObjectId,
+        /// Printed card definition.
+        card: CardId,
+        /// Object owner.
+        owner: PlayerId,
+        /// Object controller.
+        controller: PlayerId,
+        /// Zone that received the object.
+        zone: ZoneId,
+    },
+    /// One object moved between zones.
+    ObjectMoved {
+        /// Moved object.
+        object: ObjectId,
+        /// Source zone.
+        from: ZoneId,
+        /// Destination zone.
+        to: ZoneId,
+    },
+    /// A zone was shuffled.
+    ZoneShuffled {
+        /// Shuffled zone.
+        zone: ZoneId,
+    },
+    /// Base creature characteristics were set.
+    BaseCreatureCharacteristicsSet {
+        /// Updated object.
+        object: ObjectId,
+        /// New base characteristics.
+        base: BaseCreatureCharacteristics,
+    },
+    /// Base creature characteristics were cleared.
+    BaseCreatureCharacteristicsCleared {
+        /// Updated object.
+        object: ObjectId,
+    },
+    /// An object's tapped status changed.
+    ObjectTapped {
+        /// Updated object.
+        object: ObjectId,
+        /// New tapped status.
+        tapped: bool,
+    },
+    /// Damage was marked on an object.
+    DamageMarked {
+        /// Damaged object.
+        object: ObjectId,
+        /// Newly marked damage.
+        amount: u32,
+        /// Total marked damage after this event.
+        total_damage: u32,
+    },
+    /// A turn began.
+    TurnStarted {
+        /// New turn number.
+        turn: u32,
+        /// Active player for the turn.
+        active_player: PlayerId,
+    },
+    /// A step ended.
+    StepEnded {
+        /// Step that ended.
+        step: Step,
+    },
+    /// A step began.
+    StepBegan {
+        /// Step that began.
+        step: Step,
+    },
+    /// Priority passed from one player.
+    PriorityPassed {
+        /// Player who passed.
+        player: PlayerId,
+    },
+    /// The priority holder changed.
+    PriorityChanged {
+        /// New priority holder, or none when no player has priority.
+        player: Option<PlayerId>,
+    },
+    /// A stack entry was added.
+    StackEntryAdded {
+        /// Added stack entry.
+        entry: StackEntryId,
+        /// Controller of the stack entry.
+        controller: PlayerId,
+        /// Spell object, if this entry has one.
+        object: Option<ObjectId>,
+        /// Stack-entry kind.
+        kind: StackObjectKind,
+    },
+    /// A stack entry resolved or was countered on resolution.
+    StackEntryResolved {
+        /// Resolved stack entry.
+        entry: StackEntryId,
+        /// Resolution result.
+        outcome: ResolutionOutcome,
+    },
+    /// Attackers were declared.
+    AttackersDeclared {
+        /// Attacking player.
+        player: PlayerId,
+        /// Number of declared attackers.
+        count: u32,
+    },
+    /// One attacker was declared.
+    AttackDeclared {
+        /// Attacking object.
+        attacker: ObjectId,
+        /// Player being attacked.
+        defending_player: PlayerId,
+    },
+    /// Blockers were declared.
+    BlockersDeclared {
+        /// Defending player.
+        defending_player: PlayerId,
+        /// Number of declared blockers.
+        count: u32,
+    },
+    /// One blocker was declared.
+    BlockDeclared {
+        /// Blocking object.
+        blocker: ObjectId,
+        /// Attacking object being blocked.
+        attacker: ObjectId,
+    },
+    /// Combat damage was dealt.
+    CombatDamageDealt {
+        /// Combat damage record.
+        record: CombatDamageRecord,
+    },
+    /// A player lost due to a state-based action.
+    PlayerLostByStateBasedAction {
+        /// Player who lost.
+        player: PlayerId,
+        /// State-based-action reason.
+        kind: StateBasedActionKind,
+    },
+    /// A permanent moved to a graveyard due to a state-based action.
+    PermanentMovedByStateBasedAction {
+        /// Object moved.
+        object: ObjectId,
+        /// State-based-action reason.
+        kind: StateBasedActionKind,
+    },
+    /// The game outcome changed.
+    GameOutcomeChanged {
+        /// New outcome.
+        outcome: GameOutcome,
+    },
+    /// Cleanup priority was requested.
+    CleanupPriorityRequested,
+    /// A duration marker was added.
+    DurationMarkerAdded {
+        /// Added marker.
+        marker: DurationMarkerId,
+        /// Marker duration.
+        duration: EffectDuration,
+    },
+    /// Duration markers expired.
+    DurationMarkersExpired {
+        /// Expired duration kind.
+        duration: EffectDuration,
+        /// Number of markers expired.
+        count: u32,
+    },
+    /// Cleanup actions were performed.
+    CleanupPerformed {
+        /// Cleanup summary.
+        report: CleanupReport,
+    },
+    /// All mana pools were cleared.
+    ManaPoolsCleared,
+    /// A player tried to draw from an empty library.
+    EmptyLibraryDraw {
+        /// Player who tried to draw.
+        player: PlayerId,
+    },
+}
+
+impl GameEvent {
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::SeedSet { .. } => 0,
+            Self::PlayerAdded { .. } => 1,
+            Self::TurnOrderDecided { .. } => 2,
+            Self::OpeningHandsDrawn => 3,
+            Self::MulliganTaken { .. } => 4,
+            Self::OpeningHandKept { .. } => 5,
+            Self::OpeningHandCardBottomed { .. } => 6,
+            Self::PlayerMaxHandSizeSet { .. } => 7,
+            Self::LifeTotalSet { .. } => 8,
+            Self::LifeLost { .. } => 9,
+            Self::LifeGained { .. } => 10,
+            Self::PoisonCountersAdded { .. } => 11,
+            Self::ManaPoolChanged { .. } => 12,
+            Self::ManaPaid { .. } => 13,
+            Self::ObjectCreated { .. } => 14,
+            Self::ObjectMoved { .. } => 15,
+            Self::ZoneShuffled { .. } => 16,
+            Self::BaseCreatureCharacteristicsSet { .. } => 17,
+            Self::BaseCreatureCharacteristicsCleared { .. } => 18,
+            Self::ObjectTapped { .. } => 19,
+            Self::DamageMarked { .. } => 20,
+            Self::TurnStarted { .. } => 21,
+            Self::StepEnded { .. } => 22,
+            Self::StepBegan { .. } => 23,
+            Self::PriorityPassed { .. } => 24,
+            Self::PriorityChanged { .. } => 25,
+            Self::StackEntryAdded { .. } => 26,
+            Self::StackEntryResolved { .. } => 27,
+            Self::AttackersDeclared { .. } => 28,
+            Self::AttackDeclared { .. } => 29,
+            Self::BlockersDeclared { .. } => 30,
+            Self::BlockDeclared { .. } => 31,
+            Self::CombatDamageDealt { .. } => 32,
+            Self::PlayerLostByStateBasedAction { .. } => 33,
+            Self::PermanentMovedByStateBasedAction { .. } => 34,
+            Self::GameOutcomeChanged { .. } => 35,
+            Self::CleanupPriorityRequested => 36,
+            Self::DurationMarkerAdded { .. } => 37,
+            Self::DurationMarkersExpired { .. } => 38,
+            Self::CleanupPerformed { .. } => 39,
+            Self::ManaPoolsCleared => 40,
+            Self::EmptyLibraryDraw { .. } => 41,
+        }
+    }
+}
+
+/// One sequenced event in the current turn's event buffer.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct EventRecord {
+    sequence: u64,
+    turn: u32,
+    event: GameEvent,
+}
+
+impl EventRecord {
+    /// Returns the monotonic sequence number for this event.
+    #[must_use]
+    pub const fn sequence(self) -> u64 {
+        self.sequence
+    }
+
+    /// Returns the turn number associated with this event.
+    #[must_use]
+    pub const fn turn(self) -> u32 {
+        self.turn
+    }
+
+    /// Returns the typed event payload.
+    #[must_use]
+    pub const fn event(self) -> GameEvent {
+        self.event
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum PendingStateBasedAction {
     PlayerLoses {
@@ -3270,7 +3711,7 @@ enum PendingStateBasedAction {
 }
 
 /// Complete T1 game state.
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Eq, PartialEq)]
 pub struct GameState {
     seed: u64,
     rng_state: u64,
@@ -3301,10 +3742,47 @@ pub struct GameState {
     stack_entries: Vec<StackEntry>,
     // clone_surface: append-only resolution audit for deterministic replay diagnostics.
     resolution_log: Vec<ResolutionRecord>,
+    next_event_sequence: u64,
+    // clone_surface: current-turn Copy event records for trigger/replay consumers.
+    turn_events: Arc<Vec<EventRecord>>,
     // clone_surface: current combat wrapper; cleared between combats.
     combat: CombatState,
     // clone_surface: player IDs only, drained by state-based-action processing.
     empty_library_draws_since_sba: Vec<PlayerId>,
+}
+
+impl Clone for GameState {
+    fn clone(&self) -> Self {
+        Self {
+            seed: self.seed,
+            rng_state: self.rng_state,
+            turn_number: self.turn_number,
+            outcome: self.outcome,
+            starting_player: self.starting_player,
+            opening_hands_drawn: self.opening_hands_drawn,
+            active_player: self.active_player,
+            priority_player: self.priority_player,
+            priority_pass_count: self.priority_pass_count,
+            current_step: self.current_step,
+            cleanup_iteration: self.cleanup_iteration,
+            cleanup_priority_requested: self.cleanup_priority_requested,
+            cleanup_repeat_pending: self.cleanup_repeat_pending,
+            attackers_declared_this_combat: self.attackers_declared_this_combat,
+            last_cleanup_report: self.last_cleanup_report,
+            players: self.players.clone(),
+            objects: self.objects.clone(),
+            zones: self.zones.clone(),
+            next_duration_marker: self.next_duration_marker,
+            duration_markers: self.duration_markers.clone(),
+            next_stack_entry: self.next_stack_entry,
+            stack_entries: self.stack_entries.clone(),
+            resolution_log: self.resolution_log.clone(),
+            next_event_sequence: self.next_event_sequence,
+            turn_events: Arc::clone(&self.turn_events),
+            combat: self.combat.clone(),
+            empty_library_draws_since_sba: self.empty_library_draws_since_sba.clone(),
+        }
+    }
 }
 
 impl Default for GameState {
@@ -3358,6 +3836,8 @@ impl GameState {
             next_stack_entry: 0,
             stack_entries: Vec::new(),
             resolution_log: Vec::new(),
+            next_event_sequence: 0,
+            turn_events: Arc::new(Vec::with_capacity(EVENT_DEEP_CLONE_LIMIT)),
             combat: CombatState::new(),
             empty_library_draws_since_sba: Vec::new(),
         }
@@ -3367,6 +3847,7 @@ impl GameState {
     fn set_seed(&mut self, seed: u64) {
         self.seed = seed;
         self.rng_state = seed;
+        self.emit_event(GameEvent::SeedSet { seed });
     }
 
     /// Returns the deterministic game seed.
@@ -3468,10 +3949,79 @@ impl GameState {
         &self.resolution_log
     }
 
+    /// Returns typed mutation events emitted during the current turn.
+    #[must_use]
+    pub fn events_this_turn(&self) -> &[EventRecord] {
+        &self.turn_events
+    }
+
+    /// Returns a cursor positioned after the latest retained event.
+    #[must_use]
+    pub const fn event_cursor(&self) -> EventCursor {
+        EventCursor {
+            turn: self.turn_number,
+            next_sequence: self.next_event_sequence,
+        }
+    }
+
+    /// Returns current-turn events at or after a cursor.
+    pub fn events_since(&self, cursor: EventCursor) -> Result<&[EventRecord], EventReplayError> {
+        if cursor.turn != self.turn_number {
+            return Err(EventReplayError::CursorTurnMismatch {
+                cursor_turn: cursor.turn,
+                current_turn: self.turn_number,
+            });
+        }
+        if cursor.next_sequence > self.next_event_sequence {
+            return Err(EventReplayError::CursorInFuture {
+                requested: cursor.next_sequence,
+                next_sequence: self.next_event_sequence,
+            });
+        }
+        let oldest = self
+            .turn_events
+            .first()
+            .map_or(self.next_event_sequence, |event| event.sequence());
+        if cursor.next_sequence < oldest {
+            return Err(EventReplayError::CursorTooOld {
+                requested: cursor.next_sequence,
+                oldest_retained: oldest,
+            });
+        }
+        let offset = self
+            .turn_events
+            .iter()
+            .position(|event| event.sequence() >= cursor.next_sequence)
+            .unwrap_or(self.turn_events.len());
+        Ok(&self.turn_events[offset..])
+    }
+
     /// Returns current combat state.
     #[must_use]
     pub const fn combat_state(&self) -> &CombatState {
         &self.combat
+    }
+
+    fn emit_event(&mut self, event: GameEvent) {
+        let record = EventRecord {
+            sequence: self.next_event_sequence,
+            turn: self.turn_number,
+            event,
+        };
+        self.next_event_sequence = self.next_event_sequence.saturating_add(1);
+        let events = Arc::make_mut(&mut self.turn_events);
+        events.push(record);
+        if events.len() > EVENT_RING_CAPACITY {
+            events.remove(0);
+        }
+    }
+
+    fn reset_turn_events(&mut self) {
+        if Arc::strong_count(&self.turn_events) > 1 {
+            self.turn_events = Arc::new(Vec::with_capacity(EVENT_DEEP_CLONE_LIMIT));
+        } else {
+            Arc::make_mut(&mut self.turn_events).clear();
+        }
     }
 
     /// Adds a player and that player's owned zones.
@@ -3490,6 +4040,7 @@ impl GameState {
             id: ZoneId::new(Some(id), ZoneKind::Graveyard),
             objects: Arc::new(Vec::new()),
         });
+        self.emit_event(GameEvent::PlayerAdded { player: id });
         id
     }
 
@@ -3504,6 +4055,10 @@ impl GameState {
             .get_mut(player.index())
             .ok_or(StateError::UnknownPlayer(player))?;
         player_state.max_hand_size = max_hand_size;
+        self.emit_event(GameEvent::PlayerMaxHandSizeSet {
+            player,
+            max_hand_size,
+        });
         Ok(())
     }
 
@@ -3514,6 +4069,7 @@ impl GameState {
             .get_mut(player.index())
             .ok_or(StateError::UnknownPlayer(player))?;
         player_state.life = life;
+        self.emit_event(GameEvent::LifeTotalSet { player, life });
         Ok(())
     }
 
@@ -3527,6 +4083,12 @@ impl GameState {
             .life
             .checked_sub(i32::try_from(amount).unwrap_or(i32::MAX))
             .ok_or(StateError::LifeTotalOverflow)?;
+        let life = player_state.life;
+        self.emit_event(GameEvent::LifeLost {
+            player,
+            amount,
+            life,
+        });
         Ok(())
     }
 
@@ -3540,6 +4102,12 @@ impl GameState {
             .life
             .checked_add(i32::try_from(amount).unwrap_or(i32::MAX))
             .ok_or(StateError::LifeTotalOverflow)?;
+        let life = player_state.life;
+        self.emit_event(GameEvent::LifeGained {
+            player,
+            amount,
+            life,
+        });
         Ok(())
     }
 
@@ -3553,6 +4121,12 @@ impl GameState {
             .poison
             .checked_add(amount)
             .ok_or(StateError::PoisonCounterOverflow)?;
+        let poison = player_state.poison;
+        self.emit_event(GameEvent::PoisonCountersAdded {
+            player,
+            amount,
+            poison,
+        });
         Ok(())
     }
 
@@ -3575,6 +4149,8 @@ impl GameState {
             .mana_pool
             .checked_add(mana)
             .ok_or(StateError::ManaValueOverflow)?;
+        let mana_pool = player_state.mana_pool;
+        self.emit_event(GameEvent::ManaPoolChanged { player, mana_pool });
         Ok(())
     }
 
@@ -3585,6 +4161,10 @@ impl GameState {
             .get_mut(player.index())
             .ok_or(StateError::UnknownPlayer(player))?;
         player_state.mana_pool = ManaPool::empty();
+        self.emit_event(GameEvent::ManaPoolChanged {
+            player,
+            mana_pool: ManaPool::empty(),
+        });
         Ok(())
     }
 
@@ -3617,6 +4197,12 @@ impl GameState {
             .mana_pool
             .pay(plan)
             .map_err(Self::map_payment_error)?;
+        let mana_pool = player_state.mana_pool;
+        self.emit_event(GameEvent::ManaPaid {
+            player,
+            payment: plan,
+            mana_pool,
+        });
         Ok(())
     }
 
@@ -3631,6 +4217,7 @@ impl GameState {
             .get_mut(object)
             .ok_or(StateError::UnknownObject(object))?;
         record.base_creature = Some(base);
+        self.emit_event(GameEvent::BaseCreatureCharacteristicsSet { object, base });
         Ok(())
     }
 
@@ -3642,6 +4229,7 @@ impl GameState {
             .ok_or(StateError::UnknownObject(object))?;
         record.base_creature = None;
         self.remove_object_from_combat(object);
+        self.emit_event(GameEvent::BaseCreatureCharacteristicsCleared { object });
         Ok(())
     }
 
@@ -3652,6 +4240,7 @@ impl GameState {
             .get_mut(object)
             .ok_or(StateError::UnknownObject(object))?;
         record.tapped = tapped;
+        self.emit_event(GameEvent::ObjectTapped { object, tapped });
         Ok(())
     }
 
@@ -3668,6 +4257,12 @@ impl GameState {
             .damage_marked
             .checked_add(amount)
             .ok_or(StateError::CombatDamageOverflow)?;
+        let total_damage = record.damage_marked;
+        self.emit_event(GameEvent::DamageMarked {
+            object,
+            amount,
+            total_damage,
+        });
         Ok(())
     }
 
@@ -3685,6 +4280,9 @@ impl GameState {
         }
         let player = PlayerId(self.random_below(self.players.len()) as u32);
         self.starting_player = Some(player);
+        self.emit_event(GameEvent::TurnOrderDecided {
+            starting_player: player,
+        });
         Ok(player)
     }
 
@@ -3700,6 +4298,7 @@ impl GameState {
             self.draw_cards(player, OPENING_HAND_SIZE)?;
         }
         self.opening_hands_drawn = true;
+        self.emit_event(GameEvent::OpeningHandsDrawn);
         Ok(())
     }
 
@@ -3726,6 +4325,10 @@ impl GameState {
         self.shuffle_zone(library)?;
         self.draw_cards(player, OPENING_HAND_SIZE)?;
         self.players[player.index()].mulligans_taken = next_mulligans;
+        self.emit_event(GameEvent::MulliganTaken {
+            player,
+            mulligans_taken: next_mulligans,
+        });
         Ok(())
     }
 
@@ -3770,6 +4373,7 @@ impl GameState {
 
         self.put_hand_cards_on_library_bottom(player, bottom)?;
         self.players[player.index()].opening_hand_kept = true;
+        self.emit_event(GameEvent::OpeningHandKept { player });
         Ok(())
     }
 
@@ -3872,6 +4476,11 @@ impl GameState {
             .ok_or(StateError::TurnNumberOverflow)?;
         self.cleanup_iteration = 0;
         self.attackers_declared_this_combat = false;
+        self.reset_turn_events();
+        self.emit_event(GameEvent::TurnStarted {
+            turn: self.turn_number,
+            active_player,
+        });
         self.begin_step(Step::Untap)
     }
 
@@ -4093,19 +4702,33 @@ impl GameState {
         }
 
         self.combat = CombatState::new();
+        self.emit_event(GameEvent::AttackersDeclared {
+            player,
+            count: attacks.len() as u32,
+        });
         for attack in attacks {
             let keywords = self.creature_keywords(attack.attacker())?;
             if !keywords.vigilance() {
-                self.objects
-                    .get_mut(attack.attacker())
-                    .ok_or(StateError::UnknownObject(attack.attacker()))?
-                    .tapped = true;
+                {
+                    self.objects
+                        .get_mut(attack.attacker())
+                        .ok_or(StateError::UnknownObject(attack.attacker()))?
+                        .tapped = true;
+                }
+                self.emit_event(GameEvent::ObjectTapped {
+                    object: attack.attacker(),
+                    tapped: true,
+                });
             }
             self.combat.attackers.push(AttackingCreature {
                 object: attack.attacker(),
                 defending_player: attack.defending_player(),
                 blocked: false,
                 blockers: Vec::new(),
+            });
+            self.emit_event(GameEvent::AttackDeclared {
+                attacker: attack.attacker(),
+                defending_player: attack.defending_player(),
             });
         }
         self.attackers_declared_this_combat = !attacks.is_empty();
@@ -4139,6 +4762,10 @@ impl GameState {
             attacker.blockers.clear();
             attacker.blocked = false;
         }
+        self.emit_event(GameEvent::BlockersDeclared {
+            defending_player,
+            count: blocks.len() as u32,
+        });
         for block in blocks {
             self.combat.blockers.push(BlockingCreature {
                 object: block.blocker(),
@@ -4153,6 +4780,10 @@ impl GameState {
                 attacker.blocked = true;
                 attacker.blockers.push(block.blocker());
             }
+            self.emit_event(GameEvent::BlockDeclared {
+                blocker: block.blocker(),
+                attacker: block.attacker(),
+            });
         }
         self.grant_priority_to(self.active_player)?;
         Ok(())
@@ -4213,6 +4844,7 @@ impl GameState {
                     source_had_lifelink: keywords.lifelink(),
                 };
                 self.apply_combat_damage(record)?;
+                self.emit_event(GameEvent::CombatDamageDealt { record });
                 records.push(record);
             }
         }
@@ -4224,6 +4856,7 @@ impl GameState {
     /// Requests the CR 514.3a cleanup exception after cleanup actions finish.
     fn request_cleanup_priority(&mut self) {
         self.cleanup_priority_requested = true;
+        self.emit_event(GameEvent::CleanupPriorityRequested);
     }
 
     /// Adds a placeholder duration marker.
@@ -4231,6 +4864,10 @@ impl GameState {
         let id = DurationMarkerId(self.next_duration_marker);
         self.next_duration_marker = self.next_duration_marker.saturating_add(1);
         self.duration_markers.push(DurationMarker { id, duration });
+        self.emit_event(GameEvent::DurationMarkerAdded {
+            marker: id,
+            duration,
+        });
         id
     }
 
@@ -4262,6 +4899,13 @@ impl GameState {
         self.require_zone(zone)?;
         let object = self.objects.push(card, owner, controller, self.turn_number);
         self.zone_mut(zone)?.objects_mut().push(object);
+        self.emit_event(GameEvent::ObjectCreated {
+            object,
+            card,
+            owner,
+            controller,
+            zone,
+        });
         Ok(object)
     }
 
@@ -4302,6 +4946,11 @@ impl GameState {
                 record.deathtouch_damage_marked = false;
             }
         }
+        self.emit_event(GameEvent::ObjectMoved {
+            object,
+            from: from_zone_id,
+            to,
+        });
         Ok(())
     }
 
@@ -4431,6 +5080,11 @@ impl GameState {
         for resolution in &self.resolution_log {
             bytes.write_resolution_record(resolution);
         }
+        bytes.write_u64(self.next_event_sequence);
+        bytes.write_u32(self.turn_events.len() as u32);
+        for event in self.turn_events.iter() {
+            bytes.write_event_record(*event);
+        }
         bytes.write_combat_state(&self.combat);
         bytes.write_u32(self.empty_library_draws_since_sba.len() as u32);
         for player in &self.empty_library_draws_since_sba {
@@ -4510,6 +5164,11 @@ impl GameState {
         for resolution in &self.resolution_log {
             hash.write_resolution_record(resolution);
         }
+        hash.write_u64(self.next_event_sequence);
+        hash.write_u32(self.turn_events.len() as u32);
+        for event in self.turn_events.iter() {
+            hash.write_event_record(*event);
+        }
         hash.write_combat_state(&self.combat);
         hash.write_u32(self.empty_library_draws_since_sba.len() as u32);
         for player in &self.empty_library_draws_since_sba {
@@ -4521,6 +5180,7 @@ impl GameState {
 
     fn begin_step(&mut self, step: Step) -> Result<(), StateError> {
         self.current_step = Some(step);
+        self.emit_event(GameEvent::StepBegan { step });
         self.expire_step_begin_markers(step);
         match step {
             Step::Untap => self.priority_player = None,
@@ -4553,6 +5213,7 @@ impl GameState {
     }
 
     fn end_step(&mut self, step: Step) {
+        self.emit_event(GameEvent::StepEnded { step });
         self.priority_player = None;
         self.priority_pass_count = 0;
         self.clear_all_mana_pools();
@@ -4576,6 +5237,11 @@ impl GameState {
         self.cleanup_iteration = 0;
         self.attackers_declared_this_combat = false;
         self.combat = CombatState::new();
+        self.reset_turn_events();
+        self.emit_event(GameEvent::TurnStarted {
+            turn: self.turn_number,
+            active_player: next_active,
+        });
         self.begin_step(Step::Untap)?;
         Ok(Step::Untap)
     }
@@ -4616,17 +5282,21 @@ impl GameState {
     fn begin_cleanup_step(&mut self) -> Result<(), StateError> {
         self.cleanup_iteration = self.cleanup_iteration.saturating_add(1);
         self.last_cleanup_report = self.perform_cleanup_actions()?;
+        self.emit_event(GameEvent::CleanupPerformed {
+            report: self.last_cleanup_report,
+        });
         self.clear_damage_marked();
         let sba_report = self.perform_state_based_actions()?;
         let grant_priority = self.cleanup_priority_requested;
         self.cleanup_priority_requested = false;
         let needs_priority = grant_priority || sba_report.actions_performed() > 0;
         self.cleanup_repeat_pending = needs_priority && self.outcome == GameOutcome::InProgress;
-        self.priority_player = if needs_priority && self.outcome == GameOutcome::InProgress {
+        let new_priority = if needs_priority && self.outcome == GameOutcome::InProgress {
             self.active_player
         } else {
             None
         };
+        self.priority_player = new_priority;
         self.priority_pass_count = 0;
         Ok(())
     }
@@ -5147,11 +5817,12 @@ impl GameState {
 
     fn grant_priority_to(&mut self, player: Option<PlayerId>) -> Result<(), StateError> {
         self.perform_state_based_actions()?;
-        self.priority_player = if self.outcome == GameOutcome::InProgress {
+        let new_priority = if self.outcome == GameOutcome::InProgress {
             player
         } else {
             None
         };
+        self.priority_player = new_priority;
         self.priority_pass_count = 0;
         Ok(())
     }
@@ -5339,6 +6010,7 @@ impl GameState {
                 if !player_state.lost {
                     player_state.lost = true;
                     report.record_player_loss(kind);
+                    self.emit_event(GameEvent::PlayerLostByStateBasedAction { player, kind });
                 }
             }
             PendingStateBasedAction::MovePermanentToGraveyard { object, kind } => {
@@ -5350,6 +6022,7 @@ impl GameState {
                         .owner();
                     self.move_object(object, ZoneId::new(Some(owner), ZoneKind::Graveyard))?;
                     report.record_permanent_move(kind);
+                    self.emit_event(GameEvent::PermanentMovedByStateBasedAction { object, kind });
                 }
             }
         }
@@ -5371,6 +6044,7 @@ impl GameState {
     }
 
     fn refresh_game_outcome(&mut self) {
+        let old_outcome = self.outcome;
         let remaining: Vec<PlayerId> = self
             .players
             .iter()
@@ -5387,6 +6061,11 @@ impl GameState {
         } else {
             GameOutcome::Draw
         };
+        if self.outcome != old_outcome {
+            self.emit_event(GameEvent::GameOutcomeChanged {
+                outcome: self.outcome,
+            });
+        }
         if self.outcome != GameOutcome::InProgress {
             self.priority_player = None;
             self.priority_pass_count = 0;
@@ -5491,6 +6170,12 @@ impl GameState {
             targets,
             payment,
         });
+        self.emit_event(GameEvent::StackEntryAdded {
+            entry: id,
+            controller,
+            object,
+            kind,
+        });
         id
     }
 
@@ -5554,6 +6239,10 @@ impl GameState {
             legal_targets,
             outcome,
         });
+        self.emit_event(GameEvent::StackEntryResolved {
+            entry: entry.id(),
+            outcome,
+        });
         Ok(entry.id())
     }
 
@@ -5566,8 +6255,13 @@ impl GameState {
     }
 
     fn clear_all_mana_pools(&mut self) {
+        let mut changed = false;
         for player in &mut self.players {
+            changed |= player.mana_pool != ManaPool::empty();
             player.mana_pool = ManaPool::empty();
+        }
+        if changed {
+            self.emit_event(GameEvent::ManaPoolsCleared);
         }
     }
 
@@ -5613,10 +6307,11 @@ impl GameState {
         let library = ZoneId::new(Some(player), ZoneKind::Library);
         let hand = ZoneId::new(Some(player), ZoneKind::Hand);
         for _ in 0..count {
-            if self.move_last_between_zones(library, hand)?.is_none()
-                && !self.empty_library_draws_since_sba.contains(&player)
-            {
-                self.empty_library_draws_since_sba.push(player);
+            if self.move_last_between_zones(library, hand)?.is_none() {
+                self.emit_event(GameEvent::EmptyLibraryDraw { player });
+                if !self.empty_library_draws_since_sba.contains(&player) {
+                    self.empty_library_draws_since_sba.push(player);
+                }
             }
         }
         Ok(())
@@ -5651,6 +6346,12 @@ impl GameState {
             self.zones[library_index]
                 .objects_mut()
                 .insert(offset, object);
+            self.emit_event(GameEvent::ObjectMoved {
+                object,
+                from: hand,
+                to: library,
+            });
+            self.emit_event(GameEvent::OpeningHandCardBottomed { player, object });
         }
         Ok(())
     }
@@ -5673,6 +6374,7 @@ impl GameState {
         };
         let to_index = self.zone_index(to).ok_or(StateError::UnknownZone(to))?;
         self.zones[to_index].objects_mut().push(object);
+        self.emit_event(GameEvent::ObjectMoved { object, from, to });
         Ok(Some(object))
     }
 
@@ -5684,6 +6386,7 @@ impl GameState {
             let swap_with = self.random_below(index + 1);
             self.zones[zone_index].objects_mut().swap(index, swap_with);
         }
+        self.emit_event(GameEvent::ZoneShuffled { zone });
         Ok(())
     }
 
@@ -5731,33 +6434,64 @@ impl GameState {
     }
 
     fn expire_step_begin_markers(&mut self, step: Step) {
+        let before = self.duration_markers.len();
         self.duration_markers.retain(|marker| {
             !matches!(
                 marker.duration,
                 EffectDuration::UntilStepBegins(marker_step) if marker_step == step
             )
         });
+        let count = before - self.duration_markers.len();
+        if count > 0 {
+            self.emit_event(GameEvent::DurationMarkersExpired {
+                duration: EffectDuration::UntilStepBegins(step),
+                count: count as u32,
+            });
+        }
     }
 
     fn expire_phase_end_markers(&mut self, phase: Phase) {
+        let before = self.duration_markers.len();
         self.duration_markers.retain(|marker| {
             !matches!(
                 marker.duration,
                 EffectDuration::UntilPhaseEnds(marker_phase) if marker_phase == phase
             )
         });
+        let count = before - self.duration_markers.len();
+        if count > 0 {
+            self.emit_event(GameEvent::DurationMarkersExpired {
+                duration: EffectDuration::UntilPhaseEnds(phase),
+                count: count as u32,
+            });
+        }
     }
 
     fn expire_end_of_combat_markers(&mut self) {
+        let before = self.duration_markers.len();
         self.duration_markers
             .retain(|marker| marker.duration != EffectDuration::UntilEndOfCombat);
+        let count = before - self.duration_markers.len();
+        if count > 0 {
+            self.emit_event(GameEvent::DurationMarkersExpired {
+                duration: EffectDuration::UntilEndOfCombat,
+                count: count as u32,
+            });
+        }
     }
 
     fn expire_duration_markers(&mut self, duration: EffectDuration) -> usize {
         let before = self.duration_markers.len();
         self.duration_markers
             .retain(|marker| marker.duration != duration);
-        before - self.duration_markers.len()
+        let count = before - self.duration_markers.len();
+        if count > 0 {
+            self.emit_event(GameEvent::DurationMarkersExpired {
+                duration,
+                count: count as u32,
+            });
+        }
+        count
     }
 
     fn require_player(&self, id: PlayerId) -> Result<(), StateError> {
@@ -5887,6 +6621,12 @@ impl Fnva64 {
         self.write_creature_keywords(creature.keywords);
     }
 
+    fn write_base_creature_characteristics(&mut self, base: BaseCreatureCharacteristics) {
+        self.write_i32(base.power);
+        self.write_i32(base.toughness);
+        self.write_creature_keywords(base.keywords);
+    }
+
     fn write_optional_creature_characteristics(
         &mut self,
         creature: Option<CreatureCharacteristics>,
@@ -6011,6 +6751,193 @@ impl Fnva64 {
             self.write_bool(*legal);
         }
         self.write_u8(record.outcome.canonical_code());
+    }
+
+    fn write_event_record(&mut self, record: EventRecord) {
+        self.write_u64(record.sequence);
+        self.write_u32(record.turn);
+        self.write_game_event(record.event);
+    }
+
+    fn write_game_event(&mut self, event: GameEvent) {
+        self.write_u8(event.canonical_code());
+        match event {
+            GameEvent::SeedSet { seed } => self.write_u64(seed),
+            GameEvent::PlayerAdded { player }
+            | GameEvent::OpeningHandKept { player }
+            | GameEvent::PriorityPassed { player }
+            | GameEvent::EmptyLibraryDraw { player } => self.write_u32(player.0),
+            GameEvent::TurnOrderDecided { starting_player } => self.write_u32(starting_player.0),
+            GameEvent::OpeningHandsDrawn
+            | GameEvent::CleanupPriorityRequested
+            | GameEvent::ManaPoolsCleared => {}
+            GameEvent::MulliganTaken {
+                player,
+                mulligans_taken,
+            } => {
+                self.write_u32(player.0);
+                self.write_u32(mulligans_taken);
+            }
+            GameEvent::OpeningHandCardBottomed { player, object } => {
+                self.write_u32(player.0);
+                self.write_u32(object.0);
+            }
+            GameEvent::PlayerMaxHandSizeSet {
+                player,
+                max_hand_size,
+            } => {
+                self.write_u32(player.0);
+                self.write_u32(max_hand_size);
+            }
+            GameEvent::LifeTotalSet { player, life } => {
+                self.write_u32(player.0);
+                self.write_i32(life);
+            }
+            GameEvent::LifeLost {
+                player,
+                amount,
+                life,
+            }
+            | GameEvent::LifeGained {
+                player,
+                amount,
+                life,
+            } => {
+                self.write_u32(player.0);
+                self.write_u32(amount);
+                self.write_i32(life);
+            }
+            GameEvent::PoisonCountersAdded {
+                player,
+                amount,
+                poison,
+            } => {
+                self.write_u32(player.0);
+                self.write_u32(amount);
+                self.write_u32(poison);
+            }
+            GameEvent::ManaPoolChanged { player, mana_pool } => {
+                self.write_u32(player.0);
+                self.write_mana_pool(mana_pool);
+            }
+            GameEvent::ManaPaid {
+                player,
+                payment,
+                mana_pool,
+            } => {
+                self.write_u32(player.0);
+                self.write_payment_plan(payment);
+                self.write_mana_pool(mana_pool);
+            }
+            GameEvent::ObjectCreated {
+                object,
+                card,
+                owner,
+                controller,
+                zone,
+            } => {
+                self.write_u32(object.0);
+                self.write_u32(card.0);
+                self.write_u32(owner.0);
+                self.write_u32(controller.0);
+                self.write_zone_id(zone);
+            }
+            GameEvent::ObjectMoved { object, from, to } => {
+                self.write_u32(object.0);
+                self.write_zone_id(from);
+                self.write_zone_id(to);
+            }
+            GameEvent::ZoneShuffled { zone } => self.write_zone_id(zone),
+            GameEvent::BaseCreatureCharacteristicsSet { object, base } => {
+                self.write_u32(object.0);
+                self.write_base_creature_characteristics(base);
+            }
+            GameEvent::BaseCreatureCharacteristicsCleared { object } => {
+                self.write_u32(object.0);
+            }
+            GameEvent::ObjectTapped { object, tapped } => {
+                self.write_u32(object.0);
+                self.write_bool(tapped);
+            }
+            GameEvent::DamageMarked {
+                object,
+                amount,
+                total_damage,
+            } => {
+                self.write_u32(object.0);
+                self.write_u32(amount);
+                self.write_u32(total_damage);
+            }
+            GameEvent::TurnStarted {
+                turn,
+                active_player,
+            } => {
+                self.write_u32(turn);
+                self.write_u32(active_player.0);
+            }
+            GameEvent::StepEnded { step } | GameEvent::StepBegan { step } => {
+                self.write_u8(step.canonical_code());
+            }
+            GameEvent::PriorityChanged { player } => self.write_optional_player(player),
+            GameEvent::StackEntryAdded {
+                entry,
+                controller,
+                object,
+                kind,
+            } => {
+                self.write_u32(entry.0);
+                self.write_u32(controller.0);
+                self.write_optional_object(object);
+                self.write_u8(kind.canonical_code());
+            }
+            GameEvent::StackEntryResolved { entry, outcome } => {
+                self.write_u32(entry.0);
+                self.write_u8(outcome.canonical_code());
+            }
+            GameEvent::AttackersDeclared { player, count } => {
+                self.write_u32(player.0);
+                self.write_u32(count);
+            }
+            GameEvent::AttackDeclared {
+                attacker,
+                defending_player,
+            } => {
+                self.write_u32(attacker.0);
+                self.write_u32(defending_player.0);
+            }
+            GameEvent::BlockersDeclared {
+                defending_player,
+                count,
+            } => {
+                self.write_u32(defending_player.0);
+                self.write_u32(count);
+            }
+            GameEvent::BlockDeclared { blocker, attacker } => {
+                self.write_u32(blocker.0);
+                self.write_u32(attacker.0);
+            }
+            GameEvent::CombatDamageDealt { record } => {
+                self.write_combat_damage_record(record);
+            }
+            GameEvent::PlayerLostByStateBasedAction { player, kind } => {
+                self.write_u32(player.0);
+                self.write_u8(kind.canonical_code());
+            }
+            GameEvent::PermanentMovedByStateBasedAction { object, kind } => {
+                self.write_u32(object.0);
+                self.write_u8(kind.canonical_code());
+            }
+            GameEvent::GameOutcomeChanged { outcome } => self.write_game_outcome(outcome),
+            GameEvent::DurationMarkerAdded { marker, duration } => {
+                self.write_u32(marker.0);
+                self.write_effect_duration(duration);
+            }
+            GameEvent::DurationMarkersExpired { duration, count } => {
+                self.write_effect_duration(duration);
+                self.write_u32(count);
+            }
+            GameEvent::CleanupPerformed { report } => self.write_cleanup_report(report),
+        }
     }
 
     fn write_combat_damage_step(&mut self, step: Option<CombatDamageStepKind>) {
@@ -6155,6 +7082,12 @@ impl CanonicalBytes {
         self.write_creature_keywords(creature.keywords);
     }
 
+    fn write_base_creature_characteristics(&mut self, base: BaseCreatureCharacteristics) {
+        self.write_i32(base.power);
+        self.write_i32(base.toughness);
+        self.write_creature_keywords(base.keywords);
+    }
+
     fn write_optional_creature_characteristics(
         &mut self,
         creature: Option<CreatureCharacteristics>,
@@ -6281,6 +7214,193 @@ impl CanonicalBytes {
         self.write_u8(record.outcome.canonical_code());
     }
 
+    fn write_event_record(&mut self, record: EventRecord) {
+        self.write_u64(record.sequence);
+        self.write_u32(record.turn);
+        self.write_game_event(record.event);
+    }
+
+    fn write_game_event(&mut self, event: GameEvent) {
+        self.write_u8(event.canonical_code());
+        match event {
+            GameEvent::SeedSet { seed } => self.write_u64(seed),
+            GameEvent::PlayerAdded { player }
+            | GameEvent::OpeningHandKept { player }
+            | GameEvent::PriorityPassed { player }
+            | GameEvent::EmptyLibraryDraw { player } => self.write_u32(player.0),
+            GameEvent::TurnOrderDecided { starting_player } => self.write_u32(starting_player.0),
+            GameEvent::OpeningHandsDrawn
+            | GameEvent::CleanupPriorityRequested
+            | GameEvent::ManaPoolsCleared => {}
+            GameEvent::MulliganTaken {
+                player,
+                mulligans_taken,
+            } => {
+                self.write_u32(player.0);
+                self.write_u32(mulligans_taken);
+            }
+            GameEvent::OpeningHandCardBottomed { player, object } => {
+                self.write_u32(player.0);
+                self.write_u32(object.0);
+            }
+            GameEvent::PlayerMaxHandSizeSet {
+                player,
+                max_hand_size,
+            } => {
+                self.write_u32(player.0);
+                self.write_u32(max_hand_size);
+            }
+            GameEvent::LifeTotalSet { player, life } => {
+                self.write_u32(player.0);
+                self.write_i32(life);
+            }
+            GameEvent::LifeLost {
+                player,
+                amount,
+                life,
+            }
+            | GameEvent::LifeGained {
+                player,
+                amount,
+                life,
+            } => {
+                self.write_u32(player.0);
+                self.write_u32(amount);
+                self.write_i32(life);
+            }
+            GameEvent::PoisonCountersAdded {
+                player,
+                amount,
+                poison,
+            } => {
+                self.write_u32(player.0);
+                self.write_u32(amount);
+                self.write_u32(poison);
+            }
+            GameEvent::ManaPoolChanged { player, mana_pool } => {
+                self.write_u32(player.0);
+                self.write_mana_pool(mana_pool);
+            }
+            GameEvent::ManaPaid {
+                player,
+                payment,
+                mana_pool,
+            } => {
+                self.write_u32(player.0);
+                self.write_payment_plan(payment);
+                self.write_mana_pool(mana_pool);
+            }
+            GameEvent::ObjectCreated {
+                object,
+                card,
+                owner,
+                controller,
+                zone,
+            } => {
+                self.write_u32(object.0);
+                self.write_u32(card.0);
+                self.write_u32(owner.0);
+                self.write_u32(controller.0);
+                self.write_zone_id(zone);
+            }
+            GameEvent::ObjectMoved { object, from, to } => {
+                self.write_u32(object.0);
+                self.write_zone_id(from);
+                self.write_zone_id(to);
+            }
+            GameEvent::ZoneShuffled { zone } => self.write_zone_id(zone),
+            GameEvent::BaseCreatureCharacteristicsSet { object, base } => {
+                self.write_u32(object.0);
+                self.write_base_creature_characteristics(base);
+            }
+            GameEvent::BaseCreatureCharacteristicsCleared { object } => {
+                self.write_u32(object.0);
+            }
+            GameEvent::ObjectTapped { object, tapped } => {
+                self.write_u32(object.0);
+                self.write_bool(tapped);
+            }
+            GameEvent::DamageMarked {
+                object,
+                amount,
+                total_damage,
+            } => {
+                self.write_u32(object.0);
+                self.write_u32(amount);
+                self.write_u32(total_damage);
+            }
+            GameEvent::TurnStarted {
+                turn,
+                active_player,
+            } => {
+                self.write_u32(turn);
+                self.write_u32(active_player.0);
+            }
+            GameEvent::StepEnded { step } | GameEvent::StepBegan { step } => {
+                self.write_u8(step.canonical_code());
+            }
+            GameEvent::PriorityChanged { player } => self.write_optional_player(player),
+            GameEvent::StackEntryAdded {
+                entry,
+                controller,
+                object,
+                kind,
+            } => {
+                self.write_u32(entry.0);
+                self.write_u32(controller.0);
+                self.write_optional_object(object);
+                self.write_u8(kind.canonical_code());
+            }
+            GameEvent::StackEntryResolved { entry, outcome } => {
+                self.write_u32(entry.0);
+                self.write_u8(outcome.canonical_code());
+            }
+            GameEvent::AttackersDeclared { player, count } => {
+                self.write_u32(player.0);
+                self.write_u32(count);
+            }
+            GameEvent::AttackDeclared {
+                attacker,
+                defending_player,
+            } => {
+                self.write_u32(attacker.0);
+                self.write_u32(defending_player.0);
+            }
+            GameEvent::BlockersDeclared {
+                defending_player,
+                count,
+            } => {
+                self.write_u32(defending_player.0);
+                self.write_u32(count);
+            }
+            GameEvent::BlockDeclared { blocker, attacker } => {
+                self.write_u32(blocker.0);
+                self.write_u32(attacker.0);
+            }
+            GameEvent::CombatDamageDealt { record } => {
+                self.write_combat_damage_record(record);
+            }
+            GameEvent::PlayerLostByStateBasedAction { player, kind } => {
+                self.write_u32(player.0);
+                self.write_u8(kind.canonical_code());
+            }
+            GameEvent::PermanentMovedByStateBasedAction { object, kind } => {
+                self.write_u32(object.0);
+                self.write_u8(kind.canonical_code());
+            }
+            GameEvent::GameOutcomeChanged { outcome } => self.write_game_outcome(outcome),
+            GameEvent::DurationMarkerAdded { marker, duration } => {
+                self.write_u32(marker.0);
+                self.write_effect_duration(duration);
+            }
+            GameEvent::DurationMarkersExpired { duration, count } => {
+                self.write_effect_duration(duration);
+                self.write_u32(count);
+            }
+            GameEvent::CleanupPerformed { report } => self.write_cleanup_report(report),
+        }
+    }
+
     fn write_combat_damage_step(&mut self, step: Option<CombatDamageStepKind>) {
         match step {
             Some(step) => {
@@ -6352,11 +7472,12 @@ mod tests {
         Action, AttackDeclaration, BaseCreatureCharacteristics, BlockDeclaration, CardId,
         CastSpellRequest, CombatDamageAssignment, CombatDamageAssignmentRequest,
         CombatDamageStepKind, CombatDamageTarget, CreatureCharacteristics, CreatureKeywords,
-        EffectDuration, GameOutcome, GameState, ManaCost, ManaKind, ManaPool, ManaSource,
-        ObjectView, Outcome, PaymentError, Phase, PlayerId, PriorityOutcome, ResolutionOutcome,
-        SpellTiming, StackEntryId, StackObjectKind, StateBasedActionKind, StateBasedActionReport,
-        StateError, Step, TargetChoice, TargetKind, TargetRequirement, ZoneConservation, ZoneId,
-        ZoneKind, NORMAL_TURN_STEPS, OPENING_HAND_SIZE, PAYMENT_PLAN_LIMIT,
+        EffectDuration, EventReplayError, GameEvent, GameOutcome, GameState, ManaCost, ManaKind,
+        ManaPool, ManaSource, ObjectView, Outcome, PaymentError, Phase, PlayerId, PriorityOutcome,
+        ResolutionOutcome, SpellTiming, StackEntryId, StackObjectKind, StateBasedActionKind,
+        StateBasedActionReport, StateError, Step, TargetChoice, TargetKind, TargetRequirement,
+        ZoneConservation, ZoneId, ZoneKind, EVENT_RING_CAPACITY, NORMAL_TURN_STEPS,
+        OPENING_HAND_SIZE, PAYMENT_PLAN_LIMIT,
     };
 
     #[test]
@@ -6392,6 +7513,162 @@ mod tests {
 
         assert_eq!(state.seed(), 17);
         assert_eq!(state.object_zone(object), Some(hand));
+    }
+
+    #[test]
+    fn event_log_records_setup_and_zone_mutations() {
+        let mut state = GameState::new();
+        let cursor = state.event_cursor();
+
+        assert_eq!(
+            apply(&mut state, Action::SetSeed { seed: 22 }),
+            Outcome::Applied
+        );
+        let player = match apply(&mut state, Action::AddPlayer) {
+            Outcome::PlayerAdded(player) => player,
+            other => panic!("unexpected player outcome: {other:?}"),
+        };
+        let hand = ZoneId::new(Some(player), ZoneKind::Hand);
+        let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+        let object = match apply(
+            &mut state,
+            Action::CreateObject {
+                card: CardId::new(2_101),
+                owner: player,
+                controller: player,
+                zone: hand,
+            },
+        ) {
+            Outcome::ObjectCreated(object) => object,
+            other => panic!("unexpected object outcome: {other:?}"),
+        };
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::MoveObject {
+                    object,
+                    to: battlefield,
+                },
+            ),
+            Outcome::Applied
+        );
+
+        let events: Vec<GameEvent> = state
+            .events_since(cursor)
+            .unwrap_or_else(|error| panic!("unexpected cursor error: {error:?}"))
+            .iter()
+            .map(|record| record.event())
+            .collect();
+        assert_eq!(
+            events,
+            vec![
+                GameEvent::SeedSet { seed: 22 },
+                GameEvent::PlayerAdded { player },
+                GameEvent::ObjectCreated {
+                    object,
+                    card: CardId::new(2_101),
+                    owner: player,
+                    controller: player,
+                    zone: hand,
+                },
+                GameEvent::ObjectMoved {
+                    object,
+                    from: hand,
+                    to: battlefield,
+                },
+            ]
+        );
+        for (expected, record) in state.events_this_turn().iter().enumerate() {
+            assert_eq!(record.sequence(), expected as u64);
+            assert_eq!(record.turn(), 0);
+        }
+    }
+
+    #[test]
+    fn failed_actions_do_not_emit_events() {
+        let mut state = GameState::new();
+        let cursor = state.event_cursor();
+
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::MoveObject {
+                    object: super::ObjectId(99),
+                    to: ZoneId::new(None, ZoneKind::Battlefield),
+                },
+            ),
+            Outcome::Failed(StateError::UnknownObject(super::ObjectId(99)))
+        );
+        assert!(state
+            .events_since(cursor)
+            .unwrap_or_else(|error| panic!("unexpected cursor error: {error:?}"))
+            .is_empty());
+        assert_eq!(state.event_cursor(), cursor);
+    }
+
+    #[test]
+    fn event_ring_is_bounded_and_reports_stale_cursors() {
+        let mut state = GameState::new();
+        let stale = state.event_cursor();
+        for seed in 0..(EVENT_RING_CAPACITY as u64 + 3) {
+            assert_eq!(
+                apply(&mut state, Action::SetSeed { seed }),
+                Outcome::Applied
+            );
+        }
+
+        assert_eq!(state.events_this_turn().len(), EVENT_RING_CAPACITY);
+        assert_eq!(state.events_this_turn()[0].sequence(), 3);
+        assert_eq!(
+            state.events_since(stale),
+            Err(EventReplayError::CursorTooOld {
+                requested: 0,
+                oldest_retained: 3,
+            })
+        );
+    }
+
+    #[test]
+    fn new_turn_resets_event_ring_and_invalidates_old_turn_cursor() {
+        let mut state = GameState::new();
+        let player = match apply(&mut state, Action::AddPlayer) {
+            Outcome::PlayerAdded(player) => player,
+            other => panic!("unexpected player outcome: {other:?}"),
+        };
+        let old_turn = state.event_cursor();
+
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::StartTurn {
+                    active_player: player,
+                },
+            ),
+            Outcome::Applied
+        );
+
+        assert_eq!(
+            state.events_since(old_turn),
+            Err(EventReplayError::CursorTurnMismatch {
+                cursor_turn: 0,
+                current_turn: 1,
+            })
+        );
+        let events: Vec<GameEvent> = state
+            .events_this_turn()
+            .iter()
+            .map(|record| record.event())
+            .collect();
+        assert_eq!(
+            events,
+            vec![
+                GameEvent::TurnStarted {
+                    turn: 1,
+                    active_player: player,
+                },
+                GameEvent::StepBegan { step: Step::Untap },
+            ]
+        );
     }
 
     #[test]

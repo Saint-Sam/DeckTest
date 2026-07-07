@@ -30,7 +30,7 @@
   "full_state_snapshot_surface": false,
   "game_state_debug": false,
   "guard": "static persistent allocation field count",
-  "persistent_allocation_field_count": 18,
+  "persistent_allocation_field_count": 19,
   "persistent_allocation_fields": [
     {
       "field": "targets",
@@ -127,6 +127,12 @@
       "reason": "deterministic replay audit log",
       "struct": "GameState",
       "type": "Vec<ResolutionRecord>"
+    },
+    {
+      "field": "turn_events",
+      "reason": "current-turn Copy event records bounded by EVENT_RING_CAPACITY",
+      "struct": "GameState",
+      "type": "Arc<Vec<EventRecord>>"
     },
     {
       "field": "combat",

@@ -82,6 +82,7 @@ allowed = {
     ("GameState", "duration_markers"): "Copy records bounded by active effects",
     ("GameState", "stack_entries"): "bounded by current stack depth",
     ("GameState", "resolution_log"): "deterministic replay audit log",
+    ("GameState", "turn_events"): "current-turn Copy event records bounded by EVENT_RING_CAPACITY",
     ("GameState", "combat"): "CombatState wrapper cleared between combats",
     ("GameState", "empty_library_draws_since_sba"): "player IDs drained by SBA processing",
 }

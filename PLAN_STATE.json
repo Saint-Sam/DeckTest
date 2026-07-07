@@ -1,5 +1,5 @@
 {
-  "tier": 1,
+  "tier": 2,
   "tasks": {
     "T0.1": {
       "status": "verified",
@@ -163,6 +163,12 @@
       "branch": "remediation/T1.R9-final-tree-remote-ci",
       "attempts": 0,
       "verification": "GitHub Actions ci #18 run 28883217715 passed all required jobs for exact T1 gate evidence commit 2198493284299d9721d59ab3a23e3b2a2ab71f56"
+    },
+    "T2.1": {
+      "status": "verified_local",
+      "branch": "task/T2.1-event-system",
+      "attempts": 0,
+      "verification": "scripts/vl.sh passed locally with typed data-only GameEvent/EventRecord, bounded current-turn event ring, cursor replay errors, failed-action cleanliness, event canonical hash coverage, clone-surface baseline persistent_allocation_field_count=19, 300 oracle scenarios green, and perf_diff reporting 0 regressions"
     }
   },
   "gates_passed": [
