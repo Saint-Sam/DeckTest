@@ -2495,6 +2495,435 @@ pub enum StateError {
     StateBasedActionLoop,
 }
 
+/// One externally visible kernel action.
+///
+/// T1.R1 keeps the action surface broad enough to cover current T1 setup and
+/// rules-kernel operations while preventing consumers from calling low-level
+/// mutators directly.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum Action {
+    /// Set the deterministic game seed.
+    SetSeed {
+        /// New deterministic seed.
+        seed: u64,
+    },
+    /// Add one player and that player's zones.
+    AddPlayer,
+    /// Set a player's maximum hand size.
+    SetPlayerMaxHandSize {
+        /// Player to update.
+        player: PlayerId,
+        /// New maximum hand size.
+        max_hand_size: u32,
+    },
+    /// Set a player's life total.
+    SetPlayerLife {
+        /// Player to update.
+        player: PlayerId,
+        /// New life total.
+        life: i32,
+    },
+    /// Make a player lose life.
+    LoseLife {
+        /// Player losing life.
+        player: PlayerId,
+        /// Life amount to lose.
+        amount: u32,
+    },
+    /// Make a player gain life.
+    GainLife {
+        /// Player gaining life.
+        player: PlayerId,
+        /// Life amount to gain.
+        amount: u32,
+    },
+    /// Add poison counters to a player.
+    AddPoisonCounters {
+        /// Player receiving counters.
+        player: PlayerId,
+        /// Number of counters to add.
+        amount: u32,
+    },
+    /// Add mana to a player's pool.
+    AddManaToPool {
+        /// Player receiving mana.
+        player: PlayerId,
+        /// Mana to add.
+        mana: ManaPool,
+    },
+    /// Clear one player's mana pool.
+    ClearManaPool {
+        /// Player whose pool is cleared.
+        player: PlayerId,
+    },
+    /// Pay one explicit mana payment plan.
+    PayMana {
+        /// Paying player.
+        player: PlayerId,
+        /// Cost being paid.
+        cost: ManaCost,
+        /// Payment plan to apply.
+        plan: PaymentPlan,
+    },
+    /// Set temporary T1 creature characteristics for one object.
+    SetCreatureCharacteristics {
+        /// Object to update.
+        object: ObjectId,
+        /// Characteristics to set.
+        characteristics: CreatureCharacteristics,
+    },
+    /// Clear temporary T1 creature characteristics from one object.
+    ClearCreatureCharacteristics {
+        /// Object to update.
+        object: ObjectId,
+    },
+    /// Set an object's tapped status.
+    SetObjectTapped {
+        /// Object to update.
+        object: ObjectId,
+        /// New tapped status.
+        tapped: bool,
+    },
+    /// Mark damage on a creature object.
+    MarkDamageOnObject {
+        /// Object receiving damage.
+        object: ObjectId,
+        /// Damage amount to mark.
+        amount: u32,
+    },
+    /// Check state-based actions to a fixpoint.
+    CheckStateBasedActions,
+    /// Start a turn for the chosen active player.
+    StartTurn {
+        /// Active player for the new turn.
+        active_player: PlayerId,
+    },
+    /// Advance from the current step or main-phase segment.
+    AdvanceStep,
+    /// Pass priority for the current priority player.
+    PassPriority {
+        /// Player passing priority.
+        player: PlayerId,
+    },
+    /// Cast a spell through the CR 601 pipeline.
+    CastSpell {
+        /// Casting player.
+        player: PlayerId,
+        /// Spell object.
+        object: ObjectId,
+        /// Cast request.
+        request: CastSpellRequest,
+    },
+    /// Put a spell object on the stack through the low-level T1 stack helper.
+    PutSpellOnStack {
+        /// Controlling player.
+        player: PlayerId,
+        /// Spell object.
+        object: ObjectId,
+        /// Stack-object kind.
+        kind: StackObjectKind,
+        /// Whether priority remains with that player.
+        hold_priority: bool,
+    },
+    /// Put an ability on the stack through the low-level T1 stack helper.
+    PutAbilityOnStack {
+        /// Controlling player.
+        player: PlayerId,
+        /// Stack-object kind.
+        kind: StackObjectKind,
+        /// Whether priority remains with that player.
+        hold_priority: bool,
+    },
+    /// Put simultaneous triggered abilities on the stack in APNAP order.
+    PutSimultaneousAbilitiesApnap {
+        /// Ability controllers in source order.
+        abilities: Vec<PlayerId>,
+        /// Stack-object kind.
+        kind: StackObjectKind,
+    },
+    /// Record whether attackers were declared in this combat.
+    SetAttackersDeclaredThisCombat {
+        /// True if at least one attacker was declared.
+        attackers_declared: bool,
+    },
+    /// Declare attackers.
+    DeclareAttackers {
+        /// Attacking player.
+        player: PlayerId,
+        /// Attack declarations.
+        attacks: Vec<AttackDeclaration>,
+    },
+    /// Declare blockers.
+    DeclareBlockers {
+        /// Defending player.
+        defending_player: PlayerId,
+        /// Block declarations.
+        blocks: Vec<BlockDeclaration>,
+    },
+    /// Assign and deal combat damage.
+    AssignCombatDamage {
+        /// Damage assignment requests.
+        assignments: Vec<CombatDamageAssignmentRequest>,
+    },
+    /// Request the cleanup priority exception.
+    RequestCleanupPriority,
+    /// Add one duration marker.
+    AddDurationMarker {
+        /// Duration to track.
+        duration: EffectDuration,
+    },
+    /// Create one object in a zone.
+    CreateObject {
+        /// Card definition ID.
+        card: CardId,
+        /// Object owner.
+        owner: PlayerId,
+        /// Object controller.
+        controller: PlayerId,
+        /// Destination zone.
+        zone: ZoneId,
+    },
+    /// Move one object to another zone.
+    MoveObject {
+        /// Object to move.
+        object: ObjectId,
+        /// Destination zone.
+        to: ZoneId,
+    },
+}
+
+/// Ordered set of currently legal actions.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct ActionList {
+    actions: Vec<Action>,
+}
+
+impl ActionList {
+    /// Creates an action list from canonical actions.
+    #[must_use]
+    pub fn new(actions: Vec<Action>) -> Self {
+        Self { actions }
+    }
+
+    /// Returns the legal actions in deterministic order.
+    #[must_use]
+    pub fn actions(&self) -> &[Action] {
+        &self.actions
+    }
+
+    /// Returns the number of actions.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.actions.len()
+    }
+
+    /// Returns true if there are no actions.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.actions.is_empty()
+    }
+}
+
+/// Result of applying one external action.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum Outcome {
+    /// The action succeeded without a more specific payload.
+    Applied,
+    /// A player was added.
+    PlayerAdded(PlayerId),
+    /// An object was created.
+    ObjectCreated(ObjectId),
+    /// A step advanced.
+    StepAdvanced(Step),
+    /// Priority was passed or a stack object resolved.
+    Priority(PriorityOutcome),
+    /// A stack entry was created.
+    StackEntryAdded(StackEntryId),
+    /// Multiple stack entries were created.
+    StackEntriesAdded(Vec<StackEntryId>),
+    /// Combat damage was assigned and dealt.
+    CombatDamageAssigned(Vec<CombatDamageRecord>),
+    /// State-based actions were checked.
+    StateBasedActions(StateBasedActionReport),
+    /// A duration marker was added.
+    DurationMarkerAdded(DurationMarkerId),
+    /// The action was rejected.
+    Failed(StateError),
+}
+
+/// Returns the currently legal external actions in deterministic order.
+#[must_use]
+pub fn legal_actions(state: &GameState) -> ActionList {
+    let mut actions = Vec::new();
+    if let Some(player) = state.priority_player() {
+        actions.push(Action::PassPriority { player });
+    }
+    ActionList::new(actions)
+}
+
+/// Applies one external action through the kernel boundary.
+pub fn apply(state: &mut GameState, action: Action) -> Outcome {
+    match action {
+        Action::SetSeed { seed } => {
+            state.set_seed(seed);
+            Outcome::Applied
+        }
+        Action::AddPlayer => Outcome::PlayerAdded(state.add_player()),
+        Action::SetPlayerMaxHandSize {
+            player,
+            max_hand_size,
+        } => match state.set_player_max_hand_size(player, max_hand_size) {
+            Ok(()) => Outcome::Applied,
+            Err(error) => Outcome::Failed(error),
+        },
+        Action::SetPlayerLife { player, life } => match state.set_player_life(player, life) {
+            Ok(()) => Outcome::Applied,
+            Err(error) => Outcome::Failed(error),
+        },
+        Action::LoseLife { player, amount } => match state.lose_life(player, amount) {
+            Ok(()) => Outcome::Applied,
+            Err(error) => Outcome::Failed(error),
+        },
+        Action::GainLife { player, amount } => match state.gain_life(player, amount) {
+            Ok(()) => Outcome::Applied,
+            Err(error) => Outcome::Failed(error),
+        },
+        Action::AddPoisonCounters { player, amount } => {
+            match state.add_poison_counters(player, amount) {
+                Ok(()) => Outcome::Applied,
+                Err(error) => Outcome::Failed(error),
+            }
+        }
+        Action::AddManaToPool { player, mana } => match state.add_mana_to_pool(player, mana) {
+            Ok(()) => Outcome::Applied,
+            Err(error) => Outcome::Failed(error),
+        },
+        Action::ClearManaPool { player } => match state.clear_mana_pool(player) {
+            Ok(()) => Outcome::Applied,
+            Err(error) => Outcome::Failed(error),
+        },
+        Action::PayMana { player, cost, plan } => match state.pay_mana(player, cost, plan) {
+            Ok(()) => Outcome::Applied,
+            Err(error) => Outcome::Failed(error),
+        },
+        Action::SetCreatureCharacteristics {
+            object,
+            characteristics,
+        } => match state.set_creature_characteristics(object, characteristics) {
+            Ok(()) => Outcome::Applied,
+            Err(error) => Outcome::Failed(error),
+        },
+        Action::ClearCreatureCharacteristics { object } => {
+            match state.clear_creature_characteristics(object) {
+                Ok(()) => Outcome::Applied,
+                Err(error) => Outcome::Failed(error),
+            }
+        }
+        Action::SetObjectTapped { object, tapped } => {
+            match state.set_object_tapped(object, tapped) {
+                Ok(()) => Outcome::Applied,
+                Err(error) => Outcome::Failed(error),
+            }
+        }
+        Action::MarkDamageOnObject { object, amount } => {
+            match state.mark_damage_on_object(object, amount) {
+                Ok(()) => Outcome::Applied,
+                Err(error) => Outcome::Failed(error),
+            }
+        }
+        Action::CheckStateBasedActions => match state.check_state_based_actions() {
+            Ok(report) => Outcome::StateBasedActions(report),
+            Err(error) => Outcome::Failed(error),
+        },
+        Action::StartTurn { active_player } => match state.start_turn(active_player) {
+            Ok(()) => Outcome::Applied,
+            Err(error) => Outcome::Failed(error),
+        },
+        Action::AdvanceStep => match state.advance_step() {
+            Ok(step) => Outcome::StepAdvanced(step),
+            Err(error) => Outcome::Failed(error),
+        },
+        Action::PassPriority { player } => match state.pass_priority(player) {
+            Ok(outcome) => Outcome::Priority(outcome),
+            Err(error) => Outcome::Failed(error),
+        },
+        Action::CastSpell {
+            player,
+            object,
+            request,
+        } => match state.cast_spell(player, object, request) {
+            Ok(entry) => Outcome::StackEntryAdded(entry),
+            Err(error) => Outcome::Failed(error),
+        },
+        Action::PutSpellOnStack {
+            player,
+            object,
+            kind,
+            hold_priority,
+        } => match state.put_spell_on_stack(player, object, kind, hold_priority) {
+            Ok(entry) => Outcome::StackEntryAdded(entry),
+            Err(error) => Outcome::Failed(error),
+        },
+        Action::PutAbilityOnStack {
+            player,
+            kind,
+            hold_priority,
+        } => match state.put_ability_on_stack(player, kind, hold_priority) {
+            Ok(entry) => Outcome::StackEntryAdded(entry),
+            Err(error) => Outcome::Failed(error),
+        },
+        Action::PutSimultaneousAbilitiesApnap { abilities, kind } => {
+            match state.put_simultaneous_abilities_apnap(&abilities, kind) {
+                Ok(entries) => Outcome::StackEntriesAdded(entries),
+                Err(error) => Outcome::Failed(error),
+            }
+        }
+        Action::SetAttackersDeclaredThisCombat { attackers_declared } => {
+            state.set_attackers_declared_this_combat(attackers_declared);
+            Outcome::Applied
+        }
+        Action::DeclareAttackers { player, attacks } => {
+            match state.declare_attackers(player, &attacks) {
+                Ok(()) => Outcome::Applied,
+                Err(error) => Outcome::Failed(error),
+            }
+        }
+        Action::DeclareBlockers {
+            defending_player,
+            blocks,
+        } => match state.declare_blockers(defending_player, &blocks) {
+            Ok(()) => Outcome::Applied,
+            Err(error) => Outcome::Failed(error),
+        },
+        Action::AssignCombatDamage { assignments } => {
+            match state.assign_combat_damage(&assignments) {
+                Ok(records) => Outcome::CombatDamageAssigned(records),
+                Err(error) => Outcome::Failed(error),
+            }
+        }
+        Action::RequestCleanupPriority => {
+            state.request_cleanup_priority();
+            Outcome::Applied
+        }
+        Action::AddDurationMarker { duration } => {
+            Outcome::DurationMarkerAdded(state.add_duration_marker(duration))
+        }
+        Action::CreateObject {
+            card,
+            owner,
+            controller,
+            zone,
+        } => match state.create_object(card, owner, controller, zone) {
+            Ok(object) => Outcome::ObjectCreated(object),
+            Err(error) => Outcome::Failed(error),
+        },
+        Action::MoveObject { object, to } => match state.move_object(object, to) {
+            Ok(()) => Outcome::Applied,
+            Err(error) => Outcome::Failed(error),
+        },
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum PendingStateBasedAction {
     PlayerLoses {
@@ -2588,7 +3017,7 @@ impl GameState {
     }
 
     /// Sets the deterministic game seed.
-    pub fn set_seed(&mut self, seed: u64) {
+    fn set_seed(&mut self, seed: u64) {
         self.seed = seed;
     }
 
@@ -2686,7 +3115,7 @@ impl GameState {
     }
 
     /// Adds a player and that player's owned zones.
-    pub fn add_player(&mut self) -> PlayerId {
+    fn add_player(&mut self) -> PlayerId {
         let id = PlayerId(self.players.len() as u32);
         self.players.push(PlayerState::new(id));
         self.zones.push(Zone {
@@ -2705,7 +3134,7 @@ impl GameState {
     }
 
     /// Sets a player's maximum hand size.
-    pub fn set_player_max_hand_size(
+    fn set_player_max_hand_size(
         &mut self,
         player: PlayerId,
         max_hand_size: u32,
@@ -2719,7 +3148,7 @@ impl GameState {
     }
 
     /// Sets a player's life total.
-    pub fn set_player_life(&mut self, player: PlayerId, life: i32) -> Result<(), StateError> {
+    fn set_player_life(&mut self, player: PlayerId, life: i32) -> Result<(), StateError> {
         let player_state = self
             .players
             .get_mut(player.index())
@@ -2729,7 +3158,7 @@ impl GameState {
     }
 
     /// Makes a player lose life.
-    pub fn lose_life(&mut self, player: PlayerId, amount: u32) -> Result<(), StateError> {
+    fn lose_life(&mut self, player: PlayerId, amount: u32) -> Result<(), StateError> {
         let player_state = self
             .players
             .get_mut(player.index())
@@ -2742,7 +3171,7 @@ impl GameState {
     }
 
     /// Makes a player gain life.
-    pub fn gain_life(&mut self, player: PlayerId, amount: u32) -> Result<(), StateError> {
+    fn gain_life(&mut self, player: PlayerId, amount: u32) -> Result<(), StateError> {
         let player_state = self
             .players
             .get_mut(player.index())
@@ -2755,7 +3184,7 @@ impl GameState {
     }
 
     /// Adds poison counters to a player.
-    pub fn add_poison_counters(&mut self, player: PlayerId, amount: u32) -> Result<(), StateError> {
+    fn add_poison_counters(&mut self, player: PlayerId, amount: u32) -> Result<(), StateError> {
         let player_state = self
             .players
             .get_mut(player.index())
@@ -2777,7 +3206,7 @@ impl GameState {
     }
 
     /// Adds mana to a player's pool.
-    pub fn add_mana_to_pool(&mut self, player: PlayerId, mana: ManaPool) -> Result<(), StateError> {
+    fn add_mana_to_pool(&mut self, player: PlayerId, mana: ManaPool) -> Result<(), StateError> {
         let player_state = self
             .players
             .get_mut(player.index())
@@ -2790,7 +3219,7 @@ impl GameState {
     }
 
     /// Clears one player's mana pool.
-    pub fn clear_mana_pool(&mut self, player: PlayerId) -> Result<(), StateError> {
+    fn clear_mana_pool(&mut self, player: PlayerId) -> Result<(), StateError> {
         let player_state = self
             .players
             .get_mut(player.index())
@@ -2809,7 +3238,7 @@ impl GameState {
     }
 
     /// Applies one explicit payment plan to a player's mana pool.
-    pub fn pay_mana(
+    fn pay_mana(
         &mut self,
         player: PlayerId,
         cost: ManaCost,
@@ -2832,7 +3261,7 @@ impl GameState {
     }
 
     /// Sets or replaces creature characteristics for one object.
-    pub fn set_creature_characteristics(
+    fn set_creature_characteristics(
         &mut self,
         object: ObjectId,
         characteristics: CreatureCharacteristics,
@@ -2846,7 +3275,7 @@ impl GameState {
     }
 
     /// Clears creature characteristics from one object.
-    pub fn clear_creature_characteristics(&mut self, object: ObjectId) -> Result<(), StateError> {
+    fn clear_creature_characteristics(&mut self, object: ObjectId) -> Result<(), StateError> {
         let record = self
             .objects
             .get_mut(object)
@@ -2857,7 +3286,7 @@ impl GameState {
     }
 
     /// Sets an object's tapped status.
-    pub fn set_object_tapped(&mut self, object: ObjectId, tapped: bool) -> Result<(), StateError> {
+    fn set_object_tapped(&mut self, object: ObjectId, tapped: bool) -> Result<(), StateError> {
         let record = self
             .objects
             .get_mut(object)
@@ -2867,11 +3296,7 @@ impl GameState {
     }
 
     /// Marks damage on a creature object.
-    pub fn mark_damage_on_object(
-        &mut self,
-        object: ObjectId,
-        amount: u32,
-    ) -> Result<(), StateError> {
+    fn mark_damage_on_object(&mut self, object: ObjectId, amount: u32) -> Result<(), StateError> {
         let record = self
             .objects
             .get_mut(object)
@@ -2887,7 +3312,7 @@ impl GameState {
     }
 
     /// Checks CR 704 state-based actions until a fixpoint is reached.
-    pub fn check_state_based_actions(&mut self) -> Result<StateBasedActionReport, StateError> {
+    fn check_state_based_actions(&mut self) -> Result<StateBasedActionReport, StateError> {
         self.perform_state_based_actions()
     }
 
@@ -2917,7 +3342,7 @@ impl GameState {
     }
 
     /// Starts a turn for the chosen active player at the untap step.
-    pub fn start_turn(&mut self, active_player: PlayerId) -> Result<(), StateError> {
+    fn start_turn(&mut self, active_player: PlayerId) -> Result<(), StateError> {
         self.require_player(active_player)?;
         if self.current_step.is_some() {
             return Err(StateError::TurnAlreadyStarted);
@@ -2939,7 +3364,7 @@ impl GameState {
     /// This remains available for no-priority steps and tests. Steps with a
     /// priority window should usually end through [`Self::pass_priority`],
     /// because CR 117.4 requires all players to pass in succession.
-    pub fn advance_step(&mut self) -> Result<Step, StateError> {
+    fn advance_step(&mut self) -> Result<Step, StateError> {
         self.advance_step_after_empty_stack()
     }
 
@@ -2947,7 +3372,7 @@ impl GameState {
     ///
     /// If all players pass in succession, this either resolves the top stack
     /// entry or completes the current step when the stack is empty.
-    pub fn pass_priority(&mut self, player: PlayerId) -> Result<PriorityOutcome, StateError> {
+    fn pass_priority(&mut self, player: PlayerId) -> Result<PriorityOutcome, StateError> {
         let priority_player = self.priority_player.ok_or(StateError::NoPriority)?;
         if priority_player != player {
             return Err(StateError::PriorityPlayerMismatch {
@@ -2979,7 +3404,7 @@ impl GameState {
     /// before mutating state. On success, the spell object moves to the stack,
     /// target legality snapshots are captured, costs are paid, and priority
     /// returns to the caster.
-    pub fn cast_spell(
+    fn cast_spell(
         &mut self,
         player: PlayerId,
         object: ObjectId,
@@ -3033,7 +3458,7 @@ impl GameState {
     /// When `hold_priority` is true, priority remains with the caster as an
     /// explicit full-control choice. T1.3 keeps the same result either way
     /// because CR 117.3c gives priority back after a spell is cast.
-    pub fn put_spell_on_stack(
+    fn put_spell_on_stack(
         &mut self,
         player: PlayerId,
         object: ObjectId,
@@ -3055,7 +3480,7 @@ impl GameState {
     }
 
     /// Puts an ability on top of the stack for the current priority player.
-    pub fn put_ability_on_stack(
+    fn put_ability_on_stack(
         &mut self,
         player: PlayerId,
         kind: StackObjectKind,
@@ -3073,7 +3498,7 @@ impl GameState {
     /// Entries controlled by the active player are placed lowest, followed by
     /// nonactive players in turn order. Within one controller's entries, the
     /// provided order is preserved.
-    pub fn put_simultaneous_abilities_apnap(
+    fn put_simultaneous_abilities_apnap(
         &mut self,
         abilities: &[PlayerId],
         kind: StackObjectKind,
@@ -3119,12 +3544,12 @@ impl GameState {
     ///
     /// This is the T1.2 hook for CR 508.8. Full attack declaration replaces it
     /// in T1.6, but keeping the flag here makes the step machine testable now.
-    pub fn set_attackers_declared_this_combat(&mut self, attackers_declared: bool) {
+    fn set_attackers_declared_this_combat(&mut self, attackers_declared: bool) {
         self.attackers_declared_this_combat = attackers_declared;
     }
 
     /// Declares attackers for the current declare attackers step.
-    pub fn declare_attackers(
+    fn declare_attackers(
         &mut self,
         player: PlayerId,
         attacks: &[AttackDeclaration],
@@ -3165,7 +3590,7 @@ impl GameState {
     }
 
     /// Declares blockers for the current declare blockers step.
-    pub fn declare_blockers(
+    fn declare_blockers(
         &mut self,
         defending_player: PlayerId,
         blocks: &[BlockDeclaration],
@@ -3210,7 +3635,7 @@ impl GameState {
     }
 
     /// Assigns and deals combat damage for the current combat damage step.
-    pub fn assign_combat_damage(
+    fn assign_combat_damage(
         &mut self,
         assignments: &[CombatDamageAssignmentRequest],
     ) -> Result<Vec<CombatDamageRecord>, StateError> {
@@ -3273,12 +3698,12 @@ impl GameState {
     }
 
     /// Requests the CR 514.3a cleanup exception after cleanup actions finish.
-    pub fn request_cleanup_priority(&mut self) {
+    fn request_cleanup_priority(&mut self) {
         self.cleanup_priority_requested = true;
     }
 
     /// Adds a placeholder duration marker.
-    pub fn add_duration_marker(&mut self, duration: EffectDuration) -> DurationMarkerId {
+    fn add_duration_marker(&mut self, duration: EffectDuration) -> DurationMarkerId {
         let id = DurationMarkerId(self.next_duration_marker);
         self.next_duration_marker = self.next_duration_marker.saturating_add(1);
         self.duration_markers.push(DurationMarker { id, duration });
@@ -3301,7 +3726,7 @@ impl GameState {
     }
 
     /// Creates one object and places it into a zone.
-    pub fn create_object(
+    fn create_object(
         &mut self,
         card: CardId,
         owner: PlayerId,
@@ -3317,7 +3742,7 @@ impl GameState {
     }
 
     /// Moves an object from its current zone to another zone.
-    pub fn move_object(&mut self, object: ObjectId, to: ZoneId) -> Result<(), StateError> {
+    fn move_object(&mut self, object: ObjectId, to: ZoneId) -> Result<(), StateError> {
         if self.objects.get(object).is_none() {
             return Err(StateError::UnknownObject(object));
         }
@@ -5245,20 +5670,72 @@ impl CanonicalBytes {
 #[cfg(test)]
 mod tests {
     use super::{
-        auto_payment_plan, crate_ready, enumerate_auto_tap_payment_plans, enumerate_payment_plans,
-        state_based_action_table, validate_payment_plan, AttackDeclaration, BlockDeclaration,
-        CardId, CastSpellRequest, CombatDamageAssignment, CombatDamageAssignmentRequest,
-        CombatDamageStepKind, CombatDamageTarget, CreatureCharacteristics, CreatureKeywords,
-        EffectDuration, GameOutcome, GameState, ManaCost, ManaKind, ManaPool, ManaSource,
-        PaymentError, Phase, PlayerId, PriorityOutcome, ResolutionOutcome, SpellTiming,
-        StackEntryId, StackObjectKind, StateBasedActionKind, StateError, Step, TargetChoice,
-        TargetKind, TargetRequirement, ZoneConservation, ZoneId, ZoneKind, NORMAL_TURN_STEPS,
-        PAYMENT_PLAN_LIMIT,
+        apply, auto_payment_plan, crate_ready, enumerate_auto_tap_payment_plans,
+        enumerate_payment_plans, legal_actions, state_based_action_table, validate_payment_plan,
+        Action, AttackDeclaration, BlockDeclaration, CardId, CastSpellRequest,
+        CombatDamageAssignment, CombatDamageAssignmentRequest, CombatDamageStepKind,
+        CombatDamageTarget, CreatureCharacteristics, CreatureKeywords, EffectDuration, GameOutcome,
+        GameState, ManaCost, ManaKind, ManaPool, ManaSource, Outcome, PaymentError, Phase,
+        PlayerId, PriorityOutcome, ResolutionOutcome, SpellTiming, StackEntryId, StackObjectKind,
+        StateBasedActionKind, StateError, Step, TargetChoice, TargetKind, TargetRequirement,
+        ZoneConservation, ZoneId, ZoneKind, NORMAL_TURN_STEPS, PAYMENT_PLAN_LIMIT,
     };
 
     #[test]
     fn bootstrap_crate_is_ready() {
         assert!(crate_ready());
+    }
+
+    #[test]
+    fn action_surface_creates_setup_state_without_public_mutators() {
+        let mut state = GameState::new();
+
+        assert_eq!(
+            apply(&mut state, Action::SetSeed { seed: 17 }),
+            Outcome::Applied
+        );
+        let player = match apply(&mut state, Action::AddPlayer) {
+            Outcome::PlayerAdded(player) => player,
+            other => panic!("unexpected outcome: {other:?}"),
+        };
+        let hand = ZoneId::new(Some(player), ZoneKind::Hand);
+        let object = match apply(
+            &mut state,
+            Action::CreateObject {
+                card: CardId::new(700),
+                owner: player,
+                controller: player,
+                zone: hand,
+            },
+        ) {
+            Outcome::ObjectCreated(object) => object,
+            other => panic!("unexpected outcome: {other:?}"),
+        };
+
+        assert_eq!(state.seed(), 17);
+        assert_eq!(state.object_zone(object), Some(hand));
+    }
+
+    #[test]
+    fn legal_actions_return_actions_that_apply_accepts() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let next = state.add_player();
+
+        assert_eq!(state.start_turn(active), Ok(()));
+        assert_eq!(state.advance_step(), Ok(Step::Upkeep));
+
+        let actions = legal_actions(&state);
+
+        assert_eq!(actions.len(), 1);
+        assert_eq!(
+            actions.actions(),
+            &[Action::PassPriority { player: active }]
+        );
+        assert_eq!(
+            apply(&mut state, actions.actions()[0].clone()),
+            Outcome::Priority(PriorityOutcome::PassedTo(next))
+        );
     }
 
     #[test]

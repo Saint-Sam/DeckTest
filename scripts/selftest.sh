@@ -31,6 +31,7 @@ scripts=(
   scripts/gates/gate_T7.sh
   scripts/gates/gate_T8.sh
   scripts/review/mutation_check.sh
+  scripts/review/no_public_mutating_gamestate.sh
   scripts/review/no_unwrap.sh
   scripts/review/no_card_names.sh
   scripts/review/determinism.sh

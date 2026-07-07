@@ -74,9 +74,10 @@
       "remote_ci": "GitHub Actions ci #12 run 28824832805 passed all required jobs for commit 6491d5f"
     },
     "T1.R1": {
-      "status": "queued",
+      "status": "verified_local",
       "branch": "remediation/T1.R1-action-surface",
-      "attempts": 0
+      "attempts": 0,
+      "verification": "scripts/vl.sh passed locally with public GameState mutator review for action/apply surface"
     },
     "T1.R2": {
       "status": "queued",
@@ -119,7 +120,7 @@
       "signoff": "reports/gates/CP-KERNEL/SIGNOFF.md",
       "reviewed_commit": "6491d5fd12887eb5f5b7ad8d57eda83e1ff17783",
       "remediation": {
-        "T1.R1": "queued: seal the kernel behind legal_actions/apply",
+        "T1.R1": "verified_local: sealed the kernel behind legal_actions/apply and added public mutator review script",
         "T1.R2": "queued: replace stored creature characteristics with computed boundary",
         "T1.R3": "queued: land hidden-information PlayerView before T1.8",
         "T1.R4": "queued: flatten or guard GameState clone surface"

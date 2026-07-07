@@ -36,6 +36,7 @@ else
   step "cargo slow tests" cargo test --workspace --quiet --release -- --ignored slow
 fi
 
+step "public GameState mutator review" "$ROOT/scripts/review/no_public_mutating_gamestate.sh"
 step "coverage floor" "$ROOT/scripts/check_coverage.sh" 80
 step "oracle subset" "$ROOT/scripts/run_oracle_subset.sh"
 step "perf smoke" "$ROOT/scripts/perf_smoke.sh"
