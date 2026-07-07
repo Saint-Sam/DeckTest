@@ -86,9 +86,10 @@
       "verification": "scripts/vl.sh passed locally with base creature characteristics and derived query path"
     },
     "T1.R3": {
-      "status": "queued",
+      "status": "verified_local",
       "branch": "remediation/T1.R3-player-view",
-      "attempts": 0
+      "attempts": 0,
+      "verification": "scripts/vl.sh passed locally with PlayerView redaction, forge-ai view entrypoint, no public full snapshot, and hidden library/hand canary coverage"
     },
     "T1.R4": {
       "status": "queued",
@@ -123,7 +124,7 @@
       "remediation": {
         "T1.R1": "verified_local: sealed the kernel behind legal_actions/apply and added public mutator review script",
         "T1.R2": "verified_local: ObjectRecord stores base creature characteristics and rules code uses derived creature_characteristics query",
-        "T1.R3": "queued: land hidden-information PlayerView before T1.8",
+        "T1.R3": "verified_local: PlayerView redacts hidden hand/library identities, forge-ai accepts PlayerView instead of GameState, and full-information snapshots/canonical bytes are not public consumer APIs",
         "T1.R4": "queued: flatten or guard GameState clone surface"
       }
     }

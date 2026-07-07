@@ -5,6 +5,9 @@ version = 3
 [[package]]
 name = "forge-ai"
 version = "0.0.0"
+dependencies = [
+ "forge-core",
+]
 
 [[package]]
 name = "forge-app-android"

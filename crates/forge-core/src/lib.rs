@@ -2394,6 +2394,125 @@ impl Zone {
     }
 }
 
+/// One object slot as visible to a single observing player.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ObjectView {
+    /// A visible object with its public object record.
+    Known {
+        /// Visible object record.
+        object: ObjectRecord,
+    },
+    /// A hidden object placeholder. Count and zone position are visible, identity is not.
+    Hidden,
+}
+
+impl ObjectView {
+    /// Returns the object record when this view is known.
+    #[must_use]
+    pub const fn known(self) -> Option<ObjectRecord> {
+        match self {
+            Self::Known { object } => Some(object),
+            Self::Hidden => None,
+        }
+    }
+
+    /// Returns true when this object slot is hidden from the observer.
+    #[must_use]
+    pub const fn is_hidden(self) -> bool {
+        matches!(self, Self::Hidden)
+    }
+}
+
+/// One zone as visible to a single observing player.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ZoneView {
+    id: ZoneId,
+    objects: Vec<ObjectView>,
+}
+
+impl ZoneView {
+    /// Returns this visible zone's ID.
+    #[must_use]
+    pub const fn id(&self) -> ZoneId {
+        self.id
+    }
+
+    /// Returns visible object slots in zone order.
+    #[must_use]
+    pub fn objects(&self) -> &[ObjectView] {
+        &self.objects
+    }
+}
+
+/// Redacted state projection for one observing player.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PlayerView {
+    observer: PlayerId,
+    turn_number: u32,
+    outcome: GameOutcome,
+    active_player: Option<PlayerId>,
+    priority_player: Option<PlayerId>,
+    current_step: Option<Step>,
+    players: Vec<PlayerState>,
+    zones: Vec<ZoneView>,
+}
+
+impl PlayerView {
+    /// Returns the player this projection is for.
+    #[must_use]
+    pub const fn observer(&self) -> PlayerId {
+        self.observer
+    }
+
+    /// Returns the visible turn number.
+    #[must_use]
+    pub const fn turn_number(&self) -> u32 {
+        self.turn_number
+    }
+
+    /// Returns the visible game outcome.
+    #[must_use]
+    pub const fn game_outcome(&self) -> GameOutcome {
+        self.outcome
+    }
+
+    /// Returns the visible active player.
+    #[must_use]
+    pub const fn active_player(&self) -> Option<PlayerId> {
+        self.active_player
+    }
+
+    /// Returns the visible priority player.
+    #[must_use]
+    pub const fn priority_player(&self) -> Option<PlayerId> {
+        self.priority_player
+    }
+
+    /// Returns the visible current step.
+    #[must_use]
+    pub const fn current_step(&self) -> Option<Step> {
+        self.current_step
+    }
+
+    /// Returns visible player scalar state.
+    #[must_use]
+    pub fn players(&self) -> &[PlayerState] {
+        &self.players
+    }
+
+    /// Returns visible zones in canonical state order.
+    #[must_use]
+    pub fn zones(&self) -> &[ZoneView] {
+        &self.zones
+    }
+
+    /// Returns one visible zone by ID.
+    #[must_use]
+    pub fn zone(&self, id: ZoneId) -> Option<&ZoneView> {
+        self.zones.iter().find(|zone| zone.id == id)
+    }
+}
+
 /// Deterministic state hash.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct StateHash(u64);
@@ -2403,27 +2522,6 @@ impl StateHash {
     #[must_use]
     pub const fn get(self) -> u64 {
         self.0
-    }
-}
-
-/// Immutable snapshot of a game state and its deterministic hash.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct GameSnapshot {
-    state: GameState,
-    hash: StateHash,
-}
-
-impl GameSnapshot {
-    /// Returns the cloned state captured by this snapshot.
-    #[must_use]
-    pub const fn state(&self) -> &GameState {
-        &self.state
-    }
-
-    /// Returns the deterministic hash captured with the snapshot.
-    #[must_use]
-    pub const fn hash(&self) -> StateHash {
-        self.hash
     }
 }
 
@@ -2989,7 +3087,7 @@ enum PendingStateBasedAction {
 }
 
 /// Complete T1 game state.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct GameState {
     seed: u64,
     turn_number: u32,
@@ -3375,22 +3473,60 @@ impl GameState {
     }
 
     /// Returns object arena storage.
+    #[cfg(test)]
     #[must_use]
-    pub const fn objects(&self) -> &ObjectArena {
+    const fn objects(&self) -> &ObjectArena {
         &self.objects
     }
 
-    /// Returns all zones in canonical state order.
-    #[must_use]
-    pub fn zones(&self) -> &[Zone] {
-        &self.zones
-    }
-
     /// Returns one zone by ID.
+    #[cfg(test)]
     #[must_use]
-    pub fn zone(&self, id: ZoneId) -> Option<&Zone> {
+    fn zone(&self, id: ZoneId) -> Option<&Zone> {
         let index = self.zone_index(id)?;
         self.zones.get(index)
+    }
+
+    /// Returns the redacted state projection visible to one observing player.
+    pub fn player_view(&self, observer: PlayerId) -> Result<PlayerView, StateError> {
+        self.require_player(observer)?;
+        let mut zones = Vec::with_capacity(self.zones.len());
+        for zone in &self.zones {
+            let hidden_from_observer = match zone.id.kind() {
+                ZoneKind::Hand => zone.id.owner() != Some(observer),
+                ZoneKind::Library => true,
+                _ => false,
+            };
+            let mut objects = Vec::with_capacity(zone.objects.len());
+            for object in &zone.objects {
+                let record = self
+                    .objects
+                    .get(*object)
+                    .ok_or(StateError::InvalidZoneObject {
+                        zone: zone.id,
+                        object: *object,
+                    })?;
+                if hidden_from_observer {
+                    objects.push(ObjectView::Hidden);
+                } else {
+                    objects.push(ObjectView::Known { object: record });
+                }
+            }
+            zones.push(ZoneView {
+                id: zone.id,
+                objects,
+            });
+        }
+        Ok(PlayerView {
+            observer,
+            turn_number: self.turn_number,
+            outcome: self.outcome,
+            active_player: self.active_player,
+            priority_player: self.priority_player,
+            current_step: self.current_step,
+            players: self.players.clone(),
+            zones,
+        })
     }
 
     /// Starts a turn for the chosen active player at the untap step.
@@ -3876,15 +4012,6 @@ impl GameState {
         })
     }
 
-    /// Captures a cloned state snapshot with its current deterministic hash.
-    #[must_use]
-    pub fn snapshot(&self) -> GameSnapshot {
-        GameSnapshot {
-            state: self.clone(),
-            hash: self.deterministic_hash(),
-        }
-    }
-
     /// Computes the canonical FNV-1a state hash.
     #[must_use]
     pub fn deterministic_hash(&self) -> StateHash {
@@ -3900,7 +4027,7 @@ impl GameState {
     /// This is for deterministic replay, tests, and diagnostics. Player-facing
     /// views must use a redacted projection once hidden information exists.
     #[must_use]
-    pub fn canonical_bytes(&self) -> Vec<u8> {
+    fn canonical_bytes(&self) -> Vec<u8> {
         let mut bytes = CanonicalBytes::default();
         bytes.write_u64(self.seed);
         bytes.write_u32(self.turn_number);
@@ -5726,11 +5853,11 @@ mod tests {
         Action, AttackDeclaration, BaseCreatureCharacteristics, BlockDeclaration, CardId,
         CastSpellRequest, CombatDamageAssignment, CombatDamageAssignmentRequest,
         CombatDamageStepKind, CombatDamageTarget, CreatureCharacteristics, CreatureKeywords,
-        EffectDuration, GameOutcome, GameState, ManaCost, ManaKind, ManaPool, ManaSource, Outcome,
-        PaymentError, Phase, PlayerId, PriorityOutcome, ResolutionOutcome, SpellTiming,
-        StackEntryId, StackObjectKind, StateBasedActionKind, StateBasedActionReport, StateError,
-        Step, TargetChoice, TargetKind, TargetRequirement, ZoneConservation, ZoneId, ZoneKind,
-        NORMAL_TURN_STEPS, PAYMENT_PLAN_LIMIT,
+        EffectDuration, GameOutcome, GameState, ManaCost, ManaKind, ManaPool, ManaSource,
+        ObjectView, Outcome, PaymentError, Phase, PlayerId, PriorityOutcome, ResolutionOutcome,
+        SpellTiming, StackEntryId, StackObjectKind, StateBasedActionKind, StateBasedActionReport,
+        StateError, Step, TargetChoice, TargetKind, TargetRequirement, ZoneConservation, ZoneId,
+        ZoneKind, NORMAL_TURN_STEPS, PAYMENT_PLAN_LIMIT,
     };
 
     #[test]
@@ -5852,6 +5979,138 @@ mod tests {
     }
 
     #[test]
+    fn player_view_hides_opponent_hand_and_library_objects() {
+        let mut state = GameState::new();
+        let alice = match apply(&mut state, Action::AddPlayer) {
+            Outcome::PlayerAdded(player) => player,
+            other => panic!("unexpected alice outcome: {other:?}"),
+        };
+        let bob = match apply(&mut state, Action::AddPlayer) {
+            Outcome::PlayerAdded(player) => player,
+            other => panic!("unexpected bob outcome: {other:?}"),
+        };
+        let alice_hand = ZoneId::new(Some(alice), ZoneKind::Hand);
+        let alice_library = ZoneId::new(Some(alice), ZoneKind::Library);
+        let bob_hand = ZoneId::new(Some(bob), ZoneKind::Hand);
+        let bob_library = ZoneId::new(Some(bob), ZoneKind::Library);
+        let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+
+        let alice_hand_object = match apply(
+            &mut state,
+            Action::CreateObject {
+                card: CardId::new(710),
+                owner: alice,
+                controller: alice,
+                zone: alice_hand,
+            },
+        ) {
+            Outcome::ObjectCreated(object) => object,
+            other => panic!("unexpected alice hand object outcome: {other:?}"),
+        };
+        match apply(
+            &mut state,
+            Action::CreateObject {
+                card: CardId::new(714),
+                owner: alice,
+                controller: alice,
+                zone: alice_library,
+            },
+        ) {
+            Outcome::ObjectCreated(_) => {}
+            other => panic!("unexpected alice library object outcome: {other:?}"),
+        }
+        match apply(
+            &mut state,
+            Action::CreateObject {
+                card: CardId::new(711),
+                owner: bob,
+                controller: bob,
+                zone: bob_hand,
+            },
+        ) {
+            Outcome::ObjectCreated(_) => {}
+            other => panic!("unexpected bob hand object outcome: {other:?}"),
+        }
+        match apply(
+            &mut state,
+            Action::CreateObject {
+                card: CardId::new(712),
+                owner: bob,
+                controller: bob,
+                zone: bob_library,
+            },
+        ) {
+            Outcome::ObjectCreated(_) => {}
+            other => panic!("unexpected bob library object outcome: {other:?}"),
+        }
+        let battlefield_object = match apply(
+            &mut state,
+            Action::CreateObject {
+                card: CardId::new(713),
+                owner: bob,
+                controller: bob,
+                zone: battlefield,
+            },
+        ) {
+            Outcome::ObjectCreated(object) => object,
+            other => panic!("unexpected battlefield object outcome: {other:?}"),
+        };
+
+        let view = state
+            .player_view(alice)
+            .unwrap_or_else(|error| panic!("unexpected player view error: {error:?}"));
+        let alice_hand_view = view
+            .zone(alice_hand)
+            .unwrap_or_else(|| panic!("missing alice hand view"));
+        let alice_library_view = view
+            .zone(alice_library)
+            .unwrap_or_else(|| panic!("missing alice library view"));
+        let bob_hand_view = view
+            .zone(bob_hand)
+            .unwrap_or_else(|| panic!("missing bob hand view"));
+        let bob_library_view = view
+            .zone(bob_library)
+            .unwrap_or_else(|| panic!("missing bob library view"));
+        let battlefield_view = view
+            .zone(battlefield)
+            .unwrap_or_else(|| panic!("missing battlefield view"));
+
+        assert_eq!(
+            alice_hand_view.objects(),
+            &[ObjectView::Known {
+                object: state
+                    .objects()
+                    .get(alice_hand_object)
+                    .unwrap_or_else(|| panic!("missing alice hand object"))
+            }]
+        );
+        assert_eq!(alice_library_view.objects(), &[ObjectView::Hidden]);
+        assert_eq!(bob_hand_view.objects(), &[ObjectView::Hidden]);
+        assert_eq!(bob_library_view.objects(), &[ObjectView::Hidden]);
+        assert_eq!(
+            battlefield_view.objects(),
+            &[ObjectView::Known {
+                object: state
+                    .objects()
+                    .get(battlefield_object)
+                    .unwrap_or_else(|| panic!("missing battlefield object"))
+            }]
+        );
+        assert!(bob_hand_view.objects()[0].is_hidden());
+        assert_eq!(bob_hand_view.objects()[0].known(), None);
+    }
+
+    #[test]
+    fn player_view_rejects_unknown_observer() {
+        let state = GameState::new();
+
+        assert_eq!(
+            state.player_view(PlayerId(99)),
+            Err(StateError::UnknownPlayer(PlayerId(99)))
+        );
+    }
+
+    #[test]
     fn state_based_action_table_tracks_cr_704_rows() {
         let table = state_based_action_table();
 
@@ -5930,11 +6189,9 @@ mod tests {
         assert_eq!(left.canonical_bytes(), right.canonical_bytes());
 
         let before = left.deterministic_hash();
-        let snapshot = left.snapshot();
         left.move_object(left_object, left_battlefield)
             .unwrap_or_else(|error| panic!("unexpected move error: {error:?}"));
 
-        assert_eq!(snapshot.hash(), before);
         assert_ne!(left.deterministic_hash(), before);
     }
 
