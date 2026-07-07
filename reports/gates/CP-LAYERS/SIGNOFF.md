@@ -25,6 +25,9 @@ Verdict: PENDING
 - `reports/gates/CP-LAYERS/remote-ci-2026-07-07.md`
 - `reports/gates/CP-LAYERS/memoization-invalidation-audit-2026-07-07.md`
 - `reports/gates/CP-LAYERS/fuzz_report.md`
+- `reports/gates/CP-LAYERS/owner-decisions-2026-07-07.md`
+- `reports/gates/CP-LAYERS/legacy-local-search-2026-07-07.md`
+- `reports/gates/CP-LAYERS/scenario-interview-2026-07-07.md`
 - `reports/gates/CP-LAYERS/tests_added.txt`
 - `reports/gates/CP-LAYERS/reviewer-instructions.md`
 - `docs/specs/T2.4.md`
@@ -41,7 +44,7 @@ Verdict: PENDING
 | CDA and Humility-class stacking covered | PENDING | Include CDA, type removal/addition, ability removal/addition, and 7a-7d order. |
 | Legacy 100-card layered subset differential | PENDING | Every divergence must be adjudicated in writing. |
 | Memoization/invalidation audit | PENDING | Current implementation has no derived-characteristics cache; reviewer must accept or demand more evidence. |
-| Mutation/query fuzz target | PREPARED | `fuzz_characteristics` exists and smoke-runs; reviewer may demand longer sanitizer fuzz. |
+| Mutation/query fuzz target | PASS | `fuzz_characteristics` smoke and 301-second address-sanitizer fuzz completed without crash, panic, or invariant failure. |
 | Explicit belief sentence | PENDING | Required below before PASS. |
 | T2.5+ unblock decision | PENDING | No T2.5+ task may start before PASS. |
 

@@ -248,6 +248,6 @@
   "owner_input": {
     "O1": "complete",
     "O2": "complete",
-    "O5": "pending_CP_LAYERS_owner_review"
+    "O5": "CP_LAYERS_decisions_recorded_pending_scenario_interview_fuzz_and_legacy_results"
   }
 }

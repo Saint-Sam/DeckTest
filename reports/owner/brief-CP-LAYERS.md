@@ -54,10 +54,23 @@ T2.5+ stays blocked. The next step is CP-LAYERS human review: 15 novel layer
 scenarios, a 100-card legacy layered differential with written adjudication,
 memoization/invalidation acceptance, and the explicit signoff sentence.
 
-## 6. WHAT WE NEED FROM YOU
+## 6. CURRENT OWNER DECISIONS
+
+You supplied the CP-LAYERS review direction on 2026-07-07:
+
+- Codex should interview you and turn your answers into 15 reviewer scenarios
+  for your approval.
+- Legacy differential work starts with local-only search; Codex must ask before
+  any network access or download.
+- Longer sanitizer fuzz may run only if the tooling is already installed;
+  otherwise Codex must ask before installing anything.
+- CP-LAYERS is not approved yet. Codex must bring the results back before you
+  decide proceed or fail.
+
+## 7. WHAT WE NEED FROM YOU
 
 You are the CP-LAYERS human reviewer under O1 Option C. To proceed, review the
-packet and provide, or personally direct, the 15 novel layer scenarios so they
-remain reviewer-authored. I can supply a blank scenario template, run the cases
-you give me, and record the results, but I will not start T2.5 until CP-LAYERS
-is signed off.
+packet and answer the scenario interview in
+`reports/gates/CP-LAYERS/scenario-interview-2026-07-07.md`. I will turn your
+answers into 15 reviewer scenarios for your approval, run the approved cases,
+and record the results. T2.5 stays blocked until CP-LAYERS is signed off.
