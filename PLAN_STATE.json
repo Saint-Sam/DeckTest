@@ -186,10 +186,11 @@
       "remote_ci": "GitHub Actions ci #22 run 28888565460 passed all required jobs for commit 241e2f5efb224113ed89630b80333a5babac0a1d"
     },
     "T2.4": {
-      "status": "verified_local",
+      "status": "verified_remote",
       "branch": "task/T2.4-layers",
       "attempts": 0,
-      "verification": "scripts/vl.sh passed locally with data-only ContinuousEffectDefinition effects, CR 613 layer ordering through 7d, timestamp and same-layer dependency ordering, effective controller/characteristics queries feeding gameplay and SBAs, continuous-effect canonical hash coverage, clone-surface baseline persistent_allocation_field_count=24, 382 oracle scenarios green including 80 layer scenarios, coverage floor restored at 81.65% by running layer oracles under coverage, and perf_diff reporting 0 regressions"
+      "verification": "scripts/vl.sh passed locally with data-only ContinuousEffectDefinition effects, CR 613 layer ordering through 7d, timestamp and same-layer dependency ordering, effective controller/characteristics queries feeding gameplay and SBAs, continuous-effect canonical hash coverage, clone-surface baseline persistent_allocation_field_count=24, 382 oracle scenarios green including 80 layer scenarios, coverage floor restored at 81.65% by running layer oracles under coverage, and perf_diff reporting 0 regressions",
+      "remote_ci": "GitHub Actions ci #23 run 28891474213 passed all required jobs for commit 81143e1e221ee5d5a01a7691f0adbe380cb357f7; manually triggered ci #24 run 28892313697 also passed for the same commit"
     }
   },
   "gates_passed": [
