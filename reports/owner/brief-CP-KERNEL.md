@@ -2,6 +2,13 @@
 
 Date: 2026-07-06
 
+## 0. STATUS UPDATE
+
+CP-KERNEL initially failed at commit `6491d5f`. The remediation tickets
+T1.R1-T1.R4 were implemented and locally verified. A fresh Gate Reviewer then
+performed the scoped re-review at commit `d7fcb03` and returned PASS. T1.8 is no
+longer blocked by CP-KERNEL.
+
 ## 1. WHAT JUST HAPPENED
 
 T1.7 state-based actions were implemented and pushed. GitHub Actions `ci #12`

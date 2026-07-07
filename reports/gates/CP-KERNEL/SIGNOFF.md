@@ -1,5 +1,41 @@
 # CP-KERNEL Signoff
 
+## Re-review: 2026-07-06
+
+Reviewer identity: Kierkegaard, delegated strong-reasoning Gate Reviewer
+(`gpt-5.5`), no implementation edits during review.
+
+Verdict: **PASS**
+
+Commit SHA reviewed: `d7fcb03` (`T1.R4: guard clone surface`)
+
+Scope reviewed: failed CP-KERNEL remediation tickets T1.R1-T1.R4 plus fresh
+G1 verification evidence. This is CP-KERNEL signoff only, not the Tier 1 exit
+gate.
+
+Current tree note: this re-review supersedes the historical FAIL below while
+preserving the original failure and remediation tickets for audit history.
+
+## Re-review Checklist
+
+| Check | Verdict | Evidence |
+| --- | --- | --- |
+| T1.R1 action surface | PASS | Public mutation is routed through `legal_actions(&GameState) -> ActionList` and `apply(&mut GameState, Action) -> Outcome`; `scripts/review/no_public_mutating_gamestate.sh` is wired into VL. |
+| T1.R2 characteristic boundary | PASS | `ObjectRecord` stores `base_creature: Option<BaseCreatureCharacteristics>`; current characteristics derive through `GameState::creature_characteristics`; combat and SBA paths use that query. |
+| T1.R3 hidden information boundary | PASS | `ObjectView::Hidden` and `PlayerView` are present; `GameState::player_view` redacts opponent hands and all libraries; `canonical_bytes` is private diagnostics; `forge-ai` public state-facing code accepts `PlayerView`. |
+| T1.R4 clone-surface discipline | PASS | `GameState` no longer derives `Debug`; full-state `GameSnapshot`/`StateSnapshot`/`snapshot()` are absent and guarded against resurrection; persistent allocation-bearing fields carry `clone_surface:` invariants; `metrics/clone_surface.json` records `persistent_allocation_field_count=18`. |
+| G1 fresh sanity | PASS | Fresh local clone at `d7fcb03` ran `scripts/vl.sh` and exited `0` with `ALL CHECKS PASSED`; refreshed bundle `test_log.txt` also ends `ALL CHECKS PASSED`. |
+
+## Re-review Notes
+
+- Oracle subset and perf smoke are scheduled skips at CP-KERNEL because oracle
+  scenarios and `metrics/perf_baseline.json` are not active yet.
+- Fuzz absence remains expected at this checkpoint and is documented in the
+  bundle.
+- No blockers remain for T1.8 from CP-KERNEL.
+
+## Historical Review: Initial Fail Superseded
+
 Reviewer: Codex (GPT-5) Gate Reviewer; did not implement or review T1.
 
 Date: 2026-07-06

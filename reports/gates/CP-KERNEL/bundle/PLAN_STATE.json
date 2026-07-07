@@ -99,7 +99,8 @@
     }
   },
   "gates_passed": [
-    "T0"
+    "T0",
+    "CP-KERNEL"
   ],
   "metrics_snapshot": "metrics/legacy_inventory.json",
   "gate_reviews": {
@@ -118,16 +119,18 @@
       }
     },
     "CP-KERNEL": {
-      "status": "failed",
+      "status": "passed",
       "bundle": "reports/gates/CP-KERNEL/bundle",
       "signoff": "reports/gates/CP-KERNEL/SIGNOFF.md",
-      "reviewed_commit": "6491d5fd12887eb5f5b7ad8d57eda83e1ff17783",
+      "reviewed_commit": "d7fcb03",
+      "original_failed_commit": "6491d5fd12887eb5f5b7ad8d57eda83e1ff17783",
       "remediation": {
         "T1.R1": "verified_local: sealed the kernel behind legal_actions/apply and added public mutator review script",
         "T1.R2": "verified_local: ObjectRecord stores base creature characteristics and rules code uses derived creature_characteristics query",
         "T1.R3": "verified_local: PlayerView redacts hidden hand/library identities, forge-ai accepts PlayerView instead of GameState, and full-information snapshots/canonical bytes are not public consumer APIs",
         "T1.R4": "verified_local: removed full-state snapshot surface, documented clone-surface invariants, and added clone_surface_guard baseline persistent_allocation_field_count=18"
-      }
+      },
+      "re_review": "PASS at d7fcb03; scoped re-review of T1.R1-T1.R4 plus fresh G1 verification found no blockers"
     }
   },
   "owner_input": {
