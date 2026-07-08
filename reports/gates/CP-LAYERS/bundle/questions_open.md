@@ -27,15 +27,18 @@ Current evidence: `docs/t1_10_legacy_test_oracle_mapping.md`
 
 Priority: P0
 
-Status: open
+Status: open, partially remediated 2026-07-07
 
 Question: CP-LAYERS requires a legacy engine differential on a 100-card layered
 subset. Local-only evidence selected the subset and adjudicated script-level
-divergence categories, but a true engine-vs-engine run is blocked because Forge
-2.0 has no real legacy card-script importer/card compiler yet, and the local
-legacy Java engine is not runnable as-is without JDK17/Maven/dependencies.
-Should CP-LAYERS remediate this before T2.5, explicitly de-scope the true
-engine differential for this checkpoint, or fail/reopen?
+divergence categories. The legacy Java engine side has now been remediated with
+repo-local Corretto/Maven tooling and executed for all 100 selected cards: 100
+legacy snapshots emitted, 100 OK, 0 harness errors. A true engine-vs-engine run
+is still blocked because Forge 2.0 has no real legacy card-script
+importer/card compiler yet. Should CP-LAYERS continue remediation before T2.5,
+explicitly de-scope the true engine differential for this checkpoint, or
+fail/reopen?
 
 Current evidence:
 `reports/gates/CP-LAYERS/legacy-100-layered-subset-2026-07-07.md`
+`reports/gates/CP-LAYERS/legacy-engine-snapshot-2026-07-07.md`

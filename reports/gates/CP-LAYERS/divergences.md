@@ -2,7 +2,7 @@
 
 Date: 2026-07-07
 
-Status: BLOCKED FOR TRUE ENGINE DIFFERENTIAL
+Status: PARTIALLY REMEDIATED; TRUE ENGINE DIFFERENTIAL STILL BLOCKED
 
 Owner decision on 2026-07-07: use local-only search for a legacy Forge/layered
 subset first, and ask before any network/download. No network access, clone,
@@ -16,13 +16,19 @@ download, or upstream fetch was used.
   `reports/gates/CP-LAYERS/legacy-100-layered-subset-2026-07-07.md`
 - Machine-readable subset CSV:
   `reports/gates/CP-LAYERS/legacy-100-layered-subset-2026-07-07.csv`
+- Legacy engine snapshot:
+  `reports/gates/CP-LAYERS/legacy-engine-snapshot-2026-07-07.md`
+- Machine-readable legacy snapshot:
+  `metrics/cp_layers_legacy_engine_snapshot.jsonl`
 
 ## Result
 
-The 100-card legacy layered subset is selected, but a true engine-vs-engine
-differential cannot honestly run yet. Forge 2.0 currently has a data-only layer
-substrate and RON oracle harness, but no legacy card-script importer/card
-compiler capable of executing those real legacy scripts in the new engine.
+The 100-card legacy layered subset is selected and the legacy Forge Java engine
+now runs locally for all 100 cards: 100 snapshots emitted, 100 OK, 0 legacy
+harness errors. A true engine-vs-engine differential still cannot honestly run
+yet because Forge 2.0 currently has a data-only layer substrate and RON oracle
+harness, but no legacy card-script importer/card compiler capable of executing
+those real legacy scripts in the new engine.
 
 ## Adjudicated Divergence Categories
 
@@ -41,6 +47,7 @@ compiler capable of executing those real legacy scripts in the new engine.
 ## Gate Consequence
 
 CP-LAYERS cannot pass the Section 15.4 legacy differential clause without owner
-review. The available choices are to reopen T2.4/T2.x remediation for missing
-layer/card-import semantics, explicitly de-scope the real 100-card differential
-from this checkpoint, or fail CP-LAYERS and trigger the plan's remediation path.
+review or further new-engine importer/compiler remediation. The available
+choices are to continue remediation for missing layer/card-import semantics,
+explicitly de-scope the real 100-card engine-vs-engine differential from this
+checkpoint, or fail CP-LAYERS and trigger the plan's remediation path.

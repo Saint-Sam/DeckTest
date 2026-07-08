@@ -33,6 +33,17 @@ evidence recording, and the CP-LAYERS fuzz-target addition.
   100-card legacy layered subset and wrote script-level divergence adjudication.
 - `PYTHONPYCACHEPREFIX=target/tmp/python-cache python3 -m py_compile tools/cp_layers_legacy_subset.py`:
   PASS.
+- `PYTHONPYCACHEPREFIX=target/tmp/python-cache python3 tools/scryfall_cache_summary.py`:
+  PASS, recorded the approved local Scryfall card-data cache summary.
+- `tools/run_legacy_layer_snapshot.sh Humility "Darksteel Mutation" "Angelic Armaments"`:
+  PASS, compiled the local legacy harness and emitted three real legacy Forge
+  post-layer snapshots.
+- `PYTHONPYCACHEPREFIX=target/tmp/python-cache python3 tools/cp_layers_legacy_engine_snapshot.py`:
+  PASS, ran the vendored legacy Java engine over the selected 100-card subset;
+  100 legacy snapshots emitted, 100 OK, 0 errors.
+- `PYTHONPYCACHEPREFIX=target/tmp/python-cache python3 -m py_compile tools/scryfall_cache_summary.py tools/cp_layers_legacy_engine_snapshot.py`:
+  PASS.
+- `bash -n tools/run_legacy_layer_snapshot.sh`: PASS.
 
 ## CP-LAYERS Fuzz Target Verification
 
@@ -52,7 +63,7 @@ registered continuous-effect list. This simplifies invalidation for CP-LAYERS,
 but the checkpoint must still verify that future memoization work does not
 weaken this invariant.
 
-The true 100-card legacy engine differential is blocked by missing card-script
-import/compiler support in Forge 2.0. The local-only subset report adjudicates
-the script-level divergence categories, but it is not a substitute for executing
-those 100 real cards in both engines.
+The legacy side of the 100-card engine differential is now executable and
+recorded. The remaining true differential blocker is Forge 2.0 card-script
+support: the new engine still has no importer/compiler capable of executing
+those 100 real legacy card scripts for engine-vs-engine comparison.

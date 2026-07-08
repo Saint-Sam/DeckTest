@@ -32,6 +32,8 @@ T2.5+ work can depend on layers.
 
 - 80 original layer oracle scenarios pass.
 - 100 owner-approved reviewer oracle scenarios pass.
+- 100 selected legacy Forge layered-card snapshots now execute locally: 100 OK,
+  0 legacy harness errors.
 - 5 layer-focused `forge-core` unit tests pass.
 - Full VL passed after the reviewer pack: 482 oracle scenarios, 0 failures.
 - Coverage after the reviewer pack: 81.82% lines; clone-surface baseline:
@@ -46,11 +48,11 @@ card text. It has no real card compiler yet and no derived-characteristics
 memoization cache. That absence is good for correctness right now because every
 query recomputes, but performance/memoization will need fresh evidence later.
 
-The true 100-card legacy engine differential is blocked locally. The vendored
-legacy scripts are present and a 100-card layered subset is selected, but Forge
-2.0 does not yet have a legacy card-script importer/card compiler capable of
-executing those real cards in the new engine. The local Java legacy engine also
-is not runnable as-is without JDK17/Maven/dependencies.
+The legacy side of the 100-card differential is no longer blocked: Codex used
+repo-local Corretto 17 and Maven artifacts to run the vendored legacy Java
+engine over all 100 selected cards. The remaining true differential blocker is
+on the Forge 2.0 side: Forge 2.0 does not yet have a legacy card-script
+importer/card compiler capable of executing those real cards in the new engine.
 
 ## 5. WHAT YOU SHOULD EXPECT NEXT
 
@@ -64,9 +66,11 @@ You supplied the CP-LAYERS review direction on 2026-07-07:
 
 - Codex interviewed you and turned your answers into 100 reviewer scenarios.
   You approved them with `approve 100 scenarios`, and all 100 pass locally.
-- Legacy differential work starts with local-only search; Codex must ask before
-  any network access, download, or install. Local-only search selected the
-  100-card subset, but true execution is blocked.
+- Legacy differential work started with local-only search; Codex asked before
+  network/download/toolchain setup. Local-only search selected the 100-card
+  subset, and the legacy Java engine now emits 100/100 OK snapshots. True
+  engine-vs-engine execution is still blocked by missing Forge 2.0 importer/compiler
+  support.
 - Longer sanitizer fuzz may run only if the tooling is already installed;
   otherwise Codex must ask before installing anything.
 - CP-LAYERS is not approved yet. Codex must bring the results back before you
@@ -76,11 +80,11 @@ You supplied the CP-LAYERS review direction on 2026-07-07:
 
 You are the CP-LAYERS human reviewer under O1 Option C. To proceed, decide one:
 
-- Remediate: build/import enough real card-script support or approve the
-  toolchain/dependency install path needed for a true differential.
+- Remediate: build/import enough Forge 2.0 real card-script support for these
+  100 selected cards, then run the true differential.
 - De-scope: explicitly waive the true 100-card engine differential for this
-  checkpoint and accept the 100 synthetic oracles plus static legacy subset
-  evidence.
+  checkpoint and accept the 100 synthetic oracles plus 100/100 legacy-engine
+  snapshot evidence.
 - Fail/reopen: fail CP-LAYERS and reopen layer/card-import remediation before
   T2.5.
 

@@ -26,9 +26,13 @@ Verdict: PENDING
 - `reports/gates/CP-LAYERS/memoization-invalidation-audit-2026-07-07.md`
 - `reports/gates/CP-LAYERS/fuzz_report.md`
 - `reports/gates/CP-LAYERS/owner-decisions-2026-07-07.md`
+- `reports/gates/CP-LAYERS/scryfall-cache-2026-07-07.md`
 - `reports/gates/CP-LAYERS/legacy-local-search-2026-07-07.md`
 - `reports/gates/CP-LAYERS/legacy-100-layered-subset-2026-07-07.md`
 - `reports/gates/CP-LAYERS/legacy-100-layered-subset-2026-07-07.csv`
+- `reports/gates/CP-LAYERS/legacy-engine-snapshot-2026-07-07.md`
+- `metrics/cp_layers_legacy_engine_snapshot.json`
+- `metrics/cp_layers_legacy_engine_snapshot.jsonl`
 - `reports/gates/CP-LAYERS/scenario-interview-2026-07-07.md`
 - `reports/gates/CP-LAYERS/reviewer-scenarios-2026-07-07.md`
 - `reports/gates/CP-LAYERS/reviewer-oracles-2026-07-07.md`
@@ -47,7 +51,7 @@ Verdict: PENDING
 | CR 613.8 dependency ordering covered | PARTIAL | Explicit dependency-ID ordering, chain, non-applicable target isolation, and cross-layer guard cases pass; semantic dependency inference is not modeled yet. |
 | Timestamp ties covered | PASS | Equal timestamp deterministic ID-order and reverse-registration tie cases pass. |
 | CDA and Humility-class stacking covered | PARTIAL | Numeric 7a P/T, 7a-7d order, type gating, and combat-keyword add/remove stack cases pass; true CDA/copiable-CDA and all-abilities removal remain unmodeled. |
-| Legacy 100-card layered subset differential | BLOCKED | Local 100-card subset selected and script-level divergence categories adjudicated; true engine-vs-engine run is blocked by missing card-script importer/compiler. Owner decision required. |
+| Legacy 100-card layered subset differential | PARTIAL | Local 100-card subset selected; vendored legacy Forge engine now executes all 100 selected cards with 100 OK snapshots and 0 legacy harness errors. True engine-vs-engine run remains blocked by missing Forge 2.0 card-script importer/compiler. Owner decision or further remediation required. |
 | Memoization/invalidation audit | EVIDENCE READY | Current implementation has no derived-characteristics cache; mutation/query interleave oracles and sanitizer fuzz passed. Owner/reviewer must accept or demand more evidence. |
 | Mutation/query fuzz target | PASS | `fuzz_characteristics` smoke and 301-second address-sanitizer fuzz completed without crash, panic, or invariant failure. |
 | Explicit belief sentence | PENDING | Required below before PASS. |
@@ -61,5 +65,6 @@ PENDING:
 
 ## Remaining Remediation
 
-Pending owner/human CP-LAYERS review and decision on the blocked legacy
+Pending owner/human CP-LAYERS review and decision on the remaining Forge 2.0
+card-script importer/compiler blocker for the true engine-vs-engine legacy
 differential clause.

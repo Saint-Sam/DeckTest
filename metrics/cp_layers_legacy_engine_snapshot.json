@@ -1,0 +1,13 @@
+{
+  "ignored_stdout_lines": 8,
+  "missing": [],
+  "missing_count": 0,
+  "result_jsonl": "metrics/cp_layers_legacy_engine_snapshot.jsonl",
+  "returncode": 0,
+  "snapshot_count": 100,
+  "status_counts": {
+    "ok": 100
+  },
+  "stderr_nonempty": true,
+  "subset_count": 100
+}
