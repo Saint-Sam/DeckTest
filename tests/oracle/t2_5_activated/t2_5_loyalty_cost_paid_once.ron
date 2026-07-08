@@ -1,0 +1,49 @@
+(
+    name: "T2.5 loyalty ability pays loyalty cost before stack resolution",
+    setup: (
+        players: 1,
+        libraries: [
+            (player: 0, cards: [25030]),
+        ],
+        objects: [
+            (card: 25003, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "set_object_loyalty", object: 0, loyalty: 3),
+        (
+            action: "register_activated_ability",
+            controller: 0,
+            source_object: 0,
+            timing: "sorcery",
+            cost: (loyalty_delta: 1),
+            effect: (operation: "gain_life", amount: 1),
+        ),
+        (action: "start_turn", player: 0),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "activate_ability_auto", player: 0, ability: 0),
+        (action: "assert_object_loyalty", object: 0, loyalty: 4),
+        (action: "pass_priority", player: 0),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Stack", count: 0),
+            (zone: "Battlefield", count: 1),
+        ],
+        players: [
+            (player: 0, life: 21),
+        ],
+        outcome: "in_progress",
+        active_player: 0,
+        priority_player: 0,
+        current_step: "PrecombatMain",
+        invariants: [
+            "zone_conservation",
+            "life_poison_sanity",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

@@ -1,0 +1,40 @@
+(
+    name: "T2.5 mana ability resolves without stack and taps source",
+    setup: (
+        players: 1,
+        objects: [
+            (card: 25001, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (
+            action: "register_activated_ability",
+            controller: 0,
+            source_object: 0,
+            mana_ability: true,
+            cost: (tap_source: true),
+            effect: (operation: "add_mana", mana: (green: 1)),
+        ),
+        (action: "activate_ability_auto", player: 0, ability: 0),
+        (action: "assert_object_tapped", object: 0, tapped: true),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Stack", count: 0),
+            (zone: "Battlefield", count: 1),
+        ],
+        players: [
+            (player: 0, mana: (green: 1)),
+        ],
+        outcome: "in_progress",
+        active_player: "none",
+        priority_player: "none",
+        current_step: "none",
+        invariants: [
+            "zone_conservation",
+            "life_poison_sanity",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

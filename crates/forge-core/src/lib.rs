@@ -1090,6 +1090,42 @@ impl TriggerId {
     }
 }
 
+/// A stable handle for one registered activated ability definition.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct ActivatedAbilityId(u32);
+
+impl ActivatedAbilityId {
+    /// Returns the zero-based activated-ability definition index.
+    #[must_use]
+    pub const fn index(self) -> usize {
+        self.0 as usize
+    }
+
+    /// Returns the raw deterministic activated-ability value.
+    #[must_use]
+    pub const fn get(self) -> u32 {
+        self.0
+    }
+}
+
+/// A stable handle for one registered activation cost modifier.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct CostModifierId(u32);
+
+impl CostModifierId {
+    /// Returns the zero-based cost-modifier index.
+    #[must_use]
+    pub const fn index(self) -> usize {
+        self.0 as usize
+    }
+
+    /// Returns the raw deterministic cost-modifier value.
+    #[must_use]
+    pub const fn get(self) -> u32 {
+        self.0
+    }
+}
+
 /// A stable handle for one registered replacement/prevention effect definition.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct ReplacementEffectId(u32);
@@ -1508,6 +1544,16 @@ pub enum GameEventKind {
     ReplacementEffectApplied,
     /// A continuous effect definition was registered.
     ContinuousEffectRegistered,
+    /// An object's loyalty value changed.
+    ObjectLoyaltySet,
+    /// An activated ability definition was registered.
+    ActivatedAbilityRegistered,
+    /// An activation cost modifier was registered.
+    CostModifierRegistered,
+    /// An activated ability was activated.
+    ActivatedAbilityActivated,
+    /// An activated ability resolved.
+    ActivatedAbilityResolved,
 }
 
 impl GameEventKind {
@@ -1562,6 +1608,11 @@ impl GameEventKind {
             Self::ReplacementChoiceOrderSet => 46,
             Self::ReplacementEffectApplied => 47,
             Self::ContinuousEffectRegistered => 48,
+            Self::ObjectLoyaltySet => 49,
+            Self::ActivatedAbilityRegistered => 50,
+            Self::CostModifierRegistered => 51,
+            Self::ActivatedAbilityActivated => 52,
+            Self::ActivatedAbilityResolved => 53,
         }
     }
 }
@@ -2226,6 +2277,307 @@ impl CastSpellRequest {
     }
 }
 
+/// Timing permission for activating an ability.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum ActivationTiming {
+    /// The ability may be activated whenever its controller has priority.
+    Instant,
+    /// The ability may be activated only during that player's main phase with an empty stack.
+    Sorcery,
+}
+
+impl ActivationTiming {
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::Instant => 0,
+            Self::Sorcery => 1,
+        }
+    }
+}
+
+/// Player selector used by no-target activated ability effects.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum AbilityPlayer {
+    /// The player activating or controlling the ability.
+    Controller,
+    /// One exact player.
+    Player(PlayerId),
+}
+
+impl AbilityPlayer {
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::Controller => 0,
+            Self::Player(_) => 1,
+        }
+    }
+}
+
+/// A data-only activated ability effect that can resolve without card-specific code.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum ActivatedAbilityEffect {
+    /// Add mana to a selected player's mana pool.
+    AddMana {
+        /// Player receiving mana.
+        player: AbilityPlayer,
+        /// Mana to add.
+        mana: ManaPool,
+    },
+    /// Gain life for a selected player.
+    GainLife {
+        /// Player gaining life.
+        player: AbilityPlayer,
+        /// Life amount to gain.
+        amount: u32,
+    },
+    /// Lose life for a selected player.
+    LoseLife {
+        /// Player losing life.
+        player: AbilityPlayer,
+        /// Life amount to lose.
+        amount: u32,
+    },
+}
+
+impl ActivatedAbilityEffect {
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::AddMana { .. } => 0,
+            Self::GainLife { .. } => 1,
+            Self::LoseLife { .. } => 2,
+        }
+    }
+
+    /// Returns true if this is a mana-producing effect.
+    #[must_use]
+    pub const fn is_mana_effect(self) -> bool {
+        matches!(self, Self::AddMana { .. })
+    }
+}
+
+/// Costs paid to activate one ability.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct ActivationCost {
+    mana: ManaCost,
+    tap_source: bool,
+    loyalty_delta: Option<i32>,
+}
+
+impl ActivationCost {
+    /// Creates an activation cost with mana and no non-mana costs.
+    #[must_use]
+    pub const fn new(mana: ManaCost) -> Self {
+        Self {
+            mana,
+            tap_source: false,
+            loyalty_delta: None,
+        }
+    }
+
+    /// Adds a tap-symbol source cost.
+    #[must_use]
+    pub const fn with_tap_source(mut self) -> Self {
+        self.tap_source = true;
+        self
+    }
+
+    /// Adds a loyalty cost or loyalty-increase cost.
+    #[must_use]
+    pub const fn with_loyalty_delta(mut self, delta: i32) -> Self {
+        self.loyalty_delta = Some(delta);
+        self
+    }
+
+    /// Returns the mana portion of the cost.
+    #[must_use]
+    pub const fn mana(self) -> ManaCost {
+        self.mana
+    }
+
+    /// Returns whether the source must be tapped.
+    #[must_use]
+    pub const fn tap_source(self) -> bool {
+        self.tap_source
+    }
+
+    /// Returns the loyalty change paid as a cost, if any.
+    #[must_use]
+    pub const fn loyalty_delta(self) -> Option<i32> {
+        self.loyalty_delta
+    }
+}
+
+/// Declarative T2.5 activated ability definition.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct ActivatedAbilityDefinition {
+    controller: PlayerId,
+    source: Option<ObjectId>,
+    timing: ActivationTiming,
+    cost: ActivationCost,
+    effect: ActivatedAbilityEffect,
+    mana_ability: bool,
+}
+
+impl ActivatedAbilityDefinition {
+    /// Creates one activated ability definition.
+    #[must_use]
+    pub const fn new(
+        controller: PlayerId,
+        source: Option<ObjectId>,
+        timing: ActivationTiming,
+        cost: ActivationCost,
+        effect: ActivatedAbilityEffect,
+    ) -> Self {
+        Self {
+            controller,
+            source,
+            timing,
+            cost,
+            effect,
+            mana_ability: false,
+        }
+    }
+
+    /// Marks this ability as a mana ability that resolves without using the stack.
+    #[must_use]
+    pub const fn as_mana_ability(mut self) -> Self {
+        self.mana_ability = true;
+        self
+    }
+
+    /// Returns the ability controller.
+    #[must_use]
+    pub const fn controller(self) -> PlayerId {
+        self.controller
+    }
+
+    /// Returns the source object, if any.
+    #[must_use]
+    pub const fn source(self) -> Option<ObjectId> {
+        self.source
+    }
+
+    /// Returns the activation timing restriction.
+    #[must_use]
+    pub const fn timing(self) -> ActivationTiming {
+        self.timing
+    }
+
+    /// Returns the base activation cost.
+    #[must_use]
+    pub const fn cost(self) -> ActivationCost {
+        self.cost
+    }
+
+    /// Returns the effect to resolve.
+    #[must_use]
+    pub const fn effect(self) -> ActivatedAbilityEffect {
+        self.effect
+    }
+
+    /// Returns true if this ability resolves without using the stack.
+    #[must_use]
+    pub const fn is_mana_ability(self) -> bool {
+        self.mana_ability
+    }
+}
+
+/// Scope for a T2.5 activation cost modifier.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum CostModifierScope {
+    /// Applies to every activated ability.
+    AllActivatedAbilities,
+    /// Applies to one registered ability.
+    Ability(ActivatedAbilityId),
+    /// Applies to abilities whose source matches this object.
+    Source(ObjectId),
+    /// Applies to abilities controlled by this player.
+    Controller(PlayerId),
+}
+
+impl CostModifierScope {
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::AllActivatedAbilities => 0,
+            Self::Ability(_) => 1,
+            Self::Source(_) => 2,
+            Self::Controller(_) => 3,
+        }
+    }
+}
+
+/// Mana-cost adjustment for activated abilities.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum CostModifierOperation {
+    /// Add a complete mana cost as an additional cost.
+    AddManaCost(ManaCost),
+    /// Increase the generic portion.
+    AddGeneric(u32),
+    /// Reduce the generic portion, to a floor of zero.
+    ReduceGeneric(u32),
+}
+
+impl CostModifierOperation {
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::AddManaCost(_) => 0,
+            Self::AddGeneric(_) => 1,
+            Self::ReduceGeneric(_) => 2,
+        }
+    }
+}
+
+/// Registered cost adjustment for activated abilities.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct CostModifierDefinition {
+    controller: PlayerId,
+    source: Option<ObjectId>,
+    scope: CostModifierScope,
+    operation: CostModifierOperation,
+}
+
+impl CostModifierDefinition {
+    /// Creates one data-only activated ability cost modifier.
+    #[must_use]
+    pub const fn new(
+        controller: PlayerId,
+        source: Option<ObjectId>,
+        scope: CostModifierScope,
+        operation: CostModifierOperation,
+    ) -> Self {
+        Self {
+            controller,
+            source,
+            scope,
+            operation,
+        }
+    }
+
+    /// Returns the modifier controller.
+    #[must_use]
+    pub const fn controller(self) -> PlayerId {
+        self.controller
+    }
+
+    /// Returns the source object, if any.
+    #[must_use]
+    pub const fn source(self) -> Option<ObjectId> {
+        self.source
+    }
+
+    /// Returns the matching scope.
+    #[must_use]
+    pub const fn scope(self) -> CostModifierScope {
+        self.scope
+    }
+
+    /// Returns the cost operation.
+    #[must_use]
+    pub const fn operation(self) -> CostModifierOperation {
+        self.operation
+    }
+}
+
 /// Outcome recorded when a stack entry leaves the stack.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum ResolutionOutcome {
@@ -2251,6 +2603,7 @@ pub struct StackEntry {
     controller: PlayerId,
     object: Option<ObjectId>,
     trigger: Option<TriggerId>,
+    activated_ability: Option<ActivatedAbilityId>,
     kind: StackObjectKind,
     // clone_surface: target snapshots are Copy records bounded by target requirements.
     targets: Vec<TargetSnapshot>,
@@ -2282,6 +2635,12 @@ impl StackEntry {
         self.trigger
     }
 
+    /// Returns the activated ability definition that created this entry, if any.
+    #[must_use]
+    pub const fn activated_ability(&self) -> Option<ActivatedAbilityId> {
+        self.activated_ability
+    }
+
     /// Returns the coarse stack-object kind.
     #[must_use]
     pub const fn kind(&self) -> StackObjectKind {
@@ -2308,6 +2667,7 @@ pub struct ResolutionRecord {
     controller: PlayerId,
     object: Option<ObjectId>,
     trigger: Option<TriggerId>,
+    activated_ability: Option<ActivatedAbilityId>,
     kind: StackObjectKind,
     // clone_surface: copied target snapshots are bounded by the resolving entry.
     targets: Vec<TargetSnapshot>,
@@ -2341,6 +2701,12 @@ impl ResolutionRecord {
         self.trigger
     }
 
+    /// Returns the activated ability definition that resolved, if any.
+    #[must_use]
+    pub const fn activated_ability(&self) -> Option<ActivatedAbilityId> {
+        self.activated_ability
+    }
+
     /// Returns the resolved stack-object kind.
     #[must_use]
     pub const fn kind(&self) -> StackObjectKind {
@@ -2364,6 +2730,17 @@ impl ResolutionRecord {
     pub const fn outcome(&self) -> ResolutionOutcome {
         self.outcome
     }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct StackEntryRequest {
+    controller: PlayerId,
+    object: Option<ObjectId>,
+    trigger: Option<TriggerId>,
+    activated_ability: Option<ActivatedAbilityId>,
+    kind: StackObjectKind,
+    targets: Vec<TargetSnapshot>,
+    payment: Option<PaymentPlan>,
 }
 
 /// Combat-relevant static keywords tracked by the T1.6 kernel.
@@ -3674,6 +4051,7 @@ pub struct ObjectRecord {
     base_creature: Option<BaseCreatureCharacteristics>,
     damage_marked: u32,
     deathtouch_damage_marked: bool,
+    loyalty: Option<i32>,
     controlled_since_turn: u32,
 }
 
@@ -3724,6 +4102,12 @@ impl ObjectRecord {
     #[must_use]
     pub const fn deathtouch_damage_marked(self) -> bool {
         self.deathtouch_damage_marked
+    }
+
+    /// Returns the object's loyalty value, if this record is tracking one.
+    #[must_use]
+    pub const fn loyalty(self) -> Option<i32> {
+        self.loyalty
     }
 
     /// Returns the turn number since which this controller has controlled it.
@@ -3790,6 +4174,7 @@ impl ObjectArena {
             base_creature: None,
             damage_marked: 0,
             deathtouch_damage_marked: false,
+            loyalty: None,
             controlled_since_turn,
         });
         id
@@ -4077,6 +4462,18 @@ pub enum StateError {
     UnknownContinuousEffect(ContinuousEffectId),
     /// A continuous-effect definition named the same dependency more than once.
     DuplicateContinuousEffectDependency(ContinuousEffectId),
+    /// The requested activated ability ID does not exist.
+    UnknownActivatedAbility(ActivatedAbilityId),
+    /// The requested cost modifier ID does not exist.
+    UnknownCostModifier(CostModifierId),
+    /// The object cannot currently be used as that activated ability's source.
+    ObjectNotActivatable(ObjectId),
+    /// The source object is already tapped and cannot pay a tap cost.
+    SourceAlreadyTapped(ObjectId),
+    /// A loyalty ability of this permanent has already been activated this turn.
+    LoyaltyAbilityAlreadyActivatedThisTurn(ObjectId),
+    /// The source object does not have enough loyalty for the requested cost.
+    InsufficientLoyalty(ObjectId),
     /// A stack resolution was requested while the stack was empty.
     EmptyStack,
     /// A stack entry refers to a spell object that is no longer on the stack.
@@ -4230,6 +4627,32 @@ pub enum Action {
         cost: ManaCost,
         /// Payment plan to apply.
         plan: PaymentPlan,
+    },
+    /// Set or clear an object's loyalty value.
+    SetObjectLoyalty {
+        /// Object to update.
+        object: ObjectId,
+        /// New loyalty value, or none to clear loyalty tracking.
+        loyalty: Option<i32>,
+    },
+    /// Register one declarative activated ability definition.
+    RegisterActivatedAbility {
+        /// Data-only activated ability definition.
+        definition: ActivatedAbilityDefinition,
+    },
+    /// Register one activated ability cost modifier.
+    RegisterCostModifier {
+        /// Data-only activation cost modifier.
+        definition: CostModifierDefinition,
+    },
+    /// Activate one registered ability using an explicit payment plan.
+    ActivateAbility {
+        /// Activating player.
+        player: PlayerId,
+        /// Registered ability to activate.
+        ability: ActivatedAbilityId,
+        /// Mana payment selected for the effective activation cost.
+        payment: PaymentPlan,
     },
     /// Set T1 base printed creature characteristics for one object.
     SetBaseCreatureCharacteristics {
@@ -4484,6 +4907,10 @@ pub enum Outcome {
     ReplacementEffectRegistered(ReplacementEffectId),
     /// A continuous effect definition was registered.
     ContinuousEffectRegistered(ContinuousEffectId),
+    /// An activated ability definition was registered.
+    ActivatedAbilityRegistered(ActivatedAbilityId),
+    /// An activation cost modifier was registered.
+    CostModifierRegistered(CostModifierId),
     /// Combat damage was assigned and dealt.
     CombatDamageAssigned(Vec<CombatDamageRecord>),
     /// State-based actions were checked.
@@ -4601,6 +5028,33 @@ fn apply_fallback(state: &mut GameState, action: Action) -> Outcome {
         },
         Action::PayMana { player, cost, plan } => match state.pay_mana(player, cost, plan) {
             Ok(()) => Outcome::Applied,
+            Err(error) => Outcome::Failed(error),
+        },
+        Action::SetObjectLoyalty { object, loyalty } => {
+            match state.set_object_loyalty(object, loyalty) {
+                Ok(()) => Outcome::Applied,
+                Err(error) => Outcome::Failed(error),
+            }
+        }
+        Action::RegisterActivatedAbility { definition } => {
+            match state.register_activated_ability(definition) {
+                Ok(ability) => Outcome::ActivatedAbilityRegistered(ability),
+                Err(error) => Outcome::Failed(error),
+            }
+        }
+        Action::RegisterCostModifier { definition } => {
+            match state.register_cost_modifier(definition) {
+                Ok(modifier) => Outcome::CostModifierRegistered(modifier),
+                Err(error) => Outcome::Failed(error),
+            }
+        }
+        Action::ActivateAbility {
+            player,
+            ability,
+            payment,
+        } => match state.activate_ability(player, ability, payment) {
+            Ok(Some(entry)) => Outcome::StackEntryAdded(entry),
+            Ok(None) => Outcome::Applied,
             Err(error) => Outcome::Failed(error),
         },
         Action::SetBaseCreatureCharacteristics { object, base } => {
@@ -5165,6 +5619,57 @@ pub enum GameEvent {
         /// Effect timestamp.
         timestamp: u64,
     },
+    /// An object's loyalty value changed.
+    ObjectLoyaltySet {
+        /// Updated object.
+        object: ObjectId,
+        /// New loyalty value, or none if loyalty tracking was cleared.
+        loyalty: Option<i32>,
+    },
+    /// An activated ability definition was registered.
+    ActivatedAbilityRegistered {
+        /// Registered activated ability.
+        ability: ActivatedAbilityId,
+        /// Registered controller fallback.
+        controller: PlayerId,
+        /// Optional source object.
+        source: Option<ObjectId>,
+        /// Whether this ability resolves without using the stack.
+        mana_ability: bool,
+    },
+    /// An activated ability cost modifier was registered.
+    CostModifierRegistered {
+        /// Registered modifier.
+        modifier: CostModifierId,
+        /// Modifier controller.
+        controller: PlayerId,
+        /// Optional source object.
+        source: Option<ObjectId>,
+        /// Modifier operation.
+        operation: CostModifierOperation,
+    },
+    /// An activated ability was activated.
+    ActivatedAbilityActivated {
+        /// Activated ability.
+        ability: ActivatedAbilityId,
+        /// Activating player.
+        player: PlayerId,
+        /// Optional source object.
+        source: Option<ObjectId>,
+        /// Whether this ability resolved without using the stack.
+        mana_ability: bool,
+    },
+    /// An activated ability resolved.
+    ActivatedAbilityResolved {
+        /// Resolved ability.
+        ability: ActivatedAbilityId,
+        /// Controller at activation or resolution.
+        player: PlayerId,
+        /// Optional source object.
+        source: Option<ObjectId>,
+        /// Resolved effect.
+        effect: ActivatedAbilityEffect,
+    },
 }
 
 impl GameEvent {
@@ -5219,6 +5724,11 @@ impl GameEvent {
             Self::ReplacementChoiceOrderSet { .. } => 46,
             Self::ReplacementEffectApplied { .. } => 47,
             Self::ContinuousEffectRegistered { .. } => 48,
+            Self::ObjectLoyaltySet { .. } => 49,
+            Self::ActivatedAbilityRegistered { .. } => 50,
+            Self::CostModifierRegistered { .. } => 51,
+            Self::ActivatedAbilityActivated { .. } => 52,
+            Self::ActivatedAbilityResolved { .. } => 53,
         }
     }
 
@@ -5283,6 +5793,11 @@ impl GameEvent {
             Self::ReplacementChoiceOrderSet { .. } => GameEventKind::ReplacementChoiceOrderSet,
             Self::ReplacementEffectApplied { .. } => GameEventKind::ReplacementEffectApplied,
             Self::ContinuousEffectRegistered { .. } => GameEventKind::ContinuousEffectRegistered,
+            Self::ObjectLoyaltySet { .. } => GameEventKind::ObjectLoyaltySet,
+            Self::ActivatedAbilityRegistered { .. } => GameEventKind::ActivatedAbilityRegistered,
+            Self::CostModifierRegistered { .. } => GameEventKind::CostModifierRegistered,
+            Self::ActivatedAbilityActivated { .. } => GameEventKind::ActivatedAbilityActivated,
+            Self::ActivatedAbilityResolved { .. } => GameEventKind::ActivatedAbilityResolved,
         }
     }
 }
@@ -5365,6 +5880,18 @@ struct TriggerSubscription {
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+struct ActivatedAbilitySubscription {
+    id: ActivatedAbilityId,
+    definition: ActivatedAbilityDefinition,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+struct CostModifierSubscription {
+    id: CostModifierId,
+    definition: CostModifierDefinition,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 struct ReplacementSubscription {
     id: ReplacementEffectId,
     definition: ReplacementDefinition,
@@ -5433,6 +5960,14 @@ pub struct GameState {
     trigger_subscriptions: Vec<TriggerSubscription>,
     // clone_surface: Copy trigger instances waiting for the next priority window.
     pending_triggers: Vec<PendingTriggeredAbility>,
+    next_activated_ability: u32,
+    // clone_surface: data-only activated abilities compiled from card IR.
+    activated_abilities: Vec<ActivatedAbilitySubscription>,
+    next_cost_modifier: u32,
+    // clone_surface: data-only activation cost adjustments.
+    cost_modifiers: Vec<CostModifierSubscription>,
+    // clone_surface: object IDs whose loyalty abilities were activated this turn.
+    loyalty_activations_this_turn: Vec<ObjectId>,
     next_replacement: u32,
     // clone_surface: data-only replacement/prevention definitions compiled from card IR.
     replacement_effects: Vec<ReplacementSubscription>,
@@ -5480,6 +6015,11 @@ impl Clone for GameState {
             next_trigger: self.next_trigger,
             trigger_subscriptions: self.trigger_subscriptions.clone(),
             pending_triggers: self.pending_triggers.clone(),
+            next_activated_ability: self.next_activated_ability,
+            activated_abilities: self.activated_abilities.clone(),
+            next_cost_modifier: self.next_cost_modifier,
+            cost_modifiers: self.cost_modifiers.clone(),
+            loyalty_activations_this_turn: self.loyalty_activations_this_turn.clone(),
             next_replacement: self.next_replacement,
             replacement_effects: self.replacement_effects.clone(),
             replacement_choice_orders: self.replacement_choice_orders.clone(),
@@ -5548,6 +6088,11 @@ impl GameState {
             next_trigger: 0,
             trigger_subscriptions: Vec::new(),
             pending_triggers: Vec::new(),
+            next_activated_ability: 0,
+            activated_abilities: Vec::new(),
+            next_cost_modifier: 0,
+            cost_modifiers: Vec::new(),
+            loyalty_activations_this_turn: Vec::new(),
             next_replacement: 0,
             replacement_effects: Vec::new(),
             replacement_choice_orders: Vec::new(),
@@ -5680,6 +6225,30 @@ impl GameState {
     #[must_use]
     pub fn pending_triggers(&self) -> &[PendingTriggeredAbility] {
         &self.pending_triggers
+    }
+
+    /// Returns registered activated abilities in deterministic ID order.
+    pub fn activated_abilities(
+        &self,
+    ) -> impl Iterator<Item = (ActivatedAbilityId, ActivatedAbilityDefinition)> + '_ {
+        self.activated_abilities
+            .iter()
+            .map(|subscription| (subscription.id, subscription.definition))
+    }
+
+    /// Returns registered activation cost modifiers in deterministic ID order.
+    pub fn cost_modifiers(
+        &self,
+    ) -> impl Iterator<Item = (CostModifierId, CostModifierDefinition)> + '_ {
+        self.cost_modifiers
+            .iter()
+            .map(|subscription| (subscription.id, subscription.definition))
+    }
+
+    /// Returns source objects whose loyalty abilities were activated this turn.
+    #[must_use]
+    pub fn loyalty_activations_this_turn(&self) -> &[ObjectId] {
+        &self.loyalty_activations_this_turn
     }
 
     /// Returns registered replacement/prevention effects in deterministic ID order.
@@ -5974,6 +6543,394 @@ impl GameState {
         Ok(())
     }
 
+    /// Sets or clears an object's loyalty value.
+    fn set_object_loyalty(
+        &mut self,
+        object: ObjectId,
+        loyalty: Option<i32>,
+    ) -> Result<(), StateError> {
+        let record = self
+            .objects
+            .get_mut(object)
+            .ok_or(StateError::UnknownObject(object))?;
+        record.loyalty = loyalty;
+        self.emit_event(GameEvent::ObjectLoyaltySet { object, loyalty });
+        Ok(())
+    }
+
+    /// Registers one data-only activated ability definition.
+    fn register_activated_ability(
+        &mut self,
+        definition: ActivatedAbilityDefinition,
+    ) -> Result<ActivatedAbilityId, StateError> {
+        self.require_player(definition.controller())?;
+        if let Some(source) = definition.source() {
+            if self.objects.get(source).is_none() {
+                return Err(StateError::UnknownObject(source));
+            }
+        }
+        let id = ActivatedAbilityId(self.next_activated_ability);
+        self.next_activated_ability = self.next_activated_ability.saturating_add(1);
+        self.activated_abilities
+            .push(ActivatedAbilitySubscription { id, definition });
+        self.emit_event(GameEvent::ActivatedAbilityRegistered {
+            ability: id,
+            controller: definition.controller(),
+            source: definition.source(),
+            mana_ability: definition.is_mana_ability(),
+        });
+        Ok(id)
+    }
+
+    /// Registers one data-only activation cost modifier.
+    fn register_cost_modifier(
+        &mut self,
+        definition: CostModifierDefinition,
+    ) -> Result<CostModifierId, StateError> {
+        self.require_player(definition.controller())?;
+        if let Some(source) = definition.source() {
+            if self.objects.get(source).is_none() {
+                return Err(StateError::UnknownObject(source));
+            }
+        }
+        match definition.scope() {
+            CostModifierScope::Ability(ability) => {
+                self.activated_ability_definition(ability)?;
+            }
+            CostModifierScope::Source(source) => {
+                if self.objects.get(source).is_none() {
+                    return Err(StateError::UnknownObject(source));
+                }
+            }
+            CostModifierScope::Controller(player) => self.require_player(player)?,
+            CostModifierScope::AllActivatedAbilities => {}
+        }
+        let id = CostModifierId(self.next_cost_modifier);
+        self.next_cost_modifier = self.next_cost_modifier.saturating_add(1);
+        self.cost_modifiers
+            .push(CostModifierSubscription { id, definition });
+        self.emit_event(GameEvent::CostModifierRegistered {
+            modifier: id,
+            controller: definition.controller(),
+            source: definition.source(),
+            operation: definition.operation(),
+        });
+        Ok(id)
+    }
+
+    /// Returns the effective activation cost after T2.5 cost modifiers.
+    pub fn effective_activation_cost(
+        &self,
+        ability: ActivatedAbilityId,
+    ) -> Result<ActivationCost, StateError> {
+        let definition = self.activated_ability_definition(ability)?;
+        let controller = self.activated_ability_controller(definition)?;
+        let mut mana = definition.cost().mana();
+        for modifier in &self.cost_modifiers {
+            if self.cost_modifier_applies(modifier.definition, ability, definition, controller) {
+                mana = Self::apply_cost_modifier(mana, modifier.definition.operation())?;
+            }
+        }
+        let mut cost = ActivationCost::new(mana);
+        if definition.cost().tap_source() {
+            cost = cost.with_tap_source();
+        }
+        if let Some(delta) = definition.cost().loyalty_delta() {
+            cost = cost.with_loyalty_delta(delta);
+        }
+        Ok(cost)
+    }
+
+    fn activated_ability_definition(
+        &self,
+        ability: ActivatedAbilityId,
+    ) -> Result<ActivatedAbilityDefinition, StateError> {
+        self.activated_abilities
+            .get(ability.index())
+            .filter(|subscription| subscription.id == ability)
+            .map(|subscription| subscription.definition)
+            .ok_or(StateError::UnknownActivatedAbility(ability))
+    }
+
+    fn activated_ability_controller(
+        &self,
+        definition: ActivatedAbilityDefinition,
+    ) -> Result<PlayerId, StateError> {
+        if let Some(source) = definition.source() {
+            self.object_controller(source)
+        } else {
+            self.require_player(definition.controller())?;
+            Ok(definition.controller())
+        }
+    }
+
+    fn cost_modifier_applies(
+        &self,
+        modifier: CostModifierDefinition,
+        ability: ActivatedAbilityId,
+        definition: ActivatedAbilityDefinition,
+        controller: PlayerId,
+    ) -> bool {
+        match modifier.scope() {
+            CostModifierScope::AllActivatedAbilities => true,
+            CostModifierScope::Ability(expected) => expected == ability,
+            CostModifierScope::Source(expected) => definition.source() == Some(expected),
+            CostModifierScope::Controller(expected) => expected == controller,
+        }
+    }
+
+    fn apply_cost_modifier(
+        cost: ManaCost,
+        operation: CostModifierOperation,
+    ) -> Result<ManaCost, StateError> {
+        match operation {
+            CostModifierOperation::AddManaCost(additional) => {
+                let mut colored = [0_u32; 5];
+                for (index, kind) in COLORED_MANA_KINDS.iter().copied().enumerate() {
+                    colored[index] = cost
+                        .colored(kind)
+                        .checked_add(additional.colored(kind))
+                        .ok_or(StateError::ManaValueOverflow)?;
+                }
+                let generic = cost
+                    .generic_total()
+                    .map_err(Self::map_payment_error)?
+                    .checked_add(
+                        additional
+                            .generic_total()
+                            .map_err(Self::map_payment_error)?,
+                    )
+                    .ok_or(StateError::ManaValueOverflow)?;
+                Ok(ManaCost::new(
+                    colored[0], colored[1], colored[2], colored[3], colored[4], generic,
+                ))
+            }
+            CostModifierOperation::AddGeneric(amount) => {
+                let generic = cost
+                    .generic_total()
+                    .map_err(Self::map_payment_error)?
+                    .checked_add(amount)
+                    .ok_or(StateError::ManaValueOverflow)?;
+                Ok(ManaCost::new(
+                    cost.colored(ManaKind::White),
+                    cost.colored(ManaKind::Blue),
+                    cost.colored(ManaKind::Black),
+                    cost.colored(ManaKind::Red),
+                    cost.colored(ManaKind::Green),
+                    generic,
+                ))
+            }
+            CostModifierOperation::ReduceGeneric(amount) => {
+                let generic = cost
+                    .generic_total()
+                    .map_err(Self::map_payment_error)?
+                    .saturating_sub(amount);
+                Ok(ManaCost::new(
+                    cost.colored(ManaKind::White),
+                    cost.colored(ManaKind::Blue),
+                    cost.colored(ManaKind::Black),
+                    cost.colored(ManaKind::Red),
+                    cost.colored(ManaKind::Green),
+                    generic,
+                ))
+            }
+        }
+    }
+
+    fn activate_ability(
+        &mut self,
+        player: PlayerId,
+        ability: ActivatedAbilityId,
+        payment: PaymentPlan,
+    ) -> Result<Option<StackEntryId>, StateError> {
+        let definition = self.activated_ability_definition(ability)?;
+        let controller = self.activated_ability_controller(definition)?;
+        if controller != player {
+            return Err(StateError::PriorityPlayerMismatch {
+                expected: controller,
+                actual: player,
+            });
+        }
+        if !definition.is_mana_ability() {
+            self.require_priority_player(player)?;
+            if !self.can_activate_with_timing(player, definition.timing()) {
+                return Err(StateError::InvalidSpellTiming);
+            }
+        }
+        if definition.cost().loyalty_delta().is_some()
+            && !self.can_activate_with_timing(player, ActivationTiming::Sorcery)
+        {
+            return Err(StateError::InvalidSpellTiming);
+        }
+        let effective_cost = self.effective_activation_cost(ability)?;
+        let canonical_payment = validate_payment_plan(
+            self.mana_pool(player)?,
+            effective_cost.mana(),
+            payment.paid(),
+        )
+        .map_err(Self::map_payment_error)?;
+        if canonical_payment != payment {
+            return Err(StateError::InvalidPaymentPlan);
+        }
+        self.validate_non_mana_activation_costs(player, definition, effective_cost)?;
+
+        self.pay_mana(player, effective_cost.mana(), payment)?;
+        self.pay_non_mana_activation_costs(definition, effective_cost)?;
+        self.emit_event(GameEvent::ActivatedAbilityActivated {
+            ability,
+            player,
+            source: definition.source(),
+            mana_ability: definition.is_mana_ability(),
+        });
+
+        if definition.is_mana_ability() {
+            self.resolve_activated_ability_effect(ability, player, definition)?;
+            Ok(None)
+        } else {
+            let id = self.push_stack_entry(StackEntryRequest {
+                controller: player,
+                object: None,
+                trigger: None,
+                activated_ability: Some(ability),
+                kind: StackObjectKind::ActivatedAbility,
+                targets: Vec::new(),
+                payment: Some(payment),
+            });
+            self.after_priority_action(player, true)?;
+            Ok(Some(id))
+        }
+    }
+
+    fn validate_non_mana_activation_costs(
+        &self,
+        player: PlayerId,
+        definition: ActivatedAbilityDefinition,
+        cost: ActivationCost,
+    ) -> Result<(), StateError> {
+        if let Some(source) = definition.source() {
+            if self.object_zone(source) != Some(ZoneId::new(None, ZoneKind::Battlefield)) {
+                return Err(StateError::ObjectNotActivatable(source));
+            }
+            if self.object_controller(source)? != player {
+                return Err(StateError::ObjectNotActivatable(source));
+            }
+            let record = self
+                .objects
+                .get(source)
+                .ok_or(StateError::UnknownObject(source))?;
+            if cost.tap_source() {
+                if record.tapped() {
+                    return Err(StateError::SourceAlreadyTapped(source));
+                }
+                if self
+                    .creature_characteristics(source)
+                    .is_ok_and(|characteristics| !characteristics.keywords().haste())
+                    && record.controlled_since_turn() == self.turn_number
+                {
+                    return Err(StateError::SummoningSick(source));
+                }
+            }
+            if let Some(delta) = cost.loyalty_delta() {
+                if self.loyalty_activations_this_turn.contains(&source) {
+                    return Err(StateError::LoyaltyAbilityAlreadyActivatedThisTurn(source));
+                }
+                let loyalty = record
+                    .loyalty()
+                    .ok_or(StateError::InsufficientLoyalty(source))?;
+                let next = loyalty
+                    .checked_add(delta)
+                    .ok_or(StateError::LifeTotalOverflow)?;
+                if next < 0 {
+                    return Err(StateError::InsufficientLoyalty(source));
+                }
+            }
+        } else if cost.tap_source() || cost.loyalty_delta().is_some() {
+            return Err(StateError::ObjectNotActivatable(ObjectId(0)));
+        }
+        Ok(())
+    }
+
+    fn pay_non_mana_activation_costs(
+        &mut self,
+        definition: ActivatedAbilityDefinition,
+        cost: ActivationCost,
+    ) -> Result<(), StateError> {
+        if let Some(source) = definition.source() {
+            if cost.tap_source() {
+                self.set_object_tapped(source, true)?;
+            }
+            if let Some(delta) = cost.loyalty_delta() {
+                let record = self
+                    .objects
+                    .get_mut(source)
+                    .ok_or(StateError::UnknownObject(source))?;
+                let next = record
+                    .loyalty()
+                    .ok_or(StateError::InsufficientLoyalty(source))?
+                    .checked_add(delta)
+                    .ok_or(StateError::LifeTotalOverflow)?;
+                record.loyalty = Some(next);
+                self.loyalty_activations_this_turn.push(source);
+                self.emit_event(GameEvent::ObjectLoyaltySet {
+                    object: source,
+                    loyalty: Some(next),
+                });
+            }
+        }
+        Ok(())
+    }
+
+    fn resolve_activated_ability_effect(
+        &mut self,
+        ability: ActivatedAbilityId,
+        player: PlayerId,
+        definition: ActivatedAbilityDefinition,
+    ) -> Result<(), StateError> {
+        match definition.effect() {
+            ActivatedAbilityEffect::AddMana {
+                player: target,
+                mana,
+            } => {
+                let target = self.resolve_ability_player(player, target)?;
+                self.add_mana_to_pool(target, mana)?;
+            }
+            ActivatedAbilityEffect::GainLife {
+                player: target,
+                amount,
+            } => {
+                let target = self.resolve_ability_player(player, target)?;
+                self.gain_life(target, amount)?;
+            }
+            ActivatedAbilityEffect::LoseLife {
+                player: target,
+                amount,
+            } => {
+                let target = self.resolve_ability_player(player, target)?;
+                self.lose_life(target, amount)?;
+            }
+        }
+        self.emit_event(GameEvent::ActivatedAbilityResolved {
+            ability,
+            player,
+            source: definition.source(),
+            effect: definition.effect(),
+        });
+        Ok(())
+    }
+
+    fn resolve_ability_player(
+        &self,
+        controller: PlayerId,
+        player: AbilityPlayer,
+    ) -> Result<PlayerId, StateError> {
+        let resolved = match player {
+            AbilityPlayer::Controller => controller,
+            AbilityPlayer::Player(player) => player,
+        };
+        self.require_player(resolved)?;
+        Ok(resolved)
+    }
+
     /// Sets or replaces base printed creature characteristics for one object.
     fn set_base_creature_characteristics(
         &mut self,
@@ -6182,6 +7139,12 @@ impl GameState {
         &self.objects
     }
 
+    /// Returns one object record by ID.
+    #[must_use]
+    pub fn object(&self, object: ObjectId) -> Option<ObjectRecord> {
+        self.objects.get(object)
+    }
+
     /// Returns one zone by ID.
     #[cfg(test)]
     #[must_use]
@@ -6268,6 +7231,7 @@ impl GameState {
             .ok_or(StateError::TurnNumberOverflow)?;
         self.cleanup_iteration = 0;
         self.attackers_declared_this_combat = false;
+        self.loyalty_activations_this_turn.clear();
         self.reset_turn_events();
         self.emit_event(GameEvent::TurnStarted {
             turn: self.turn_number,
@@ -6362,14 +7326,15 @@ impl GameState {
 
         self.pay_mana(player, request.cost(), request.payment())?;
         self.move_object(object, ZoneId::new(None, ZoneKind::Stack))?;
-        let id = self.push_stack_entry(
-            player,
-            Some(object),
-            None,
-            request.kind(),
-            target_snapshots,
-            Some(request.payment()),
-        );
+        let id = self.push_stack_entry(StackEntryRequest {
+            controller: player,
+            object: Some(object),
+            trigger: None,
+            activated_ability: None,
+            kind: request.kind(),
+            targets: target_snapshots,
+            payment: Some(request.payment()),
+        });
         self.after_priority_action(player, true)?;
         Ok(id)
     }
@@ -6399,7 +7364,15 @@ impl GameState {
         if self.object_zone(object) != Some(stack_zone) {
             self.move_object(object, stack_zone)?;
         }
-        let id = self.push_stack_entry(player, Some(object), None, kind, Vec::new(), None);
+        let id = self.push_stack_entry(StackEntryRequest {
+            controller: player,
+            object: Some(object),
+            trigger: None,
+            activated_ability: None,
+            kind,
+            targets: Vec::new(),
+            payment: None,
+        });
         self.after_priority_action(player, hold_priority)?;
         Ok(id)
     }
@@ -6413,7 +7386,15 @@ impl GameState {
     ) -> Result<StackEntryId, StateError> {
         self.require_priority_player(player)?;
         self.require_player(player)?;
-        let id = self.push_stack_entry(player, None, None, kind, Vec::new(), None);
+        let id = self.push_stack_entry(StackEntryRequest {
+            controller: player,
+            object: None,
+            trigger: None,
+            activated_ability: None,
+            kind,
+            targets: Vec::new(),
+            payment: None,
+        });
         self.after_priority_action(player, hold_priority)?;
         Ok(id)
     }
@@ -6436,7 +7417,15 @@ impl GameState {
         for player in self.apnap_players(active)? {
             for ability_controller in abilities {
                 if *ability_controller == player {
-                    ids.push(self.push_stack_entry(player, None, None, kind, Vec::new(), None));
+                    ids.push(self.push_stack_entry(StackEntryRequest {
+                        controller: player,
+                        object: None,
+                        trigger: None,
+                        activated_ability: None,
+                        kind,
+                        targets: Vec::new(),
+                        payment: None,
+                    }));
                 }
             }
         }
@@ -6487,14 +7476,15 @@ impl GameState {
         for player in self.apnap_players(active)? {
             for trigger in &pending {
                 if trigger.controller() == player {
-                    let id = self.push_stack_entry(
-                        player,
-                        None,
-                        Some(trigger.trigger()),
-                        StackObjectKind::TriggeredAbility,
-                        Vec::new(),
-                        None,
-                    );
+                    let id = self.push_stack_entry(StackEntryRequest {
+                        controller: player,
+                        object: None,
+                        trigger: Some(trigger.trigger()),
+                        activated_ability: None,
+                        kind: StackObjectKind::TriggeredAbility,
+                        targets: Vec::new(),
+                        payment: None,
+                    });
                     self.emit_event_without_triggers(GameEvent::TriggeredAbilityPutOnStack {
                         trigger: trigger.trigger(),
                         entry: id,
@@ -7389,6 +8379,7 @@ impl GameState {
             bytes.write_optional_base_creature_characteristics(object.base_creature());
             bytes.write_u32(object.damage_marked);
             bytes.write_bool(object.deathtouch_damage_marked);
+            bytes.write_optional_i32(object.loyalty);
             bytes.write_u32(object.controlled_since_turn);
         }
 
@@ -7424,6 +8415,20 @@ impl GameState {
         bytes.write_u32(self.pending_triggers.len() as u32);
         for trigger in &self.pending_triggers {
             bytes.write_pending_trigger(*trigger);
+        }
+        bytes.write_u32(self.next_activated_ability);
+        bytes.write_u32(self.activated_abilities.len() as u32);
+        for ability in &self.activated_abilities {
+            bytes.write_activated_ability_subscription(*ability);
+        }
+        bytes.write_u32(self.next_cost_modifier);
+        bytes.write_u32(self.cost_modifiers.len() as u32);
+        for modifier in &self.cost_modifiers {
+            bytes.write_cost_modifier_subscription(*modifier);
+        }
+        bytes.write_u32(self.loyalty_activations_this_turn.len() as u32);
+        for object in &self.loyalty_activations_this_turn {
+            bytes.write_u32(object.0);
         }
         bytes.write_u32(self.next_replacement);
         bytes.write_u32(self.replacement_effects.len() as u32);
@@ -7494,6 +8499,7 @@ impl GameState {
             hash.write_optional_base_creature_characteristics(object.base_creature());
             hash.write_u32(object.damage_marked);
             hash.write_bool(object.deathtouch_damage_marked);
+            hash.write_optional_i32(object.loyalty);
             hash.write_u32(object.controlled_since_turn);
         }
 
@@ -7530,6 +8536,20 @@ impl GameState {
         hash.write_u32(self.pending_triggers.len() as u32);
         for trigger in &self.pending_triggers {
             hash.write_pending_trigger(*trigger);
+        }
+        hash.write_u32(self.next_activated_ability);
+        hash.write_u32(self.activated_abilities.len() as u32);
+        for ability in &self.activated_abilities {
+            hash.write_activated_ability_subscription(*ability);
+        }
+        hash.write_u32(self.next_cost_modifier);
+        hash.write_u32(self.cost_modifiers.len() as u32);
+        for modifier in &self.cost_modifiers {
+            hash.write_cost_modifier_subscription(*modifier);
+        }
+        hash.write_u32(self.loyalty_activations_this_turn.len() as u32);
+        for object in &self.loyalty_activations_this_turn {
+            hash.write_u32(object.0);
         }
         hash.write_u32(self.next_replacement);
         hash.write_u32(self.replacement_effects.len() as u32);
@@ -8655,6 +9675,20 @@ impl GameState {
         }
     }
 
+    fn can_activate_with_timing(&self, player: PlayerId, timing: ActivationTiming) -> bool {
+        match timing {
+            ActivationTiming::Instant => true,
+            ActivationTiming::Sorcery => {
+                self.active_player == Some(player)
+                    && matches!(
+                        self.current_step,
+                        Some(Step::PrecombatMain | Step::PostcombatMain)
+                    )
+                    && self.stack_entries.is_empty()
+            }
+        }
+    }
+
     fn capture_target_snapshots(
         &self,
         requirements: &[TargetRequirement],
@@ -8721,15 +9755,16 @@ impl GameState {
         }
     }
 
-    fn push_stack_entry(
-        &mut self,
-        controller: PlayerId,
-        object: Option<ObjectId>,
-        trigger: Option<TriggerId>,
-        kind: StackObjectKind,
-        targets: Vec<TargetSnapshot>,
-        payment: Option<PaymentPlan>,
-    ) -> StackEntryId {
+    fn push_stack_entry(&mut self, request: StackEntryRequest) -> StackEntryId {
+        let StackEntryRequest {
+            controller,
+            object,
+            trigger,
+            activated_ability,
+            kind,
+            targets,
+            payment,
+        } = request;
         let id = StackEntryId(self.next_stack_entry);
         self.next_stack_entry = self.next_stack_entry.saturating_add(1);
         self.stack_entries.push(StackEntry {
@@ -8737,6 +9772,7 @@ impl GameState {
             controller,
             object,
             trigger,
+            activated_ability,
             kind,
             targets,
             payment,
@@ -8801,11 +9837,18 @@ impl GameState {
                 self.move_object(object, destination)?;
             }
         }
+        if outcome == ResolutionOutcome::Resolved {
+            if let Some(ability) = entry.activated_ability() {
+                let definition = self.activated_ability_definition(ability)?;
+                self.resolve_activated_ability_effect(ability, entry.controller(), definition)?;
+            }
+        }
         self.resolution_log.push(ResolutionRecord {
             stack_entry: entry.id(),
             controller: entry.controller(),
             object: entry.object(),
             trigger: entry.trigger(),
+            activated_ability: entry.activated_ability(),
             kind: entry.kind(),
             targets: entry.targets().to_vec(),
             legal_targets,
@@ -9151,6 +10194,16 @@ impl Fnva64 {
         }
     }
 
+    fn write_optional_i32(&mut self, value: Option<i32>) {
+        match value {
+            Some(value) => {
+                self.write_u8(1);
+                self.write_i32(value);
+            }
+            None => self.write_u8(0),
+        }
+    }
+
     fn write_optional_player(&mut self, player: Option<PlayerId>) {
         match player {
             Some(player) => {
@@ -9262,6 +10315,16 @@ impl Fnva64 {
             Some(trigger) => {
                 self.write_u8(1);
                 self.write_u32(trigger.0);
+            }
+            None => self.write_u8(0),
+        }
+    }
+
+    fn write_optional_activated_ability(&mut self, ability: Option<ActivatedAbilityId>) {
+        match ability {
+            Some(ability) => {
+                self.write_u8(1);
+                self.write_u32(ability.0);
             }
             None => self.write_u8(0),
         }
@@ -9421,6 +10484,92 @@ impl Fnva64 {
         self.write_u32(trigger.event_turn);
     }
 
+    fn write_activation_timing(&mut self, timing: ActivationTiming) {
+        self.write_u8(timing.canonical_code());
+    }
+
+    fn write_ability_player(&mut self, player: AbilityPlayer) {
+        self.write_u8(player.canonical_code());
+        if let AbilityPlayer::Player(player) = player {
+            self.write_u32(player.0);
+        }
+    }
+
+    fn write_activated_ability_effect(&mut self, effect: ActivatedAbilityEffect) {
+        self.write_u8(effect.canonical_code());
+        match effect {
+            ActivatedAbilityEffect::AddMana { player, mana } => {
+                self.write_ability_player(player);
+                self.write_mana_pool(mana);
+            }
+            ActivatedAbilityEffect::GainLife { player, amount }
+            | ActivatedAbilityEffect::LoseLife { player, amount } => {
+                self.write_ability_player(player);
+                self.write_u32(amount);
+            }
+        }
+    }
+
+    fn write_activation_cost(&mut self, cost: ActivationCost) {
+        self.write_mana_cost(cost.mana);
+        self.write_bool(cost.tap_source);
+        self.write_optional_i32(cost.loyalty_delta);
+    }
+
+    fn write_mana_cost(&mut self, cost: ManaCost) {
+        for kind in COLORED_MANA_KINDS {
+            self.write_u32(cost.colored(kind));
+        }
+        self.write_u32(cost.generic);
+        self.write_u32(cost.x_count);
+        self.write_u32(cost.x_value);
+    }
+
+    fn write_activated_ability_definition(&mut self, definition: ActivatedAbilityDefinition) {
+        self.write_u32(definition.controller.0);
+        self.write_optional_object(definition.source);
+        self.write_activation_timing(definition.timing);
+        self.write_activation_cost(definition.cost);
+        self.write_activated_ability_effect(definition.effect);
+        self.write_bool(definition.mana_ability);
+    }
+
+    fn write_activated_ability_subscription(&mut self, subscription: ActivatedAbilitySubscription) {
+        self.write_u32(subscription.id.0);
+        self.write_activated_ability_definition(subscription.definition);
+    }
+
+    fn write_cost_modifier_scope(&mut self, scope: CostModifierScope) {
+        self.write_u8(scope.canonical_code());
+        match scope {
+            CostModifierScope::AllActivatedAbilities => {}
+            CostModifierScope::Ability(ability) => self.write_u32(ability.0),
+            CostModifierScope::Source(object) => self.write_u32(object.0),
+            CostModifierScope::Controller(player) => self.write_u32(player.0),
+        }
+    }
+
+    fn write_cost_modifier_operation(&mut self, operation: CostModifierOperation) {
+        self.write_u8(operation.canonical_code());
+        match operation {
+            CostModifierOperation::AddManaCost(cost) => self.write_mana_cost(cost),
+            CostModifierOperation::AddGeneric(amount)
+            | CostModifierOperation::ReduceGeneric(amount) => self.write_u32(amount),
+        }
+    }
+
+    fn write_cost_modifier_definition(&mut self, definition: CostModifierDefinition) {
+        self.write_u32(definition.controller.0);
+        self.write_optional_object(definition.source);
+        self.write_cost_modifier_scope(definition.scope);
+        self.write_cost_modifier_operation(definition.operation);
+    }
+
+    fn write_cost_modifier_subscription(&mut self, subscription: CostModifierSubscription) {
+        self.write_u32(subscription.id.0);
+        self.write_cost_modifier_definition(subscription.definition);
+    }
+
     fn write_replacement_source_filter(&mut self, filter: ReplacementSourceFilter) {
         self.write_u8(filter.canonical_code());
         if let ReplacementSourceFilter::Object(object) = filter {
@@ -9556,6 +10705,7 @@ impl Fnva64 {
         self.write_u32(entry.controller.0);
         self.write_optional_object(entry.object);
         self.write_optional_trigger(entry.trigger);
+        self.write_optional_activated_ability(entry.activated_ability);
         self.write_u8(entry.kind.canonical_code());
         self.write_u32(entry.targets.len() as u32);
         for target in &entry.targets {
@@ -9569,6 +10719,7 @@ impl Fnva64 {
         self.write_u32(record.controller.0);
         self.write_optional_object(record.object);
         self.write_optional_trigger(record.trigger);
+        self.write_optional_activated_ability(record.activated_ability);
         self.write_u8(record.kind.canonical_code());
         self.write_u32(record.targets.len() as u32);
         for target in &record.targets {
@@ -9848,6 +10999,54 @@ impl Fnva64 {
                 self.write_continuous_effect_operation(operation);
                 self.write_continuous_effect_layer(layer);
                 self.write_u64(timestamp);
+            }
+            GameEvent::ObjectLoyaltySet { object, loyalty } => {
+                self.write_u32(object.0);
+                self.write_optional_i32(loyalty);
+            }
+            GameEvent::ActivatedAbilityRegistered {
+                ability,
+                controller,
+                source,
+                mana_ability,
+            } => {
+                self.write_u32(ability.0);
+                self.write_u32(controller.0);
+                self.write_optional_object(source);
+                self.write_bool(mana_ability);
+            }
+            GameEvent::CostModifierRegistered {
+                modifier,
+                controller,
+                source,
+                operation,
+            } => {
+                self.write_u32(modifier.0);
+                self.write_u32(controller.0);
+                self.write_optional_object(source);
+                self.write_cost_modifier_operation(operation);
+            }
+            GameEvent::ActivatedAbilityActivated {
+                ability,
+                player,
+                source,
+                mana_ability,
+            } => {
+                self.write_u32(ability.0);
+                self.write_u32(player.0);
+                self.write_optional_object(source);
+                self.write_bool(mana_ability);
+            }
+            GameEvent::ActivatedAbilityResolved {
+                ability,
+                player,
+                source,
+                effect,
+            } => {
+                self.write_u32(ability.0);
+                self.write_u32(player.0);
+                self.write_optional_object(source);
+                self.write_activated_ability_effect(effect);
             }
         }
     }
@@ -9941,6 +11140,16 @@ impl CanonicalBytes {
         self.bytes.extend(value.to_le_bytes());
     }
 
+    fn write_optional_i32(&mut self, value: Option<i32>) {
+        match value {
+            Some(value) => {
+                self.write_u8(1);
+                self.write_i32(value);
+            }
+            None => self.write_u8(0),
+        }
+    }
+
     fn write_optional_player(&mut self, player: Option<PlayerId>) {
         match player {
             Some(player) => {
@@ -9956,6 +11165,16 @@ impl CanonicalBytes {
             Some(trigger) => {
                 self.write_u8(1);
                 self.write_u32(trigger.0);
+            }
+            None => self.write_u8(0),
+        }
+    }
+
+    fn write_optional_activated_ability(&mut self, ability: Option<ActivatedAbilityId>) {
+        match ability {
+            Some(ability) => {
+                self.write_u8(1);
+                self.write_u32(ability.0);
             }
             None => self.write_u8(0),
         }
@@ -10211,6 +11430,92 @@ impl CanonicalBytes {
         self.write_u32(trigger.event_turn);
     }
 
+    fn write_activation_timing(&mut self, timing: ActivationTiming) {
+        self.write_u8(timing.canonical_code());
+    }
+
+    fn write_ability_player(&mut self, player: AbilityPlayer) {
+        self.write_u8(player.canonical_code());
+        if let AbilityPlayer::Player(player) = player {
+            self.write_u32(player.0);
+        }
+    }
+
+    fn write_activated_ability_effect(&mut self, effect: ActivatedAbilityEffect) {
+        self.write_u8(effect.canonical_code());
+        match effect {
+            ActivatedAbilityEffect::AddMana { player, mana } => {
+                self.write_ability_player(player);
+                self.write_mana_pool(mana);
+            }
+            ActivatedAbilityEffect::GainLife { player, amount }
+            | ActivatedAbilityEffect::LoseLife { player, amount } => {
+                self.write_ability_player(player);
+                self.write_u32(amount);
+            }
+        }
+    }
+
+    fn write_mana_cost(&mut self, cost: ManaCost) {
+        for kind in COLORED_MANA_KINDS {
+            self.write_u32(cost.colored(kind));
+        }
+        self.write_u32(cost.generic);
+        self.write_u32(cost.x_count);
+        self.write_u32(cost.x_value);
+    }
+
+    fn write_activation_cost(&mut self, cost: ActivationCost) {
+        self.write_mana_cost(cost.mana);
+        self.write_bool(cost.tap_source);
+        self.write_optional_i32(cost.loyalty_delta);
+    }
+
+    fn write_activated_ability_definition(&mut self, definition: ActivatedAbilityDefinition) {
+        self.write_u32(definition.controller.0);
+        self.write_optional_object(definition.source);
+        self.write_activation_timing(definition.timing);
+        self.write_activation_cost(definition.cost);
+        self.write_activated_ability_effect(definition.effect);
+        self.write_bool(definition.mana_ability);
+    }
+
+    fn write_activated_ability_subscription(&mut self, subscription: ActivatedAbilitySubscription) {
+        self.write_u32(subscription.id.0);
+        self.write_activated_ability_definition(subscription.definition);
+    }
+
+    fn write_cost_modifier_scope(&mut self, scope: CostModifierScope) {
+        self.write_u8(scope.canonical_code());
+        match scope {
+            CostModifierScope::AllActivatedAbilities => {}
+            CostModifierScope::Ability(ability) => self.write_u32(ability.0),
+            CostModifierScope::Source(object) => self.write_u32(object.0),
+            CostModifierScope::Controller(player) => self.write_u32(player.0),
+        }
+    }
+
+    fn write_cost_modifier_operation(&mut self, operation: CostModifierOperation) {
+        self.write_u8(operation.canonical_code());
+        match operation {
+            CostModifierOperation::AddManaCost(cost) => self.write_mana_cost(cost),
+            CostModifierOperation::AddGeneric(amount)
+            | CostModifierOperation::ReduceGeneric(amount) => self.write_u32(amount),
+        }
+    }
+
+    fn write_cost_modifier_definition(&mut self, definition: CostModifierDefinition) {
+        self.write_u32(definition.controller.0);
+        self.write_optional_object(definition.source);
+        self.write_cost_modifier_scope(definition.scope);
+        self.write_cost_modifier_operation(definition.operation);
+    }
+
+    fn write_cost_modifier_subscription(&mut self, subscription: CostModifierSubscription) {
+        self.write_u32(subscription.id.0);
+        self.write_cost_modifier_definition(subscription.definition);
+    }
+
     fn write_replacement_source_filter(&mut self, filter: ReplacementSourceFilter) {
         self.write_u8(filter.canonical_code());
         if let ReplacementSourceFilter::Object(object) = filter {
@@ -10346,6 +11651,7 @@ impl CanonicalBytes {
         self.write_u32(entry.controller.0);
         self.write_optional_object(entry.object);
         self.write_optional_trigger(entry.trigger);
+        self.write_optional_activated_ability(entry.activated_ability);
         self.write_u8(entry.kind.canonical_code());
         self.write_u32(entry.targets.len() as u32);
         for target in &entry.targets {
@@ -10359,6 +11665,7 @@ impl CanonicalBytes {
         self.write_u32(record.controller.0);
         self.write_optional_object(record.object);
         self.write_optional_trigger(record.trigger);
+        self.write_optional_activated_ability(record.activated_ability);
         self.write_u8(record.kind.canonical_code());
         self.write_u32(record.targets.len() as u32);
         for target in &record.targets {
@@ -10639,6 +11946,54 @@ impl CanonicalBytes {
                 self.write_continuous_effect_layer(layer);
                 self.write_u64(timestamp);
             }
+            GameEvent::ObjectLoyaltySet { object, loyalty } => {
+                self.write_u32(object.0);
+                self.write_optional_i32(loyalty);
+            }
+            GameEvent::ActivatedAbilityRegistered {
+                ability,
+                controller,
+                source,
+                mana_ability,
+            } => {
+                self.write_u32(ability.0);
+                self.write_u32(controller.0);
+                self.write_optional_object(source);
+                self.write_bool(mana_ability);
+            }
+            GameEvent::CostModifierRegistered {
+                modifier,
+                controller,
+                source,
+                operation,
+            } => {
+                self.write_u32(modifier.0);
+                self.write_u32(controller.0);
+                self.write_optional_object(source);
+                self.write_cost_modifier_operation(operation);
+            }
+            GameEvent::ActivatedAbilityActivated {
+                ability,
+                player,
+                source,
+                mana_ability,
+            } => {
+                self.write_u32(ability.0);
+                self.write_u32(player.0);
+                self.write_optional_object(source);
+                self.write_bool(mana_ability);
+            }
+            GameEvent::ActivatedAbilityResolved {
+                ability,
+                player,
+                source,
+                effect,
+            } => {
+                self.write_u32(ability.0);
+                self.write_u32(player.0);
+                self.write_optional_object(source);
+                self.write_activated_ability_effect(effect);
+            }
         }
     }
 
@@ -10710,20 +12065,21 @@ mod tests {
     use super::{
         apply, auto_payment_plan, crate_ready, enumerate_auto_tap_payment_plans,
         enumerate_payment_plans, legal_actions, state_based_action_table, validate_payment_plan,
-        Action, AttackDeclaration, BaseCreatureCharacteristics, BlockDeclaration, CardId,
+        AbilityPlayer, Action, ActivatedAbilityDefinition, ActivatedAbilityEffect, ActivationCost,
+        ActivationTiming, AttackDeclaration, BaseCreatureCharacteristics, BlockDeclaration, CardId,
         CastSpellRequest, CombatDamageAssignment, CombatDamageAssignmentRequest,
         CombatDamageStepKind, CombatDamageTarget, ContinuousEffectDefinition, ContinuousEffectId,
-        ContinuousEffectOperation, ContinuousEffectTarget, CreatureCharacteristics,
-        CreatureKeywords, EffectDuration, EventReplayError, GameEvent, GameOutcome, GameState,
-        ManaCost, ManaKind, ManaPool, ManaSource, ObjectColors, ObjectTypes, ObjectView, Outcome,
-        PaymentError, Phase, PlayerId, PriorityOutcome, ReplacementCondition,
-        ReplacementDamageTargetFilter, ReplacementDefinition, ReplacementDuration,
-        ReplacementEffectId, ReplacementOperation, ReplacementSourceFilter, ResolutionOutcome,
-        SpellTiming, StackEntryId, StackObjectKind, StateBasedActionKind, StateBasedActionReport,
-        StateError, Step, TargetChoice, TargetKind, TargetRequirement, TriggerCondition,
-        TriggerDefinition, TriggerInterveningIf, TriggerObjectFilter, TriggerPlayerFilter,
-        TriggerZoneFilter, ZoneConservation, ZoneId, ZoneKind, EVENT_RING_CAPACITY,
-        NORMAL_TURN_STEPS, OPENING_HAND_SIZE, PAYMENT_PLAN_LIMIT,
+        ContinuousEffectOperation, ContinuousEffectTarget, CostModifierDefinition,
+        CostModifierOperation, CostModifierScope, CreatureCharacteristics, CreatureKeywords,
+        EffectDuration, EventReplayError, GameEvent, GameOutcome, GameState, ManaCost, ManaKind,
+        ManaPool, ManaSource, ObjectColors, ObjectTypes, ObjectView, Outcome, PaymentError, Phase,
+        PlayerId, PriorityOutcome, ReplacementCondition, ReplacementDamageTargetFilter,
+        ReplacementDefinition, ReplacementDuration, ReplacementEffectId, ReplacementOperation,
+        ReplacementSourceFilter, ResolutionOutcome, SpellTiming, StackEntryId, StackObjectKind,
+        StateBasedActionKind, StateBasedActionReport, StateError, Step, TargetChoice, TargetKind,
+        TargetRequirement, TriggerCondition, TriggerDefinition, TriggerInterveningIf,
+        TriggerObjectFilter, TriggerPlayerFilter, TriggerZoneFilter, ZoneConservation, ZoneId,
+        ZoneKind, EVENT_RING_CAPACITY, NORMAL_TURN_STEPS, OPENING_HAND_SIZE, PAYMENT_PLAN_LIMIT,
     };
 
     #[test]
@@ -14126,6 +15482,167 @@ mod tests {
         assert_eq!(state.priority_player(), Some(responder));
         assert_eq!(state.priority_pass_count(), 0);
         assert_eq!(state.stack_top().map(|entry| entry.id()), Some(ability));
+    }
+
+    #[test]
+    fn mana_activated_ability_resolves_without_priority_or_stack() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let source = state
+            .create_object(
+                CardId::new(25_001),
+                active,
+                active,
+                ZoneId::new(None, ZoneKind::Battlefield),
+            )
+            .unwrap_or_else(|error| panic!("unexpected source create error: {error:?}"));
+        let ability = state
+            .register_activated_ability(
+                ActivatedAbilityDefinition::new(
+                    active,
+                    Some(source),
+                    ActivationTiming::Instant,
+                    ActivationCost::new(ManaCost::new(0, 0, 0, 0, 0, 0)).with_tap_source(),
+                    ActivatedAbilityEffect::AddMana {
+                        player: AbilityPlayer::Controller,
+                        mana: ManaPool::new(0, 0, 0, 0, 1, 0),
+                    },
+                )
+                .as_mana_ability(),
+            )
+            .unwrap_or_else(|error| panic!("unexpected ability registration error: {error:?}"));
+
+        assert_eq!(
+            state.activate_ability(
+                active,
+                ability,
+                zero_payment(ManaCost::new(0, 0, 0, 0, 0, 0))
+            ),
+            Ok(None)
+        );
+
+        assert!(state
+            .object(source)
+            .unwrap_or_else(|| panic!("source missing"))
+            .tapped());
+        assert!(state.stack_entries().is_empty());
+        assert_eq!(
+            state
+                .mana_pool(active)
+                .unwrap_or_else(|error| panic!("unexpected mana pool error: {error:?}")),
+            ManaPool::new(0, 0, 0, 0, 1, 0)
+        );
+        assert_eq!(state.priority_player(), None);
+    }
+
+    #[test]
+    fn loyalty_activated_ability_is_once_per_turn() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let source = state
+            .create_object(
+                CardId::new(25_002),
+                active,
+                active,
+                ZoneId::new(None, ZoneKind::Battlefield),
+            )
+            .unwrap_or_else(|error| panic!("unexpected source create error: {error:?}"));
+        state
+            .set_object_loyalty(source, Some(3))
+            .unwrap_or_else(|error| panic!("unexpected loyalty setup error: {error:?}"));
+        let ability = state
+            .register_activated_ability(ActivatedAbilityDefinition::new(
+                active,
+                Some(source),
+                ActivationTiming::Sorcery,
+                ActivationCost::new(ManaCost::new(0, 0, 0, 0, 0, 0)).with_loyalty_delta(1),
+                ActivatedAbilityEffect::GainLife {
+                    player: AbilityPlayer::Controller,
+                    amount: 1,
+                },
+            ))
+            .unwrap_or_else(|error| panic!("unexpected ability registration error: {error:?}"));
+        start_upkeep(&mut state, active);
+        state
+            .advance_step()
+            .unwrap_or_else(|error| panic!("unexpected draw advance error: {error:?}"));
+        state
+            .advance_step()
+            .unwrap_or_else(|error| panic!("unexpected main advance error: {error:?}"));
+
+        let payment = zero_payment(ManaCost::new(0, 0, 0, 0, 0, 0));
+        let entry = state
+            .activate_ability(active, ability, payment)
+            .unwrap_or_else(|error| panic!("unexpected loyalty activation error: {error:?}"))
+            .unwrap_or_else(|| panic!("loyalty ability should use the stack"));
+        assert_eq!(
+            state
+                .object(source)
+                .unwrap_or_else(|| panic!("source missing"))
+                .loyalty(),
+            Some(4)
+        );
+        assert_eq!(
+            state.pass_priority(active),
+            Ok(PriorityOutcome::Resolved(entry))
+        );
+        assert_eq!(
+            state.activate_ability(active, ability, payment),
+            Err(StateError::LoyaltyAbilityAlreadyActivatedThisTurn(source))
+        );
+    }
+
+    #[test]
+    fn activated_cost_modifier_changes_required_payment() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let source = state
+            .create_object(
+                CardId::new(25_003),
+                active,
+                active,
+                ZoneId::new(None, ZoneKind::Battlefield),
+            )
+            .unwrap_or_else(|error| panic!("unexpected source create error: {error:?}"));
+        let ability = state
+            .register_activated_ability(ActivatedAbilityDefinition::new(
+                active,
+                Some(source),
+                ActivationTiming::Instant,
+                ActivationCost::new(ManaCost::new(0, 0, 0, 0, 0, 1)),
+                ActivatedAbilityEffect::GainLife {
+                    player: AbilityPlayer::Controller,
+                    amount: 1,
+                },
+            ))
+            .unwrap_or_else(|error| panic!("unexpected ability registration error: {error:?}"));
+        state
+            .register_cost_modifier(CostModifierDefinition::new(
+                active,
+                None,
+                CostModifierScope::Ability(ability),
+                CostModifierOperation::AddGeneric(1),
+            ))
+            .unwrap_or_else(|error| panic!("unexpected modifier registration error: {error:?}"));
+        start_upkeep(&mut state, active);
+        state
+            .add_mana_to_pool(active, ManaPool::new(0, 0, 0, 0, 0, 1))
+            .unwrap_or_else(|error| panic!("unexpected mana add error: {error:?}"));
+        let base_payment = validate_payment_plan(
+            state
+                .mana_pool(active)
+                .unwrap_or_else(|error| panic!("unexpected mana pool error: {error:?}")),
+            ManaCost::new(0, 0, 0, 0, 0, 1),
+            ManaPool::new(0, 0, 0, 0, 0, 1),
+        )
+        .unwrap_or_else(|error| panic!("unexpected base payment error: {error:?}"));
+
+        assert_eq!(
+            state.activate_ability(active, ability, base_payment),
+            Err(StateError::InvalidPaymentPlan)
+        );
+        assert_eq!(state.players()[active.index()].life(), 20);
+        assert!(state.stack_entries().is_empty());
     }
 
     #[test]

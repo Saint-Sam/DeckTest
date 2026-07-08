@@ -18,6 +18,7 @@
     "ReplacementChoiceOrder",
     "ResolutionRecord",
     "StackEntry",
+    "StackEntryRequest",
     "Zone",
     "ZoneView"
   ],
@@ -32,7 +33,7 @@
   "full_state_snapshot_surface": false,
   "game_state_debug": false,
   "guard": "static persistent allocation field count",
-  "persistent_allocation_field_count": 24,
+  "persistent_allocation_field_count": 27,
   "persistent_allocation_fields": [
     {
       "field": "targets",
@@ -141,6 +142,24 @@
       "reason": "Copy trigger instances drained before priority",
       "struct": "GameState",
       "type": "Vec<PendingTriggeredAbility>"
+    },
+    {
+      "field": "activated_abilities",
+      "reason": "data-only Copy activated ability definitions compiled from card IR",
+      "struct": "GameState",
+      "type": "Vec<ActivatedAbilitySubscription>"
+    },
+    {
+      "field": "cost_modifiers",
+      "reason": "data-only Copy activation cost modifiers compiled from card IR",
+      "struct": "GameState",
+      "type": "Vec<CostModifierSubscription>"
+    },
+    {
+      "field": "loyalty_activations_this_turn",
+      "reason": "object IDs bounded by active permanents and cleared each turn",
+      "struct": "GameState",
+      "type": "Vec<ObjectId>"
     },
     {
       "field": "replacement_effects",

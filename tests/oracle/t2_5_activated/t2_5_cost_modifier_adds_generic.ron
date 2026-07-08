@@ -1,0 +1,51 @@
+(
+    name: "T2.5 activated ability cost modifier adds generic cost",
+    setup: (
+        players: 1,
+        objects: [
+            (card: 25004, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (
+            action: "register_activated_ability",
+            controller: 0,
+            source_object: 0,
+            timing: "instant",
+            cost: (mana: (generic: 1)),
+            effect: (operation: "gain_life", amount: 4),
+        ),
+        (
+            action: "register_cost_modifier",
+            controller: 0,
+            scope: "ability",
+            ability: 0,
+            operation: "add_generic",
+            amount: 1,
+        ),
+        (action: "start_turn", player: 0),
+        (action: "advance_step"),
+        (action: "add_mana", player: 0, mana: (colorless: 2)),
+        (action: "activate_ability_auto", player: 0, ability: 0),
+        (action: "pass_priority", player: 0),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Stack", count: 0),
+            (zone: "Battlefield", count: 1),
+        ],
+        players: [
+            (player: 0, life: 24, mana: ()),
+        ],
+        outcome: "in_progress",
+        active_player: 0,
+        priority_player: 0,
+        current_step: "Upkeep",
+        invariants: [
+            "zone_conservation",
+            "life_poison_sanity",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

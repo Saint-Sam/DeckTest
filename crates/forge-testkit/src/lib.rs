@@ -8,13 +8,16 @@
 //! tests exercise the same public mutation boundary as application code.
 
 use forge_core::{
-    apply, auto_payment_plan, Action, AttackDeclaration, BaseCreatureCharacteristics,
-    BlockDeclaration, CardId, CombatDamageAssignment, CombatDamageAssignmentRequest,
-    CombatDamageTarget, ContinuousEffectDefinition, ContinuousEffectId, ContinuousEffectOperation,
-    ContinuousEffectTarget, CreatureKeywords, GameOutcome, GameState, ManaCost, ManaKind, ManaPool,
-    ObjectColors, ObjectId, ObjectTypes, Outcome, PlayerId, ReplacementCondition,
-    ReplacementDamageTargetFilter, ReplacementDefinition, ReplacementDuration, ReplacementEffectId,
-    ReplacementOperation, ReplacementSourceFilter, StateHash, Step, ZoneId, ZoneKind,
+    apply, auto_payment_plan, AbilityPlayer, Action, ActivatedAbilityDefinition,
+    ActivatedAbilityEffect, ActivatedAbilityId, ActivationCost, ActivationTiming,
+    AttackDeclaration, BaseCreatureCharacteristics, BlockDeclaration, CardId,
+    CombatDamageAssignment, CombatDamageAssignmentRequest, CombatDamageTarget,
+    ContinuousEffectDefinition, ContinuousEffectId, ContinuousEffectOperation,
+    ContinuousEffectTarget, CostModifierDefinition, CostModifierOperation, CostModifierScope,
+    CreatureKeywords, GameOutcome, GameState, ManaCost, ManaKind, ManaPool, ObjectColors, ObjectId,
+    ObjectTypes, Outcome, PlayerId, ReplacementCondition, ReplacementDamageTargetFilter,
+    ReplacementDefinition, ReplacementDuration, ReplacementEffectId, ReplacementOperation,
+    ReplacementSourceFilter, StateHash, Step, ZoneId, ZoneKind,
 };
 use std::{fs, path::Path};
 
@@ -520,6 +523,13 @@ pub enum ScenarioStep {
         /// New tapped status.
         tapped: bool,
     },
+    /// Set or clear an object's loyalty value.
+    SetObjectLoyalty {
+        /// Scenario object index.
+        object: usize,
+        /// New loyalty value, or none to clear loyalty tracking.
+        loyalty: Option<i32>,
+    },
     /// Mark damage on a creature object.
     MarkDamage {
         /// Scenario object index.
@@ -560,10 +570,41 @@ pub enum ScenarioStep {
         /// Continuous-effect registration spec.
         spec: ContinuousEffectSpec,
     },
+    /// Register an activated ability.
+    RegisterActivatedAbility {
+        /// Activated-ability registration spec.
+        spec: ActivatedAbilitySpec,
+    },
+    /// Register a cost modifier for activated abilities.
+    RegisterCostModifier {
+        /// Cost-modifier registration spec.
+        spec: CostModifierSpec,
+    },
+    /// Activate a previously registered ability using the deterministic payment planner.
+    ActivateAbilityAuto {
+        /// Zero-based scenario player index.
+        player: usize,
+        /// Zero-based activated-ability registration index.
+        ability: usize,
+    },
     /// Assert current derived object characteristics.
     AssertCharacteristics {
         /// Expected effective characteristics.
         expectation: CharacteristicExpectation,
+    },
+    /// Assert an object's tapped status.
+    AssertObjectTapped {
+        /// Scenario object index.
+        object: usize,
+        /// Expected tapped status.
+        tapped: bool,
+    },
+    /// Assert an object's loyalty value.
+    AssertObjectLoyalty {
+        /// Scenario object index.
+        object: usize,
+        /// Expected loyalty value, or none if loyalty tracking is absent.
+        loyalty: Option<i32>,
     },
     /// Declare attackers during the declare attackers step.
     DeclareAttackers {
@@ -612,6 +653,7 @@ impl ScenarioStep {
             Self::SetBaseCreature { object, .. } => format!("set_base_creature[{object}]"),
             Self::ClearBaseCreature { object } => format!("clear_base_creature[{object}]"),
             Self::SetObjectTapped { object, .. } => format!("set_object_tapped[{object}]"),
+            Self::SetObjectLoyalty { object, .. } => format!("set_object_loyalty[{object}]"),
             Self::MarkDamage { object, .. } => format!("mark_damage[{object}]"),
             Self::RegisterDamageReplacement { controller, .. } => {
                 format!("register_damage_replacement[{controller}]")
@@ -622,9 +664,20 @@ impl ScenarioStep {
             Self::RegisterContinuousEffect { spec } => {
                 format!("register_continuous_effect[{}]", spec.controller)
             }
+            Self::RegisterActivatedAbility { spec } => {
+                format!("register_activated_ability[{}]", spec.controller)
+            }
+            Self::RegisterCostModifier { spec } => {
+                format!("register_cost_modifier[{}]", spec.controller)
+            }
+            Self::ActivateAbilityAuto { player, ability } => {
+                format!("activate_ability_auto[{player}:{ability}]")
+            }
             Self::AssertCharacteristics { expectation } => {
                 format!("assert_characteristics[{}]", expectation.object)
             }
+            Self::AssertObjectTapped { object, .. } => format!("assert_object_tapped[{object}]"),
+            Self::AssertObjectLoyalty { object, .. } => format!("assert_object_loyalty[{object}]"),
             Self::DeclareAttackers { player, .. } => format!("declare_attackers[{player}]"),
             Self::DeclareBlockers { player, .. } => format!("declare_blockers[{player}]"),
             Self::AssignCombatDamage { .. } => "assign_combat_damage".to_owned(),
@@ -1092,6 +1145,164 @@ impl ContinuousEffectSpec {
                 "register_continuous_effect.dependencies",
             )?,
         })
+    }
+}
+
+/// Scenario activated-ability cost registration.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct ActivationCostSpec {
+    mana: ManaCostSpec,
+    tap_source: bool,
+    loyalty_delta: Option<i32>,
+}
+
+impl ActivationCostSpec {
+    fn from_optional(value: Option<RonValue>) -> Result<Self, ScenarioError> {
+        match value {
+            Some(value) => Self::from_ron_value(value),
+            None => Ok(Self::default()),
+        }
+    }
+
+    fn from_ron_value(value: RonValue) -> Result<Self, ScenarioError> {
+        let map = value.into_map("activation cost")?;
+        Ok(Self {
+            mana: match map.optional("mana")? {
+                Some(value) => ManaCostSpec::from_ron_value(value)?,
+                None => ManaCostSpec::default(),
+            },
+            tap_source: map.optional_bool("tap_source")?.unwrap_or(false),
+            loyalty_delta: map.optional_i32("loyalty_delta")?,
+        })
+    }
+
+    fn to_cost(&self) -> ActivationCost {
+        let mut cost = ActivationCost::new(self.mana.to_cost());
+        if self.tap_source {
+            cost = cost.with_tap_source();
+        }
+        if let Some(delta) = self.loyalty_delta {
+            cost = cost.with_loyalty_delta(delta);
+        }
+        cost
+    }
+}
+
+/// Scenario activated-ability registration.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ActivatedAbilitySpec {
+    controller: usize,
+    source_object: Option<usize>,
+    timing: ActivationTiming,
+    cost: ActivationCostSpec,
+    effect: AbilityEffectSpec,
+    mana_ability: bool,
+}
+
+impl ActivatedAbilitySpec {
+    fn from_map(map: &RonMap) -> Result<Self, ScenarioError> {
+        Ok(Self {
+            controller: map.required_usize("controller")?,
+            source_object: map.optional_usize("source_object")?,
+            timing: match map.optional_string("timing")? {
+                Some(timing) => parse_activation_timing(&timing)?,
+                None => ActivationTiming::Instant,
+            },
+            cost: ActivationCostSpec::from_optional(map.optional("cost")?)?,
+            effect: AbilityEffectSpec::from_ron_value(map.required("effect")?)?,
+            mana_ability: map.optional_bool("mana_ability")?.unwrap_or(false),
+        })
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct AbilityEffectSpec {
+    operation: String,
+    player: Option<usize>,
+    mana: Option<ManaSpec>,
+    amount: Option<u32>,
+}
+
+impl AbilityEffectSpec {
+    fn from_ron_value(value: RonValue) -> Result<Self, ScenarioError> {
+        let map = value.into_map("activated ability effect")?;
+        Ok(Self {
+            operation: map.required_string("operation")?,
+            player: map.optional_usize("player")?,
+            mana: match map.optional("mana")? {
+                Some(value) => Some(ManaSpec::from_ron_value(value)?),
+                None => None,
+            },
+            amount: map.optional_u32("amount")?,
+        })
+    }
+}
+
+/// Scenario activated-ability cost modifier registration.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CostModifierSpec {
+    controller: usize,
+    source_object: Option<usize>,
+    scope: CostModifierScopeSpec,
+    operation: CostModifierOperationSpec,
+}
+
+impl CostModifierSpec {
+    fn from_map(map: &RonMap) -> Result<Self, ScenarioError> {
+        Ok(Self {
+            controller: map.required_usize("controller")?,
+            source_object: map.optional_usize("source_object")?,
+            scope: CostModifierScopeSpec::from_map(map)?,
+            operation: CostModifierOperationSpec::from_map(map)?,
+        })
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum CostModifierScopeSpec {
+    All,
+    Ability(usize),
+    Source(usize),
+    Controller(usize),
+}
+
+impl CostModifierScopeSpec {
+    fn from_map(map: &RonMap) -> Result<Self, ScenarioError> {
+        match map
+            .optional_string("scope")?
+            .unwrap_or_else(|| "all".to_owned())
+            .as_str()
+        {
+            "all" => Ok(Self::All),
+            "ability" => Ok(Self::Ability(map.required_usize("ability")?)),
+            "source" => Ok(Self::Source(map.required_usize("scope_source_object")?)),
+            "controller" => Ok(Self::Controller(map.required_usize("player")?)),
+            other => Err(ScenarioError::schema(format!(
+                "unsupported cost modifier scope `{other}`"
+            ))),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum CostModifierOperationSpec {
+    AddManaCost(ManaCostSpec),
+    AddGeneric(u32),
+    ReduceGeneric(u32),
+}
+
+impl CostModifierOperationSpec {
+    fn from_map(map: &RonMap) -> Result<Self, ScenarioError> {
+        match map.required_string("operation")?.as_str() {
+            "add_mana_cost" => Ok(Self::AddManaCost(ManaCostSpec::from_ron_value(
+                map.required("cost")?,
+            )?)),
+            "add_generic" => Ok(Self::AddGeneric(map.required_u32("amount")?)),
+            "reduce_generic" => Ok(Self::ReduceGeneric(map.required_u32("amount")?)),
+            other => Err(ScenarioError::schema(format!(
+                "unsupported cost modifier operation `{other}`"
+            ))),
+        }
     }
 }
 
@@ -1570,6 +1781,7 @@ struct RunContext {
     objects: Vec<ObjectId>,
     replacements: Vec<ReplacementEffectId>,
     continuous_effects: Vec<ContinuousEffectId>,
+    activated_abilities: Vec<ActivatedAbilityId>,
     failures: Vec<ScenarioFailure>,
     steps: Vec<StepRecord>,
 }
@@ -1581,6 +1793,7 @@ fn execute_scenario(scenario: &Scenario, check_expectations: bool) -> ScenarioRe
         objects: Vec::new(),
         replacements: Vec::new(),
         continuous_effects: Vec::new(),
+        activated_abilities: Vec::new(),
         failures: Vec::new(),
         steps: Vec::new(),
     };
@@ -1703,10 +1916,23 @@ fn create_object(
 
 fn execute_step(step: &ScenarioStep, context: &mut RunContext) {
     let label = step.label();
-    if let ScenarioStep::AssertCharacteristics { expectation } = step {
-        check_characteristic_expectation(&label, expectation, context);
-        record_outcome(&label, Outcome::Applied, context);
-        return;
+    match step {
+        ScenarioStep::AssertCharacteristics { expectation } => {
+            check_characteristic_expectation(&label, expectation, context);
+            record_outcome(&label, Outcome::Applied, context);
+            return;
+        }
+        ScenarioStep::AssertObjectTapped { object, tapped } => {
+            check_object_tapped_expectation(&label, *object, *tapped, context);
+            record_outcome(&label, Outcome::Applied, context);
+            return;
+        }
+        ScenarioStep::AssertObjectLoyalty { object, loyalty } => {
+            check_object_loyalty_expectation(&label, *object, *loyalty, context);
+            record_outcome(&label, Outcome::Applied, context);
+            return;
+        }
+        _ => {}
     }
     let action = match action_for_step(step, context) {
         Ok(action) => action,
@@ -1730,6 +1956,9 @@ fn execute_step(step: &ScenarioStep, context: &mut RunContext) {
         }
         Outcome::ContinuousEffectRegistered(effect) => {
             context.continuous_effects.push(*effect);
+        }
+        Outcome::ActivatedAbilityRegistered(ability) => {
+            context.activated_abilities.push(*ability);
         }
         _ => {}
     }
@@ -1827,6 +2056,10 @@ fn action_for_step(step: &ScenarioStep, context: &RunContext) -> Result<Action, 
             object: object_id(&context.objects, *object, "set_object_tapped")?,
             tapped: *tapped,
         }),
+        ScenarioStep::SetObjectLoyalty { object, loyalty } => Ok(Action::SetObjectLoyalty {
+            object: object_id(&context.objects, *object, "set_object_loyalty")?,
+            loyalty: *loyalty,
+        }),
         ScenarioStep::MarkDamage { object, amount } => Ok(Action::MarkDamageOnObject {
             object: object_id(&context.objects, *object, "mark_damage")?,
             amount: *amount,
@@ -1897,7 +2130,49 @@ fn action_for_step(step: &ScenarioStep, context: &RunContext) -> Result<Action, 
             let definition = continuous_effect_definition(spec, context)?;
             Ok(Action::RegisterContinuousEffect { definition })
         }
+        ScenarioStep::RegisterActivatedAbility { spec } => {
+            let definition = activated_ability_definition(spec, context)?;
+            Ok(Action::RegisterActivatedAbility { definition })
+        }
+        ScenarioStep::RegisterCostModifier { spec } => {
+            let definition = cost_modifier_definition(spec, context)?;
+            Ok(Action::RegisterCostModifier { definition })
+        }
+        ScenarioStep::ActivateAbilityAuto { player, ability } => {
+            let player = player_id(&context.players, *player, "activate_ability_auto.player")?;
+            let ability = activated_ability_id(
+                &context.activated_abilities,
+                *ability,
+                "activate_ability_auto.ability",
+            )?;
+            let cost = context
+                .state
+                .effective_activation_cost(ability)
+                .map_err(|error| {
+                    ScenarioError::schema(format!("activation cost failed: {error:?}"))
+                })?;
+            let available = context.state.mana_pool(player).map_err(|error| {
+                ScenarioError::schema(format!("activation mana pool failed: {error:?}"))
+            })?;
+            let payment = auto_payment_plan(available, cost.mana())
+                .map_err(|error| {
+                    ScenarioError::schema(format!("activation payment planning failed: {error:?}"))
+                })?
+                .ok_or_else(|| {
+                    ScenarioError::schema(
+                        "activate_ability_auto has no valid payment plan".to_owned(),
+                    )
+                })?;
+            Ok(Action::ActivateAbility {
+                player,
+                ability,
+                payment,
+            })
+        }
         ScenarioStep::AssertCharacteristics { .. } => Ok(Action::CheckStateBasedActions),
+        ScenarioStep::AssertObjectTapped { .. } | ScenarioStep::AssertObjectLoyalty { .. } => {
+            Ok(Action::CheckStateBasedActions)
+        }
         ScenarioStep::DeclareAttackers { player, attacks } => {
             let mut declarations = Vec::with_capacity(attacks.len());
             for attack in attacks {
@@ -2345,6 +2620,74 @@ fn check_characteristic_expectation(
     }
 }
 
+fn check_object_tapped_expectation(
+    phase: &str,
+    object: usize,
+    expected: bool,
+    context: &mut RunContext,
+) {
+    let object_id = match object_id(&context.objects, object, phase) {
+        Ok(object) => object,
+        Err(error) => {
+            context
+                .failures
+                .push(ScenarioFailure::new(phase, error.to_string()));
+            return;
+        }
+    };
+    let Some(record) = context.state.object(object_id) else {
+        context.failures.push(ScenarioFailure::new(
+            phase,
+            format!("object {object} is missing from state"),
+        ));
+        return;
+    };
+    if record.tapped() != expected {
+        context.failures.push(ScenarioFailure::new(
+            phase,
+            format!(
+                "object {object} expected tapped {}, found {}",
+                expected,
+                record.tapped()
+            ),
+        ));
+    }
+}
+
+fn check_object_loyalty_expectation(
+    phase: &str,
+    object: usize,
+    expected: Option<i32>,
+    context: &mut RunContext,
+) {
+    let object_id = match object_id(&context.objects, object, phase) {
+        Ok(object) => object,
+        Err(error) => {
+            context
+                .failures
+                .push(ScenarioFailure::new(phase, error.to_string()));
+            return;
+        }
+    };
+    let Some(record) = context.state.object(object_id) else {
+        context.failures.push(ScenarioFailure::new(
+            phase,
+            format!("object {object} is missing from state"),
+        ));
+        return;
+    };
+    if record.loyalty() != expected {
+        context.failures.push(ScenarioFailure::new(
+            phase,
+            format!(
+                "object {object} expected loyalty {:?}, found {:?}",
+                expected,
+                record.loyalty()
+            ),
+        ));
+    }
+}
+
 fn check_outcome(expectation: OutcomeExpectation, context: &mut RunContext) {
     match (expectation, context.state.game_outcome()) {
         (OutcomeExpectation::InProgress, GameOutcome::InProgress)
@@ -2422,6 +2765,16 @@ fn continuous_effect_id(
 ) -> Result<ContinuousEffectId, ScenarioError> {
     effects.get(index).copied().ok_or_else(|| {
         ScenarioError::schema(format!("{phase}: unknown continuous effect index {index}"))
+    })
+}
+
+fn activated_ability_id(
+    abilities: &[ActivatedAbilityId],
+    index: usize,
+    phase: &str,
+) -> Result<ActivatedAbilityId, ScenarioError> {
+    abilities.get(index).copied().ok_or_else(|| {
+        ScenarioError::schema(format!("{phase}: unknown activated ability index {index}"))
     })
 }
 
@@ -2622,6 +2975,142 @@ fn continuous_effect_operation(
     }
 }
 
+fn activated_ability_definition(
+    spec: &ActivatedAbilitySpec,
+    context: &RunContext,
+) -> Result<ActivatedAbilityDefinition, ScenarioError> {
+    let controller = player_id(
+        &context.players,
+        spec.controller,
+        "register_activated_ability.controller",
+    )?;
+    let source = match spec.source_object {
+        Some(index) => Some(object_id(
+            &context.objects,
+            index,
+            "register_activated_ability.source_object",
+        )?),
+        None => None,
+    };
+    let effect = activated_ability_effect(&spec.effect, &context.players)?;
+    let mut definition = ActivatedAbilityDefinition::new(
+        controller,
+        source,
+        spec.timing,
+        spec.cost.to_cost(),
+        effect,
+    );
+    if spec.mana_ability {
+        definition = definition.as_mana_ability();
+    }
+    Ok(definition)
+}
+
+fn activated_ability_effect(
+    spec: &AbilityEffectSpec,
+    players: &[PlayerId],
+) -> Result<ActivatedAbilityEffect, ScenarioError> {
+    let player = ability_player(spec.player, players, "activated ability effect.player")?;
+    match spec.operation.as_str() {
+        "add_mana" => Ok(ActivatedAbilityEffect::AddMana {
+            player,
+            mana: spec
+                .mana
+                .ok_or_else(|| ScenarioError::schema("add_mana effect requires mana".to_owned()))?
+                .to_pool(),
+        }),
+        "gain_life" => Ok(ActivatedAbilityEffect::GainLife {
+            player,
+            amount: spec.amount.ok_or_else(|| {
+                ScenarioError::schema("gain_life effect requires amount".to_owned())
+            })?,
+        }),
+        "lose_life" => Ok(ActivatedAbilityEffect::LoseLife {
+            player,
+            amount: spec.amount.ok_or_else(|| {
+                ScenarioError::schema("lose_life effect requires amount".to_owned())
+            })?,
+        }),
+        other => Err(ScenarioError::schema(format!(
+            "unsupported activated ability effect `{other}`"
+        ))),
+    }
+}
+
+fn cost_modifier_definition(
+    spec: &CostModifierSpec,
+    context: &RunContext,
+) -> Result<CostModifierDefinition, ScenarioError> {
+    let controller = player_id(
+        &context.players,
+        spec.controller,
+        "register_cost_modifier.controller",
+    )?;
+    let source = match spec.source_object {
+        Some(index) => Some(object_id(
+            &context.objects,
+            index,
+            "register_cost_modifier.source_object",
+        )?),
+        None => None,
+    };
+    Ok(CostModifierDefinition::new(
+        controller,
+        source,
+        cost_modifier_scope(&spec.scope, context)?,
+        cost_modifier_operation(&spec.operation),
+    ))
+}
+
+fn cost_modifier_scope(
+    spec: &CostModifierScopeSpec,
+    context: &RunContext,
+) -> Result<CostModifierScope, ScenarioError> {
+    match spec {
+        CostModifierScopeSpec::All => Ok(CostModifierScope::AllActivatedAbilities),
+        CostModifierScopeSpec::Ability(index) => {
+            Ok(CostModifierScope::Ability(activated_ability_id(
+                &context.activated_abilities,
+                *index,
+                "register_cost_modifier.ability",
+            )?))
+        }
+        CostModifierScopeSpec::Source(index) => Ok(CostModifierScope::Source(object_id(
+            &context.objects,
+            *index,
+            "register_cost_modifier.scope_source_object",
+        )?)),
+        CostModifierScopeSpec::Controller(index) => Ok(CostModifierScope::Controller(player_id(
+            &context.players,
+            *index,
+            "register_cost_modifier.player",
+        )?)),
+    }
+}
+
+fn cost_modifier_operation(spec: &CostModifierOperationSpec) -> CostModifierOperation {
+    match spec {
+        CostModifierOperationSpec::AddManaCost(cost) => {
+            CostModifierOperation::AddManaCost(cost.to_cost())
+        }
+        CostModifierOperationSpec::AddGeneric(amount) => CostModifierOperation::AddGeneric(*amount),
+        CostModifierOperationSpec::ReduceGeneric(amount) => {
+            CostModifierOperation::ReduceGeneric(*amount)
+        }
+    }
+}
+
+fn ability_player(
+    player: Option<usize>,
+    players: &[PlayerId],
+    phase: &str,
+) -> Result<AbilityPlayer, ScenarioError> {
+    match player {
+        Some(index) => Ok(AbilityPlayer::Player(player_id(players, index, phase)?)),
+        None => Ok(AbilityPlayer::Controller),
+    }
+}
+
 fn parse_script(value: RonValue) -> Result<Vec<ScenarioStep>, ScenarioError> {
     let mut script = Vec::new();
     for value in value.into_list("script")? {
@@ -2696,6 +3185,10 @@ fn parse_script(value: RonValue) -> Result<Vec<ScenarioStep>, ScenarioError> {
                 object: map.required_usize("object")?,
                 tapped: map.optional_bool("tapped")?.unwrap_or(true),
             },
+            "set_object_loyalty" => ScenarioStep::SetObjectLoyalty {
+                object: map.required_usize("object")?,
+                loyalty: map.optional_i32("loyalty")?,
+            },
             "mark_damage" => ScenarioStep::MarkDamage {
                 object: map.required_usize("object")?,
                 amount: map.required_u32("amount")?,
@@ -2722,8 +3215,26 @@ fn parse_script(value: RonValue) -> Result<Vec<ScenarioStep>, ScenarioError> {
             "register_continuous_effect" => ScenarioStep::RegisterContinuousEffect {
                 spec: ContinuousEffectSpec::from_map(&map)?,
             },
+            "register_activated_ability" => ScenarioStep::RegisterActivatedAbility {
+                spec: ActivatedAbilitySpec::from_map(&map)?,
+            },
+            "register_cost_modifier" => ScenarioStep::RegisterCostModifier {
+                spec: CostModifierSpec::from_map(&map)?,
+            },
+            "activate_ability_auto" => ScenarioStep::ActivateAbilityAuto {
+                player: map.required_usize("player")?,
+                ability: map.required_usize("ability")?,
+            },
             "assert_characteristics" => ScenarioStep::AssertCharacteristics {
                 expectation: CharacteristicExpectation::from_ron_value(RonValue::Map(map))?,
+            },
+            "assert_object_tapped" => ScenarioStep::AssertObjectTapped {
+                object: map.required_usize("object")?,
+                tapped: map.required_bool("tapped")?,
+            },
+            "assert_object_loyalty" => ScenarioStep::AssertObjectLoyalty {
+                object: map.required_usize("object")?,
+                loyalty: map.optional_i32("loyalty")?,
             },
             "declare_attackers" => ScenarioStep::DeclareAttackers {
                 player: map.required_usize("player")?,
@@ -2845,6 +3356,16 @@ fn parse_step(input: &str) -> Result<Step, ScenarioError> {
         "Cleanup" | "cleanup" => Ok(Step::Cleanup),
         _ => Err(ScenarioError::schema(format!(
             "unsupported current_step `{input}`"
+        ))),
+    }
+}
+
+fn parse_activation_timing(input: &str) -> Result<ActivationTiming, ScenarioError> {
+    match input {
+        "Instant" | "instant" => Ok(ActivationTiming::Instant),
+        "Sorcery" | "sorcery" => Ok(ActivationTiming::Sorcery),
+        other => Err(ScenarioError::schema(format!(
+            "unsupported activation timing `{other}`"
         ))),
     }
 }
@@ -3025,6 +3546,10 @@ impl RonMap {
         self.optional(key)?
             .map(|value| value.into_i32(key))
             .transpose()
+    }
+
+    fn required_bool(&self, key: &str) -> Result<bool, ScenarioError> {
+        self.required(key)?.into_bool(key)
     }
 
     fn optional_bool(&self, key: &str) -> Result<Option<bool>, ScenarioError> {

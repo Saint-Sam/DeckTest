@@ -1,0 +1,38 @@
+id: T2.5
+title: Activated abilities, mana abilities, loyalty abilities, and activation cost modifiers
+tier: 2
+tags:
+  - kernel
+  - activated-abilities
+  - mana-abilities
+  - loyalty
+  - costs
+  - oracle
+scope_paths:
+  - crates/forge-core/src/lib.rs
+  - crates/forge-testkit/src/lib.rs
+  - tests/oracle/t2_5_activated/
+  - reports/tickets/T2.5.yaml
+inputs:
+  - FORGE_REBUILD_MASTER_PLAN.md Section 7 T2.5
+  - docs/vendor/comprehensive-rules.txt Sections 107.5, 107.7, 113.5, 117.1b, 602, 605, and 606
+  - CP-LAYERS owner signoff from 2026-07-08
+acceptance:
+  - activated abilities are registered as data-only definitions with controller, source, timing, costs, and effects
+  - non-mana activated abilities require priority, use the stack, and resolve through the existing priority loop
+  - mana abilities do not require priority and resolve immediately without stack entries
+  - tap costs validate battlefield source, controller, tapped state, and summoning-sickness restrictions for creatures
+  - loyalty costs mutate loyalty at activation time, require sorcery timing, and are limited once per source per turn
+  - activation mana costs support deterministic payment validation and registered cost modifiers
+  - activated ability, cost modifier, stack, resolution, loyalty, and event state participate in canonical hashes
+  - testkit RON supports registering and activating abilities plus asserting tapped and loyalty state
+  - focused oracle scenarios cover mana no-stack activation, stack activation, loyalty cost payment, and cost modifier payment
+verify: cargo clippy --workspace --all-targets --all-features -- -D warnings && cargo test -p forge-core activated && cargo run -p forge-testkit -- oracle --path tests/oracle/t2_5_activated --no-junit && scripts/vl.sh
+retry_policy: 3 attempts then T2.5 design review
+depends_on:
+  - T2.1
+  - T2.2
+  - T2.3
+  - T2.4
+  - CP-LAYERS
+parallel_ok: false
