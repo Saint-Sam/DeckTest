@@ -1,0 +1,38 @@
+(
+    name: "T2.8 command-zone casting applies increasing commander tax",
+    setup: (
+        players: 1,
+        objects: [
+            (card: 28006, owner: 0, controller: 0, zone: "Command"),
+        ],
+    ),
+    script: [
+        (action: "designate_commander", object: 0, colors: []),
+        (action: "start_turn", player: 0),
+        (action: "advance_step"),
+        (action: "cast_spell_auto", player: 0, object: 0, kind: "permanent", timing: "instant"),
+        (action: "pass_priority", player: 0),
+        (action: "assert_commander", object: 0, commander: true, cast_count: 1, tax_generic: 2),
+        (action: "move_object", object: 0, zone: "Command"),
+        (action: "add_mana", player: 0, mana: (colorless: 2)),
+        (action: "cast_spell_auto", player: 0, object: 0, kind: "permanent", timing: "instant"),
+        (action: "pass_priority", player: 0),
+        (action: "assert_commander", object: 0, commander: true, cast_count: 2, tax_generic: 4),
+        (action: "assert_object_zone", object: 0, zone: "Battlefield"),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Battlefield", count: 1),
+            (zone: "Command", count: 0),
+        ],
+        players: [
+            (player: 0, mana: ()),
+        ],
+        outcome: "in_progress",
+        active_player: 0,
+        priority_player: 0,
+        current_step: "Upkeep",
+        invariants: ["zone_conservation", "hash_consistency"],
+        hash_determinism: true,
+    ),
+)

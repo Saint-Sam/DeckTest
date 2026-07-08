@@ -73,6 +73,21 @@ pub enum CounterKind {
     Named(u32),
 }
 
+/// Multiplayer range-of-influence policy.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum RangeOfInfluence {
+    /// All players and objects are in range. This is the v1 Commander policy.
+    Off,
+}
+
+impl RangeOfInfluence {
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::Off => 0,
+        }
+    }
+}
+
 impl CounterKind {
     /// Creates an arbitrary named counter from a deterministic ID.
     #[must_use]
@@ -1364,6 +1379,18 @@ impl ObjectColors {
             || (self.green && other.green)
     }
 
+    /// Returns the union of this color set and `other`.
+    #[must_use]
+    pub const fn union(self, other: Self) -> Self {
+        Self {
+            white: self.white || other.white,
+            blue: self.blue || other.blue,
+            black: self.black || other.black,
+            red: self.red || other.red,
+            green: self.green || other.green,
+        }
+    }
+
     const fn canonical_bits(self) -> u8 {
         (self.white as u8)
             | ((self.blue as u8) << 1)
@@ -1700,6 +1727,14 @@ pub enum GameEventKind {
     ObjectCeasedToExist,
     /// Matching +1/+1 and -1/-1 counters were removed.
     CounterPairCancelled,
+    /// An object's Commander color identity metadata changed.
+    ObjectColorIdentitySet,
+    /// An object was designated as a commander.
+    CommanderDesignated,
+    /// A commander cast was recorded for tax tracking.
+    CommanderCastRecorded,
+    /// Commander color identity validation completed.
+    CommanderColorIdentityValidated,
 }
 
 impl GameEventKind {
@@ -1766,6 +1801,10 @@ impl GameEventKind {
             Self::StackEntryCopied => 58,
             Self::ObjectCeasedToExist => 59,
             Self::CounterPairCancelled => 60,
+            Self::ObjectColorIdentitySet => 61,
+            Self::CommanderDesignated => 62,
+            Self::CommanderCastRecorded => 63,
+            Self::CommanderColorIdentityValidated => 64,
         }
     }
 }
@@ -4642,6 +4681,9 @@ pub struct ObjectRecord {
     token: bool,
     copy_source: Option<ObjectId>,
     controlled_since_turn: u32,
+    color_identity: ObjectColors,
+    commander: bool,
+    commander_cast_count: u32,
 }
 
 impl ObjectRecord {
@@ -4722,6 +4764,32 @@ impl ObjectRecord {
     pub const fn controlled_since_turn(self) -> u32 {
         self.controlled_since_turn
     }
+
+    /// Returns this object's Commander color identity metadata.
+    #[must_use]
+    pub const fn color_identity(self) -> ObjectColors {
+        self.color_identity
+    }
+
+    /// Returns true if this object is designated as a commander.
+    #[must_use]
+    pub const fn is_commander(self) -> bool {
+        self.commander
+    }
+
+    /// Returns how many times this commander has been cast from the command zone.
+    #[must_use]
+    pub const fn commander_cast_count(self) -> u32 {
+        self.commander_cast_count
+    }
+
+    /// Returns the generic Commander tax for this object, if it fits in `u32`.
+    #[must_use]
+    pub fn commander_tax(self) -> Option<ManaCost> {
+        self.commander_cast_count
+            .checked_mul(2)
+            .map(|generic| ManaCost::new(0, 0, 0, 0, 0, generic))
+    }
 }
 
 /// Arena storage for game objects.
@@ -4785,6 +4853,9 @@ impl ObjectArena {
             token: false,
             copy_source: None,
             controlled_since_turn,
+            color_identity: ObjectColors::none(),
+            commander: false,
+            commander_cast_count: 0,
         });
         id
     }
@@ -4882,6 +4953,8 @@ pub struct PlayerView {
     outcome: GameOutcome,
     starting_player: Option<PlayerId>,
     opening_hands_drawn: bool,
+    turn_order: Vec<PlayerId>,
+    range_of_influence: RangeOfInfluence,
     active_player: Option<PlayerId>,
     priority_player: Option<PlayerId>,
     current_step: Option<Step>,
@@ -4918,6 +4991,18 @@ impl PlayerView {
     #[must_use]
     pub const fn opening_hands_drawn(&self) -> bool {
         self.opening_hands_drawn
+    }
+
+    /// Returns the visible explicit multiplayer turn order.
+    #[must_use]
+    pub fn turn_order(&self) -> &[PlayerId] {
+        &self.turn_order
+    }
+
+    /// Returns the visible range-of-influence policy.
+    #[must_use]
+    pub const fn range_of_influence(&self) -> RangeOfInfluence {
+        self.range_of_influence
     }
 
     /// Returns the visible active player.
@@ -5015,6 +5100,17 @@ pub enum StateError {
     TurnOrderAlreadyDecided,
     /// Opening-hand setup requires turn order to be decided first.
     TurnOrderNotDecided,
+    /// An explicit turn order did not name exactly every player.
+    TurnOrderPlayerCountMismatch {
+        /// Current game player count.
+        expected: u32,
+        /// Players named by the order request.
+        actual: u32,
+    },
+    /// An explicit turn order named the same player more than once.
+    DuplicateTurnOrderPlayer(PlayerId),
+    /// An explicit turn order omitted this player.
+    TurnOrderMissingPlayer(PlayerId),
     /// Turn structure tried to start with a player other than the setup starter.
     StartingPlayerMismatch {
         /// Player chosen by setup to start.
@@ -5101,6 +5197,25 @@ pub enum StateError {
     PoisonCounterOverflow,
     /// A counter arithmetic operation overflowed.
     CounterOverflow,
+    /// A Commander cast-count operation overflowed.
+    CommanderCastCountOverflow(ObjectId),
+    /// Commander tax could not be represented as a mana cost.
+    CommanderTaxOverflow(ObjectId),
+    /// The object is not designated as a commander.
+    ObjectNotCommander(ObjectId),
+    /// A player has no commander identity metadata to validate against.
+    NoCommanderForPlayer(PlayerId),
+    /// An object's color identity is outside its commander's allowed identity.
+    CommanderColorIdentityViolation {
+        /// Player whose commander identity was used.
+        player: PlayerId,
+        /// Object that failed validation.
+        object: ObjectId,
+        /// Allowed commander identity.
+        allowed: ObjectColors,
+        /// Actual object identity.
+        actual: ObjectColors,
+    },
     /// A request tried to remove more counters than are present.
     InsufficientCounters {
         /// Object with too few counters.
@@ -5186,6 +5301,11 @@ pub enum Action {
     AddPlayer,
     /// Randomly choose the starting player from the deterministic seed stream.
     DecideTurnOrder,
+    /// Set an explicit N-player turn order.
+    SetTurnOrder {
+        /// Player order, starting with the first player in the ring.
+        order: Vec<PlayerId>,
+    },
     /// Draw opening hands for all players in starting-player turn order.
     DrawOpeningHands,
     /// Take one London mulligan for a player.
@@ -5262,6 +5382,32 @@ pub enum Action {
         object: ObjectId,
         /// New loyalty value, or none to clear loyalty tracking.
         loyalty: Option<i32>,
+    },
+    /// Set an object's Commander color identity metadata.
+    SetObjectColorIdentity {
+        /// Object to update.
+        object: ObjectId,
+        /// Color identity metadata.
+        colors: ObjectColors,
+    },
+    /// Designate an object as a commander with color identity metadata.
+    DesignateCommander {
+        /// Object to designate.
+        object: ObjectId,
+        /// Commander color identity.
+        color_identity: ObjectColors,
+    },
+    /// Record one commander cast for tax tracking.
+    RecordCommanderCast {
+        /// Commander object.
+        object: ObjectId,
+    },
+    /// Validate objects against a player's Commander color identity.
+    ValidateCommanderColorIdentity {
+        /// Player whose commander identity sets the allowed colors.
+        player: PlayerId,
+        /// Objects to validate.
+        objects: Vec<ObjectId>,
     },
     /// Add counters to an object.
     AddObjectCounters {
@@ -5631,16 +5777,11 @@ fn apply_pass_priority(state: &mut GameState, player: PlayerId) -> Outcome {
         let pass_count = state.priority_pass_count + 1;
         let player_count = state.players.len() as u32;
         if pass_count < player_count {
-            state.priority_pass_count = pass_count;
-            let next_index = player.0 + 1;
-            let next_index = if next_index == player_count {
-                0
-            } else {
-                next_index
-            };
-            let next = PlayerId(next_index);
-            state.priority_player = Some(next);
-            return Outcome::Priority(PriorityOutcome::PassedTo(next));
+            if let Ok(next) = state.next_player_after(player) {
+                state.priority_pass_count = pass_count;
+                state.priority_player = Some(next);
+                return Outcome::Priority(PriorityOutcome::PassedTo(next));
+            }
         }
     }
     match state.pass_priority(player) {
@@ -5658,6 +5799,10 @@ fn apply_fallback(state: &mut GameState, action: Action) -> Outcome {
         }
         Action::AddPlayer => Outcome::PlayerAdded(state.add_player()),
         Action::DecideTurnOrder => match state.decide_turn_order() {
+            Ok(player) => Outcome::TurnOrderDecided(player),
+            Err(error) => Outcome::Failed(error),
+        },
+        Action::SetTurnOrder { order } => match state.set_turn_order(order) {
             Ok(player) => Outcome::TurnOrderDecided(player),
             Err(error) => Outcome::Failed(error),
         },
@@ -5714,6 +5859,29 @@ fn apply_fallback(state: &mut GameState, action: Action) -> Outcome {
         },
         Action::SetObjectLoyalty { object, loyalty } => {
             match state.set_object_loyalty(object, loyalty) {
+                Ok(()) => Outcome::Applied,
+                Err(error) => Outcome::Failed(error),
+            }
+        }
+        Action::SetObjectColorIdentity { object, colors } => {
+            match state.set_object_color_identity(object, colors) {
+                Ok(()) => Outcome::Applied,
+                Err(error) => Outcome::Failed(error),
+            }
+        }
+        Action::DesignateCommander {
+            object,
+            color_identity,
+        } => match state.designate_commander(object, color_identity) {
+            Ok(()) => Outcome::Applied,
+            Err(error) => Outcome::Failed(error),
+        },
+        Action::RecordCommanderCast { object } => match state.record_commander_cast(object) {
+            Ok(()) => Outcome::Applied,
+            Err(error) => Outcome::Failed(error),
+        },
+        Action::ValidateCommanderColorIdentity { player, objects } => {
+            match state.validate_commander_color_identity(player, &objects) {
                 Ok(()) => Outcome::Applied,
                 Err(error) => Outcome::Failed(error),
             }
@@ -6459,6 +6627,42 @@ pub enum GameEvent {
         /// Number of each counter removed.
         amount: u32,
     },
+    /// An object's Commander color identity metadata changed.
+    ObjectColorIdentitySet {
+        /// Updated object.
+        object: ObjectId,
+        /// New color identity.
+        colors: ObjectColors,
+    },
+    /// An object was designated as a commander.
+    CommanderDesignated {
+        /// Updated object.
+        object: ObjectId,
+        /// Commander owner.
+        player: PlayerId,
+        /// Commander color identity.
+        color_identity: ObjectColors,
+    },
+    /// A commander cast was recorded for tax tracking.
+    CommanderCastRecorded {
+        /// Commander object.
+        object: ObjectId,
+        /// Commander owner.
+        player: PlayerId,
+        /// Cast count after this event.
+        cast_count: u32,
+        /// Current Commander tax after this event.
+        tax: ManaCost,
+    },
+    /// Commander color identity validation completed.
+    CommanderColorIdentityValidated {
+        /// Player whose commander identity was used.
+        player: PlayerId,
+        /// Number of objects validated.
+        count: u32,
+        /// Allowed identity.
+        allowed: ObjectColors,
+    },
 }
 
 impl GameEvent {
@@ -6525,6 +6729,10 @@ impl GameEvent {
             Self::StackEntryCopied { .. } => 58,
             Self::ObjectCeasedToExist { .. } => 59,
             Self::CounterPairCancelled { .. } => 60,
+            Self::ObjectColorIdentitySet { .. } => 61,
+            Self::CommanderDesignated { .. } => 62,
+            Self::CommanderCastRecorded { .. } => 63,
+            Self::CommanderColorIdentityValidated { .. } => 64,
         }
     }
 
@@ -6601,6 +6809,12 @@ impl GameEvent {
             Self::StackEntryCopied { .. } => GameEventKind::StackEntryCopied,
             Self::ObjectCeasedToExist { .. } => GameEventKind::ObjectCeasedToExist,
             Self::CounterPairCancelled { .. } => GameEventKind::CounterPairCancelled,
+            Self::ObjectColorIdentitySet { .. } => GameEventKind::ObjectColorIdentitySet,
+            Self::CommanderDesignated { .. } => GameEventKind::CommanderDesignated,
+            Self::CommanderCastRecorded { .. } => GameEventKind::CommanderCastRecorded,
+            Self::CommanderColorIdentityValidated { .. } => {
+                GameEventKind::CommanderColorIdentityValidated
+            }
         }
     }
 }
@@ -6760,6 +6974,8 @@ pub struct GameState {
     last_cleanup_report: CleanupReport,
     // clone_surface: player scalar arena; bounded by game player count.
     players: Vec<PlayerState>,
+    // clone_surface: explicit multiplayer turn ring; bounded by game player count.
+    turn_order: Vec<PlayerId>,
     // clone_surface: object storage wrapper with one Copy-record arena.
     objects: ObjectArena,
     // clone_surface: fixed shared zones plus per-player zones; membership IDs live in Zone.
@@ -6827,6 +7043,7 @@ impl Clone for GameState {
             attackers_declared_this_combat: self.attackers_declared_this_combat,
             last_cleanup_report: self.last_cleanup_report,
             players: self.players.clone(),
+            turn_order: self.turn_order.clone(),
             objects: self.objects.clone(),
             zones: Arc::clone(&self.zones),
             next_duration_marker: self.next_duration_marker,
@@ -6886,6 +7103,7 @@ impl GameState {
             attackers_declared_this_combat: false,
             last_cleanup_report: CleanupReport::default(),
             players: Vec::new(),
+            turn_order: Vec::new(),
             objects: ObjectArena::default(),
             zones: Arc::new(vec![
                 Zone {
@@ -6961,6 +7179,18 @@ impl GameState {
     #[must_use]
     pub const fn opening_hands_drawn(&self) -> bool {
         self.opening_hands_drawn
+    }
+
+    /// Returns the explicit multiplayer turn order, if setup has established one.
+    #[must_use]
+    pub fn turn_order(&self) -> &[PlayerId] {
+        &self.turn_order
+    }
+
+    /// Returns the v1 range-of-influence policy.
+    #[must_use]
+    pub const fn range_of_influence(&self) -> RangeOfInfluence {
+        RangeOfInfluence::Off
     }
 
     /// Returns the current turn number.
@@ -7241,6 +7471,9 @@ impl GameState {
             id: ZoneId::new(Some(id), ZoneKind::Graveyard),
             objects: Arc::new(Vec::new()),
         });
+        if !self.turn_order.is_empty() {
+            self.turn_order.push(id);
+        }
         self.emit_event(GameEvent::PlayerAdded { player: id });
         id
     }
@@ -7378,6 +7611,27 @@ impl GameState {
         enumerate_payment_plans(self.mana_pool(player)?, cost).map_err(Self::map_payment_error)
     }
 
+    /// Returns the effective spell cost after Commander tax hooks.
+    pub fn effective_spell_cost(
+        &self,
+        player: PlayerId,
+        object: ObjectId,
+        base: ManaCost,
+    ) -> Result<ManaCost, StateError> {
+        self.require_player(player)?;
+        let record = self
+            .objects
+            .get(object)
+            .ok_or(StateError::UnknownObject(object))?;
+        if record.is_commander()
+            && record.owner() == player
+            && self.object_zone(object) == Some(ZoneId::new(None, ZoneKind::Command))
+        {
+            return Self::add_mana_costs(base, self.commander_tax(object)?);
+        }
+        Ok(base)
+    }
+
     /// Applies one explicit payment plan to a player's mana pool.
     fn pay_mana(
         &mut self,
@@ -7419,6 +7673,156 @@ impl GameState {
             .ok_or(StateError::UnknownObject(object))?;
         record.loyalty = loyalty;
         self.emit_event(GameEvent::ObjectLoyaltySet { object, loyalty });
+        Ok(())
+    }
+
+    /// Sets an object's Commander color identity metadata.
+    fn set_object_color_identity(
+        &mut self,
+        object: ObjectId,
+        colors: ObjectColors,
+    ) -> Result<(), StateError> {
+        let record = self
+            .objects
+            .get_mut(object)
+            .ok_or(StateError::UnknownObject(object))?;
+        record.color_identity = colors;
+        self.emit_event(GameEvent::ObjectColorIdentitySet { object, colors });
+        Ok(())
+    }
+
+    /// Designates an object as a commander.
+    fn designate_commander(
+        &mut self,
+        object: ObjectId,
+        color_identity: ObjectColors,
+    ) -> Result<(), StateError> {
+        let player = {
+            let record = self
+                .objects
+                .get_mut(object)
+                .ok_or(StateError::UnknownObject(object))?;
+            record.commander = true;
+            record.color_identity = color_identity;
+            record.owner
+        };
+        self.emit_event(GameEvent::ObjectColorIdentitySet {
+            object,
+            colors: color_identity,
+        });
+        self.emit_event(GameEvent::CommanderDesignated {
+            object,
+            player,
+            color_identity,
+        });
+        Ok(())
+    }
+
+    /// Records one commander cast for tax tracking.
+    fn record_commander_cast(&mut self, object: ObjectId) -> Result<(), StateError> {
+        let (player, cast_count, tax) = {
+            let record = self
+                .objects
+                .get_mut(object)
+                .ok_or(StateError::UnknownObject(object))?;
+            if !record.commander {
+                return Err(StateError::ObjectNotCommander(object));
+            }
+            record.commander_cast_count = record
+                .commander_cast_count
+                .checked_add(1)
+                .ok_or(StateError::CommanderCastCountOverflow(object))?;
+            let tax = record
+                .commander_tax()
+                .ok_or(StateError::CommanderTaxOverflow(object))?;
+            (record.owner, record.commander_cast_count, tax)
+        };
+        self.emit_event(GameEvent::CommanderCastRecorded {
+            object,
+            player,
+            cast_count,
+            tax,
+        });
+        Ok(())
+    }
+
+    /// Returns the current Commander tax for one commander.
+    pub fn commander_tax(&self, object: ObjectId) -> Result<ManaCost, StateError> {
+        let record = self
+            .objects
+            .get(object)
+            .ok_or(StateError::UnknownObject(object))?;
+        if !record.is_commander() {
+            return Err(StateError::ObjectNotCommander(object));
+        }
+        record
+            .commander_tax()
+            .ok_or(StateError::CommanderTaxOverflow(object))
+    }
+
+    /// Returns the union of a player's commander color identities.
+    pub fn commander_color_identity_for_player(
+        &self,
+        player: PlayerId,
+    ) -> Result<ObjectColors, StateError> {
+        self.require_player(player)?;
+        let mut found = false;
+        let mut colors = ObjectColors::none();
+        for record in self.objects.iter() {
+            if record.owner() == player && record.is_commander() {
+                found = true;
+                colors = colors.union(record.color_identity());
+            }
+        }
+        if found {
+            Ok(colors)
+        } else {
+            Err(StateError::NoCommanderForPlayer(player))
+        }
+    }
+
+    /// Returns whether one object is legal under a player's Commander identity.
+    pub fn commander_color_identity_legal(
+        &self,
+        player: PlayerId,
+        object: ObjectId,
+    ) -> Result<bool, StateError> {
+        let allowed = self.commander_color_identity_for_player(player)?;
+        let actual = self
+            .objects
+            .get(object)
+            .ok_or(StateError::UnknownObject(object))?
+            .color_identity();
+        Ok(allowed.contains_all(actual))
+    }
+
+    /// Validates a set of objects under a player's Commander color identity.
+    fn validate_commander_color_identity(
+        &mut self,
+        player: PlayerId,
+        objects: &[ObjectId],
+    ) -> Result<(), StateError> {
+        let allowed = self.commander_color_identity_for_player(player)?;
+        for object in objects {
+            let actual = self
+                .objects
+                .get(*object)
+                .ok_or(StateError::UnknownObject(*object))?
+                .color_identity();
+            if !allowed.contains_all(actual) {
+                return Err(StateError::CommanderColorIdentityViolation {
+                    player,
+                    object: *object,
+                    allowed,
+                    actual,
+                });
+            }
+        }
+        self.emit_event(GameEvent::CommanderColorIdentityValidated {
+            player,
+            count: u32::try_from(objects.len()).unwrap_or(u32::MAX),
+            allowed,
+        });
         Ok(())
     }
 
@@ -7733,25 +8137,7 @@ impl GameState {
     ) -> Result<ManaCost, StateError> {
         match operation {
             CostModifierOperation::AddManaCost(additional) => {
-                let mut colored = [0_u32; 5];
-                for (index, kind) in COLORED_MANA_KINDS.iter().copied().enumerate() {
-                    colored[index] = cost
-                        .colored(kind)
-                        .checked_add(additional.colored(kind))
-                        .ok_or(StateError::ManaValueOverflow)?;
-                }
-                let generic = cost
-                    .generic_total()
-                    .map_err(Self::map_payment_error)?
-                    .checked_add(
-                        additional
-                            .generic_total()
-                            .map_err(Self::map_payment_error)?,
-                    )
-                    .ok_or(StateError::ManaValueOverflow)?;
-                Ok(ManaCost::new(
-                    colored[0], colored[1], colored[2], colored[3], colored[4], generic,
-                ))
+                Self::add_mana_costs(cost, additional)
             }
             CostModifierOperation::AddGeneric(amount) => {
                 let generic = cost
@@ -8078,10 +8464,27 @@ impl GameState {
         }
         let player = PlayerId(self.random_below(self.players.len()) as u32);
         self.starting_player = Some(player);
+        self.turn_order = self.turn_order_from(player)?;
         self.emit_event(GameEvent::TurnOrderDecided {
             starting_player: player,
         });
         Ok(player)
+    }
+
+    fn set_turn_order(&mut self, order: Vec<PlayerId>) -> Result<PlayerId, StateError> {
+        if self.players.is_empty() {
+            return Err(StateError::NoPlayers);
+        }
+        if self.starting_player.is_some() || self.current_step.is_some() || self.opening_hands_drawn
+        {
+            return Err(StateError::TurnOrderAlreadyDecided);
+        }
+        self.validate_turn_order(&order)?;
+        let starting_player = order[0];
+        self.starting_player = Some(starting_player);
+        self.turn_order = order;
+        self.emit_event(GameEvent::TurnOrderDecided { starting_player });
+        Ok(starting_player)
     }
 
     fn draw_opening_hands(&mut self) -> Result<(), StateError> {
@@ -8238,6 +8641,8 @@ impl GameState {
             outcome: self.outcome,
             starting_player: self.starting_player,
             opening_hands_drawn: self.opening_hands_drawn,
+            turn_order: self.turn_order.clone(),
+            range_of_influence: self.range_of_influence(),
             active_player: self.active_player,
             priority_player: self.priority_player,
             current_step: self.current_step,
@@ -8317,13 +8722,7 @@ impl GameState {
         self.priority_pass_count += 1;
         let player_count = self.players.len() as u32;
         if self.priority_pass_count < player_count {
-            let next_index = player.0 + 1;
-            let next_index = if next_index == player_count {
-                0
-            } else {
-                next_index
-            };
-            let next = PlayerId(next_index);
+            let next = self.next_player_after(player)?;
             self.priority_player = Some(next);
             return Ok(PriorityOutcome::PassedTo(next));
         }
@@ -8353,9 +8752,17 @@ impl GameState {
     ) -> Result<StackEntryId, StateError> {
         self.require_priority_player(player)?;
         self.require_player(player)?;
-        if self.object_controller(object)? != player
-            || self.object_zone(object) != Some(ZoneId::new(Some(player), ZoneKind::Hand))
-        {
+        let record = self
+            .objects
+            .get(object)
+            .ok_or(StateError::UnknownObject(object))?;
+        let zone = self.object_zone(object);
+        let casting_from_hand = record.controller() == player
+            && zone == Some(ZoneId::new(Some(player), ZoneKind::Hand));
+        let casting_commander_from_command = record.is_commander()
+            && record.owner() == player
+            && zone == Some(ZoneId::new(None, ZoneKind::Command));
+        if !casting_from_hand && !casting_commander_from_command {
             return Err(StateError::ObjectNotCastable(object));
         }
         if !self.can_cast_with_timing(player, request.timing()) {
@@ -8367,9 +8774,10 @@ impl GameState {
             request.target_requirements(),
             request.target_choices(),
         )?;
+        let effective_cost = self.effective_spell_cost(player, object, request.cost())?;
         let canonical_payment = validate_payment_plan(
             self.mana_pool(player)?,
-            request.cost(),
+            effective_cost,
             request.payment().paid(),
         )
         .map_err(Self::map_payment_error)?;
@@ -8377,8 +8785,11 @@ impl GameState {
             return Err(StateError::InvalidPaymentPlan);
         }
 
-        self.pay_mana(player, request.cost(), request.payment())?;
+        self.pay_mana(player, effective_cost, request.payment())?;
         self.move_object(object, ZoneId::new(None, ZoneKind::Stack))?;
+        if casting_commander_from_command {
+            self.record_commander_cast(object)?;
+        }
         let id = self.push_stack_entry(StackEntryRequest {
             controller: player,
             object: Some(object),
@@ -9585,6 +9996,7 @@ impl GameState {
         bytes.write_bool(self.cleanup_repeat_pending);
         bytes.write_bool(self.attackers_declared_this_combat);
         bytes.write_cleanup_report(self.last_cleanup_report);
+        bytes.write_u8(self.range_of_influence().canonical_code());
         bytes.write_u32(self.players.len() as u32);
         for player in &self.players {
             bytes.write_u32(player.id.0);
@@ -9595,6 +10007,10 @@ impl GameState {
             bytes.write_u32(player.mulligans_taken);
             bytes.write_bool(player.opening_hand_kept);
             bytes.write_mana_pool(player.mana_pool);
+        }
+        bytes.write_u32(self.turn_order.len() as u32);
+        for player in &self.turn_order {
+            bytes.write_u32(player.0);
         }
 
         bytes.write_u32(self.objects.len() as u32);
@@ -9611,6 +10027,9 @@ impl GameState {
             bytes.write_bool(object.token);
             bytes.write_optional_object(object.copy_source);
             bytes.write_u32(object.controlled_since_turn);
+            bytes.write_object_colors(object.color_identity);
+            bytes.write_bool(object.commander);
+            bytes.write_u32(object.commander_cast_count);
         }
 
         bytes.write_u32(self.zones.len() as u32);
@@ -9716,6 +10135,7 @@ impl GameState {
         hash.write_bool(self.cleanup_repeat_pending);
         hash.write_bool(self.attackers_declared_this_combat);
         hash.write_cleanup_report(self.last_cleanup_report);
+        hash.write_u8(self.range_of_influence().canonical_code());
         hash.write_u32(self.players.len() as u32);
         for player in &self.players {
             hash.write_u32(player.id.0);
@@ -9726,6 +10146,10 @@ impl GameState {
             hash.write_u32(player.mulligans_taken);
             hash.write_bool(player.opening_hand_kept);
             hash.write_mana_pool(player.mana_pool);
+        }
+        hash.write_u32(self.turn_order.len() as u32);
+        for player in &self.turn_order {
+            hash.write_u32(player.0);
         }
 
         hash.write_u32(self.objects.len() as u32);
@@ -9742,6 +10166,9 @@ impl GameState {
             hash.write_bool(object.token);
             hash.write_optional_object(object.copy_source);
             hash.write_u32(object.controlled_since_turn);
+            hash.write_object_colors(object.color_identity);
+            hash.write_bool(object.commander);
+            hash.write_u32(object.commander_cast_count);
         }
 
         hash.write_u32(self.zones.len() as u32);
@@ -11711,11 +12138,56 @@ impl GameState {
         Ok(self.zones[index].objects.len())
     }
 
+    fn validate_turn_order(&self, order: &[PlayerId]) -> Result<(), StateError> {
+        if self.players.is_empty() {
+            return Err(StateError::NoPlayers);
+        }
+        if order.len() != self.players.len() {
+            return Err(StateError::TurnOrderPlayerCountMismatch {
+                expected: self.players.len() as u32,
+                actual: u32::try_from(order.len()).unwrap_or(u32::MAX),
+            });
+        }
+        let mut seen = vec![false; self.players.len()];
+        for player in order {
+            self.require_player(*player)?;
+            if seen[player.index()] {
+                return Err(StateError::DuplicateTurnOrderPlayer(*player));
+            }
+            seen[player.index()] = true;
+        }
+        for player in &self.players {
+            if !seen[player.id().index()] {
+                return Err(StateError::TurnOrderMissingPlayer(player.id()));
+            }
+        }
+        Ok(())
+    }
+
+    fn turn_order_from(&self, starting_player: PlayerId) -> Result<Vec<PlayerId>, StateError> {
+        self.require_player(starting_player)?;
+        let mut order = Vec::with_capacity(self.players.len());
+        for offset in 0..self.players.len() {
+            let index = (starting_player.index() + offset) % self.players.len();
+            order.push(PlayerId(index as u32));
+        }
+        Ok(order)
+    }
+
     fn next_player_after(&self, player: PlayerId) -> Result<PlayerId, StateError> {
         if self.players.is_empty() {
             return Err(StateError::NoPlayers);
         }
         self.require_player(player)?;
+        if !self.turn_order.is_empty() {
+            let position = self
+                .turn_order
+                .iter()
+                .position(|candidate| *candidate == player)
+                .ok_or(StateError::TurnOrderMissingPlayer(player))?;
+            let next = (position + 1) % self.turn_order.len();
+            return Ok(self.turn_order[next]);
+        }
         let next_index = (player.index() + 1) % self.players.len();
         Ok(PlayerId(next_index as u32))
     }
@@ -12901,6 +13373,39 @@ impl Fnva64 {
                 self.write_u32(object.0);
                 self.write_u32(amount);
             }
+            GameEvent::ObjectColorIdentitySet { object, colors } => {
+                self.write_u32(object.0);
+                self.write_object_colors(colors);
+            }
+            GameEvent::CommanderDesignated {
+                object,
+                player,
+                color_identity,
+            } => {
+                self.write_u32(object.0);
+                self.write_u32(player.0);
+                self.write_object_colors(color_identity);
+            }
+            GameEvent::CommanderCastRecorded {
+                object,
+                player,
+                cast_count,
+                tax,
+            } => {
+                self.write_u32(object.0);
+                self.write_u32(player.0);
+                self.write_u32(cast_count);
+                self.write_mana_cost(tax);
+            }
+            GameEvent::CommanderColorIdentityValidated {
+                player,
+                count,
+                allowed,
+            } => {
+                self.write_u32(player.0);
+                self.write_u32(count);
+                self.write_object_colors(allowed);
+            }
         }
     }
 
@@ -14024,6 +14529,39 @@ impl CanonicalBytes {
             GameEvent::CounterPairCancelled { object, amount } => {
                 self.write_u32(object.0);
                 self.write_u32(amount);
+            }
+            GameEvent::ObjectColorIdentitySet { object, colors } => {
+                self.write_u32(object.0);
+                self.write_object_colors(colors);
+            }
+            GameEvent::CommanderDesignated {
+                object,
+                player,
+                color_identity,
+            } => {
+                self.write_u32(object.0);
+                self.write_u32(player.0);
+                self.write_object_colors(color_identity);
+            }
+            GameEvent::CommanderCastRecorded {
+                object,
+                player,
+                cast_count,
+                tax,
+            } => {
+                self.write_u32(object.0);
+                self.write_u32(player.0);
+                self.write_u32(cast_count);
+                self.write_mana_cost(tax);
+            }
+            GameEvent::CommanderColorIdentityValidated {
+                player,
+                count,
+                allowed,
+            } => {
+                self.write_u32(player.0);
+                self.write_u32(count);
+                self.write_object_colors(allowed);
             }
         }
     }

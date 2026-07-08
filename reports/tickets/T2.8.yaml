@@ -1,0 +1,41 @@
+id: T2.8
+title: Multiplayer turn order and Commander framework hooks
+tier: 2
+tags:
+  - kernel
+  - multiplayer
+  - commander
+  - turn-order
+  - oracle
+scope_paths:
+  - crates/forge-core/src/lib.rs
+  - crates/forge-testkit/src/lib.rs
+  - tests/oracle/t2_8_multiplayer_commander/
+  - scripts/check_coverage.sh
+  - scripts/review/clone_surface_guard.sh
+  - metrics/clone_surface.json
+  - reports/tickets/T2.8.yaml
+inputs:
+  - FORGE_REBUILD_MASTER_PLAN.md Section 7 T2.8
+  - CP-LAYERS owner signoff from 2026-07-08
+acceptance:
+  - explicit N-player turn order is stored, hashed, exposed, and used by priority/APNAP/next-turn helpers
+  - range of influence is represented as off for v1 multiplayer and exposed through state/player views
+  - command zone remains a first-class zone for commander objects
+  - commander designation, color identity metadata, cast counts, and tax are tracked on object records
+  - commander color identity validation accepts in-identity objects and detects off-color objects
+  - command-zone casting of designated commanders uses effective spell costs with increasing commander tax
+  - testkit RON supports turn-order, range, commander metadata, commander tax, and color-identity assertions
+  - focused oracle scenarios cover multiplayer priority order, range off, commander designation/tax, identity pass/fail, and command-zone tax casting
+verify: cargo clippy --workspace --all-targets --all-features -- -D warnings && cargo run -p forge-testkit -- oracle --path tests/oracle/t2_8_multiplayer_commander --no-junit && scripts/vl.sh
+retry_policy: 3 attempts then T2.8 design review
+depends_on:
+  - T2.1
+  - T2.2
+  - T2.3
+  - T2.4
+  - T2.5
+  - T2.6
+  - T2.7
+  - CP-LAYERS
+parallel_ok: false

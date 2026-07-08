@@ -1,0 +1,41 @@
+(
+    name: "T2.8 explicit N-player turn order drives priority",
+    setup: (
+        players: 4,
+        libraries: [
+            (player: 0, cards: [28010, 28011, 28012, 28013, 28014, 28015, 28016]),
+            (player: 1, cards: [28020, 28021, 28022, 28023, 28024, 28025, 28026]),
+            (player: 2, cards: [28030, 28031, 28032, 28033, 28034, 28035, 28036]),
+            (player: 3, cards: [28040, 28041, 28042, 28043, 28044, 28045, 28046]),
+        ],
+    ),
+    script: [
+        (action: "set_turn_order", order: [2, 0, 3, 1]),
+        (action: "assert_turn_order", order: [2, 0, 3, 1]),
+        (action: "assert_range_of_influence", mode: "off"),
+        (action: "draw_opening_hands"),
+        (action: "keep_opening_hand", player: 0, bottom: []),
+        (action: "keep_opening_hand", player: 1, bottom: []),
+        (action: "keep_opening_hand", player: 2, bottom: []),
+        (action: "keep_opening_hand", player: 3, bottom: []),
+        (action: "start_turn", player: 2),
+        (action: "advance_step"),
+        (action: "pass_priority", player: 2),
+        (action: "pass_priority", player: 0),
+        (action: "pass_priority", player: 3),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Hand", player: 0, count: 7),
+            (zone: "Hand", player: 1, count: 7),
+            (zone: "Hand", player: 2, count: 7),
+            (zone: "Hand", player: 3, count: 7),
+        ],
+        outcome: "in_progress",
+        active_player: 2,
+        priority_player: 1,
+        current_step: "Upkeep",
+        invariants: ["zone_conservation", "hash_consistency"],
+        hash_determinism: true,
+    ),
+)

@@ -33,7 +33,7 @@
   "full_state_snapshot_surface": false,
   "game_state_debug": false,
   "guard": "static persistent allocation field count",
-  "persistent_allocation_field_count": 29,
+  "persistent_allocation_field_count": 30,
   "persistent_allocation_fields": [
     {
       "field": "targets",
@@ -100,6 +100,12 @@
       "reason": "player scalar arena bounded by player count",
       "struct": "GameState",
       "type": "Vec<PlayerState>"
+    },
+    {
+      "field": "turn_order",
+      "reason": "explicit player ID turn ring bounded by player count",
+      "struct": "GameState",
+      "type": "Vec<PlayerId>"
     },
     {
       "field": "objects",

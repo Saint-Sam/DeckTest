@@ -1,0 +1,17 @@
+(
+    name: "T2.8 seeded setup exposes the decided turn order ring",
+    setup: (
+        seed: 88028,
+        players: 3,
+    ),
+    script: [
+        (action: "decide_turn_order"),
+        (action: "assert_turn_order", order: [1, 2, 0]),
+        (action: "assert_range_of_influence", mode: "off"),
+    ],
+    expect: (
+        outcome: "in_progress",
+        invariants: ["zone_conservation", "hash_consistency"],
+        hash_determinism: true,
+    ),
+)

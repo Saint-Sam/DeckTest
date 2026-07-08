@@ -77,6 +77,7 @@ allowed = {
     ("CombatState", "damage_records"): "current-combat Copy damage records",
     ("CombatState", "first_strike_participants"): "object IDs bounded by current combat",
     ("GameState", "players"): "player scalar arena bounded by player count",
+    ("GameState", "turn_order"): "explicit player ID turn ring bounded by player count",
     ("GameState", "objects"): "ObjectArena wrapper with one copy-on-write Copy-record arena",
     ("GameState", "zones"): "fixed shared zones plus per-player copy-on-write memberships",
     ("GameState", "duration_markers"): "Copy records bounded by active effects",

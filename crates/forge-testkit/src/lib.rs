@@ -16,7 +16,7 @@ use forge_core::{
     ContinuousEffectOperation, ContinuousEffectTarget, CostModifierDefinition,
     CostModifierOperation, CostModifierScope, CounterKind, CreatureKeywords, GameOutcome,
     GameState, ManaCost, ManaKind, ManaPool, ObjectColors, ObjectId, ObjectTargetPredicate,
-    ObjectTypes, Outcome, PlayerId, PlayerTargetPredicate, ReplacementCondition,
+    ObjectTypes, Outcome, PlayerId, PlayerTargetPredicate, RangeOfInfluence, ReplacementCondition,
     ReplacementDamageTargetFilter, ReplacementDefinition, ReplacementDuration, ReplacementEffectId,
     ReplacementOperation, ReplacementSourceFilter, RestrictionDefinition, RestrictionEffect,
     SpellTiming, StackEntryId, StackObjectKind, StateHash, Step, TargetChoice,
@@ -444,6 +444,11 @@ impl ZoneSpec {
 pub enum ScenarioStep {
     /// Decide the starting player from the deterministic seed stream.
     DecideTurnOrder,
+    /// Set an explicit multiplayer turn order.
+    SetTurnOrder {
+        /// Zero-based scenario player order.
+        order: Vec<usize>,
+    },
     /// Draw all opening hands.
     DrawOpeningHands,
     /// Take one London mulligan.
@@ -588,6 +593,32 @@ pub enum ScenarioStep {
         object: usize,
         /// New loyalty value, or none to clear loyalty tracking.
         loyalty: Option<i32>,
+    },
+    /// Set an object's Commander color identity metadata.
+    SetObjectColorIdentity {
+        /// Scenario object index.
+        object: usize,
+        /// Color identity metadata.
+        colors: ColorSpec,
+    },
+    /// Designate an object as a commander.
+    DesignateCommander {
+        /// Scenario object index.
+        object: usize,
+        /// Commander color identity.
+        colors: ColorSpec,
+    },
+    /// Record one commander cast.
+    RecordCommanderCast {
+        /// Scenario object index.
+        object: usize,
+    },
+    /// Validate objects under a player's Commander color identity.
+    ValidateCommanderColorIdentity {
+        /// Zero-based scenario player index.
+        player: usize,
+        /// Scenario object indexes to validate.
+        objects: Vec<usize>,
     },
     /// Add counters to an object.
     AddObjectCounters {
@@ -750,6 +781,38 @@ pub enum ScenarioStep {
         /// Expected source object index, if asserted.
         copy_source: Option<usize>,
     },
+    /// Assert the explicit multiplayer turn order.
+    AssertTurnOrder {
+        /// Expected zero-based scenario player order.
+        order: Vec<usize>,
+    },
+    /// Assert the range-of-influence policy.
+    AssertRangeOfInfluence {
+        /// Expected policy name.
+        mode: String,
+    },
+    /// Assert Commander metadata on an object.
+    AssertCommander {
+        /// Scenario object index.
+        object: usize,
+        /// Expected commander flag.
+        commander: bool,
+        /// Expected color identity, if asserted.
+        colors: Option<ColorSpec>,
+        /// Expected cast count, if asserted.
+        cast_count: Option<u32>,
+        /// Expected generic tax, if asserted.
+        tax_generic: Option<u32>,
+    },
+    /// Assert whether one object is legal under a player's Commander identity.
+    AssertCommanderIdentityLegal {
+        /// Zero-based scenario player index.
+        player: usize,
+        /// Scenario object index.
+        object: usize,
+        /// Expected legality.
+        expected: bool,
+    },
     /// Declare attackers during the declare attackers step.
     DeclareAttackers {
         /// Zero-based scenario attacking-player index.
@@ -795,6 +858,7 @@ impl ScenarioStep {
     fn label(&self) -> String {
         match self {
             Self::DecideTurnOrder => "decide_turn_order".to_owned(),
+            Self::SetTurnOrder { order } => format!("set_turn_order[{}]", order.len()),
             Self::DrawOpeningHands => "draw_opening_hands".to_owned(),
             Self::TakeMulligan { player } => format!("take_mulligan[{player}]"),
             Self::KeepOpeningHand { player, .. } => format!("keep_opening_hand[{player}]"),
@@ -821,6 +885,14 @@ impl ScenarioStep {
             Self::ClearBaseCreature { object } => format!("clear_base_creature[{object}]"),
             Self::SetObjectTapped { object, .. } => format!("set_object_tapped[{object}]"),
             Self::SetObjectLoyalty { object, .. } => format!("set_object_loyalty[{object}]"),
+            Self::SetObjectColorIdentity { object, .. } => {
+                format!("set_object_color_identity[{object}]")
+            }
+            Self::DesignateCommander { object, .. } => format!("designate_commander[{object}]"),
+            Self::RecordCommanderCast { object } => format!("record_commander_cast[{object}]"),
+            Self::ValidateCommanderColorIdentity { player, .. } => {
+                format!("validate_commander_color_identity[{player}]")
+            }
             Self::AddObjectCounters { object, .. } => format!("add_object_counters[{object}]"),
             Self::RemoveObjectCounters { object, .. } => {
                 format!("remove_object_counters[{object}]")
@@ -868,6 +940,18 @@ impl ScenarioStep {
             }
             Self::AssertObjectZone { object, .. } => format!("assert_object_zone[{object}]"),
             Self::AssertObjectFlags { object, .. } => format!("assert_object_flags[{object}]"),
+            Self::AssertTurnOrder { order } => format!("assert_turn_order[{}]", order.len()),
+            Self::AssertRangeOfInfluence { mode } => {
+                format!("assert_range_of_influence[{mode}]")
+            }
+            Self::AssertCommander { object, .. } => format!("assert_commander[{object}]"),
+            Self::AssertCommanderIdentityLegal {
+                player,
+                object,
+                expected,
+            } => {
+                format!("assert_commander_identity_legal[{player}:{object}:{expected}]")
+            }
             Self::DeclareAttackers { player, .. } => format!("declare_attackers[{player}]"),
             Self::DeclareBlockers { player, .. } => format!("declare_blockers[{player}]"),
             Self::AssertCanAttack { player, .. } => format!("assert_can_attack[{player}]"),
@@ -2424,6 +2508,46 @@ fn execute_step(step: &ScenarioStep, context: &mut RunContext) {
             record_outcome(&label, Outcome::Applied, context);
             return;
         }
+        ScenarioStep::AssertTurnOrder { order } => {
+            check_turn_order_expectation(&label, order, context);
+            record_outcome(&label, Outcome::Applied, context);
+            return;
+        }
+        ScenarioStep::AssertRangeOfInfluence { mode } => {
+            check_range_of_influence_expectation(&label, mode, context);
+            record_outcome(&label, Outcome::Applied, context);
+            return;
+        }
+        ScenarioStep::AssertCommander {
+            object,
+            commander,
+            colors,
+            cast_count,
+            tax_generic,
+        } => {
+            check_commander_expectation(
+                &label,
+                *object,
+                *commander,
+                *colors,
+                *cast_count,
+                *tax_generic,
+                context,
+            );
+            record_outcome(&label, Outcome::Applied, context);
+            return;
+        }
+        ScenarioStep::AssertCommanderIdentityLegal {
+            player,
+            object,
+            expected,
+        } => {
+            check_commander_identity_legal_expectation(
+                &label, *player, *object, *expected, context,
+            );
+            record_outcome(&label, Outcome::Applied, context);
+            return;
+        }
         ScenarioStep::AssertCanTarget {
             player,
             source_object,
@@ -2514,6 +2638,13 @@ fn execute_step(step: &ScenarioStep, context: &mut RunContext) {
 fn action_for_step(step: &ScenarioStep, context: &RunContext) -> Result<Action, ScenarioError> {
     match step {
         ScenarioStep::DecideTurnOrder => Ok(Action::DecideTurnOrder),
+        ScenarioStep::SetTurnOrder { order } => {
+            let mut players = Vec::with_capacity(order.len());
+            for index in order {
+                players.push(player_id(&context.players, *index, "set_turn_order")?);
+            }
+            Ok(Action::SetTurnOrder { order: players })
+        }
         ScenarioStep::DrawOpeningHands => Ok(Action::DrawOpeningHands),
         ScenarioStep::TakeMulligan { player } => Ok(Action::TakeMulligan {
             player: player_id(&context.players, *player, "take_mulligan")?,
@@ -2652,6 +2783,37 @@ fn action_for_step(step: &ScenarioStep, context: &RunContext) -> Result<Action, 
             object: object_id(&context.objects, *object, "set_object_loyalty")?,
             loyalty: *loyalty,
         }),
+        ScenarioStep::SetObjectColorIdentity { object, colors } => {
+            Ok(Action::SetObjectColorIdentity {
+                object: object_id(&context.objects, *object, "set_object_color_identity")?,
+                colors: colors.to_colors(),
+            })
+        }
+        ScenarioStep::DesignateCommander { object, colors } => Ok(Action::DesignateCommander {
+            object: object_id(&context.objects, *object, "designate_commander")?,
+            color_identity: colors.to_colors(),
+        }),
+        ScenarioStep::RecordCommanderCast { object } => Ok(Action::RecordCommanderCast {
+            object: object_id(&context.objects, *object, "record_commander_cast")?,
+        }),
+        ScenarioStep::ValidateCommanderColorIdentity { player, objects } => {
+            let mut object_ids = Vec::with_capacity(objects.len());
+            for object in objects {
+                object_ids.push(object_id(
+                    &context.objects,
+                    *object,
+                    "validate_commander_color_identity.object",
+                )?);
+            }
+            Ok(Action::ValidateCommanderColorIdentity {
+                player: player_id(
+                    &context.players,
+                    *player,
+                    "validate_commander_color_identity.player",
+                )?,
+                objects: object_ids,
+            })
+        }
         ScenarioStep::AddObjectCounters {
             object,
             kind,
@@ -2794,10 +2956,14 @@ fn action_for_step(step: &ScenarioStep, context: &RunContext) -> Result<Action, 
             let player = player_id(&context.players, *player, "cast_spell_auto.player")?;
             let object = object_id(&context.objects, *object, "cast_spell_auto.object")?;
             let cost = cost.to_cost();
+            let effective_cost = context
+                .state
+                .effective_spell_cost(player, object, cost)
+                .map_err(|error| ScenarioError::schema(format!("spell cost failed: {error:?}")))?;
             let available = context.state.mana_pool(player).map_err(|error| {
                 ScenarioError::schema(format!("cast mana pool failed: {error:?}"))
             })?;
-            let payment = auto_payment_plan(available, cost)
+            let payment = auto_payment_plan(available, effective_cost)
                 .map_err(|error| {
                     ScenarioError::schema(format!("cast payment planning failed: {error:?}"))
                 })?
@@ -2833,6 +2999,10 @@ fn action_for_step(step: &ScenarioStep, context: &RunContext) -> Result<Action, 
         | ScenarioStep::AssertObjectCounters { .. }
         | ScenarioStep::AssertObjectZone { .. }
         | ScenarioStep::AssertObjectFlags { .. }
+        | ScenarioStep::AssertTurnOrder { .. }
+        | ScenarioStep::AssertRangeOfInfluence { .. }
+        | ScenarioStep::AssertCommander { .. }
+        | ScenarioStep::AssertCommanderIdentityLegal { .. }
         | ScenarioStep::AssertCanTarget { .. }
         | ScenarioStep::AssertWardCost { .. }
         | ScenarioStep::AssertCanAttack { .. }
@@ -3469,6 +3639,177 @@ fn check_object_flags_expectation(
                 .failures
                 .push(ScenarioFailure::new(phase, error.to_string())),
         }
+    }
+}
+
+fn check_turn_order_expectation(phase: &str, order: &[usize], context: &mut RunContext) {
+    let mut expected = Vec::with_capacity(order.len());
+    for player in order {
+        match player_id(&context.players, *player, phase) {
+            Ok(player) => expected.push(player),
+            Err(error) => {
+                context
+                    .failures
+                    .push(ScenarioFailure::new(phase, error.to_string()));
+                return;
+            }
+        }
+    }
+    if context.state.turn_order() != expected.as_slice() {
+        context.failures.push(ScenarioFailure::new(
+            phase,
+            format!(
+                "expected turn order {:?}, found {:?}",
+                expected
+                    .iter()
+                    .map(|player| player.index())
+                    .collect::<Vec<_>>(),
+                context
+                    .state
+                    .turn_order()
+                    .iter()
+                    .map(|player| player.index())
+                    .collect::<Vec<_>>()
+            ),
+        ));
+    }
+}
+
+fn check_range_of_influence_expectation(phase: &str, mode: &str, context: &mut RunContext) {
+    let expected = match mode {
+        "off" | "Off" => RangeOfInfluence::Off,
+        other => {
+            context.failures.push(ScenarioFailure::new(
+                phase,
+                format!("unsupported range-of-influence mode `{other}`"),
+            ));
+            return;
+        }
+    };
+    if context.state.range_of_influence() != expected {
+        context.failures.push(ScenarioFailure::new(
+            phase,
+            format!(
+                "expected range of influence {:?}, found {:?}",
+                expected,
+                context.state.range_of_influence()
+            ),
+        ));
+    }
+}
+
+fn check_commander_expectation(
+    phase: &str,
+    object: usize,
+    commander: bool,
+    colors: Option<ColorSpec>,
+    cast_count: Option<u32>,
+    tax_generic: Option<u32>,
+    context: &mut RunContext,
+) {
+    let checked_object = match object_id(&context.objects, object, phase) {
+        Ok(object) => object,
+        Err(error) => {
+            context
+                .failures
+                .push(ScenarioFailure::new(phase, error.to_string()));
+            return;
+        }
+    };
+    let Some(record) = context.state.object(checked_object) else {
+        context.failures.push(ScenarioFailure::new(
+            phase,
+            format!("object {object} is missing from state"),
+        ));
+        return;
+    };
+    if record.is_commander() != commander {
+        context.failures.push(ScenarioFailure::new(
+            phase,
+            format!(
+                "object {object} expected commander {}, found {}",
+                commander,
+                record.is_commander()
+            ),
+        ));
+    }
+    if let Some(colors) = colors {
+        if record.color_identity() != colors.to_colors() {
+            context.failures.push(ScenarioFailure::new(
+                phase,
+                format!(
+                    "object {object} expected identity {:?}, found {:?}",
+                    colors.to_colors(),
+                    record.color_identity()
+                ),
+            ));
+        }
+    }
+    if let Some(expected) = cast_count {
+        if record.commander_cast_count() != expected {
+            context.failures.push(ScenarioFailure::new(
+                phase,
+                format!(
+                    "object {object} expected cast count {}, found {}",
+                    expected,
+                    record.commander_cast_count()
+                ),
+            ));
+        }
+    }
+    if let Some(expected) = tax_generic {
+        match context.state.commander_tax(checked_object) {
+            Ok(tax) if tax.generic_total().unwrap_or(u32::MAX) == expected => {}
+            Ok(tax) => context.failures.push(ScenarioFailure::new(
+                phase,
+                format!(
+                    "object {object} expected commander tax {}, found {:?}",
+                    expected, tax
+                ),
+            )),
+            Err(error) => context.failures.push(ScenarioFailure::new(
+                phase,
+                format!("object {object} commander tax failed: {error:?}"),
+            )),
+        }
+    }
+}
+
+fn check_commander_identity_legal_expectation(
+    phase: &str,
+    player: usize,
+    object: usize,
+    expected: bool,
+    context: &mut RunContext,
+) {
+    let player = match player_id(&context.players, player, phase) {
+        Ok(player) => player,
+        Err(error) => {
+            context
+                .failures
+                .push(ScenarioFailure::new(phase, error.to_string()));
+            return;
+        }
+    };
+    let object = match object_id(&context.objects, object, phase) {
+        Ok(object) => object,
+        Err(error) => {
+            context
+                .failures
+                .push(ScenarioFailure::new(phase, error.to_string()));
+            return;
+        }
+    };
+    match context.state.commander_color_identity_legal(player, object) {
+        Ok(actual) if actual == expected => {}
+        Ok(actual) => context.failures.push(ScenarioFailure::new(
+            phase,
+            format!("expected commander identity legality {expected}, found {actual}"),
+        )),
+        Err(error) => context.failures.push(ScenarioFailure::new(
+            phase,
+            format!("commander identity legality failed: {error:?}"),
+        )),
     }
 }
 
@@ -4209,6 +4550,9 @@ fn parse_script(value: RonValue) -> Result<Vec<ScenarioStep>, ScenarioError> {
         let action = map.required_string("action")?;
         script.push(match action.as_str() {
             "decide_turn_order" => ScenarioStep::DecideTurnOrder,
+            "set_turn_order" => ScenarioStep::SetTurnOrder {
+                order: parse_usize_list(map.required("order")?, "set_turn_order.order")?,
+            },
             "draw_opening_hands" => ScenarioStep::DrawOpeningHands,
             "take_mulligan" => ScenarioStep::TakeMulligan {
                 player: map.required_usize("player")?,
@@ -4304,6 +4648,25 @@ fn parse_script(value: RonValue) -> Result<Vec<ScenarioStep>, ScenarioError> {
             "set_object_loyalty" => ScenarioStep::SetObjectLoyalty {
                 object: map.required_usize("object")?,
                 loyalty: map.optional_i32("loyalty")?,
+            },
+            "set_object_color_identity" => ScenarioStep::SetObjectColorIdentity {
+                object: map.required_usize("object")?,
+                colors: ColorSpec::from_ron_value(map.required("colors")?)?,
+            },
+            "designate_commander" => ScenarioStep::DesignateCommander {
+                object: map.required_usize("object")?,
+                colors: ColorSpec::from_ron_value(map.required("colors")?)?,
+            },
+            "record_commander_cast" => ScenarioStep::RecordCommanderCast {
+                object: map.required_usize("object")?,
+            },
+            "validate_commander_color_identity" => ScenarioStep::ValidateCommanderColorIdentity {
+                player: map.required_usize("player")?,
+                objects: parse_usize_list(
+                    map.optional("objects")?
+                        .unwrap_or_else(|| RonValue::List(Vec::new())),
+                    "validate_commander_color_identity.objects",
+                )?,
             },
             "add_object_counters" => ScenarioStep::AddObjectCounters {
                 object: map.required_usize("object")?,
@@ -4406,6 +4769,27 @@ fn parse_script(value: RonValue) -> Result<Vec<ScenarioStep>, ScenarioError> {
                 token: map.optional_bool("token")?,
                 copy: map.optional_bool("copy")?,
                 copy_source: map.optional_usize("copy_source")?,
+            },
+            "assert_turn_order" => ScenarioStep::AssertTurnOrder {
+                order: parse_usize_list(map.required("order")?, "assert_turn_order.order")?,
+            },
+            "assert_range_of_influence" => ScenarioStep::AssertRangeOfInfluence {
+                mode: map.required_string("mode")?,
+            },
+            "assert_commander" => ScenarioStep::AssertCommander {
+                object: map.required_usize("object")?,
+                commander: map.optional_bool("commander")?.unwrap_or(true),
+                colors: match map.optional("colors")? {
+                    Some(value) => Some(ColorSpec::from_ron_value(value)?),
+                    None => None,
+                },
+                cast_count: map.optional_u32("cast_count")?,
+                tax_generic: map.optional_u32("tax_generic")?,
+            },
+            "assert_commander_identity_legal" => ScenarioStep::AssertCommanderIdentityLegal {
+                player: map.required_usize("player")?,
+                object: map.required_usize("object")?,
+                expected: map.required_bool("expected")?,
             },
             "declare_attackers" => ScenarioStep::DeclareAttackers {
                 player: map.required_usize("player")?,
