@@ -34,9 +34,11 @@ T2.5+ work can depend on layers.
 - 100 owner-approved reviewer oracle scenarios pass.
 - 100 selected legacy Forge layered-card snapshots now execute locally: 100 OK,
   0 legacy harness errors.
-- 53 generated Forge 2.0 legacy-script fragment scenarios pass. They come from
-  the 100 selected real legacy scripts; 43 match the legacy snapshot on modeled
-  fields and 10 expose fixture/model divergence.
+- 53 generated Forge 2.0 legacy-script fragment scenarios pass. They remain as
+  supplemental executable coverage.
+- The true importer differential now passes for the selected 100-card subset:
+  100/100 exact stable-role snapshots, 0 mismatches, 186 imported layer
+  operations from 117 active-face continuous lines.
 - 5 layer-focused `forge-core` unit tests pass.
 - Full VL passed after the legacy bridge: 535 oracle scenarios, 0 failures.
 - Coverage after the reviewer pack: 81.82% lines; clone-surface baseline:
@@ -53,18 +55,16 @@ query recomputes, but performance/memoization will need fresh evidence later.
 
 The legacy side of the 100-card differential is no longer blocked: Codex used
 repo-local Corretto 17 and Maven artifacts to run the vendored legacy Java
-engine over all 100 selected cards. Codex also added a local bridge that parses
-those real scripts into the 53 layer-fragment scenarios the current Forge 2.0
-engine can honestly represent. The remaining true differential blocker is on
-the Forge 2.0 side: Forge 2.0 does not yet have a full legacy card-script
-importer/card compiler capable of executing those real cards end to end in the
-new engine.
+engine over all 100 selected cards. Codex also added a local true importer
+differential for this CP-LAYERS fixture. It parses the active legacy card face,
+recreates the same three-object fixture with stable object roles, applies
+layer-ordered continuous effects, and matches the Java snapshots for all 100
+selected cards.
 
 ## 5. WHAT YOU SHOULD EXPECT NEXT
 
-T2.5+ stays blocked. The next step is your CP-LAYERS decision on the blocked
-legacy differential clause, then either remediation, explicit de-scope, or
-fail/reopen.
+T2.5+ stays blocked until you give the CP-LAYERS signoff or fail it. The
+previous true differential blocker has been remediated locally.
 
 ## 6. CURRENT OWNER DECISIONS
 
@@ -74,10 +74,9 @@ You supplied the CP-LAYERS review direction on 2026-07-07:
   You approved them with `approve 100 scenarios`, and all 100 pass locally.
 - Legacy differential work started with local-only search; Codex asked before
   network/download/toolchain setup. Local-only search selected the 100-card
-  subset, the legacy Java engine now emits 100/100 OK snapshots, and the
-  Forge 2.0 bridge emits 53/53 passing real-script fragment scenarios. True
-  end-to-end engine-vs-engine execution is still blocked by missing full Forge
-  2.0 importer/compiler support.
+  subset, the legacy Java engine emits 100/100 OK snapshots, the supplemental
+  bridge emits 53/53 passing real-script fragment scenarios, and the true
+  importer differential now matches 100/100 selected legacy snapshots.
 - Longer sanitizer fuzz may run only if the tooling is already installed;
   otherwise Codex must ask before installing anything.
 - CP-LAYERS is not approved yet. Codex must bring the results back before you
@@ -85,14 +84,13 @@ You supplied the CP-LAYERS review direction on 2026-07-07:
 
 ## 7. WHAT WE NEED FROM YOU
 
-You are the CP-LAYERS human reviewer under O1 Option C. To proceed, decide one:
+You are the CP-LAYERS human reviewer under O1 Option C. The remaining decision
+is now signoff, not de-scope: either approve CP-LAYERS with the required
+sentence, or fail it and reopen remediation.
 
-- Remediate: build/import enough Forge 2.0 real card-script support for these
-  100 selected cards, then run the true differential.
-- De-scope: explicitly waive the true 100-card engine differential for this
-  checkpoint and accept the 100 synthetic oracles plus 100/100 legacy-engine
-  snapshot evidence.
-- Fail/reopen: fail CP-LAYERS and reopen layer/card-import remediation before
-  T2.5.
+Required sentence:
 
-T2.5 stays blocked until you choose and give the explicit CP-LAYERS signoff.
+> I believe layer ordering is correct for the following reasons...
+
+T2.5 stays blocked until you give that explicit CP-LAYERS signoff or fail the
+checkpoint.

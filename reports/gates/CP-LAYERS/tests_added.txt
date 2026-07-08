@@ -36,6 +36,14 @@ Reviewed implementation commit: `81143e1e221ee5d5a01a7691f0adbe380cb357f7`
   records the selected subset and divergence categories.
 - `reports/gates/CP-LAYERS/legacy-100-layered-subset-2026-07-07.csv:1`
   records the machine-readable subset.
+- `tools/cp_layers_true_importer_diff.py:1` imports the selected 100 legacy
+  scripts into the CP-LAYERS stable-role fixture differential.
+- `reports/gates/CP-LAYERS/legacy-true-importer-diff-2026-07-08.md:1`
+  records the 100/100 exact legacy snapshot match.
+- `metrics/cp_layers_true_importer_diff.json:1` records the machine-readable
+  true importer differential summary.
+- `metrics/cp_layers_true_importer_diff_predicted.jsonl:1` records the
+  importer-predicted snapshots.
 
 ## Layer Oracle Scenarios Added by T2.4
 

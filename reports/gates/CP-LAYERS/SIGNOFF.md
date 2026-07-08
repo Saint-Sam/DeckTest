@@ -32,9 +32,12 @@ Verdict: PENDING
 - `reports/gates/CP-LAYERS/legacy-100-layered-subset-2026-07-07.csv`
 - `reports/gates/CP-LAYERS/legacy-engine-snapshot-2026-07-07.md`
 - `reports/gates/CP-LAYERS/legacy-script-bridge-2026-07-07.md`
+- `reports/gates/CP-LAYERS/legacy-true-importer-diff-2026-07-08.md`
 - `metrics/cp_layers_legacy_engine_snapshot.json`
 - `metrics/cp_layers_legacy_engine_snapshot.jsonl`
 - `metrics/cp_layers_legacy_script_bridge.json`
+- `metrics/cp_layers_true_importer_diff.json`
+- `metrics/cp_layers_true_importer_diff_predicted.jsonl`
 - `tests/oracle/legacy_layers/`
 - `reports/gates/CP-LAYERS/scenario-interview-2026-07-07.md`
 - `reports/gates/CP-LAYERS/reviewer-scenarios-2026-07-07.md`
@@ -54,7 +57,7 @@ Verdict: PENDING
 | CR 613.8 dependency ordering covered | PARTIAL | Explicit dependency-ID ordering, chain, non-applicable target isolation, and cross-layer guard cases pass; semantic dependency inference is not modeled yet. |
 | Timestamp ties covered | PASS | Equal timestamp deterministic ID-order and reverse-registration tie cases pass. |
 | CDA and Humility-class stacking covered | PARTIAL | Numeric 7a P/T, 7a-7d order, type gating, and combat-keyword add/remove stack cases pass; true CDA/copiable-CDA and all-abilities removal remain unmodeled. |
-| Legacy 100-card layered subset differential | PARTIAL | Local 100-card subset selected; vendored legacy Forge engine now executes all 100 selected cards with 100 OK snapshots and 0 legacy harness errors. Forge 2.0 bridge parses all 100 scripts and executes 53 representable layer-fragment scenarios with 53/53 pass; 43 generated fragments match legacy modeled fields and 10 expose fixture/model divergence. True end-to-end engine-vs-engine run remains blocked by missing full Forge 2.0 card-script importer/compiler. Owner decision or further remediation required. |
+| Legacy 100-card layered subset differential | PASS | Local 100-card subset selected; vendored legacy Forge engine executes all 100 selected cards with 100 OK snapshots and 0 legacy harness errors. The true importer differential now parses the active legacy card face, recreates the CP-LAYERS fixture with stable object roles, instantiates 186 layer operations from 117 active-face continuous lines, and matches 100/100 legacy snapshots with 0 mismatches. The older 53-scenario fragment bridge remains as executable supplemental coverage. |
 | Memoization/invalidation audit | EVIDENCE READY | Current implementation has no derived-characteristics cache; mutation/query interleave oracles and sanitizer fuzz passed. Owner/reviewer must accept or demand more evidence. |
 | Mutation/query fuzz target | PASS | `fuzz_characteristics` smoke and 301-second address-sanitizer fuzz completed without crash, panic, or invariant failure. |
 | Explicit belief sentence | PENDING | Required below before PASS. |
@@ -68,6 +71,6 @@ PENDING:
 
 ## Remaining Remediation
 
-Pending owner/human CP-LAYERS review and decision on the remaining Forge 2.0
-card-script importer/compiler blocker for the true end-to-end engine-vs-engine
-legacy differential clause.
+Pending owner/human CP-LAYERS review, explicit layer-ordering belief sentence,
+and proceed/fail decision. The previous true importer/compiler blocker has local
+PASS evidence in `legacy-true-importer-diff-2026-07-08.md`.

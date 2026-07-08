@@ -25,7 +25,7 @@ Current evidence: `docs/t1_10_legacy_test_oracle_mapping.md`
 
 Priority: P0
 
-Status: open, partially remediated 2026-07-07
+Status: resolved/remediated 2026-07-08; awaiting CP-LAYERS owner signoff
 
 Question: CP-LAYERS requires a legacy engine differential on a 100-card layered
 subset. Local-only evidence selected the subset and adjudicated script-level
@@ -40,7 +40,15 @@ importer/card compiler yet. Should CP-LAYERS continue remediation before T2.5,
 explicitly de-scope the true engine differential for this checkpoint, or
 fail/reopen?
 
+Resolution: Owner chose remediation rather than de-scope. Codex added a
+local true importer differential for the selected CP-LAYERS 100-card subset.
+It parses the active legacy card face, recreates the Java snapshot fixture with
+stable object roles, applies layer-ordered continuous effects, and matches the
+vendored legacy Java engine snapshots for 100/100 selected scripts with 0
+mismatches.
+
 Current evidence:
 `reports/gates/CP-LAYERS/legacy-100-layered-subset-2026-07-07.md`
 `reports/gates/CP-LAYERS/legacy-engine-snapshot-2026-07-07.md`
 `reports/gates/CP-LAYERS/legacy-script-bridge-2026-07-07.md`
+`reports/gates/CP-LAYERS/legacy-true-importer-diff-2026-07-08.md`

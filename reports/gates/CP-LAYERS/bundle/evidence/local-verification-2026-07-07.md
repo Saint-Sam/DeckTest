@@ -53,10 +53,18 @@ evidence recording, and the CP-LAYERS fuzz-target addition.
   53 generated legacy-fragment scenarios parsed.
 - `cargo run -p forge-testkit -- oracle --path tests/oracle/legacy_layers --junit target/forge-testkit/legacy-layers-junit.xml`:
   PASS, 53 generated legacy-fragment scenarios passed, 0 failed.
+- `PYTHONPYCACHEPREFIX=target/tmp/python-cache python3 tools/cp_layers_true_importer_diff.py`:
+  PASS, imported the selected 100 legacy scripts into the CP-LAYERS stable-role
+  fixture differential; 100/100 predicted snapshots matched the vendored legacy
+  Java snapshots with 0 mismatches.
+- `PYTHONPYCACHEPREFIX=target/tmp/python-cache python3 -m py_compile tools/cp_layers_true_importer_diff.py`:
+  PASS.
 - `scripts/gates/make_bundle.sh CP-LAYERS`: PASS, refreshed the packaged
   checkpoint bundle after adding bridge evidence.
 - `scripts/vl.sh`: PASS after the legacy-script bridge; 535 oracle scenarios
   passed, 0 failed, and perf smoke reported 0 regressions.
+- `scripts/vl.sh`: PASS after the true importer differential; 535 oracle
+  scenarios passed, 0 failed, and perf smoke reported 0 regressions.
 
 ## CP-LAYERS Fuzz Target Verification
 
@@ -76,11 +84,9 @@ registered continuous-effect list. This simplifies invalidation for CP-LAYERS,
 but the checkpoint must still verify that future memoization work does not
 weaken this invariant.
 
-The legacy side of the 100-card engine differential is now executable and
-recorded. A Forge 2.0 legacy-script bridge also parses the 100 scripts and
-executes 53 currently representable layer fragments; 43 generated fragments
-match the legacy snapshot on modeled fields and 10 expose fixture/model
-divergences. The remaining true differential blocker is full Forge 2.0
-card-script support: the new engine still has no importer/compiler capable of
-executing those 100 real legacy card scripts end to end for engine-vs-engine
-comparison.
+The legacy side of the 100-card engine differential is executable and recorded.
+A Forge 2.0 legacy-script bridge also parses the 100 scripts and executes 53
+currently representable layer fragments. The earlier true differential blocker
+has now been remediated for CP-LAYERS: the stable-role importer differential
+matches 100/100 selected legacy Java snapshots with 0 mismatches. Owner/human
+signoff is still required before T2.5+.

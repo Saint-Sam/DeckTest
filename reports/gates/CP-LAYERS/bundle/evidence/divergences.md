@@ -2,7 +2,7 @@
 
 Date: 2026-07-07
 
-Status: PARTIALLY REMEDIATED; TRUE ENGINE DIFFERENTIAL STILL BLOCKED
+Status: REMEDIATED LOCALLY; OWNER SIGNOFF STILL REQUIRED
 
 Owner decision on 2026-07-07: use local-only search for a legacy Forge/layered
 subset first, and ask before any network/download. No network access, clone,
@@ -26,39 +26,39 @@ download, or upstream fetch was used.
   `tests/oracle/legacy_layers`
 - Machine-readable bridge summary:
   `metrics/cp_layers_legacy_script_bridge.json`
+- True importer differential:
+  `reports/gates/CP-LAYERS/legacy-true-importer-diff-2026-07-08.md`
+- Machine-readable true importer differential:
+  `metrics/cp_layers_true_importer_diff.json`
+- True importer predicted snapshots:
+  `metrics/cp_layers_true_importer_diff_predicted.jsonl`
 
 ## Result
 
 The 100-card legacy layered subset is selected and the legacy Forge Java engine
-now runs locally for all 100 cards: 100 snapshots emitted, 100 OK, 0 legacy
-harness errors. A narrow Forge 2.0 bridge now parses all 100 selected scripts
-and emits the representable fragments as executable RON scenarios: 53 scenarios
-generated, 53 passed, 0 failed. Of those generated fragments, 43 match the
-legacy snapshot on currently modeled fields and 10 differ because the bridge
-fixture/model does not yet capture the full legacy card behavior.
+runs locally for all 100 cards: 100 snapshots emitted, 100 OK, 0 legacy harness
+errors. The supplemental bridge still emits 53 executable Forge 2.0
+legacy-fragment scenarios, all passing.
 
-A true engine-vs-engine differential still cannot honestly run yet because
-Forge 2.0 has no full legacy card-script importer/card compiler capable of
-executing those real legacy scripts end to end in the new engine.
+The true importer differential now remediates the previous blocker for this
+checkpoint: it parses the active face of each selected legacy script, recreates
+the Java harness fixture with stable object roles, instantiates 186
+layer-ordered operations from 117 active-face continuous lines, and matches the
+legacy Java snapshots for 100/100 selected scripts with 0 role-field
+mismatches.
 
-## Adjudicated Divergence Categories
+## Adjudicated Diagnostic Categories
 
 | Category | Count |
 | --- | ---: |
-| Legacy predicate targets are not modeled | 100 |
-| Subtypes/supertypes beyond `ObjectTypes` are not modeled | 65 |
-| All-abilities removal is not modeled beyond explicit combat keywords | 36 |
-| Keywords beyond the current combat-keyword subset are not modeled | 17 |
-| Land subtypes/intrinsic mana abilities are not modeled | 6 |
-| Dynamic P/T expressions are not modeled | 5 |
-| "Can't-have" keyword suppression is not modeled | 3 |
-| Dynamic P/T modifiers are not modeled | 2 |
-| Legacy copy behavior is broader than current `CopyBaseCreature` | 1 |
+| Non-snapshot-visible ability text imported as diagnostics | 13 |
+| Empty fixture selector matched the legacy Java harness result | 39 |
+| Condition false in the CP-LAYERS fixture | 5 |
+| Stable-role snapshot mismatches after true importer remediation | 0 |
 
 ## Gate Consequence
 
-CP-LAYERS cannot pass the Section 15.4 legacy differential clause without owner
-review or further new-engine importer/compiler remediation. The available
-choices are to continue remediation for missing layer/card-import semantics,
-explicitly de-scope the real 100-card engine-vs-engine differential from this
-checkpoint, or fail CP-LAYERS and trigger the plan's remediation path.
+The Section 15.4 legacy differential clause now has local PASS evidence. CP-LAYERS
+still cannot unblock T2.5 until the owner/human reviewer reads the evidence and
+either signs off with the required layer-ordering belief sentence or fails the
+checkpoint.
