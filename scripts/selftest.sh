@@ -17,6 +17,7 @@ scripts=(
   scripts/check_coverage.sh
   scripts/run_oracle.sh
   scripts/run_oracle_subset.sh
+  scripts/run_nightmare_suite.sh
   scripts/fuzz_nightly.sh
   scripts/card_regression.sh
   scripts/perf_smoke.sh

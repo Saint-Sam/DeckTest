@@ -225,6 +225,12 @@
       "attempts": 0,
       "verification": "scripts/vl.sh passed locally with wave-one keyword/plumbing support for defender, haste, hexproof restriction desugaring, indestructible, prowess metadata, flash, kicker, flashback, cycling, equip, aura attachment plumbing, sacrifice costs, scry/surveil, and ETB/dies trigger registration; clone-surface baseline persistent_allocation_field_count=30, 578 oracle scenarios green including 16 T2.9 keyword-wave scenarios, coverage gate including T2.9 oracles at 81.67% lines, and perf_diff reporting 0 regressions",
       "remote_ci": "GitHub Actions ci #40 run 28955699444 passed all required jobs for commit 55e669999c5aee77e21a0508eb9f52ed857367d4"
+    },
+    "T2.10": {
+      "status": "verified_local",
+      "branch": "task/T2.10-nightmare-decks",
+      "attempts": 0,
+      "verification": "cargo fmt --all -- --check, cargo clippy --workspace --all-targets --all-features -- -D warnings, cargo test --workspace --quiet, scripts/run_nightmare_suite.sh 1000 6, and scripts/vl.sh passed locally with 10 hand-authored layer-heavy nightmare fixtures, 1,000 random-legal games, 0 invariant violations, a VL nightmare-suite smoke hook, and a T2 gate scaffold for >=1,200 oracle scenarios plus 12-hour sanitizer fuzz evidence"
     }
   },
   "gates_passed": [

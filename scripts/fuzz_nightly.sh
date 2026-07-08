@@ -34,6 +34,8 @@ fi
 
 if [[ "$mode" == "--t1-gate" ]]; then
   seconds="${FORGE_FUZZ_SECONDS:-$(((6 * 60 * 60 + ${#targets[@]} - 1) / ${#targets[@]}))}"
+elif [[ "$mode" == "--t2-gate" ]]; then
+  seconds="${FORGE_FUZZ_SECONDS:-$(((12 * 60 * 60 + ${#targets[@]} - 1) / ${#targets[@]}))}"
 else
   seconds="${FORGE_FUZZ_SECONDS:-3600}"
 fi

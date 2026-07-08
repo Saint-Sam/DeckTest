@@ -8,6 +8,7 @@ if [[ "${1:-}" == "--self-test" ]]; then
   [[ -x "$ROOT/scripts/check_coverage.sh" ]]
   [[ -x "$ROOT/scripts/review/clone_surface_guard.sh" ]]
   [[ -x "$ROOT/scripts/run_oracle_subset.sh" ]]
+  [[ -x "$ROOT/scripts/run_nightmare_suite.sh" ]]
   [[ -x "$ROOT/scripts/perf_smoke.sh" ]]
   echo "PASS vl.sh self-test"
   exit 0
@@ -41,5 +42,6 @@ step "public GameState mutator review" "$ROOT/scripts/review/no_public_mutating_
 step "clone surface guard" "$ROOT/scripts/review/clone_surface_guard.sh"
 step "coverage floor" "$ROOT/scripts/check_coverage.sh" 80
 step "oracle subset" "$ROOT/scripts/run_oracle_subset.sh"
+step "nightmare suite smoke" "$ROOT/scripts/run_nightmare_suite.sh" "${FORGE_VL_NIGHTMARE_GAMES:-100}" "${FORGE_VL_NIGHTMARE_MAX_TURNS:-4}"
 step "perf smoke" "$ROOT/scripts/perf_smoke.sh"
 echo "ALL CHECKS PASSED"
