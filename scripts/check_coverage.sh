@@ -36,4 +36,5 @@ cargo llvm-cov --workspace --no-report
 cargo llvm-cov run -p forge-testkit --bin forge-testkit --no-report -- oracle --filter layers --no-junit
 cargo llvm-cov run -p forge-testkit --bin forge-testkit --no-report -- oracle --path tests/oracle/t2_5_activated --no-junit
 cargo llvm-cov run -p forge-testkit --bin forge-testkit --no-report -- oracle --path tests/oracle/t2_6_targeting --no-junit
+cargo llvm-cov run -p forge-testkit --bin forge-testkit --no-report -- oracle --path tests/oracle/t2_7_counters_tokens_copy --no-junit
 cargo llvm-cov report --fail-under-lines "$floor" --json --output-path metrics/coverage.json

@@ -33,7 +33,7 @@
   "full_state_snapshot_surface": false,
   "game_state_debug": false,
   "guard": "static persistent allocation field count",
-  "persistent_allocation_field_count": 28,
+  "persistent_allocation_field_count": 29,
   "persistent_allocation_fields": [
     {
       "field": "targets",
@@ -160,6 +160,12 @@
       "reason": "data-only Copy targeting and combat restrictions compiled from card IR",
       "struct": "GameState",
       "type": "Vec<RestrictionSubscription>"
+    },
+    {
+      "field": "object_counters",
+      "reason": "compact counter totals bounded by active objects and counter kinds",
+      "struct": "GameState",
+      "type": "Vec<ObjectCounterEntry>"
     },
     {
       "field": "loyalty_activations_this_turn",

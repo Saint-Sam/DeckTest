@@ -1,0 +1,23 @@
+(
+    name: "T2.7 named counters persist and hash deterministically",
+    setup: (
+        players: 1,
+        objects: [
+            (card: 27004, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "add_object_counters", object: 0, kind: "named:42", amount: 7),
+        (action: "assert_object_counters", object: 0, kind: "named:42", count: 7),
+        (action: "check_state_based_actions"),
+        (action: "assert_object_counters", object: 0, kind: "named:42", count: 7),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Battlefield", count: 1),
+        ],
+        outcome: "in_progress",
+        invariants: ["zone_conservation", "hash_consistency"],
+        hash_determinism: true,
+    ),
+)

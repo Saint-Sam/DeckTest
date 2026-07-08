@@ -1,0 +1,27 @@
+(
+    name: "T2.7 plus and minus counters cancel during state-based actions",
+    setup: (
+        players: 1,
+        objects: [
+            (card: 27001, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "set_base_creature", object: 0, power: 2, toughness: 2, keywords: []),
+        (action: "add_object_counters", object: 0, kind: "plus_one_plus_one", amount: 3),
+        (action: "add_object_counters", object: 0, kind: "minus_one_minus_one", amount: 1),
+        (action: "assert_characteristics", object: 0, power: 4, toughness: 4),
+        (action: "check_state_based_actions"),
+        (action: "assert_object_counters", object: 0, kind: "plus_one_plus_one", count: 2),
+        (action: "assert_object_counters", object: 0, kind: "minus_one_minus_one", count: 0),
+        (action: "assert_characteristics", object: 0, power: 4, toughness: 4),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Battlefield", count: 1),
+        ],
+        outcome: "in_progress",
+        invariants: ["zone_conservation", "hash_consistency"],
+        hash_determinism: true,
+    ),
+)

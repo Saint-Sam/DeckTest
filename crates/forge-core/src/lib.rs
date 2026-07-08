@@ -60,6 +60,43 @@ impl CardId {
     }
 }
 
+/// A counter kind tracked by the T2.7 counter engine.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum CounterKind {
+    /// A +1/+1 counter.
+    PlusOnePlusOne,
+    /// A -1/-1 counter.
+    MinusOneMinusOne,
+    /// A loyalty counter.
+    Loyalty,
+    /// A deterministic compiler-assigned named counter.
+    Named(u32),
+}
+
+impl CounterKind {
+    /// Creates an arbitrary named counter from a deterministic ID.
+    #[must_use]
+    pub const fn named(id: u32) -> Self {
+        Self::Named(id)
+    }
+
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::PlusOnePlusOne => 0,
+            Self::MinusOneMinusOne => 1,
+            Self::Loyalty => 2,
+            Self::Named(_) => 3,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+struct ObjectCounterEntry {
+    object: ObjectId,
+    kind: CounterKind,
+    count: u32,
+}
+
 /// Maximum number of payment plans returned by the T1.4 enumerator.
 pub const PAYMENT_PLAN_LIMIT: usize = 64;
 
@@ -800,6 +837,8 @@ pub enum ZoneKind {
     Stack,
     /// The shared command zone.
     Command,
+    /// Internal retention zone for tokens and copies that ceased to exist.
+    Ceased,
 }
 
 impl ZoneKind {
@@ -812,6 +851,7 @@ impl ZoneKind {
             Self::Exile => 4,
             Self::Stack => 5,
             Self::Command => 6,
+            Self::Ceased => 7,
         }
     }
 
@@ -1069,6 +1109,36 @@ impl StackEntryId {
     #[must_use]
     pub const fn get(self) -> u32 {
         self.0
+    }
+}
+
+/// Provenance for a copied stack entry.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct StackCopyInfo {
+    source_entry: StackEntryId,
+    source_object: Option<ObjectId>,
+}
+
+impl StackCopyInfo {
+    /// Creates stack-copy provenance.
+    #[must_use]
+    pub const fn new(source_entry: StackEntryId, source_object: Option<ObjectId>) -> Self {
+        Self {
+            source_entry,
+            source_object,
+        }
+    }
+
+    /// Returns the stack entry that was copied.
+    #[must_use]
+    pub const fn source_entry(self) -> StackEntryId {
+        self.source_entry
+    }
+
+    /// Returns the copied spell object, if the copied entry had one.
+    #[must_use]
+    pub const fn source_object(self) -> Option<ObjectId> {
+        self.source_object
     }
 }
 
@@ -1618,6 +1688,18 @@ pub enum GameEventKind {
     ActivatedAbilityResolved,
     /// A targeting or combat restriction definition was registered.
     RestrictionRegistered,
+    /// An object's counter total changed.
+    ObjectCountersChanged,
+    /// A token object was created.
+    TokenCreated,
+    /// A permanent-copy object was created.
+    ObjectCopyCreated,
+    /// A stack entry was copied.
+    StackEntryCopied,
+    /// A token or copy ceased to exist.
+    ObjectCeasedToExist,
+    /// Matching +1/+1 and -1/-1 counters were removed.
+    CounterPairCancelled,
 }
 
 impl GameEventKind {
@@ -1678,6 +1760,12 @@ impl GameEventKind {
             Self::ActivatedAbilityActivated => 52,
             Self::ActivatedAbilityResolved => 53,
             Self::RestrictionRegistered => 54,
+            Self::ObjectCountersChanged => 55,
+            Self::TokenCreated => 56,
+            Self::ObjectCopyCreated => 57,
+            Self::StackEntryCopied => 58,
+            Self::ObjectCeasedToExist => 59,
+            Self::CounterPairCancelled => 60,
         }
     }
 }
@@ -3013,6 +3101,7 @@ pub struct StackEntry {
     // clone_surface: target snapshots are Copy records bounded by target requirements.
     targets: Vec<TargetSnapshot>,
     payment: Option<PaymentPlan>,
+    copy_info: Option<StackCopyInfo>,
 }
 
 impl StackEntry {
@@ -3063,6 +3152,12 @@ impl StackEntry {
     pub const fn payment(&self) -> Option<PaymentPlan> {
         self.payment
     }
+
+    /// Returns provenance when this stack entry is a copy.
+    #[must_use]
+    pub const fn copy_info(&self) -> Option<StackCopyInfo> {
+        self.copy_info
+    }
 }
 
 /// Record of a stack object that resolved.
@@ -3079,6 +3174,7 @@ pub struct ResolutionRecord {
     // clone_surface: one bool per target snapshot; paired with `targets`.
     legal_targets: Vec<bool>,
     outcome: ResolutionOutcome,
+    copy_info: Option<StackCopyInfo>,
 }
 
 impl ResolutionRecord {
@@ -3135,6 +3231,12 @@ impl ResolutionRecord {
     pub const fn outcome(&self) -> ResolutionOutcome {
         self.outcome
     }
+
+    /// Returns provenance when the resolved stack entry was a copy.
+    #[must_use]
+    pub const fn copy_info(&self) -> Option<StackCopyInfo> {
+        self.copy_info
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -3146,6 +3248,7 @@ struct StackEntryRequest {
     kind: StackObjectKind,
     targets: Vec<TargetSnapshot>,
     payment: Option<PaymentPlan>,
+    copy_info: Option<StackCopyInfo>,
 }
 
 /// Combat-relevant static keywords tracked by the T1.6 kernel.
@@ -4304,6 +4407,10 @@ pub struct StateBasedActionReport {
     zero_toughness_creatures: u32,
     lethal_damage_creatures: u32,
     deathtouch_damage_creatures: u32,
+    tokens_ceased: u32,
+    copies_ceased: u32,
+    counter_pairs_cancelled: u32,
+    counters_removed: u32,
 }
 
 impl StateBasedActionReport {
@@ -4355,6 +4462,30 @@ impl StateBasedActionReport {
         self.deathtouch_damage_creatures
     }
 
+    /// Returns how many token objects ceased to exist.
+    #[must_use]
+    pub const fn tokens_ceased(self) -> u32 {
+        self.tokens_ceased
+    }
+
+    /// Returns how many copy objects ceased to exist.
+    #[must_use]
+    pub const fn copies_ceased(self) -> u32 {
+        self.copies_ceased
+    }
+
+    /// Returns how many +1/+1 and -1/-1 counter pairs were cancelled.
+    #[must_use]
+    pub const fn counter_pairs_cancelled(self) -> u32 {
+        self.counter_pairs_cancelled
+    }
+
+    /// Returns the total counters removed by pair-cancellation actions.
+    #[must_use]
+    pub const fn counters_removed(self) -> u32 {
+        self.counters_removed
+    }
+
     fn record_iteration(&mut self) {
         self.iterations = self.iterations.saturating_add(1);
     }
@@ -4383,6 +4514,27 @@ impl StateBasedActionReport {
             }
             _ => {}
         }
+    }
+
+    fn record_ceased_object(&mut self, kind: StateBasedActionKind) {
+        self.actions_performed = self.actions_performed.saturating_add(1);
+        match kind {
+            StateBasedActionKind::TokenOffBattlefield => {
+                self.tokens_ceased = self.tokens_ceased.saturating_add(1);
+            }
+            StateBasedActionKind::CopyOutOfAllowedZone => {
+                self.copies_ceased = self.copies_ceased.saturating_add(1);
+            }
+            _ => {}
+        }
+    }
+
+    fn record_counter_pair_cancelled(&mut self, amount: u32) {
+        self.actions_performed = self.actions_performed.saturating_add(1);
+        self.counter_pairs_cancelled = self.counter_pairs_cancelled.saturating_add(1);
+        self.counters_removed = self
+            .counters_removed
+            .saturating_add(amount.saturating_mul(2));
     }
 }
 
@@ -4487,6 +4639,8 @@ pub struct ObjectRecord {
     damage_marked: u32,
     deathtouch_damage_marked: bool,
     loyalty: Option<i32>,
+    token: bool,
+    copy_source: Option<ObjectId>,
     controlled_since_turn: u32,
 }
 
@@ -4543,6 +4697,24 @@ impl ObjectRecord {
     #[must_use]
     pub const fn loyalty(self) -> Option<i32> {
         self.loyalty
+    }
+
+    /// Returns true if this object is a token.
+    #[must_use]
+    pub const fn is_token(self) -> bool {
+        self.token
+    }
+
+    /// Returns the permanent copied to create this object, if any.
+    #[must_use]
+    pub const fn copy_source(self) -> Option<ObjectId> {
+        self.copy_source
+    }
+
+    /// Returns true if this object is a copy object.
+    #[must_use]
+    pub const fn is_copy(self) -> bool {
+        self.copy_source.is_some()
     }
 
     /// Returns the turn number since which this controller has controlled it.
@@ -4610,6 +4782,8 @@ impl ObjectArena {
             damage_marked: 0,
             deathtouch_damage_marked: false,
             loyalty: None,
+            token: false,
+            copy_source: None,
             controlled_since_turn,
         });
         id
@@ -4913,14 +5087,31 @@ pub enum StateError {
     InsufficientLoyalty(ObjectId),
     /// A stack resolution was requested while the stack was empty.
     EmptyStack,
+    /// The requested stack entry ID does not exist.
+    UnknownStackEntry(StackEntryId),
     /// A stack entry refers to a spell object that is no longer on the stack.
     StackObjectNotOnStack(ObjectId),
+    /// The requested object cannot be used as a copy source.
+    ObjectNotCopyable(ObjectId),
     /// A mana arithmetic operation overflowed.
     ManaValueOverflow,
     /// A life-total arithmetic operation overflowed.
     LifeTotalOverflow,
     /// A poison-counter arithmetic operation overflowed.
     PoisonCounterOverflow,
+    /// A counter arithmetic operation overflowed.
+    CounterOverflow,
+    /// A request tried to remove more counters than are present.
+    InsufficientCounters {
+        /// Object with too few counters.
+        object: ObjectId,
+        /// Counter kind being removed.
+        kind: CounterKind,
+        /// Counters currently present.
+        available: u32,
+        /// Counters requested for removal.
+        requested: u32,
+    },
     /// A player does not have enough mana for a requested payment.
     InsufficientMana,
     /// A proposed explicit payment does not satisfy the cost.
@@ -5071,6 +5262,24 @@ pub enum Action {
         object: ObjectId,
         /// New loyalty value, or none to clear loyalty tracking.
         loyalty: Option<i32>,
+    },
+    /// Add counters to an object.
+    AddObjectCounters {
+        /// Object receiving counters.
+        object: ObjectId,
+        /// Counter kind to add.
+        kind: CounterKind,
+        /// Counter amount to add.
+        amount: u32,
+    },
+    /// Remove counters from an object.
+    RemoveObjectCounters {
+        /// Object losing counters.
+        object: ObjectId,
+        /// Counter kind to remove.
+        kind: CounterKind,
+        /// Counter amount to remove.
+        amount: u32,
     },
     /// Register one declarative activated ability definition.
     RegisterActivatedAbility {
@@ -5244,6 +5453,35 @@ pub enum Action {
         object: ObjectId,
         /// Destination zone.
         to: ZoneId,
+    },
+    /// Create one token object.
+    CreateToken {
+        /// Card definition ID for the token face.
+        card: CardId,
+        /// Token owner.
+        owner: PlayerId,
+        /// Token controller.
+        controller: PlayerId,
+        /// Optional base creature values.
+        base: Option<BaseCreatureCharacteristics>,
+    },
+    /// Create one permanent copy object from a source object's copiable values.
+    CreatePermanentCopy {
+        /// Source object being copied.
+        source: ObjectId,
+        /// New object's owner.
+        owner: PlayerId,
+        /// New object's controller.
+        controller: PlayerId,
+        /// Whether the copy object is also a token.
+        token: bool,
+    },
+    /// Copy one existing stack entry.
+    CopyStackEntry {
+        /// Controller of the copy.
+        player: PlayerId,
+        /// Stack entry to copy.
+        entry: StackEntryId,
     },
 }
 
@@ -5480,6 +5718,22 @@ fn apply_fallback(state: &mut GameState, action: Action) -> Outcome {
                 Err(error) => Outcome::Failed(error),
             }
         }
+        Action::AddObjectCounters {
+            object,
+            kind,
+            amount,
+        } => match state.add_object_counters(object, kind, amount) {
+            Ok(()) => Outcome::Applied,
+            Err(error) => Outcome::Failed(error),
+        },
+        Action::RemoveObjectCounters {
+            object,
+            kind,
+            amount,
+        } => match state.remove_object_counters(object, kind, amount) {
+            Ok(()) => Outcome::Applied,
+            Err(error) => Outcome::Failed(error),
+        },
         Action::RegisterActivatedAbility { definition } => {
             match state.register_activated_ability(definition) {
                 Ok(ability) => Outcome::ActivatedAbilityRegistered(ability),
@@ -5646,6 +5900,28 @@ fn apply_fallback(state: &mut GameState, action: Action) -> Outcome {
         },
         Action::MoveObject { object, to } => match state.move_object(object, to) {
             Ok(()) => Outcome::Applied,
+            Err(error) => Outcome::Failed(error),
+        },
+        Action::CreateToken {
+            card,
+            owner,
+            controller,
+            base,
+        } => match state.create_token(card, owner, controller, base) {
+            Ok(object) => Outcome::ObjectCreated(object),
+            Err(error) => Outcome::Failed(error),
+        },
+        Action::CreatePermanentCopy {
+            source,
+            owner,
+            controller,
+            token,
+        } => match state.create_permanent_copy(source, owner, controller, token) {
+            Ok(object) => Outcome::ObjectCreated(object),
+            Err(error) => Outcome::Failed(error),
+        },
+        Action::CopyStackEntry { player, entry } => match state.copy_stack_entry(player, entry) {
+            Ok(copy) => Outcome::StackEntryAdded(copy),
             Err(error) => Outcome::Failed(error),
         },
     }
@@ -6131,6 +6407,58 @@ pub enum GameEvent {
         /// Restriction effect.
         effect: RestrictionEffect,
     },
+    /// An object's counter total changed.
+    ObjectCountersChanged {
+        /// Updated object.
+        object: ObjectId,
+        /// Counter kind changed.
+        kind: CounterKind,
+        /// New total for that counter kind.
+        count: u32,
+    },
+    /// A token object was created.
+    TokenCreated {
+        /// Created token object.
+        object: ObjectId,
+        /// Token card definition.
+        card: CardId,
+        /// Token owner.
+        owner: PlayerId,
+        /// Token controller.
+        controller: PlayerId,
+    },
+    /// A permanent-copy object was created.
+    ObjectCopyCreated {
+        /// Created copy object.
+        object: ObjectId,
+        /// Source object copied.
+        source: ObjectId,
+        /// Whether the copy object is also a token.
+        token: bool,
+    },
+    /// A stack entry was copied.
+    StackEntryCopied {
+        /// Source stack entry.
+        source: StackEntryId,
+        /// Created stack-entry copy.
+        copy: StackEntryId,
+        /// Controller of the copy.
+        controller: PlayerId,
+    },
+    /// A token or copy object ceased to exist.
+    ObjectCeasedToExist {
+        /// Object that ceased to exist.
+        object: ObjectId,
+        /// State-based-action reason.
+        kind: StateBasedActionKind,
+    },
+    /// Matching +1/+1 and -1/-1 counters were cancelled.
+    CounterPairCancelled {
+        /// Object whose counters were cancelled.
+        object: ObjectId,
+        /// Number of each counter removed.
+        amount: u32,
+    },
 }
 
 impl GameEvent {
@@ -6191,6 +6519,12 @@ impl GameEvent {
             Self::ActivatedAbilityActivated { .. } => 52,
             Self::ActivatedAbilityResolved { .. } => 53,
             Self::RestrictionRegistered { .. } => 54,
+            Self::ObjectCountersChanged { .. } => 55,
+            Self::TokenCreated { .. } => 56,
+            Self::ObjectCopyCreated { .. } => 57,
+            Self::StackEntryCopied { .. } => 58,
+            Self::ObjectCeasedToExist { .. } => 59,
+            Self::CounterPairCancelled { .. } => 60,
         }
     }
 
@@ -6261,6 +6595,12 @@ impl GameEvent {
             Self::ActivatedAbilityActivated { .. } => GameEventKind::ActivatedAbilityActivated,
             Self::ActivatedAbilityResolved { .. } => GameEventKind::ActivatedAbilityResolved,
             Self::RestrictionRegistered { .. } => GameEventKind::RestrictionRegistered,
+            Self::ObjectCountersChanged { .. } => GameEventKind::ObjectCountersChanged,
+            Self::TokenCreated { .. } => GameEventKind::TokenCreated,
+            Self::ObjectCopyCreated { .. } => GameEventKind::ObjectCopyCreated,
+            Self::StackEntryCopied { .. } => GameEventKind::StackEntryCopied,
+            Self::ObjectCeasedToExist { .. } => GameEventKind::ObjectCeasedToExist,
+            Self::CounterPairCancelled { .. } => GameEventKind::CounterPairCancelled,
         }
     }
 }
@@ -6390,6 +6730,14 @@ enum PendingStateBasedAction {
         object: ObjectId,
         kind: StateBasedActionKind,
     },
+    CeaseObject {
+        object: ObjectId,
+        kind: StateBasedActionKind,
+    },
+    CancelCounterPair {
+        object: ObjectId,
+        amount: u32,
+    },
 }
 
 /// Complete T1 game state.
@@ -6438,6 +6786,8 @@ pub struct GameState {
     next_restriction: u32,
     // clone_surface: data-only targeting/combat restrictions.
     restrictions: Vec<RestrictionSubscription>,
+    // clone_surface: compact object counter totals keyed by object and kind.
+    object_counters: Vec<ObjectCounterEntry>,
     // clone_surface: object IDs whose loyalty abilities were activated this turn.
     loyalty_activations_this_turn: Vec<ObjectId>,
     next_replacement: u32,
@@ -6493,6 +6843,7 @@ impl Clone for GameState {
             cost_modifiers: self.cost_modifiers.clone(),
             next_restriction: self.next_restriction,
             restrictions: self.restrictions.clone(),
+            object_counters: self.object_counters.clone(),
             loyalty_activations_this_turn: self.loyalty_activations_this_turn.clone(),
             next_replacement: self.next_replacement,
             replacement_effects: self.replacement_effects.clone(),
@@ -6553,6 +6904,10 @@ impl GameState {
                     id: ZoneId::new(None, ZoneKind::Command),
                     objects: Arc::new(Vec::new()),
                 },
+                Zone {
+                    id: ZoneId::new(None, ZoneKind::Ceased),
+                    objects: Arc::new(Vec::new()),
+                },
             ]),
             next_duration_marker: 0,
             duration_markers: Vec::new(),
@@ -6568,6 +6923,7 @@ impl GameState {
             cost_modifiers: Vec::new(),
             next_restriction: 0,
             restrictions: Vec::new(),
+            object_counters: Vec::new(),
             loyalty_activations_this_turn: Vec::new(),
             next_replacement: 0,
             replacement_effects: Vec::new(),
@@ -6728,6 +7084,29 @@ impl GameState {
         self.restrictions
             .iter()
             .map(|subscription| (subscription.id, subscription.definition))
+    }
+
+    /// Returns compact object-counter totals in deterministic order.
+    pub fn object_counters(&self) -> impl Iterator<Item = (ObjectId, CounterKind, u32)> + '_ {
+        self.object_counters
+            .iter()
+            .map(|entry| (entry.object, entry.kind, entry.count))
+    }
+
+    /// Returns the counter count for one object and kind.
+    #[must_use]
+    pub fn object_counter_count(&self, object: ObjectId, kind: CounterKind) -> u32 {
+        if kind == CounterKind::Loyalty {
+            return self
+                .objects
+                .get(object)
+                .and_then(ObjectRecord::loyalty)
+                .map_or(0, |loyalty| u32::try_from(loyalty.max(0)).unwrap_or(0));
+        }
+        self.object_counters
+            .iter()
+            .find(|entry| entry.object == object && entry.kind == kind)
+            .map_or(0, |entry| entry.count)
     }
 
     /// Returns source objects whose loyalty abilities were activated this turn.
@@ -7043,6 +7422,147 @@ impl GameState {
         Ok(())
     }
 
+    /// Adds counters to one object.
+    fn add_object_counters(
+        &mut self,
+        object: ObjectId,
+        kind: CounterKind,
+        amount: u32,
+    ) -> Result<(), StateError> {
+        if self.objects.get(object).is_none() {
+            return Err(StateError::UnknownObject(object));
+        }
+        if amount == 0 {
+            return Ok(());
+        }
+        if kind == CounterKind::Loyalty {
+            let record = self
+                .objects
+                .get_mut(object)
+                .ok_or(StateError::UnknownObject(object))?;
+            let current = record.loyalty.unwrap_or(0).max(0);
+            let next = current
+                .checked_add(i32::try_from(amount).unwrap_or(i32::MAX))
+                .ok_or(StateError::CounterOverflow)?;
+            record.loyalty = Some(next);
+            self.emit_event(GameEvent::ObjectCountersChanged {
+                object,
+                kind,
+                count: u32::try_from(next).unwrap_or(u32::MAX),
+            });
+            self.emit_event(GameEvent::ObjectLoyaltySet {
+                object,
+                loyalty: Some(next),
+            });
+            return Ok(());
+        }
+        let count = match self
+            .object_counters
+            .iter_mut()
+            .find(|entry| entry.object == object && entry.kind == kind)
+        {
+            Some(entry) => {
+                entry.count = entry
+                    .count
+                    .checked_add(amount)
+                    .ok_or(StateError::CounterOverflow)?;
+                entry.count
+            }
+            None => {
+                self.object_counters.push(ObjectCounterEntry {
+                    object,
+                    kind,
+                    count: amount,
+                });
+                self.object_counters
+                    .sort_by_key(|entry| (entry.object, entry.kind));
+                amount
+            }
+        };
+        self.emit_event(GameEvent::ObjectCountersChanged {
+            object,
+            kind,
+            count,
+        });
+        Ok(())
+    }
+
+    /// Removes counters from one object.
+    fn remove_object_counters(
+        &mut self,
+        object: ObjectId,
+        kind: CounterKind,
+        amount: u32,
+    ) -> Result<(), StateError> {
+        if self.objects.get(object).is_none() {
+            return Err(StateError::UnknownObject(object));
+        }
+        if amount == 0 {
+            return Ok(());
+        }
+        if kind == CounterKind::Loyalty {
+            let record = self
+                .objects
+                .get_mut(object)
+                .ok_or(StateError::UnknownObject(object))?;
+            let current = record.loyalty.unwrap_or(0).max(0);
+            let requested = i32::try_from(amount).unwrap_or(i32::MAX);
+            if current < requested {
+                return Err(StateError::InsufficientCounters {
+                    object,
+                    kind,
+                    available: u32::try_from(current).unwrap_or(0),
+                    requested: amount,
+                });
+            }
+            let next = current - requested;
+            record.loyalty = Some(next);
+            self.emit_event(GameEvent::ObjectCountersChanged {
+                object,
+                kind,
+                count: u32::try_from(next).unwrap_or(0),
+            });
+            self.emit_event(GameEvent::ObjectLoyaltySet {
+                object,
+                loyalty: Some(next),
+            });
+            return Ok(());
+        }
+        let Some(index) = self
+            .object_counters
+            .iter()
+            .position(|entry| entry.object == object && entry.kind == kind)
+        else {
+            return Err(StateError::InsufficientCounters {
+                object,
+                kind,
+                available: 0,
+                requested: amount,
+            });
+        };
+        let available = self.object_counters[index].count;
+        if available < amount {
+            return Err(StateError::InsufficientCounters {
+                object,
+                kind,
+                available,
+                requested: amount,
+            });
+        }
+        let count = available - amount;
+        if count == 0 {
+            self.object_counters.remove(index);
+        } else {
+            self.object_counters[index].count = count;
+        }
+        self.emit_event(GameEvent::ObjectCountersChanged {
+            object,
+            kind,
+            count,
+        });
+        Ok(())
+    }
+
     /// Registers one data-only activated ability definition.
     fn register_activated_ability(
         &mut self,
@@ -7323,6 +7843,7 @@ impl GameState {
                 kind: StackObjectKind::ActivatedAbility,
                 targets: Vec::new(),
                 payment: Some(payment),
+                copy_info: None,
             });
             self.after_priority_action(player, true)?;
             Ok(Some(id))
@@ -7866,6 +8387,7 @@ impl GameState {
             kind: request.kind(),
             targets: target_snapshots,
             payment: Some(request.payment()),
+            copy_info: None,
         });
         self.after_priority_action(player, true)?;
         Ok(id)
@@ -7904,6 +8426,7 @@ impl GameState {
             kind,
             targets: Vec::new(),
             payment: None,
+            copy_info: None,
         });
         self.after_priority_action(player, hold_priority)?;
         Ok(id)
@@ -7926,6 +8449,7 @@ impl GameState {
             kind,
             targets: Vec::new(),
             payment: None,
+            copy_info: None,
         });
         self.after_priority_action(player, hold_priority)?;
         Ok(id)
@@ -7957,6 +8481,7 @@ impl GameState {
                         kind,
                         targets: Vec::new(),
                         payment: None,
+                        copy_info: None,
                     }));
                 }
             }
@@ -8016,6 +8541,7 @@ impl GameState {
                         kind: StackObjectKind::TriggeredAbility,
                         targets: Vec::new(),
                         payment: None,
+                        copy_info: None,
                     });
                     self.emit_event_without_triggers(GameEvent::TriggeredAbilityPutOnStack {
                         trigger: trigger.trigger(),
@@ -8786,6 +9312,119 @@ impl GameState {
         Ok(object)
     }
 
+    /// Creates one token on the battlefield.
+    fn create_token(
+        &mut self,
+        card: CardId,
+        owner: PlayerId,
+        controller: PlayerId,
+        base: Option<BaseCreatureCharacteristics>,
+    ) -> Result<ObjectId, StateError> {
+        let object = self.create_object(
+            card,
+            owner,
+            controller,
+            ZoneId::new(None, ZoneKind::Battlefield),
+        )?;
+        {
+            let record = self
+                .objects
+                .get_mut(object)
+                .ok_or(StateError::UnknownObject(object))?;
+            record.token = true;
+            record.base_creature = base;
+        }
+        self.emit_event(GameEvent::TokenCreated {
+            object,
+            card,
+            owner,
+            controller,
+        });
+        if let Some(base) = base {
+            self.emit_event(GameEvent::BaseCreatureCharacteristicsSet { object, base });
+        }
+        Ok(object)
+    }
+
+    /// Creates one permanent copy object on the battlefield.
+    fn create_permanent_copy(
+        &mut self,
+        source: ObjectId,
+        owner: PlayerId,
+        controller: PlayerId,
+        token: bool,
+    ) -> Result<ObjectId, StateError> {
+        self.require_player(owner)?;
+        self.require_player(controller)?;
+        let source_record = self
+            .objects
+            .get(source)
+            .ok_or(StateError::UnknownObject(source))?;
+        let object = self.create_object(
+            source_record.card(),
+            owner,
+            controller,
+            ZoneId::new(None, ZoneKind::Battlefield),
+        )?;
+        {
+            let record = self
+                .objects
+                .get_mut(object)
+                .ok_or(StateError::UnknownObject(object))?;
+            record.token = token;
+            record.copy_source = Some(source);
+            record.base_creature = source_record.base_creature();
+        }
+        if token {
+            self.emit_event(GameEvent::TokenCreated {
+                object,
+                card: source_record.card(),
+                owner,
+                controller,
+            });
+        }
+        self.emit_event(GameEvent::ObjectCopyCreated {
+            object,
+            source,
+            token,
+        });
+        if let Some(base) = source_record.base_creature() {
+            self.emit_event(GameEvent::BaseCreatureCharacteristicsSet { object, base });
+        }
+        Ok(object)
+    }
+
+    /// Copies one stack entry without creating a physical card object.
+    fn copy_stack_entry(
+        &mut self,
+        player: PlayerId,
+        entry: StackEntryId,
+    ) -> Result<StackEntryId, StateError> {
+        self.require_player(player)?;
+        let source = self
+            .stack_entries
+            .iter()
+            .find(|candidate| candidate.id() == entry)
+            .cloned()
+            .ok_or(StateError::UnknownStackEntry(entry))?;
+        let copy = self.push_stack_entry(StackEntryRequest {
+            controller: player,
+            object: None,
+            trigger: source.trigger(),
+            activated_ability: source.activated_ability(),
+            kind: source.kind(),
+            targets: source.targets().to_vec(),
+            payment: source.payment(),
+            copy_info: Some(StackCopyInfo::new(source.id(), source.object())),
+        });
+        self.emit_event(GameEvent::StackEntryCopied {
+            source: entry,
+            copy,
+            controller: player,
+        });
+        Ok(copy)
+    }
+
     /// Moves an object from its current zone to another zone.
     fn move_object(&mut self, object: ObjectId, to: ZoneId) -> Result<(), StateError> {
         if self.objects.get(object).is_none() {
@@ -8817,6 +9456,7 @@ impl GameState {
                 record.damage_marked = 0;
                 record.deathtouch_damage_marked = false;
             }
+            self.clear_object_counters(object);
         }
         if from_zone_id != battlefield && to == battlefield {
             if let Some(record) = self.objects.get_mut(object) {
@@ -8831,6 +9471,43 @@ impl GameState {
             to,
         });
         Ok(())
+    }
+
+    fn clear_object_counters(&mut self, object: ObjectId) {
+        let cleared: Vec<ObjectCounterEntry> = self
+            .object_counters
+            .iter()
+            .copied()
+            .filter(|entry| entry.object == object && entry.count > 0)
+            .collect();
+        self.object_counters.retain(|entry| entry.object != object);
+        for entry in cleared {
+            self.emit_event(GameEvent::ObjectCountersChanged {
+                object,
+                kind: entry.kind,
+                count: 0,
+            });
+        }
+        let cleared_loyalty = if let Some(record) = self.objects.get_mut(object) {
+            let had_loyalty = record.loyalty.is_some();
+            if had_loyalty {
+                record.loyalty = None;
+            }
+            had_loyalty
+        } else {
+            false
+        };
+        if cleared_loyalty {
+            self.emit_event(GameEvent::ObjectCountersChanged {
+                object,
+                kind: CounterKind::Loyalty,
+                count: 0,
+            });
+            self.emit_event(GameEvent::ObjectLoyaltySet {
+                object,
+                loyalty: None,
+            });
+        }
     }
 
     /// Returns the zone currently containing an object.
@@ -8931,6 +9608,8 @@ impl GameState {
             bytes.write_u32(object.damage_marked);
             bytes.write_bool(object.deathtouch_damage_marked);
             bytes.write_optional_i32(object.loyalty);
+            bytes.write_bool(object.token);
+            bytes.write_optional_object(object.copy_source);
             bytes.write_u32(object.controlled_since_turn);
         }
 
@@ -8981,6 +9660,10 @@ impl GameState {
         bytes.write_u32(self.restrictions.len() as u32);
         for restriction in &self.restrictions {
             bytes.write_restriction_subscription(*restriction);
+        }
+        bytes.write_u32(self.object_counters.len() as u32);
+        for counter in &self.object_counters {
+            bytes.write_object_counter_entry(*counter);
         }
         bytes.write_u32(self.loyalty_activations_this_turn.len() as u32);
         for object in &self.loyalty_activations_this_turn {
@@ -9056,6 +9739,8 @@ impl GameState {
             hash.write_u32(object.damage_marked);
             hash.write_bool(object.deathtouch_damage_marked);
             hash.write_optional_i32(object.loyalty);
+            hash.write_bool(object.token);
+            hash.write_optional_object(object.copy_source);
             hash.write_u32(object.controlled_since_turn);
         }
 
@@ -9107,6 +9792,10 @@ impl GameState {
         hash.write_u32(self.restrictions.len() as u32);
         for restriction in &self.restrictions {
             hash.write_restriction_subscription(*restriction);
+        }
+        hash.write_u32(self.object_counters.len() as u32);
+        for counter in &self.object_counters {
+            hash.write_object_counter_entry(*counter);
         }
         hash.write_u32(self.loyalty_activations_this_turn.len() as u32);
         for object in &self.loyalty_activations_this_turn {
@@ -9774,6 +10463,9 @@ impl GameState {
             for effect in self.ordered_continuous_effects_for_layer(object, layer) {
                 self.apply_continuous_effect(object, &mut characteristics, effect)?;
             }
+            if layer == ContinuousEffectLayer::PowerToughnessModify {
+                self.apply_power_toughness_counters(object, &mut characteristics);
+            }
         }
 
         Ok(characteristics)
@@ -9914,6 +10606,28 @@ impl GameState {
         Ok(())
     }
 
+    fn apply_power_toughness_counters(
+        &self,
+        object: ObjectId,
+        characteristics: &mut ObjectCharacteristics,
+    ) {
+        let Some(creature) = characteristics.creature() else {
+            return;
+        };
+        let plus = i32::try_from(self.object_counter_count(object, CounterKind::PlusOnePlusOne))
+            .unwrap_or(i32::MAX);
+        let minus = i32::try_from(self.object_counter_count(object, CounterKind::MinusOneMinusOne))
+            .unwrap_or(i32::MAX);
+        let delta = plus.saturating_sub(minus);
+        characteristics.creature = Some(
+            CreatureCharacteristics::new(
+                creature.power().saturating_add(delta),
+                creature.toughness().saturating_add(delta),
+            )
+            .with_keywords(creature.keywords()),
+        );
+    }
+
     fn creature_keywords(&self, object: ObjectId) -> Result<CreatureKeywords, StateError> {
         Ok(self.creature_characteristics(object)?.keywords())
     }
@@ -10049,20 +10763,28 @@ impl GameState {
                 StateBasedActionKind::PlayerTenOrMorePoison => {
                     self.collect_poison_sbas(*kind, &mut actions);
                 }
+                StateBasedActionKind::TokenOffBattlefield => {
+                    self.collect_token_sbas(*kind, &mut actions);
+                }
+                StateBasedActionKind::CopyOutOfAllowedZone => {
+                    self.collect_copy_sbas(*kind, &mut actions);
+                }
                 StateBasedActionKind::CreatureZeroOrLessToughness
                 | StateBasedActionKind::CreatureLethalDamage
                 | StateBasedActionKind::CreatureDeathtouchDamage => {
                     self.collect_creature_sbas(*kind, &mut actions);
                 }
-                StateBasedActionKind::TokenOffBattlefield
-                | StateBasedActionKind::CopyOutOfAllowedZone
-                | StateBasedActionKind::PlaneswalkerZeroLoyalty
-                | StateBasedActionKind::LegendRule
+                StateBasedActionKind::PlaneswalkerZeroLoyalty => {
+                    self.collect_planeswalker_sbas(*kind, &mut actions);
+                }
+                StateBasedActionKind::CounterPairCancellation => {
+                    self.collect_counter_pair_sbas(&mut actions);
+                }
+                StateBasedActionKind::LegendRule
                 | StateBasedActionKind::WorldRule
                 | StateBasedActionKind::AuraIllegalOrUnattached
                 | StateBasedActionKind::EquipmentOrFortificationIllegalAttachment
                 | StateBasedActionKind::BattleCreatureOrOtherIllegalAttachment
-                | StateBasedActionKind::CounterPairCancellation
                 | StateBasedActionKind::CounterMaximum
                 | StateBasedActionKind::SagaFinalChapter
                 | StateBasedActionKind::DungeonCompleted
@@ -10117,6 +10839,43 @@ impl GameState {
         }
     }
 
+    fn collect_token_sbas(
+        &self,
+        kind: StateBasedActionKind,
+        actions: &mut Vec<PendingStateBasedAction>,
+    ) {
+        let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+        let ceased = ZoneId::new(None, ZoneKind::Ceased);
+        for object in self.objects.iter() {
+            if object.is_token()
+                && self
+                    .object_zone(object.id())
+                    .is_some_and(|zone| zone != battlefield && zone != ceased)
+            {
+                Self::push_cease_sba(actions, object.id(), kind);
+            }
+        }
+    }
+
+    fn collect_copy_sbas(
+        &self,
+        kind: StateBasedActionKind,
+        actions: &mut Vec<PendingStateBasedAction>,
+    ) {
+        let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+        let stack = ZoneId::new(None, ZoneKind::Stack);
+        let ceased = ZoneId::new(None, ZoneKind::Ceased);
+        for object in self.objects.iter() {
+            if object.is_copy()
+                && self
+                    .object_zone(object.id())
+                    .is_some_and(|zone| zone != battlefield && zone != stack && zone != ceased)
+            {
+                Self::push_cease_sba(actions, object.id(), kind);
+            }
+        }
+    }
+
     fn collect_creature_sbas(
         &self,
         kind: StateBasedActionKind,
@@ -10148,6 +10907,43 @@ impl GameState {
             };
             if applies {
                 Self::push_permanent_graveyard_sba(actions, object.id(), kind);
+            }
+        }
+    }
+
+    fn collect_planeswalker_sbas(
+        &self,
+        kind: StateBasedActionKind,
+        actions: &mut Vec<PendingStateBasedAction>,
+    ) {
+        let Some(battlefield_index) = self.zone_index(ZoneId::new(None, ZoneKind::Battlefield))
+        else {
+            return;
+        };
+        for object_id in self.zones[battlefield_index].objects.iter().copied() {
+            let Some(object) = self.objects.get(object_id) else {
+                continue;
+            };
+            if object.loyalty().is_some_and(|loyalty| loyalty <= 0)
+                && self
+                    .object_characteristics(object.id())
+                    .is_ok_and(|characteristics| characteristics.types().planeswalker())
+            {
+                Self::push_permanent_graveyard_sba(actions, object.id(), kind);
+            }
+        }
+    }
+
+    fn collect_counter_pair_sbas(&self, actions: &mut Vec<PendingStateBasedAction>) {
+        for object in self.objects.iter() {
+            let plus = self.object_counter_count(object.id(), CounterKind::PlusOnePlusOne);
+            let minus = self.object_counter_count(object.id(), CounterKind::MinusOneMinusOne);
+            let amount = plus.min(minus);
+            if amount > 0 {
+                actions.push(PendingStateBasedAction::CancelCounterPair {
+                    object: object.id(),
+                    amount,
+                });
             }
         }
     }
@@ -10188,6 +10984,24 @@ impl GameState {
         }
     }
 
+    fn push_cease_sba(
+        actions: &mut Vec<PendingStateBasedAction>,
+        object: ObjectId,
+        kind: StateBasedActionKind,
+    ) {
+        if !actions.iter().any(|action| {
+            matches!(
+                action,
+                PendingStateBasedAction::CeaseObject {
+                    object: existing,
+                    ..
+                } if *existing == object
+            )
+        }) {
+            actions.push(PendingStateBasedAction::CeaseObject { object, kind });
+        }
+    }
+
     fn apply_state_based_action(
         &mut self,
         action: PendingStateBasedAction,
@@ -10216,6 +11030,19 @@ impl GameState {
                     report.record_permanent_move(kind);
                     self.emit_event(GameEvent::PermanentMovedByStateBasedAction { object, kind });
                 }
+            }
+            PendingStateBasedAction::CeaseObject { object, kind } => {
+                if self.object_zone(object) != Some(ZoneId::new(None, ZoneKind::Ceased)) {
+                    self.move_object(object, ZoneId::new(None, ZoneKind::Ceased))?;
+                    report.record_ceased_object(kind);
+                    self.emit_event(GameEvent::ObjectCeasedToExist { object, kind });
+                }
+            }
+            PendingStateBasedAction::CancelCounterPair { object, amount } => {
+                self.remove_object_counters(object, CounterKind::PlusOnePlusOne, amount)?;
+                self.remove_object_counters(object, CounterKind::MinusOneMinusOne, amount)?;
+                report.record_counter_pair_cancelled(amount);
+                self.emit_event(GameEvent::CounterPairCancelled { object, amount });
             }
         }
         Ok(())
@@ -10605,6 +11432,7 @@ impl GameState {
             kind,
             targets,
             payment,
+            copy_info,
         } = request;
         let id = StackEntryId(self.next_stack_entry);
         self.next_stack_entry = self.next_stack_entry.saturating_add(1);
@@ -10617,6 +11445,7 @@ impl GameState {
             kind,
             targets,
             payment,
+            copy_info,
         });
         self.emit_event(GameEvent::StackEntryAdded {
             entry: id,
@@ -10698,6 +11527,7 @@ impl GameState {
             targets: entry.targets().to_vec(),
             legal_targets,
             outcome,
+            copy_info: entry.copy_info(),
         });
         self.emit_event(GameEvent::StackEntryResolved {
             entry: entry.id(),
@@ -11092,6 +11922,19 @@ impl Fnva64 {
         }
     }
 
+    fn write_counter_kind(&mut self, kind: CounterKind) {
+        self.write_u8(kind.canonical_code());
+        if let CounterKind::Named(id) = kind {
+            self.write_u32(id);
+        }
+    }
+
+    fn write_object_counter_entry(&mut self, entry: ObjectCounterEntry) {
+        self.write_u32(entry.object.0);
+        self.write_counter_kind(entry.kind);
+        self.write_u32(entry.count);
+    }
+
     fn write_creature_keywords(&mut self, keywords: CreatureKeywords) {
         self.write_u32(u32::from(keywords.canonical_bits()));
     }
@@ -11170,6 +12013,17 @@ impl Fnva64 {
             Some(ability) => {
                 self.write_u8(1);
                 self.write_u32(ability.0);
+            }
+            None => self.write_u8(0),
+        }
+    }
+
+    fn write_optional_stack_copy_info(&mut self, copy_info: Option<StackCopyInfo>) {
+        match copy_info {
+            Some(copy_info) => {
+                self.write_u8(1);
+                self.write_u32(copy_info.source_entry.0);
+                self.write_optional_object(copy_info.source_object);
             }
             None => self.write_u8(0),
         }
@@ -11652,6 +12506,7 @@ impl Fnva64 {
             self.write_target_snapshot(*target);
         }
         self.write_optional_payment_plan(entry.payment);
+        self.write_optional_stack_copy_info(entry.copy_info);
     }
 
     fn write_resolution_record(&mut self, record: &ResolutionRecord) {
@@ -11670,6 +12525,7 @@ impl Fnva64 {
             self.write_bool(*legal);
         }
         self.write_u8(record.outcome.canonical_code());
+        self.write_optional_stack_copy_info(record.copy_info);
     }
 
     fn write_event_record(&mut self, record: EventRecord) {
@@ -11998,6 +12854,52 @@ impl Fnva64 {
                 self.write_u32(controller.0);
                 self.write_optional_object(source);
                 self.write_restriction_effect(effect);
+            }
+            GameEvent::ObjectCountersChanged {
+                object,
+                kind,
+                count,
+            } => {
+                self.write_u32(object.0);
+                self.write_counter_kind(kind);
+                self.write_u32(count);
+            }
+            GameEvent::TokenCreated {
+                object,
+                card,
+                owner,
+                controller,
+            } => {
+                self.write_u32(object.0);
+                self.write_u32(card.0);
+                self.write_u32(owner.0);
+                self.write_u32(controller.0);
+            }
+            GameEvent::ObjectCopyCreated {
+                object,
+                source,
+                token,
+            } => {
+                self.write_u32(object.0);
+                self.write_u32(source.0);
+                self.write_bool(token);
+            }
+            GameEvent::StackEntryCopied {
+                source,
+                copy,
+                controller,
+            } => {
+                self.write_u32(source.0);
+                self.write_u32(copy.0);
+                self.write_u32(controller.0);
+            }
+            GameEvent::ObjectCeasedToExist { object, kind } => {
+                self.write_u32(object.0);
+                self.write_u8(kind.canonical_code());
+            }
+            GameEvent::CounterPairCancelled { object, amount } => {
+                self.write_u32(object.0);
+                self.write_u32(amount);
             }
         }
     }
@@ -12131,6 +13033,17 @@ impl CanonicalBytes {
         }
     }
 
+    fn write_optional_stack_copy_info(&mut self, copy_info: Option<StackCopyInfo>) {
+        match copy_info {
+            Some(copy_info) => {
+                self.write_u8(1);
+                self.write_u32(copy_info.source_entry.0);
+                self.write_optional_object(copy_info.source_object);
+            }
+            None => self.write_u8(0),
+        }
+    }
+
     fn write_optional_step(&mut self, step: Option<Step>) {
         match step {
             Some(step) => {
@@ -12162,6 +13075,19 @@ impl CanonicalBytes {
         for amount in pool.amounts {
             self.write_u32(amount);
         }
+    }
+
+    fn write_counter_kind(&mut self, kind: CounterKind) {
+        self.write_u8(kind.canonical_code());
+        if let CounterKind::Named(id) = kind {
+            self.write_u32(id);
+        }
+    }
+
+    fn write_object_counter_entry(&mut self, entry: ObjectCounterEntry) {
+        self.write_u32(entry.object.0);
+        self.write_counter_kind(entry.kind);
+        self.write_u32(entry.count);
     }
 
     fn write_creature_keywords(&mut self, keywords: CreatureKeywords) {
@@ -12704,6 +13630,7 @@ impl CanonicalBytes {
             self.write_target_snapshot(*target);
         }
         self.write_optional_payment_plan(entry.payment);
+        self.write_optional_stack_copy_info(entry.copy_info);
     }
 
     fn write_resolution_record(&mut self, record: &ResolutionRecord) {
@@ -12722,6 +13649,7 @@ impl CanonicalBytes {
             self.write_bool(*legal);
         }
         self.write_u8(record.outcome.canonical_code());
+        self.write_optional_stack_copy_info(record.copy_info);
     }
 
     fn write_event_record(&mut self, record: EventRecord) {
@@ -13050,6 +13978,52 @@ impl CanonicalBytes {
                 self.write_u32(controller.0);
                 self.write_optional_object(source);
                 self.write_restriction_effect(effect);
+            }
+            GameEvent::ObjectCountersChanged {
+                object,
+                kind,
+                count,
+            } => {
+                self.write_u32(object.0);
+                self.write_counter_kind(kind);
+                self.write_u32(count);
+            }
+            GameEvent::TokenCreated {
+                object,
+                card,
+                owner,
+                controller,
+            } => {
+                self.write_u32(object.0);
+                self.write_u32(card.0);
+                self.write_u32(owner.0);
+                self.write_u32(controller.0);
+            }
+            GameEvent::ObjectCopyCreated {
+                object,
+                source,
+                token,
+            } => {
+                self.write_u32(object.0);
+                self.write_u32(source.0);
+                self.write_bool(token);
+            }
+            GameEvent::StackEntryCopied {
+                source,
+                copy,
+                controller,
+            } => {
+                self.write_u32(source.0);
+                self.write_u32(copy.0);
+                self.write_u32(controller.0);
+            }
+            GameEvent::ObjectCeasedToExist { object, kind } => {
+                self.write_u32(object.0);
+                self.write_u8(kind.canonical_code());
+            }
+            GameEvent::CounterPairCancelled { object, amount } => {
+                self.write_u32(object.0);
+                self.write_u32(amount);
             }
         }
     }
@@ -14115,6 +15089,10 @@ mod tests {
                 zero_toughness_creatures: 1,
                 lethal_damage_creatures: 0,
                 deathtouch_damage_creatures: 0,
+                tokens_ceased: 0,
+                copies_ceased: 0,
+                counter_pairs_cancelled: 0,
+                counters_removed: 0,
             })
         );
         assert_eq!(

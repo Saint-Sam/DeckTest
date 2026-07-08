@@ -1,0 +1,23 @@
+(
+    name: "T2.7 non-token permanent remains in graveyard after SBA",
+    setup: (
+        players: 1,
+        objects: [
+            (card: 27006, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "move_object", object: 0, zone: "Graveyard", player: 0),
+        (action: "check_state_based_actions"),
+        (action: "assert_object_zone", object: 0, zone: "Graveyard", player: 0),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Graveyard", player: 0, count: 1),
+            (zone: "Ceased", count: 0),
+        ],
+        outcome: "in_progress",
+        invariants: ["zone_conservation", "hash_consistency"],
+        hash_determinism: true,
+    ),
+)

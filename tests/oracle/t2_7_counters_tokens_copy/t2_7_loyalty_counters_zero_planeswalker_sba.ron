@@ -1,0 +1,26 @@
+(
+    name: "T2.7 loyalty counters at zero move a planeswalker to graveyard",
+    setup: (
+        players: 1,
+        objects: [
+            (card: 27003, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "set_types", types: ["planeswalker"]),
+        (action: "add_object_counters", object: 0, kind: "loyalty", amount: 1),
+        (action: "remove_object_counters", object: 0, kind: "loyalty", amount: 1),
+        (action: "assert_object_loyalty", object: 0, loyalty: 0),
+        (action: "check_state_based_actions"),
+        (action: "assert_object_zone", object: 0, zone: "Graveyard", player: 0),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Battlefield", count: 0),
+            (zone: "Graveyard", player: 0, count: 1),
+        ],
+        outcome: "in_progress",
+        invariants: ["zone_conservation", "hash_consistency"],
+        hash_determinism: true,
+    ),
+)

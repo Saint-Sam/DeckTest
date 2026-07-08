@@ -1,0 +1,31 @@
+(
+    name: "T2.7 spell copy resolves without a physical card zone move",
+    setup: (
+        players: 1,
+        objects: [
+            (card: 27009, owner: 0, controller: 0, zone: "Hand", player: 0),
+        ],
+    ),
+    script: [
+        (action: "start_turn", player: 0),
+        (action: "advance_step"),
+        (action: "cast_spell_auto", player: 0, object: 0, kind: "instant", timing: "instant"),
+        (action: "copy_stack_entry", player: 0, entry: 0),
+        (action: "pass_priority", player: 0),
+        (action: "pass_priority", player: 0),
+        (action: "assert_object_zone", object: 0, zone: "Graveyard", player: 0),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Hand", player: 0, count: 0),
+            (zone: "Stack", count: 0),
+            (zone: "Graveyard", player: 0, count: 1),
+        ],
+        outcome: "in_progress",
+        active_player: 0,
+        priority_player: 0,
+        current_step: "Upkeep",
+        invariants: ["zone_conservation", "hash_consistency"],
+        hash_determinism: true,
+    ),
+)

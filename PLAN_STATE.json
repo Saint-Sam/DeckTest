@@ -199,10 +199,17 @@
       "verification": "scripts/vl.sh passed locally with data-only activated ability definitions, no-stack mana ability resolution, stack-using non-mana activations, loyalty abilities with once-per-source-per-turn enforcement, activation cost modifiers, activated-ability canonical hash coverage, clone-surface baseline persistent_allocation_field_count=27, 539 oracle scenarios green including 4 T2.5 activated-ability scenarios, coverage gate including T2.5 oracles, and perf_diff reporting 0 regressions"
     },
     "T2.6": {
-      "status": "verified_local",
+      "status": "verified_remote",
       "branch": "task/T2.6-targeting-restrictions",
       "attempts": 0,
-      "verification": "scripts/vl.sh passed locally with data-only target predicates over player/object characteristics, shroud/hexproof/protection/ward targeting restrictions, cannot attack/cannot block/cannot be blocked combat restrictions, restriction canonical hash coverage, clone-surface baseline persistent_allocation_field_count=28, 547 oracle scenarios green including 8 T2.6 targeting/restriction scenarios, coverage gate including T2.6 oracles at 80.78% lines, and perf_diff reporting 0 regressions"
+      "verification": "scripts/vl.sh passed locally with data-only target predicates over player/object characteristics, shroud/hexproof/protection/ward targeting restrictions, cannot attack/cannot block/cannot be blocked combat restrictions, restriction canonical hash coverage, clone-surface baseline persistent_allocation_field_count=28, 547 oracle scenarios green including 8 T2.6 targeting/restriction scenarios, coverage gate including T2.6 oracles at 80.78% lines, and perf_diff reporting 0 regressions",
+      "remote_ci": "GitHub Actions ci #35 run 28945116782 passed all required jobs for commit 6635a9a5d1e567cd7434d8e520bbee8ea4ec44a3"
+    },
+    "T2.7": {
+      "status": "verified_local",
+      "branch": "task/T2.7-counters-tokens-copy",
+      "attempts": 0,
+      "verification": "scripts/vl.sh passed locally with object counters (+1/+1, -1/-1, loyalty, named), counter pair cancellation SBAs, token creation and ceasing, permanent-copy provenance, stack-copy resolution metadata, counter/token/copy canonical hash coverage, clone-surface baseline persistent_allocation_field_count=29, 556 oracle scenarios green including 9 T2.7 counter/token/copy scenarios, coverage gate including T2.7 oracles at 81.00% lines, and perf_diff reporting 0 regressions"
     }
   },
   "gates_passed": [

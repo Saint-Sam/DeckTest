@@ -14,13 +14,14 @@ use forge_core::{
     CombatDamageAssignment, CombatDamageAssignmentRequest, CombatDamageTarget, CombatRestriction,
     CombatRestrictionSubject, ContinuousEffectDefinition, ContinuousEffectId,
     ContinuousEffectOperation, ContinuousEffectTarget, CostModifierDefinition,
-    CostModifierOperation, CostModifierScope, CreatureKeywords, GameOutcome, GameState, ManaCost,
-    ManaKind, ManaPool, ObjectColors, ObjectId, ObjectTargetPredicate, ObjectTypes, Outcome,
-    PlayerId, PlayerTargetPredicate, ReplacementCondition, ReplacementDamageTargetFilter,
-    ReplacementDefinition, ReplacementDuration, ReplacementEffectId, ReplacementOperation,
-    ReplacementSourceFilter, RestrictionDefinition, RestrictionEffect, SpellTiming,
-    StackObjectKind, StateHash, Step, TargetChoice, TargetControllerPredicate, TargetKind,
-    TargetRequirement, TargetRestriction, TargetRestrictionSubject, ZoneId, ZoneKind,
+    CostModifierOperation, CostModifierScope, CounterKind, CreatureKeywords, GameOutcome,
+    GameState, ManaCost, ManaKind, ManaPool, ObjectColors, ObjectId, ObjectTargetPredicate,
+    ObjectTypes, Outcome, PlayerId, PlayerTargetPredicate, ReplacementCondition,
+    ReplacementDamageTargetFilter, ReplacementDefinition, ReplacementDuration, ReplacementEffectId,
+    ReplacementOperation, ReplacementSourceFilter, RestrictionDefinition, RestrictionEffect,
+    SpellTiming, StackEntryId, StackObjectKind, StateHash, Step, TargetChoice,
+    TargetControllerPredicate, TargetKind, TargetRequirement, TargetRestriction,
+    TargetRestrictionSubject, ZoneId, ZoneKind,
 };
 use std::{fs, path::Path};
 
@@ -391,6 +392,8 @@ pub enum ZoneSpec {
     Stack,
     /// The shared command zone.
     Command,
+    /// Internal retention zone for tokens and copies that ceased to exist.
+    Ceased,
 }
 
 impl ZoneSpec {
@@ -402,6 +405,7 @@ impl ZoneSpec {
                 "Exile" | "exile" => Ok(Self::Exile),
                 "Stack" | "stack" => Ok(Self::Stack),
                 "Command" | "command" => Ok(Self::Command),
+                "Ceased" | "ceased" => Ok(Self::Ceased),
                 _ => Err(ScenarioError::schema(format!(
                     "target zone `{zone}` requires a zone map with player when applicable"
                 ))),
@@ -430,6 +434,7 @@ impl ZoneSpec {
             Self::Exile => Ok(ZoneId::new(None, ZoneKind::Exile)),
             Self::Stack => Ok(ZoneId::new(None, ZoneKind::Stack)),
             Self::Command => Ok(ZoneId::new(None, ZoneKind::Command)),
+            Self::Ceased => Ok(ZoneId::new(None, ZoneKind::Ceased)),
         }
     }
 }
@@ -521,6 +526,39 @@ pub enum ScenarioStep {
         /// Destination zone.
         zone: ZoneSpec,
     },
+    /// Create a token on the battlefield.
+    CreateToken {
+        /// Card definition ID for the token.
+        card: u32,
+        /// Zero-based owner index.
+        owner: usize,
+        /// Zero-based controller index.
+        controller: usize,
+        /// Optional base power.
+        power: Option<i32>,
+        /// Optional base toughness.
+        toughness: Option<i32>,
+        /// Static combat keywords.
+        keywords: CreatureKeywordSpec,
+    },
+    /// Create a permanent copy on the battlefield.
+    CreatePermanentCopy {
+        /// Scenario source object index.
+        source: usize,
+        /// Zero-based owner index.
+        owner: usize,
+        /// Zero-based controller index.
+        controller: usize,
+        /// Whether the copy is also a token.
+        token: bool,
+    },
+    /// Copy a previously created stack entry.
+    CopyStackEntry {
+        /// Zero-based controller index.
+        player: usize,
+        /// Zero-based stack-entry registration index.
+        entry: usize,
+    },
     /// Set an object's base creature characteristics.
     SetBaseCreature {
         /// Scenario object index.
@@ -550,6 +588,24 @@ pub enum ScenarioStep {
         object: usize,
         /// New loyalty value, or none to clear loyalty tracking.
         loyalty: Option<i32>,
+    },
+    /// Add counters to an object.
+    AddObjectCounters {
+        /// Scenario object index.
+        object: usize,
+        /// Counter kind.
+        kind: CounterKind,
+        /// Counter amount.
+        amount: u32,
+    },
+    /// Remove counters from an object.
+    RemoveObjectCounters {
+        /// Scenario object index.
+        object: usize,
+        /// Counter kind.
+        kind: CounterKind,
+        /// Counter amount.
+        amount: u32,
     },
     /// Mark damage on a creature object.
     MarkDamage {
@@ -667,6 +723,33 @@ pub enum ScenarioStep {
         /// Expected loyalty value, or none if loyalty tracking is absent.
         loyalty: Option<i32>,
     },
+    /// Assert an object's counter total.
+    AssertObjectCounters {
+        /// Scenario object index.
+        object: usize,
+        /// Counter kind.
+        kind: CounterKind,
+        /// Expected counter count.
+        count: u32,
+    },
+    /// Assert an object's current zone.
+    AssertObjectZone {
+        /// Scenario object index.
+        object: usize,
+        /// Expected zone.
+        zone: ZoneSpec,
+    },
+    /// Assert token/copy flags and copy source.
+    AssertObjectFlags {
+        /// Scenario object index.
+        object: usize,
+        /// Expected token flag, if asserted.
+        token: Option<bool>,
+        /// Expected copy flag, if asserted.
+        copy: Option<bool>,
+        /// Expected source object index, if asserted.
+        copy_source: Option<usize>,
+    },
     /// Declare attackers during the declare attackers step.
     DeclareAttackers {
         /// Zero-based scenario attacking-player index.
@@ -729,10 +812,19 @@ impl ScenarioStep {
             Self::ClearMana { player } => format!("clear_mana[{player}]"),
             Self::PayManaAuto { player, .. } => format!("pay_mana_auto[{player}]"),
             Self::MoveObject { object, .. } => format!("move_object[{object}]"),
+            Self::CreateToken { controller, .. } => format!("create_token[{controller}]"),
+            Self::CreatePermanentCopy { source, .. } => format!("create_permanent_copy[{source}]"),
+            Self::CopyStackEntry { player, entry } => {
+                format!("copy_stack_entry[{player}:{entry}]")
+            }
             Self::SetBaseCreature { object, .. } => format!("set_base_creature[{object}]"),
             Self::ClearBaseCreature { object } => format!("clear_base_creature[{object}]"),
             Self::SetObjectTapped { object, .. } => format!("set_object_tapped[{object}]"),
             Self::SetObjectLoyalty { object, .. } => format!("set_object_loyalty[{object}]"),
+            Self::AddObjectCounters { object, .. } => format!("add_object_counters[{object}]"),
+            Self::RemoveObjectCounters { object, .. } => {
+                format!("remove_object_counters[{object}]")
+            }
             Self::MarkDamage { object, .. } => format!("mark_damage[{object}]"),
             Self::RegisterDamageReplacement { controller, .. } => {
                 format!("register_damage_replacement[{controller}]")
@@ -771,6 +863,11 @@ impl ScenarioStep {
             }
             Self::AssertObjectTapped { object, .. } => format!("assert_object_tapped[{object}]"),
             Self::AssertObjectLoyalty { object, .. } => format!("assert_object_loyalty[{object}]"),
+            Self::AssertObjectCounters { object, .. } => {
+                format!("assert_object_counters[{object}]")
+            }
+            Self::AssertObjectZone { object, .. } => format!("assert_object_zone[{object}]"),
+            Self::AssertObjectFlags { object, .. } => format!("assert_object_flags[{object}]"),
             Self::DeclareAttackers { player, .. } => format!("declare_attackers[{player}]"),
             Self::DeclareBlockers { player, .. } => format!("declare_blockers[{player}]"),
             Self::AssertCanAttack { player, .. } => format!("assert_can_attack[{player}]"),
@@ -2151,6 +2248,7 @@ struct RunContext {
     replacements: Vec<ReplacementEffectId>,
     continuous_effects: Vec<ContinuousEffectId>,
     activated_abilities: Vec<ActivatedAbilityId>,
+    stack_entries: Vec<StackEntryId>,
     failures: Vec<ScenarioFailure>,
     steps: Vec<StepRecord>,
 }
@@ -2163,6 +2261,7 @@ fn execute_scenario(scenario: &Scenario, check_expectations: bool) -> ScenarioRe
         replacements: Vec::new(),
         continuous_effects: Vec::new(),
         activated_abilities: Vec::new(),
+        stack_entries: Vec::new(),
         failures: Vec::new(),
         steps: Vec::new(),
     };
@@ -2301,6 +2400,30 @@ fn execute_step(step: &ScenarioStep, context: &mut RunContext) {
             record_outcome(&label, Outcome::Applied, context);
             return;
         }
+        ScenarioStep::AssertObjectCounters {
+            object,
+            kind,
+            count,
+        } => {
+            check_object_counter_expectation(&label, *object, *kind, *count, context);
+            record_outcome(&label, Outcome::Applied, context);
+            return;
+        }
+        ScenarioStep::AssertObjectZone { object, zone } => {
+            check_object_zone_expectation(&label, *object, *zone, context);
+            record_outcome(&label, Outcome::Applied, context);
+            return;
+        }
+        ScenarioStep::AssertObjectFlags {
+            object,
+            token,
+            copy,
+            copy_source,
+        } => {
+            check_object_flags_expectation(&label, *object, *token, *copy, *copy_source, context);
+            record_outcome(&label, Outcome::Applied, context);
+            return;
+        }
         ScenarioStep::AssertCanTarget {
             player,
             source_object,
@@ -2373,6 +2496,15 @@ fn execute_step(step: &ScenarioStep, context: &mut RunContext) {
         }
         Outcome::ActivatedAbilityRegistered(ability) => {
             context.activated_abilities.push(*ability);
+        }
+        Outcome::ObjectCreated(object) => {
+            context.objects.push(*object);
+        }
+        Outcome::StackEntryAdded(entry) => {
+            context.stack_entries.push(*entry);
+        }
+        Outcome::StackEntriesAdded(entries) => {
+            context.stack_entries.extend(entries.iter().copied());
         }
         _ => {}
     }
@@ -2451,6 +2583,52 @@ fn action_for_step(step: &ScenarioStep, context: &RunContext) -> Result<Action, 
             object: object_id(&context.objects, *object, "move_object")?,
             to: zone.zone_id(&context.players)?,
         }),
+        ScenarioStep::CreateToken {
+            card,
+            owner,
+            controller,
+            power,
+            toughness,
+            keywords,
+        } => {
+            let base = match (*power, *toughness) {
+                (Some(power), Some(toughness)) => Some(
+                    BaseCreatureCharacteristics::new(power, toughness)
+                        .with_keywords(keywords.to_keywords()),
+                ),
+                (None, None) => None,
+                _ => {
+                    return Err(ScenarioError::schema(
+                        "create_token requires both power and toughness or neither".to_owned(),
+                    ));
+                }
+            };
+            Ok(Action::CreateToken {
+                card: CardId::new(*card),
+                owner: player_id(&context.players, *owner, "create_token.owner")?,
+                controller: player_id(&context.players, *controller, "create_token.controller")?,
+                base,
+            })
+        }
+        ScenarioStep::CreatePermanentCopy {
+            source,
+            owner,
+            controller,
+            token,
+        } => Ok(Action::CreatePermanentCopy {
+            source: object_id(&context.objects, *source, "create_permanent_copy.source")?,
+            owner: player_id(&context.players, *owner, "create_permanent_copy.owner")?,
+            controller: player_id(
+                &context.players,
+                *controller,
+                "create_permanent_copy.controller",
+            )?,
+            token: *token,
+        }),
+        ScenarioStep::CopyStackEntry { player, entry } => Ok(Action::CopyStackEntry {
+            player: player_id(&context.players, *player, "copy_stack_entry.player")?,
+            entry: stack_entry_id(&context.stack_entries, *entry, "copy_stack_entry.entry")?,
+        }),
         ScenarioStep::SetBaseCreature {
             object,
             power,
@@ -2473,6 +2651,24 @@ fn action_for_step(step: &ScenarioStep, context: &RunContext) -> Result<Action, 
         ScenarioStep::SetObjectLoyalty { object, loyalty } => Ok(Action::SetObjectLoyalty {
             object: object_id(&context.objects, *object, "set_object_loyalty")?,
             loyalty: *loyalty,
+        }),
+        ScenarioStep::AddObjectCounters {
+            object,
+            kind,
+            amount,
+        } => Ok(Action::AddObjectCounters {
+            object: object_id(&context.objects, *object, "add_object_counters")?,
+            kind: *kind,
+            amount: *amount,
+        }),
+        ScenarioStep::RemoveObjectCounters {
+            object,
+            kind,
+            amount,
+        } => Ok(Action::RemoveObjectCounters {
+            object: object_id(&context.objects, *object, "remove_object_counters")?,
+            kind: *kind,
+            amount: *amount,
         }),
         ScenarioStep::MarkDamage { object, amount } => Ok(Action::MarkDamageOnObject {
             object: object_id(&context.objects, *object, "mark_damage")?,
@@ -2634,6 +2830,9 @@ fn action_for_step(step: &ScenarioStep, context: &RunContext) -> Result<Action, 
         ScenarioStep::AssertCharacteristics { .. }
         | ScenarioStep::AssertObjectTapped { .. }
         | ScenarioStep::AssertObjectLoyalty { .. }
+        | ScenarioStep::AssertObjectCounters { .. }
+        | ScenarioStep::AssertObjectZone { .. }
+        | ScenarioStep::AssertObjectFlags { .. }
         | ScenarioStep::AssertCanTarget { .. }
         | ScenarioStep::AssertWardCost { .. }
         | ScenarioStep::AssertCanAttack { .. }
@@ -3091,7 +3290,7 @@ fn check_object_tapped_expectation(
     expected: bool,
     context: &mut RunContext,
 ) {
-    let object_id = match object_id(&context.objects, object, phase) {
+    let checked_object = match object_id(&context.objects, object, phase) {
         Ok(object) => object,
         Err(error) => {
             context
@@ -3100,7 +3299,7 @@ fn check_object_tapped_expectation(
             return;
         }
     };
-    let Some(record) = context.state.object(object_id) else {
+    let Some(record) = context.state.object(checked_object) else {
         context.failures.push(ScenarioFailure::new(
             phase,
             format!("object {object} is missing from state"),
@@ -3125,7 +3324,7 @@ fn check_object_loyalty_expectation(
     expected: Option<i32>,
     context: &mut RunContext,
 ) {
-    let object_id = match object_id(&context.objects, object, phase) {
+    let checked_object = match object_id(&context.objects, object, phase) {
         Ok(object) => object,
         Err(error) => {
             context
@@ -3134,7 +3333,7 @@ fn check_object_loyalty_expectation(
             return;
         }
     };
-    let Some(record) = context.state.object(object_id) else {
+    let Some(record) = context.state.object(checked_object) else {
         context.failures.push(ScenarioFailure::new(
             phase,
             format!("object {object} is missing from state"),
@@ -3150,6 +3349,126 @@ fn check_object_loyalty_expectation(
                 record.loyalty()
             ),
         ));
+    }
+}
+
+fn check_object_counter_expectation(
+    phase: &str,
+    object: usize,
+    kind: CounterKind,
+    expected: u32,
+    context: &mut RunContext,
+) {
+    let object_id = match object_id(&context.objects, object, phase) {
+        Ok(object) => object,
+        Err(error) => {
+            context
+                .failures
+                .push(ScenarioFailure::new(phase, error.to_string()));
+            return;
+        }
+    };
+    let actual = context.state.object_counter_count(object_id, kind);
+    if actual != expected {
+        context.failures.push(ScenarioFailure::new(
+            phase,
+            format!("object {object} expected {kind:?} counters {expected}, found {actual}"),
+        ));
+    }
+}
+
+fn check_object_zone_expectation(
+    phase: &str,
+    object: usize,
+    expected: ZoneSpec,
+    context: &mut RunContext,
+) {
+    let object_id = match object_id(&context.objects, object, phase) {
+        Ok(object) => object,
+        Err(error) => {
+            context
+                .failures
+                .push(ScenarioFailure::new(phase, error.to_string()));
+            return;
+        }
+    };
+    let expected = match expected.zone_id(&context.players) {
+        Ok(zone) => zone,
+        Err(error) => {
+            context
+                .failures
+                .push(ScenarioFailure::new(phase, error.to_string()));
+            return;
+        }
+    };
+    let actual = context.state.object_zone(object_id);
+    if actual != Some(expected) {
+        context.failures.push(ScenarioFailure::new(
+            phase,
+            format!("object {object} expected zone {expected:?}, found {actual:?}"),
+        ));
+    }
+}
+
+fn check_object_flags_expectation(
+    phase: &str,
+    object: usize,
+    token: Option<bool>,
+    copy: Option<bool>,
+    copy_source: Option<usize>,
+    context: &mut RunContext,
+) {
+    let checked_object = match object_id(&context.objects, object, phase) {
+        Ok(object) => object,
+        Err(error) => {
+            context
+                .failures
+                .push(ScenarioFailure::new(phase, error.to_string()));
+            return;
+        }
+    };
+    let Some(record) = context.state.object(checked_object) else {
+        context.failures.push(ScenarioFailure::new(
+            phase,
+            format!("object {object} is missing from state"),
+        ));
+        return;
+    };
+    if token.is_some_and(|expected| expected != record.is_token()) {
+        context.failures.push(ScenarioFailure::new(
+            phase,
+            format!(
+                "object {object} expected token {:?}, found {}",
+                token,
+                record.is_token()
+            ),
+        ));
+    }
+    if copy.is_some_and(|expected| expected != record.is_copy()) {
+        context.failures.push(ScenarioFailure::new(
+            phase,
+            format!(
+                "object {object} expected copy {:?}, found {}",
+                copy,
+                record.is_copy()
+            ),
+        ));
+    }
+    if let Some(source_index) = copy_source {
+        match object_id(&context.objects, source_index, phase) {
+            Ok(expected) if record.copy_source() == Some(expected) => {}
+            Ok(expected) => context.failures.push(ScenarioFailure::new(
+                phase,
+                format!(
+                    "object {object} expected copy source {}, found {:?}",
+                    expected.index(),
+                    record.copy_source().map(ObjectId::index)
+                ),
+            )),
+            Err(error) => context
+                .failures
+                .push(ScenarioFailure::new(phase, error.to_string())),
+        }
     }
 }
 
@@ -3391,6 +3710,17 @@ fn object_id(objects: &[ObjectId], index: usize, phase: &str) -> Result<ObjectId
         .get(index)
         .copied()
         .ok_or_else(|| ScenarioError::schema(format!("{phase}: unknown object index {index}")))
+}
+
+fn stack_entry_id(
+    entries: &[StackEntryId],
+    index: usize,
+    phase: &str,
+) -> Result<StackEntryId, ScenarioError> {
+    entries
+        .get(index)
+        .copied()
+        .ok_or_else(|| ScenarioError::schema(format!("{phase}: unknown stack-entry index {index}")))
 }
 
 fn replacement_id(
@@ -3930,6 +4260,31 @@ fn parse_script(value: RonValue) -> Result<Vec<ScenarioStep>, ScenarioError> {
                 object: map.required_usize("object")?,
                 zone: parse_zone_from_map(&map)?,
             },
+            "create_token" => ScenarioStep::CreateToken {
+                card: map.required_u32("card")?,
+                owner: map.required_usize("owner")?,
+                controller: map
+                    .optional_usize("controller")?
+                    .unwrap_or(map.required_usize("owner")?),
+                power: map.optional_i32("power")?,
+                toughness: map.optional_i32("toughness")?,
+                keywords: match map.optional("keywords")? {
+                    Some(value) => CreatureKeywordSpec::from_ron_value(value)?,
+                    None => CreatureKeywordSpec::default(),
+                },
+            },
+            "create_permanent_copy" => ScenarioStep::CreatePermanentCopy {
+                source: map.required_usize("source")?,
+                owner: map.required_usize("owner")?,
+                controller: map
+                    .optional_usize("controller")?
+                    .unwrap_or(map.required_usize("owner")?),
+                token: map.optional_bool("token")?.unwrap_or(false),
+            },
+            "copy_stack_entry" => ScenarioStep::CopyStackEntry {
+                player: map.required_usize("player")?,
+                entry: map.required_usize("entry")?,
+            },
             "set_base_creature" => ScenarioStep::SetBaseCreature {
                 object: map.required_usize("object")?,
                 power: map.required_i32("power")?,
@@ -3949,6 +4304,16 @@ fn parse_script(value: RonValue) -> Result<Vec<ScenarioStep>, ScenarioError> {
             "set_object_loyalty" => ScenarioStep::SetObjectLoyalty {
                 object: map.required_usize("object")?,
                 loyalty: map.optional_i32("loyalty")?,
+            },
+            "add_object_counters" => ScenarioStep::AddObjectCounters {
+                object: map.required_usize("object")?,
+                kind: parse_counter_kind(&map.required_string("kind")?)?,
+                amount: map.required_u32("amount")?,
+            },
+            "remove_object_counters" => ScenarioStep::RemoveObjectCounters {
+                object: map.required_usize("object")?,
+                kind: parse_counter_kind(&map.required_string("kind")?)?,
+                amount: map.required_u32("amount")?,
             },
             "mark_damage" => ScenarioStep::MarkDamage {
                 object: map.required_usize("object")?,
@@ -4026,6 +4391,21 @@ fn parse_script(value: RonValue) -> Result<Vec<ScenarioStep>, ScenarioError> {
             "assert_object_loyalty" => ScenarioStep::AssertObjectLoyalty {
                 object: map.required_usize("object")?,
                 loyalty: map.optional_i32("loyalty")?,
+            },
+            "assert_object_counters" => ScenarioStep::AssertObjectCounters {
+                object: map.required_usize("object")?,
+                kind: parse_counter_kind(&map.required_string("kind")?)?,
+                count: map.required_u32("count")?,
+            },
+            "assert_object_zone" => ScenarioStep::AssertObjectZone {
+                object: map.required_usize("object")?,
+                zone: parse_zone_from_map(&map)?,
+            },
+            "assert_object_flags" => ScenarioStep::AssertObjectFlags {
+                object: map.required_usize("object")?,
+                token: map.optional_bool("token")?,
+                copy: map.optional_bool("copy")?,
+                copy_source: map.optional_usize("copy_source")?,
             },
             "declare_attackers" => ScenarioStep::DeclareAttackers {
                 player: map.required_usize("player")?,
@@ -4119,6 +4499,7 @@ fn parse_zone_from_map(map: &RonMap) -> Result<ZoneSpec, ScenarioError> {
         "Exile" | "exile" => Ok(ZoneSpec::Exile),
         "Stack" | "stack" => Ok(ZoneSpec::Stack),
         "Command" | "command" => Ok(ZoneSpec::Command),
+        "Ceased" | "ceased" => Ok(ZoneSpec::Ceased),
         _ => Err(ScenarioError::schema(format!("unsupported zone `{zone}`"))),
     }
 }
@@ -4147,6 +4528,25 @@ fn parse_maybe_step(value: RonValue) -> Result<MaybeStepExpectation, ScenarioErr
         return Ok(MaybeStepExpectation::None);
     }
     Ok(MaybeStepExpectation::Step(parse_step(&input)?))
+}
+
+fn parse_counter_kind(input: &str) -> Result<CounterKind, ScenarioError> {
+    match input {
+        "+1/+1" | "plus_one_plus_one" | "p1p1" => Ok(CounterKind::PlusOnePlusOne),
+        "-1/-1" | "minus_one_minus_one" | "m1m1" => Ok(CounterKind::MinusOneMinusOne),
+        "loyalty" | "LOYALTY" => Ok(CounterKind::Loyalty),
+        other => {
+            if let Some(value) = other.strip_prefix("named:") {
+                let id = value.parse::<u32>().map_err(|error| {
+                    ScenarioError::schema(format!("invalid named counter id `{value}`: {error}"))
+                })?;
+                return Ok(CounterKind::named(id));
+            }
+            Err(ScenarioError::schema(format!(
+                "unsupported counter kind `{other}`"
+            )))
+        }
+    }
 }
 
 fn parse_step(input: &str) -> Result<Step, ScenarioError> {

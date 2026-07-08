@@ -1,0 +1,43 @@
+id: T2.7
+title: Counters, tokens, and copy effects
+tier: 2
+tags:
+  - kernel
+  - counters
+  - tokens
+  - copy-effects
+  - state-based-actions
+  - oracle
+scope_paths:
+  - crates/forge-core/src/lib.rs
+  - crates/forge-testkit/src/lib.rs
+  - tests/oracle/t2_7_counters_tokens_copy/
+  - scripts/check_coverage.sh
+  - scripts/review/clone_surface_guard.sh
+  - metrics/clone_surface.json
+  - reports/tickets/T2.7.yaml
+inputs:
+  - FORGE_REBUILD_MASTER_PLAN.md Section 7 T2.7
+  - docs/vendor/comprehensive-rules.txt Sections 122, 111, 704, and 707
+  - CP-LAYERS owner signoff from 2026-07-08
+acceptance:
+  - object counters support +1/+1, -1/-1, loyalty, and arbitrary named counter kinds through public Action/apply mutations
+  - +1/+1 and -1/-1 counters affect creature power/toughness and cancel as state-based actions
+  - loyalty counters update planeswalker loyalty and zero-loyalty state-based actions move planeswalkers to graveyard
+  - tokens can be created with base characteristics and cease to exist when they move off the battlefield
+  - permanent copies preserve copiable base values while excluding counters and later continuous modifiers
+  - spell copies use stack-copy metadata, resolve without a physical card zone move, and participate in resolution history
+  - counters, token/copy provenance, stack-copy metadata, and related events participate in canonical hashes
+  - testkit RON supports creating tokens/copies, copying stack entries, mutating counters, and asserting counters, zones, and object flags
+  - focused oracle scenarios cover counter cancellation, lethal minus counters, loyalty SBAs, named-counter determinism, token ceasing, non-token persistence, permanent copies, token copies, and spell copies
+verify: cargo clippy --workspace --all-targets --all-features -- -D warnings && cargo run -p forge-testkit -- oracle --path tests/oracle/t2_7_counters_tokens_copy --no-junit && scripts/vl.sh
+retry_policy: 3 attempts then T2.7 design review
+depends_on:
+  - T2.1
+  - T2.2
+  - T2.3
+  - T2.4
+  - T2.5
+  - T2.6
+  - CP-LAYERS
+parallel_ok: false
