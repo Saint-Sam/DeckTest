@@ -23,12 +23,21 @@ PASS tools/run_legacy_layer_snapshot.sh Humility "Darksteel Mutation" "Angelic A
 PASS PYTHONPYCACHEPREFIX=target/tmp/python-cache python3 tools/cp_layers_legacy_engine_snapshot.py
 PASS PYTHONPYCACHEPREFIX=target/tmp/python-cache python3 -m py_compile tools/scryfall_cache_summary.py tools/cp_layers_legacy_engine_snapshot.py
 PASS bash -n tools/run_legacy_layer_snapshot.sh
+PASS PYTHONPYCACHEPREFIX=target/tmp/python-cache python3 tools/cp_layers_legacy_script_bridge.py
+PASS PYTHONPYCACHEPREFIX=target/tmp/python-cache python3 -m py_compile tools/cp_layers_legacy_script_bridge.py
+PASS cargo run -p forge-testkit -- lint tests/oracle/legacy_layers
+PASS cargo run -p forge-testkit -- oracle --path tests/oracle/legacy_layers --junit target/forge-testkit/legacy-layers-junit.xml
+PASS scripts/gates/make_bundle.sh CP-LAYERS
+PASS scripts/vl.sh after legacy script bridge
 
 Layer oracle path run result:
 oracle scenarios: 80 passed, 0 failed
 
 Reviewer oracle path run result:
 oracle scenarios: 100 passed, 0 failed
+
+Legacy script bridge path run result:
+oracle scenarios: 53 passed, 0 failed
 
 T2.4 VL result:
 oracle scenarios: 382 passed, 0 failed
@@ -40,7 +49,13 @@ oracle scenarios: 482 passed, 0 failed
 coverage: 81.82% lines
 perf smoke: 0 regressions
 
+Legacy-bridge VL result:
+oracle scenarios: 535 passed, 0 failed
+perf smoke: 0 regressions
+
 Legacy 100-card subset result:
 selected 100 local legacy layered card scripts
 legacy Forge engine snapshot emitted 100/100 OK snapshots
-true engine-vs-engine differential still blocked by missing Forge 2.0 importer/compiler
+legacy script bridge generated 53 executable Forge 2.0 fragment scenarios
+43 generated fragments matched the legacy snapshot on modeled fields; 10 did not
+true engine-vs-engine differential still blocked by missing full Forge 2.0 importer/compiler

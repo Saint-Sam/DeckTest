@@ -44,6 +44,19 @@ evidence recording, and the CP-LAYERS fuzz-target addition.
 - `PYTHONPYCACHEPREFIX=target/tmp/python-cache python3 -m py_compile tools/scryfall_cache_summary.py tools/cp_layers_legacy_engine_snapshot.py`:
   PASS.
 - `bash -n tools/run_legacy_layer_snapshot.sh`: PASS.
+- `PYTHONPYCACHEPREFIX=target/tmp/python-cache python3 tools/cp_layers_legacy_script_bridge.py`:
+  PASS, parsed the selected 100 legacy scripts and generated 53 executable
+  Forge 2.0 fragment scenarios for the currently representable layer subset.
+- `PYTHONPYCACHEPREFIX=target/tmp/python-cache python3 -m py_compile tools/cp_layers_legacy_script_bridge.py`:
+  PASS.
+- `cargo run -p forge-testkit -- lint tests/oracle/legacy_layers`: PASS,
+  53 generated legacy-fragment scenarios parsed.
+- `cargo run -p forge-testkit -- oracle --path tests/oracle/legacy_layers --junit target/forge-testkit/legacy-layers-junit.xml`:
+  PASS, 53 generated legacy-fragment scenarios passed, 0 failed.
+- `scripts/gates/make_bundle.sh CP-LAYERS`: PASS, refreshed the packaged
+  checkpoint bundle after adding bridge evidence.
+- `scripts/vl.sh`: PASS after the legacy-script bridge; 535 oracle scenarios
+  passed, 0 failed, and perf smoke reported 0 regressions.
 
 ## CP-LAYERS Fuzz Target Verification
 
@@ -64,6 +77,10 @@ but the checkpoint must still verify that future memoization work does not
 weaken this invariant.
 
 The legacy side of the 100-card engine differential is now executable and
-recorded. The remaining true differential blocker is Forge 2.0 card-script
-support: the new engine still has no importer/compiler capable of executing
-those 100 real legacy card scripts for engine-vs-engine comparison.
+recorded. A Forge 2.0 legacy-script bridge also parses the 100 scripts and
+executes 53 currently representable layer fragments; 43 generated fragments
+match the legacy snapshot on modeled fields and 10 expose fixture/model
+divergences. The remaining true differential blocker is full Forge 2.0
+card-script support: the new engine still has no importer/compiler capable of
+executing those 100 real legacy card scripts end to end for engine-vs-engine
+comparison.

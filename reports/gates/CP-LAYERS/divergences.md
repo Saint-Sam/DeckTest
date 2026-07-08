@@ -20,15 +20,26 @@ download, or upstream fetch was used.
   `reports/gates/CP-LAYERS/legacy-engine-snapshot-2026-07-07.md`
 - Machine-readable legacy snapshot:
   `metrics/cp_layers_legacy_engine_snapshot.jsonl`
+- Legacy-script bridge:
+  `reports/gates/CP-LAYERS/legacy-script-bridge-2026-07-07.md`
+- Generated Forge 2.0 fragment oracles:
+  `tests/oracle/legacy_layers`
+- Machine-readable bridge summary:
+  `metrics/cp_layers_legacy_script_bridge.json`
 
 ## Result
 
 The 100-card legacy layered subset is selected and the legacy Forge Java engine
 now runs locally for all 100 cards: 100 snapshots emitted, 100 OK, 0 legacy
-harness errors. A true engine-vs-engine differential still cannot honestly run
-yet because Forge 2.0 currently has a data-only layer substrate and RON oracle
-harness, but no legacy card-script importer/card compiler capable of executing
-those real legacy scripts in the new engine.
+harness errors. A narrow Forge 2.0 bridge now parses all 100 selected scripts
+and emits the representable fragments as executable RON scenarios: 53 scenarios
+generated, 53 passed, 0 failed. Of those generated fragments, 43 match the
+legacy snapshot on currently modeled fields and 10 differ because the bridge
+fixture/model does not yet capture the full legacy card behavior.
+
+A true engine-vs-engine differential still cannot honestly run yet because
+Forge 2.0 has no full legacy card-script importer/card compiler capable of
+executing those real legacy scripts end to end in the new engine.
 
 ## Adjudicated Divergence Categories
 

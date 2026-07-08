@@ -1,0 +1,28 @@
+(
+    name: "legacy bridge L041 Harmonious Emergence",
+    setup: (
+        players: 2,
+        objects: [
+            (card: 70411, owner: 0, controller: 0, zone: "Battlefield"),
+            (card: 70412, owner: 1, controller: 1, zone: "Battlefield"),
+            (card: 70413, owner: 1, controller: 1, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "set_base_creature", object: 0, power: 2, toughness: 2, keywords: []),
+        (action: "set_base_creature", object: 1, power: 1, toughness: 1, keywords: []),
+        (action: "register_continuous_effect", controller: 1, target_object: 1, operation: "add_types", types: ["artifact"], timestamp: 1),
+        (action: "register_continuous_effect", controller: 1, target_object: 0, operation: "set_pt", power: 4, toughness: 5, timestamp: 10),
+        (action: "register_continuous_effect", controller: 1, target_object: 0, operation: "add_types", types: ["creature"], timestamp: 10),
+        (action: "register_continuous_effect", controller: 1, target_object: 0, operation: "set_colors", colors: ["green"], timestamp: 10),
+        (action: "register_continuous_effect", controller: 1, target_object: 0, operation: "add_keywords", keywords: ["haste", "vigilance"], timestamp: 10),
+    ],
+    expect: (
+        characteristics: [
+            (object: 0, types: ["creature"], is_creature: true, power: 4, toughness: 5, colors: ["green"], keywords: ["haste", "vigilance"]),
+        ],
+        outcome: "in_progress",
+        invariants: ["zone_conservation", "hash_consistency"],
+        hash_determinism: true,
+    ),
+)

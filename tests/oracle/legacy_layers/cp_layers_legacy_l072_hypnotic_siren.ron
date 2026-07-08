@@ -1,0 +1,27 @@
+(
+    name: "legacy bridge L072 Hypnotic Siren",
+    setup: (
+        players: 2,
+        objects: [
+            (card: 70721, owner: 0, controller: 0, zone: "Battlefield"),
+            (card: 70722, owner: 1, controller: 1, zone: "Battlefield"),
+            (card: 70723, owner: 1, controller: 1, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "set_base_creature", object: 0, power: 2, toughness: 2, keywords: []),
+        (action: "set_base_creature", object: 1, power: 1, toughness: 1, keywords: []),
+        (action: "register_continuous_effect", controller: 1, target_object: 1, operation: "add_types", types: ["artifact"], timestamp: 1),
+        (action: "register_continuous_effect", controller: 1, target_object: 0, operation: "change_controller", player: 1, timestamp: 10),
+        (action: "register_continuous_effect", controller: 1, target_object: 0, operation: "modify_pt", power: 1, toughness: 1, timestamp: 11),
+        (action: "register_continuous_effect", controller: 1, target_object: 0, operation: "add_keywords", keywords: ["flying"], timestamp: 11),
+    ],
+    expect: (
+        characteristics: [
+            (object: 0, controller: 1, power: 3, toughness: 3, keywords: ["flying"]),
+        ],
+        outcome: "in_progress",
+        invariants: ["zone_conservation", "hash_consistency"],
+        hash_determinism: true,
+    ),
+)

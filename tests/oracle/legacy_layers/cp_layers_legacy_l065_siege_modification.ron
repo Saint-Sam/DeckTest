@@ -1,0 +1,25 @@
+(
+    name: "legacy bridge L065 Siege Modification",
+    setup: (
+        players: 2,
+        objects: [
+            (card: 70651, owner: 0, controller: 0, zone: "Battlefield"),
+            (card: 70652, owner: 1, controller: 1, zone: "Battlefield"),
+            (card: 70653, owner: 1, controller: 1, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "set_base_creature", object: 0, power: 2, toughness: 2, keywords: []),
+        (action: "set_base_creature", object: 1, power: 1, toughness: 1, keywords: []),
+        (action: "register_continuous_effect", controller: 1, target_object: 1, operation: "add_types", types: ["artifact"], timestamp: 1),
+        (action: "register_continuous_effect", controller: 1, target_object: 0, operation: "add_keywords", keywords: ["first_strike"], timestamp: 11),
+    ],
+    expect: (
+        characteristics: [
+            (object: 0, keywords: ["first_strike"]),
+        ],
+        outcome: "in_progress",
+        invariants: ["zone_conservation", "hash_consistency"],
+        hash_determinism: true,
+    ),
+)

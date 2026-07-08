@@ -34,8 +34,11 @@ T2.5+ work can depend on layers.
 - 100 owner-approved reviewer oracle scenarios pass.
 - 100 selected legacy Forge layered-card snapshots now execute locally: 100 OK,
   0 legacy harness errors.
+- 53 generated Forge 2.0 legacy-script fragment scenarios pass. They come from
+  the 100 selected real legacy scripts; 43 match the legacy snapshot on modeled
+  fields and 10 expose fixture/model divergence.
 - 5 layer-focused `forge-core` unit tests pass.
-- Full VL passed after the reviewer pack: 482 oracle scenarios, 0 failures.
+- Full VL passed after the legacy bridge: 535 oracle scenarios, 0 failures.
 - Coverage after the reviewer pack: 81.82% lines; clone-surface baseline:
   `persistent_allocation_field_count=24`.
 - Remote CI passed for T2.4: `ci #23` run `28891474213`; manual confirmation
@@ -50,9 +53,12 @@ query recomputes, but performance/memoization will need fresh evidence later.
 
 The legacy side of the 100-card differential is no longer blocked: Codex used
 repo-local Corretto 17 and Maven artifacts to run the vendored legacy Java
-engine over all 100 selected cards. The remaining true differential blocker is
-on the Forge 2.0 side: Forge 2.0 does not yet have a legacy card-script
-importer/card compiler capable of executing those real cards in the new engine.
+engine over all 100 selected cards. Codex also added a local bridge that parses
+those real scripts into the 53 layer-fragment scenarios the current Forge 2.0
+engine can honestly represent. The remaining true differential blocker is on
+the Forge 2.0 side: Forge 2.0 does not yet have a full legacy card-script
+importer/card compiler capable of executing those real cards end to end in the
+new engine.
 
 ## 5. WHAT YOU SHOULD EXPECT NEXT
 
@@ -68,9 +74,10 @@ You supplied the CP-LAYERS review direction on 2026-07-07:
   You approved them with `approve 100 scenarios`, and all 100 pass locally.
 - Legacy differential work started with local-only search; Codex asked before
   network/download/toolchain setup. Local-only search selected the 100-card
-  subset, and the legacy Java engine now emits 100/100 OK snapshots. True
-  engine-vs-engine execution is still blocked by missing Forge 2.0 importer/compiler
-  support.
+  subset, the legacy Java engine now emits 100/100 OK snapshots, and the
+  Forge 2.0 bridge emits 53/53 passing real-script fragment scenarios. True
+  end-to-end engine-vs-engine execution is still blocked by missing full Forge
+  2.0 importer/compiler support.
 - Longer sanitizer fuzz may run only if the tooling is already installed;
   otherwise Codex must ask before installing anything.
 - CP-LAYERS is not approved yet. Codex must bring the results back before you

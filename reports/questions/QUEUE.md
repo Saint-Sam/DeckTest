@@ -31,8 +31,11 @@ Question: CP-LAYERS requires a legacy engine differential on a 100-card layered
 subset. Local-only evidence selected the subset and adjudicated script-level
 divergence categories. The legacy Java engine side has now been remediated with
 repo-local Corretto/Maven tooling and executed for all 100 selected cards: 100
-legacy snapshots emitted, 100 OK, 0 harness errors. A true engine-vs-engine run
-is still blocked because Forge 2.0 has no real legacy card-script
+legacy snapshots emitted, 100 OK, 0 harness errors. A narrow Forge 2.0 bridge
+now parses all 100 scripts and executes 53 representable layer-fragment
+scenarios with 53/53 pass; 43 generated fragments match legacy modeled fields
+and 10 expose fixture/model divergence. A true end-to-end engine-vs-engine run
+is still blocked because Forge 2.0 has no full legacy card-script
 importer/card compiler yet. Should CP-LAYERS continue remediation before T2.5,
 explicitly de-scope the true engine differential for this checkpoint, or
 fail/reopen?
@@ -40,3 +43,4 @@ fail/reopen?
 Current evidence:
 `reports/gates/CP-LAYERS/legacy-100-layered-subset-2026-07-07.md`
 `reports/gates/CP-LAYERS/legacy-engine-snapshot-2026-07-07.md`
+`reports/gates/CP-LAYERS/legacy-script-bridge-2026-07-07.md`
