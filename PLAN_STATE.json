@@ -213,10 +213,11 @@
       "remote_ci": "GitHub Actions ci #37 run 28948191312 passed all required jobs for commit 6492f72d0b45d9d3d414315854754fd664be1239"
     },
     "T2.8": {
-      "status": "verified_local",
+      "status": "verified_remote",
       "branch": "task/T2.8-multiplayer-commander",
       "attempts": 0,
-      "verification": "scripts/vl.sh passed locally with explicit N-player turn order, range of influence off, command-zone commander hooks, commander tax and color identity metadata, command-zone casting tax integration, clone-surface baseline persistent_allocation_field_count=30, 562 oracle scenarios green including 6 T2.8 multiplayer/Commander scenarios, coverage gate including T2.8 oracles at 81.07% lines, and perf_diff reporting 0 regressions"
+      "verification": "scripts/vl.sh passed locally with explicit N-player turn order, range of influence off, command-zone commander hooks, commander tax and color identity metadata, command-zone casting tax integration, clone-surface baseline persistent_allocation_field_count=30, 562 oracle scenarios green including 6 T2.8 multiplayer/Commander scenarios, coverage gate including T2.8 oracles at 81.07% lines, and perf_diff reporting 0 regressions",
+      "remote_ci": "GitHub Actions ci #38 run 28950057313 passed all required jobs for commit fc381d5450dbc172e8d1ef94000e94c706956632"
     }
   },
   "gates_passed": [
