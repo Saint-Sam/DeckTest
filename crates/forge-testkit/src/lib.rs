@@ -10,14 +10,17 @@
 use forge_core::{
     apply, auto_payment_plan, AbilityPlayer, Action, ActivatedAbilityDefinition,
     ActivatedAbilityEffect, ActivatedAbilityId, ActivationCost, ActivationTiming,
-    AttackDeclaration, BaseCreatureCharacteristics, BlockDeclaration, CardId,
-    CombatDamageAssignment, CombatDamageAssignmentRequest, CombatDamageTarget,
-    ContinuousEffectDefinition, ContinuousEffectId, ContinuousEffectOperation,
-    ContinuousEffectTarget, CostModifierDefinition, CostModifierOperation, CostModifierScope,
-    CreatureKeywords, GameOutcome, GameState, ManaCost, ManaKind, ManaPool, ObjectColors, ObjectId,
-    ObjectTypes, Outcome, PlayerId, ReplacementCondition, ReplacementDamageTargetFilter,
+    AttackDeclaration, BaseCreatureCharacteristics, BlockDeclaration, CardId, CastSpellRequest,
+    CombatDamageAssignment, CombatDamageAssignmentRequest, CombatDamageTarget, CombatRestriction,
+    CombatRestrictionSubject, ContinuousEffectDefinition, ContinuousEffectId,
+    ContinuousEffectOperation, ContinuousEffectTarget, CostModifierDefinition,
+    CostModifierOperation, CostModifierScope, CreatureKeywords, GameOutcome, GameState, ManaCost,
+    ManaKind, ManaPool, ObjectColors, ObjectId, ObjectTargetPredicate, ObjectTypes, Outcome,
+    PlayerId, PlayerTargetPredicate, ReplacementCondition, ReplacementDamageTargetFilter,
     ReplacementDefinition, ReplacementDuration, ReplacementEffectId, ReplacementOperation,
-    ReplacementSourceFilter, StateHash, Step, ZoneId, ZoneKind,
+    ReplacementSourceFilter, RestrictionDefinition, RestrictionEffect, SpellTiming,
+    StackObjectKind, StateHash, Step, TargetChoice, TargetControllerPredicate, TargetKind,
+    TargetRequirement, TargetRestriction, TargetRestrictionSubject, ZoneId, ZoneKind,
 };
 use std::{fs, path::Path};
 
@@ -391,6 +394,24 @@ pub enum ZoneSpec {
 }
 
 impl ZoneSpec {
+    fn from_ron_value(value: RonValue) -> Result<Self, ScenarioError> {
+        match value {
+            RonValue::Map(map) => parse_zone_from_map(&map),
+            RonValue::String(zone) => match zone.as_str() {
+                "Battlefield" | "battlefield" => Ok(Self::Battlefield),
+                "Exile" | "exile" => Ok(Self::Exile),
+                "Stack" | "stack" => Ok(Self::Stack),
+                "Command" | "command" => Ok(Self::Command),
+                _ => Err(ScenarioError::schema(format!(
+                    "target zone `{zone}` requires a zone map with player when applicable"
+                ))),
+            },
+            _ => Err(ScenarioError::schema(
+                "zone must be a string or map".to_owned(),
+            )),
+        }
+    }
+
     fn zone_id(self, players: &[PlayerId]) -> Result<ZoneId, ScenarioError> {
         match self {
             Self::Library { player } => Ok(ZoneId::new(
@@ -580,12 +601,52 @@ pub enum ScenarioStep {
         /// Cost-modifier registration spec.
         spec: CostModifierSpec,
     },
+    /// Register a targeting or combat restriction.
+    RegisterRestriction {
+        /// Restriction registration spec.
+        spec: RestrictionSpec,
+    },
     /// Activate a previously registered ability using the deterministic payment planner.
     ActivateAbilityAuto {
         /// Zero-based scenario player index.
         player: usize,
         /// Zero-based activated-ability registration index.
         ability: usize,
+    },
+    /// Cast a spell using the deterministic payment planner.
+    CastSpellAuto {
+        /// Zero-based scenario player index.
+        player: usize,
+        /// Scenario object index for the spell.
+        object: usize,
+        /// Stack kind string.
+        kind: String,
+        /// Spell timing string.
+        timing: String,
+        /// Mana cost to pay.
+        cost: ManaCostSpec,
+        /// Target slots and choices.
+        targets: Vec<TargetSpec>,
+    },
+    /// Assert whether one target choice is currently legal.
+    AssertCanTarget {
+        /// Zero-based scenario player index.
+        player: usize,
+        /// Optional source object index.
+        source_object: Option<usize>,
+        /// Target requirement.
+        requirement: TargetRequirementSpec,
+        /// Target choice.
+        target: TargetChoiceSpec,
+        /// Expected legality.
+        expected: bool,
+    },
+    /// Assert the ward cost observed for one object target.
+    AssertWardCost {
+        /// Target object index.
+        target_object: usize,
+        /// Expected ward cost.
+        cost: ManaCostSpec,
     },
     /// Assert current derived object characteristics.
     AssertCharacteristics {
@@ -619,6 +680,24 @@ pub enum ScenarioStep {
         player: usize,
         /// Block declarations.
         blocks: Vec<ScenarioBlockDeclaration>,
+    },
+    /// Assert whether one attack declaration is currently legal.
+    AssertCanAttack {
+        /// Zero-based scenario attacking-player index.
+        player: usize,
+        /// Attack declaration.
+        attack: ScenarioAttackDeclaration,
+        /// Expected legality.
+        expected: bool,
+    },
+    /// Assert whether one block declaration is currently legal.
+    AssertCanBlock {
+        /// Zero-based scenario defending-player index.
+        player: usize,
+        /// Block declaration.
+        block: ScenarioBlockDeclaration,
+        /// Expected legality.
+        expected: bool,
     },
     /// Assign and deal combat damage during the combat damage step.
     AssignCombatDamage {
@@ -670,8 +749,22 @@ impl ScenarioStep {
             Self::RegisterCostModifier { spec } => {
                 format!("register_cost_modifier[{}]", spec.controller)
             }
+            Self::RegisterRestriction { spec } => {
+                format!("register_restriction[{}]", spec.controller)
+            }
             Self::ActivateAbilityAuto { player, ability } => {
                 format!("activate_ability_auto[{player}:{ability}]")
+            }
+            Self::CastSpellAuto { player, object, .. } => {
+                format!("cast_spell_auto[{player}:{object}]")
+            }
+            Self::AssertCanTarget {
+                player, expected, ..
+            } => {
+                format!("assert_can_target[{player}:{expected}]")
+            }
+            Self::AssertWardCost { target_object, .. } => {
+                format!("assert_ward_cost[{target_object}]")
             }
             Self::AssertCharacteristics { expectation } => {
                 format!("assert_characteristics[{}]", expectation.object)
@@ -680,6 +773,8 @@ impl ScenarioStep {
             Self::AssertObjectLoyalty { object, .. } => format!("assert_object_loyalty[{object}]"),
             Self::DeclareAttackers { player, .. } => format!("declare_attackers[{player}]"),
             Self::DeclareBlockers { player, .. } => format!("declare_blockers[{player}]"),
+            Self::AssertCanAttack { player, .. } => format!("assert_can_attack[{player}]"),
+            Self::AssertCanBlock { player, .. } => format!("assert_can_block[{player}]"),
             Self::AssignCombatDamage { .. } => "assign_combat_damage".to_owned(),
             Self::RequestCleanupPriority => "request_cleanup_priority".to_owned(),
         }
@@ -1050,6 +1145,280 @@ impl TypeSpec {
             }
         }
         Ok(spec)
+    }
+}
+
+/// Scenario target requirement.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct TargetRequirementSpec {
+    kind: String,
+    zone: Option<ZoneSpec>,
+    controller: Option<String>,
+    controller_player: Option<usize>,
+    player_predicate: Option<String>,
+    player: Option<usize>,
+    required_types: Option<TypeSpec>,
+    forbidden_types: Option<TypeSpec>,
+    required_colors: Option<ColorSpec>,
+    forbidden_colors: Option<ColorSpec>,
+    required_keywords: Option<CreatureKeywordSpec>,
+    forbidden_keywords: Option<CreatureKeywordSpec>,
+}
+
+impl TargetRequirementSpec {
+    fn from_ron_value(value: RonValue) -> Result<Self, ScenarioError> {
+        let map = value.into_map("target requirement")?;
+        Self::from_map(&map)
+    }
+
+    fn from_map(map: &RonMap) -> Result<Self, ScenarioError> {
+        Ok(Self {
+            kind: map.required_string("kind")?,
+            zone: match map.optional("zone")? {
+                Some(value) => Some(ZoneSpec::from_ron_value(value)?),
+                None => None,
+            },
+            controller: map.optional_string("controller")?,
+            controller_player: map.optional_usize("controller_player")?,
+            player_predicate: map.optional_string("player_predicate")?,
+            player: map.optional_usize("player")?,
+            required_types: match map.optional("required_types")? {
+                Some(value) => Some(TypeSpec::from_ron_value(value)?),
+                None => None,
+            },
+            forbidden_types: match map.optional("forbidden_types")? {
+                Some(value) => Some(TypeSpec::from_ron_value(value)?),
+                None => None,
+            },
+            required_colors: match map.optional("required_colors")? {
+                Some(value) => Some(ColorSpec::from_ron_value(value)?),
+                None => None,
+            },
+            forbidden_colors: match map.optional("forbidden_colors")? {
+                Some(value) => Some(ColorSpec::from_ron_value(value)?),
+                None => None,
+            },
+            required_keywords: match map.optional("required_keywords")? {
+                Some(value) => Some(CreatureKeywordSpec::from_ron_value(value)?),
+                None => None,
+            },
+            forbidden_keywords: match map.optional("forbidden_keywords")? {
+                Some(value) => Some(CreatureKeywordSpec::from_ron_value(value)?),
+                None => None,
+            },
+        })
+    }
+
+    fn to_requirement(&self, players: &[PlayerId]) -> Result<TargetRequirement, ScenarioError> {
+        let kind = match self.kind.as_str() {
+            "player" => TargetKind::Player,
+            "permanent" => TargetKind::Permanent,
+            "object_in_zone" => {
+                let zone = self
+                    .zone
+                    .as_ref()
+                    .ok_or_else(|| {
+                        ScenarioError::schema("object_in_zone target requires zone".to_owned())
+                    })?
+                    .zone_id(players)?;
+                TargetKind::ObjectInZone(zone)
+            }
+            other => {
+                return Err(ScenarioError::schema(format!(
+                    "unsupported target kind `{other}`"
+                )));
+            }
+        };
+        let mut requirement = TargetRequirement::new(kind);
+        if matches!(kind, TargetKind::Player) {
+            if self.player_predicate.is_some() || self.player.is_some() {
+                requirement = requirement.with_player_predicate(self.player_predicate(players)?);
+            }
+        } else if self.has_object_predicate() {
+            requirement = requirement.with_object_predicate(self.object_predicate(players)?);
+        }
+        Ok(requirement)
+    }
+
+    fn has_object_predicate(&self) -> bool {
+        self.controller.is_some()
+            || self.controller_player.is_some()
+            || self.required_types.is_some()
+            || self.forbidden_types.is_some()
+            || self.required_colors.is_some()
+            || self.forbidden_colors.is_some()
+            || self.required_keywords.is_some()
+            || self.forbidden_keywords.is_some()
+    }
+
+    fn player_predicate(
+        &self,
+        players: &[PlayerId],
+    ) -> Result<PlayerTargetPredicate, ScenarioError> {
+        match self
+            .player_predicate
+            .as_deref()
+            .unwrap_or(if self.player.is_some() {
+                "player"
+            } else {
+                "any"
+            }) {
+            "any" => Ok(PlayerTargetPredicate::Any),
+            "you" => Ok(PlayerTargetPredicate::You),
+            "opponent" => Ok(PlayerTargetPredicate::Opponent),
+            "player" => Ok(PlayerTargetPredicate::Player(player_id(
+                players,
+                self.player.ok_or_else(|| {
+                    ScenarioError::schema("player target predicate requires player".to_owned())
+                })?,
+                "target_requirement.player",
+            )?)),
+            other => Err(ScenarioError::schema(format!(
+                "unsupported player target predicate `{other}`"
+            ))),
+        }
+    }
+
+    fn object_predicate(
+        &self,
+        players: &[PlayerId],
+    ) -> Result<ObjectTargetPredicate, ScenarioError> {
+        let mut predicate = ObjectTargetPredicate::any();
+        predicate = predicate.with_controller(self.controller_predicate(players)?);
+        if let Some(types) = self.required_types {
+            predicate = predicate.with_required_types(types.to_types());
+        }
+        if let Some(types) = self.forbidden_types {
+            predicate = predicate.with_forbidden_types(types.to_types());
+        }
+        if let Some(colors) = self.required_colors {
+            predicate = predicate.with_required_colors(colors.to_colors());
+        }
+        if let Some(colors) = self.forbidden_colors {
+            predicate = predicate.with_forbidden_colors(colors.to_colors());
+        }
+        if let Some(keywords) = self.required_keywords {
+            predicate = predicate.with_required_keywords(keywords.to_keywords());
+        }
+        if let Some(keywords) = self.forbidden_keywords {
+            predicate = predicate.with_forbidden_keywords(keywords.to_keywords());
+        }
+        Ok(predicate)
+    }
+
+    fn controller_predicate(
+        &self,
+        players: &[PlayerId],
+    ) -> Result<TargetControllerPredicate, ScenarioError> {
+        match self
+            .controller
+            .as_deref()
+            .unwrap_or(if self.controller_player.is_some() {
+                "player"
+            } else {
+                "any"
+            }) {
+            "any" => Ok(TargetControllerPredicate::Any),
+            "you" => Ok(TargetControllerPredicate::You),
+            "opponent" => Ok(TargetControllerPredicate::Opponent),
+            "player" => Ok(TargetControllerPredicate::Player(player_id(
+                players,
+                self.controller_player.ok_or_else(|| {
+                    ScenarioError::schema(
+                        "controller player predicate requires controller_player".to_owned(),
+                    )
+                })?,
+                "target_requirement.controller_player",
+            )?)),
+            other => Err(ScenarioError::schema(format!(
+                "unsupported controller predicate `{other}`"
+            ))),
+        }
+    }
+}
+
+/// Scenario target choice.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct TargetChoiceSpec {
+    player: Option<usize>,
+    object: Option<usize>,
+}
+
+impl TargetChoiceSpec {
+    fn from_map(map: &RonMap) -> Result<Self, ScenarioError> {
+        Ok(Self {
+            player: map.optional_usize("target_player")?,
+            object: map.optional_usize("target_object")?,
+        })
+    }
+
+    fn to_choice(
+        self,
+        players: &[PlayerId],
+        objects: &[ObjectId],
+        phase: &str,
+    ) -> Result<TargetChoice, ScenarioError> {
+        match (self.player, self.object) {
+            (Some(player), None) => Ok(TargetChoice::Player(player_id(players, player, phase)?)),
+            (None, Some(object)) => Ok(TargetChoice::Object(object_id(objects, object, phase)?)),
+            (Some(_), Some(_)) => Err(ScenarioError::schema(format!(
+                "{phase} cannot target both player and object"
+            ))),
+            (None, None) => Err(ScenarioError::schema(format!(
+                "{phase} requires target_player or target_object"
+            ))),
+        }
+    }
+}
+
+/// Scenario spell target slot.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TargetSpec {
+    requirement: TargetRequirementSpec,
+    choice: TargetChoiceSpec,
+}
+
+impl TargetSpec {
+    fn from_ron_value(value: RonValue) -> Result<Self, ScenarioError> {
+        let map = value.into_map("target")?;
+        Ok(Self {
+            requirement: TargetRequirementSpec::from_ron_value(map.required("requirement")?)?,
+            choice: TargetChoiceSpec::from_map(&map)?,
+        })
+    }
+}
+
+/// Scenario targeting or combat restriction.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct RestrictionSpec {
+    controller: usize,
+    source_object: Option<usize>,
+    effect: String,
+    subject_object: Option<usize>,
+    all_objects: bool,
+    controlled_by: Option<usize>,
+    colors: Option<ColorSpec>,
+    cost: Option<ManaCostSpec>,
+}
+
+impl RestrictionSpec {
+    fn from_map(map: &RonMap) -> Result<Self, ScenarioError> {
+        Ok(Self {
+            controller: map.required_usize("controller")?,
+            source_object: map.optional_usize("source_object")?,
+            effect: map.required_string("effect")?,
+            subject_object: map.optional_usize("subject_object")?,
+            all_objects: map.optional_bool("all_objects")?.unwrap_or(false),
+            controlled_by: map.optional_usize("controlled_by")?,
+            colors: match map.optional("colors")? {
+                Some(value) => Some(ColorSpec::from_ron_value(value)?),
+                None => None,
+            },
+            cost: match map.optional("cost")? {
+                Some(value) => Some(ManaCostSpec::from_ron_value(value)?),
+                None => None,
+            },
+        })
     }
 }
 
@@ -1932,6 +2301,51 @@ fn execute_step(step: &ScenarioStep, context: &mut RunContext) {
             record_outcome(&label, Outcome::Applied, context);
             return;
         }
+        ScenarioStep::AssertCanTarget {
+            player,
+            source_object,
+            requirement,
+            target,
+            expected,
+        } => {
+            check_can_target(
+                &label,
+                *player,
+                *source_object,
+                requirement,
+                *target,
+                *expected,
+                context,
+            );
+            record_outcome(&label, Outcome::Applied, context);
+            return;
+        }
+        ScenarioStep::AssertWardCost {
+            target_object,
+            cost,
+        } => {
+            check_ward_cost(&label, *target_object, cost, context);
+            record_outcome(&label, Outcome::Applied, context);
+            return;
+        }
+        ScenarioStep::AssertCanAttack {
+            player,
+            attack,
+            expected,
+        } => {
+            check_can_attack(&label, *player, *attack, *expected, context);
+            record_outcome(&label, Outcome::Applied, context);
+            return;
+        }
+        ScenarioStep::AssertCanBlock {
+            player,
+            block,
+            expected,
+        } => {
+            check_can_block(&label, *player, *block, *expected, context);
+            record_outcome(&label, Outcome::Applied, context);
+            return;
+        }
         _ => {}
     }
     let action = match action_for_step(step, context) {
@@ -2138,6 +2552,10 @@ fn action_for_step(step: &ScenarioStep, context: &RunContext) -> Result<Action, 
             let definition = cost_modifier_definition(spec, context)?;
             Ok(Action::RegisterCostModifier { definition })
         }
+        ScenarioStep::RegisterRestriction { spec } => {
+            let definition = restriction_definition(spec, context)?;
+            Ok(Action::RegisterRestriction { definition })
+        }
         ScenarioStep::ActivateAbilityAuto { player, ability } => {
             let player = player_id(&context.players, *player, "activate_ability_auto.player")?;
             let ability = activated_ability_id(
@@ -2169,10 +2587,57 @@ fn action_for_step(step: &ScenarioStep, context: &RunContext) -> Result<Action, 
                 payment,
             })
         }
-        ScenarioStep::AssertCharacteristics { .. } => Ok(Action::CheckStateBasedActions),
-        ScenarioStep::AssertObjectTapped { .. } | ScenarioStep::AssertObjectLoyalty { .. } => {
-            Ok(Action::CheckStateBasedActions)
+        ScenarioStep::CastSpellAuto {
+            player,
+            object,
+            kind,
+            timing,
+            cost,
+            targets,
+        } => {
+            let player = player_id(&context.players, *player, "cast_spell_auto.player")?;
+            let object = object_id(&context.objects, *object, "cast_spell_auto.object")?;
+            let cost = cost.to_cost();
+            let available = context.state.mana_pool(player).map_err(|error| {
+                ScenarioError::schema(format!("cast mana pool failed: {error:?}"))
+            })?;
+            let payment = auto_payment_plan(available, cost)
+                .map_err(|error| {
+                    ScenarioError::schema(format!("cast payment planning failed: {error:?}"))
+                })?
+                .ok_or_else(|| {
+                    ScenarioError::schema("cast_spell_auto has no valid payment plan".to_owned())
+                })?;
+            let mut requirements = Vec::with_capacity(targets.len());
+            let mut choices = Vec::with_capacity(targets.len());
+            for target in targets {
+                requirements.push(target.requirement.to_requirement(&context.players)?);
+                choices.push(target.choice.to_choice(
+                    &context.players,
+                    &context.objects,
+                    "cast_spell_auto.target",
+                )?);
+            }
+            let request = CastSpellRequest::new(
+                parse_stack_object_kind(kind)?,
+                parse_spell_timing(timing)?,
+                cost,
+                payment,
+            )
+            .with_targets(requirements, choices);
+            Ok(Action::CastSpell {
+                player,
+                object,
+                request,
+            })
         }
+        ScenarioStep::AssertCharacteristics { .. }
+        | ScenarioStep::AssertObjectTapped { .. }
+        | ScenarioStep::AssertObjectLoyalty { .. }
+        | ScenarioStep::AssertCanTarget { .. }
+        | ScenarioStep::AssertWardCost { .. }
+        | ScenarioStep::AssertCanAttack { .. }
+        | ScenarioStep::AssertCanBlock { .. } => Ok(Action::CheckStateBasedActions),
         ScenarioStep::DeclareAttackers { player, attacks } => {
             let mut declarations = Vec::with_capacity(attacks.len());
             for attack in attacks {
@@ -2688,6 +3153,187 @@ fn check_object_loyalty_expectation(
     }
 }
 
+fn check_can_target(
+    phase: &str,
+    player: usize,
+    source_object: Option<usize>,
+    requirement: &TargetRequirementSpec,
+    target: TargetChoiceSpec,
+    expected: bool,
+    context: &mut RunContext,
+) {
+    let player_id = match player_id(&context.players, player, phase) {
+        Ok(player) => player,
+        Err(error) => {
+            context
+                .failures
+                .push(ScenarioFailure::new(phase, error.to_string()));
+            return;
+        }
+    };
+    let source = match source_object {
+        Some(index) => match object_id(&context.objects, index, phase) {
+            Ok(object) => Some(object),
+            Err(error) => {
+                context
+                    .failures
+                    .push(ScenarioFailure::new(phase, error.to_string()));
+                return;
+            }
+        },
+        None => None,
+    };
+    let requirement = match requirement.to_requirement(&context.players) {
+        Ok(requirement) => requirement,
+        Err(error) => {
+            context
+                .failures
+                .push(ScenarioFailure::new(phase, error.to_string()));
+            return;
+        }
+    };
+    let target = match target.to_choice(&context.players, &context.objects, phase) {
+        Ok(target) => target,
+        Err(error) => {
+            context
+                .failures
+                .push(ScenarioFailure::new(phase, error.to_string()));
+            return;
+        }
+    };
+    let actual = context
+        .state
+        .can_target(player_id, source, requirement, target);
+    if actual != expected {
+        context.failures.push(ScenarioFailure::new(
+            phase,
+            format!("expected target legality {expected}, found {actual}"),
+        ));
+    }
+}
+
+fn check_ward_cost(
+    phase: &str,
+    target_object: usize,
+    cost: &ManaCostSpec,
+    context: &mut RunContext,
+) {
+    let object = match object_id(&context.objects, target_object, phase) {
+        Ok(object) => object,
+        Err(error) => {
+            context
+                .failures
+                .push(ScenarioFailure::new(phase, error.to_string()));
+            return;
+        }
+    };
+    let expected = cost.to_cost();
+    match context
+        .state
+        .ward_cost_for_target(TargetChoice::Object(object))
+    {
+        Ok(actual) if actual == expected => {}
+        Ok(actual) => context.failures.push(ScenarioFailure::new(
+            phase,
+            format!("object {target_object} expected ward cost {expected:?}, found {actual:?}"),
+        )),
+        Err(error) => context.failures.push(ScenarioFailure::new(
+            phase,
+            format!("object {target_object} ward cost failed: {error:?}"),
+        )),
+    }
+}
+
+fn check_can_attack(
+    phase: &str,
+    player: usize,
+    attack: ScenarioAttackDeclaration,
+    expected: bool,
+    context: &mut RunContext,
+) {
+    let player_id = match player_id(&context.players, player, phase) {
+        Ok(player) => player,
+        Err(error) => {
+            context
+                .failures
+                .push(ScenarioFailure::new(phase, error.to_string()));
+            return;
+        }
+    };
+    let attack = match attack_declaration(attack, phase, context) {
+        Ok(attack) => attack,
+        Err(error) => {
+            context
+                .failures
+                .push(ScenarioFailure::new(phase, error.to_string()));
+            return;
+        }
+    };
+    let actual = context.state.can_attack(player_id, attack);
+    if actual != expected {
+        context.failures.push(ScenarioFailure::new(
+            phase,
+            format!("expected attack legality {expected}, found {actual}"),
+        ));
+    }
+}
+
+fn check_can_block(
+    phase: &str,
+    player: usize,
+    block: ScenarioBlockDeclaration,
+    expected: bool,
+    context: &mut RunContext,
+) {
+    let player_id = match player_id(&context.players, player, phase) {
+        Ok(player) => player,
+        Err(error) => {
+            context
+                .failures
+                .push(ScenarioFailure::new(phase, error.to_string()));
+            return;
+        }
+    };
+    let block = match block_declaration(block, phase, context) {
+        Ok(block) => block,
+        Err(error) => {
+            context
+                .failures
+                .push(ScenarioFailure::new(phase, error.to_string()));
+            return;
+        }
+    };
+    let actual = context.state.can_block(player_id, block);
+    if actual != expected {
+        context.failures.push(ScenarioFailure::new(
+            phase,
+            format!("expected block legality {expected}, found {actual}"),
+        ));
+    }
+}
+
+fn attack_declaration(
+    attack: ScenarioAttackDeclaration,
+    phase: &str,
+    context: &RunContext,
+) -> Result<AttackDeclaration, ScenarioError> {
+    Ok(AttackDeclaration::new(
+        object_id(&context.objects, attack.attacker, phase)?,
+        player_id(&context.players, attack.defender, phase)?,
+    ))
+}
+
+fn block_declaration(
+    block: ScenarioBlockDeclaration,
+    phase: &str,
+    context: &RunContext,
+) -> Result<BlockDeclaration, ScenarioError> {
+    Ok(BlockDeclaration::new(
+        object_id(&context.objects, block.blocker, phase)?,
+        object_id(&context.objects, block.attacker, phase)?,
+    ))
+}
+
 fn check_outcome(expectation: OutcomeExpectation, context: &mut RunContext) {
     match (expectation, context.state.game_outcome()) {
         (OutcomeExpectation::InProgress, GameOutcome::InProgress)
@@ -3100,6 +3746,121 @@ fn cost_modifier_operation(spec: &CostModifierOperationSpec) -> CostModifierOper
     }
 }
 
+fn restriction_definition(
+    spec: &RestrictionSpec,
+    context: &RunContext,
+) -> Result<RestrictionDefinition, ScenarioError> {
+    let controller = player_id(
+        &context.players,
+        spec.controller,
+        "register_restriction.controller",
+    )?;
+    let source = match spec.source_object {
+        Some(index) => Some(object_id(
+            &context.objects,
+            index,
+            "register_restriction.source_object",
+        )?),
+        None => None,
+    };
+    let mut definition = RestrictionDefinition::new(controller, restriction_effect(spec, context)?);
+    if let Some(source) = source {
+        definition = definition.with_source(source);
+    }
+    Ok(definition)
+}
+
+fn restriction_effect(
+    spec: &RestrictionSpec,
+    context: &RunContext,
+) -> Result<RestrictionEffect, ScenarioError> {
+    match spec.effect.as_str() {
+        "shroud" => Ok(RestrictionEffect::Targeting {
+            subject: target_restriction_subject(spec, context)?,
+            restriction: TargetRestriction::Shroud,
+        }),
+        "hexproof" => Ok(RestrictionEffect::Targeting {
+            subject: target_restriction_subject(spec, context)?,
+            restriction: TargetRestriction::Hexproof,
+        }),
+        "protection" => Ok(RestrictionEffect::Targeting {
+            subject: target_restriction_subject(spec, context)?,
+            restriction: TargetRestriction::ProtectionFromColors {
+                colors: spec
+                    .colors
+                    .ok_or_else(|| {
+                        ScenarioError::schema("protection restriction requires colors".to_owned())
+                    })?
+                    .to_colors(),
+            },
+        }),
+        "ward" => Ok(RestrictionEffect::Targeting {
+            subject: target_restriction_subject(spec, context)?,
+            restriction: TargetRestriction::Ward {
+                cost: spec.cost.unwrap_or_default().to_cost(),
+            },
+        }),
+        "cannot_attack" => Ok(RestrictionEffect::Combat {
+            subject: combat_restriction_subject(spec, context)?,
+            restriction: CombatRestriction::CannotAttack,
+        }),
+        "cannot_block" => Ok(RestrictionEffect::Combat {
+            subject: combat_restriction_subject(spec, context)?,
+            restriction: CombatRestriction::CannotBlock,
+        }),
+        "cannot_be_blocked" => Ok(RestrictionEffect::Combat {
+            subject: combat_restriction_subject(spec, context)?,
+            restriction: CombatRestriction::CannotBeBlocked,
+        }),
+        other => Err(ScenarioError::schema(format!(
+            "unsupported restriction effect `{other}`"
+        ))),
+    }
+}
+
+fn target_restriction_subject(
+    spec: &RestrictionSpec,
+    context: &RunContext,
+) -> Result<TargetRestrictionSubject, ScenarioError> {
+    match (spec.subject_object, spec.all_objects) {
+        (Some(index), false) => Ok(TargetRestrictionSubject::Object(object_id(
+            &context.objects,
+            index,
+            "register_restriction.subject_object",
+        )?)),
+        (None, true) => Ok(TargetRestrictionSubject::AllObjects),
+        (Some(_), true) => Err(ScenarioError::schema(
+            "target restriction cannot set both subject_object and all_objects".to_owned(),
+        )),
+        (None, false) => Err(ScenarioError::schema(
+            "target restriction requires subject_object or all_objects".to_owned(),
+        )),
+    }
+}
+
+fn combat_restriction_subject(
+    spec: &RestrictionSpec,
+    context: &RunContext,
+) -> Result<CombatRestrictionSubject, ScenarioError> {
+    match (spec.subject_object, spec.controlled_by, spec.all_objects) {
+        (Some(index), None, false) => Ok(CombatRestrictionSubject::Object(object_id(
+            &context.objects,
+            index,
+            "register_restriction.subject_object",
+        )?)),
+        (None, Some(player), false) => Ok(CombatRestrictionSubject::ControlledBy(player_id(
+            &context.players,
+            player,
+            "register_restriction.controlled_by",
+        )?)),
+        (None, None, true) => Ok(CombatRestrictionSubject::AllObjects),
+        _ => Err(ScenarioError::schema(
+            "combat restriction requires exactly one of subject_object, controlled_by, all_objects"
+                .to_owned(),
+        )),
+    }
+}
+
 fn ability_player(
     player: Option<usize>,
     players: &[PlayerId],
@@ -3221,9 +3982,39 @@ fn parse_script(value: RonValue) -> Result<Vec<ScenarioStep>, ScenarioError> {
             "register_cost_modifier" => ScenarioStep::RegisterCostModifier {
                 spec: CostModifierSpec::from_map(&map)?,
             },
+            "register_restriction" => ScenarioStep::RegisterRestriction {
+                spec: RestrictionSpec::from_map(&map)?,
+            },
             "activate_ability_auto" => ScenarioStep::ActivateAbilityAuto {
                 player: map.required_usize("player")?,
                 ability: map.required_usize("ability")?,
+            },
+            "cast_spell_auto" => ScenarioStep::CastSpellAuto {
+                player: map.required_usize("player")?,
+                object: map.required_usize("object")?,
+                kind: map.required_string("kind")?,
+                timing: map
+                    .optional_string("timing")?
+                    .unwrap_or_else(|| "instant".to_owned()),
+                cost: match map.optional("cost")? {
+                    Some(value) => ManaCostSpec::from_ron_value(value)?,
+                    None => ManaCostSpec::default(),
+                },
+                targets: parse_targets(
+                    map.optional("targets")?
+                        .unwrap_or_else(|| RonValue::List(Vec::new())),
+                )?,
+            },
+            "assert_can_target" => ScenarioStep::AssertCanTarget {
+                player: map.required_usize("player")?,
+                source_object: map.optional_usize("source_object")?,
+                requirement: TargetRequirementSpec::from_ron_value(map.required("requirement")?)?,
+                target: TargetChoiceSpec::from_map(&map)?,
+                expected: map.required_bool("expected")?,
+            },
+            "assert_ward_cost" => ScenarioStep::AssertWardCost {
+                target_object: map.required_usize("target_object")?,
+                cost: ManaCostSpec::from_ron_value(map.required("cost")?)?,
             },
             "assert_characteristics" => ScenarioStep::AssertCharacteristics {
                 expectation: CharacteristicExpectation::from_ron_value(RonValue::Map(map))?,
@@ -3243,6 +4034,16 @@ fn parse_script(value: RonValue) -> Result<Vec<ScenarioStep>, ScenarioError> {
             "declare_blockers" => ScenarioStep::DeclareBlockers {
                 player: map.required_usize("player")?,
                 blocks: parse_block_declarations(map.required("blocks")?)?,
+            },
+            "assert_can_attack" => ScenarioStep::AssertCanAttack {
+                player: map.required_usize("player")?,
+                attack: ScenarioAttackDeclaration::from_ron_value(map.required("attack")?)?,
+                expected: map.required_bool("expected")?,
+            },
+            "assert_can_block" => ScenarioStep::AssertCanBlock {
+                player: map.required_usize("player")?,
+                block: ScenarioBlockDeclaration::from_ron_value(map.required("block")?)?,
+                expected: map.required_bool("expected")?,
             },
             "assign_combat_damage" => ScenarioStep::AssignCombatDamage {
                 assignments: parse_combat_damage_requests(map.required("assignments")?)?,
@@ -3265,6 +4066,14 @@ fn parse_attack_declarations(
         .into_list("attack declarations")?
         .into_iter()
         .map(ScenarioAttackDeclaration::from_ron_value)
+        .collect()
+}
+
+fn parse_targets(value: RonValue) -> Result<Vec<TargetSpec>, ScenarioError> {
+    value
+        .into_list("targets")?
+        .into_iter()
+        .map(TargetSpec::from_ron_value)
         .collect()
 }
 
@@ -3366,6 +4175,29 @@ fn parse_activation_timing(input: &str) -> Result<ActivationTiming, ScenarioErro
         "Sorcery" | "sorcery" => Ok(ActivationTiming::Sorcery),
         other => Err(ScenarioError::schema(format!(
             "unsupported activation timing `{other}`"
+        ))),
+    }
+}
+
+fn parse_stack_object_kind(input: &str) -> Result<StackObjectKind, ScenarioError> {
+    match input {
+        "InstantSpell" | "instant_spell" | "instant" => Ok(StackObjectKind::InstantSpell),
+        "SorcerySpell" | "sorcery_spell" | "sorcery" => Ok(StackObjectKind::SorcerySpell),
+        "PermanentSpell" | "permanent_spell" | "permanent" => Ok(StackObjectKind::PermanentSpell),
+        "ActivatedAbility" | "activated_ability" => Ok(StackObjectKind::ActivatedAbility),
+        "TriggeredAbility" | "triggered_ability" => Ok(StackObjectKind::TriggeredAbility),
+        other => Err(ScenarioError::schema(format!(
+            "unsupported stack object kind `{other}`"
+        ))),
+    }
+}
+
+fn parse_spell_timing(input: &str) -> Result<SpellTiming, ScenarioError> {
+    match input {
+        "Instant" | "instant" => Ok(SpellTiming::Instant),
+        "Sorcery" | "sorcery" => Ok(SpellTiming::Sorcery),
+        other => Err(ScenarioError::schema(format!(
+            "unsupported spell timing `{other}`"
         ))),
     }
 }

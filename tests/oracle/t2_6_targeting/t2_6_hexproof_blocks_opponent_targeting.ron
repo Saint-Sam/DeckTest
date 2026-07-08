@@ -1,0 +1,53 @@
+(
+    name: "T2.6 hexproof blocks opponents but not controller targeting",
+    setup: (
+        players: 2,
+        objects: [
+            (card: 26001, owner: 0, controller: 0, zone: "Hand", player: 0),
+            (card: 26002, owner: 0, controller: 0, zone: "Battlefield"),
+            (card: 26003, owner: 1, controller: 1, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "set_base_creature", object: 1, power: 2, toughness: 2, keywords: []),
+        (action: "set_base_creature", object: 2, power: 2, toughness: 2, keywords: []),
+        (action: "register_restriction", controller: 1, subject_object: 2, effect: "hexproof"),
+        (
+            action: "assert_can_target",
+            player: 0,
+            source_object: 0,
+            requirement: (kind: "permanent", controller: "opponent", required_types: ["creature"]),
+            target_object: 2,
+            expected: false,
+        ),
+        (
+            action: "assert_can_target",
+            player: 1,
+            source_object: 2,
+            requirement: (kind: "permanent", controller: "you", required_types: ["creature"]),
+            target_object: 2,
+            expected: true,
+        ),
+        (
+            action: "assert_can_target",
+            player: 0,
+            source_object: 0,
+            requirement: (kind: "permanent", controller: "you", required_types: ["creature"]),
+            target_object: 1,
+            expected: true,
+        ),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Hand", player: 0, count: 1),
+            (zone: "Battlefield", count: 2),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "life_poison_sanity",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

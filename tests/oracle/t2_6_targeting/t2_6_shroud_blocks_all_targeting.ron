@@ -1,0 +1,45 @@
+(
+    name: "T2.6 shroud blocks all spell and ability targeting",
+    setup: (
+        players: 2,
+        objects: [
+            (card: 26011, owner: 0, controller: 0, zone: "Hand", player: 0),
+            (card: 26012, owner: 1, controller: 1, zone: "Hand", player: 1),
+            (card: 26013, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "set_base_creature", object: 2, power: 3, toughness: 3, keywords: []),
+        (action: "register_restriction", controller: 0, subject_object: 2, effect: "shroud"),
+        (
+            action: "assert_can_target",
+            player: 0,
+            source_object: 0,
+            requirement: (kind: "permanent", controller: "you", required_types: ["creature"]),
+            target_object: 2,
+            expected: false,
+        ),
+        (
+            action: "assert_can_target",
+            player: 1,
+            source_object: 1,
+            requirement: (kind: "permanent", controller: "opponent", required_types: ["creature"]),
+            target_object: 2,
+            expected: false,
+        ),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Hand", player: 0, count: 1),
+            (zone: "Hand", player: 1, count: 1),
+            (zone: "Battlefield", count: 1),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "life_poison_sanity",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

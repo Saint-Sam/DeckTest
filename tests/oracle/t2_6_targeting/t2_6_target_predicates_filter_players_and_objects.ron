@@ -1,0 +1,58 @@
+(
+    name: "T2.6 target predicates filter players and object characteristics",
+    setup: (
+        players: 2,
+        objects: [
+            (card: 26041, owner: 0, controller: 0, zone: "Hand", player: 0),
+            (card: 26042, owner: 0, controller: 0, zone: "Battlefield"),
+            (card: 26043, owner: 1, controller: 1, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "set_base_creature", object: 1, power: 2, toughness: 2, keywords: ["flying"]),
+        (action: "set_base_creature", object: 2, power: 2, toughness: 2, keywords: []),
+        (
+            action: "assert_can_target",
+            player: 0,
+            source_object: 0,
+            requirement: (kind: "permanent", controller: "you", required_types: ["creature"], required_keywords: ["flying"]),
+            target_object: 1,
+            expected: true,
+        ),
+        (
+            action: "assert_can_target",
+            player: 0,
+            source_object: 0,
+            requirement: (kind: "permanent", controller: "you", required_types: ["creature"], required_keywords: ["flying"]),
+            target_object: 2,
+            expected: false,
+        ),
+        (
+            action: "assert_can_target",
+            player: 0,
+            requirement: (kind: "player", player_predicate: "opponent"),
+            target_player: 1,
+            expected: true,
+        ),
+        (
+            action: "assert_can_target",
+            player: 0,
+            requirement: (kind: "player", player_predicate: "opponent"),
+            target_player: 0,
+            expected: false,
+        ),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Hand", player: 0, count: 1),
+            (zone: "Battlefield", count: 2),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "life_poison_sanity",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

@@ -1126,6 +1126,24 @@ impl CostModifierId {
     }
 }
 
+/// A stable handle for one registered targeting or combat restriction.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct RestrictionId(u32);
+
+impl RestrictionId {
+    /// Returns the zero-based restriction-definition index.
+    #[must_use]
+    pub const fn index(self) -> usize {
+        self.0 as usize
+    }
+
+    /// Returns the raw deterministic restriction value.
+    #[must_use]
+    pub const fn get(self) -> u32 {
+        self.0
+    }
+}
+
 /// A stable handle for one registered replacement/prevention effect definition.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct ReplacementEffectId(u32);
@@ -1256,6 +1274,26 @@ impl ObjectColors {
         !self.white && !self.blue && !self.black && !self.red && !self.green
     }
 
+    /// Returns true if every color in `required` is present in this set.
+    #[must_use]
+    pub const fn contains_all(self, required: Self) -> bool {
+        (!required.white || self.white)
+            && (!required.blue || self.blue)
+            && (!required.black || self.black)
+            && (!required.red || self.red)
+            && (!required.green || self.green)
+    }
+
+    /// Returns true if this set and `other` share at least one color.
+    #[must_use]
+    pub const fn intersects(self, other: Self) -> bool {
+        (self.white && other.white)
+            || (self.blue && other.blue)
+            || (self.black && other.black)
+            || (self.red && other.red)
+            || (self.green && other.green)
+    }
+
     const fn canonical_bits(self) -> u8 {
         (self.white as u8)
             | ((self.blue as u8) << 1)
@@ -1381,6 +1419,30 @@ impl ObjectTypes {
     #[must_use]
     pub const fn sorcery(self) -> bool {
         self.sorcery
+    }
+
+    /// Returns true if every type in `required` is present in this set.
+    #[must_use]
+    pub const fn contains_all(self, required: Self) -> bool {
+        (!required.artifact || self.artifact)
+            && (!required.creature || self.creature)
+            && (!required.enchantment || self.enchantment)
+            && (!required.instant || self.instant)
+            && (!required.land || self.land)
+            && (!required.planeswalker || self.planeswalker)
+            && (!required.sorcery || self.sorcery)
+    }
+
+    /// Returns true if this set and `other` share at least one type.
+    #[must_use]
+    pub const fn intersects(self, other: Self) -> bool {
+        (self.artifact && other.artifact)
+            || (self.creature && other.creature)
+            || (self.enchantment && other.enchantment)
+            || (self.instant && other.instant)
+            || (self.land && other.land)
+            || (self.planeswalker && other.planeswalker)
+            || (self.sorcery && other.sorcery)
     }
 
     const fn without(mut self, remove: Self) -> Self {
@@ -1554,6 +1616,8 @@ pub enum GameEventKind {
     ActivatedAbilityActivated,
     /// An activated ability resolved.
     ActivatedAbilityResolved,
+    /// A targeting or combat restriction definition was registered.
+    RestrictionRegistered,
 }
 
 impl GameEventKind {
@@ -1613,6 +1677,7 @@ impl GameEventKind {
             Self::CostModifierRegistered => 51,
             Self::ActivatedAbilityActivated => 52,
             Self::ActivatedAbilityResolved => 53,
+            Self::RestrictionRegistered => 54,
         }
     }
 }
@@ -1647,23 +1712,193 @@ impl TargetKind {
     }
 }
 
+/// Controller relationship used by target predicates.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum TargetControllerPredicate {
+    /// Any controller is accepted.
+    Any,
+    /// The target must be controlled by the player choosing targets.
+    You,
+    /// The target must be controlled by a different player.
+    Opponent,
+    /// The target must be controlled by one exact player.
+    Player(PlayerId),
+}
+
+impl TargetControllerPredicate {
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::Any => 0,
+            Self::You => 1,
+            Self::Opponent => 2,
+            Self::Player(_) => 3,
+        }
+    }
+}
+
+/// Declarative predicate for object targets.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct ObjectTargetPredicate {
+    controller: TargetControllerPredicate,
+    required_types: ObjectTypes,
+    forbidden_types: ObjectTypes,
+    required_colors: ObjectColors,
+    forbidden_colors: ObjectColors,
+    required_keywords: CreatureKeywords,
+    forbidden_keywords: CreatureKeywords,
+}
+
+impl ObjectTargetPredicate {
+    /// Creates an object predicate that accepts any object matching its target kind.
+    #[must_use]
+    pub const fn any() -> Self {
+        Self {
+            controller: TargetControllerPredicate::Any,
+            required_types: ObjectTypes::none(),
+            forbidden_types: ObjectTypes::none(),
+            required_colors: ObjectColors::none(),
+            forbidden_colors: ObjectColors::none(),
+            required_keywords: CreatureKeywords::none(),
+            forbidden_keywords: CreatureKeywords::none(),
+        }
+    }
+
+    /// Returns this predicate constrained to one controller relationship.
+    #[must_use]
+    pub const fn with_controller(mut self, controller: TargetControllerPredicate) -> Self {
+        self.controller = controller;
+        self
+    }
+
+    /// Returns this predicate with additional required object types.
+    #[must_use]
+    pub const fn with_required_types(mut self, types: ObjectTypes) -> Self {
+        self.required_types = types;
+        self
+    }
+
+    /// Returns this predicate with forbidden object types.
+    #[must_use]
+    pub const fn with_forbidden_types(mut self, types: ObjectTypes) -> Self {
+        self.forbidden_types = types;
+        self
+    }
+
+    /// Returns this predicate with additional required object colors.
+    #[must_use]
+    pub const fn with_required_colors(mut self, colors: ObjectColors) -> Self {
+        self.required_colors = colors;
+        self
+    }
+
+    /// Returns this predicate with forbidden object colors.
+    #[must_use]
+    pub const fn with_forbidden_colors(mut self, colors: ObjectColors) -> Self {
+        self.forbidden_colors = colors;
+        self
+    }
+
+    /// Returns this predicate with required combat keywords.
+    #[must_use]
+    pub const fn with_required_keywords(mut self, keywords: CreatureKeywords) -> Self {
+        self.required_keywords = keywords;
+        self
+    }
+
+    /// Returns this predicate with forbidden combat keywords.
+    #[must_use]
+    pub const fn with_forbidden_keywords(mut self, keywords: CreatureKeywords) -> Self {
+        self.forbidden_keywords = keywords;
+        self
+    }
+}
+
+/// Declarative predicate for player targets.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum PlayerTargetPredicate {
+    /// Any player.
+    Any,
+    /// The targeting player.
+    You,
+    /// A player other than the targeting player.
+    Opponent,
+    /// One exact player.
+    Player(PlayerId),
+}
+
+impl PlayerTargetPredicate {
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::Any => 0,
+            Self::You => 1,
+            Self::Opponent => 2,
+            Self::Player(_) => 3,
+        }
+    }
+}
+
+/// Predicate attached to one target slot.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum TargetPredicate {
+    /// Accept any legal target of the required kind.
+    Any,
+    /// Apply an object-characteristics predicate.
+    Object(ObjectTargetPredicate),
+    /// Apply a player predicate.
+    Player(PlayerTargetPredicate),
+}
+
+impl TargetPredicate {
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::Any => 0,
+            Self::Object(_) => 1,
+            Self::Player(_) => 2,
+        }
+    }
+}
+
 /// One required target slot for a spell.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct TargetRequirement {
     kind: TargetKind,
+    predicate: TargetPredicate,
 }
 
 impl TargetRequirement {
     /// Creates a target requirement.
     #[must_use]
     pub const fn new(kind: TargetKind) -> Self {
-        Self { kind }
+        Self {
+            kind,
+            predicate: TargetPredicate::Any,
+        }
     }
 
     /// Returns the required target category.
     #[must_use]
     pub const fn kind(self) -> TargetKind {
         self.kind
+    }
+
+    /// Returns this requirement with an object predicate.
+    #[must_use]
+    pub const fn with_object_predicate(mut self, predicate: ObjectTargetPredicate) -> Self {
+        self.predicate = TargetPredicate::Object(predicate);
+        self
+    }
+
+    /// Returns this requirement with a player predicate.
+    #[must_use]
+    pub const fn with_player_predicate(mut self, predicate: PlayerTargetPredicate) -> Self {
+        self.predicate = TargetPredicate::Player(predicate);
+        self
+    }
+
+    /// Returns the predicate attached to this target slot.
+    #[must_use]
+    pub const fn predicate(self) -> TargetPredicate {
+        self.predicate
     }
 }
 
@@ -1691,6 +1926,7 @@ pub struct TargetSnapshot {
     requirement: TargetRequirement,
     choice: TargetChoice,
     original_zone: Option<ZoneId>,
+    ward_cost: ManaCost,
 }
 
 impl TargetSnapshot {
@@ -1710,6 +1946,12 @@ impl TargetSnapshot {
     #[must_use]
     pub const fn original_zone(self) -> Option<ZoneId> {
         self.original_zone
+    }
+
+    /// Returns the ward cost observed when this target was chosen.
+    #[must_use]
+    pub const fn ward_cost(self) -> ManaCost {
+        self.ward_cost
     }
 }
 
@@ -2274,6 +2516,169 @@ impl CastSpellRequest {
     #[must_use]
     pub fn target_choices(&self) -> &[TargetChoice] {
         &self.target_choices
+    }
+}
+
+/// Which object(s) a targeting restriction protects.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum TargetRestrictionSubject {
+    /// One exact object.
+    Object(ObjectId),
+    /// Every current object.
+    AllObjects,
+}
+
+impl TargetRestrictionSubject {
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::Object(_) => 0,
+            Self::AllObjects => 1,
+        }
+    }
+}
+
+/// Targeting restrictions checked by the T2.6 legality engine.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum TargetRestriction {
+    /// This object cannot be targeted by spells or abilities.
+    Shroud,
+    /// This object cannot be targeted by opponents' spells or abilities.
+    Hexproof,
+    /// This object cannot be targeted by sources of any listed color.
+    ProtectionFromColors {
+        /// Protected colors.
+        colors: ObjectColors,
+    },
+    /// This object has ward. Ward does not make the target illegal; the cost is captured.
+    Ward {
+        /// Ward cost observed when the target is selected.
+        cost: ManaCost,
+    },
+}
+
+impl TargetRestriction {
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::Shroud => 0,
+            Self::Hexproof => 1,
+            Self::ProtectionFromColors { .. } => 2,
+            Self::Ward { .. } => 3,
+        }
+    }
+}
+
+/// Which object(s) a combat restriction affects.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum CombatRestrictionSubject {
+    /// One exact object.
+    Object(ObjectId),
+    /// All objects controlled by one player.
+    ControlledBy(PlayerId),
+    /// Every current object.
+    AllObjects,
+}
+
+impl CombatRestrictionSubject {
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::Object(_) => 0,
+            Self::ControlledBy(_) => 1,
+            Self::AllObjects => 2,
+        }
+    }
+}
+
+/// Combat declaration restrictions checked by the T2.6 legality engine.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum CombatRestriction {
+    /// A matching creature cannot be declared as an attacker.
+    CannotAttack,
+    /// A matching creature cannot be declared as a blocker.
+    CannotBlock,
+    /// A matching attacker cannot be blocked at all.
+    CannotBeBlocked,
+}
+
+impl CombatRestriction {
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::CannotAttack => 0,
+            Self::CannotBlock => 1,
+            Self::CannotBeBlocked => 2,
+        }
+    }
+}
+
+/// A targeting or combat restriction emitted by card IR.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum RestrictionEffect {
+    /// A restriction against choosing a target.
+    Targeting {
+        /// Object(s) protected by this targeting restriction.
+        subject: TargetRestrictionSubject,
+        /// Targeting restriction to apply.
+        restriction: TargetRestriction,
+    },
+    /// A restriction against declaring attackers or blockers.
+    Combat {
+        /// Object(s) affected by this combat restriction.
+        subject: CombatRestrictionSubject,
+        /// Combat restriction to apply.
+        restriction: CombatRestriction,
+    },
+}
+
+impl RestrictionEffect {
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::Targeting { .. } => 0,
+            Self::Combat { .. } => 1,
+        }
+    }
+}
+
+/// Data-only targeting/combat restriction definition.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct RestrictionDefinition {
+    controller: PlayerId,
+    source: Option<ObjectId>,
+    effect: RestrictionEffect,
+}
+
+impl RestrictionDefinition {
+    /// Creates a restriction definition with no source object.
+    #[must_use]
+    pub const fn new(controller: PlayerId, effect: RestrictionEffect) -> Self {
+        Self {
+            controller,
+            source: None,
+            effect,
+        }
+    }
+
+    /// Sets the source object for this restriction.
+    #[must_use]
+    pub const fn with_source(mut self, source: ObjectId) -> Self {
+        self.source = Some(source);
+        self
+    }
+
+    /// Returns the restriction controller.
+    #[must_use]
+    pub const fn controller(self) -> PlayerId {
+        self.controller
+    }
+
+    /// Returns the optional source object.
+    #[must_use]
+    pub const fn source(self) -> Option<ObjectId> {
+        self.source
+    }
+
+    /// Returns the restriction effect.
+    #[must_use]
+    pub const fn effect(self) -> RestrictionEffect {
+        self.effect
     }
 }
 
@@ -2904,6 +3309,36 @@ impl CreatureKeywords {
     #[must_use]
     pub const fn haste(self) -> bool {
         self.haste
+    }
+
+    /// Returns true if every keyword in `required` is present in this set.
+    #[must_use]
+    pub const fn contains_all(self, required: Self) -> bool {
+        (!required.first_strike || self.first_strike)
+            && (!required.double_strike || self.double_strike)
+            && (!required.trample || self.trample)
+            && (!required.deathtouch || self.deathtouch)
+            && (!required.lifelink || self.lifelink)
+            && (!required.flying || self.flying)
+            && (!required.reach || self.reach)
+            && (!required.menace || self.menace)
+            && (!required.vigilance || self.vigilance)
+            && (!required.haste || self.haste)
+    }
+
+    /// Returns true if this set and `other` share at least one keyword.
+    #[must_use]
+    pub const fn intersects(self, other: Self) -> bool {
+        (self.first_strike && other.first_strike)
+            || (self.double_strike && other.double_strike)
+            || (self.trample && other.trample)
+            || (self.deathtouch && other.deathtouch)
+            || (self.lifelink && other.lifelink)
+            || (self.flying && other.flying)
+            || (self.reach && other.reach)
+            || (self.menace && other.menace)
+            || (self.vigilance && other.vigilance)
+            || (self.haste && other.haste)
     }
 
     const fn canonical_bits(self) -> u16 {
@@ -4466,6 +4901,8 @@ pub enum StateError {
     UnknownActivatedAbility(ActivatedAbilityId),
     /// The requested cost modifier ID does not exist.
     UnknownCostModifier(CostModifierId),
+    /// The requested targeting or combat restriction ID does not exist.
+    UnknownRestriction(RestrictionId),
     /// The object cannot currently be used as that activated ability's source.
     ObjectNotActivatable(ObjectId),
     /// The source object is already tapped and cannot pay a tap cost.
@@ -4644,6 +5081,11 @@ pub enum Action {
     RegisterCostModifier {
         /// Data-only activation cost modifier.
         definition: CostModifierDefinition,
+    },
+    /// Register one targeting or combat restriction.
+    RegisterRestriction {
+        /// Data-only restriction definition.
+        definition: RestrictionDefinition,
     },
     /// Activate one registered ability using an explicit payment plan.
     ActivateAbility {
@@ -4911,6 +5353,8 @@ pub enum Outcome {
     ActivatedAbilityRegistered(ActivatedAbilityId),
     /// An activation cost modifier was registered.
     CostModifierRegistered(CostModifierId),
+    /// A targeting or combat restriction was registered.
+    RestrictionRegistered(RestrictionId),
     /// Combat damage was assigned and dealt.
     CombatDamageAssigned(Vec<CombatDamageRecord>),
     /// State-based actions were checked.
@@ -5045,6 +5489,12 @@ fn apply_fallback(state: &mut GameState, action: Action) -> Outcome {
         Action::RegisterCostModifier { definition } => {
             match state.register_cost_modifier(definition) {
                 Ok(modifier) => Outcome::CostModifierRegistered(modifier),
+                Err(error) => Outcome::Failed(error),
+            }
+        }
+        Action::RegisterRestriction { definition } => {
+            match state.register_restriction(definition) {
+                Ok(restriction) => Outcome::RestrictionRegistered(restriction),
                 Err(error) => Outcome::Failed(error),
             }
         }
@@ -5670,6 +6120,17 @@ pub enum GameEvent {
         /// Resolved effect.
         effect: ActivatedAbilityEffect,
     },
+    /// A targeting or combat restriction definition was registered.
+    RestrictionRegistered {
+        /// Registered restriction.
+        restriction: RestrictionId,
+        /// Restriction controller.
+        controller: PlayerId,
+        /// Optional restriction source object.
+        source: Option<ObjectId>,
+        /// Restriction effect.
+        effect: RestrictionEffect,
+    },
 }
 
 impl GameEvent {
@@ -5729,6 +6190,7 @@ impl GameEvent {
             Self::CostModifierRegistered { .. } => 51,
             Self::ActivatedAbilityActivated { .. } => 52,
             Self::ActivatedAbilityResolved { .. } => 53,
+            Self::RestrictionRegistered { .. } => 54,
         }
     }
 
@@ -5798,6 +6260,7 @@ impl GameEvent {
             Self::CostModifierRegistered { .. } => GameEventKind::CostModifierRegistered,
             Self::ActivatedAbilityActivated { .. } => GameEventKind::ActivatedAbilityActivated,
             Self::ActivatedAbilityResolved { .. } => GameEventKind::ActivatedAbilityResolved,
+            Self::RestrictionRegistered { .. } => GameEventKind::RestrictionRegistered,
         }
     }
 }
@@ -5892,6 +6355,12 @@ struct CostModifierSubscription {
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+struct RestrictionSubscription {
+    id: RestrictionId,
+    definition: RestrictionDefinition,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 struct ReplacementSubscription {
     id: ReplacementEffectId,
     definition: ReplacementDefinition,
@@ -5966,6 +6435,9 @@ pub struct GameState {
     next_cost_modifier: u32,
     // clone_surface: data-only activation cost adjustments.
     cost_modifiers: Vec<CostModifierSubscription>,
+    next_restriction: u32,
+    // clone_surface: data-only targeting/combat restrictions.
+    restrictions: Vec<RestrictionSubscription>,
     // clone_surface: object IDs whose loyalty abilities were activated this turn.
     loyalty_activations_this_turn: Vec<ObjectId>,
     next_replacement: u32,
@@ -6019,6 +6491,8 @@ impl Clone for GameState {
             activated_abilities: self.activated_abilities.clone(),
             next_cost_modifier: self.next_cost_modifier,
             cost_modifiers: self.cost_modifiers.clone(),
+            next_restriction: self.next_restriction,
+            restrictions: self.restrictions.clone(),
             loyalty_activations_this_turn: self.loyalty_activations_this_turn.clone(),
             next_replacement: self.next_replacement,
             replacement_effects: self.replacement_effects.clone(),
@@ -6092,6 +6566,8 @@ impl GameState {
             activated_abilities: Vec::new(),
             next_cost_modifier: 0,
             cost_modifiers: Vec::new(),
+            next_restriction: 0,
+            restrictions: Vec::new(),
             loyalty_activations_this_turn: Vec::new(),
             next_replacement: 0,
             replacement_effects: Vec::new(),
@@ -6241,6 +6717,15 @@ impl GameState {
         &self,
     ) -> impl Iterator<Item = (CostModifierId, CostModifierDefinition)> + '_ {
         self.cost_modifiers
+            .iter()
+            .map(|subscription| (subscription.id, subscription.definition))
+    }
+
+    /// Returns registered targeting/combat restrictions in deterministic ID order.
+    pub fn restrictions(
+        &self,
+    ) -> impl Iterator<Item = (RestrictionId, RestrictionDefinition)> + '_ {
+        self.restrictions
             .iter()
             .map(|subscription| (subscription.id, subscription.definition))
     }
@@ -6614,6 +7099,49 @@ impl GameState {
             controller: definition.controller(),
             source: definition.source(),
             operation: definition.operation(),
+        });
+        Ok(id)
+    }
+
+    /// Registers one data-only targeting or combat restriction.
+    fn register_restriction(
+        &mut self,
+        definition: RestrictionDefinition,
+    ) -> Result<RestrictionId, StateError> {
+        self.require_player(definition.controller())?;
+        if let Some(source) = definition.source() {
+            if self.objects.get(source).is_none() {
+                return Err(StateError::UnknownObject(source));
+            }
+        }
+        match definition.effect() {
+            RestrictionEffect::Targeting { subject, .. } => match subject {
+                TargetRestrictionSubject::Object(object) => {
+                    if self.objects.get(object).is_none() {
+                        return Err(StateError::UnknownObject(object));
+                    }
+                }
+                TargetRestrictionSubject::AllObjects => {}
+            },
+            RestrictionEffect::Combat { subject, .. } => match subject {
+                CombatRestrictionSubject::Object(object) => {
+                    if self.objects.get(object).is_none() {
+                        return Err(StateError::UnknownObject(object));
+                    }
+                }
+                CombatRestrictionSubject::ControlledBy(player) => self.require_player(player)?,
+                CombatRestrictionSubject::AllObjects => {}
+            },
+        }
+        let id = RestrictionId(self.next_restriction);
+        self.next_restriction = self.next_restriction.saturating_add(1);
+        self.restrictions
+            .push(RestrictionSubscription { id, definition });
+        self.emit_event(GameEvent::RestrictionRegistered {
+            restriction: id,
+            controller: definition.controller(),
+            source: definition.source(),
+            effect: definition.effect(),
         });
         Ok(id)
     }
@@ -7312,8 +7840,12 @@ impl GameState {
         if !self.can_cast_with_timing(player, request.timing()) {
             return Err(StateError::InvalidSpellTiming);
         }
-        let target_snapshots =
-            self.capture_target_snapshots(request.target_requirements(), request.target_choices())?;
+        let target_snapshots = self.capture_target_snapshots(
+            player,
+            Some(object),
+            request.target_requirements(),
+            request.target_choices(),
+        )?;
         let canonical_payment = validate_payment_plan(
             self.mana_pool(player)?,
             request.cost(),
@@ -8007,6 +8539,25 @@ impl GameState {
     }
 
     /// Declares attackers for the current declare attackers step.
+    #[must_use]
+    pub fn can_attack(&self, player: PlayerId, attack: AttackDeclaration) -> bool {
+        self.current_step == Some(Step::DeclareAttackers)
+            && self.active_player == Some(player)
+            && self.priority_player == Some(player)
+            && self.validate_attack_declaration(player, attack).is_ok()
+    }
+
+    /// Returns whether one block declaration is legal in the current block step.
+    #[must_use]
+    pub fn can_block(&self, defending_player: PlayerId, block: BlockDeclaration) -> bool {
+        self.current_step == Some(Step::DeclareBlockers)
+            && self.active_player != Some(defending_player)
+            && self
+                .validate_block_declaration(defending_player, block)
+                .is_ok()
+    }
+
+    /// Declares attackers for the current declare attackers step.
     fn declare_attackers(
         &mut self,
         player: PlayerId,
@@ -8426,6 +8977,11 @@ impl GameState {
         for modifier in &self.cost_modifiers {
             bytes.write_cost_modifier_subscription(*modifier);
         }
+        bytes.write_u32(self.next_restriction);
+        bytes.write_u32(self.restrictions.len() as u32);
+        for restriction in &self.restrictions {
+            bytes.write_restriction_subscription(*restriction);
+        }
         bytes.write_u32(self.loyalty_activations_this_turn.len() as u32);
         for object in &self.loyalty_activations_this_turn {
             bytes.write_u32(object.0);
@@ -8546,6 +9102,11 @@ impl GameState {
         hash.write_u32(self.cost_modifiers.len() as u32);
         for modifier in &self.cost_modifiers {
             hash.write_cost_modifier_subscription(*modifier);
+        }
+        hash.write_u32(self.next_restriction);
+        hash.write_u32(self.restrictions.len() as u32);
+        for restriction in &self.restrictions {
+            hash.write_restriction_subscription(*restriction);
         }
         hash.write_u32(self.loyalty_activations_this_turn.len() as u32);
         for object in &self.loyalty_activations_this_turn {
@@ -8739,6 +9300,9 @@ impl GameState {
         if attack.defending_player() == player {
             return Err(StateError::IllegalAttack(attack.attacker()));
         }
+        if self.combat_restriction_applies(attack.attacker(), CombatRestriction::CannotAttack) {
+            return Err(StateError::IllegalAttack(attack.attacker()));
+        }
         Ok(())
     }
 
@@ -8763,6 +9327,12 @@ impl GameState {
         if blocker.tapped() {
             return Err(StateError::CreatureTapped(block.blocker()));
         }
+        if self.combat_restriction_applies(block.blocker(), CombatRestriction::CannotBlock) {
+            return Err(StateError::IllegalBlock {
+                blocker: block.blocker(),
+                attacker: block.attacker(),
+            });
+        }
         let Some(attacker) = self
             .combat
             .attackers
@@ -8780,6 +9350,12 @@ impl GameState {
                 attacker: block.attacker(),
             });
         }
+        if self.combat_restriction_applies(block.attacker(), CombatRestriction::CannotBeBlocked) {
+            return Err(StateError::IllegalBlock {
+                blocker: block.blocker(),
+                attacker: block.attacker(),
+            });
+        }
         let attacker_keywords = self.creature_keywords(block.attacker())?;
         let blocker_keywords = self.creature_keywords(block.blocker())?;
         if attacker_keywords.flying() && !(blocker_keywords.flying() || blocker_keywords.reach()) {
@@ -8789,6 +9365,33 @@ impl GameState {
             });
         }
         Ok(())
+    }
+
+    fn combat_restriction_applies(&self, object: ObjectId, restriction: CombatRestriction) -> bool {
+        self.restrictions.iter().any(|subscription| {
+            let RestrictionEffect::Combat {
+                subject,
+                restriction: active,
+            } = subscription.definition.effect()
+            else {
+                return false;
+            };
+            active == restriction && self.combat_restriction_subject_matches(subject, object)
+        })
+    }
+
+    fn combat_restriction_subject_matches(
+        &self,
+        subject: CombatRestrictionSubject,
+        object: ObjectId,
+    ) -> bool {
+        match subject {
+            CombatRestrictionSubject::Object(target) => target == object,
+            CombatRestrictionSubject::ControlledBy(player) => self
+                .object_controller(object)
+                .is_ok_and(|controller| controller == player),
+            CombatRestrictionSubject::AllObjects => true,
+        }
     }
 
     fn validate_menace_blocks(&self, blocks: &[BlockDeclaration]) -> Result<(), StateError> {
@@ -9689,8 +10292,27 @@ impl GameState {
         }
     }
 
+    /// Returns whether a player can legally choose one target right now.
+    #[must_use]
+    pub fn can_target(
+        &self,
+        player: PlayerId,
+        source: Option<ObjectId>,
+        requirement: TargetRequirement,
+        choice: TargetChoice,
+    ) -> bool {
+        self.is_target_legal_at_cast(player, source, requirement, choice)
+    }
+
+    /// Returns the ward cost that would be observed when choosing one target.
+    pub fn ward_cost_for_target(&self, choice: TargetChoice) -> Result<ManaCost, StateError> {
+        self.target_ward_cost(choice)
+    }
+
     fn capture_target_snapshots(
         &self,
+        player: PlayerId,
+        source: Option<ObjectId>,
         requirements: &[TargetRequirement],
         choices: &[TargetChoice],
     ) -> Result<Vec<TargetSnapshot>, StateError> {
@@ -9702,7 +10324,7 @@ impl GameState {
         }
         let mut snapshots = Vec::with_capacity(requirements.len());
         for (index, (requirement, choice)) in requirements.iter().zip(choices.iter()).enumerate() {
-            if !self.is_target_legal_at_cast(*requirement, *choice) {
+            if !self.is_target_legal_at_cast(player, source, *requirement, *choice) {
                 return Err(StateError::IllegalTarget {
                     index: index as u32,
                     target: *choice,
@@ -9715,6 +10337,7 @@ impl GameState {
                     TargetChoice::Object(object) => self.object_zone(*object),
                     TargetChoice::Player(_) => None,
                 },
+                ward_cost: self.target_ward_cost(*choice)?,
             });
         }
         Ok(snapshots)
@@ -9722,10 +10345,18 @@ impl GameState {
 
     fn is_target_legal_at_cast(
         &self,
+        player: PlayerId,
+        source: Option<ObjectId>,
         requirement: TargetRequirement,
         choice: TargetChoice,
     ) -> bool {
-        match (requirement.kind(), choice) {
+        self.target_matches_kind(requirement.kind(), choice)
+            && self.target_matches_predicate(player, requirement.predicate(), choice)
+            && !self.targeting_restrictions_block(player, source, choice)
+    }
+
+    fn target_matches_kind(&self, kind: TargetKind, choice: TargetChoice) -> bool {
+        match (kind, choice) {
             (TargetKind::Player, TargetChoice::Player(player)) => {
                 self.require_player(player).is_ok()
             }
@@ -9742,15 +10373,225 @@ impl GameState {
         }
     }
 
-    fn is_target_still_legal(&self, snapshot: TargetSnapshot) -> bool {
+    fn target_matches_predicate(
+        &self,
+        player: PlayerId,
+        predicate: TargetPredicate,
+        choice: TargetChoice,
+    ) -> bool {
+        match (predicate, choice) {
+            (TargetPredicate::Any, _) => true,
+            (TargetPredicate::Player(predicate), TargetChoice::Player(target)) => {
+                self.player_target_predicate_matches(player, predicate, target)
+            }
+            (TargetPredicate::Object(predicate), TargetChoice::Object(object)) => {
+                self.object_target_predicate_matches(player, predicate, object)
+            }
+            (TargetPredicate::Player(_), TargetChoice::Object(_))
+            | (TargetPredicate::Object(_), TargetChoice::Player(_)) => false,
+        }
+    }
+
+    fn player_target_predicate_matches(
+        &self,
+        player: PlayerId,
+        predicate: PlayerTargetPredicate,
+        target: PlayerId,
+    ) -> bool {
+        match predicate {
+            PlayerTargetPredicate::Any => true,
+            PlayerTargetPredicate::You => target == player,
+            PlayerTargetPredicate::Opponent => {
+                target != player && self.require_player(target).is_ok()
+            }
+            PlayerTargetPredicate::Player(expected) => target == expected,
+        }
+    }
+
+    fn object_target_predicate_matches(
+        &self,
+        player: PlayerId,
+        predicate: ObjectTargetPredicate,
+        object: ObjectId,
+    ) -> bool {
+        let Ok(characteristics) = self.object_characteristics(object) else {
+            return false;
+        };
+        if !self.controller_predicate_matches(
+            player,
+            predicate.controller,
+            characteristics.controller(),
+        ) {
+            return false;
+        }
+        if !characteristics
+            .types()
+            .contains_all(predicate.required_types)
+            || characteristics
+                .types()
+                .intersects(predicate.forbidden_types)
+            || !characteristics
+                .colors()
+                .contains_all(predicate.required_colors)
+            || characteristics
+                .colors()
+                .intersects(predicate.forbidden_colors)
+        {
+            return false;
+        }
+        let keywords = characteristics
+            .creature()
+            .map(CreatureCharacteristics::keywords)
+            .unwrap_or_else(CreatureKeywords::none);
+        keywords.contains_all(predicate.required_keywords)
+            && !keywords.intersects(predicate.forbidden_keywords)
+    }
+
+    fn controller_predicate_matches(
+        &self,
+        player: PlayerId,
+        predicate: TargetControllerPredicate,
+        controller: PlayerId,
+    ) -> bool {
+        match predicate {
+            TargetControllerPredicate::Any => true,
+            TargetControllerPredicate::You => controller == player,
+            TargetControllerPredicate::Opponent => controller != player,
+            TargetControllerPredicate::Player(expected) => controller == expected,
+        }
+    }
+
+    fn targeting_restrictions_block(
+        &self,
+        player: PlayerId,
+        source: Option<ObjectId>,
+        choice: TargetChoice,
+    ) -> bool {
+        let TargetChoice::Object(object) = choice else {
+            return false;
+        };
+        self.restrictions.iter().any(|subscription| {
+            let RestrictionEffect::Targeting {
+                subject,
+                restriction,
+            } = subscription.definition.effect()
+            else {
+                return false;
+            };
+            self.target_restriction_subject_matches(subject, object)
+                && self.target_restriction_blocks(player, source, object, restriction)
+        })
+    }
+
+    fn target_restriction_subject_matches(
+        &self,
+        subject: TargetRestrictionSubject,
+        object: ObjectId,
+    ) -> bool {
+        match subject {
+            TargetRestrictionSubject::Object(target) => target == object,
+            TargetRestrictionSubject::AllObjects => true,
+        }
+    }
+
+    fn target_restriction_blocks(
+        &self,
+        player: PlayerId,
+        source: Option<ObjectId>,
+        object: ObjectId,
+        restriction: TargetRestriction,
+    ) -> bool {
+        match restriction {
+            TargetRestriction::Shroud => true,
+            TargetRestriction::Hexproof => self
+                .object_controller(object)
+                .is_ok_and(|controller| controller != player),
+            TargetRestriction::ProtectionFromColors { colors } => source
+                .and_then(|source| self.object_characteristics(source).ok())
+                .is_some_and(|source| source.colors().intersects(colors)),
+            TargetRestriction::Ward { .. } => false,
+        }
+    }
+
+    fn target_ward_cost(&self, choice: TargetChoice) -> Result<ManaCost, StateError> {
+        let TargetChoice::Object(object) = choice else {
+            return Ok(ManaCost::new(0, 0, 0, 0, 0, 0));
+        };
+        let mut cost = ManaCost::new(0, 0, 0, 0, 0, 0);
+        for subscription in &self.restrictions {
+            let RestrictionEffect::Targeting {
+                subject,
+                restriction: TargetRestriction::Ward { cost: ward },
+            } = subscription.definition.effect()
+            else {
+                continue;
+            };
+            if self.target_restriction_subject_matches(subject, object) {
+                cost = Self::add_mana_costs(cost, ward)?;
+            }
+        }
+        Ok(cost)
+    }
+
+    fn add_mana_costs(left: ManaCost, right: ManaCost) -> Result<ManaCost, StateError> {
+        Ok(ManaCost {
+            colored: [
+                left.colored[0]
+                    .checked_add(right.colored[0])
+                    .ok_or(StateError::ManaValueOverflow)?,
+                left.colored[1]
+                    .checked_add(right.colored[1])
+                    .ok_or(StateError::ManaValueOverflow)?,
+                left.colored[2]
+                    .checked_add(right.colored[2])
+                    .ok_or(StateError::ManaValueOverflow)?,
+                left.colored[3]
+                    .checked_add(right.colored[3])
+                    .ok_or(StateError::ManaValueOverflow)?,
+                left.colored[4]
+                    .checked_add(right.colored[4])
+                    .ok_or(StateError::ManaValueOverflow)?,
+            ],
+            generic: left
+                .generic
+                .checked_add(right.generic)
+                .ok_or(StateError::ManaValueOverflow)?,
+            x_count: left
+                .x_count
+                .checked_add(right.x_count)
+                .ok_or(StateError::ManaValueOverflow)?,
+            x_value: left
+                .x_value
+                .checked_add(right.x_value)
+                .ok_or(StateError::ManaValueOverflow)?,
+        })
+    }
+
+    fn is_target_still_legal(
+        &self,
+        controller: PlayerId,
+        source: Option<ObjectId>,
+        snapshot: TargetSnapshot,
+    ) -> bool {
         match snapshot.choice {
             TargetChoice::Player(player) => {
                 snapshot.requirement.kind() == TargetKind::Player
                     && self.require_player(player).is_ok()
+                    && self.is_target_legal_at_cast(
+                        controller,
+                        source,
+                        snapshot.requirement,
+                        snapshot.choice,
+                    )
             }
             TargetChoice::Object(object) => {
                 self.object_zone(object) == snapshot.original_zone
-                    && self.is_target_legal_at_cast(snapshot.requirement, snapshot.choice)
+                    && self.is_target_legal_at_cast(
+                        controller,
+                        source,
+                        snapshot.requirement,
+                        snapshot.choice,
+                    )
             }
         }
     }
@@ -9797,10 +10638,14 @@ impl GameState {
                 return Err(StateError::StackObjectNotOnStack(object));
             }
         }
+        let target_source = match entry.activated_ability() {
+            Some(ability) => self.activated_ability_definition(ability)?.source(),
+            None => entry.object(),
+        };
         let legal_targets: Vec<bool> = entry
             .targets()
             .iter()
-            .map(|target| self.is_target_still_legal(*target))
+            .map(|target| self.is_target_still_legal(entry.controller(), target_source, *target))
             .collect();
         let outcome = if !legal_targets.is_empty() && legal_targets.iter().all(|legal| !*legal) {
             ResolutionOutcome::CounteredOnResolution
@@ -10337,8 +11182,42 @@ impl Fnva64 {
         }
     }
 
+    fn write_target_controller_predicate(&mut self, predicate: TargetControllerPredicate) {
+        self.write_u8(predicate.canonical_code());
+        if let TargetControllerPredicate::Player(player) = predicate {
+            self.write_u32(player.0);
+        }
+    }
+
+    fn write_object_target_predicate(&mut self, predicate: ObjectTargetPredicate) {
+        self.write_target_controller_predicate(predicate.controller);
+        self.write_object_types(predicate.required_types);
+        self.write_object_types(predicate.forbidden_types);
+        self.write_object_colors(predicate.required_colors);
+        self.write_object_colors(predicate.forbidden_colors);
+        self.write_creature_keywords(predicate.required_keywords);
+        self.write_creature_keywords(predicate.forbidden_keywords);
+    }
+
+    fn write_player_target_predicate(&mut self, predicate: PlayerTargetPredicate) {
+        self.write_u8(predicate.canonical_code());
+        if let PlayerTargetPredicate::Player(player) = predicate {
+            self.write_u32(player.0);
+        }
+    }
+
+    fn write_target_predicate(&mut self, predicate: TargetPredicate) {
+        self.write_u8(predicate.canonical_code());
+        match predicate {
+            TargetPredicate::Any => {}
+            TargetPredicate::Object(predicate) => self.write_object_target_predicate(predicate),
+            TargetPredicate::Player(predicate) => self.write_player_target_predicate(predicate),
+        }
+    }
+
     fn write_target_requirement(&mut self, requirement: TargetRequirement) {
         self.write_target_kind(requirement.kind);
+        self.write_target_predicate(requirement.predicate);
     }
 
     fn write_target_choice(&mut self, choice: TargetChoice) {
@@ -10363,6 +11242,7 @@ impl Fnva64 {
         self.write_target_requirement(target.requirement);
         self.write_target_choice(target.choice);
         self.write_optional_zone(target.original_zone);
+        self.write_mana_cost(target.ward_cost);
     }
 
     fn write_payment_plan(&mut self, payment: PaymentPlan) {
@@ -10568,6 +11448,66 @@ impl Fnva64 {
     fn write_cost_modifier_subscription(&mut self, subscription: CostModifierSubscription) {
         self.write_u32(subscription.id.0);
         self.write_cost_modifier_definition(subscription.definition);
+    }
+
+    fn write_target_restriction_subject(&mut self, subject: TargetRestrictionSubject) {
+        self.write_u8(subject.canonical_code());
+        if let TargetRestrictionSubject::Object(object) = subject {
+            self.write_u32(object.0);
+        }
+    }
+
+    fn write_target_restriction(&mut self, restriction: TargetRestriction) {
+        self.write_u8(restriction.canonical_code());
+        match restriction {
+            TargetRestriction::Shroud | TargetRestriction::Hexproof => {}
+            TargetRestriction::ProtectionFromColors { colors } => self.write_object_colors(colors),
+            TargetRestriction::Ward { cost } => self.write_mana_cost(cost),
+        }
+    }
+
+    fn write_combat_restriction_subject(&mut self, subject: CombatRestrictionSubject) {
+        self.write_u8(subject.canonical_code());
+        match subject {
+            CombatRestrictionSubject::Object(object) => self.write_u32(object.0),
+            CombatRestrictionSubject::ControlledBy(player) => self.write_u32(player.0),
+            CombatRestrictionSubject::AllObjects => {}
+        }
+    }
+
+    fn write_combat_restriction(&mut self, restriction: CombatRestriction) {
+        self.write_u8(restriction.canonical_code());
+    }
+
+    fn write_restriction_effect(&mut self, effect: RestrictionEffect) {
+        self.write_u8(effect.canonical_code());
+        match effect {
+            RestrictionEffect::Targeting {
+                subject,
+                restriction,
+            } => {
+                self.write_target_restriction_subject(subject);
+                self.write_target_restriction(restriction);
+            }
+            RestrictionEffect::Combat {
+                subject,
+                restriction,
+            } => {
+                self.write_combat_restriction_subject(subject);
+                self.write_combat_restriction(restriction);
+            }
+        }
+    }
+
+    fn write_restriction_definition(&mut self, definition: RestrictionDefinition) {
+        self.write_u32(definition.controller.0);
+        self.write_optional_object(definition.source);
+        self.write_restriction_effect(definition.effect);
+    }
+
+    fn write_restriction_subscription(&mut self, subscription: RestrictionSubscription) {
+        self.write_u32(subscription.id.0);
+        self.write_restriction_definition(subscription.definition);
     }
 
     fn write_replacement_source_filter(&mut self, filter: ReplacementSourceFilter) {
@@ -11047,6 +11987,17 @@ impl Fnva64 {
                 self.write_u32(player.0);
                 self.write_optional_object(source);
                 self.write_activated_ability_effect(effect);
+            }
+            GameEvent::RestrictionRegistered {
+                restriction,
+                controller,
+                source,
+                effect,
+            } => {
+                self.write_u32(restriction.0);
+                self.write_u32(controller.0);
+                self.write_optional_object(source);
+                self.write_restriction_effect(effect);
             }
         }
     }
@@ -11283,8 +12234,42 @@ impl CanonicalBytes {
         }
     }
 
+    fn write_target_controller_predicate(&mut self, predicate: TargetControllerPredicate) {
+        self.write_u8(predicate.canonical_code());
+        if let TargetControllerPredicate::Player(player) = predicate {
+            self.write_u32(player.0);
+        }
+    }
+
+    fn write_object_target_predicate(&mut self, predicate: ObjectTargetPredicate) {
+        self.write_target_controller_predicate(predicate.controller);
+        self.write_object_types(predicate.required_types);
+        self.write_object_types(predicate.forbidden_types);
+        self.write_object_colors(predicate.required_colors);
+        self.write_object_colors(predicate.forbidden_colors);
+        self.write_creature_keywords(predicate.required_keywords);
+        self.write_creature_keywords(predicate.forbidden_keywords);
+    }
+
+    fn write_player_target_predicate(&mut self, predicate: PlayerTargetPredicate) {
+        self.write_u8(predicate.canonical_code());
+        if let PlayerTargetPredicate::Player(player) = predicate {
+            self.write_u32(player.0);
+        }
+    }
+
+    fn write_target_predicate(&mut self, predicate: TargetPredicate) {
+        self.write_u8(predicate.canonical_code());
+        match predicate {
+            TargetPredicate::Any => {}
+            TargetPredicate::Object(predicate) => self.write_object_target_predicate(predicate),
+            TargetPredicate::Player(predicate) => self.write_player_target_predicate(predicate),
+        }
+    }
+
     fn write_target_requirement(&mut self, requirement: TargetRequirement) {
         self.write_target_kind(requirement.kind);
+        self.write_target_predicate(requirement.predicate);
     }
 
     fn write_target_choice(&mut self, choice: TargetChoice) {
@@ -11309,6 +12294,7 @@ impl CanonicalBytes {
         self.write_target_requirement(target.requirement);
         self.write_target_choice(target.choice);
         self.write_optional_zone(target.original_zone);
+        self.write_mana_cost(target.ward_cost);
     }
 
     fn write_payment_plan(&mut self, payment: PaymentPlan) {
@@ -11514,6 +12500,66 @@ impl CanonicalBytes {
     fn write_cost_modifier_subscription(&mut self, subscription: CostModifierSubscription) {
         self.write_u32(subscription.id.0);
         self.write_cost_modifier_definition(subscription.definition);
+    }
+
+    fn write_target_restriction_subject(&mut self, subject: TargetRestrictionSubject) {
+        self.write_u8(subject.canonical_code());
+        if let TargetRestrictionSubject::Object(object) = subject {
+            self.write_u32(object.0);
+        }
+    }
+
+    fn write_target_restriction(&mut self, restriction: TargetRestriction) {
+        self.write_u8(restriction.canonical_code());
+        match restriction {
+            TargetRestriction::Shroud | TargetRestriction::Hexproof => {}
+            TargetRestriction::ProtectionFromColors { colors } => self.write_object_colors(colors),
+            TargetRestriction::Ward { cost } => self.write_mana_cost(cost),
+        }
+    }
+
+    fn write_combat_restriction_subject(&mut self, subject: CombatRestrictionSubject) {
+        self.write_u8(subject.canonical_code());
+        match subject {
+            CombatRestrictionSubject::Object(object) => self.write_u32(object.0),
+            CombatRestrictionSubject::ControlledBy(player) => self.write_u32(player.0),
+            CombatRestrictionSubject::AllObjects => {}
+        }
+    }
+
+    fn write_combat_restriction(&mut self, restriction: CombatRestriction) {
+        self.write_u8(restriction.canonical_code());
+    }
+
+    fn write_restriction_effect(&mut self, effect: RestrictionEffect) {
+        self.write_u8(effect.canonical_code());
+        match effect {
+            RestrictionEffect::Targeting {
+                subject,
+                restriction,
+            } => {
+                self.write_target_restriction_subject(subject);
+                self.write_target_restriction(restriction);
+            }
+            RestrictionEffect::Combat {
+                subject,
+                restriction,
+            } => {
+                self.write_combat_restriction_subject(subject);
+                self.write_combat_restriction(restriction);
+            }
+        }
+    }
+
+    fn write_restriction_definition(&mut self, definition: RestrictionDefinition) {
+        self.write_u32(definition.controller.0);
+        self.write_optional_object(definition.source);
+        self.write_restriction_effect(definition.effect);
+    }
+
+    fn write_restriction_subscription(&mut self, subscription: RestrictionSubscription) {
+        self.write_u32(subscription.id.0);
+        self.write_restriction_definition(subscription.definition);
     }
 
     fn write_replacement_source_filter(&mut self, filter: ReplacementSourceFilter) {
@@ -11993,6 +13039,17 @@ impl CanonicalBytes {
                 self.write_u32(player.0);
                 self.write_optional_object(source);
                 self.write_activated_ability_effect(effect);
+            }
+            GameEvent::RestrictionRegistered {
+                restriction,
+                controller,
+                source,
+                effect,
+            } => {
+                self.write_u32(restriction.0);
+                self.write_u32(controller.0);
+                self.write_optional_object(source);
+                self.write_restriction_effect(effect);
             }
         }
     }

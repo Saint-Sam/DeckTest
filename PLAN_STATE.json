@@ -197,6 +197,12 @@
       "branch": "task/T2.5-activated-abilities",
       "attempts": 0,
       "verification": "scripts/vl.sh passed locally with data-only activated ability definitions, no-stack mana ability resolution, stack-using non-mana activations, loyalty abilities with once-per-source-per-turn enforcement, activation cost modifiers, activated-ability canonical hash coverage, clone-surface baseline persistent_allocation_field_count=27, 539 oracle scenarios green including 4 T2.5 activated-ability scenarios, coverage gate including T2.5 oracles, and perf_diff reporting 0 regressions"
+    },
+    "T2.6": {
+      "status": "verified_local",
+      "branch": "task/T2.6-targeting-restrictions",
+      "attempts": 0,
+      "verification": "scripts/vl.sh passed locally with data-only target predicates over player/object characteristics, shroud/hexproof/protection/ward targeting restrictions, cannot attack/cannot block/cannot be blocked combat restrictions, restriction canonical hash coverage, clone-surface baseline persistent_allocation_field_count=28, 547 oracle scenarios green including 8 T2.6 targeting/restriction scenarios, coverage gate including T2.6 oracles at 80.78% lines, and perf_diff reporting 0 regressions"
     }
   },
   "gates_passed": [

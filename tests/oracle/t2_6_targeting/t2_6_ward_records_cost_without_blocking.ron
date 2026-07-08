@@ -1,0 +1,54 @@
+(
+    name: "T2.6 ward records extra cost without making target illegal",
+    setup: (
+        players: 2,
+        objects: [
+            (card: 26031, owner: 0, controller: 0, zone: "Hand", player: 0),
+            (card: 26032, owner: 1, controller: 1, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "set_base_creature", object: 1, power: 1, toughness: 3, keywords: []),
+        (action: "register_restriction", controller: 1, subject_object: 1, effect: "ward", cost: (generic: 2)),
+        (action: "assert_ward_cost", target_object: 1, cost: (generic: 2)),
+        (
+            action: "assert_can_target",
+            player: 0,
+            source_object: 0,
+            requirement: (kind: "permanent", controller: "opponent", required_types: ["creature"]),
+            target_object: 1,
+            expected: true,
+        ),
+        (action: "start_turn", player: 0),
+        (action: "advance_step"),
+        (
+            action: "cast_spell_auto",
+            player: 0,
+            object: 0,
+            kind: "instant",
+            timing: "instant",
+            targets: [
+                (
+                    requirement: (kind: "permanent", controller: "opponent", required_types: ["creature"]),
+                    target_object: 1,
+                ),
+            ],
+        ),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Stack", count: 1),
+            (zone: "Battlefield", count: 1),
+        ],
+        outcome: "in_progress",
+        active_player: 0,
+        priority_player: 0,
+        current_step: "Upkeep",
+        invariants: [
+            "zone_conservation",
+            "life_poison_sanity",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

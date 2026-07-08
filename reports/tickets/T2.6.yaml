@@ -1,0 +1,39 @@
+id: T2.6
+title: Targeting predicates and restriction effects
+tier: 2
+tags:
+  - kernel
+  - targeting
+  - restrictions
+  - combat
+  - oracle
+scope_paths:
+  - crates/forge-core/src/lib.rs
+  - crates/forge-testkit/src/lib.rs
+  - tests/oracle/t2_6_targeting/
+  - scripts/check_coverage.sh
+  - scripts/review/clone_surface_guard.sh
+  - metrics/clone_surface.json
+  - reports/tickets/T2.6.yaml
+inputs:
+  - FORGE_REBUILD_MASTER_PLAN.md Section 7 T2.6
+  - FORGE_REBUILD_MASTER_PLAN.md Section 8.1 shared card-DSL target predicate boundary
+  - CP-LAYERS owner signoff from 2026-07-08
+acceptance:
+  - target requirements support a data-only predicate language over player relationship, object controller, object types, object colors, and creature keywords
+  - spell casting and target-query APIs reject targets made illegal by shroud, hexproof, and protection from colors
+  - ward is represented as a data-only targeting restriction and its observed cost is captured without making the target illegal
+  - combat declaration legality rejects cannot attack, cannot block, and cannot be blocked restriction effects
+  - restrictions are registered through the public Action/apply boundary and participate in canonical hashes, replay events, and clone-surface accounting
+  - testkit RON supports registering restrictions, auto-casting targeted spells, and asserting target, ward, attack, and block legality
+  - focused oracle scenarios cover hexproof, shroud, protection, ward, player/object predicates, cannot attack, cannot block, and cannot be blocked
+verify: cargo clippy --workspace --all-targets --all-features -- -D warnings && cargo run -p forge-testkit -- oracle --path tests/oracle/t2_6_targeting --no-junit && scripts/vl.sh
+retry_policy: 3 attempts then T2.6 design review
+depends_on:
+  - T2.1
+  - T2.2
+  - T2.3
+  - T2.4
+  - T2.5
+  - CP-LAYERS
+parallel_ok: false

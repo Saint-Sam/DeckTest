@@ -86,6 +86,7 @@ allowed = {
     ("GameState", "pending_triggers"): "Copy trigger instances drained before priority",
     ("GameState", "activated_abilities"): "data-only Copy activated ability definitions compiled from card IR",
     ("GameState", "cost_modifiers"): "data-only Copy activation cost modifiers compiled from card IR",
+    ("GameState", "restrictions"): "data-only Copy targeting and combat restrictions compiled from card IR",
     ("GameState", "loyalty_activations_this_turn"): "object IDs bounded by active permanents and cleared each turn",
     ("GameState", "replacement_effects"): "data-only Copy replacement/prevention definitions compiled from card IR",
     ("GameState", "replacement_choice_orders"): "per-player replacement order preferences bounded by active effects",

@@ -1,0 +1,43 @@
+(
+    name: "T2.6 cannot block restriction blocks block declaration",
+    setup: (
+        players: 2,
+        libraries: [
+            (player: 0, cards: [26061, 26062]),
+        ],
+        objects: [
+            (card: 26063, owner: 0, controller: 0, zone: "Battlefield"),
+            (card: 26064, owner: 1, controller: 1, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "set_base_creature", object: 0, power: 3, toughness: 3, keywords: []),
+        (action: "set_base_creature", object: 1, power: 2, toughness: 2, keywords: []),
+        (action: "start_turn", player: 0),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "assert_can_attack", player: 0, attack: (attacker: 0, defender: 1), expected: true),
+        (action: "declare_attackers", player: 0, attacks: [(attacker: 0, defender: 1)]),
+        (action: "advance_step"),
+        (action: "assert_can_block", player: 1, block: (blocker: 1, attacker: 0), expected: true),
+        (action: "register_restriction", controller: 0, subject_object: 1, effect: "cannot_block"),
+        (action: "assert_can_block", player: 1, block: (blocker: 1, attacker: 0), expected: false),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Battlefield", count: 2),
+        ],
+        outcome: "in_progress",
+        active_player: 0,
+        current_step: "DeclareBlockers",
+        invariants: [
+            "zone_conservation",
+            "life_poison_sanity",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)
