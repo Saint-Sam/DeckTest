@@ -218,6 +218,12 @@
       "attempts": 0,
       "verification": "scripts/vl.sh passed locally with explicit N-player turn order, range of influence off, command-zone commander hooks, commander tax and color identity metadata, command-zone casting tax integration, clone-surface baseline persistent_allocation_field_count=30, 562 oracle scenarios green including 6 T2.8 multiplayer/Commander scenarios, coverage gate including T2.8 oracles at 81.07% lines, and perf_diff reporting 0 regressions",
       "remote_ci": "GitHub Actions ci #38 run 28950057313 passed all required jobs for commit fc381d5450dbc172e8d1ef94000e94c706956632"
+    },
+    "T2.9": {
+      "status": "verified_local",
+      "branch": "task/T2.9-keyword-wave1",
+      "attempts": 0,
+      "verification": "scripts/vl.sh passed locally with wave-one keyword/plumbing support for defender, haste, hexproof restriction desugaring, indestructible, prowess metadata, flash, kicker, flashback, cycling, equip, aura attachment plumbing, sacrifice costs, scry/surveil, and ETB/dies trigger registration; clone-surface baseline persistent_allocation_field_count=30, 578 oracle scenarios green including 16 T2.9 keyword-wave scenarios, coverage gate including T2.9 oracles at 81.67% lines, and perf_diff reporting 0 regressions"
     }
   },
   "gates_passed": [

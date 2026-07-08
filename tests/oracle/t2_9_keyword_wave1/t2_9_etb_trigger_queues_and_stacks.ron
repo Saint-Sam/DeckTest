@@ -1,0 +1,28 @@
+(
+    name: "T2.9 enters-the-battlefield trigger queues and stacks",
+    setup: (
+        players: 1,
+        objects: [
+            (card: 29141, owner: 0, controller: 0, zone: "Hand", player: 0),
+        ],
+    ),
+    script: [
+        (action: "register_triggered_ability", controller: 0, source_object: 0, condition: "etb"),
+        (action: "start_turn", player: 0),
+        (action: "move_object", object: 0, zone: "Battlefield"),
+        (action: "assert_pending_triggers", count: 1),
+        (action: "put_pending_triggers_on_stack"),
+        (action: "assert_pending_triggers", count: 0),
+        (action: "assert_stack_entry_flags", entry: 0),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Battlefield", count: 1),
+            (zone: "Stack", count: 0),
+        ],
+        outcome: "in_progress",
+        active_player: 0,
+        invariants: ["zone_conservation", "hash_consistency"],
+        hash_determinism: true,
+    ),
+)

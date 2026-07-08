@@ -1,0 +1,32 @@
+(
+    name: "T2.9 flashback casts from graveyard using alternate cost and exiles",
+    setup: (
+        players: 1,
+        objects: [
+            (card: 29071, owner: 0, controller: 0, zone: "Graveyard", player: 0),
+        ],
+    ),
+    script: [
+        (action: "start_turn", player: 0),
+        (action: "advance_step"),
+        (action: "add_mana", player: 0, mana: (colorless: 1)),
+        (action: "cast_spell_auto", player: 0, object: 0, kind: "instant", timing: "instant", cost: (generic: 9), flashback: (generic: 1)),
+        (action: "assert_stack_entry_flags", entry: 0, flashback: true),
+        (action: "pass_priority", player: 0),
+        (action: "assert_object_zone", object: 0, zone: "Exile"),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Exile", count: 1),
+        ],
+        players: [
+            (player: 0, mana: ()),
+        ],
+        outcome: "in_progress",
+        active_player: 0,
+        priority_player: 0,
+        current_step: "Upkeep",
+        invariants: ["zone_conservation", "hash_consistency"],
+        hash_determinism: true,
+    ),
+)

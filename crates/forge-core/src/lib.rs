@@ -342,6 +342,23 @@ impl ManaCost {
             .checked_add(x_total)
             .ok_or(PaymentError::ManaValueOverflow)
     }
+
+    /// Returns the component-wise sum of two costs, or `None` on overflow.
+    #[must_use]
+    pub fn checked_add(self, other: Self) -> Option<Self> {
+        Some(Self {
+            colored: [
+                self.colored[0].checked_add(other.colored[0])?,
+                self.colored[1].checked_add(other.colored[1])?,
+                self.colored[2].checked_add(other.colored[2])?,
+                self.colored[3].checked_add(other.colored[3])?,
+                self.colored[4].checked_add(other.colored[4])?,
+            ],
+            generic: self.generic.checked_add(other.generic)?,
+            x_count: self.x_count.checked_add(other.x_count)?,
+            x_value: self.x_value.checked_add(other.x_value)?,
+        })
+    }
 }
 
 /// A validated choice of mana used to pay a cost.
@@ -1735,6 +1752,10 @@ pub enum GameEventKind {
     CommanderCastRecorded,
     /// Commander color identity validation completed.
     CommanderColorIdentityValidated,
+    /// A library was inspected and reordered by a keyword action.
+    LibraryManipulated,
+    /// An object's attachment pointer changed.
+    ObjectAttached,
 }
 
 impl GameEventKind {
@@ -1805,6 +1826,26 @@ impl GameEventKind {
             Self::CommanderDesignated => 62,
             Self::CommanderCastRecorded => 63,
             Self::CommanderColorIdentityValidated => 64,
+            Self::LibraryManipulated => 65,
+            Self::ObjectAttached => 66,
+        }
+    }
+}
+
+/// Keyword-driven library manipulation operation.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum LibraryManipulation {
+    /// Scry moved selected cards to the library bottom.
+    Scry,
+    /// Surveil moved selected cards to the graveyard.
+    Surveil,
+}
+
+impl LibraryManipulation {
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::Scry => 0,
+            Self::Surveil => 1,
         }
     }
 }
@@ -2574,6 +2615,9 @@ pub struct CastSpellRequest {
     timing: SpellTiming,
     cost: ManaCost,
     payment: PaymentPlan,
+    flash: bool,
+    kicker: Option<ManaCost>,
+    flashback: Option<ManaCost>,
     target_requirements: Vec<TargetRequirement>,
     target_choices: Vec<TargetChoice>,
 }
@@ -2592,6 +2636,9 @@ impl CastSpellRequest {
             timing,
             cost,
             payment,
+            flash: false,
+            kicker: None,
+            flashback: None,
             target_requirements: Vec::new(),
             target_choices: Vec::new(),
         }
@@ -2606,6 +2653,27 @@ impl CastSpellRequest {
     ) -> Self {
         self.target_requirements = target_requirements;
         self.target_choices = target_choices;
+        self
+    }
+
+    /// Marks this spell as castable at instant timing.
+    #[must_use]
+    pub const fn with_flash(mut self) -> Self {
+        self.flash = true;
+        self
+    }
+
+    /// Adds an optional kicker cost to this cast request.
+    #[must_use]
+    pub const fn with_kicker(mut self, cost: ManaCost) -> Self {
+        self.kicker = Some(cost);
+        self
+    }
+
+    /// Marks this request as a flashback cast using an alternative cost.
+    #[must_use]
+    pub const fn with_flashback(mut self, cost: ManaCost) -> Self {
+        self.flashback = Some(cost);
         self
     }
 
@@ -2631,6 +2699,30 @@ impl CastSpellRequest {
     #[must_use]
     pub const fn payment(&self) -> PaymentPlan {
         self.payment
+    }
+
+    /// Returns true when flash grants instant-speed timing.
+    #[must_use]
+    pub const fn flash(&self) -> bool {
+        self.flash
+    }
+
+    /// Returns the optional kicker cost.
+    #[must_use]
+    pub const fn kicker(&self) -> Option<ManaCost> {
+        self.kicker
+    }
+
+    /// Returns the optional flashback alternative cost.
+    #[must_use]
+    pub const fn flashback(&self) -> Option<ManaCost> {
+        self.flashback
+    }
+
+    /// Returns true when this spell was kicked.
+    #[must_use]
+    pub const fn kicked(&self) -> bool {
+        self.kicker.is_some()
     }
 
     /// Returns target requirements.
@@ -2892,6 +2984,7 @@ impl ActivatedAbilityEffect {
 pub struct ActivationCost {
     mana: ManaCost,
     tap_source: bool,
+    sacrifice_source: bool,
     loyalty_delta: Option<i32>,
 }
 
@@ -2902,6 +2995,7 @@ impl ActivationCost {
         Self {
             mana,
             tap_source: false,
+            sacrifice_source: false,
             loyalty_delta: None,
         }
     }
@@ -2910,6 +3004,13 @@ impl ActivationCost {
     #[must_use]
     pub const fn with_tap_source(mut self) -> Self {
         self.tap_source = true;
+        self
+    }
+
+    /// Adds a source-sacrifice cost.
+    #[must_use]
+    pub const fn with_sacrifice_source(mut self) -> Self {
+        self.sacrifice_source = true;
         self
     }
 
@@ -2930,6 +3031,12 @@ impl ActivationCost {
     #[must_use]
     pub const fn tap_source(self) -> bool {
         self.tap_source
+    }
+
+    /// Returns whether the source must be sacrificed.
+    #[must_use]
+    pub const fn sacrifice_source(self) -> bool {
+        self.sacrifice_source
     }
 
     /// Returns the loyalty change paid as a cost, if any.
@@ -3141,6 +3248,8 @@ pub struct StackEntry {
     targets: Vec<TargetSnapshot>,
     payment: Option<PaymentPlan>,
     copy_info: Option<StackCopyInfo>,
+    kicked: bool,
+    flashback: bool,
 }
 
 impl StackEntry {
@@ -3197,6 +3306,18 @@ impl StackEntry {
     pub const fn copy_info(&self) -> Option<StackCopyInfo> {
         self.copy_info
     }
+
+    /// Returns true when this spell entry was cast with kicker.
+    #[must_use]
+    pub const fn kicked(&self) -> bool {
+        self.kicked
+    }
+
+    /// Returns true when this spell entry was cast using flashback.
+    #[must_use]
+    pub const fn flashback(&self) -> bool {
+        self.flashback
+    }
 }
 
 /// Record of a stack object that resolved.
@@ -3214,6 +3335,8 @@ pub struct ResolutionRecord {
     legal_targets: Vec<bool>,
     outcome: ResolutionOutcome,
     copy_info: Option<StackCopyInfo>,
+    kicked: bool,
+    flashback: bool,
 }
 
 impl ResolutionRecord {
@@ -3276,6 +3399,18 @@ impl ResolutionRecord {
     pub const fn copy_info(&self) -> Option<StackCopyInfo> {
         self.copy_info
     }
+
+    /// Returns true when the resolved spell entry was cast with kicker.
+    #[must_use]
+    pub const fn kicked(&self) -> bool {
+        self.kicked
+    }
+
+    /// Returns true when the resolved spell entry was cast using flashback.
+    #[must_use]
+    pub const fn flashback(&self) -> bool {
+        self.flashback
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -3288,6 +3423,8 @@ struct StackEntryRequest {
     targets: Vec<TargetSnapshot>,
     payment: Option<PaymentPlan>,
     copy_info: Option<StackCopyInfo>,
+    kicked: bool,
+    flashback: bool,
 }
 
 /// Combat-relevant static keywords tracked by the T1.6 kernel.
@@ -3303,6 +3440,9 @@ pub struct CreatureKeywords {
     menace: bool,
     vigilance: bool,
     haste: bool,
+    defender: bool,
+    indestructible: bool,
+    prowess: bool,
 }
 
 impl CreatureKeywords {
@@ -3320,6 +3460,9 @@ impl CreatureKeywords {
             menace: false,
             vigilance: false,
             haste: false,
+            defender: false,
+            indestructible: false,
+            prowess: false,
         }
     }
 
@@ -3393,6 +3536,27 @@ impl CreatureKeywords {
         self
     }
 
+    /// Returns this set with defender enabled.
+    #[must_use]
+    pub const fn with_defender(mut self) -> Self {
+        self.defender = true;
+        self
+    }
+
+    /// Returns this set with indestructible enabled.
+    #[must_use]
+    pub const fn with_indestructible(mut self) -> Self {
+        self.indestructible = true;
+        self
+    }
+
+    /// Returns this set with prowess enabled.
+    #[must_use]
+    pub const fn with_prowess(mut self) -> Self {
+        self.prowess = true;
+        self
+    }
+
     /// Returns true if this set has first strike.
     #[must_use]
     pub const fn first_strike(self) -> bool {
@@ -3453,6 +3617,24 @@ impl CreatureKeywords {
         self.haste
     }
 
+    /// Returns true if this set has defender.
+    #[must_use]
+    pub const fn defender(self) -> bool {
+        self.defender
+    }
+
+    /// Returns true if this set has indestructible.
+    #[must_use]
+    pub const fn indestructible(self) -> bool {
+        self.indestructible
+    }
+
+    /// Returns true if this set has prowess.
+    #[must_use]
+    pub const fn prowess(self) -> bool {
+        self.prowess
+    }
+
     /// Returns true if every keyword in `required` is present in this set.
     #[must_use]
     pub const fn contains_all(self, required: Self) -> bool {
@@ -3466,6 +3648,9 @@ impl CreatureKeywords {
             && (!required.menace || self.menace)
             && (!required.vigilance || self.vigilance)
             && (!required.haste || self.haste)
+            && (!required.defender || self.defender)
+            && (!required.indestructible || self.indestructible)
+            && (!required.prowess || self.prowess)
     }
 
     /// Returns true if this set and `other` share at least one keyword.
@@ -3481,6 +3666,9 @@ impl CreatureKeywords {
             || (self.menace && other.menace)
             || (self.vigilance && other.vigilance)
             || (self.haste && other.haste)
+            || (self.defender && other.defender)
+            || (self.indestructible && other.indestructible)
+            || (self.prowess && other.prowess)
     }
 
     const fn canonical_bits(self) -> u16 {
@@ -3494,6 +3682,9 @@ impl CreatureKeywords {
             | ((self.menace as u16) << 7)
             | ((self.vigilance as u16) << 8)
             | ((self.haste as u16) << 9)
+            | ((self.defender as u16) << 10)
+            | ((self.indestructible as u16) << 11)
+            | ((self.prowess as u16) << 12)
     }
 
     const fn without(mut self, remove: Self) -> Self {
@@ -3507,6 +3698,9 @@ impl CreatureKeywords {
         self.menace &= !remove.menace;
         self.vigilance &= !remove.vigilance;
         self.haste &= !remove.haste;
+        self.defender &= !remove.defender;
+        self.indestructible &= !remove.indestructible;
+        self.prowess &= !remove.prowess;
         self
     }
 
@@ -3521,6 +3715,9 @@ impl CreatureKeywords {
         self.menace |= add.menace;
         self.vigilance |= add.vigilance;
         self.haste |= add.haste;
+        self.defender |= add.defender;
+        self.indestructible |= add.indestructible;
+        self.prowess |= add.prowess;
         self
     }
 }
@@ -4680,6 +4877,7 @@ pub struct ObjectRecord {
     loyalty: Option<i32>,
     token: bool,
     copy_source: Option<ObjectId>,
+    attached_to: Option<ObjectId>,
     controlled_since_turn: u32,
     color_identity: ObjectColors,
     commander: bool,
@@ -4751,6 +4949,12 @@ impl ObjectRecord {
     #[must_use]
     pub const fn copy_source(self) -> Option<ObjectId> {
         self.copy_source
+    }
+
+    /// Returns the object this object is attached to, if any.
+    #[must_use]
+    pub const fn attached_to(self) -> Option<ObjectId> {
+        self.attached_to
     }
 
     /// Returns true if this object is a copy object.
@@ -4852,6 +5056,7 @@ impl ObjectArena {
             loyalty: None,
             token: false,
             copy_source: None,
+            attached_to: None,
             controlled_since_turn,
             color_identity: ObjectColors::none(),
             commander: false,
@@ -5376,6 +5581,55 @@ pub enum Action {
         /// Payment plan to apply.
         plan: PaymentPlan,
     },
+    /// Scry by moving selected top cards to the library bottom.
+    Scry {
+        /// Player whose library is inspected.
+        player: PlayerId,
+        /// Number of top library cards considered.
+        count: u32,
+        /// Selected cards to bottom, in bottom-to-top order.
+        bottom: Vec<ObjectId>,
+    },
+    /// Surveil by moving selected top cards to the graveyard.
+    Surveil {
+        /// Player whose library is inspected.
+        player: PlayerId,
+        /// Number of top library cards considered.
+        count: u32,
+        /// Selected cards to move to that player's graveyard.
+        graveyard: Vec<ObjectId>,
+    },
+    /// Cycle a card from hand, then draw a card.
+    Cycle {
+        /// Cycling player.
+        player: PlayerId,
+        /// Card object being cycled.
+        object: ObjectId,
+        /// Cycling mana cost.
+        cost: ManaCost,
+        /// Payment plan to apply.
+        payment: PaymentPlan,
+    },
+    /// Attach or unattach one object.
+    AttachObject {
+        /// Object that becomes attached.
+        attachment: ObjectId,
+        /// Object to attach to, or none to unattach.
+        target: Option<ObjectId>,
+    },
+    /// Equip an equipment object to a controlled creature.
+    Equip {
+        /// Activating player.
+        player: PlayerId,
+        /// Equipment object.
+        equipment: ObjectId,
+        /// Target creature controlled by the player.
+        target: ObjectId,
+        /// Equip mana cost.
+        cost: ManaCost,
+        /// Payment plan to apply.
+        payment: PaymentPlan,
+    },
     /// Set or clear an object's loyalty value.
     SetObjectLoyalty {
         /// Object to update.
@@ -5854,6 +6108,47 @@ fn apply_fallback(state: &mut GameState, action: Action) -> Outcome {
             Err(error) => Outcome::Failed(error),
         },
         Action::PayMana { player, cost, plan } => match state.pay_mana(player, cost, plan) {
+            Ok(()) => Outcome::Applied,
+            Err(error) => Outcome::Failed(error),
+        },
+        Action::Scry {
+            player,
+            count,
+            bottom,
+        } => match state.scry(player, count, &bottom) {
+            Ok(()) => Outcome::Applied,
+            Err(error) => Outcome::Failed(error),
+        },
+        Action::Surveil {
+            player,
+            count,
+            graveyard,
+        } => match state.surveil(player, count, &graveyard) {
+            Ok(()) => Outcome::Applied,
+            Err(error) => Outcome::Failed(error),
+        },
+        Action::Cycle {
+            player,
+            object,
+            cost,
+            payment,
+        } => match state.cycle(player, object, cost, payment) {
+            Ok(()) => Outcome::Applied,
+            Err(error) => Outcome::Failed(error),
+        },
+        Action::AttachObject { attachment, target } => {
+            match state.attach_object(attachment, target) {
+                Ok(()) => Outcome::Applied,
+                Err(error) => Outcome::Failed(error),
+            }
+        }
+        Action::Equip {
+            player,
+            equipment,
+            target,
+            cost,
+            payment,
+        } => match state.equip(player, equipment, target, cost, payment) {
             Ok(()) => Outcome::Applied,
             Err(error) => Outcome::Failed(error),
         },
@@ -6663,6 +6958,24 @@ pub enum GameEvent {
         /// Allowed identity.
         allowed: ObjectColors,
     },
+    /// A keyword action inspected and manipulated a library.
+    LibraryManipulated {
+        /// Player whose library was manipulated.
+        player: PlayerId,
+        /// Operation performed.
+        operation: LibraryManipulation,
+        /// Number of top cards inspected.
+        count: u32,
+        /// Number of cards moved by the operation.
+        moved: u32,
+    },
+    /// An object's attachment pointer changed.
+    ObjectAttached {
+        /// Object that became attached or unattached.
+        attachment: ObjectId,
+        /// New attachment target, if any.
+        target: Option<ObjectId>,
+    },
 }
 
 impl GameEvent {
@@ -6733,6 +7046,8 @@ impl GameEvent {
             Self::CommanderDesignated { .. } => 62,
             Self::CommanderCastRecorded { .. } => 63,
             Self::CommanderColorIdentityValidated { .. } => 64,
+            Self::LibraryManipulated { .. } => 65,
+            Self::ObjectAttached { .. } => 66,
         }
     }
 
@@ -6815,6 +7130,8 @@ impl GameEvent {
             Self::CommanderColorIdentityValidated { .. } => {
                 GameEventKind::CommanderColorIdentityValidated
             }
+            Self::LibraryManipulated { .. } => GameEventKind::LibraryManipulated,
+            Self::ObjectAttached { .. } => GameEventKind::ObjectAttached,
         }
     }
 }
@@ -7632,6 +7949,20 @@ impl GameState {
         Ok(base)
     }
 
+    /// Returns the effective spell cost for a full keyword-aware cast request.
+    pub fn effective_spell_request_cost(
+        &self,
+        player: PlayerId,
+        object: ObjectId,
+        request: &CastSpellRequest,
+    ) -> Result<ManaCost, StateError> {
+        let mut cost = request.flashback().unwrap_or_else(|| request.cost());
+        if let Some(kicker) = request.kicker() {
+            cost = Self::add_mana_costs(cost, kicker)?;
+        }
+        self.effective_spell_cost(player, object, cost)
+    }
+
     /// Applies one explicit payment plan to a player's mana pool.
     fn pay_mana(
         &mut self,
@@ -7658,6 +7989,177 @@ impl GameState {
             payment: plan,
             mana_pool,
         });
+        Ok(())
+    }
+
+    fn top_library_objects(&self, library_index: usize, count: u32) -> Vec<ObjectId> {
+        let objects = &self.zones[library_index].objects;
+        let inspected = usize::try_from(count)
+            .unwrap_or(usize::MAX)
+            .min(objects.len());
+        objects[objects.len() - inspected..].to_vec()
+    }
+
+    fn scry(
+        &mut self,
+        player: PlayerId,
+        count: u32,
+        bottom: &[ObjectId],
+    ) -> Result<(), StateError> {
+        self.require_player(player)?;
+        let library = ZoneId::new(Some(player), ZoneKind::Library);
+        self.require_zone(library)?;
+        let library_index = self
+            .zone_index(library)
+            .ok_or(StateError::UnknownZone(library))?;
+        let top = self.top_library_objects(library_index, count);
+        for object in bottom {
+            if !top.contains(object) {
+                return Err(StateError::MissingZoneMembership(*object));
+            }
+        }
+        let zone = &mut Arc::make_mut(&mut self.zones)[library_index];
+        for object in bottom {
+            let position = zone
+                .objects
+                .iter()
+                .position(|candidate| candidate == object)
+                .ok_or(StateError::MissingZoneMembership(*object))?;
+            zone.objects_mut().remove(position);
+        }
+        for (offset, object) in bottom.iter().copied().enumerate() {
+            zone.objects_mut().insert(offset, object);
+        }
+        self.emit_event(GameEvent::LibraryManipulated {
+            player,
+            operation: LibraryManipulation::Scry,
+            count,
+            moved: bottom.len() as u32,
+        });
+        Ok(())
+    }
+
+    fn surveil(
+        &mut self,
+        player: PlayerId,
+        count: u32,
+        graveyard: &[ObjectId],
+    ) -> Result<(), StateError> {
+        self.require_player(player)?;
+        let library = ZoneId::new(Some(player), ZoneKind::Library);
+        let graveyard_zone = ZoneId::new(Some(player), ZoneKind::Graveyard);
+        self.require_zone(library)?;
+        self.require_zone(graveyard_zone)?;
+        let library_index = self
+            .zone_index(library)
+            .ok_or(StateError::UnknownZone(library))?;
+        let top = self.top_library_objects(library_index, count);
+        for object in graveyard {
+            if !top.contains(object) {
+                return Err(StateError::MissingZoneMembership(*object));
+            }
+        }
+        for object in graveyard {
+            self.move_object(*object, graveyard_zone)?;
+        }
+        self.emit_event(GameEvent::LibraryManipulated {
+            player,
+            operation: LibraryManipulation::Surveil,
+            count,
+            moved: graveyard.len() as u32,
+        });
+        Ok(())
+    }
+
+    fn cycle(
+        &mut self,
+        player: PlayerId,
+        object: ObjectId,
+        cost: ManaCost,
+        payment: PaymentPlan,
+    ) -> Result<(), StateError> {
+        self.require_priority_player(player)?;
+        self.require_player(player)?;
+        let hand = ZoneId::new(Some(player), ZoneKind::Hand);
+        if self.object_zone(object) != Some(hand) {
+            return Err(StateError::ObjectNotCastable(object));
+        }
+        let owner = self
+            .objects
+            .get(object)
+            .ok_or(StateError::UnknownObject(object))?
+            .owner();
+        let canonical_payment =
+            validate_payment_plan(self.mana_pool(player)?, cost, payment.paid())
+                .map_err(Self::map_payment_error)?;
+        if canonical_payment != payment {
+            return Err(StateError::InvalidPaymentPlan);
+        }
+        self.pay_mana(player, cost, payment)?;
+        self.move_object(object, ZoneId::new(Some(owner), ZoneKind::Graveyard))?;
+        self.draw_cards(player, 1)?;
+        self.after_priority_action(player, true)?;
+        Ok(())
+    }
+
+    fn attach_object(
+        &mut self,
+        attachment: ObjectId,
+        target: Option<ObjectId>,
+    ) -> Result<(), StateError> {
+        if self.objects.get(attachment).is_none() {
+            return Err(StateError::UnknownObject(attachment));
+        }
+        if let Some(target) = target {
+            if self.objects.get(target).is_none() {
+                return Err(StateError::UnknownObject(target));
+            }
+        }
+        let record = self
+            .objects
+            .get_mut(attachment)
+            .ok_or(StateError::UnknownObject(attachment))?;
+        record.attached_to = target;
+        self.emit_event(GameEvent::ObjectAttached { attachment, target });
+        Ok(())
+    }
+
+    fn equip(
+        &mut self,
+        player: PlayerId,
+        equipment: ObjectId,
+        target: ObjectId,
+        cost: ManaCost,
+        payment: PaymentPlan,
+    ) -> Result<(), StateError> {
+        self.require_priority_player(player)?;
+        self.require_player(player)?;
+        if !self.can_activate_with_timing(player, ActivationTiming::Sorcery) {
+            return Err(StateError::InvalidSpellTiming);
+        }
+        if self.object_zone(equipment) != Some(ZoneId::new(None, ZoneKind::Battlefield))
+            || self.object_controller(equipment)? != player
+        {
+            return Err(StateError::ObjectNotActivatable(equipment));
+        }
+        if self.object_zone(target) != Some(ZoneId::new(None, ZoneKind::Battlefield))
+            || self.object_controller(target)? != player
+            || self.creature_characteristics(target).is_err()
+        {
+            return Err(StateError::IllegalTarget {
+                index: 0,
+                target: TargetChoice::Object(target),
+            });
+        }
+        let canonical_payment =
+            validate_payment_plan(self.mana_pool(player)?, cost, payment.paid())
+                .map_err(Self::map_payment_error)?;
+        if canonical_payment != payment {
+            return Err(StateError::InvalidPaymentPlan);
+        }
+        self.pay_mana(player, cost, payment)?;
+        self.attach_object(equipment, Some(target))?;
+        self.after_priority_action(player, true)?;
         Ok(())
     }
 
@@ -8087,6 +8589,9 @@ impl GameState {
         if definition.cost().tap_source() {
             cost = cost.with_tap_source();
         }
+        if definition.cost().sacrifice_source() {
+            cost = cost.with_sacrifice_source();
+        }
         if let Some(delta) = definition.cost().loyalty_delta() {
             cost = cost.with_loyalty_delta(delta);
         }
@@ -8230,6 +8735,8 @@ impl GameState {
                 targets: Vec::new(),
                 payment: Some(payment),
                 copy_info: None,
+                kicked: false,
+                flashback: false,
             });
             self.after_priority_action(player, true)?;
             Ok(Some(id))
@@ -8279,7 +8786,7 @@ impl GameState {
                     return Err(StateError::InsufficientLoyalty(source));
                 }
             }
-        } else if cost.tap_source() || cost.loyalty_delta().is_some() {
+        } else if cost.tap_source() || cost.sacrifice_source() || cost.loyalty_delta().is_some() {
             return Err(StateError::ObjectNotActivatable(ObjectId(0)));
         }
         Ok(())
@@ -8310,6 +8817,14 @@ impl GameState {
                     object: source,
                     loyalty: Some(next),
                 });
+            }
+            if cost.sacrifice_source() {
+                let owner = self
+                    .objects
+                    .get(source)
+                    .ok_or(StateError::UnknownObject(source))?
+                    .owner();
+                self.move_object(source, ZoneId::new(Some(owner), ZoneKind::Graveyard))?;
             }
         }
         Ok(())
@@ -8762,10 +9277,21 @@ impl GameState {
         let casting_commander_from_command = record.is_commander()
             && record.owner() == player
             && zone == Some(ZoneId::new(None, ZoneKind::Command));
-        if !casting_from_hand && !casting_commander_from_command {
+        let casting_from_graveyard_with_flashback = request.flashback().is_some()
+            && record.owner() == player
+            && zone == Some(ZoneId::new(Some(player), ZoneKind::Graveyard));
+        if !casting_from_hand
+            && !casting_commander_from_command
+            && !casting_from_graveyard_with_flashback
+        {
             return Err(StateError::ObjectNotCastable(object));
         }
-        if !self.can_cast_with_timing(player, request.timing()) {
+        let timing = if request.flash() {
+            SpellTiming::Instant
+        } else {
+            request.timing()
+        };
+        if !self.can_cast_with_timing(player, timing) {
             return Err(StateError::InvalidSpellTiming);
         }
         let target_snapshots = self.capture_target_snapshots(
@@ -8774,7 +9300,7 @@ impl GameState {
             request.target_requirements(),
             request.target_choices(),
         )?;
-        let effective_cost = self.effective_spell_cost(player, object, request.cost())?;
+        let effective_cost = self.effective_spell_request_cost(player, object, &request)?;
         let canonical_payment = validate_payment_plan(
             self.mana_pool(player)?,
             effective_cost,
@@ -8799,6 +9325,8 @@ impl GameState {
             targets: target_snapshots,
             payment: Some(request.payment()),
             copy_info: None,
+            kicked: request.kicked(),
+            flashback: request.flashback().is_some(),
         });
         self.after_priority_action(player, true)?;
         Ok(id)
@@ -8838,6 +9366,8 @@ impl GameState {
             targets: Vec::new(),
             payment: None,
             copy_info: None,
+            kicked: false,
+            flashback: false,
         });
         self.after_priority_action(player, hold_priority)?;
         Ok(id)
@@ -8861,6 +9391,8 @@ impl GameState {
             targets: Vec::new(),
             payment: None,
             copy_info: None,
+            kicked: false,
+            flashback: false,
         });
         self.after_priority_action(player, hold_priority)?;
         Ok(id)
@@ -8893,6 +9425,8 @@ impl GameState {
                         targets: Vec::new(),
                         payment: None,
                         copy_info: None,
+                        kicked: false,
+                        flashback: false,
                     }));
                 }
             }
@@ -8953,6 +9487,8 @@ impl GameState {
                         targets: Vec::new(),
                         payment: None,
                         copy_info: None,
+                        kicked: false,
+                        flashback: false,
                     });
                     self.emit_event_without_triggers(GameEvent::TriggeredAbilityPutOnStack {
                         trigger: trigger.trigger(),
@@ -9827,6 +10363,8 @@ impl GameState {
             targets: source.targets().to_vec(),
             payment: source.payment(),
             copy_info: Some(StackCopyInfo::new(source.id(), source.object())),
+            kicked: source.kicked(),
+            flashback: source.flashback(),
         });
         self.emit_event(GameEvent::StackEntryCopied {
             source: entry,
@@ -9930,6 +10468,15 @@ impl GameState {
             .map(Zone::id)
     }
 
+    /// Returns object IDs in one zone from bottom/front to top/back order.
+    #[must_use]
+    pub fn zone_objects(&self, zone: ZoneId) -> Option<&[ObjectId]> {
+        self.zones
+            .iter()
+            .find(|candidate| candidate.id == zone)
+            .map(|candidate| candidate.objects.as_slice())
+    }
+
     /// Validates that every object appears in exactly one zone.
     pub fn validate_zone_conservation(&self) -> Result<ZoneConservation, StateError> {
         let mut memberships = vec![0_u8; self.objects.len()];
@@ -10026,6 +10573,7 @@ impl GameState {
             bytes.write_optional_i32(object.loyalty);
             bytes.write_bool(object.token);
             bytes.write_optional_object(object.copy_source);
+            bytes.write_optional_object(object.attached_to);
             bytes.write_u32(object.controlled_since_turn);
             bytes.write_object_colors(object.color_identity);
             bytes.write_bool(object.commander);
@@ -10165,6 +10713,7 @@ impl GameState {
             hash.write_optional_i32(object.loyalty);
             hash.write_bool(object.token);
             hash.write_optional_object(object.copy_source);
+            hash.write_optional_object(object.attached_to);
             hash.write_u32(object.controlled_since_turn);
             hash.write_object_colors(object.color_identity);
             hash.write_bool(object.commander);
@@ -10411,6 +10960,9 @@ impl GameState {
         }
         if record.controlled_since_turn() == self.turn_number && !creature.keywords().haste() {
             return Err(StateError::SummoningSick(attack.attacker()));
+        }
+        if creature.keywords().defender() {
+            return Err(StateError::IllegalAttack(attack.attacker()));
         }
         self.require_player(attack.defending_player())?;
         if attack.defending_player() == player {
@@ -11323,12 +11875,15 @@ impl GameState {
                 StateBasedActionKind::CreatureZeroOrLessToughness => creature.toughness() <= 0,
                 StateBasedActionKind::CreatureLethalDamage => {
                     creature.toughness() > 0
+                        && !creature.keywords().indestructible()
                         && object.damage_marked() > 0
                         && object.damage_marked()
                             >= u32::try_from(creature.toughness()).unwrap_or(u32::MAX)
                 }
                 StateBasedActionKind::CreatureDeathtouchDamage => {
-                    creature.toughness() > 0 && object.deathtouch_damage_marked()
+                    creature.toughness() > 0
+                        && !creature.keywords().indestructible()
+                        && object.deathtouch_damage_marked()
                 }
                 _ => false,
             };
@@ -11788,37 +12343,7 @@ impl GameState {
     }
 
     fn add_mana_costs(left: ManaCost, right: ManaCost) -> Result<ManaCost, StateError> {
-        Ok(ManaCost {
-            colored: [
-                left.colored[0]
-                    .checked_add(right.colored[0])
-                    .ok_or(StateError::ManaValueOverflow)?,
-                left.colored[1]
-                    .checked_add(right.colored[1])
-                    .ok_or(StateError::ManaValueOverflow)?,
-                left.colored[2]
-                    .checked_add(right.colored[2])
-                    .ok_or(StateError::ManaValueOverflow)?,
-                left.colored[3]
-                    .checked_add(right.colored[3])
-                    .ok_or(StateError::ManaValueOverflow)?,
-                left.colored[4]
-                    .checked_add(right.colored[4])
-                    .ok_or(StateError::ManaValueOverflow)?,
-            ],
-            generic: left
-                .generic
-                .checked_add(right.generic)
-                .ok_or(StateError::ManaValueOverflow)?,
-            x_count: left
-                .x_count
-                .checked_add(right.x_count)
-                .ok_or(StateError::ManaValueOverflow)?,
-            x_value: left
-                .x_value
-                .checked_add(right.x_value)
-                .ok_or(StateError::ManaValueOverflow)?,
-        })
+        left.checked_add(right).ok_or(StateError::ManaValueOverflow)
     }
 
     fn is_target_still_legal(
@@ -11860,6 +12385,8 @@ impl GameState {
             targets,
             payment,
             copy_info,
+            kicked,
+            flashback,
         } = request;
         let id = StackEntryId(self.next_stack_entry);
         self.next_stack_entry = self.next_stack_entry.saturating_add(1);
@@ -11873,6 +12400,8 @@ impl GameState {
             targets,
             payment,
             copy_info,
+            kicked,
+            flashback,
         });
         self.emit_event(GameEvent::StackEntryAdded {
             entry: id,
@@ -11917,7 +12446,11 @@ impl GameState {
                         .get(object)
                         .ok_or(StateError::UnknownObject(object))?
                         .owner();
-                    ZoneId::new(Some(owner), ZoneKind::Graveyard)
+                    if entry.flashback() {
+                        ZoneId::new(None, ZoneKind::Exile)
+                    } else {
+                        ZoneId::new(Some(owner), ZoneKind::Graveyard)
+                    }
                 }
                 ResolutionOutcome::Resolved => match entry.kind() {
                     StackObjectKind::InstantSpell | StackObjectKind::SorcerySpell => {
@@ -11926,7 +12459,11 @@ impl GameState {
                             .get(object)
                             .ok_or(StateError::UnknownObject(object))?
                             .owner();
-                        ZoneId::new(Some(owner), ZoneKind::Graveyard)
+                        if entry.flashback() {
+                            ZoneId::new(None, ZoneKind::Exile)
+                        } else {
+                            ZoneId::new(Some(owner), ZoneKind::Graveyard)
+                        }
                     }
                     StackObjectKind::PermanentSpell => ZoneId::new(None, ZoneKind::Battlefield),
                     StackObjectKind::ActivatedAbility | StackObjectKind::TriggeredAbility => {
@@ -11955,6 +12492,8 @@ impl GameState {
             legal_targets,
             outcome,
             copy_info: entry.copy_info(),
+            kicked: entry.kicked(),
+            flashback: entry.flashback(),
         });
         self.emit_event(GameEvent::StackEntryResolved {
             entry: entry.id(),
@@ -12719,6 +13258,7 @@ impl Fnva64 {
     fn write_activation_cost(&mut self, cost: ActivationCost) {
         self.write_mana_cost(cost.mana);
         self.write_bool(cost.tap_source);
+        self.write_bool(cost.sacrifice_source);
         self.write_optional_i32(cost.loyalty_delta);
     }
 
@@ -12979,6 +13519,8 @@ impl Fnva64 {
         }
         self.write_optional_payment_plan(entry.payment);
         self.write_optional_stack_copy_info(entry.copy_info);
+        self.write_bool(entry.kicked);
+        self.write_bool(entry.flashback);
     }
 
     fn write_resolution_record(&mut self, record: &ResolutionRecord) {
@@ -12998,6 +13540,8 @@ impl Fnva64 {
         }
         self.write_u8(record.outcome.canonical_code());
         self.write_optional_stack_copy_info(record.copy_info);
+        self.write_bool(record.kicked);
+        self.write_bool(record.flashback);
     }
 
     fn write_event_record(&mut self, record: EventRecord) {
@@ -13405,6 +13949,21 @@ impl Fnva64 {
                 self.write_u32(player.0);
                 self.write_u32(count);
                 self.write_object_colors(allowed);
+            }
+            GameEvent::LibraryManipulated {
+                player,
+                operation,
+                count,
+                moved,
+            } => {
+                self.write_u32(player.0);
+                self.write_u8(operation.canonical_code());
+                self.write_u32(count);
+                self.write_u32(moved);
+            }
+            GameEvent::ObjectAttached { attachment, target } => {
+                self.write_u32(attachment.0);
+                self.write_optional_object(target);
             }
         }
     }
@@ -13885,6 +14444,7 @@ impl CanonicalBytes {
     fn write_activation_cost(&mut self, cost: ActivationCost) {
         self.write_mana_cost(cost.mana);
         self.write_bool(cost.tap_source);
+        self.write_bool(cost.sacrifice_source);
         self.write_optional_i32(cost.loyalty_delta);
     }
 
@@ -14136,6 +14696,8 @@ impl CanonicalBytes {
         }
         self.write_optional_payment_plan(entry.payment);
         self.write_optional_stack_copy_info(entry.copy_info);
+        self.write_bool(entry.kicked);
+        self.write_bool(entry.flashback);
     }
 
     fn write_resolution_record(&mut self, record: &ResolutionRecord) {
@@ -14155,6 +14717,8 @@ impl CanonicalBytes {
         }
         self.write_u8(record.outcome.canonical_code());
         self.write_optional_stack_copy_info(record.copy_info);
+        self.write_bool(record.kicked);
+        self.write_bool(record.flashback);
     }
 
     fn write_event_record(&mut self, record: EventRecord) {
@@ -14562,6 +15126,21 @@ impl CanonicalBytes {
                 self.write_u32(player.0);
                 self.write_u32(count);
                 self.write_object_colors(allowed);
+            }
+            GameEvent::LibraryManipulated {
+                player,
+                operation,
+                count,
+                moved,
+            } => {
+                self.write_u32(player.0);
+                self.write_u8(operation.canonical_code());
+                self.write_u32(count);
+                self.write_u32(moved);
+            }
+            GameEvent::ObjectAttached { attachment, target } => {
+                self.write_u32(attachment.0);
+                self.write_optional_object(target);
             }
         }
     }

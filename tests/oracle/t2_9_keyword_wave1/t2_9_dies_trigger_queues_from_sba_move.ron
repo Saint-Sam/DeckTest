@@ -1,0 +1,27 @@
+(
+    name: "T2.9 dies trigger queues from battlefield-to-graveyard SBA move",
+    setup: (
+        players: 1,
+        objects: [
+            (card: 29151, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "set_base_creature", object: 0, power: 1, toughness: 1, keywords: []),
+        (action: "register_triggered_ability", controller: 0, source_object: 0, condition: "dies"),
+        (action: "start_turn", player: 0),
+        (action: "mark_damage", object: 0, amount: 1),
+        (action: "check_state_based_actions"),
+        (action: "assert_object_zone", object: 0, zone: "Graveyard", player: 0),
+        (action: "assert_pending_triggers", count: 1),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Graveyard", player: 0, count: 1),
+        ],
+        outcome: "in_progress",
+        active_player: 0,
+        invariants: ["zone_conservation", "hash_consistency"],
+        hash_determinism: true,
+    ),
+)

@@ -21,7 +21,8 @@ use forge_core::{
     ReplacementOperation, ReplacementSourceFilter, RestrictionDefinition, RestrictionEffect,
     SpellTiming, StackEntryId, StackObjectKind, StateHash, Step, TargetChoice,
     TargetControllerPredicate, TargetKind, TargetRequirement, TargetRestriction,
-    TargetRestrictionSubject, ZoneId, ZoneKind,
+    TargetRestrictionSubject, TriggerCondition, TriggerDefinition, TriggerId, TriggerObjectFilter,
+    TriggerZoneFilter, ZoneId, ZoneKind,
 };
 use std::{fs, path::Path};
 
@@ -524,6 +525,51 @@ pub enum ScenarioStep {
         /// Cost to pay.
         cost: ManaCostSpec,
     },
+    /// Scry and bottom selected cards.
+    Scry {
+        /// Zero-based scenario player index.
+        player: usize,
+        /// Number of top library cards to inspect.
+        count: u32,
+        /// Scenario object indexes to bottom.
+        bottom: Vec<usize>,
+    },
+    /// Surveil and move selected cards to the graveyard.
+    Surveil {
+        /// Zero-based scenario player index.
+        player: usize,
+        /// Number of top library cards to inspect.
+        count: u32,
+        /// Scenario object indexes to move to graveyard.
+        graveyard: Vec<usize>,
+    },
+    /// Cycle a hand card using deterministic payment.
+    CycleAuto {
+        /// Zero-based scenario player index.
+        player: usize,
+        /// Scenario object index.
+        object: usize,
+        /// Cycling mana cost.
+        cost: ManaCostSpec,
+    },
+    /// Attach or unattach one object.
+    AttachObject {
+        /// Scenario attachment object index.
+        attachment: usize,
+        /// Scenario target object index, or none to unattach.
+        target_object: Option<usize>,
+    },
+    /// Equip to a controlled creature using deterministic payment.
+    EquipAuto {
+        /// Zero-based scenario player index.
+        player: usize,
+        /// Scenario equipment object index.
+        equipment: usize,
+        /// Scenario target creature object index.
+        target_object: usize,
+        /// Equip mana cost.
+        cost: ManaCostSpec,
+    },
     /// Move a scenario object to another zone.
     MoveObject {
         /// Scenario object index.
@@ -693,6 +739,13 @@ pub enum ScenarioStep {
         /// Restriction registration spec.
         spec: RestrictionSpec,
     },
+    /// Register a triggered ability.
+    RegisterTriggeredAbility {
+        /// Triggered-ability registration spec.
+        spec: TriggerSpec,
+    },
+    /// Put all currently pending triggered abilities on the stack.
+    PutPendingTriggersOnStack,
     /// Activate a previously registered ability using the deterministic payment planner.
     ActivateAbilityAuto {
         /// Zero-based scenario player index.
@@ -712,6 +765,12 @@ pub enum ScenarioStep {
         timing: String,
         /// Mana cost to pay.
         cost: ManaCostSpec,
+        /// Whether flash grants instant-speed timing.
+        flash: bool,
+        /// Optional kicker cost.
+        kicker: Option<ManaCostSpec>,
+        /// Optional flashback alternative cost.
+        flashback: Option<ManaCostSpec>,
         /// Target slots and choices.
         targets: Vec<TargetSpec>,
     },
@@ -770,6 +829,13 @@ pub enum ScenarioStep {
         /// Expected zone.
         zone: ZoneSpec,
     },
+    /// Assert exact object order in a zone, bottom/front to top/back.
+    AssertZoneOrder {
+        /// Expected zone.
+        zone: ZoneSpec,
+        /// Expected scenario object indexes.
+        objects: Vec<usize>,
+    },
     /// Assert token/copy flags and copy source.
     AssertObjectFlags {
         /// Scenario object index.
@@ -780,6 +846,27 @@ pub enum ScenarioStep {
         copy: Option<bool>,
         /// Expected source object index, if asserted.
         copy_source: Option<usize>,
+    },
+    /// Assert an object's attachment target.
+    AssertAttachedTo {
+        /// Scenario attachment object index.
+        attachment: usize,
+        /// Expected scenario target object index, or none.
+        target_object: Option<usize>,
+    },
+    /// Assert pending triggered ability count.
+    AssertPendingTriggers {
+        /// Expected pending trigger count.
+        count: usize,
+    },
+    /// Assert metadata captured on a stack entry.
+    AssertStackEntryFlags {
+        /// Scenario stack-entry index.
+        entry: usize,
+        /// Expected kicked flag, if asserted.
+        kicked: Option<bool>,
+        /// Expected flashback flag, if asserted.
+        flashback: Option<bool>,
     },
     /// Assert the explicit multiplayer turn order.
     AssertTurnOrder {
@@ -875,6 +962,15 @@ impl ScenarioStep {
             Self::AddMana { player, .. } => format!("add_mana[{player}]"),
             Self::ClearMana { player } => format!("clear_mana[{player}]"),
             Self::PayManaAuto { player, .. } => format!("pay_mana_auto[{player}]"),
+            Self::Scry { player, .. } => format!("scry[{player}]"),
+            Self::Surveil { player, .. } => format!("surveil[{player}]"),
+            Self::CycleAuto { player, object, .. } => format!("cycle_auto[{player}:{object}]"),
+            Self::AttachObject { attachment, .. } => format!("attach_object[{attachment}]"),
+            Self::EquipAuto {
+                player, equipment, ..
+            } => {
+                format!("equip_auto[{player}:{equipment}]")
+            }
             Self::MoveObject { object, .. } => format!("move_object[{object}]"),
             Self::CreateToken { controller, .. } => format!("create_token[{controller}]"),
             Self::CreatePermanentCopy { source, .. } => format!("create_permanent_copy[{source}]"),
@@ -916,6 +1012,10 @@ impl ScenarioStep {
             Self::RegisterRestriction { spec } => {
                 format!("register_restriction[{}]", spec.controller)
             }
+            Self::RegisterTriggeredAbility { spec } => {
+                format!("register_triggered_ability[{}]", spec.controller)
+            }
+            Self::PutPendingTriggersOnStack => "put_pending_triggers_on_stack".to_owned(),
             Self::ActivateAbilityAuto { player, ability } => {
                 format!("activate_ability_auto[{player}:{ability}]")
             }
@@ -939,7 +1039,17 @@ impl ScenarioStep {
                 format!("assert_object_counters[{object}]")
             }
             Self::AssertObjectZone { object, .. } => format!("assert_object_zone[{object}]"),
+            Self::AssertZoneOrder { objects, .. } => {
+                format!("assert_zone_order[{}]", objects.len())
+            }
             Self::AssertObjectFlags { object, .. } => format!("assert_object_flags[{object}]"),
+            Self::AssertAttachedTo { attachment, .. } => {
+                format!("assert_attached_to[{attachment}]")
+            }
+            Self::AssertPendingTriggers { count } => format!("assert_pending_triggers[{count}]"),
+            Self::AssertStackEntryFlags { entry, .. } => {
+                format!("assert_stack_entry_flags[{entry}]")
+            }
             Self::AssertTurnOrder { order } => format!("assert_turn_order[{}]", order.len()),
             Self::AssertRangeOfInfluence { mode } => {
                 format!("assert_range_of_influence[{mode}]")
@@ -1154,6 +1264,9 @@ pub struct CreatureKeywordSpec {
     menace: bool,
     vigilance: bool,
     haste: bool,
+    defender: bool,
+    indestructible: bool,
+    prowess: bool,
 }
 
 impl CreatureKeywordSpec {
@@ -1189,6 +1302,15 @@ impl CreatureKeywordSpec {
         if self.haste {
             keywords = keywords.with_haste();
         }
+        if self.defender {
+            keywords = keywords.with_defender();
+        }
+        if self.indestructible {
+            keywords = keywords.with_indestructible();
+        }
+        if self.prowess {
+            keywords = keywords.with_prowess();
+        }
         keywords
     }
 
@@ -1206,6 +1328,9 @@ impl CreatureKeywordSpec {
                 "menace" => spec.menace = true,
                 "vigilance" => spec.vigilance = true,
                 "haste" => spec.haste = true,
+                "defender" => spec.defender = true,
+                "indestructible" => spec.indestructible = true,
+                "prowess" => spec.prowess = true,
                 other => {
                     return Err(ScenarioError::schema(format!(
                         "unsupported creature keyword `{other}`"
@@ -1703,6 +1828,7 @@ impl ContinuousEffectSpec {
 pub struct ActivationCostSpec {
     mana: ManaCostSpec,
     tap_source: bool,
+    sacrifice_source: bool,
     loyalty_delta: Option<i32>,
 }
 
@@ -1722,6 +1848,7 @@ impl ActivationCostSpec {
                 None => ManaCostSpec::default(),
             },
             tap_source: map.optional_bool("tap_source")?.unwrap_or(false),
+            sacrifice_source: map.optional_bool("sacrifice_source")?.unwrap_or(false),
             loyalty_delta: map.optional_i32("loyalty_delta")?,
         })
     }
@@ -1730,6 +1857,9 @@ impl ActivationCostSpec {
         let mut cost = ActivationCost::new(self.mana.to_cost());
         if self.tap_source {
             cost = cost.with_tap_source();
+        }
+        if self.sacrifice_source {
+            cost = cost.with_sacrifice_source();
         }
         if let Some(delta) = self.loyalty_delta {
             cost = cost.with_loyalty_delta(delta);
@@ -1761,6 +1891,28 @@ impl ActivatedAbilitySpec {
             cost: ActivationCostSpec::from_optional(map.optional("cost")?)?,
             effect: AbilityEffectSpec::from_ron_value(map.required("effect")?)?,
             mana_ability: map.optional_bool("mana_ability")?.unwrap_or(false),
+        })
+    }
+}
+
+/// Scenario triggered-ability registration.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TriggerSpec {
+    controller: usize,
+    source_object: Option<usize>,
+    condition: String,
+    object: Option<usize>,
+    once: bool,
+}
+
+impl TriggerSpec {
+    fn from_map(map: &RonMap) -> Result<Self, ScenarioError> {
+        Ok(Self {
+            controller: map.required_usize("controller")?,
+            source_object: map.optional_usize("source_object")?,
+            condition: map.required_string("condition")?,
+            object: map.optional_usize("object")?,
+            once: map.optional_bool("once")?.unwrap_or(false),
         })
     }
 }
@@ -2332,6 +2484,7 @@ struct RunContext {
     replacements: Vec<ReplacementEffectId>,
     continuous_effects: Vec<ContinuousEffectId>,
     activated_abilities: Vec<ActivatedAbilityId>,
+    triggers: Vec<TriggerId>,
     stack_entries: Vec<StackEntryId>,
     failures: Vec<ScenarioFailure>,
     steps: Vec<StepRecord>,
@@ -2345,6 +2498,7 @@ fn execute_scenario(scenario: &Scenario, check_expectations: bool) -> ScenarioRe
         replacements: Vec::new(),
         continuous_effects: Vec::new(),
         activated_abilities: Vec::new(),
+        triggers: Vec::new(),
         stack_entries: Vec::new(),
         failures: Vec::new(),
         steps: Vec::new(),
@@ -2498,6 +2652,11 @@ fn execute_step(step: &ScenarioStep, context: &mut RunContext) {
             record_outcome(&label, Outcome::Applied, context);
             return;
         }
+        ScenarioStep::AssertZoneOrder { zone, objects } => {
+            check_zone_order_expectation(&label, *zone, objects, context);
+            record_outcome(&label, Outcome::Applied, context);
+            return;
+        }
         ScenarioStep::AssertObjectFlags {
             object,
             token,
@@ -2505,6 +2664,28 @@ fn execute_step(step: &ScenarioStep, context: &mut RunContext) {
             copy_source,
         } => {
             check_object_flags_expectation(&label, *object, *token, *copy, *copy_source, context);
+            record_outcome(&label, Outcome::Applied, context);
+            return;
+        }
+        ScenarioStep::AssertAttachedTo {
+            attachment,
+            target_object,
+        } => {
+            check_attached_to_expectation(&label, *attachment, *target_object, context);
+            record_outcome(&label, Outcome::Applied, context);
+            return;
+        }
+        ScenarioStep::AssertPendingTriggers { count } => {
+            check_pending_triggers_expectation(&label, *count, context);
+            record_outcome(&label, Outcome::Applied, context);
+            return;
+        }
+        ScenarioStep::AssertStackEntryFlags {
+            entry,
+            kicked,
+            flashback,
+        } => {
+            check_stack_entry_flags_expectation(&label, *entry, *kicked, *flashback, context);
             record_outcome(&label, Outcome::Applied, context);
             return;
         }
@@ -2621,6 +2802,9 @@ fn execute_step(step: &ScenarioStep, context: &mut RunContext) {
         Outcome::ActivatedAbilityRegistered(ability) => {
             context.activated_abilities.push(*ability);
         }
+        Outcome::TriggerRegistered(trigger) => {
+            context.triggers.push(*trigger);
+        }
         Outcome::ObjectCreated(object) => {
             context.objects.push(*object);
         }
@@ -2708,6 +2892,101 @@ fn action_for_step(step: &ScenarioStep, context: &RunContext) -> Result<Action, 
                 player: player_id,
                 cost,
                 plan,
+            })
+        }
+        ScenarioStep::Scry {
+            player,
+            count,
+            bottom,
+        } => {
+            let mut objects = Vec::with_capacity(bottom.len());
+            for index in bottom {
+                objects.push(object_id(&context.objects, *index, "scry.bottom")?);
+            }
+            Ok(Action::Scry {
+                player: player_id(&context.players, *player, "scry.player")?,
+                count: *count,
+                bottom: objects,
+            })
+        }
+        ScenarioStep::Surveil {
+            player,
+            count,
+            graveyard,
+        } => {
+            let mut objects = Vec::with_capacity(graveyard.len());
+            for index in graveyard {
+                objects.push(object_id(&context.objects, *index, "surveil.graveyard")?);
+            }
+            Ok(Action::Surveil {
+                player: player_id(&context.players, *player, "surveil.player")?,
+                count: *count,
+                graveyard: objects,
+            })
+        }
+        ScenarioStep::CycleAuto {
+            player,
+            object,
+            cost,
+        } => {
+            let player = player_id(&context.players, *player, "cycle_auto.player")?;
+            let object = object_id(&context.objects, *object, "cycle_auto.object")?;
+            let cost = cost.to_cost();
+            let available = context.state.mana_pool(player).map_err(|error| {
+                ScenarioError::schema(format!("cycle mana pool failed: {error:?}"))
+            })?;
+            let payment = auto_payment_plan(available, cost)
+                .map_err(|error| {
+                    ScenarioError::schema(format!("cycle payment planning failed: {error:?}"))
+                })?
+                .ok_or_else(|| {
+                    ScenarioError::schema("cycle_auto has no valid payment plan".to_owned())
+                })?;
+            Ok(Action::Cycle {
+                player,
+                object,
+                cost,
+                payment,
+            })
+        }
+        ScenarioStep::AttachObject {
+            attachment,
+            target_object,
+        } => Ok(Action::AttachObject {
+            attachment: object_id(&context.objects, *attachment, "attach_object.attachment")?,
+            target: match target_object {
+                Some(index) => Some(object_id(
+                    &context.objects,
+                    *index,
+                    "attach_object.target_object",
+                )?),
+                None => None,
+            },
+        }),
+        ScenarioStep::EquipAuto {
+            player,
+            equipment,
+            target_object,
+            cost,
+        } => {
+            let player = player_id(&context.players, *player, "equip_auto.player")?;
+            let cost = cost.to_cost();
+            let available = context.state.mana_pool(player).map_err(|error| {
+                ScenarioError::schema(format!("equip mana pool failed: {error:?}"))
+            })?;
+            let payment = auto_payment_plan(available, cost)
+                .map_err(|error| {
+                    ScenarioError::schema(format!("equip payment planning failed: {error:?}"))
+                })?
+                .ok_or_else(|| {
+                    ScenarioError::schema("equip_auto has no valid payment plan".to_owned())
+                })?;
+            Ok(Action::Equip {
+                player,
+                equipment: object_id(&context.objects, *equipment, "equip_auto.equipment")?,
+                target: object_id(&context.objects, *target_object, "equip_auto.target_object")?,
+                cost,
+                payment,
             })
         }
         ScenarioStep::MoveObject { object, zone } => Ok(Action::MoveObject {
@@ -2914,6 +3193,11 @@ fn action_for_step(step: &ScenarioStep, context: &RunContext) -> Result<Action, 
             let definition = restriction_definition(spec, context)?;
             Ok(Action::RegisterRestriction { definition })
         }
+        ScenarioStep::RegisterTriggeredAbility { spec } => {
+            let definition = trigger_definition(spec, context)?;
+            Ok(Action::RegisterTriggeredAbility { definition })
+        }
+        ScenarioStep::PutPendingTriggersOnStack => Ok(Action::PutPendingTriggeredAbilitiesOnStack),
         ScenarioStep::ActivateAbilityAuto { player, ability } => {
             let player = player_id(&context.players, *player, "activate_ability_auto.player")?;
             let ability = activated_ability_id(
@@ -2951,14 +3235,54 @@ fn action_for_step(step: &ScenarioStep, context: &RunContext) -> Result<Action, 
             kind,
             timing,
             cost,
+            flash,
+            kicker,
+            flashback,
             targets,
         } => {
             let player = player_id(&context.players, *player, "cast_spell_auto.player")?;
             let object = object_id(&context.objects, *object, "cast_spell_auto.object")?;
             let cost = cost.to_cost();
+            let mut requirements = Vec::with_capacity(targets.len());
+            let mut choices = Vec::with_capacity(targets.len());
+            for target in targets {
+                requirements.push(target.requirement.to_requirement(&context.players)?);
+                choices.push(target.choice.to_choice(
+                    &context.players,
+                    &context.objects,
+                    "cast_spell_auto.target",
+                )?);
+            }
+            let placeholder_payment = auto_payment_plan(
+                context.state.mana_pool(player).map_err(|error| {
+                    ScenarioError::schema(format!("cast mana pool failed: {error:?}"))
+                })?,
+                ManaCostSpec::default().to_cost(),
+            )
+            .map_err(|error| {
+                ScenarioError::schema(format!("cast payment planning failed: {error:?}"))
+            })?
+            .ok_or_else(|| {
+                ScenarioError::schema("cast_spell_auto has no zero-cost payment plan".to_owned())
+            })?;
+            let mut request = CastSpellRequest::new(
+                parse_stack_object_kind(kind)?,
+                parse_spell_timing(timing)?,
+                cost,
+                placeholder_payment,
+            );
+            if *flash {
+                request = request.with_flash();
+            }
+            if let Some(kicker) = kicker {
+                request = request.with_kicker(kicker.to_cost());
+            }
+            if let Some(flashback) = flashback {
+                request = request.with_flashback(flashback.to_cost());
+            }
             let effective_cost = context
                 .state
-                .effective_spell_cost(player, object, cost)
+                .effective_spell_request_cost(player, object, &request)
                 .map_err(|error| ScenarioError::schema(format!("spell cost failed: {error:?}")))?;
             let available = context.state.mana_pool(player).map_err(|error| {
                 ScenarioError::schema(format!("cast mana pool failed: {error:?}"))
@@ -2970,23 +3294,22 @@ fn action_for_step(step: &ScenarioStep, context: &RunContext) -> Result<Action, 
                 .ok_or_else(|| {
                     ScenarioError::schema("cast_spell_auto has no valid payment plan".to_owned())
                 })?;
-            let mut requirements = Vec::with_capacity(targets.len());
-            let mut choices = Vec::with_capacity(targets.len());
-            for target in targets {
-                requirements.push(target.requirement.to_requirement(&context.players)?);
-                choices.push(target.choice.to_choice(
-                    &context.players,
-                    &context.objects,
-                    "cast_spell_auto.target",
-                )?);
-            }
-            let request = CastSpellRequest::new(
+            request = CastSpellRequest::new(
                 parse_stack_object_kind(kind)?,
                 parse_spell_timing(timing)?,
                 cost,
                 payment,
-            )
-            .with_targets(requirements, choices);
+            );
+            if *flash {
+                request = request.with_flash();
+            }
+            if let Some(kicker) = kicker {
+                request = request.with_kicker(kicker.to_cost());
+            }
+            if let Some(flashback) = flashback {
+                request = request.with_flashback(flashback.to_cost());
+            }
+            request = request.with_targets(requirements, choices);
             Ok(Action::CastSpell {
                 player,
                 object,
@@ -2998,7 +3321,11 @@ fn action_for_step(step: &ScenarioStep, context: &RunContext) -> Result<Action, 
         | ScenarioStep::AssertObjectLoyalty { .. }
         | ScenarioStep::AssertObjectCounters { .. }
         | ScenarioStep::AssertObjectZone { .. }
+        | ScenarioStep::AssertZoneOrder { .. }
         | ScenarioStep::AssertObjectFlags { .. }
+        | ScenarioStep::AssertAttachedTo { .. }
+        | ScenarioStep::AssertPendingTriggers { .. }
+        | ScenarioStep::AssertStackEntryFlags { .. }
         | ScenarioStep::AssertTurnOrder { .. }
         | ScenarioStep::AssertRangeOfInfluence { .. }
         | ScenarioStep::AssertCommander { .. }
@@ -3580,6 +3907,52 @@ fn check_object_zone_expectation(
     }
 }
 
+fn check_zone_order_expectation(
+    phase: &str,
+    zone: ZoneSpec,
+    objects: &[usize],
+    context: &mut RunContext,
+) {
+    let expected_zone = match zone.zone_id(&context.players) {
+        Ok(zone) => zone,
+        Err(error) => {
+            context
+                .failures
+                .push(ScenarioFailure::new(phase, error.to_string()));
+            return;
+        }
+    };
+    let mut expected = Vec::with_capacity(objects.len());
+    for object in objects {
+        match object_id(&context.objects, *object, phase) {
+            Ok(object) => expected.push(object),
+            Err(error) => {
+                context
+                    .failures
+                    .push(ScenarioFailure::new(phase, error.to_string()));
+                return;
+            }
+        }
+    }
+    let actual = context.state.zone_objects(expected_zone);
+    if actual != Some(expected.as_slice()) {
+        context.failures.push(ScenarioFailure::new(
+            phase,
+            format!(
+                "zone {expected_zone:?} expected objects {:?}, found {:?}",
+                expected
+                    .iter()
+                    .map(|object| object.index())
+                    .collect::<Vec<_>>(),
+                actual.map(|objects| objects
+                    .iter()
+                    .map(|object| object.index())
+                    .collect::<Vec<_>>())
+            ),
+        ));
+    }
+}
+
 fn check_object_flags_expectation(
     phase: &str,
     object: usize,
@@ -3639,6 +4012,113 @@ fn check_object_flags_expectation(
                 .failures
                 .push(ScenarioFailure::new(phase, error.to_string())),
         }
+    }
+}
+
+fn check_attached_to_expectation(
+    phase: &str,
+    attachment: usize,
+    target_object: Option<usize>,
+    context: &mut RunContext,
+) {
+    let attachment_id = match object_id(&context.objects, attachment, phase) {
+        Ok(object) => object,
+        Err(error) => {
+            context
+                .failures
+                .push(ScenarioFailure::new(phase, error.to_string()));
+            return;
+        }
+    };
+    let expected = match target_object {
+        Some(index) => match object_id(&context.objects, index, phase) {
+            Ok(object) => Some(object),
+            Err(error) => {
+                context
+                    .failures
+                    .push(ScenarioFailure::new(phase, error.to_string()));
+                return;
+            }
+        },
+        None => None,
+    };
+    let Some(record) = context.state.object(attachment_id) else {
+        context.failures.push(ScenarioFailure::new(
+            phase,
+            format!("attachment object {attachment} is missing from state"),
+        ));
+        return;
+    };
+    if record.attached_to() != expected {
+        context.failures.push(ScenarioFailure::new(
+            phase,
+            format!(
+                "attachment {attachment} expected target {:?}, found {:?}",
+                expected.map(ObjectId::index),
+                record.attached_to().map(ObjectId::index)
+            ),
+        ));
+    }
+}
+
+fn check_pending_triggers_expectation(phase: &str, expected: usize, context: &mut RunContext) {
+    let actual = context.state.pending_triggers().len();
+    if actual != expected {
+        context.failures.push(ScenarioFailure::new(
+            phase,
+            format!("expected {expected} pending triggers, found {actual}"),
+        ));
+    }
+}
+
+fn check_stack_entry_flags_expectation(
+    phase: &str,
+    entry: usize,
+    kicked: Option<bool>,
+    flashback: Option<bool>,
+    context: &mut RunContext,
+) {
+    let Some(entry_id) = context.stack_entries.get(entry).copied() else {
+        context.failures.push(ScenarioFailure::new(
+            phase,
+            format!("unknown stack entry index {entry}"),
+        ));
+        return;
+    };
+    let Some(stack_entry) = context
+        .state
+        .stack_entries()
+        .iter()
+        .find(|candidate| candidate.id() == entry_id)
+    else {
+        context.failures.push(ScenarioFailure::new(
+            phase,
+            format!(
+                "stack entry {} is not currently on the stack",
+                entry_id.index()
+            ),
+        ));
+        return;
+    };
+    if kicked.is_some_and(|expected| expected != stack_entry.kicked()) {
+        context.failures.push(ScenarioFailure::new(
+            phase,
+            format!(
+                "stack entry {entry} expected kicked {:?}, found {}",
+                kicked,
+                stack_entry.kicked()
+            ),
+        ));
+    }
+    if flashback.is_some_and(|expected| expected != stack_entry.flashback()) {
+        context.failures.push(ScenarioFailure::new(
+            phase,
+            format!(
+                "stack entry {entry} expected flashback {:?}, found {}",
+                flashback,
+                stack_entry.flashback()
+            ),
+        ));
     }
 }
 
@@ -4323,6 +4803,67 @@ fn activated_ability_definition(
     Ok(definition)
 }
 
+fn trigger_definition(
+    spec: &TriggerSpec,
+    context: &RunContext,
+) -> Result<TriggerDefinition, ScenarioError> {
+    let controller = player_id(
+        &context.players,
+        spec.controller,
+        "register_triggered_ability.controller",
+    )?;
+    let source = match spec.source_object {
+        Some(index) => Some(object_id(
+            &context.objects,
+            index,
+            "register_triggered_ability.source_object",
+        )?),
+        None => None,
+    };
+    let object_filter = match spec.object {
+        Some(index) => TriggerObjectFilter::Object(object_id(
+            &context.objects,
+            index,
+            "register_triggered_ability.object",
+        )?),
+        None if source.is_some() => TriggerObjectFilter::Source,
+        None => TriggerObjectFilter::Any,
+    };
+    let condition = match spec.condition.as_str() {
+        "enters_battlefield" | "etb" => TriggerCondition::ObjectMoved {
+            object: object_filter,
+            from: TriggerZoneFilter::Any,
+            to: TriggerZoneFilter::Exact(ZoneId::new(None, ZoneKind::Battlefield)),
+        },
+        "dies" => TriggerCondition::ObjectMoved {
+            object: object_filter,
+            from: TriggerZoneFilter::Exact(ZoneId::new(None, ZoneKind::Battlefield)),
+            to: TriggerZoneFilter::Kind(ZoneKind::Graveyard),
+        },
+        "object_moved" => TriggerCondition::ObjectMoved {
+            object: object_filter,
+            from: TriggerZoneFilter::Any,
+            to: TriggerZoneFilter::Any,
+        },
+        "stack_entry_added" => {
+            TriggerCondition::EventKind(forge_core::GameEventKind::StackEntryAdded)
+        }
+        other => {
+            return Err(ScenarioError::schema(format!(
+                "unsupported trigger condition `{other}`"
+            )));
+        }
+    };
+    let mut definition = TriggerDefinition::new(controller, condition);
+    if let Some(source) = source {
+        definition = definition.with_source(source);
+    }
+    if spec.once {
+        definition = definition.delayed_once();
+    }
+    Ok(definition)
+}
+
 fn activated_ability_effect(
     spec: &AbilityEffectSpec,
     players: &[PlayerId],
@@ -4600,6 +5141,45 @@ fn parse_script(value: RonValue) -> Result<Vec<ScenarioStep>, ScenarioError> {
                 player: map.required_usize("player")?,
                 cost: ManaCostSpec::from_ron_value(map.required("cost")?)?,
             },
+            "scry" => ScenarioStep::Scry {
+                player: map.required_usize("player")?,
+                count: map.required_u32("count")?,
+                bottom: parse_usize_list(
+                    map.optional("bottom")?
+                        .unwrap_or_else(|| RonValue::List(Vec::new())),
+                    "scry.bottom",
+                )?,
+            },
+            "surveil" => ScenarioStep::Surveil {
+                player: map.required_usize("player")?,
+                count: map.required_u32("count")?,
+                graveyard: parse_usize_list(
+                    map.optional("graveyard")?
+                        .unwrap_or_else(|| RonValue::List(Vec::new())),
+                    "surveil.graveyard",
+                )?,
+            },
+            "cycle_auto" => ScenarioStep::CycleAuto {
+                player: map.required_usize("player")?,
+                object: map.required_usize("object")?,
+                cost: match map.optional("cost")? {
+                    Some(value) => ManaCostSpec::from_ron_value(value)?,
+                    None => ManaCostSpec::default(),
+                },
+            },
+            "attach_object" => ScenarioStep::AttachObject {
+                attachment: map.required_usize("attachment")?,
+                target_object: map.optional_usize("target_object")?,
+            },
+            "equip_auto" => ScenarioStep::EquipAuto {
+                player: map.required_usize("player")?,
+                equipment: map.required_usize("equipment")?,
+                target_object: map.required_usize("target_object")?,
+                cost: match map.optional("cost")? {
+                    Some(value) => ManaCostSpec::from_ron_value(value)?,
+                    None => ManaCostSpec::default(),
+                },
+            },
             "move_object" => ScenarioStep::MoveObject {
                 object: map.required_usize("object")?,
                 zone: parse_zone_from_map(&map)?,
@@ -4713,6 +5293,10 @@ fn parse_script(value: RonValue) -> Result<Vec<ScenarioStep>, ScenarioError> {
             "register_restriction" => ScenarioStep::RegisterRestriction {
                 spec: RestrictionSpec::from_map(&map)?,
             },
+            "register_triggered_ability" => ScenarioStep::RegisterTriggeredAbility {
+                spec: TriggerSpec::from_map(&map)?,
+            },
+            "put_pending_triggers_on_stack" => ScenarioStep::PutPendingTriggersOnStack,
             "activate_ability_auto" => ScenarioStep::ActivateAbilityAuto {
                 player: map.required_usize("player")?,
                 ability: map.required_usize("ability")?,
@@ -4727,6 +5311,15 @@ fn parse_script(value: RonValue) -> Result<Vec<ScenarioStep>, ScenarioError> {
                 cost: match map.optional("cost")? {
                     Some(value) => ManaCostSpec::from_ron_value(value)?,
                     None => ManaCostSpec::default(),
+                },
+                flash: map.optional_bool("flash")?.unwrap_or(false),
+                kicker: match map.optional("kicker")? {
+                    Some(value) => Some(ManaCostSpec::from_ron_value(value)?),
+                    None => None,
+                },
+                flashback: match map.optional("flashback")? {
+                    Some(value) => Some(ManaCostSpec::from_ron_value(value)?),
+                    None => None,
                 },
                 targets: parse_targets(
                     map.optional("targets")?
@@ -4764,11 +5357,27 @@ fn parse_script(value: RonValue) -> Result<Vec<ScenarioStep>, ScenarioError> {
                 object: map.required_usize("object")?,
                 zone: parse_zone_from_map(&map)?,
             },
+            "assert_zone_order" => ScenarioStep::AssertZoneOrder {
+                zone: parse_zone_from_map(&map)?,
+                objects: parse_usize_list(map.required("objects")?, "assert_zone_order.objects")?,
+            },
             "assert_object_flags" => ScenarioStep::AssertObjectFlags {
                 object: map.required_usize("object")?,
                 token: map.optional_bool("token")?,
                 copy: map.optional_bool("copy")?,
                 copy_source: map.optional_usize("copy_source")?,
+            },
+            "assert_attached_to" => ScenarioStep::AssertAttachedTo {
+                attachment: map.required_usize("attachment")?,
+                target_object: map.optional_usize("target_object")?,
+            },
+            "assert_pending_triggers" => ScenarioStep::AssertPendingTriggers {
+                count: map.required_usize("count")?,
+            },
+            "assert_stack_entry_flags" => ScenarioStep::AssertStackEntryFlags {
+                entry: map.required_usize("entry")?,
+                kicked: map.optional_bool("kicked")?,
+                flashback: map.optional_bool("flashback")?,
             },
             "assert_turn_order" => ScenarioStep::AssertTurnOrder {
                 order: parse_usize_list(map.required("order")?, "assert_turn_order.order")?,

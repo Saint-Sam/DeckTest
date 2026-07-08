@@ -1,0 +1,38 @@
+(
+    name: "T2.9 haste permits same-turn attacking while non-haste remains sick",
+    setup: (
+        players: 2,
+        libraries: [
+            (player: 0, cards: [29011, 29012]),
+        ],
+        objects: [
+            (card: 29013, owner: 0, controller: 0, zone: "Hand", player: 0),
+            (card: 29014, owner: 0, controller: 0, zone: "Hand", player: 0),
+        ],
+    ),
+    script: [
+        (action: "set_base_creature", object: 0, power: 2, toughness: 2, keywords: ["haste"]),
+        (action: "set_base_creature", object: 1, power: 2, toughness: 2, keywords: []),
+        (action: "start_turn", player: 0),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "move_object", object: 0, zone: "Battlefield"),
+        (action: "move_object", object: 1, zone: "Battlefield"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "assert_can_attack", player: 0, attack: (attacker: 0, defender: 1), expected: true),
+        (action: "assert_can_attack", player: 0, attack: (attacker: 1, defender: 1), expected: false),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Battlefield", count: 2),
+        ],
+        outcome: "in_progress",
+        active_player: 0,
+        priority_player: 0,
+        current_step: "DeclareAttackers",
+        invariants: ["zone_conservation", "hash_consistency"],
+        hash_determinism: true,
+    ),
+)

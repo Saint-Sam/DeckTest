@@ -1,0 +1,23 @@
+(
+    name: "T2.9 scry bottoms selected inspected card deterministically",
+    setup: (
+        players: 1,
+        objects: [
+            (card: 29101, owner: 0, controller: 0, zone: "Library", player: 0),
+            (card: 29102, owner: 0, controller: 0, zone: "Library", player: 0),
+            (card: 29103, owner: 0, controller: 0, zone: "Library", player: 0),
+        ],
+    ),
+    script: [
+        (action: "scry", player: 0, count: 2, bottom: [2]),
+        (action: "assert_zone_order", zone: "Library", player: 0, objects: [2, 0, 1]),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Library", player: 0, count: 3),
+        ],
+        outcome: "in_progress",
+        invariants: ["zone_conservation", "hash_consistency"],
+        hash_determinism: true,
+    ),
+)

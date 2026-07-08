@@ -1,0 +1,33 @@
+(
+    name: "T2.9 equip attaches equipment to controlled creature",
+    setup: (
+        players: 1,
+        libraries: [
+            (player: 0, cards: [29121]),
+        ],
+        objects: [
+            (card: 29122, owner: 0, controller: 0, zone: "Battlefield"),
+            (card: 29123, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "set_base_creature", object: 1, power: 2, toughness: 2, keywords: []),
+        (action: "start_turn", player: 0),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "equip_auto", player: 0, equipment: 0, target_object: 1),
+        (action: "assert_attached_to", attachment: 0, target_object: 1),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Battlefield", count: 2),
+        ],
+        outcome: "in_progress",
+        active_player: 0,
+        priority_player: 0,
+        current_step: "PrecombatMain",
+        invariants: ["zone_conservation", "hash_consistency"],
+        hash_determinism: true,
+    ),
+)

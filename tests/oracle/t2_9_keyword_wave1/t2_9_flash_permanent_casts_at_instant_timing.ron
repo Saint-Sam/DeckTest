@@ -1,0 +1,27 @@
+(
+    name: "T2.9 flash permits permanent spell at instant timing",
+    setup: (
+        players: 1,
+        objects: [
+            (card: 29051, owner: 0, controller: 0, zone: "Hand", player: 0),
+        ],
+    ),
+    script: [
+        (action: "start_turn", player: 0),
+        (action: "advance_step"),
+        (action: "cast_spell_auto", player: 0, object: 0, kind: "permanent", timing: "sorcery", flash: true),
+        (action: "pass_priority", player: 0),
+        (action: "assert_object_zone", object: 0, zone: "Battlefield"),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Battlefield", count: 1),
+        ],
+        outcome: "in_progress",
+        active_player: 0,
+        priority_player: 0,
+        current_step: "Upkeep",
+        invariants: ["zone_conservation", "hash_consistency"],
+        hash_determinism: true,
+    ),
+)

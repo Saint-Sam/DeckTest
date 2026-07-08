@@ -1,0 +1,23 @@
+(
+    name: "T2.9 aura attachment plumbing records target object",
+    setup: (
+        players: 1,
+        objects: [
+            (card: 29131, owner: 0, controller: 0, zone: "Battlefield"),
+            (card: 29132, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "set_base_creature", object: 1, power: 1, toughness: 1, keywords: []),
+        (action: "attach_object", attachment: 0, target_object: 1),
+        (action: "assert_attached_to", attachment: 0, target_object: 1),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Battlefield", count: 2),
+        ],
+        outcome: "in_progress",
+        invariants: ["zone_conservation", "hash_consistency"],
+        hash_determinism: true,
+    ),
+)

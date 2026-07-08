@@ -1,0 +1,33 @@
+(
+    name: "T2.9 defender keyword prevents attacking",
+    setup: (
+        players: 2,
+        libraries: [
+            (player: 0, cards: [29001, 29002]),
+        ],
+        objects: [
+            (card: 29003, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "set_base_creature", object: 0, power: 3, toughness: 3, keywords: ["defender"]),
+        (action: "start_turn", player: 0),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "assert_can_attack", player: 0, attack: (attacker: 0, defender: 1), expected: false),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Battlefield", count: 1),
+        ],
+        outcome: "in_progress",
+        active_player: 0,
+        priority_player: 0,
+        current_step: "DeclareAttackers",
+        invariants: ["zone_conservation", "life_poison_sanity", "hash_consistency"],
+        hash_determinism: true,
+    ),
+)
