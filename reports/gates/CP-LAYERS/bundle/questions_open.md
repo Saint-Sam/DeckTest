@@ -27,7 +27,7 @@ Current evidence: `docs/t1_10_legacy_test_oracle_mapping.md`
 
 Priority: P0
 
-Status: resolved/remediated 2026-07-08; awaiting CP-LAYERS owner signoff
+Status: resolved/remediated 2026-07-08; owner signed off CP-LAYERS
 
 Question: CP-LAYERS requires a legacy engine differential on a 100-card layered
 subset. Local-only evidence selected the subset and adjudicated script-level
@@ -54,3 +54,9 @@ Current evidence:
 `reports/gates/CP-LAYERS/legacy-engine-snapshot-2026-07-07.md`
 `reports/gates/CP-LAYERS/legacy-script-bridge-2026-07-07.md`
 `reports/gates/CP-LAYERS/legacy-true-importer-diff-2026-07-08.md`
+
+Owner signoff: 2026-07-08, Codex thread:
+`CP-LAYERS signoff: proceed. I approve CP-LAYERS based on the 100
+owner-approved reviewer scenarios passing, the 100-card true importer legacy
+differential matching 100/100 with 0 mismatches, fuzz/local verification
+passing, and no current blocking divergences.`

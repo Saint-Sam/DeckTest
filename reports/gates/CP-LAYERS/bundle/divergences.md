@@ -2,7 +2,7 @@
 
 Date: 2026-07-07
 
-Status: REMEDIATED LOCALLY; OWNER SIGNOFF STILL REQUIRED
+Status: REMEDIATED AND OWNER-SIGNED-OFF
 
 Owner decision on 2026-07-07: use local-only search for a legacy Forge/layered
 subset first, and ask before any network/download. No network access, clone,
@@ -58,7 +58,6 @@ mismatches.
 
 ## Gate Consequence
 
-The Section 15.4 legacy differential clause now has local PASS evidence. CP-LAYERS
-still cannot unblock T2.5 until the owner/human reviewer reads the evidence and
-either signs off with the required layer-ordering belief sentence or fails the
-checkpoint.
+The Section 15.4 legacy differential clause has PASS evidence. The owner/human
+reviewer signed off in the Codex thread on 2026-07-08, so CP-LAYERS is unblocked
+and T2.5 may start.

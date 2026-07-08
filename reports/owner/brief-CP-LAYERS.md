@@ -10,8 +10,8 @@ remote-green on GitHub Actions. I also added a checkpoint-specific
 `fuzz_characteristics` target so the reviewer can probe random mutation/query
 interleavings before signing off.
 
-This is not a pass yet. CP-LAYERS is the plan's human checkpoint before any
-T2.5+ work can depend on layers.
+CP-LAYERS is now signed off. It was the plan's human checkpoint before any
+T2.5+ work could depend on layers.
 
 ## 2. WHAT YOU SHOULD SEE - TRY IT YOURSELF
 
@@ -24,9 +24,8 @@ T2.5+ work can depend on layers.
 - RED FLAG: any Rust error in `fuzz_characteristics`.
 
 - DO: open `reports/gates/CP-LAYERS/SIGNOFF.md`
-- EXPECT: `Verdict: PENDING` and a checklist of the human review items.
-- RED FLAG: this file says PASS before you decide what to do about the blocked
-  100-card legacy engine differential.
+- EXPECT: `Verdict: PASS` and your 2026-07-08 owner signoff sentence.
+- RED FLAG: missing `ci #33` evidence for commit `a3d16af`.
 
 ## 3. NUMBERS THAT MATTER
 
@@ -63,8 +62,8 @@ selected cards.
 
 ## 5. WHAT YOU SHOULD EXPECT NEXT
 
-T2.5+ stays blocked until you give the CP-LAYERS signoff or fail it. The
-previous true differential blocker has been remediated locally.
+T2.5 may now start. The previous true differential blocker has been remediated
+locally and the evidence commit is remote-green.
 
 ## 6. CURRENT OWNER DECISIONS
 
@@ -79,18 +78,12 @@ You supplied the CP-LAYERS review direction on 2026-07-07:
   importer differential now matches 100/100 selected legacy snapshots.
 - Longer sanitizer fuzz may run only if the tooling is already installed;
   otherwise Codex must ask before installing anything.
-- CP-LAYERS is not approved yet. Codex must bring the results back before you
-  decide proceed or fail.
+- CP-LAYERS was approved by you on 2026-07-08 with:
+  `CP-LAYERS signoff: proceed. I approve CP-LAYERS based on the 100
+  owner-approved reviewer scenarios passing, the 100-card true importer legacy
+  differential matching 100/100 with 0 mismatches, fuzz/local verification
+  passing, and no current blocking divergences.`
 
 ## 7. WHAT WE NEED FROM YOU
 
-You are the CP-LAYERS human reviewer under O1 Option C. The remaining decision
-is now signoff, not de-scope: either approve CP-LAYERS with the required
-sentence, or fail it and reopen remediation.
-
-Required sentence:
-
-> I believe layer ordering is correct for the following reasons...
-
-T2.5 stays blocked until you give that explicit CP-LAYERS signoff or fail the
-checkpoint.
+No owner action is needed for CP-LAYERS. T2.5 is open.

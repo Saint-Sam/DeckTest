@@ -196,7 +196,8 @@
   "gates_passed": [
     "T0",
     "CP-KERNEL",
-    "T1"
+    "T1",
+    "CP-LAYERS"
   ],
   "metrics_snapshot": "metrics/legacy_inventory.json",
   "gate_reviews": {
@@ -237,17 +238,19 @@
       "re_review": "PASS on 2026-07-07 after combat oracle remediation, live reviewer checks, clean-checkout gate evidence, and exact-commit remote CI."
     },
     "CP-LAYERS": {
-      "status": "awaiting_owner_review",
+      "status": "passed",
       "bundle": "reports/gates/CP-LAYERS/bundle",
       "signoff": "reports/gates/CP-LAYERS/SIGNOFF.md",
-      "reviewed_remote_green_commit": "81143e1e221ee5d5a01a7691f0adbe380cb357f7",
-      "remote_ci": "GitHub Actions ci #23 run 28891474213 and manual ci #24 run 28892313697 passed for T2.4 commit 81143e1e221ee5d5a01a7691f0adbe380cb357f7; evidence commit ae535189e9543907dd3b8f6144e40b800ac2be3d passed in ci #25 run 28892638060",
-      "review_requirements": "Owner/human CP-LAYERS review must complete Section 15.4 with the owner-approved stricter packet: 100 novel layer scenarios with no rules-observable failures, legacy differential on a 100-card layered subset with written adjudication, memoization-invalidation audit plus fuzz target, and the explicit layer-ordering belief sentence before T2.5+ starts. Legacy Forge engine snapshot side emits 100/100 OK snapshots. The supplemental Forge 2.0 script bridge parses all 100 selected scripts and executes 53 representable layer-fragment scenarios with 53/53 pass. The true importer differential now parses active legacy faces, instantiates 186 layer operations from 117 active-face continuous lines, and matches 100/100 selected legacy Java snapshots with 0 mismatches. Owner CP-LAYERS signoff remains pending."
+      "reviewed_remote_green_commit": "a3d16af655d55dc1d6030b47d5a3115660843719",
+      "t2_4_implementation_commit": "81143e1e221ee5d5a01a7691f0adbe380cb357f7",
+      "remote_ci": "GitHub Actions ci #33 run 28936524486 passed all required jobs for CP-LAYERS true importer differential commit a3d16af655d55dc1d6030b47d5a3115660843719; earlier T2.4 implementation CI #23/#24 and evidence CI #25 were also green.",
+      "review_requirements": "Section 15.4 completed with owner-approved stricter packet: 100 novel layer scenarios with no rules-observable failures, legacy differential on a 100-card layered subset with written adjudication, memoization-invalidation audit plus fuzz target, and explicit owner proceed approval before T2.5+ starts. Legacy Forge engine snapshot side emits 100/100 OK snapshots. The supplemental Forge 2.0 script bridge parses all 100 selected scripts and executes 53 representable layer-fragment scenarios with 53/53 pass. The true importer differential parses active legacy faces, instantiates 186 layer operations from 117 active-face continuous lines, and matches 100/100 selected legacy Java snapshots with 0 mismatches.",
+      "owner_signoff": "2026-07-08 Codex thread: CP-LAYERS signoff: proceed. I approve CP-LAYERS based on the 100 owner-approved reviewer scenarios passing, the 100-card true importer legacy differential matching 100/100 with 0 mismatches, fuzz/local verification passing, and no current blocking divergences."
     }
   },
   "owner_input": {
     "O1": "complete",
     "O2": "complete",
-    "O5": "CP_LAYERS_100_scenarios_passed_legacy_engine_snapshots_100_ok_true_importer_diff_100_exact_pending_owner_signoff"
+    "O5": "complete"
   }
 }

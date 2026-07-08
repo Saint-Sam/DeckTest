@@ -20,6 +20,10 @@ evidence_dir="reports/gates/${gate_id}"
 mkdir -p "$bundle"
 
 cp PLAN_STATE.json "$bundle/PLAN_STATE.json"
+if [[ -f "${evidence_dir}/SIGNOFF.md" ]]; then
+  cp "${evidence_dir}/SIGNOFF.md" "$bundle/SIGNOFF.md"
+fi
+
 if [[ -f "${evidence_dir}/metrics_snapshot.json" ]]; then
   cp "${evidence_dir}/metrics_snapshot.json" "$bundle/metrics_snapshot.json"
 elif [[ -f "metrics/legacy_inventory.json" ]]; then
