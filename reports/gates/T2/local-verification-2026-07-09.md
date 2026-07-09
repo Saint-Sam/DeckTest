@@ -26,4 +26,6 @@ FORGE_T2_RUN_FUZZ=1 scripts/gates/gate_T2.sh
 - Nightmare suite: 1,000 game(s), 10 fixture(s), 0 invariant violations.
 - T2 fuzz gate: 3 targets, 14,400 seconds each, all clean.
 - Overall T2 gate: `PASS gate_T2.sh`.
-
+- Clean-checkout T2 gate at commit
+  `0fdc23dea157ee55226eae24d8d4d817c46b5d59`: PASS; archived in
+  `reports/gates/T2/clean-checkout-gate-0fdc23d-2026-07-09.log`.

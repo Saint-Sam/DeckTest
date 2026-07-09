@@ -1,0 +1,51 @@
+==> baseline test command
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-QuRJ5aWV' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-LcBCqb5u' (errno=Operation not permitted)
+
+warning: `forge-testkit` (bin "forge-testkit") generated 1 warning
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running `target/debug/forge-testkit oracle --path reports/gates/T2/reviewer_oracles --no-junit`
+PASS reports/gates/T2/reviewer_oracles/reviewer_t2_commander_tax_identity_combo.ron
+PASS reports/gates/T2/reviewer_oracles/reviewer_t2_copy_ignores_counters_and_modifiers.ron
+PASS reports/gates/T2/reviewer_oracles/reviewer_t2_haste_does_not_override_cannot_attack.ron
+PASS reports/gates/T2/reviewer_oracles/reviewer_t2_layer_counter_sba_lethal.ron
+PASS reports/gates/T2/reviewer_oracles/reviewer_t2_mana_then_stack_ability.ron
+PASS reports/gates/T2/reviewer_oracles/reviewer_t2_protection_uses_effective_source_color.ron
+PASS reports/gates/T2/reviewer_oracles/reviewer_t2_scry_then_surveil_zone_order.ron
+PASS reports/gates/T2/reviewer_oracles/reviewer_t2_token_copy_ceases_without_original.ron
+oracle scenarios: 8 passed, 0 failed
+git: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-scIocAXd' (errno=Operation not permitted)
+git: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-h3rihjSe' (errno=Operation not permitted)
+==> mutation edit command
+perl: warning: Setting locale failed.
+perl: warning: Please check that your locale settings:
+	LC_ALL = "C.UTF-8",
+	LC_CTYPE = "C.UTF-8",
+	LANG = "C.UTF-8"
+    are supported and installed on your system.
+perl: warning: Falling back to the standard locale ("C").
+==> mutated test command (expected to fail)
+   Compiling forge-core v0.0.0 (/private/var/folders/bc/364csh9x7ts0qcsvtp63gw91dhcrjl/T/forge_mutation_edit_worktree.XlPwrd/crates/forge-core)
+   Compiling forge-testkit v0.0.0 (/private/var/folders/bc/364csh9x7ts0qcsvtp63gw91dhcrjl/T/forge_mutation_edit_worktree.XlPwrd/crates/forge-testkit)
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-AMi9W4wP' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-FnJ5DXmU' (errno=Operation not permitted)
+
+warning: `forge-testkit` (bin "forge-testkit") generated 1 warning
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.05s
+     Running `target/debug/forge-testkit oracle --path reports/gates/T2/reviewer_oracles --no-junit`
+PASS reports/gates/T2/reviewer_oracles/reviewer_t2_commander_tax_identity_combo.ron
+PASS reports/gates/T2/reviewer_oracles/reviewer_t2_copy_ignores_counters_and_modifiers.ron
+PASS reports/gates/T2/reviewer_oracles/reviewer_t2_haste_does_not_override_cannot_attack.ron
+PASS reports/gates/T2/reviewer_oracles/reviewer_t2_layer_counter_sba_lethal.ron
+PASS reports/gates/T2/reviewer_oracles/reviewer_t2_mana_then_stack_ability.ron
+FAIL reports/gates/T2/reviewer_oracles/reviewer_t2_protection_uses_effective_source_color.ron
+  assert_can_target[0:true]: expected target legality true, found false
+PASS reports/gates/T2/reviewer_oracles/reviewer_t2_scry_then_surveil_zone_order.ron
+PASS reports/gates/T2/reviewer_oracles/reviewer_t2_token_copy_ceases_without_original.ron
+oracle scenarios: 7 passed, 1 failed
+one or more oracle scenarios failed
+PASS mutation_check.sh

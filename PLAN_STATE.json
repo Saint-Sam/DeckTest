@@ -238,7 +238,8 @@
     "T0",
     "CP-KERNEL",
     "T1",
-    "CP-LAYERS"
+    "CP-LAYERS",
+    "T2"
   ],
   "metrics_snapshot": "metrics/legacy_inventory.json",
   "gate_reviews": {
@@ -287,11 +288,29 @@
       "remote_ci": "GitHub Actions ci #33 run 28936524486 passed all required jobs for CP-LAYERS true importer differential commit a3d16af655d55dc1d6030b47d5a3115660843719; earlier T2.4 implementation CI #23/#24 and evidence CI #25 were also green.",
       "review_requirements": "Section 15.4 completed with owner-approved stricter packet: 100 novel layer scenarios with no rules-observable failures, legacy differential on a 100-card layered subset with written adjudication, memoization-invalidation audit plus fuzz target, and explicit owner proceed approval before T2.5+ starts. Legacy Forge engine snapshot side emits 100/100 OK snapshots. The supplemental Forge 2.0 script bridge parses all 100 selected scripts and executes 53 representable layer-fragment scenarios with 53/53 pass. The true importer differential parses active legacy faces, instantiates 186 layer operations from 117 active-face continuous lines, and matches 100/100 selected legacy Java snapshots with 0 mismatches.",
       "owner_signoff": "2026-07-08 Codex thread: CP-LAYERS signoff: proceed. I approve CP-LAYERS based on the 100 owner-approved reviewer scenarios passing, the 100-card true importer legacy differential matching 100/100 with 0 mismatches, fuzz/local verification passing, and no current blocking divergences."
+    },
+    "T2": {
+      "status": "passed",
+      "bundle": "reports/gates/T2/bundle",
+      "signoff": "reports/gates/T2/SIGNOFF.md",
+      "reviewed_remote_green_commit": "0fdc23dea157ee55226eae24d8d4d817c46b5d59",
+      "remote_ci": "GitHub Actions ci #44 run 28993856797 passed all required jobs for exact T2 evidence commit 0fdc23dea157ee55226eae24d8d4d817c46b5d59. Later closeout evidence/status commits are local-only because owner reported GitHub Actions budget pressure.",
+      "clean_checkout_gate": "PASS on 2026-07-09 from /private/tmp/forge-t2-clean-gate/forge-t2-0fdc23d-clean at commit 0fdc23dea157ee55226eae24d8d4d817c46b5d59; archived in reports/gates/T2/clean-checkout-gate-0fdc23d-2026-07-09.log.",
+      "re_review": "PASS on 2026-07-09 after clean-checkout T2 gate, 8 reviewer adversarial oracles, 3 mutation checks, 3 spot replays, and determinism replay evidence."
     }
   },
   "owner_input": {
     "O1": "complete",
     "O2": "complete",
     "O5": "complete"
+  },
+  "process_improvements": {
+    "PI-2026-07-09-local-multiworker-fuzz": {
+      "status": "planned",
+      "target": "before next long local fuzz gate after T2",
+      "request": "Owner requested using more local resources for long fuzz gates because GitHub Actions budget is constrained.",
+      "implementation": "Add a local-only multi-worker fuzz mode to the gate/fuzz harness so future T3+ clean-clone gates can shard libFuzzer targets across available CPU resources without spending GitHub Actions minutes.",
+      "constraints": "Do not restart the active T2 clean-clone gate; do not push or trigger GitHub Actions unless owner explicitly approves."
+    }
   }
 }

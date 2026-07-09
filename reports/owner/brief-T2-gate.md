@@ -41,6 +41,12 @@ also passed remote GitHub Actions CI.
   region coverage.
 - Remote CI: GitHub Actions `ci #44`, run ID `28993856797`, passed all required
   jobs for commit `0fdc23dea157ee55226eae24d8d4d817c46b5d59`.
+- Clean-checkout local gate: commit `0fdc23dea157ee55226eae24d8d4d817c46b5d59`
+  passed `FORGE_T2_RUN_FUZZ=1 scripts/gates/gate_T2.sh` from
+  `/private/tmp/forge-t2-clean-gate/forge-t2-0fdc23d-clean`.
+- Reviewer hardening: 8 reviewer-only T2 oracles passed, 3 mutation checks
+  caught their injected failures, and 3 spot replays round-tripped with
+  deterministic replay checks.
 
 ## 4. KNOWN ROUGH EDGES
 

@@ -1,0 +1,30 @@
+(
+    name: "T2 reviewer commander tax and color identity stay consistent",
+    setup: (
+        players: 1,
+        objects: [
+            (card: 72003, owner: 0, controller: 0, zone: "Command"),
+            (card: 72004, owner: 0, controller: 0, zone: "Battlefield"),
+            (card: 72005, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "designate_commander", object: 0, colors: ["red", "green"]),
+        (action: "record_commander_cast", object: 0),
+        (action: "record_commander_cast", object: 0),
+        (action: "assert_commander", object: 0, commander: true, colors: ["red", "green"], cast_count: 2, tax_generic: 4),
+        (action: "set_object_color_identity", object: 1, colors: ["red"]),
+        (action: "set_object_color_identity", object: 2, colors: ["blue"]),
+        (action: "assert_commander_identity_legal", player: 0, object: 1, expected: true),
+        (action: "assert_commander_identity_legal", player: 0, object: 2, expected: false),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Command", count: 1),
+            (zone: "Battlefield", count: 2),
+        ],
+        outcome: "in_progress",
+        invariants: ["zone_conservation", "hash_consistency"],
+        hash_determinism: true,
+    ),
+)

@@ -1,0 +1,26 @@
+(
+    name: "T2 reviewer layer and counter toughness feed state-based actions",
+    setup: (
+        players: 1,
+        objects: [
+            (card: 72017, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "set_base_creature", object: 0, power: 2, toughness: 2, keywords: []),
+        (action: "add_object_counters", object: 0, kind: "minus_one_minus_one", amount: 1),
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "modify_pt", power: 0, toughness: -1),
+        (action: "assert_characteristics", object: 0, power: 1, toughness: 0),
+        (action: "check_state_based_actions"),
+        (action: "assert_object_zone", object: 0, zone: "Graveyard", player: 0),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Battlefield", count: 0),
+            (zone: "Graveyard", player: 0, count: 1),
+        ],
+        outcome: "in_progress",
+        invariants: ["zone_conservation", "hash_consistency"],
+        hash_determinism: true,
+    ),
+)
