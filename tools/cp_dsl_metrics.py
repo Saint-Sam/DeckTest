@@ -78,6 +78,27 @@ def build_report(root: Path) -> dict[str, object]:
     identity_count = len(index.get("identities", []))
     printing_count = len(index.get("printings", []))
     definition_count = int(manifest.get("card_count", 0))
+    malformed_cases = malformed.get("cases", [])
+    recursive_argument_cases = [
+        case
+        for case in malformed_cases
+        if isinstance(case, dict) and case.get("category") == "recursive_argument"
+    ] if isinstance(malformed_cases, list) else []
+    recursive_argument_kinds = {
+        str(case.get("argument_kind")) for case in recursive_argument_cases
+    }
+    required_argument_kinds = {
+        str(kind) for kind in malformed.get("required_argument_kinds", [])
+    }
+    recursive_argument_features = {
+        str(feature)
+        for case in recursive_argument_cases
+        for feature in case.get("features", [])
+        if isinstance(case.get("features", []), list)
+    }
+    recursive_argument_depths = {
+        int(case.get("depth", 0)) for case in recursive_argument_cases
+    }
     mandatory_strata = corpus.get("mandatory_strata", [])
     manifest_strata = manifest.get("strata", {})
     closed_strata = (
@@ -137,7 +158,18 @@ def build_report(root: Path) -> dict[str, object]:
         "catalog_only_classification_separate": int(catalog.get("catalog_only", 0)) > 0
         and corpus.get("catalog_only_records_verified_separately") is True,
         "expressiveness_threshold": int(corpus.get("distinct_operations", 0)) >= 50,
-        "malformed_diagnostics_threshold": int(malformed.get("case_count", 0)) >= 50,
+        "recursive_argument_diagnostics_threshold": len(recursive_argument_cases) >= 50
+        and int(malformed.get("recursive_argument_case_count", 0))
+        == len(recursive_argument_cases)
+        and recursive_argument_kinds == required_argument_kinds
+        and malformed.get("missing_argument_kinds") == []
+        and recursive_argument_depths.issuperset({1, 2, 3, 4})
+        and {
+            "bare_symbol",
+            "category_correct_wrong_argument",
+            "prose",
+            "variadic",
+        }.issubset(recursive_argument_features),
         "deterministic_database": deterministic,
         "versioned_database_header": versioned_header,
         "runtime_loader": "validated" in runtime_output,
@@ -178,6 +210,8 @@ def build_report(root: Path) -> dict[str, object]:
             "minimum_cards_per_stratum": corpus.get("minimum_cards_per_stratum"),
             "distinct_operations": corpus.get("distinct_operations"),
             "malformed_positioned_diagnostics": malformed.get("case_count"),
+            "recursive_argument_diagnostics": len(recursive_argument_cases),
+            "recursive_argument_kinds": sorted(recursive_argument_kinds),
             "card_driven_nightmare_fixtures": 10,
         },
         "database": {

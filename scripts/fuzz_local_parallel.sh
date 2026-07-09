@@ -13,6 +13,10 @@ if [[ "$mode" == "--self-test" ]]; then
 fi
 
 minimum_total_args=()
+evidence_args=()
+if [[ -n "${FORGE_CP_DSL_EVIDENCE_DIR:-}" ]]; then
+  evidence_args=(--evidence-dir "${FORGE_CP_DSL_EVIDENCE_DIR}/fuzz")
+fi
 case "$mode" in
   smoke) seconds="${FORGE_FUZZ_SECONDS:-10}" ;;
   task) seconds="${FORGE_FUZZ_SECONDS:-30}" ;;
@@ -30,4 +34,5 @@ case "$mode" in
     ;;
 esac
 
-exec python3 tools/run_local_fuzz.py --seconds "$seconds" "${minimum_total_args[@]}"
+exec python3 tools/run_local_fuzz.py --seconds "$seconds" \
+  "${minimum_total_args[@]}" "${evidence_args[@]}"

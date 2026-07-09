@@ -5,6 +5,7 @@ ROOT="${FORGE_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 cd "$ROOT"
 
 if [[ "${1:-}" == "--self-test" ]]; then
+  [[ -x "$ROOT/tools/coverage_summary.py" ]]
   echo "PASS check_coverage.sh self-test"
   exit 0
 fi
@@ -31,6 +32,8 @@ if ! cargo llvm-cov --version >/dev/null 2>&1; then
 fi
 
 mkdir -p metrics
+raw_coverage="target/coverage/coverage.raw.json"
+mkdir -p "$(dirname "$raw_coverage")"
 cargo llvm-cov clean --workspace
 cargo llvm-cov --workspace --no-report
 cargo llvm-cov run -p forge-testkit --bin forge-testkit --no-report -- oracle --filter layers --no-junit
@@ -54,4 +57,5 @@ cargo llvm-cov run -p forge-arena --bin forge-arena --no-report -- \
   --nightmare-suite --games 10 --max-turns 2
 cargo llvm-cov run -p forge-arena --bin forge-arena --no-report -- \
   --smoke 1 --random --max-turns 2
-cargo llvm-cov report --fail-under-lines "$floor" --json --output-path metrics/coverage.json
+cargo llvm-cov report --fail-under-lines "$floor" --json --output-path "$raw_coverage"
+python3 tools/coverage_summary.py --raw "$raw_coverage" --floor "$floor"

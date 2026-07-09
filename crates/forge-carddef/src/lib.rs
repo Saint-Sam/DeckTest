@@ -760,6 +760,9 @@ macro_rules! operations {
         }
 
         impl Operation {
+            /// Every operation in stable declaration order.
+            pub const ALL: &'static [Self] = &[$(Self::$variant),+];
+
             /// Parses a canonical operation name.
             #[must_use]
             pub fn parse(value: &str) -> Option<Self> {
@@ -837,19 +840,19 @@ operations! {
     LoyaltyCost => ("loyalty_cost", Cost, 1, Some(1)),
     RemoveCounterCost => ("remove_counter_cost", Cost, 2, Some(2)),
     ExileCost => ("exile_cost", Cost, 1, Some(2)),
-    EventCast => ("event_cast", Event, 0, None),
-    EventEnters => ("event_enters", Event, 0, None),
-    EventLeaves => ("event_leaves", Event, 0, None),
-    EventDies => ("event_dies", Event, 0, None),
-    EventAttacks => ("event_attacks", Event, 0, None),
-    EventBlocks => ("event_blocks", Event, 0, None),
-    EventDamage => ("event_damage", Event, 0, None),
-    EventUpkeep => ("event_upkeep", Event, 0, None),
-    EventDraw => ("event_draw", Event, 0, None),
-    EventDiscard => ("event_discard", Event, 0, None),
-    EventCounterAdded => ("event_counter_added", Event, 0, None),
-    EventZoneChange => ("event_zone_change", Event, 0, None),
-    EventTargeted => ("event_targeted", Event, 0, None),
+    EventCast => ("event_cast", Event, 0, Some(2)),
+    EventEnters => ("event_enters", Event, 0, Some(2)),
+    EventLeaves => ("event_leaves", Event, 0, Some(2)),
+    EventDies => ("event_dies", Event, 0, Some(2)),
+    EventAttacks => ("event_attacks", Event, 0, Some(2)),
+    EventBlocks => ("event_blocks", Event, 0, Some(2)),
+    EventDamage => ("event_damage", Event, 0, Some(3)),
+    EventUpkeep => ("event_upkeep", Event, 0, Some(1)),
+    EventDraw => ("event_draw", Event, 0, Some(2)),
+    EventDiscard => ("event_discard", Event, 0, Some(2)),
+    EventCounterAdded => ("event_counter_added", Event, 0, Some(2)),
+    EventZoneChange => ("event_zone_change", Event, 0, Some(2)),
+    EventTargeted => ("event_targeted", Event, 0, Some(2)),
     Sequence => ("sequence", Effect, 1, None),
     ChooseOne => ("choose_one", Effect, 2, None),
     ChooseUpTo => ("choose_up_to", Effect, 2, None),
@@ -868,7 +871,7 @@ operations! {
     AddMana => ("add_mana", Effect, 1, Some(2)),
     CounterSpell => ("counter_spell", Effect, 1, Some(2)),
     Copy => ("copy", Effect, 1, Some(2)),
-    CreateToken => ("create_token", Effect, 1, None),
+    CreateToken => ("create_token", Effect, 1, Some(3)),
     AddCounter => ("add_counter", Effect, 2, Some(3)),
     RemoveCounters => ("remove_counters", Effect, 2, Some(3)),
     ModifyPt => ("modify_pt", Effect, 3, Some(4)),
@@ -932,7 +935,7 @@ operations! {
     Transform => ("transform", Effect, 1, Some(1)),
     Meld => ("meld", Effect, 2, Some(3)),
     LevelUp => ("level_up", Effect, 1, Some(2)),
-    Vote => ("vote", Effect, 1, None),
+    Vote => ("vote", Effect, 1, Some(2)),
     TimingInstant => ("timing_instant", Timing, 0, Some(0)),
     TimingSorcery => ("timing_sorcery", Timing, 0, Some(0)),
     TimingOnceEachTurn => ("timing_once_each_turn", Timing, 0, Some(1)),
@@ -944,6 +947,9 @@ operations! {
     Toughness => ("toughness", Value, 1, Some(1)),
     IfElse => ("if_else", Value, 3, Some(3)),
     ForEach => ("for_each", Effect, 2, Some(2)),
+    BooleanIs => ("boolean_is", Predicate, 1, Some(1)),
+    Nonzero => ("nonzero", Predicate, 1, Some(1)),
+    AtTiming => ("at_timing", Effect, 2, Some(2)),
 }
 
 impl Operation {
@@ -951,17 +957,18 @@ impl Operation {
     #[must_use]
     pub const fn argument_kind(self, index: usize) -> Option<ArgumentKind> {
         use ArgumentKind::{
-            Comparable, Effect, Event, Number, Predicate, PredicateOrText, RememberedValue, Scalar,
-            Selector, SelectorOrEvent, SelectorOrNumber, SelectorOrPredicate, SelectorOrText,
-            SelectorTextOrNumber, Text,
+            Boolean, Comparable, Effect, Event, Number, Predicate, PredicateOrText,
+            RememberedValue, Scalar, Selector, SelectorOrEvent, SelectorOrNumber,
+            SelectorOrPredicate, SelectorOrText, SelectorTextOrNumber, Text, Timing, Value,
         };
 
         match self {
             Self::All => Some(Selector),
-            Self::Any | Self::You | Self::Opponent | Self::Source => None,
+            Self::Any | Self::You | Self::Source => None,
+            Self::Opponent => Some(Selector),
             Self::Chosen | Self::Target => Some(SelectorOrPredicate),
             Self::ControllerOf | Self::OwnerOf => Some(Selector),
-            Self::Triggered => None,
+            Self::Triggered => Some(Selector),
             Self::Remembered => Some(Text),
             Self::EquippedObject | Self::EnchantedObject => Some(Selector),
             Self::Cards | Self::Permanents | Self::Spells => Some(PredicateOrText),
@@ -982,6 +989,8 @@ impl Operation {
                 _ => None,
             },
             Self::Equals | Self::LessThan | Self::GreaterThan | Self::AtLeast => Some(Comparable),
+            Self::BooleanIs => Some(Boolean),
+            Self::Nonzero => Some(Value),
 
             Self::ManaCost => Some(Text),
             Self::TapSelf | Self::UntapSelf | Self::SacrificeSelf => None,
@@ -1174,6 +1183,11 @@ impl Operation {
                 2 => Some(Text),
                 _ => None,
             },
+            Self::AtTiming => match index {
+                0 => Some(Timing),
+                1 => Some(Effect),
+                _ => None,
+            },
             Self::LayerEffect => match index {
                 0 | 1 => Some(Selector),
                 2 => Some(Effect),
@@ -1320,5 +1334,22 @@ mod tests {
             Some(ArgumentKind::Effect)
         );
         assert_eq!(Operation::parse("card_specific_magic"), None);
+    }
+
+    #[test]
+    fn every_declared_operation_argument_has_a_closed_type() {
+        for &operation in Operation::ALL {
+            let checked_positions = operation
+                .max_args()
+                .unwrap_or_else(|| operation.min_args().saturating_add(4));
+            for index in 0..checked_positions {
+                assert!(
+                    operation.argument_kind(index).is_some(),
+                    "{} accepts argument {} without a closed type",
+                    operation.as_str(),
+                    index + 1
+                );
+            }
+        }
     }
 }

@@ -27,8 +27,9 @@ acceptance:
   - Unknown fields, layouts, ability kinds, operators, keywords, and mana symbols fail closed.
   - Versioned bincode database and JSON index are deterministic and load through forge-cards.
   - 100-card CP-DSL corpus covers the exact 25 mandatory strata with four cards each and round-trips 100/100.
-  - At least 50 malformed cases exercise recursive argument diagnostics; curated mutation score is at least 90 percent.
-  - All five local fuzz targets pass at least 2,400 aggregate address-sanitizer worker-seconds.
+  - At least 50 tagged recursive argument cases cover every ArgumentKind, multiple depths, variadic positions, bare symbols, and prose misuse.
+  - Curated mutation score is at least 90 percent with a passing unmutated control, expected killing assertions, and retained hashed logs.
+  - All five local fuzz targets pass at least 2,400 verified address-sanitizer worker-seconds with retained final-stat logs.
   - Ten T2 nightmare classes lower effects from a compiled scenario database with no independent fixture effect seeds.
   - Oracle breadth metrics collapse scalar-only variants and meet the declared family and interaction floors.
 dod:
@@ -37,5 +38,6 @@ dod:
   - cargo test --workspace --quiet
   - scripts/card_regression.sh
   - scripts/gates/gate_CP_DSL.sh
+  - scripts/gates/gate_CP_DSL.sh --exact-packet
   - scripts/local_verify.sh task
 owner_checkpoint: O4_CP_DSL

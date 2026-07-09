@@ -237,7 +237,7 @@
       "status": "in_progress",
       "branch": "task/T3.1-card-dsl",
       "attempts": 0,
-      "verification": "CP-DSL reviewer remediation implemented and locally green: 100/100 definitions, exact 25 strata, 64 malformed diagnostics, 28/28 mutants killed, 2,400 address-sanitizer worker-seconds, 4/4 executed cross-target checks, three isolated deterministic builds, compiled layer scenario lowering, 1,200/1,200 semantic scenarios, and 80.08% coverage; exact-commit re-review pending"
+      "verification": "Second CP-DSL reviewer remediation implemented: 115 malformed diagnostics include 59 explicitly tagged recursive-argument cases covering every ArgumentKind, registry signatures are total over every accepted position, and mutation/fuzz evidence now requires controls, final statistics, retained full logs, hashes, and an exact detached local packet. Prior product evidence remains green; the new exact-commit packet and re-review are pending."
     }
   },
   "gates_passed": [

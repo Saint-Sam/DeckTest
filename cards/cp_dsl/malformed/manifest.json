@@ -1,7 +1,66 @@
 {
   "schema_version": 1,
-  "case_count": 64,
+  "case_count": 115,
   "minimum_required": 50,
+  "recursive_argument_case_count": 59,
+  "recursive_argument_minimum_required": 50,
+  "recursive_argument_kinds": [
+    "boolean",
+    "comparable",
+    "cost",
+    "effect",
+    "event",
+    "integer",
+    "number",
+    "predicate",
+    "predicate_or_text",
+    "remembered_value",
+    "scalar",
+    "selector",
+    "selector_or_event",
+    "selector_or_number",
+    "selector_or_predicate",
+    "selector_or_text",
+    "selector_text_or_number",
+    "text",
+    "timing",
+    "value"
+  ],
+  "required_argument_kinds": [
+    "boolean",
+    "comparable",
+    "cost",
+    "effect",
+    "event",
+    "integer",
+    "number",
+    "predicate",
+    "predicate_or_text",
+    "remembered_value",
+    "scalar",
+    "selector",
+    "selector_or_event",
+    "selector_or_number",
+    "selector_or_predicate",
+    "selector_or_text",
+    "selector_text_or_number",
+    "text",
+    "timing",
+    "value"
+  ],
+  "missing_argument_kinds": [],
+  "recursive_argument_depths": [
+    1,
+    2,
+    3,
+    4
+  ],
+  "recursive_argument_features": [
+    "bare_symbol",
+    "category_correct_wrong_argument",
+    "prose",
+    "variadic"
+  ],
   "cases": [
     {
       "id": "unknown_card_keyword",
@@ -343,49 +402,716 @@
       "id": "number_argument_gets_selector",
       "file": "cards/cp_dsl/malformed/057_number_argument_gets_selector.frs",
       "expected_diagnostic": "argument 1 requires integer or value",
-      "sha256": "71c8a83f6f4f155974c53caea29a398af6b9452360a35165330bcea89f4b6195"
+      "sha256": "71c8a83f6f4f155974c53caea29a398af6b9452360a35165330bcea89f4b6195",
+      "category": "recursive_argument",
+      "argument_kind": "number",
+      "depth": 1,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
     },
     {
       "id": "selector_argument_gets_cost",
       "file": "cards/cp_dsl/malformed/058_selector_argument_gets_cost.frs",
       "expected_diagnostic": "argument 2 requires selector",
-      "sha256": "a2089f03a53688458700f79f9a6712c484acfe38410c92006d749a101aae1431"
+      "sha256": "a2089f03a53688458700f79f9a6712c484acfe38410c92006d749a101aae1431",
+      "category": "recursive_argument",
+      "argument_kind": "selector",
+      "depth": 1,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
     },
     {
       "id": "variadic_effect_gets_selector",
       "file": "cards/cp_dsl/malformed/059_variadic_effect_gets_selector.frs",
       "expected_diagnostic": "argument 2 requires effect",
-      "sha256": "7af6d81714ed7e0326f42f04563f18488c350798a3015da6c2ad7282f4a828a5"
+      "sha256": "7af6d81714ed7e0326f42f04563f18488c350798a3015da6c2ad7282f4a828a5",
+      "category": "recursive_argument",
+      "argument_kind": "effect",
+      "depth": 2,
+      "features": [
+        "category_correct_wrong_argument",
+        "variadic"
+      ]
     },
     {
       "id": "target_gets_integer",
       "file": "cards/cp_dsl/malformed/060_target_gets_integer.frs",
       "expected_diagnostic": "argument 1 requires selector or predicate",
-      "sha256": "1cb59731eaa6a5002482491f15750d7401751900a94576e36f79dbb50eb0fc19"
+      "sha256": "1cb59731eaa6a5002482491f15750d7401751900a94576e36f79dbb50eb0fc19",
+      "category": "recursive_argument",
+      "argument_kind": "selector_or_predicate",
+      "depth": 2,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
     },
     {
       "id": "nested_bare_symbol",
       "file": "cards/cp_dsl/malformed/061_nested_bare_symbol.frs",
       "expected_diagnostic": "received bare symbol",
-      "sha256": "8d5e93fa24cb73adb8f2fa0ad2577c534fc6c44be336a5f36fa0cecce34fe7e2"
+      "sha256": "8d5e93fa24cb73adb8f2fa0ad2577c534fc6c44be336a5f36fa0cecce34fe7e2",
+      "category": "recursive_argument",
+      "argument_kind": "selector",
+      "depth": 1,
+      "features": [
+        "bare_symbol"
+      ]
     },
     {
       "id": "alternate_cost_gets_effect",
       "file": "cards/cp_dsl/malformed/062_alternate_cost_gets_effect.frs",
       "expected_diagnostic": "argument 2 requires cost",
-      "sha256": "a87c3f2d79294a822ff50c9b11f92abd728549a6d0e90316697249d708c01f71"
+      "sha256": "a87c3f2d79294a822ff50c9b11f92abd728549a6d0e90316697249d708c01f71",
+      "category": "recursive_argument",
+      "argument_kind": "cost",
+      "depth": 2,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
     },
     {
       "id": "continuous_gets_prose",
       "file": "cards/cp_dsl/malformed/063_continuous_gets_prose.frs",
       "expected_diagnostic": "argument 2 requires effect",
-      "sha256": "84ef8a416abd50815aff23e67bb4167475f01f0f0779b2604dfc142bd3352e94"
+      "sha256": "84ef8a416abd50815aff23e67bb4167475f01f0f0779b2604dfc142bd3352e94",
+      "category": "recursive_argument",
+      "argument_kind": "effect",
+      "depth": 1,
+      "features": [
+        "prose"
+      ]
     },
     {
       "id": "predicate_gets_selector",
       "file": "cards/cp_dsl/malformed/064_predicate_gets_selector.frs",
       "expected_diagnostic": "argument 2 requires predicate",
-      "sha256": "89d9a01dc60ba15a966ec1c769e5b68f81678240e2e533f768e7e617b5c351de"
+      "sha256": "89d9a01dc60ba15a966ec1c769e5b68f81678240e2e533f768e7e617b5c351de",
+      "category": "recursive_argument",
+      "argument_kind": "predicate",
+      "depth": 4,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
+    },
+    {
+      "id": "integer_set_text_gets_value",
+      "file": "cards/cp_dsl/malformed/065_integer_set_text_gets_value.frs",
+      "expected_diagnostic": "requires integer",
+      "sha256": "32b6385340b54bced0a233264af34296c38d7ef93144050d3e5a86b81cdb06b6",
+      "category": "recursive_argument",
+      "argument_kind": "integer",
+      "depth": 1,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
+    },
+    {
+      "id": "integer_layer_dependency_gets_value",
+      "file": "cards/cp_dsl/malformed/066_integer_layer_dependency_gets_value.frs",
+      "expected_diagnostic": "requires integer",
+      "sha256": "35765617460cba81dbd127d020eb609358c50d0d15d69b45267a24a0d5a934fb",
+      "category": "recursive_argument",
+      "argument_kind": "integer",
+      "depth": 2,
+      "features": [
+        "category_correct_wrong_argument",
+        "variadic"
+      ]
+    },
+    {
+      "id": "integer_deep_gets_boolean",
+      "file": "cards/cp_dsl/malformed/067_integer_deep_gets_boolean.frs",
+      "expected_diagnostic": "requires integer",
+      "sha256": "cd20a3ea871c9a830e80c7be8605c934ba43a61ebb0b36bf7c3d7549615aa34f",
+      "category": "recursive_argument",
+      "argument_kind": "integer",
+      "depth": 3,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
+    },
+    {
+      "id": "boolean_gets_integer",
+      "file": "cards/cp_dsl/malformed/068_boolean_gets_integer.frs",
+      "expected_diagnostic": "requires boolean",
+      "sha256": "1848e9846a46b3b6bbd3e6a280b099ca6ee7a517e7fafc63198233baf237dd98",
+      "category": "recursive_argument",
+      "argument_kind": "boolean",
+      "depth": 2,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
+    },
+    {
+      "id": "boolean_gets_text",
+      "file": "cards/cp_dsl/malformed/069_boolean_gets_text.frs",
+      "expected_diagnostic": "requires boolean",
+      "sha256": "4e5a4e78cce3147eb444e779271f5ae368a6c597cd680379f7ef17cf15263087",
+      "category": "recursive_argument",
+      "argument_kind": "boolean",
+      "depth": 2,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
+    },
+    {
+      "id": "boolean_gets_selector",
+      "file": "cards/cp_dsl/malformed/070_boolean_gets_selector.frs",
+      "expected_diagnostic": "requires boolean",
+      "sha256": "3c8517bae12180616ec2f5a627086462b66008c15c8b0f9847955ffa3a30b0f3",
+      "category": "recursive_argument",
+      "argument_kind": "boolean",
+      "depth": 2,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
+    },
+    {
+      "id": "text_add_mana_gets_selector",
+      "file": "cards/cp_dsl/malformed/071_text_add_mana_gets_selector.frs",
+      "expected_diagnostic": "requires text",
+      "sha256": "94ec20169afb56fb0b49bf6a9fe84e77141d3cbb2012341b772b3f46ba54f49b",
+      "category": "recursive_argument",
+      "argument_kind": "text",
+      "depth": 1,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
+    },
+    {
+      "id": "text_remember_key_gets_integer",
+      "file": "cards/cp_dsl/malformed/072_text_remember_key_gets_integer.frs",
+      "expected_diagnostic": "requires text",
+      "sha256": "efc92636c0e36b5e8f38d3193e7ee51de08743a49478ba43256823f8e02a713f",
+      "category": "recursive_argument",
+      "argument_kind": "text",
+      "depth": 1,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
+    },
+    {
+      "id": "text_deep_type_gets_selector",
+      "file": "cards/cp_dsl/malformed/073_text_deep_type_gets_selector.frs",
+      "expected_diagnostic": "requires text",
+      "sha256": "81cb7b0a6785d57782625e4a13a35befc6a81482f3d52df3f8d63e4d86fc8a83",
+      "category": "recursive_argument",
+      "argument_kind": "text",
+      "depth": 3,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
+    },
+    {
+      "id": "selector_tap_gets_effect",
+      "file": "cards/cp_dsl/malformed/074_selector_tap_gets_effect.frs",
+      "expected_diagnostic": "requires selector",
+      "sha256": "724aa48c380bd7105018bd7cd3904af9a393cc7674e6d2bea6727c68661df735",
+      "category": "recursive_argument",
+      "argument_kind": "selector",
+      "depth": 1,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
+    },
+    {
+      "id": "selector_controller_gets_predicate",
+      "file": "cards/cp_dsl/malformed/075_selector_controller_gets_predicate.frs",
+      "expected_diagnostic": "requires selector",
+      "sha256": "3f83461390bb4126ac9b9c7c8f197183ea6d188f0ef76d5231e804d3c163f6e0",
+      "category": "recursive_argument",
+      "argument_kind": "selector",
+      "depth": 2,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
+    },
+    {
+      "id": "selector_damage_gets_cost",
+      "file": "cards/cp_dsl/malformed/076_selector_damage_gets_cost.frs",
+      "expected_diagnostic": "requires selector",
+      "sha256": "589b8e47fbbab18b947563da659732117443066d319f781343d6863dc03d7c32",
+      "category": "recursive_argument",
+      "argument_kind": "selector",
+      "depth": 1,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
+    },
+    {
+      "id": "predicate_while_gets_selector",
+      "file": "cards/cp_dsl/malformed/077_predicate_while_gets_selector.frs",
+      "expected_diagnostic": "requires predicate",
+      "sha256": "cb5fb38f221386a9b9dfd8bb70c09d51acc774055357206f21b7dc22ed7db244",
+      "category": "recursive_argument",
+      "argument_kind": "predicate",
+      "depth": 1,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
+    },
+    {
+      "id": "predicate_and_gets_event",
+      "file": "cards/cp_dsl/malformed/078_predicate_and_gets_event.frs",
+      "expected_diagnostic": "requires predicate",
+      "sha256": "5624854767171e5ff15b78c2ef08458963b202694e953d918ed14e42f326dd01",
+      "category": "recursive_argument",
+      "argument_kind": "predicate",
+      "depth": 3,
+      "features": [
+        "category_correct_wrong_argument",
+        "variadic"
+      ]
+    },
+    {
+      "id": "predicate_attack_gets_cost",
+      "file": "cards/cp_dsl/malformed/079_predicate_attack_gets_cost.frs",
+      "expected_diagnostic": "requires predicate",
+      "sha256": "0fa0a5886608802181fa43ce5c86ab0b1ec3a5fe06c9668e5ccb4540cecaf86d",
+      "category": "recursive_argument",
+      "argument_kind": "predicate",
+      "depth": 1,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
+    },
+    {
+      "id": "cost_alternate_gets_selector",
+      "file": "cards/cp_dsl/malformed/080_cost_alternate_gets_selector.frs",
+      "expected_diagnostic": "requires cost",
+      "sha256": "9f3449d37e725dfe22a4d49070fab4ec172696b076b2cf0e8a5a668e55ff258d",
+      "category": "recursive_argument",
+      "argument_kind": "cost",
+      "depth": 2,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
+    },
+    {
+      "id": "cost_alternate_variadic_gets_event",
+      "file": "cards/cp_dsl/malformed/081_cost_alternate_variadic_gets_event.frs",
+      "expected_diagnostic": "requires cost",
+      "sha256": "a640500c94010d4bff2a54c5bf1ce30590d50639aca113736c66a976e689812e",
+      "category": "recursive_argument",
+      "argument_kind": "cost",
+      "depth": 2,
+      "features": [
+        "category_correct_wrong_argument",
+        "variadic"
+      ]
+    },
+    {
+      "id": "cost_deep_gets_effect",
+      "file": "cards/cp_dsl/malformed/082_cost_deep_gets_effect.frs",
+      "expected_diagnostic": "requires cost",
+      "sha256": "57af340401f9388936d0b568fc1e767fcaff061f10e3cb6c8ad406414e03c301",
+      "category": "recursive_argument",
+      "argument_kind": "cost",
+      "depth": 4,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
+    },
+    {
+      "id": "event_delayed_gets_selector",
+      "file": "cards/cp_dsl/malformed/083_event_delayed_gets_selector.frs",
+      "expected_diagnostic": "requires event",
+      "sha256": "5ba1f35fe3f332339e723f26ba7cd8cccd87f24bac390f243a7c4cfced438c86",
+      "category": "recursive_argument",
+      "argument_kind": "event",
+      "depth": 1,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
+    },
+    {
+      "id": "event_deep_gets_predicate",
+      "file": "cards/cp_dsl/malformed/084_event_deep_gets_predicate.frs",
+      "expected_diagnostic": "requires event",
+      "sha256": "77f98de1458920b02a52bad76183d75c3b02cea152bfa85785fe23115b9ef05c",
+      "category": "recursive_argument",
+      "argument_kind": "event",
+      "depth": 3,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
+    },
+    {
+      "id": "effect_choose_gets_selector",
+      "file": "cards/cp_dsl/malformed/085_effect_choose_gets_selector.frs",
+      "expected_diagnostic": "requires effect",
+      "sha256": "7a2d6e703882a7faedabd19fa18028dde5337049b7ca704cc430778569a9d0cf",
+      "category": "recursive_argument",
+      "argument_kind": "effect",
+      "depth": 1,
+      "features": [
+        "category_correct_wrong_argument",
+        "variadic"
+      ]
+    },
+    {
+      "id": "effect_choose_up_to_gets_event",
+      "file": "cards/cp_dsl/malformed/086_effect_choose_up_to_gets_event.frs",
+      "expected_diagnostic": "requires effect",
+      "sha256": "f21a65958f5f52f041a209a9317d73f4f88d4afad0a89e4d54ea2baa42e2ceff",
+      "category": "recursive_argument",
+      "argument_kind": "effect",
+      "depth": 1,
+      "features": [
+        "category_correct_wrong_argument",
+        "variadic"
+      ]
+    },
+    {
+      "id": "effect_until_gets_cost",
+      "file": "cards/cp_dsl/malformed/087_effect_until_gets_cost.frs",
+      "expected_diagnostic": "requires effect",
+      "sha256": "361e1ae32dace25d5de72b363f655b320dee344a8c95a53718261e7122d61c65",
+      "category": "recursive_argument",
+      "argument_kind": "effect",
+      "depth": 1,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
+    },
+    {
+      "id": "effect_at_timing_gets_selector",
+      "file": "cards/cp_dsl/malformed/088_effect_at_timing_gets_selector.frs",
+      "expected_diagnostic": "requires effect",
+      "sha256": "1c742c8a7136ac08adc779446e7d591811ba052c63a6189a2f851a59e4939d8c",
+      "category": "recursive_argument",
+      "argument_kind": "effect",
+      "depth": 1,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
+    },
+    {
+      "id": "timing_gets_selector",
+      "file": "cards/cp_dsl/malformed/089_timing_gets_selector.frs",
+      "expected_diagnostic": "requires timing",
+      "sha256": "21df3357e4dd5251b2016f4c5ca81a6fee6a1b0e64ee8f1e164887d8840c03e6",
+      "category": "recursive_argument",
+      "argument_kind": "timing",
+      "depth": 1,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
+    },
+    {
+      "id": "timing_gets_effect",
+      "file": "cards/cp_dsl/malformed/090_timing_gets_effect.frs",
+      "expected_diagnostic": "requires timing",
+      "sha256": "a5d59d561422bbadc713fe174633aedd9ba84e9557bcc23ae70d4750025af50e",
+      "category": "recursive_argument",
+      "argument_kind": "timing",
+      "depth": 1,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
+    },
+    {
+      "id": "timing_deep_gets_cost",
+      "file": "cards/cp_dsl/malformed/091_timing_deep_gets_cost.frs",
+      "expected_diagnostic": "requires timing",
+      "sha256": "c54b6a70d381e9f6f644d95504e0904f527508dd990fb19856d0438ccf977eba",
+      "category": "recursive_argument",
+      "argument_kind": "timing",
+      "depth": 2,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
+    },
+    {
+      "id": "value_nonzero_gets_integer",
+      "file": "cards/cp_dsl/malformed/092_value_nonzero_gets_integer.frs",
+      "expected_diagnostic": "requires value",
+      "sha256": "e07c5e3edf72a6c16504fa55b108b28bd30fdbf0b9ce5563578047b2955eb14f",
+      "category": "recursive_argument",
+      "argument_kind": "value",
+      "depth": 2,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
+    },
+    {
+      "id": "value_nonzero_gets_selector",
+      "file": "cards/cp_dsl/malformed/093_value_nonzero_gets_selector.frs",
+      "expected_diagnostic": "requires value",
+      "sha256": "b78b20e11c0ca72497ec7277de6561ce647f0e871be1b4a13173aaa0e1da7758",
+      "category": "recursive_argument",
+      "argument_kind": "value",
+      "depth": 2,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
+    },
+    {
+      "id": "value_nonzero_gets_effect",
+      "file": "cards/cp_dsl/malformed/094_value_nonzero_gets_effect.frs",
+      "expected_diagnostic": "requires value",
+      "sha256": "fa5d98af72029c99aa309249241bf435e6aacef30b97500a44f0359cca6904db",
+      "category": "recursive_argument",
+      "argument_kind": "value",
+      "depth": 2,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
+    },
+    {
+      "id": "number_choose_gets_text",
+      "file": "cards/cp_dsl/malformed/095_number_choose_gets_text.frs",
+      "expected_diagnostic": "requires integer or value",
+      "sha256": "5a9ea2e5cc425dac990e54106589acce5d356b64c0fc35e2837e8a531b8df6fe",
+      "category": "recursive_argument",
+      "argument_kind": "number",
+      "depth": 1,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
+    },
+    {
+      "id": "number_modify_gets_selector",
+      "file": "cards/cp_dsl/malformed/096_number_modify_gets_selector.frs",
+      "expected_diagnostic": "requires integer or value",
+      "sha256": "b1aaa0c852ce6fb6a619cccde37bbd6d9049ca2837fed25758b0e051f7aa7d31",
+      "category": "recursive_argument",
+      "argument_kind": "number",
+      "depth": 1,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
+    },
+    {
+      "id": "number_deep_draw_gets_event",
+      "file": "cards/cp_dsl/malformed/097_number_deep_draw_gets_event.frs",
+      "expected_diagnostic": "requires integer or value",
+      "sha256": "9aec17b6e23ba6b335719ef46c5ce839bfa23dbf1859f750911726b15c68dd45",
+      "category": "recursive_argument",
+      "argument_kind": "number",
+      "depth": 3,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
+    },
+    {
+      "id": "selector_or_text_damage_gets_predicate",
+      "file": "cards/cp_dsl/malformed/098_selector_or_text_damage_gets_predicate.frs",
+      "expected_diagnostic": "requires selector or text",
+      "sha256": "0bf627addf1805a8f5cb125f60cccc9b4907c00e625bcf76fe5a33629707d617",
+      "category": "recursive_argument",
+      "argument_kind": "selector_or_text",
+      "depth": 1,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
+    },
+    {
+      "id": "selector_or_text_event_gets_cost",
+      "file": "cards/cp_dsl/malformed/099_selector_or_text_event_gets_cost.frs",
+      "expected_diagnostic": "requires selector or text",
+      "sha256": "e83802ef39787d50cdffc86c4ce474ba88bb38d4361dc705fa84a2a1cf9c055f",
+      "category": "recursive_argument",
+      "argument_kind": "selector_or_text",
+      "depth": 2,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
+    },
+    {
+      "id": "selector_or_predicate_chosen_gets_text",
+      "file": "cards/cp_dsl/malformed/100_selector_or_predicate_chosen_gets_text.frs",
+      "expected_diagnostic": "requires selector or predicate",
+      "sha256": "eb4bcdb9ef05db4644a8848fd4a401da8246f959b848dd3372045c62274c2420",
+      "category": "recursive_argument",
+      "argument_kind": "selector_or_predicate",
+      "depth": 2,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
+    },
+    {
+      "id": "selector_or_predicate_target_gets_cost",
+      "file": "cards/cp_dsl/malformed/101_selector_or_predicate_target_gets_cost.frs",
+      "expected_diagnostic": "requires selector or predicate",
+      "sha256": "d062c0ca033f93e20c2761ce8601b417915d175ee467ee4ceab4848bf2bf6a35",
+      "category": "recursive_argument",
+      "argument_kind": "selector_or_predicate",
+      "depth": 2,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
+    },
+    {
+      "id": "selector_text_number_exile_gets_event",
+      "file": "cards/cp_dsl/malformed/102_selector_text_number_exile_gets_event.frs",
+      "expected_diagnostic": "requires selector, text, integer, or value",
+      "sha256": "eab015b8a58aeefdcd7e78c35b60c3e01d0ff8f58b43ac700f09f7b036046420",
+      "category": "recursive_argument",
+      "argument_kind": "selector_text_or_number",
+      "depth": 1,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
+    },
+    {
+      "id": "selector_text_number_deep_gets_predicate",
+      "file": "cards/cp_dsl/malformed/103_selector_text_number_deep_gets_predicate.frs",
+      "expected_diagnostic": "requires selector, text, integer, or value",
+      "sha256": "c2dc9225e5c3263b092651de800555c4ba9b98986a12e60c8d5d551518c2e9a1",
+      "category": "recursive_argument",
+      "argument_kind": "selector_text_or_number",
+      "depth": 2,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
+    },
+    {
+      "id": "selector_or_number_look_gets_predicate",
+      "file": "cards/cp_dsl/malformed/104_selector_or_number_look_gets_predicate.frs",
+      "expected_diagnostic": "requires selector, integer, or value",
+      "sha256": "7459551c7442ff16ffce8a26086c58005624fc2388d513c79841037f8249d2b9",
+      "category": "recursive_argument",
+      "argument_kind": "selector_or_number",
+      "depth": 1,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
+    },
+    {
+      "id": "selector_or_number_look_gets_cost",
+      "file": "cards/cp_dsl/malformed/105_selector_or_number_look_gets_cost.frs",
+      "expected_diagnostic": "requires selector, integer, or value",
+      "sha256": "b3af22551a094febf5298f3982a6009707264348e8ff02fd0802fab0f9f3ec57",
+      "category": "recursive_argument",
+      "argument_kind": "selector_or_number",
+      "depth": 2,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
+    },
+    {
+      "id": "predicate_or_text_cards_gets_selector",
+      "file": "cards/cp_dsl/malformed/106_predicate_or_text_cards_gets_selector.frs",
+      "expected_diagnostic": "requires predicate or text",
+      "sha256": "0e7146324a7e2980b1b270d9029cde0de90837559cf54f298a543b53bd5fb6d0",
+      "category": "recursive_argument",
+      "argument_kind": "predicate_or_text",
+      "depth": 2,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
+    },
+    {
+      "id": "predicate_or_text_permanents_gets_event",
+      "file": "cards/cp_dsl/malformed/107_predicate_or_text_permanents_gets_event.frs",
+      "expected_diagnostic": "requires predicate or text",
+      "sha256": "1700f606105b01a0f2eb57783af076dc5c5e10923c1ccbc2faacee48e80ea2b6",
+      "category": "recursive_argument",
+      "argument_kind": "predicate_or_text",
+      "depth": 2,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
+    },
+    {
+      "id": "selector_or_event_replace_gets_predicate",
+      "file": "cards/cp_dsl/malformed/108_selector_or_event_replace_gets_predicate.frs",
+      "expected_diagnostic": "requires selector or event",
+      "sha256": "bac0bbbb6453e4793a9b702f81f22fb2c4e17c62bd53a3c192e2587b6f81ffa7",
+      "category": "recursive_argument",
+      "argument_kind": "selector_or_event",
+      "depth": 1,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
+    },
+    {
+      "id": "selector_or_event_double_gets_text",
+      "file": "cards/cp_dsl/malformed/109_selector_or_event_double_gets_text.frs",
+      "expected_diagnostic": "requires selector or event",
+      "sha256": "fbf542f864049812546141b7863c1864e625d694203cef8b5a0b58007e1ca818",
+      "category": "recursive_argument",
+      "argument_kind": "selector_or_event",
+      "depth": 1,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
+    },
+    {
+      "id": "scalar_search_gets_predicate",
+      "file": "cards/cp_dsl/malformed/110_scalar_search_gets_predicate.frs",
+      "expected_diagnostic": "requires scalar literal or value",
+      "sha256": "a6c62e8b19bca9412b75d70ec9b25030cf58fbc399f171a86bdfbe7eebb360d2",
+      "category": "recursive_argument",
+      "argument_kind": "scalar",
+      "depth": 1,
+      "features": [
+        "category_correct_wrong_argument",
+        "variadic"
+      ]
+    },
+    {
+      "id": "scalar_if_else_gets_selector",
+      "file": "cards/cp_dsl/malformed/111_scalar_if_else_gets_selector.frs",
+      "expected_diagnostic": "requires scalar literal or value",
+      "sha256": "7bef34a95540bbd8e97dface46376c0695521bd3b97858580d2a0c6ee24c8538",
+      "category": "recursive_argument",
+      "argument_kind": "scalar",
+      "depth": 2,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
+    },
+    {
+      "id": "comparable_equals_gets_cost",
+      "file": "cards/cp_dsl/malformed/112_comparable_equals_gets_cost.frs",
+      "expected_diagnostic": "requires comparable expression",
+      "sha256": "2d2472eeac07f559fafedfea3dbecc8b48fa0ae92cfc0afb1434d4a8f400b50b",
+      "category": "recursive_argument",
+      "argument_kind": "comparable",
+      "depth": 2,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
+    },
+    {
+      "id": "comparable_move_gets_cost",
+      "file": "cards/cp_dsl/malformed/113_comparable_move_gets_cost.frs",
+      "expected_diagnostic": "requires comparable expression",
+      "sha256": "97be130a18b00669a49a56eca3157241a2e22da8a539e5732e3ae577c40fcade",
+      "category": "recursive_argument",
+      "argument_kind": "comparable",
+      "depth": 1,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
+    },
+    {
+      "id": "remembered_value_gets_predicate",
+      "file": "cards/cp_dsl/malformed/114_remembered_value_gets_predicate.frs",
+      "expected_diagnostic": "requires rememberable value",
+      "sha256": "ced50467e2e777f326c85d51beda3a2b82ba333da3914299b35fbca028da4980",
+      "category": "recursive_argument",
+      "argument_kind": "remembered_value",
+      "depth": 1,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
+    },
+    {
+      "id": "remembered_value_gets_event",
+      "file": "cards/cp_dsl/malformed/115_remembered_value_gets_event.frs",
+      "expected_diagnostic": "requires rememberable value",
+      "sha256": "b311d357f3af1eaca40161eb91ac3f098144f21f0e5c27e97baefb122cf0b9bc",
+      "category": "recursive_argument",
+      "argument_kind": "remembered_value",
+      "depth": 1,
+      "features": [
+        "category_correct_wrong_argument"
+      ]
     }
   ]
 }

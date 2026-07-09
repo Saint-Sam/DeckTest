@@ -123,27 +123,201 @@ CASES: list[tuple[str, str, str]] = [
 ]
 
 
+REQUIRED_ARGUMENT_KINDS = {
+    "integer",
+    "boolean",
+    "text",
+    "selector",
+    "predicate",
+    "cost",
+    "event",
+    "effect",
+    "timing",
+    "value",
+    "number",
+    "selector_or_text",
+    "selector_or_predicate",
+    "selector_text_or_number",
+    "selector_or_number",
+    "predicate_or_text",
+    "selector_or_event",
+    "scalar",
+    "comparable",
+    "remembered_value",
+}
+
+
+def recursive_case(
+    name: str,
+    expression: str,
+    diagnostic: str,
+    argument_kind: str,
+    depth: int,
+    *features: str,
+) -> tuple[str, str, str, dict[str, object]]:
+    return (
+        name,
+        changed("draw(1, you())", expression),
+        diagnostic,
+        {
+            "category": "recursive_argument",
+            "argument_kind": argument_kind,
+            "depth": depth,
+            "features": ["category_correct_wrong_argument", *features],
+        },
+    )
+
+
+RECURSIVE_ARGUMENT_METADATA: dict[str, dict[str, object]] = {
+    "number_argument_gets_selector": {
+        "category": "recursive_argument",
+        "argument_kind": "number",
+        "depth": 1,
+        "features": ["category_correct_wrong_argument"],
+    },
+    "selector_argument_gets_cost": {
+        "category": "recursive_argument",
+        "argument_kind": "selector",
+        "depth": 1,
+        "features": ["category_correct_wrong_argument"],
+    },
+    "variadic_effect_gets_selector": {
+        "category": "recursive_argument",
+        "argument_kind": "effect",
+        "depth": 2,
+        "features": ["category_correct_wrong_argument", "variadic"],
+    },
+    "target_gets_integer": {
+        "category": "recursive_argument",
+        "argument_kind": "selector_or_predicate",
+        "depth": 2,
+        "features": ["category_correct_wrong_argument"],
+    },
+    "nested_bare_symbol": {
+        "category": "recursive_argument",
+        "argument_kind": "selector",
+        "depth": 1,
+        "features": ["bare_symbol"],
+    },
+    "alternate_cost_gets_effect": {
+        "category": "recursive_argument",
+        "argument_kind": "cost",
+        "depth": 2,
+        "features": ["category_correct_wrong_argument"],
+    },
+    "continuous_gets_prose": {
+        "category": "recursive_argument",
+        "argument_kind": "effect",
+        "depth": 1,
+        "features": ["prose"],
+    },
+    "predicate_gets_selector": {
+        "category": "recursive_argument",
+        "argument_kind": "predicate",
+        "depth": 4,
+        "features": ["category_correct_wrong_argument"],
+    },
+}
+
+
+ADDITIONAL_RECURSIVE_ARGUMENT_CASES = [
+    recursive_case("integer_set_text_gets_value", "set_text_marker(source(), amount(you()))", "requires integer", "integer", 1),
+    recursive_case("integer_layer_dependency_gets_value", "layer_effect(you(), source(), tap(source()), 1, amount(you()))", "requires integer", "integer", 2, "variadic"),
+    recursive_case("integer_deep_gets_boolean", "sequence(until_end_of_turn(set_text_marker(source(), true)))", "requires integer", "integer", 3),
+    recursive_case("boolean_gets_integer", "while_condition(boolean_is(1), draw(1, you()))", "requires boolean", "boolean", 2),
+    recursive_case("boolean_gets_text", 'while_condition(boolean_is("true"), draw(1, you()))', "requires boolean", "boolean", 2),
+    recursive_case("boolean_gets_selector", "while_condition(boolean_is(source()), draw(1, you()))", "requires boolean", "boolean", 2),
+    recursive_case("text_add_mana_gets_selector", "add_mana(source(), you())", "requires text", "text", 1),
+    recursive_case("text_remember_key_gets_integer", "remember(1, source())", "requires text", "text", 1),
+    recursive_case("text_deep_type_gets_selector", "destroy(permanents(type_is(source())))", "requires text", "text", 3),
+    recursive_case("selector_tap_gets_effect", "tap(draw(1, you()))", "requires selector", "selector", 1),
+    recursive_case("selector_controller_gets_predicate", 'draw(1, controller_of(type_is("creature")))', "requires selector", "selector", 2),
+    recursive_case("selector_damage_gets_cost", 'deal_damage(mana_cost("{R}"), 1)', "requires selector", "selector", 1),
+    recursive_case("predicate_while_gets_selector", "while_condition(source(), draw(1, you()))", "requires predicate", "predicate", 1),
+    recursive_case("predicate_and_gets_event", 'destroy(permanents(and(type_is("creature"), event_cast())))', "requires predicate", "predicate", 3, "variadic"),
+    recursive_case("predicate_attack_gets_cost", 'cannot_attack(source(), mana_cost("{1}"))', "requires predicate", "predicate", 1),
+    recursive_case("cost_alternate_gets_selector", "continuous(source(), alternate_cost(source(), source()))", "requires cost", "cost", 2),
+    recursive_case("cost_alternate_variadic_gets_event", 'continuous(source(), alternate_cost(source(), mana_cost("{1}"), event_cast()))', "requires cost", "cost", 2, "variadic"),
+    recursive_case("cost_deep_gets_effect", "sequence(until_end_of_turn(continuous(source(), alternate_cost(source(), draw(1, you())))))", "requires cost", "cost", 4),
+    recursive_case("event_delayed_gets_selector", "register_delayed_trigger(source(), draw(1, you()))", "requires event", "event", 1),
+    recursive_case("event_deep_gets_predicate", 'sequence(register_delayed_trigger(event_cast(), register_delayed_trigger(type_is("creature"), draw(1, you())), "outer"))', "requires event", "event", 3),
+    recursive_case("effect_choose_gets_selector", "choose_one(draw(1, you()), source())", "requires effect", "effect", 1, "variadic"),
+    recursive_case("effect_choose_up_to_gets_event", "choose_up_to(2, draw(1, you()), event_cast())", "requires effect", "effect", 1, "variadic"),
+    recursive_case("effect_until_gets_cost", 'until_end_of_turn(mana_cost("{1}"))', "requires effect", "effect", 1),
+    recursive_case("effect_at_timing_gets_selector", "at_timing(timing_instant(), source())", "requires effect", "effect", 1),
+    recursive_case("timing_gets_selector", "at_timing(source(), draw(1, you()))", "requires timing", "timing", 1),
+    recursive_case("timing_gets_effect", "at_timing(draw(1, you()), draw(1, you()))", "requires timing", "timing", 1),
+    recursive_case("timing_deep_gets_cost", 'sequence(at_timing(mana_cost("{1}"), draw(1, you())))', "requires timing", "timing", 2),
+    recursive_case("value_nonzero_gets_integer", "while_condition(nonzero(1), draw(1, you()))", "requires value", "value", 2),
+    recursive_case("value_nonzero_gets_selector", "while_condition(nonzero(source()), draw(1, you()))", "requires value", "value", 2),
+    recursive_case("value_nonzero_gets_effect", "while_condition(nonzero(draw(1, you())), draw(1, you()))", "requires value", "value", 2),
+    recursive_case("number_choose_gets_text", 'choose_up_to("two", draw(1, you()))', "requires integer or value", "number", 1),
+    recursive_case("number_modify_gets_selector", "modify_pt(source(), source(), 1)", "requires integer or value", "number", 1),
+    recursive_case("number_deep_draw_gets_event", "sequence(until_end_of_turn(draw(event_cast(), you())))", "requires integer or value", "number", 3),
+    recursive_case("selector_or_text_damage_gets_predicate", 'deal_damage(source(), 1, type_is("creature"))', "requires selector or text", "selector_or_text", 1),
+    recursive_case("selector_or_text_event_gets_cost", 'register_delayed_trigger(event_cast(source(), mana_cost("{1}")), draw(1, you()))', "requires selector or text", "selector_or_text", 2),
+    recursive_case("selector_or_predicate_chosen_gets_text", 'draw(1, chosen("name"))', "requires selector or predicate", "selector_or_predicate", 2),
+    recursive_case("selector_or_predicate_target_gets_cost", 'tap(target(mana_cost("{1}")))', "requires selector or predicate", "selector_or_predicate", 2),
+    recursive_case("selector_text_number_exile_gets_event", "exile(source(), event_cast())", "requires selector, text, integer, or value", "selector_text_or_number", 1),
+    recursive_case("selector_text_number_deep_gets_predicate", 'sequence(exile(source(), and(type_is("creature"), type_is("artifact"))))', "requires selector, text, integer, or value", "selector_text_or_number", 2),
+    recursive_case("selector_or_number_look_gets_predicate", 'look_at(source(), type_is("creature"))', "requires selector, integer, or value", "selector_or_number", 1),
+    recursive_case("selector_or_number_look_gets_cost", 'sequence(look_at(source(), mana_cost("{1}")))', "requires selector, integer, or value", "selector_or_number", 2),
+    recursive_case("predicate_or_text_cards_gets_selector", "draw(1, cards(source()))", "requires predicate or text", "predicate_or_text", 2),
+    recursive_case("predicate_or_text_permanents_gets_event", "tap(permanents(event_cast()))", "requires predicate or text", "predicate_or_text", 2),
+    recursive_case("selector_or_event_replace_gets_predicate", 'replace_event(type_is("creature"), draw(1, you()))', "requires selector or event", "selector_or_event", 1),
+    recursive_case("selector_or_event_double_gets_text", 'double_event("damage", 1)', "requires selector or event", "selector_or_event", 1),
+    recursive_case("scalar_search_gets_predicate", 'search_library(cards(), you(), type_is("creature"))', "requires scalar literal or value", "scalar", 1, "variadic"),
+    recursive_case("scalar_if_else_gets_selector", 'draw(if_else(type_is("creature"), source(), 1), you())', "requires scalar literal or value", "scalar", 2),
+    recursive_case("comparable_equals_gets_cost", 'while_condition(equals(mana_cost("{1}"), 1), draw(1, you()))', "requires comparable expression", "comparable", 2),
+    recursive_case("comparable_move_gets_cost", 'move_zone(source(), "exile", mana_cost("{1}"))', "requires comparable expression", "comparable", 1),
+    recursive_case("remembered_value_gets_predicate", 'remember("x", type_is("creature"))', "requires rememberable value", "remembered_value", 1),
+    recursive_case("remembered_value_gets_event", 'remember("x", event_cast())', "requires rememberable value", "remembered_value", 1),
+]
+
+
 def generate(root: Path, check: bool) -> int:
     output_dir = root / "cards/cp_dsl/malformed"
     output_dir.mkdir(parents=True, exist_ok=True)
     expected: dict[Path, bytes] = {}
     rows = []
-    for index, (name, source, diagnostic) in enumerate(CASES, start=1):
+    all_cases = [
+        (name, source, diagnostic, RECURSIVE_ARGUMENT_METADATA.get(name))
+        for name, source, diagnostic in CASES
+    ]
+    all_cases.extend(ADDITIONAL_RECURSIVE_ARGUMENT_CASES)
+    for index, (name, source, diagnostic, metadata) in enumerate(all_cases, start=1):
         path = output_dir / f"{index:03d}_{name}.frs"
         content = source.encode("utf-8")
         expected[path] = content
-        rows.append(
-            {
-                "id": name,
-                "file": str(path.relative_to(root)),
-                "expected_diagnostic": diagnostic,
-                "sha256": hashlib.sha256(content).hexdigest(),
-            }
-        )
+        row: dict[str, object] = {
+            "id": name,
+            "file": str(path.relative_to(root)),
+            "expected_diagnostic": diagnostic,
+            "sha256": hashlib.sha256(content).hexdigest(),
+        }
+        if metadata is not None:
+            row.update(metadata)
+        rows.append(row)
+    recursive_rows = [row for row in rows if row.get("category") == "recursive_argument"]
+    recursive_kinds = sorted({str(row["argument_kind"]) for row in recursive_rows})
+    recursive_features = sorted(
+        {
+            str(feature)
+            for row in recursive_rows
+            for feature in row.get("features", [])
+        }
+    )
     manifest = {
         "schema_version": 1,
         "case_count": len(rows),
         "minimum_required": 50,
+        "recursive_argument_case_count": len(recursive_rows),
+        "recursive_argument_minimum_required": 50,
+        "recursive_argument_kinds": recursive_kinds,
+        "required_argument_kinds": sorted(REQUIRED_ARGUMENT_KINDS),
+        "missing_argument_kinds": sorted(REQUIRED_ARGUMENT_KINDS - set(recursive_kinds)),
+        "recursive_argument_depths": sorted({int(row["depth"]) for row in recursive_rows}),
+        "recursive_argument_features": recursive_features,
         "cases": rows,
     }
     manifest_path = output_dir / "manifest.json"
