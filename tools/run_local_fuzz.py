@@ -82,11 +82,14 @@ def command_output(command: list[str], root: Path) -> str:
     result = subprocess.run(
         command,
         cwd=root,
-        check=True,
         text=True,
         stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
+        stderr=subprocess.PIPE,
     )
+    if result.returncode != 0:
+        raise subprocess.CalledProcessError(
+            result.returncode, command, output=result.stdout, stderr=result.stderr
+        )
     return result.stdout.strip()
 
 

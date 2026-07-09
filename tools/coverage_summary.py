@@ -46,11 +46,17 @@ def git_value(root: Path, value: str) -> str:
     result = subprocess.run(
         ["git", "rev-parse", value],
         cwd=root,
-        check=True,
         text=True,
         stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
+        stderr=subprocess.PIPE,
     )
+    if result.returncode != 0:
+        raise subprocess.CalledProcessError(
+            result.returncode,
+            ["git", "rev-parse", value],
+            output=result.stdout,
+            stderr=result.stderr,
+        )
     return result.stdout.strip()
 
 
