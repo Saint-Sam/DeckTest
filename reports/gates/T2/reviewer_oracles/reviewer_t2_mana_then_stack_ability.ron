@@ -1,0 +1,49 @@
+(
+    name: "T2 reviewer mana ability skips stack before activated life ability resolves",
+    setup: (
+        players: 1,
+        objects: [
+            (card: 72015, owner: 0, controller: 0, zone: "Battlefield"),
+            (card: 72016, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (
+            action: "register_activated_ability",
+            controller: 0,
+            source_object: 0,
+            mana_ability: true,
+            cost: (tap_source: true),
+            effect: (operation: "add_mana", mana: (green: 1)),
+        ),
+        (
+            action: "register_activated_ability",
+            controller: 0,
+            source_object: 1,
+            timing: "instant",
+            effect: (operation: "gain_life", amount: 4),
+        ),
+        (action: "start_turn", player: 0),
+        (action: "advance_step"),
+        (action: "activate_ability_auto", player: 0, ability: 0),
+        (action: "assert_object_tapped", object: 0, tapped: true),
+        (action: "activate_ability_auto", player: 0, ability: 1),
+        (action: "pass_priority", player: 0),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Stack", count: 0),
+            (zone: "Battlefield", count: 2),
+        ],
+        players: [
+            (player: 0, life: 24),
+            (player: 0, mana: (green: 1)),
+        ],
+        outcome: "in_progress",
+        active_player: 0,
+        priority_player: 0,
+        current_step: "Upkeep",
+        invariants: ["zone_conservation", "life_poison_sanity", "hash_consistency"],
+        hash_determinism: true,
+    ),
+)

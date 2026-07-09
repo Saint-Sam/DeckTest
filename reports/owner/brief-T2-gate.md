@@ -11,7 +11,8 @@ multiplayer/Commander hooks, keyword wave one, and the nightmare deck
 integration suite.
 
 The T2 exit gate passed locally after adding the generated T2 gate oracle pack.
-That brought the checked oracle corpus to 1,200 scenarios.
+That brought the checked oracle corpus to 1,200 scenarios. The evidence commit
+also passed remote GitHub Actions CI.
 
 ## 2. WHAT YOU SHOULD SEE - TRY IT YOURSELF
 
@@ -38,6 +39,8 @@ That brought the checked oracle corpus to 1,200 scenarios.
   - `fuzz_scenarioparse`: 1,559,087,053 runs.
 - Current coverage report after the gate shows 81.98% line coverage and 80.60%
   region coverage.
+- Remote CI: GitHub Actions `ci #44`, run ID `28993856797`, passed all required
+  jobs for commit `0fdc23dea157ee55226eae24d8d4d817c46b5d59`.
 
 ## 4. KNOWN ROUGH EDGES
 
@@ -53,6 +56,4 @@ go, is T3.1: freeze-review the DSL design before mass translation.
 
 ## 6. WHAT WE NEED FROM YOU
 
-Nothing right now unless GitHub Desktop or remote CI needs attention. I will
-push the T2 evidence, watch CI, record the gate state, and then pause before T3.
-
+Nothing right now. T2 is being recorded as passed, and work pauses before T3.

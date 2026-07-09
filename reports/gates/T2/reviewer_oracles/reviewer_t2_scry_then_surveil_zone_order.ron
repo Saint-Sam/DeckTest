@@ -1,0 +1,27 @@
+(
+    name: "T2 reviewer scry then surveil keeps library and graveyard order",
+    setup: (
+        players: 1,
+        objects: [
+            (card: 72012, owner: 0, controller: 0, zone: "Library", player: 0),
+            (card: 72013, owner: 0, controller: 0, zone: "Library", player: 0),
+            (card: 72014, owner: 0, controller: 0, zone: "Library", player: 0),
+        ],
+    ),
+    script: [
+        (action: "scry", player: 0, count: 2, bottom: [2]),
+        (action: "assert_zone_order", zone: "Library", player: 0, objects: [2, 0, 1]),
+        (action: "surveil", player: 0, count: 2, graveyard: [0]),
+        (action: "assert_zone_order", zone: "Library", player: 0, objects: [2, 1]),
+        (action: "assert_zone_order", zone: "Graveyard", player: 0, objects: [0]),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Library", player: 0, count: 2),
+            (zone: "Graveyard", player: 0, count: 1),
+        ],
+        outcome: "in_progress",
+        invariants: ["zone_conservation", "hash_consistency"],
+        hash_determinism: true,
+    ),
+)
