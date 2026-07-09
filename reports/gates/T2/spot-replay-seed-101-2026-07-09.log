@@ -1,0 +1,30 @@
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-mnELzR9G' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-64pZ4whw' (errno=Operation not permitted)
+
+warning: `forge-cli` (bin "forge-cli") generated 1 warning
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.05s
+     Running `target/debug/forge-cli play --demo --seed 101 --replay-out reports/gates/T2/replays/spot-seed-101.frsreplay`
+demo complete
+seed: 101
+turn: 1
+final_hash: 1566419436961389613
+outcome: won player 0
+actions: 14
+players:
+  player 0 life=20 poison=0 lost=false
+  player 1 life=-5 poison=0 lost=true
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-mnELzR9G' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-64pZ4whw' (errno=Operation not permitted)
+
+warning: `forge-cli` (bin "forge-cli") generated 1 warning
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running `target/debug/forge-cli roundtrip reports/gates/T2/replays/spot-seed-101.frsreplay`
+roundtrip ok
+seed: 101
+actions: 14
+final_hash: 1566419436961389613
+outcome: won player 0
