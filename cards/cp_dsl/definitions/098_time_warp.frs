@@ -1,0 +1,15 @@
+// CP-DSL stratum: turn_combat
+card "Time Warp" {
+  id: "dbd6a94b-62ff-4a10-9d52-bdd90b26e425"
+  layout: normal
+  status: verified_playable
+  face "Time Warp" {
+    cost: "{3}{U}{U}"
+    types: "Sorcery"
+    oracle: "Target player takes an extra turn after this one."
+    keywords: []
+    ability spell {
+      effect: extra_turn(target(any()))
+    }
+  }
+}

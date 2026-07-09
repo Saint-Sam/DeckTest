@@ -1,0 +1,14 @@
+// CP-DSL stratum: vanilla_keywords
+card "Serra Angel" {
+  id: "4b7ac066-e5c7-43e6-9e7e-2739b24a905d"
+  layout: normal
+  status: verified_playable
+  face "Serra Angel" {
+    cost: "{3}{W}{W}"
+    types: "Creature — Angel"
+    oracle: "Flying\nVigilance (Attacking doesn't cause this creature to tap.)"
+    power: "4"
+    toughness: "4"
+    keywords: [flying, vigilance]
+  }
+}

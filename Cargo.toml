@@ -21,7 +21,7 @@ resolver = "2"
 [workspace.package]
 edition = "2021"
 license = "GPL-3.0-only"
-repository = "https://github.com/OWNER/forge-rs"
+repository = "https://github.com/Saint-Sam/Forge-2.0"
 rust-version = "1.79"
 
 [workspace.lints.rust]
@@ -31,4 +31,3 @@ unsafe_code = "forbid"
 [workspace.lints.clippy]
 unwrap_used = "deny"
 expect_used = "deny"
-

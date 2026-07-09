@@ -1,0 +1,35 @@
+// CP-DSL stratum: flip
+card "Budoka Gardener // Dokai, Weaver of Life" {
+  id: "cb952c81-c7bb-4670-938d-296d35551986"
+  layout: flip
+  status: verified_playable
+  face "Budoka Gardener" {
+    cost: "{1}{G}"
+    types: "Creature — Human Monk"
+    oracle: "{T}: You may put a land card from your hand onto the battlefield. If you control ten or more lands, flip this creature."
+    power: "2"
+    toughness: "1"
+    keywords: []
+    ability activated {
+      costs: [mana_cost("{2}{G}"), tap_self()]
+      effect: move_zone(cards(and(zone_is("hand"), type_is("land"))), "battlefield")
+    }
+    ability triggered {
+      event: event_enters(permanents(type_is("land")))
+      condition: at_least(count(permanents(and(type_is("land"), controlled_by(you())))), 10)
+      effect: transform(source())
+    }
+  }
+  face "Dokai, Weaver of Life" {
+    cost: ""
+    types: "Legendary Creature — Human Monk"
+    oracle: "{4}{G}{G}, {T}: Create an X/X green Elemental creature token, where X is the number of lands you control."
+    power: "3"
+    toughness: "3"
+    keywords: []
+    ability activated {
+      costs: [mana_cost("{4}{G}{G}"), tap_self()]
+      effect: create_token("green Elemental with power and toughness equal to lands", 1, you())
+    }
+  }
+}

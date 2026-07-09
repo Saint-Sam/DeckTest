@@ -1,0 +1,19 @@
+// CP-DSL stratum: cast_from_zone
+card "Bloodghast" {
+  id: "e97f9c2b-b41e-4f36-9245-77c0ac125647"
+  layout: normal
+  status: verified_playable
+  face "Bloodghast" {
+    cost: "{B}{B}"
+    types: "Creature — Vampire Spirit"
+    oracle: "This creature can't block.\nThis creature has haste as long as an opponent has 10 or less life.\nLandfall — Whenever a land you control enters, you may return this card from your graveyard to the battlefield."
+    power: "2"
+    toughness: "1"
+    keywords: [landfall]
+    ability triggered {
+      event: event_enters(permanents(and(type_is("land"), controlled_by(you()))))
+      condition: equals(zone_is("graveyard"), true)
+      effect: move_zone(source(), "battlefield")
+    }
+  }
+}

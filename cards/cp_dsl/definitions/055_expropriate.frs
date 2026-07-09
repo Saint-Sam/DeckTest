@@ -1,0 +1,15 @@
+// CP-DSL stratum: multiplayer_commander_voting
+card "Expropriate" {
+  id: "a69265b2-0e37-4d86-866e-e4a923233b4d"
+  layout: normal
+  status: verified_playable
+  face "Expropriate" {
+    cost: "{7}{U}{U}"
+    types: "Sorcery"
+    oracle: "Council's dilemma — Starting with you, each player votes for time or money. For each time vote, take an extra turn after this one. For each money vote, choose a permanent owned by the voter and gain control of it. Exile Expropriate."
+    keywords: [councils_dilemma]
+    ability spell {
+      effect: sequence(vote("time_or_money", all(any())), for_each(remembered("time_votes"), extra_turn(you())), for_each(remembered("money_votes"), change_control(target(permanents()), you())))
+    }
+  }
+}

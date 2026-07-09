@@ -1,0 +1,30 @@
+// CP-DSL stratum: flip
+card "Erayo, Soratami Ascendant // Erayo's Essence" {
+  id: "d83bb32d-f409-421a-9d93-bd7ea3240b47"
+  layout: flip
+  status: verified_playable
+  face "Erayo, Soratami Ascendant" {
+    cost: "{1}{U}"
+    types: "Legendary Creature — Moonfolk Monk"
+    oracle: "Flying\nWhenever the fourth spell of a turn is cast, flip Erayo."
+    power: "1"
+    toughness: "1"
+    keywords: [flying]
+    ability triggered {
+      event: event_cast(spells())
+      condition: at_least(count(spells("this_turn")), 4)
+      effect: transform(source())
+    }
+  }
+  face "Erayo's Essence" {
+    cost: ""
+    types: "Legendary Enchantment"
+    oracle: "Whenever an opponent casts their first spell each turn, counter that spell."
+    keywords: [flying]
+    ability replacement {
+      event: event_cast(spells(controlled_by(opponent())))
+      condition: equals(count(spells(and(controlled_by(opponent()), during("this_turn")))), 1)
+      effect: replace_event(triggered(), counter_spell(triggered()))
+    }
+  }
+}

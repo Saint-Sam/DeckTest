@@ -1,0 +1,26 @@
+// CP-DSL stratum: adventure
+card "Lovestruck Beast // Heart's Desire" {
+  id: "7e84aff5-2cb6-4214-befd-3d2de31229e5"
+  layout: adventure
+  status: verified_playable
+  face "Lovestruck Beast" {
+    cost: "{2}{G}"
+    types: "Creature — Beast Noble"
+    oracle: "This creature can't attack unless you control a 1/1 creature."
+    power: "5"
+    toughness: "5"
+    keywords: []
+    ability static {
+      effect: continuous(source(), cannot_attack(source(), not(at_least(count(permanents(and(type_is("creature"), controlled_by(you()), equals(power(any()), 1), equals(toughness(any()), 1)))), 1))))
+    }
+  }
+  face "Heart's Desire" {
+    cost: "{G}"
+    types: "Sorcery — Adventure"
+    oracle: "Create a 1/1 white Human creature token. (Then exile this card. You may cast the creature later from exile.)"
+    keywords: []
+    ability spell {
+      effect: create_token("1/1 white Human", 1, you())
+    }
+  }
+}

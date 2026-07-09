@@ -1,0 +1,15 @@
+// CP-DSL stratum: modal_choices
+card "Boros Charm" {
+  id: "2679d0dd-ba30-4a1c-b6a0-b3ac6c790496"
+  layout: normal
+  status: verified_playable
+  face "Boros Charm" {
+    cost: "{R}{W}"
+    types: "Instant"
+    oracle: "Choose one —\n• Boros Charm deals 4 damage to target player or planeswalker.\n• Permanents you control gain indestructible until end of turn.\n• Target creature gains double strike until end of turn."
+    keywords: []
+    ability spell {
+      effect: choose_one(deal_damage(target(any()), 4), grant_keyword(all(permanents(controlled_by(you()))), "indestructible", "until_end_of_turn"), grant_keyword(target(permanents(type_is("creature"))), "double_strike", "until_end_of_turn"))
+    }
+  }
+}

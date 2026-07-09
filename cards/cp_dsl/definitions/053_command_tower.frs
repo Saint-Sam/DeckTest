@@ -1,0 +1,17 @@
+// CP-DSL stratum: multiplayer_commander_voting
+card "Command Tower" {
+  id: "0895c9b7-ae7d-4bb3-af17-3b75deb50a25"
+  layout: normal
+  status: verified_playable
+  face "Command Tower" {
+    cost: ""
+    types: "Land"
+    oracle: "{T}: Add one mana of any color in your commander's color identity."
+    keywords: []
+    ability activated {
+      costs: [tap_self()]
+      effect: add_mana("commander_color_identity", you())
+      mana_ability: true
+    }
+  }
+}

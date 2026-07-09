@@ -1,0 +1,18 @@
+// CP-DSL stratum: zones_lki
+card "Scavenging Ooze" {
+  id: "1ff25f67-36a7-4cfa-a2b1-2135b5b6fb67"
+  layout: normal
+  status: verified_playable
+  face "Scavenging Ooze" {
+    cost: "{1}{G}"
+    types: "Creature — Ooze"
+    oracle: "{G}: Exile target card from a graveyard. If it was a creature card, put a +1/+1 counter on this creature and you gain 1 life."
+    power: "2"
+    toughness: "2"
+    keywords: []
+    ability activated {
+      costs: [mana_cost("{G}")]
+      effect: sequence(exile(target(cards(and(zone_is("graveyard"), type_is("creature"))))), add_counter(source(), "plus1_plus1", 1), gain_life(1, you()))
+    }
+  }
+}

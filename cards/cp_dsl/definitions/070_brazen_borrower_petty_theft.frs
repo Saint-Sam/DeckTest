@@ -1,0 +1,26 @@
+// CP-DSL stratum: adventure
+card "Brazen Borrower // Petty Theft" {
+  id: "c7b044c3-3cfa-407e-bf20-2875e8e04b7b"
+  layout: adventure
+  status: verified_playable
+  face "Brazen Borrower" {
+    cost: "{1}{U}{U}"
+    types: "Creature — Faerie Rogue"
+    oracle: "Flash\nFlying\nThis creature can block only creatures with flying."
+    power: "3"
+    toughness: "1"
+    keywords: [flash, flying]
+    ability static {
+      effect: continuous(source(), can_block_only(source(), keyword_is("flying")))
+    }
+  }
+  face "Petty Theft" {
+    cost: "{1}{U}"
+    types: "Instant — Adventure"
+    oracle: "Return target nonland permanent an opponent controls to its owner's hand."
+    keywords: [flash, flying]
+    ability spell {
+      effect: return_to_hand(target(permanents(and(not(type_is("land")), controlled_by(opponent())))))
+    }
+  }
+}

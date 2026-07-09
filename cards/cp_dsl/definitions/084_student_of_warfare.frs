@@ -1,0 +1,27 @@
+// CP-DSL stratum: saga_class_case_leveler
+card "Student of Warfare" {
+  id: "0bc2875b-3a5a-4885-86b9-16ab7330ac10"
+  layout: leveler
+  status: verified_playable
+  face "Student of Warfare" {
+    cost: "{W}"
+    types: "Creature — Human Knight"
+    oracle: "Level up {W} ({W}: Put a level counter on this. Level up only as a sorcery.)\nLEVEL 2-6\n3/3\nFirst strike\nLEVEL 7+\n4/4\nDouble strike"
+    power: "1"
+    toughness: "1"
+    keywords: [double_strike, first_strike, level_up]
+    ability activated {
+      costs: [mana_cost("{W}")]
+      timing: timing_sorcery()
+      effect: level_up(source(), 1)
+    }
+    ability static {
+      condition: at_least(count("level_counters"), 2)
+      effect: continuous(source(), grant_keyword(source(), "first_strike"))
+    }
+    ability static {
+      condition: at_least(count("level_counters"), 7)
+      effect: continuous(source(), sequence(modify_pt(source(), 3, 3), grant_keyword(source(), "double_strike")))
+    }
+  }
+}

@@ -1,0 +1,22 @@
+// CP-DSL stratum: triggered_delayed
+card "Sun Titan" {
+  id: "b2e950fb-cb7e-40a0-a311-5bbdd0477b29"
+  layout: normal
+  status: verified_playable
+  face "Sun Titan" {
+    cost: "{4}{W}{W}"
+    types: "Creature — Giant"
+    oracle: "Vigilance\nWhenever this creature enters or attacks, you may return target permanent card with mana value 3 or less from your graveyard to the battlefield."
+    power: "6"
+    toughness: "6"
+    keywords: [vigilance]
+    ability triggered {
+      event: event_enters(source())
+      effect: move_zone(target(cards(and(zone_is("graveyard"), less_than(mana_value(any()), 4)))), "battlefield")
+    }
+    ability triggered {
+      event: event_attacks(source())
+      effect: move_zone(target(cards(and(zone_is("graveyard"), less_than(mana_value(any()), 4)))), "battlefield")
+    }
+  }
+}

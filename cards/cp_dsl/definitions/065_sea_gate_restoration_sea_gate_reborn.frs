@@ -1,0 +1,26 @@
+// CP-DSL stratum: modal_dfc
+card "Sea Gate Restoration // Sea Gate, Reborn" {
+  id: "4a8d41fe-e04d-484b-a7d1-19be311e6ca7"
+  layout: modal_dfc
+  status: verified_playable
+  face "Sea Gate Restoration" {
+    cost: "{4}{U}{U}{U}"
+    types: "Sorcery"
+    oracle: "Draw cards equal to the number of cards in your hand plus one. You have no maximum hand size for the rest of the game."
+    keywords: []
+    ability spell {
+      effect: sequence(draw(amount("hand_size", 1), you()), continuous(you(), no_maximum_hand_size(you())))
+    }
+  }
+  face "Sea Gate, Reborn" {
+    cost: ""
+    types: "Land"
+    oracle: "As this land enters, you may pay 3 life. If you don't, it enters tapped.\n{T}: Add {U}."
+    keywords: []
+    ability activated {
+      costs: [tap_self()]
+      effect: add_mana("{U}", you())
+      mana_ability: true
+    }
+  }
+}

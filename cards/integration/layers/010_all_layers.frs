@@ -1,0 +1,26 @@
+card "Layer Scenario: All Layers" {
+  id: "forge:scenario:layers:010"
+  layout: normal
+  status: verified_playable
+  face "Layer Scenario: All Layers" {
+    cost: "{0}"
+    types: "Enchantment"
+    oracle: "Compiled integration scenario for copy, type, keyword, and power/toughness layers."
+    keywords: []
+    ability static {
+      effect: layer_effect(you(), remembered("fixture_object_1"), copy(remembered("fixture_object_1"), remembered("fixture_object_0")), 1)
+    }
+    ability static {
+      effect: layer_effect(you(), all(permanents()), add_type(all(permanents()), "enchantment"), 2)
+    }
+    ability static {
+      effect: layer_effect(you(), all(permanents()), remove_keyword(all(permanents()), "flying"), 3)
+    }
+    ability static {
+      effect: layer_effect(you(), all(permanents()), grant_keyword(all(permanents()), "reach"), 4)
+    }
+    ability static {
+      effect: layer_effect(you(), all(permanents()), modify_pt(all(permanents()), 2, 0), 5)
+    }
+  }
+}

@@ -1,0 +1,18 @@
+// CP-DSL stratum: unusual_mana
+card "Kitchen Finks" {
+  id: "5470dcfa-4eff-43da-abf7-19922841f719"
+  layout: normal
+  status: verified_playable
+  face "Kitchen Finks" {
+    cost: "{1}{G/W}{G/W}"
+    types: "Creature — Ouphe"
+    oracle: "When this creature enters, you gain 2 life.\nPersist (When this creature dies, if it had no -1/-1 counters on it, return it to the battlefield under its owner's control with a -1/-1 counter on it.)"
+    power: "3"
+    toughness: "2"
+    keywords: [persist]
+    ability triggered {
+      event: event_enters(source())
+      effect: gain_life(2, you())
+    }
+  }
+}

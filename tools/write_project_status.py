@@ -1,0 +1,115 @@
+#!/usr/bin/env python3
+"""Generate the current project status metric from repository sources."""
+
+from __future__ import annotations
+
+import argparse
+import json
+from datetime import datetime, timezone
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def load_json(path: Path) -> dict[str, object]:
+    with path.open(encoding="utf-8") as handle:
+        value = json.load(handle)
+    if not isinstance(value, dict):
+        raise ValueError(f"expected object in {path}")
+    return value
+
+
+def generate() -> dict[str, object]:
+    state = load_json(ROOT / "PLAN_STATE.json")
+    legacy = load_json(ROOT / "metrics" / "legacy_inventory.json")
+    scryfall = load_json(ROOT / "metrics" / "scryfall_cache_summary.json")
+    catalog = load_json(ROOT / "metrics" / "card_catalog.json")
+    corpus = load_json(ROOT / "metrics" / "cp_dsl_corpus.json")
+    mutation = load_json(ROOT / "metrics" / "cp_dsl_mutation.json")
+    local_fuzz = load_json(ROOT / "metrics" / "local_fuzz.json")
+    local_platforms = load_json(ROOT / "metrics" / "local_platforms.json")
+    oracle_semantics = load_json(ROOT / "metrics" / "oracle_semantics.json")
+    tasks = state.get("tasks", {})
+    if not isinstance(tasks, dict):
+        raise ValueError("PLAN_STATE tasks must be an object")
+    task_statuses: dict[str, int] = {}
+    for task in tasks.values():
+        if not isinstance(task, dict):
+            continue
+        status = str(task.get("status", "unknown"))
+        task_statuses[status] = task_statuses.get(status, 0) + 1
+
+    source = catalog.get("source", {})
+    if not isinstance(source, dict):
+        raise ValueError("card catalog source must be an object")
+    oracle_measured = oracle_semantics.get("measured", {})
+    if not isinstance(oracle_measured, dict):
+        raise ValueError("oracle semantic measurements must be an object")
+    hosted_workflows = sorted((ROOT / ".github" / "workflows").glob("*.yml"))
+    return {
+        "schema_version": 2,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generator": "tools/write_project_status.py",
+        "verification_mode": "local_only",
+        "hosted_workflow_count": len(hosted_workflows),
+        "tier": state.get("tier"),
+        "gates_passed": state.get("gates_passed", []),
+        "task_count": len(tasks),
+        "task_status_counts": dict(sorted(task_statuses.items())),
+        "oracle_metrics_passed": oracle_semantics.get("passed"),
+        "oracle_file_count": oracle_measured.get("raw_scenarios"),
+        "oracle_structural_family_count": oracle_measured.get("structural_families"),
+        "oracle_rule_interaction_count": oracle_measured.get("rule_interactions"),
+        "oracle_hand_authored_count": oracle_measured.get("hand_authored_scenarios"),
+        "oracle_distinct_action_count": oracle_measured.get("distinct_actions"),
+        "oracle_distinct_operation_count": oracle_measured.get("distinct_operations"),
+        "legacy_script_count": legacy.get("total_scripts"),
+        "catalog_total_records": catalog.get("source_records"),
+        "catalog_english_printings": catalog.get("imported_english_printings"),
+        "catalog_classified_identities": catalog.get("classified_identities"),
+        "catalog_dangling_references": catalog.get("dangling_printing_references"),
+        "catalog_unique_english_oracle_ids": catalog.get("source_unique_english_oracle_ids"),
+        "catalog_unique_english_names": scryfall.get("unique_english_names"),
+        "catalog_source_updated_at": source.get("source_updated_at"),
+        "catalog_source_sha256": source.get("source_sha256"),
+        "catalog_source_path": source.get("source_path"),
+        "cp_dsl_reviewed_cards": corpus.get("reviewed_card_count"),
+        "cp_dsl_primary_strata": corpus.get("distinct_primary_strata"),
+        "cp_dsl_distinct_operations": corpus.get("distinct_operations"),
+        "cp_dsl_mutation_score_percent": mutation.get("mutation_score_percent"),
+        "cp_dsl_mutation_survivors": mutation.get("survived"),
+        "local_fuzz_passed": local_fuzz.get("passed"),
+        "local_fuzz_worker_seconds": local_fuzz.get("total_worker_seconds"),
+        "local_platforms_passed": local_platforms.get("passed"),
+        "local_platform_target_count": len(local_platforms.get("targets", [])),
+    }
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=ROOT / "metrics" / "project_status.json",
+    )
+    parser.add_argument("--check", action="store_true")
+    args = parser.parse_args()
+    rendered = json.dumps(generate(), indent=2, sort_keys=True) + "\n"
+    if args.check:
+        existing = args.output.read_text(encoding="utf-8")
+        existing_value = json.loads(existing)
+        rendered_value = json.loads(rendered)
+        existing_value.pop("generated_at", None)
+        rendered_value.pop("generated_at", None)
+        if existing_value != rendered_value:
+            raise SystemExit(f"stale project status: {args.output}")
+        print(f"PASS project status current: {args.output}")
+        return
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(rendered, encoding="utf-8")
+    print(f"wrote {args.output}")
+
+
+if __name__ == "__main__":
+    main()

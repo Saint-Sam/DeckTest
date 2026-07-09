@@ -1,0 +1,17 @@
+// CP-DSL stratum: calculated_values
+card "Tarmogoyf" {
+  id: "45900b2f-f6a9-4c42-9642-008f3c1cf6dd"
+  layout: normal
+  status: verified_playable
+  face "Tarmogoyf" {
+    cost: "{1}{G}"
+    types: "Creature — Lhurgoyf"
+    oracle: "Tarmogoyf's power is equal to the number of card types among cards in all graveyards and its toughness is equal to that number plus 1."
+    power: "*"
+    toughness: "1+*"
+    keywords: []
+    ability static {
+      effect: continuous(source(), set_pt(source(), count("card_types_among_all_graveyards"), amount(count("card_types_among_all_graveyards"), 1)))
+    }
+  }
+}

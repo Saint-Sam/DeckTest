@@ -1,0 +1,15 @@
+// CP-DSL stratum: turn_combat
+card "Silence" {
+  id: "8aed54cb-d1bb-45ad-adbe-38e55d84ff31"
+  layout: normal
+  status: verified_playable
+  face "Silence" {
+    cost: "{W}"
+    types: "Instant"
+    oracle: "Your opponents can't cast spells this turn."
+    keywords: []
+    ability spell {
+      effect: continuous(opponent(), cannot_cast(opponent(), "this_turn"))
+    }
+  }
+}

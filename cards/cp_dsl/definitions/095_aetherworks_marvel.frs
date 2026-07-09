@@ -1,0 +1,20 @@
+// CP-DSL stratum: dungeon_initiative_monarch_energy
+card "Aetherworks Marvel" {
+  id: "470ec98e-120c-446d-ade6-7d80aa836b55"
+  layout: normal
+  status: verified_playable
+  face "Aetherworks Marvel" {
+    cost: "{4}"
+    types: "Legendary Artifact"
+    oracle: "Whenever a permanent you control is put into a graveyard, you get {E} (an energy counter).\n{T}, Pay six {E}: Look at the top six cards of your library. You may cast a spell from among them without paying its mana cost. Put the rest on the bottom of your library in a random order."
+    keywords: []
+    ability triggered {
+      event: event_zone_change(permanents(controlled_by(you())), "graveyard")
+      effect: add_counter(you(), "energy", 1)
+    }
+    ability activated {
+      costs: [remove_counter_cost(you(), "six_energy"), tap_self()]
+      effect: sequence(look_at(cards(zone_is("library_top")), 6), cast(chosen(cards()), "without_mana_cost"))
+    }
+  }
+}

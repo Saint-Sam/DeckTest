@@ -1,0 +1,18 @@
+// CP-DSL stratum: alternate_additional_costs
+card "Treasure Cruise" {
+  id: "5b6bdf5a-2742-4851-92cd-a857a3852836"
+  layout: normal
+  status: verified_playable
+  face "Treasure Cruise" {
+    cost: "{7}{U}"
+    types: "Sorcery"
+    oracle: "Delve (Each card you exile from your graveyard while casting this spell pays for {1}.)\nDraw three cards."
+    keywords: [delve]
+    ability static {
+      effect: continuous(source(), delve_cost(source()))
+    }
+    ability spell {
+      effect: draw(3, you())
+    }
+  }
+}

@@ -1,0 +1,24 @@
+// CP-DSL stratum: split_fuse
+card "Fire // Ice" {
+  id: "ae92942b-919c-4ea9-b693-85fcef765d5a"
+  layout: split
+  status: verified_playable
+  face "Fire" {
+    cost: "{1}{R}"
+    types: "Instant"
+    oracle: "Fire deals 2 damage divided as you choose among one or two targets."
+    keywords: []
+    ability spell {
+      effect: choose_one(deal_damage(target(any()), 2), sequence(deal_damage(target(any()), 1), deal_damage(target(any()), 1)))
+    }
+  }
+  face "Ice" {
+    cost: "{1}{U}"
+    types: "Instant"
+    oracle: "Tap target permanent.\nDraw a card."
+    keywords: []
+    ability spell {
+      effect: sequence(tap(target(permanents())), draw(1, you()))
+    }
+  }
+}

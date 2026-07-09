@@ -1,0 +1,41 @@
+id: T3.1
+title: Versioned card identity catalog and typed DSL
+role: Implementer
+status: in_progress
+branch: task/T3.1-card-dsl
+depends_on: [T2.6, T2]
+plan_refs: ["0", "1.5", "5.3", "8.1", "13.7", "15.4", "PC-0001", "PC-0002", "PC-0003"]
+scope_paths:
+  - crates/forge-carddef/
+  - crates/forge-cardc/
+  - crates/forge-cards/
+  - crates/forge-porttools/
+  - cards/examples/t3/
+  - cards/cp_dsl/
+  - cards/integration/layers/
+  - tools/card_catalog_coverage.py
+  - tools/cp_dsl_metrics.py
+  - tools/oracle_semantic_metrics.py
+  - scripts/card_regression.sh
+  - scripts/gates/gate_T3.sh
+  - docs/specs/T3.1.md
+  - reports/gates/CP-DSL/
+acceptance:
+  - One mechanics definition per Oracle identity with ordered multi-face support.
+  - Every English printing in the pinned local snapshot is cataloged and every identity classified.
+  - Pest grammar preserves // inside strings and reports file/line/column errors.
+  - Unknown fields, layouts, ability kinds, operators, keywords, and mana symbols fail closed.
+  - Versioned bincode database and JSON index are deterministic and load through forge-cards.
+  - 100-card CP-DSL corpus covers the exact 25 mandatory strata with four cards each and round-trips 100/100.
+  - At least 50 malformed cases exercise recursive argument diagnostics; curated mutation score is at least 90 percent.
+  - All five local fuzz targets pass at least 2,400 aggregate address-sanitizer worker-seconds.
+  - Ten T2 nightmare classes lower effects from a compiled scenario database with no independent fixture effect seeds.
+  - Oracle breadth metrics collapse scalar-only variants and meet the declared family and interaction floors.
+dod:
+  - cargo fmt --all -- --check
+  - cargo clippy --workspace --all-targets --all-features -- -D warnings
+  - cargo test --workspace --quiet
+  - scripts/card_regression.sh
+  - scripts/gates/gate_CP_DSL.sh
+  - scripts/local_verify.sh task
+owner_checkpoint: O4_CP_DSL

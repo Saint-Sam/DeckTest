@@ -1,0 +1,21 @@
+// CP-DSL stratum: targeting_restrictions
+card "True-Name Nemesis" {
+  id: "112322ad-8f66-4cd4-98a1-f425d61a69ce"
+  layout: normal
+  status: verified_playable
+  face "True-Name Nemesis" {
+    cost: "{1}{U}{U}"
+    types: "Creature — Merfolk Rogue"
+    oracle: "As this creature enters, choose a player.\nThis creature has protection from the chosen player."
+    power: "3"
+    toughness: "1"
+    keywords: []
+    ability triggered {
+      event: event_enters(source())
+      effect: remember("chosen_player", opponent())
+    }
+    ability static {
+      effect: continuous(source(), grant_keyword(source(), "protection", remembered("chosen_player")))
+    }
+  }
+}

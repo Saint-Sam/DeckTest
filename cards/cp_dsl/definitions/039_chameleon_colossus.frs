@@ -1,0 +1,18 @@
+// CP-DSL stratum: calculated_values
+card "Chameleon Colossus" {
+  id: "7b8f1458-c638-4907-9363-f7cc22d04605"
+  layout: normal
+  status: verified_playable
+  face "Chameleon Colossus" {
+    cost: "{2}{G}{G}"
+    types: "Creature — Shapeshifter"
+    oracle: "Changeling (This card is every creature type.)\nProtection from black\n{2}{G}{G}: This creature gets +X/+X until end of turn, where X is its power."
+    power: "4"
+    toughness: "4"
+    keywords: [changeling, protection]
+    ability activated {
+      costs: [mana_cost("{2}{G}{G}")]
+      effect: modify_pt(source(), power(source()), toughness(source()), "until_end_of_turn")
+    }
+  }
+}

@@ -5,6 +5,13 @@ edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 
+[dependencies]
+bincode = { version = "2.0", features = ["serde"] }
+forge-carddef = { path = "../forge-carddef" }
+pest = "2.8"
+pest_derive = "2.8"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
 [lints]
 workspace = true
-

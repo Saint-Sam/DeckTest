@@ -1,0 +1,19 @@
+// CP-DSL stratum: activated_mana_loyalty
+card "Llanowar Elves" {
+  id: "68954295-54e3-4303-a6bc-fc4547a4e3a3"
+  layout: normal
+  status: verified_playable
+  face "Llanowar Elves" {
+    cost: "{G}"
+    types: "Creature — Elf Druid"
+    oracle: "{T}: Add {G}."
+    power: "1"
+    toughness: "1"
+    keywords: []
+    ability activated {
+      costs: [tap_self()]
+      effect: add_mana("{G}", you())
+      mana_ability: true
+    }
+  }
+}

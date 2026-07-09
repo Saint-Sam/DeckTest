@@ -1,0 +1,15 @@
+// CP-DSL stratum: continuous_layers
+card "Blood Moon" {
+  id: "94fac5fe-97d5-4c12-a80c-8efff9d853ae"
+  layout: normal
+  status: verified_playable
+  face "Blood Moon" {
+    cost: "{2}{R}"
+    types: "Enchantment"
+    oracle: "Nonbasic lands are Mountains."
+    keywords: []
+    ability static {
+      effect: continuous(all(permanents(and(type_is("land"), not(supertype_is("basic"))))), set_type(any(), "Mountain"))
+    }
+  }
+}

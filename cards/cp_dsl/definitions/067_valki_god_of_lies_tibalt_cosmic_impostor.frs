@@ -1,0 +1,44 @@
+// CP-DSL stratum: modal_dfc
+card "Valki, God of Lies // Tibalt, Cosmic Impostor" {
+  id: "907ae517-22d5-4ac7-bc3a-3f4d5eaeeb57"
+  layout: modal_dfc
+  status: verified_playable
+  face "Valki, God of Lies" {
+    cost: "{1}{B}"
+    types: "Legendary Creature — God"
+    oracle: "When Valki enters, each opponent reveals their hand. For each opponent, exile a creature card they revealed this way until Valki leaves the battlefield.\n{X}: Choose a creature card exiled with Valki with mana value X. Valki becomes a copy of that card."
+    power: "2"
+    toughness: "1"
+    keywords: []
+    ability triggered {
+      event: event_enters(source())
+      effect: exile(cards(and(zone_is("hand"), type_is("creature"))), opponent())
+    }
+    ability activated {
+      costs: [mana_cost("{X}")]
+      effect: copy(chosen(cards(equals(mana_value(any()), "X"))), source())
+    }
+  }
+  face "Tibalt, Cosmic Impostor" {
+    cost: "{5}{B}{R}"
+    types: "Legendary Planeswalker — Tibalt"
+    oracle: "As Tibalt enters, you get an emblem with \"You may play cards exiled with Tibalt, Cosmic Impostor, and you may spend mana as though it were mana of any color to cast those spells.\"\n+2: Exile the top card of each player's library.\n−3: Exile target artifact or creature.\n−8: Exile all graveyards. Add {R}{R}{R}."
+    loyalty: "5"
+    keywords: []
+    ability static {
+      effect: continuous(you(), play_exiled(you(), source()))
+    }
+    ability activated {
+      costs: [loyalty_cost(2)]
+      effect: exile(cards(zone_is("library_top")), all(any()))
+    }
+    ability activated {
+      costs: [loyalty_cost(-3)]
+      effect: exile(target(permanents(and(not(type_is("artifact")), not(type_is("land"))))))
+    }
+    ability activated {
+      costs: [loyalty_cost(-8)]
+      effect: exile(all(cards(zone_is("graveyard"))))
+    }
+  }
+}

@@ -1,0 +1,17 @@
+card "Layer Scenario: Specific Color" {
+  id: "forge:scenario:layers:008"
+  layout: normal
+  status: verified_playable
+  face "Layer Scenario: Specific Color" {
+    cost: "{0}"
+    types: "Enchantment"
+    oracle: "Compiled integration scenario for specific color effects after global effects."
+    keywords: []
+    ability static {
+      effect: layer_effect(you(), all(permanents()), set_color(all(permanents()), "red"), 1)
+    }
+    ability static {
+      effect: layer_effect(you(), remembered("fixture_object_0"), set_color(remembered("fixture_object_0"), "blue"), 2)
+    }
+  }
+}

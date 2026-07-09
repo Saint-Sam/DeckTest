@@ -1,0 +1,40 @@
+// CP-DSL stratum: transform_day_night
+card "Huntmaster of the Fells // Ravager of the Fells" {
+  id: "582328cd-660d-47a4-bb23-e91e80b9a907"
+  layout: transform
+  status: verified_playable
+  face "Huntmaster of the Fells" {
+    cost: "{2}{R}{G}"
+    types: "Creature — Human Werewolf"
+    oracle: "Whenever this creature enters or transforms into Huntmaster of the Fells, create a 2/2 green Wolf creature token and you gain 2 life.\nAt the beginning of each upkeep, if no spells were cast last turn, transform this creature."
+    power: "2"
+    toughness: "2"
+    keywords: [trample, transform]
+    ability triggered {
+      event: event_enters(source())
+      effect: sequence(create_token("2/2 green Wolf", 1, you()), gain_life(2, you()))
+    }
+    ability triggered {
+      event: event_upkeep(any())
+      condition: equals(count(spells("previous_turn")), 0)
+      effect: transform(source())
+    }
+  }
+  face "Ravager of the Fells" {
+    cost: ""
+    types: "Creature — Werewolf"
+    oracle: "Trample\nWhenever this creature transforms into Ravager of the Fells, it deals 2 damage to target opponent or planeswalker and 2 damage to up to one target creature that player or that planeswalker's controller controls.\nAt the beginning of each upkeep, if a player cast two or more spells last turn, transform this creature."
+    power: "4"
+    toughness: "4"
+    keywords: [trample, transform]
+    ability triggered {
+      event: event_upkeep(any())
+      condition: at_least(count(spells("previous_turn")), 2)
+      effect: transform(source())
+    }
+    ability triggered {
+      event: event_enters(source(), "transformed")
+      effect: sequence(deal_damage(target(opponent()), 2), deal_damage(target(permanents(type_is("creature"))), 2))
+    }
+  }
+}

@@ -1,0 +1,18 @@
+// CP-DSL stratum: activated_mana_loyalty
+card "Prodigal Sorcerer" {
+  id: "5e961d15-5972-4e4b-9385-1cd7cd7c6bbe"
+  layout: normal
+  status: verified_playable
+  face "Prodigal Sorcerer" {
+    cost: "{2}{U}"
+    types: "Creature — Human Wizard Sorcerer"
+    oracle: "{T}: This creature deals 1 damage to any target."
+    power: "1"
+    toughness: "1"
+    keywords: []
+    ability activated {
+      costs: [tap_self()]
+      effect: deal_damage(target(any()), 1)
+    }
+  }
+}

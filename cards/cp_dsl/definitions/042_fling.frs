@@ -1,0 +1,16 @@
+// CP-DSL stratum: alternate_additional_costs
+card "Fling" {
+  id: "24227761-b50e-4b9e-93a2-e82d053b3e3d"
+  layout: normal
+  status: verified_playable
+  face "Fling" {
+    cost: "{1}{R}"
+    types: "Instant"
+    oracle: "As an additional cost to cast this spell, sacrifice a creature.\nFling deals damage equal to the sacrificed creature's power to any target."
+    keywords: []
+    ability spell {
+      costs: [sacrifice(permanents(type_is("creature")))]
+      effect: deal_damage(target(any()), power(triggered()))
+    }
+  }
+}

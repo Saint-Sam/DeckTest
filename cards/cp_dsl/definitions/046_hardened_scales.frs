@@ -1,0 +1,16 @@
+// CP-DSL stratum: counters_tokens_copy
+card "Hardened Scales" {
+  id: "a1f3da21-af6d-450e-bf0b-985d158418e6"
+  layout: normal
+  status: verified_playable
+  face "Hardened Scales" {
+    cost: "{G}"
+    types: "Enchantment"
+    oracle: "If one or more +1/+1 counters would be put on a creature you control, that many plus one +1/+1 counters are put on it instead."
+    keywords: []
+    ability replacement {
+      event: event_counter_added(permanents(controlled_by(you())), "plus1_plus1")
+      effect: replace_event(triggered(), add_counter(triggered(), "plus1_plus1", 1))
+    }
+  }
+}

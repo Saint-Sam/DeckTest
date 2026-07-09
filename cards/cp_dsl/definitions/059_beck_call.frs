@@ -1,0 +1,24 @@
+// CP-DSL stratum: split_fuse
+card "Beck // Call" {
+  id: "5b8472c8-a7e7-46f2-aecf-e954082a5ef5"
+  layout: split
+  status: verified_playable
+  face "Beck" {
+    cost: "{G}{U}"
+    types: "Sorcery"
+    oracle: "Whenever a creature enters this turn, you may draw a card.\nFuse (You may cast one or both halves of this card from your hand.)"
+    keywords: [fuse]
+    ability spell {
+      effect: register_delayed_trigger(event_enters(permanents(and(type_is("creature"), controlled_by(you())))), draw(1, you()), "this_turn")
+    }
+  }
+  face "Call" {
+    cost: "{4}{W}{U}"
+    types: "Sorcery"
+    oracle: "Create four 1/1 white Bird creature tokens with flying.\nFuse (You may cast one or both halves of this card from your hand.)"
+    keywords: [fuse]
+    ability spell {
+      effect: create_token("1/1 white Bird with flying", 4, you())
+    }
+  }
+}

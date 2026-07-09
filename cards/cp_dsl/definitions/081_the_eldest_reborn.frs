@@ -1,0 +1,16 @@
+// CP-DSL stratum: saga_class_case_leveler
+card "The Eldest Reborn" {
+  id: "44ed4c0c-a012-4895-a547-b04150553bba"
+  layout: saga
+  status: verified_playable
+  face "The Eldest Reborn" {
+    cost: "{4}{B}"
+    types: "Enchantment — Saga"
+    oracle: "(As this Saga enters and after your draw step, add a lore counter. Sacrifice after III.)\nI — Each opponent sacrifices a creature or planeswalker of their choice.\nII — Each opponent discards a card.\nIII — Put target creature or planeswalker card from a graveyard onto the battlefield under your control."
+    keywords: []
+    ability triggered {
+      event: event_counter_added(source(), "lore")
+      effect: choose_one(sacrifice_effect(opponent(), permanents(or(type_is("creature"), type_is("planeswalker")))), discard_cards(1, opponent()), move_zone(target(cards(and(zone_is("graveyard"), or(type_is("creature"), type_is("planeswalker"))))), "battlefield"))
+    }
+  }
+}

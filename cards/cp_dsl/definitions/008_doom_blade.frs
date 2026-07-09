@@ -1,0 +1,15 @@
+// CP-DSL stratum: instant_sorcery
+card "Doom Blade" {
+  id: "59e7f2ae-4535-4191-98be-3e65b6b2befa"
+  layout: normal
+  status: verified_playable
+  face "Doom Blade" {
+    cost: "{1}{B}"
+    types: "Instant"
+    oracle: "Destroy target nonblack creature."
+    keywords: []
+    ability spell {
+      effect: destroy(target(and(type_is("creature"), not(color_is("black")))))
+    }
+  }
+}

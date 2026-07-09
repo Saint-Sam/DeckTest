@@ -1,0 +1,29 @@
+// CP-DSL stratum: saga_class_case_leveler
+card "Wizard Class" {
+  id: "36f68aa3-9955-46f1-bc87-497f16ef5222"
+  layout: class
+  status: verified_playable
+  face "Wizard Class" {
+    cost: "{U}"
+    types: "Enchantment — Class"
+    oracle: "(Gain the next level as a sorcery to add its ability.)\nYou have no maximum hand size.\n{2}{U}: Level 2\nWhen this Class becomes level 2, draw two cards.\n{4}{U}: Level 3\nWhenever you draw a card, put a +1/+1 counter on target creature you control."
+    keywords: []
+    ability static {
+      effect: continuous(you(), no_maximum_hand_size(you()))
+    }
+    ability activated {
+      costs: [mana_cost("{2}{U}")]
+      timing: timing_sorcery()
+      effect: sequence(level_up(source(), 2), draw(2, you()))
+    }
+    ability activated {
+      costs: [mana_cost("{4}{U}")]
+      timing: timing_sorcery()
+      effect: level_up(source(), 3)
+    }
+    ability triggered {
+      event: event_draw(you())
+      effect: add_counter(target(permanents(type_is("creature"))), "plus1_plus1", 1)
+    }
+  }
+}

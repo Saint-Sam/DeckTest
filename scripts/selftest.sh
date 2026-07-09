@@ -19,12 +19,16 @@ scripts=(
   scripts/run_oracle_subset.sh
   scripts/run_nightmare_suite.sh
   scripts/fuzz_nightly.sh
+  scripts/fuzz_local_parallel.sh
   scripts/card_regression.sh
+  scripts/local_workers.sh
+  scripts/local_verify.sh
   scripts/perf_smoke.sh
   scripts/gates/make_bundle.sh
   scripts/gates/gate_T0.sh
   scripts/gates/gate_T1.sh
   scripts/gates/gate_T2.sh
+  scripts/gates/gate_CP_DSL.sh
   scripts/gates/gate_T3.sh
   scripts/gates/gate_T4.sh
   scripts/gates/gate_T5.sh
@@ -43,6 +47,7 @@ tools=(
   tools/perf_diff.py
   tools/criterion_to_perf.py
   tools/metrics_write.py
+  tools/oracle_semantic_metrics.py
 )
 
 for script in "${scripts[@]}"; do

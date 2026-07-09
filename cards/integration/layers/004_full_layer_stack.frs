@@ -1,0 +1,41 @@
+card "Layer Scenario: Full Stack" {
+  id: "forge:scenario:layers:004"
+  layout: normal
+  status: verified_playable
+  face "Layer Scenario: Full Stack" {
+    cost: "{0}"
+    types: "Enchantment"
+    oracle: "Compiled integration scenario covering every implemented characteristic layer."
+    keywords: []
+    ability static {
+      effect: layer_effect(you(), remembered("fixture_object_1"), copy(remembered("fixture_object_1"), remembered("fixture_object_0")), 1)
+    }
+    ability static {
+      effect: layer_effect(you(), remembered("fixture_object_1"), change_control(remembered("fixture_object_1"), opponent()), 2)
+    }
+    ability static {
+      effect: layer_effect(you(), remembered("fixture_object_1"), set_text_marker(remembered("fixture_object_1"), 210), 3)
+    }
+    ability static {
+      effect: layer_effect(you(), remembered("fixture_object_1"), add_type(remembered("fixture_object_1"), "artifact"), 4)
+    }
+    ability static {
+      effect: layer_effect(you(), remembered("fixture_object_1"), set_color(remembered("fixture_object_1"), "white", "blue"), 5)
+    }
+    ability static {
+      effect: layer_effect(you(), remembered("fixture_object_1"), remove_keyword(remembered("fixture_object_1"), "trample"), 6)
+    }
+    ability static {
+      effect: layer_effect(you(), remembered("fixture_object_1"), grant_keyword(remembered("fixture_object_1"), "flying"), 7)
+    }
+    ability static {
+      effect: layer_effect(you(), remembered("fixture_object_1"), set_pt(remembered("fixture_object_1"), 3, 6), 8)
+    }
+    ability static {
+      effect: layer_effect(you(), remembered("fixture_object_1"), modify_pt(remembered("fixture_object_1"), 1, -2), 9)
+    }
+    ability static {
+      effect: layer_effect(you(), remembered("fixture_object_1"), switch_pt(remembered("fixture_object_1")), 10)
+    }
+  }
+}

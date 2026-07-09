@@ -46,7 +46,7 @@ if [[ -n "${FORGE_FUZZ_TOOLCHAIN:-}" ]]; then
 elif [[ "$sanitizer" == "none" ]]; then
   toolchain=""
 else
-  toolchain="nightly"
+  toolchain="nightly-2026-07-05"
 fi
 
 cargo_cmd=(cargo)

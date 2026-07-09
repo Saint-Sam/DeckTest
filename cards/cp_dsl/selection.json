@@ -1,0 +1,129 @@
+{
+  "schema_version": 1,
+  "cards": [
+    { "name": "Grizzly Bears", "stratum": "vanilla_keywords" },
+    { "name": "Serra Angel", "stratum": "vanilla_keywords" },
+    { "name": "Vampire Nighthawk", "stratum": "vanilla_keywords" },
+    { "name": "Questing Beast", "stratum": "vanilla_keywords" },
+
+    { "name": "Lightning Bolt", "stratum": "instant_sorcery" },
+    { "name": "Counterspell", "stratum": "instant_sorcery" },
+    { "name": "Divination", "stratum": "instant_sorcery" },
+    { "name": "Doom Blade", "stratum": "instant_sorcery" },
+
+    { "name": "Cryptic Command", "stratum": "modal_choices" },
+    { "name": "Kolaghan's Command", "stratum": "modal_choices" },
+    { "name": "Archmage's Charm", "stratum": "modal_choices" },
+    { "name": "Boros Charm", "stratum": "modal_choices" },
+
+    { "name": "Llanowar Elves", "stratum": "activated_mana_loyalty" },
+    { "name": "Prodigal Sorcerer", "stratum": "activated_mana_loyalty" },
+    { "name": "Walking Ballista", "stratum": "activated_mana_loyalty" },
+    { "name": "Jace, the Mind Sculptor", "stratum": "activated_mana_loyalty" },
+
+    { "name": "Soul Warden", "stratum": "triggered_delayed" },
+    { "name": "Young Pyromancer", "stratum": "triggered_delayed" },
+    { "name": "Sun Titan", "stratum": "triggered_delayed" },
+    { "name": "Restoration Angel", "stratum": "triggered_delayed" },
+
+    { "name": "Doubling Season", "stratum": "replacement_prevention" },
+    { "name": "Rest in Peace", "stratum": "replacement_prevention" },
+    { "name": "Leyline of the Void", "stratum": "replacement_prevention" },
+    { "name": "Fog", "stratum": "replacement_prevention" },
+
+    { "name": "Humility", "stratum": "continuous_layers" },
+    { "name": "Opalescence", "stratum": "continuous_layers" },
+    { "name": "Blood Moon", "stratum": "continuous_layers" },
+    { "name": "Mycosynth Lattice", "stratum": "continuous_layers" },
+
+    { "name": "Hex", "stratum": "targeting_restrictions" },
+    { "name": "Swords to Plowshares", "stratum": "targeting_restrictions" },
+    { "name": "Deflecting Swat", "stratum": "targeting_restrictions" },
+    { "name": "True-Name Nemesis", "stratum": "targeting_restrictions" },
+
+    { "name": "Reanimate", "stratum": "zones_lki" },
+    { "name": "Snapcaster Mage", "stratum": "zones_lki" },
+    { "name": "Eternal Witness", "stratum": "zones_lki" },
+    { "name": "Scavenging Ooze", "stratum": "zones_lki" },
+
+    { "name": "Tarmogoyf", "stratum": "calculated_values" },
+    { "name": "Lord of Extinction", "stratum": "calculated_values" },
+    { "name": "Chameleon Colossus", "stratum": "calculated_values" },
+    { "name": "Crackle with Power", "stratum": "calculated_values" },
+
+    { "name": "Force of Will", "stratum": "alternate_additional_costs" },
+    { "name": "Fling", "stratum": "alternate_additional_costs" },
+    { "name": "Burst Lightning", "stratum": "alternate_additional_costs" },
+    { "name": "Treasure Cruise", "stratum": "alternate_additional_costs" },
+
+    { "name": "Clone", "stratum": "counters_tokens_copy" },
+    { "name": "Hardened Scales", "stratum": "counters_tokens_copy" },
+    { "name": "Anointed Procession", "stratum": "counters_tokens_copy" },
+    { "name": "Sakashima the Impostor", "stratum": "counters_tokens_copy" },
+
+    { "name": "Lightning Greaves", "stratum": "attachments" },
+    { "name": "Pacifism", "stratum": "attachments" },
+    { "name": "Cranial Plating", "stratum": "attachments" },
+    { "name": "Colossus Hammer", "stratum": "attachments" },
+
+    { "name": "Command Tower", "stratum": "multiplayer_commander_voting" },
+    { "name": "Council's Judgment", "stratum": "multiplayer_commander_voting" },
+    { "name": "Expropriate", "stratum": "multiplayer_commander_voting" },
+    { "name": "Breena, the Demagogue", "stratum": "multiplayer_commander_voting" },
+
+    { "name": "Fire // Ice", "stratum": "split_fuse" },
+    { "name": "Wear // Tear", "stratum": "split_fuse" },
+    { "name": "Beck // Call", "stratum": "split_fuse" },
+    { "name": "Far // Away", "stratum": "split_fuse" },
+
+    { "name": "Delver of Secrets // Insectile Aberration", "stratum": "transform_day_night" },
+    { "name": "Huntmaster of the Fells // Ravager of the Fells", "stratum": "transform_day_night" },
+    { "name": "Brutal Cathar // Moonrage Brute", "stratum": "transform_day_night" },
+    { "name": "Bloodline Keeper // Lord of Lineage", "stratum": "transform_day_night" },
+
+    { "name": "Sea Gate Restoration // Sea Gate, Reborn", "stratum": "modal_dfc" },
+    { "name": "Emeria's Call // Emeria, Shattered Skyclave", "stratum": "modal_dfc" },
+    { "name": "Valki, God of Lies // Tibalt, Cosmic Impostor", "stratum": "modal_dfc" },
+    { "name": "Birgi, God of Storytelling // Harnfel, Horn of Bounty", "stratum": "modal_dfc" },
+
+    { "name": "Bonecrusher Giant // Stomp", "stratum": "adventure" },
+    { "name": "Brazen Borrower // Petty Theft", "stratum": "adventure" },
+    { "name": "Murderous Rider // Swift End", "stratum": "adventure" },
+    { "name": "Lovestruck Beast // Heart's Desire", "stratum": "adventure" },
+
+    { "name": "Bruna, the Fading Light", "stratum": "meld" },
+    { "name": "Gisela, the Broken Blade", "stratum": "meld" },
+    { "name": "Urza, Lord Protector", "stratum": "meld" },
+    { "name": "The Mightstone and Weakstone", "stratum": "meld" },
+
+    { "name": "Nezumi Shortfang // Stabwhisker the Odious", "stratum": "flip" },
+    { "name": "Budoka Gardener // Dokai, Weaver of Life", "stratum": "flip" },
+    { "name": "Erayo, Soratami Ascendant // Erayo's Essence", "stratum": "flip" },
+    { "name": "Jushi Apprentice // Tomoya the Revealer", "stratum": "flip" },
+
+    { "name": "The Eldest Reborn", "stratum": "saga_class_case_leveler" },
+    { "name": "Wizard Class", "stratum": "saga_class_case_leveler" },
+    { "name": "Case of the Locked Hothouse", "stratum": "saga_class_case_leveler" },
+    { "name": "Student of Warfare", "stratum": "saga_class_case_leveler" },
+
+    { "name": "Kitchen Finks", "stratum": "unusual_mana" },
+    { "name": "Gitaxian Probe", "stratum": "unusual_mana" },
+    { "name": "Spectral Procession", "stratum": "unusual_mana" },
+    { "name": "Beseech the Queen", "stratum": "unusual_mana" },
+
+    { "name": "Gravecrawler", "stratum": "cast_from_zone" },
+    { "name": "Bloodghast", "stratum": "cast_from_zone" },
+    { "name": "Misthollow Griffin", "stratum": "cast_from_zone" },
+    { "name": "Eternal Scourge", "stratum": "cast_from_zone" },
+
+    { "name": "White Plume Adventurer", "stratum": "dungeon_initiative_monarch_energy" },
+    { "name": "Palace Jailer", "stratum": "dungeon_initiative_monarch_energy" },
+    { "name": "Aetherworks Marvel", "stratum": "dungeon_initiative_monarch_energy" },
+    { "name": "Sefris of the Hidden Ways", "stratum": "dungeon_initiative_monarch_energy" },
+
+    { "name": "Relentless Assault", "stratum": "turn_combat" },
+    { "name": "Time Warp", "stratum": "turn_combat" },
+    { "name": "Silence", "stratum": "turn_combat" },
+    { "name": "Maze of Ith", "stratum": "turn_combat" }
+  ]
+}

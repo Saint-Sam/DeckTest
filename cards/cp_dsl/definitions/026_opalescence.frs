@@ -1,0 +1,15 @@
+// CP-DSL stratum: continuous_layers
+card "Opalescence" {
+  id: "59489b46-9d02-4f3c-bcd0-884e7605e9a5"
+  layout: normal
+  status: verified_playable
+  face "Opalescence" {
+    cost: "{2}{W}{W}"
+    types: "Enchantment"
+    oracle: "Each other non-Aura enchantment is a creature in addition to its other types and has base power and base toughness each equal to its mana value."
+    keywords: []
+    ability static {
+      effect: continuous(all(permanents(and(type_is("enchantment"), not(equals(any(), source()))))), sequence(add_type(any(), "creature"), set_pt(any(), mana_value(any()), mana_value(any()))))
+    }
+  }
+}

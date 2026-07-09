@@ -1,0 +1,23 @@
+// CP-DSL stratum: saga_class_case_leveler
+card "Case of the Locked Hothouse" {
+  id: "2380fd04-6d19-4f5a-8a9e-c17d9ae09fb6"
+  layout: case
+  status: verified_playable
+  face "Case of the Locked Hothouse" {
+    cost: "{3}{G}"
+    types: "Enchantment — Case"
+    oracle: "You may play an additional land on each of your turns.\nTo solve — You control seven or more lands. (If unsolved, solve at the beginning of your end step.)\nSolved — You may look at the top card of your library any time, and you may play lands and cast creature and enchantment spells from the top of your library."
+    keywords: [solved]
+    ability static {
+      effect: continuous(you(), additional_land_plays(you(), 1))
+    }
+    ability triggered {
+      event: event_upkeep(you())
+      condition: at_least(count(permanents(and(type_is("land"), controlled_by(you())))), 7)
+      effect: remember("case_solved", true)
+    }
+    ability static {
+      effect: continuous(you(), play(cards(and(zone_is("library_top"), or(type_is("creature"), type_is("enchantment")))), "while_solved"))
+    }
+  }
+}

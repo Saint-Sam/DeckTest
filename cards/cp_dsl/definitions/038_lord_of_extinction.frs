@@ -1,0 +1,17 @@
+// CP-DSL stratum: calculated_values
+card "Lord of Extinction" {
+  id: "ea5e3401-bd6c-47bb-a52a-8eec5f09455d"
+  layout: normal
+  status: verified_playable
+  face "Lord of Extinction" {
+    cost: "{3}{B}{G}"
+    types: "Creature — Elemental"
+    oracle: "Lord of Extinction's power and toughness are each equal to the number of cards in all graveyards."
+    power: "*"
+    toughness: "*"
+    keywords: []
+    ability static {
+      effect: continuous(source(), set_pt(source(), count(cards(zone_is("graveyard"))), count(cards(zone_is("graveyard")))))
+    }
+  }
+}

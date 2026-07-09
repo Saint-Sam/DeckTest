@@ -1,0 +1,15 @@
+// CP-DSL stratum: modal_choices
+card "Archmage's Charm" {
+  id: "85cbb035-25df-43bb-ae06-ab098f448b02"
+  layout: normal
+  status: verified_playable
+  face "Archmage's Charm" {
+    cost: "{U}{U}{U}"
+    types: "Instant"
+    oracle: "Choose one —\n• Counter target spell.\n• Target player draws two cards.\n• Gain control of target nonland permanent with mana value 1 or less."
+    keywords: []
+    ability spell {
+      effect: choose_one(counter_spell(target(spells())), draw(2, target(any())), change_control(target(permanents(and(not(type_is("land")), less_than(mana_value(any()), 2)))), you()))
+    }
+  }
+}

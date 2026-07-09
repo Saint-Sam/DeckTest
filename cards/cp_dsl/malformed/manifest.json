@@ -1,0 +1,391 @@
+{
+  "schema_version": 1,
+  "case_count": 64,
+  "minimum_required": 50,
+  "cases": [
+    {
+      "id": "unknown_card_keyword",
+      "file": "cards/cp_dsl/malformed/001_unknown_card_keyword.frs",
+      "expected_diagnostic": "",
+      "sha256": "e7bf6dcd84ef8f6af0f2f9d29afddbc0e8536d0645aa64b31e241e04ffac3fe3"
+    },
+    {
+      "id": "missing_card_name",
+      "file": "cards/cp_dsl/malformed/002_missing_card_name.frs",
+      "expected_diagnostic": "",
+      "sha256": "c808f95513cc3daaf73e5b0077816d095cd804afe9e67154e5a62dbedfb4f1ac"
+    },
+    {
+      "id": "unknown_card_field",
+      "file": "cards/cp_dsl/malformed/003_unknown_card_field.frs",
+      "expected_diagnostic": "",
+      "sha256": "ad6cb5cff9447eb24fc95605bfe140c4bac32fe5f22ced2087bb4d60456124dc"
+    },
+    {
+      "id": "empty_id",
+      "file": "cards/cp_dsl/malformed/004_empty_id.frs",
+      "expected_diagnostic": "invalid id",
+      "sha256": "d6632532d87d73867c5eaa063e9c1bb06b9b7dee6dfdaa25d01056354cda940c"
+    },
+    {
+      "id": "id_with_spaces",
+      "file": "cards/cp_dsl/malformed/005_id_with_spaces.frs",
+      "expected_diagnostic": "invalid id",
+      "sha256": "bf0de269b1912a5569f0d2afd57cdc6158e1a889c71aadcbbdc2bdc72cb0bdce"
+    },
+    {
+      "id": "missing_id",
+      "file": "cards/cp_dsl/malformed/006_missing_id.frs",
+      "expected_diagnostic": "missing `id:`",
+      "sha256": "ea39dbe462fa2a85eacc8a0b2685f84adf9498a670eecd3e2235b771f2628071"
+    },
+    {
+      "id": "duplicate_id",
+      "file": "cards/cp_dsl/malformed/007_duplicate_id.frs",
+      "expected_diagnostic": "duplicate `id:`",
+      "sha256": "2afdb04ad56253843cb8c3b4cd2d47c708fa8573bdc2264a1a9118fd8605dfe4"
+    },
+    {
+      "id": "unknown_layout",
+      "file": "cards/cp_dsl/malformed/008_unknown_layout.frs",
+      "expected_diagnostic": "unknown layout",
+      "sha256": "7b51f1bcefd8244cc49907e7921f4ba3c7cbef58899970224e870223a091a5ca"
+    },
+    {
+      "id": "missing_layout",
+      "file": "cards/cp_dsl/malformed/009_missing_layout.frs",
+      "expected_diagnostic": "missing `layout:`",
+      "sha256": "a8601bdae1e32e08702c08fd13b7f57ed1cb01b0691a0d6a77fab27cd3d0c4bc"
+    },
+    {
+      "id": "duplicate_layout",
+      "file": "cards/cp_dsl/malformed/010_duplicate_layout.frs",
+      "expected_diagnostic": "duplicate `layout:`",
+      "sha256": "52bf0cdd8541935469e7dadca301133ae65467375cab7d850f744e2343a1c23e"
+    },
+    {
+      "id": "invalid_status",
+      "file": "cards/cp_dsl/malformed/011_invalid_status.frs",
+      "expected_diagnostic": "cannot use status",
+      "sha256": "9e82a06bc7097b4454bac3b679e869bf22d56103431f696d688c92b72332a3ae"
+    },
+    {
+      "id": "missing_status",
+      "file": "cards/cp_dsl/malformed/012_missing_status.frs",
+      "expected_diagnostic": "missing `status:`",
+      "sha256": "7d3be7630f5ed5520fc2694bab5ac00348a6f3cabf4f477129a7e220ae787c9d"
+    },
+    {
+      "id": "no_face",
+      "file": "cards/cp_dsl/malformed/013_no_face.frs",
+      "expected_diagnostic": "card has no faces",
+      "sha256": "1239f2cd2683c27c84293021f462fa7028fa4aae1443afccbdc2b505d8f82780"
+    },
+    {
+      "id": "empty_card_name",
+      "file": "cards/cp_dsl/malformed/014_empty_card_name.frs",
+      "expected_diagnostic": "card name is empty",
+      "sha256": "c4911940cd9fb899d3b30e2cf69550646080fa83fb85e4c8fa39f9dbc9b6e4de"
+    },
+    {
+      "id": "empty_face_name",
+      "file": "cards/cp_dsl/malformed/015_empty_face_name.frs",
+      "expected_diagnostic": "face name is empty",
+      "sha256": "b3d4ad001ad2f0224fe3f50880f424e0fbec1b7bd3b57367e208b4112119c083"
+    },
+    {
+      "id": "missing_cost",
+      "file": "cards/cp_dsl/malformed/016_missing_cost.frs",
+      "expected_diagnostic": "missing `cost:`",
+      "sha256": "75f0d6774390c1e1599369fa139b6495e436f6816d5679e41b90f38aa9d42294"
+    },
+    {
+      "id": "duplicate_cost",
+      "file": "cards/cp_dsl/malformed/017_duplicate_cost.frs",
+      "expected_diagnostic": "duplicate `cost:`",
+      "sha256": "afbc8aba99329d6b555fd1a2dc243e245460c3255d18ac0cf6cea094d00586b8"
+    },
+    {
+      "id": "mana_without_open",
+      "file": "cards/cp_dsl/malformed/018_mana_without_open.frs",
+      "expected_diagnostic": "must start",
+      "sha256": "1e3fc1229362f54d56fadee2affecd9e3b73715f07667345e52745176f4b415e"
+    },
+    {
+      "id": "mana_without_close",
+      "file": "cards/cp_dsl/malformed/019_mana_without_close.frs",
+      "expected_diagnostic": "unknown mana symbol",
+      "sha256": "ad6952dd7f7782a5c14e362572ac50bd5ee64fe1618f5472f7ba1d4a5a823933"
+    },
+    {
+      "id": "unknown_mana",
+      "file": "cards/cp_dsl/malformed/020_unknown_mana.frs",
+      "expected_diagnostic": "unknown mana symbol",
+      "sha256": "c0c3d2c863e43cb9fb327aea51b7912676e45959e83dd67c64edbd3daa62c677"
+    },
+    {
+      "id": "generic_mana_overflow",
+      "file": "cards/cp_dsl/malformed/021_generic_mana_overflow.frs",
+      "expected_diagnostic": "unknown mana symbol",
+      "sha256": "06720e23dfa6bfa7132a130f0900fbc7c5e3f345ab89a7e2453d26a1fe1b8c63"
+    },
+    {
+      "id": "missing_types",
+      "file": "cards/cp_dsl/malformed/022_missing_types.frs",
+      "expected_diagnostic": "missing `types:`",
+      "sha256": "264ad5bea1377b0f6cbf0088aa0659bf95b186223317f80033d1faec17f9788e"
+    },
+    {
+      "id": "duplicate_types",
+      "file": "cards/cp_dsl/malformed/023_duplicate_types.frs",
+      "expected_diagnostic": "duplicate `types:`",
+      "sha256": "ac13467c4eea56de7e2b0a3e7844d484ff9a5062609b1d8a7ca264bb7c7057ca"
+    },
+    {
+      "id": "unknown_card_type",
+      "file": "cards/cp_dsl/malformed/024_unknown_card_type.frs",
+      "expected_diagnostic": "unknown card type",
+      "sha256": "eabfebdcdaa74e8d7aa3af63e43bf13e6311fc5bbba415f9ef7a2de530e41ab0"
+    },
+    {
+      "id": "no_card_type",
+      "file": "cards/cp_dsl/malformed/025_no_card_type.frs",
+      "expected_diagnostic": "no card type",
+      "sha256": "9c3491dff14ceb83ace790c92f6d80e30553080695e74ef1da014407796ed509"
+    },
+    {
+      "id": "missing_oracle",
+      "file": "cards/cp_dsl/malformed/026_missing_oracle.frs",
+      "expected_diagnostic": "missing `oracle:`",
+      "sha256": "5d6d8c5385cebcdd554a0567030a0b38549fb096053d9039aacfe723f9c6994c"
+    },
+    {
+      "id": "duplicate_oracle",
+      "file": "cards/cp_dsl/malformed/027_duplicate_oracle.frs",
+      "expected_diagnostic": "duplicate `oracle:`",
+      "sha256": "5fcae5dfcb2bf71bfc5b1110bacb8625f5925689b1dca86ed1635a31335cc8db"
+    },
+    {
+      "id": "creature_missing_power",
+      "file": "cards/cp_dsl/malformed/028_creature_missing_power.frs",
+      "expected_diagnostic": "requires both",
+      "sha256": "45218142ddc484eabe22451a39deb6b6d5ea936035c1603df651e945cc520a9d"
+    },
+    {
+      "id": "creature_missing_toughness",
+      "file": "cards/cp_dsl/malformed/029_creature_missing_toughness.frs",
+      "expected_diagnostic": "requires both",
+      "sha256": "1fdcfb04e42ef6fb49830f2fc533518e66391baecd09e873c1f820db4a49e322"
+    },
+    {
+      "id": "planeswalker_missing_loyalty",
+      "file": "cards/cp_dsl/malformed/030_planeswalker_missing_loyalty.frs",
+      "expected_diagnostic": "requires `loyalty:`",
+      "sha256": "0b5cac4004b949a906aec5bb636cfcfaeab048db9f4326dab90baefa73433613"
+    },
+    {
+      "id": "battle_missing_defense",
+      "file": "cards/cp_dsl/malformed/031_battle_missing_defense.frs",
+      "expected_diagnostic": "requires `defense:`",
+      "sha256": "a112fa81740a95bb24e8b4c66e7a292faea8ac3f8d691bb3ee262624410064c7"
+    },
+    {
+      "id": "unknown_keyword",
+      "file": "cards/cp_dsl/malformed/032_unknown_keyword.frs",
+      "expected_diagnostic": "unknown keyword",
+      "sha256": "0f64e1853caa6ca8b0dafd0ef21f82f5973d88bea3e0a7762cba12f5efe727c1"
+    },
+    {
+      "id": "integer_keyword",
+      "file": "cards/cp_dsl/malformed/033_integer_keyword.frs",
+      "expected_diagnostic": "keywords must",
+      "sha256": "9677944c5accc621e647f881b953aef07caeef31bc476b7ef337315a72ba1184"
+    },
+    {
+      "id": "uppercase_keyword_symbol",
+      "file": "cards/cp_dsl/malformed/034_uppercase_keyword_symbol.frs",
+      "expected_diagnostic": "invalid symbol",
+      "sha256": "dc276cc970ba55b653116c6f864163477e2e76944c921128c3c1fa271f972a7e"
+    },
+    {
+      "id": "unknown_ability_kind",
+      "file": "cards/cp_dsl/malformed/035_unknown_ability_kind.frs",
+      "expected_diagnostic": "unknown ability kind",
+      "sha256": "f53a4f772532143134ce78e7e1349ad135b2ba26208b2e9450c286d0bf48c89b"
+    },
+    {
+      "id": "activated_without_cost",
+      "file": "cards/cp_dsl/malformed/036_activated_without_cost.frs",
+      "expected_diagnostic": "requires at least one cost",
+      "sha256": "2c436ceed691196baae32c46fc5bd750cbf2a4c35266f3fa40b16c382bedd0af"
+    },
+    {
+      "id": "triggered_without_event",
+      "file": "cards/cp_dsl/malformed/037_triggered_without_event.frs",
+      "expected_diagnostic": "requires `event:`",
+      "sha256": "5f37fbbac951d5cc14dd3d3ba5188c88c758d87224265dbc427b277601bfe062"
+    },
+    {
+      "id": "replacement_without_event",
+      "file": "cards/cp_dsl/malformed/038_replacement_without_event.frs",
+      "expected_diagnostic": "requires `event:`",
+      "sha256": "90a3fd8e54d0a353557731d4784881db14831f9222dfc60b5f999d63b08f37da"
+    },
+    {
+      "id": "spell_marked_mana_ability",
+      "file": "cards/cp_dsl/malformed/039_spell_marked_mana_ability.frs",
+      "expected_diagnostic": "only an activated",
+      "sha256": "cca998f891a7bcdb936911f97ffd544351e7fee2cd1b5d7e7b8b5a097ad197cf"
+    },
+    {
+      "id": "missing_effect",
+      "file": "cards/cp_dsl/malformed/040_missing_effect.frs",
+      "expected_diagnostic": "missing `effect:`",
+      "sha256": "98d85846d3f160223a2ee411b3f7e63dab86864a950cd90e53f2d9eeade37618"
+    },
+    {
+      "id": "duplicate_effect",
+      "file": "cards/cp_dsl/malformed/041_duplicate_effect.frs",
+      "expected_diagnostic": "duplicate `effect:`",
+      "sha256": "f5c350674e2cb68463c3dfdf9846407f53949aebc15465c0ffb734c5949cc12d"
+    },
+    {
+      "id": "unknown_operation",
+      "file": "cards/cp_dsl/malformed/042_unknown_operation.frs",
+      "expected_diagnostic": "unknown operation",
+      "sha256": "5fe56a8d11704dba1823d43276e4005cd788f980cb8dacf7bdeaa512625ac47c"
+    },
+    {
+      "id": "effect_wrong_category",
+      "file": "cards/cp_dsl/malformed/043_effect_wrong_category.frs",
+      "expected_diagnostic": "expected Effect",
+      "sha256": "b18d4c98dd9cccb5a85a1914c038ebfd0289e78bb32b2ff56872229ace04f046"
+    },
+    {
+      "id": "cost_wrong_category",
+      "file": "cards/cp_dsl/malformed/044_cost_wrong_category.frs",
+      "expected_diagnostic": "expected Cost",
+      "sha256": "ab3f873c8dc68be87122da61aa69260dc687ced244153447c970c933ccbedae8"
+    },
+    {
+      "id": "event_wrong_category",
+      "file": "cards/cp_dsl/malformed/045_event_wrong_category.frs",
+      "expected_diagnostic": "expected Event",
+      "sha256": "b35aea60ec463e73d65b522fdc3a698863df6bea8a44ebcb2e1e46284c4a44a0"
+    },
+    {
+      "id": "condition_wrong_category",
+      "file": "cards/cp_dsl/malformed/046_condition_wrong_category.frs",
+      "expected_diagnostic": "expected Predicate",
+      "sha256": "542ffb5ddafc9f7b064639104d8562521508550ad40ef9d1147acf9e15ddab67"
+    },
+    {
+      "id": "timing_wrong_category",
+      "file": "cards/cp_dsl/malformed/047_timing_wrong_category.frs",
+      "expected_diagnostic": "expected Timing",
+      "sha256": "4b6bdda963e9b2e355bca84bdd9b8eb07e1fa08b8c34335493f81c972dc44d34"
+    },
+    {
+      "id": "operation_too_few_args",
+      "file": "cards/cp_dsl/malformed/048_operation_too_few_args.frs",
+      "expected_diagnostic": "received 0 argument",
+      "sha256": "b3b9e56d7c6aa3d26a654aa699eccc0285e60d587c7f9e525e8cb00e29e70988"
+    },
+    {
+      "id": "operation_too_many_args",
+      "file": "cards/cp_dsl/malformed/049_operation_too_many_args.frs",
+      "expected_diagnostic": "received 2 argument",
+      "sha256": "0d657461957a9ab1052c6b487270a35309e2c5d0add5970eb269978f3332ca8d"
+    },
+    {
+      "id": "invalid_uppercase_symbol",
+      "file": "cards/cp_dsl/malformed/050_invalid_uppercase_symbol.frs",
+      "expected_diagnostic": "invalid symbol",
+      "sha256": "f002650410735486a1f5263f457cb8810f9da435c1da5e3da72d41c3b4040e9f"
+    },
+    {
+      "id": "split_with_one_face",
+      "file": "cards/cp_dsl/malformed/051_split_with_one_face.frs",
+      "expected_diagnostic": "requires at least two faces",
+      "sha256": "e22ac95b4988e9bed601bd9576c2232ae50b90f928f22831876951716d066f07"
+    },
+    {
+      "id": "transform_with_one_face",
+      "file": "cards/cp_dsl/malformed/052_transform_with_one_face.frs",
+      "expected_diagnostic": "requires at least two faces",
+      "sha256": "dc0732e6af14f2e2e0f5a8fbf346b6be5ab6bc555de9ac316a3b0dc94523ac89"
+    },
+    {
+      "id": "unterminated_string",
+      "file": "cards/cp_dsl/malformed/053_unterminated_string.frs",
+      "expected_diagnostic": "",
+      "sha256": "61a33a9c7b55f79683c9c731e05161d5a65d6b0e40432e9d0b12ae64b939642c"
+    },
+    {
+      "id": "invalid_escape",
+      "file": "cards/cp_dsl/malformed/054_invalid_escape.frs",
+      "expected_diagnostic": "",
+      "sha256": "c5ada7366856d4f61d3310bbb413453de16e3c6d4739b440500715b141a23ea2"
+    },
+    {
+      "id": "integer_expression_overflow",
+      "file": "cards/cp_dsl/malformed/055_integer_expression_overflow.frs",
+      "expected_diagnostic": "outside i64 range",
+      "sha256": "eebb4d489f15e63730bb0c92c35a7bedc66687a73fa8d5e412b312bf230c1655"
+    },
+    {
+      "id": "duplicate_mana_ability",
+      "file": "cards/cp_dsl/malformed/056_duplicate_mana_ability.frs",
+      "expected_diagnostic": "duplicate `mana_ability:`",
+      "sha256": "9a3bc5be7a191152c89e3564231585c381e22f8aec97c9ff5ed5a76bd6f488be"
+    },
+    {
+      "id": "number_argument_gets_selector",
+      "file": "cards/cp_dsl/malformed/057_number_argument_gets_selector.frs",
+      "expected_diagnostic": "argument 1 requires integer or value",
+      "sha256": "71c8a83f6f4f155974c53caea29a398af6b9452360a35165330bcea89f4b6195"
+    },
+    {
+      "id": "selector_argument_gets_cost",
+      "file": "cards/cp_dsl/malformed/058_selector_argument_gets_cost.frs",
+      "expected_diagnostic": "argument 2 requires selector",
+      "sha256": "a2089f03a53688458700f79f9a6712c484acfe38410c92006d749a101aae1431"
+    },
+    {
+      "id": "variadic_effect_gets_selector",
+      "file": "cards/cp_dsl/malformed/059_variadic_effect_gets_selector.frs",
+      "expected_diagnostic": "argument 2 requires effect",
+      "sha256": "7af6d81714ed7e0326f42f04563f18488c350798a3015da6c2ad7282f4a828a5"
+    },
+    {
+      "id": "target_gets_integer",
+      "file": "cards/cp_dsl/malformed/060_target_gets_integer.frs",
+      "expected_diagnostic": "argument 1 requires selector or predicate",
+      "sha256": "1cb59731eaa6a5002482491f15750d7401751900a94576e36f79dbb50eb0fc19"
+    },
+    {
+      "id": "nested_bare_symbol",
+      "file": "cards/cp_dsl/malformed/061_nested_bare_symbol.frs",
+      "expected_diagnostic": "received bare symbol",
+      "sha256": "8d5e93fa24cb73adb8f2fa0ad2577c534fc6c44be336a5f36fa0cecce34fe7e2"
+    },
+    {
+      "id": "alternate_cost_gets_effect",
+      "file": "cards/cp_dsl/malformed/062_alternate_cost_gets_effect.frs",
+      "expected_diagnostic": "argument 2 requires cost",
+      "sha256": "a87c3f2d79294a822ff50c9b11f92abd728549a6d0e90316697249d708c01f71"
+    },
+    {
+      "id": "continuous_gets_prose",
+      "file": "cards/cp_dsl/malformed/063_continuous_gets_prose.frs",
+      "expected_diagnostic": "argument 2 requires effect",
+      "sha256": "84ef8a416abd50815aff23e67bb4167475f01f0f0779b2604dfc142bd3352e94"
+    },
+    {
+      "id": "predicate_gets_selector",
+      "file": "cards/cp_dsl/malformed/064_predicate_gets_selector.frs",
+      "expected_diagnostic": "argument 2 requires predicate",
+      "sha256": "89d9a01dc60ba15a966ec1c769e5b68f81678240e2e533f768e7e617b5c351de"
+    }
+  ]
+}

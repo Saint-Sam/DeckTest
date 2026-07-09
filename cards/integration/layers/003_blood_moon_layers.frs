@@ -1,0 +1,20 @@
+card "Layer Scenario: Blood Moon" {
+  id: "forge:scenario:layers:003"
+  layout: normal
+  status: verified_playable
+  face "Layer Scenario: Blood Moon" {
+    cost: "{0}"
+    types: "Enchantment"
+    oracle: "Compiled integration scenario for type replacement ordering."
+    keywords: []
+    ability static {
+      effect: layer_effect(you(), remembered("fixture_object_0"), set_type(remembered("fixture_object_0"), "artifact", "land"), 1)
+    }
+    ability static {
+      effect: layer_effect(opponent(), remembered("fixture_object_1"), set_type(remembered("fixture_object_1"), "creature", "land"), 1)
+    }
+    ability static {
+      effect: layer_effect(you(), all(permanents()), set_type(all(permanents()), "land"), 2)
+    }
+  }
+}

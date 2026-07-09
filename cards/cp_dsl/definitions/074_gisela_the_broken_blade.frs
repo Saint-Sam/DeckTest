@@ -1,0 +1,14 @@
+// CP-DSL stratum: meld
+card "Gisela, the Broken Blade" {
+  id: "f3e23d5e-bd88-4e7c-a3fb-db2a8cb05b22"
+  layout: meld
+  status: verified_playable
+  face "Gisela, the Broken Blade" {
+    cost: "{2}{W}{W}"
+    types: "Legendary Creature — Angel Horror"
+    oracle: "Flying, first strike, lifelink\nAt the beginning of your end step, if you both own and control Gisela and a creature named Bruna, the Fading Light, exile them, then meld them into Brisela, Voice of Nightmares."
+    power: "4"
+    toughness: "3"
+    keywords: [first_strike, flying, lifelink, meld]
+  }
+}

@@ -1,0 +1,18 @@
+// CP-DSL stratum: triggered_delayed
+card "Restoration Angel" {
+  id: "dfbd3afc-9905-4cff-a4f4-df08a4d0a7fa"
+  layout: normal
+  status: verified_playable
+  face "Restoration Angel" {
+    cost: "{3}{W}"
+    types: "Creature — Angel"
+    oracle: "Flash\nFlying\nWhen this creature enters, you may exile target non-Angel creature you control, then return that card to the battlefield under your control."
+    power: "3"
+    toughness: "4"
+    keywords: [flash, flying]
+    ability triggered {
+      event: event_enters(source())
+      effect: sequence(exile(target(permanents(and(type_is("creature"), controlled_by(you()), not(subtype_is("Angel")))))), move_zone(triggered(), "battlefield"))
+    }
+  }
+}

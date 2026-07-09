@@ -1,0 +1,14 @@
+card "Layer Scenario: Control Change" {
+  id: "forge:scenario:layers:009"
+  layout: normal
+  status: verified_playable
+  face "Layer Scenario: Control Change" {
+    cost: "{0}"
+    types: "Enchantment"
+    oracle: "Compiled integration scenario for persistent control changes."
+    keywords: []
+    ability static {
+      effect: layer_effect(you(), remembered("fixture_object_0"), change_control(remembered("fixture_object_0"), you()), 1)
+    }
+  }
+}

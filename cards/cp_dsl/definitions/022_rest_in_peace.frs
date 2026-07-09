@@ -1,0 +1,20 @@
+// CP-DSL stratum: replacement_prevention
+card "Rest in Peace" {
+  id: "087f9ad7-e74f-40e2-8102-1ed2925d0418"
+  layout: normal
+  status: verified_playable
+  face "Rest in Peace" {
+    cost: "{1}{W}"
+    types: "Enchantment"
+    oracle: "When this enchantment enters, exile all graveyards.\nIf a card or token would be put into a graveyard from anywhere, exile it instead."
+    keywords: []
+    ability triggered {
+      event: event_enters(source())
+      effect: exile(all(cards(zone_is("graveyard"))))
+    }
+    ability replacement {
+      event: event_zone_change(cards(), "graveyard")
+      effect: replace_event(triggered(), move_zone(triggered(), "exile"))
+    }
+  }
+}

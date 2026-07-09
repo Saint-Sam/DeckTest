@@ -1,0 +1,20 @@
+// CP-DSL stratum: attachments
+card "Lightning Greaves" {
+  id: "ca204b66-8d0c-431a-8d34-282f7c2d17da"
+  layout: normal
+  status: verified_playable
+  face "Lightning Greaves" {
+    cost: "{2}"
+    types: "Artifact — Equipment"
+    oracle: "Equipped creature has haste and shroud. (It can't be the target of spells or abilities.)\nEquip {0}"
+    keywords: [equip]
+    ability activated {
+      costs: [mana_cost("{0}")]
+      timing: timing_sorcery()
+      effect: attach(source(), target(permanents(type_is("creature"))))
+    }
+    ability static {
+      effect: continuous(equipped_object(source()), sequence(grant_keyword(any(), "haste"), grant_keyword(any(), "shroud")))
+    }
+  }
+}

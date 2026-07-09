@@ -1,8 +1,16 @@
-# FORGE-RS REBUILD — MASTER EXECUTION PLAN v1.2
+# FORGE-RS REBUILD — MASTER EXECUTION PLAN v1.4
 
 **Status:** Ready for agent orchestration — includes Gate Review & Checkpoint protocol (§15), plan governance (§16), and the Owner Interface (§17: expectation briefs, owner input map, trouble bulletins)
 **This document is the sole authority.** If any agent instruction, prior knowledge, or tool default conflicts with this plan, the plan wins; if the plan is ambiguous, use the Question Queue (§15.5) — do not guess.
 **Prepared:** 2026-07-05
+**v1.3 amendment (2026-07-09):** Owner-approved and Gate-Reviewer-recommended
+PC-0001 local-only verification, PC-0002 card identity/coverage contract, and
+PC-0003 semantic evidence hardening. See `docs/plan-changes/`.
+**v1.4 amendment (2026-07-09):** Owner-approved CP-DSL review remediation:
+closed recursive operation-argument signatures, exact mandatory mechanics
+strata with catalog-only coverage measured separately, compiled scenario
+lowering instead of fixture-provided effects, executed local platform checks,
+and exact-commit detached verification before O4.
 **Prerequisite artifact:** `forge-rs` proof-of-concept (validated: 70 ns state clone, 5,080 playouts/sec, monotonic MCTS difficulty ladder)
 **License constraint:** GPL-3.0-only for any component that derives from Card-Forge/forge content (card scripts, AI profiles, rules-test scenarios)[^1]
 
@@ -25,7 +33,7 @@ This plan is written to be executed by non-reasoning-heavy agents under an orche
 
 ### 0.2 Non-negotiable rules for all agents
 
-1. Never merge with failing CI. Never disable a test to make CI pass; failing tests are escalated, not deleted.
+1. Never integrate a commit with failing exact-commit local verification. GitHub Actions are disabled by Owner decision. Never disable a test to make verification pass; failing tests are escalated, not deleted.
 2. Every task branch is `task/T<id>-<slug>`. One task per branch. Squash-merge only.
 3. Every commit message begins with the task ID: `T3.2: implement DealDamage ability compiler`.
 4. Do not add external crates without an ADR (Architecture Decision Record, §0.6). The dependency budget is deliberately tight (§5.3).
@@ -45,14 +53,14 @@ The Orchestrator spawns these roles. One agent may hold multiple roles on small 
 | **Orchestrator** | Owns the task queue, enforces tier ordering, assigns tasks, arbitrates blockers, owns `PLAN_STATE.json` | Always running |
 | **Spec Agent** | Expands a task ID into a written spec (`specs/T<id>.md`) with API signatures, edge cases, test list — before code is written | Any task tagged `SPEC-FIRST` |
 | **Implementer** | Writes code + unit tests on the task branch | Every code task |
-| **Review Agent** | Runs checklist §0.5 against the diff; may request changes at most twice before escalating | Every PR |
-| **Test Agent** | Executes VL commands, triages failures, writes minimal repro cases into `tests/regressions/` | Every PR + nightly |
+| **Review Agent** | Runs checklist §0.5 against the diff; may request changes at most twice before escalating | Every task integration |
+| **Test Agent** | Executes VL commands, triages failures, writes minimal repro cases into `tests/regressions/` | Every task + local campaign |
 | **Fuzz Agent** | Runs invariant fuzzing (§13.4), minimizes crashes, files regression tests | Nightly from T1 onward |
 | **Rules-Oracle Agent** | Authors oracle scenarios from the Comprehensive Rules; adjudicates rules disputes; maintains `tests/oracle/` | T1–T3, then on demand |
 | **Card-Port Agent(s)** | Runs the batch card-translation pipeline (§8); many instances in parallel | T3 onward |
 | **AI Agent** | Implements/search-tunes AI; runs arena evaluations | T4 |
 | **UI Agent** | Implements UI per screen specs (§10); produces screenshot diffs | T5 |
-| **Perf Agent** | Owns benchmarks, baselines, regression gates | T1 onward, nightly |
+| **Perf Agent** | Owns benchmarks, baselines, regression gates | T1 onward, local campaigns |
 | **Release Agent** | Packaging, signing, store artifacts (§12) | T7 |
 | **Docs Agent** | Keeps `docs/` and ADRs current; generates API docs | Continuous |
 
@@ -145,7 +153,9 @@ Rebuild Forge — an unofficial rules engine and AI opponent for Magic: The Gath
 | Metric | Target | Measured by |
 | --- | --- | --- |
 | Rules correctness | 100% pass on oracle corpus (≥3,000 scenarios by GA) | `scripts/run_oracle.sh` |
-| Card coverage | ≥95% of legacy Forge's scripted cards playable | `metrics/card_coverage.json` |
+| Catalog coverage | 100% of English printing records in the pinned metadata snapshot imported and indexed | `metrics/card_catalog_coverage.json` |
+| Identity classification | 100% of source Oracle identities classified as verified playable, unverified playable, quarantined, out-of-v1, or catalog-only | `metrics/card_identity_coverage.json` |
+| Playable card coverage | ≥95% of legacy Forge's scripted cards verified playable; quarantined/catalog-only records never count | `metrics/card_coverage.json` |
 | AI strength ladder | Each tier ≥65% win rate vs tier below over ≥400 mirror games | `cargo run -p forge-arena` |
 | AI latency | Master tier ≤2.0 s/decision desktop, Apprentice ≤150 ms mobile | `metrics/ai_latency.json` |
 | State clone | ≤200 ns at 200-card game scale | `cargo bench -p forge-core` |
@@ -165,6 +175,20 @@ Rebuild Forge — an unofficial rules engine and AI opponent for Magic: The Gath
 1. The legacy repo and its card scripts are GPL-3.0. Any file mechanically translated from `cardsfolder/`, `res/ai/`, or legacy tests makes the containing distribution GPL-3.0. Decision: **the whole project is GPL-3.0-only.** ADR-0001.
 2. Magic: The Gathering is Wizards of the Coast IP. Ship no card art, no set symbols, no mana-symbol fonts from official sources. Use Scryfall's API for user-side image fetching with mandatory local caching and rate-limit compliance (§10.8)[^3], and text rendering fallbacks so the game is fully playable with zero downloads.
 3. Card names, rules text, and oracle text are used as game data under the same posture the legacy project has operated with; include the standard Fan Content / unaffiliated disclaimer in About screens and README.
+4. Catalog ingestion is metadata/text only. It may not add official art, set symbols, or mana-symbol fonts. Every generated catalog metric records source path, source timestamp, SHA-256, and generator version.
+
+### 1.5 Card identity and coverage terms
+
+- A **printing** is one source catalog record keyed by its stable printing id.
+- An **Oracle identity** uses Scryfall `oracle_id` when present. Records without
+  one use a deterministic namespaced identity derived from layout and source id.
+- Ordered faces for split, adventure, transform, modal DFC, flip, meld, and
+  reversible layouts remain under the source-defined game identity.
+- Tokens, emblems, art-series, and non-game records remain visible catalog
+  records with explicit classification; they cannot count as playable.
+- One mechanics `CardDefinition` is compiled per Oracle identity and referenced
+  by all printings of that identity. Catalog, identity, playability, and legacy
+  parity are separate generated metrics and must never be conflated.
 
 ---
 
@@ -339,27 +363,31 @@ depends_on: [T2.1, T2.2]
 parallel_ok: false
 ```
 
-### 4.3 Recurring automated checks (cron owned by Orchestrator)
+### 4.3 Local verification campaigns (owned by Orchestrator)
 
 | Cadence | Job | Command | Failure action |
 | --- | --- | --- | --- |
-| Every PR | Verification Loop | `scripts/vl.sh` | Block merge |
-| Every PR | Determinism replay | `scripts/review/determinism.sh` | Block merge |
-| Nightly | Full oracle corpus | `scripts/run_oracle.sh --all` | Auto-file P1 task |
-| Nightly | Fuzz 60 min/target | `scripts/fuzz_nightly.sh` | Minimize + regression test + P0 |
-| Nightly | Perf suite vs baseline | `cargo bench --workspace && tools/perf_diff.py` | P1 if >5% regression |
-| Nightly | Card corpus recompile + smoke | `scripts/card_regression.sh` | P1, quarantine list |
-| Weekly | Arena ladder (2,000 games) | `cargo run -p forge-arena -- --ladder --games 2000` | AI Agent reviews Elo drift |
-| Weekly | Dependency audit | `cargo audit && cargo deny check` | P1 |
+| Every task integration | Verification Loop | `scripts/local_verify.sh task` | Block integration |
+| Every task integration | Determinism replay | `scripts/review/determinism.sh` | Block integration |
+| Before each tier gate | Full oracle corpus | `scripts/run_oracle.sh --all` | File P1 task |
+| Explicit long campaign | Resource-aware fuzz | `scripts/fuzz_local_parallel.sh` | Minimize + regression test + P0 |
+| Before each tier gate | Perf suite vs baseline | `cargo bench --workspace && tools/perf_diff.py` | P1 if >5% regression |
+| T3+ task/gate campaign | Card corpus compile + smoke/semantic | `scripts/card_regression.sh` | P1, quarantine list |
+| T4+ calibration campaign | Arena ladder (2,000 games) | `cargo run -p forge-arena -- --ladder --games 2000` | AI Agent reviews Elo drift |
+| Before each tier gate | Dependency audit | `cargo audit && cargo deny check` | P1 |
 | Every 14 days mid-tier | Interim drift review (§15.6) | Gate Reviewer, 1-hour scope | Remediation tickets |
 | Per tier + §15.4 list | Gate/checkpoint review | §15 protocol | Tier reopens on failure |
 
+No hosted or background scheduler is assumed. Installing a launch agent,
+service, cron entry, VM, simulator, SDK, or other background runner requires
+Owner approval. Manual/local campaigns remain mandatory at the listed points.
+
 ---
 
-## 🧱 Section 5 — TIER 0: Foundations (repo, toolchain, CI, gates)
+## 🧱 Section 5 — TIER 0: Foundations (repo, toolchain, local verification, gates)
 
 **Objective:** a repository where the Verification Loop, gates, and metrics plumbing all run before any engine code exists.
-**Exit Gate `gate_T0.sh`:** empty-workspace `vl.sh` passes; CI green on all 6 platform targets' *build* jobs; `mine_legacy.py` report committed.
+**Exit Gate `gate_T0.sh`:** empty-workspace `vl.sh` passes; the exact-commit local platform build matrix is green; `mine_legacy.py` report committed.
 
 ### T0.1 — Toolchain bootstrap (Implementer)
 
@@ -376,9 +404,9 @@ DoD: `scripts/check_toolchain.sh` verifies every binary above and pins versions 
 
 Create the §3.2 layout with empty lib crates (each containing one doc-comment and one trivial test so the workspace builds and tests green). DoD: `scripts/vl.sh` exits 0.
 
-### T0.3 — CI pipeline (GitHub Actions or equivalent)
+### T0.3 — Local verification pipeline
 
-`\.github/workflows/ci.yml` jobs: `fmt`, `clippy`, `test-linux`, `test-macos`, `test-windows`, `build-wasm`, `build-android` (cargo-ndk, no packaging yet), `coverage` (cargo-llvm-cov, upload JSON to `metrics/`), `deny-audit`. Cache with `Swatinem/rust-cache`. DoD: all jobs green on a scratch PR; branch protection requires them.
+`scripts/local_verify.sh` runs `fmt`, `clippy`, native tests, WASM and Android builds, coverage, deny/audit, determinism, and the currently available local platform matrix. Linux and Windows execute in local VMs/containers when those release lanes open; Apple/mobile targets use local simulators/devices. GitHub workflow definitions remain archived outside `.github/workflows/`. DoD: an exact-commit detached-worktree packet records commit SHA, isolated target directories, full logs, toolchain versions, platform results, and artifact hashes.
 
 ### T0.4 — Gate/review/metrics scripting
 
@@ -461,12 +489,17 @@ Ordering (each task = the ticket format of §4.2; SPEC-FIRST unless noted):
 
 ---
 
-## 🃏 Section 8 — TIER 3: Card DSL + mass-porting pipeline (the 30k-card factory)
+## 🃏 Section 8 — TIER 3: Card catalog + DSL + mass-porting pipeline
 
-**Objective:** a typed card DSL, a compiler, and a translation factory that converts legacy `cardsfolder` scripts at scale with automated semantic verification. This tier runs **partially in parallel with late T2** (`PARALLEL-OK` where marked) and continues as a background production line for the rest of the project.
-**Exit Gate:** ≥60% of legacy scripts translated & passing smoke+semantic tests; translation line fully automated end-to-end; coverage dashboard live.
+**Objective:** a complete printing/identity catalog, a typed card DSL, a compiler, and a translation factory that converts legacy `cardsfolder` scripts at scale with automated semantic verification. This tier runs **partially in parallel with late T2** (`PARALLEL-OK` where marked) and continues as a background production line for the rest of the project.
+**Exit Gate:** 100% of English printing records imported, 100% of Oracle identities classified, ≥60% of legacy scripts translated and passing smoke+semantic tests, translation line fully automated end-to-end, card-driven nightmare integration green, and the coverage dashboard live.
 
-### 8.1 DSL design (T3.1, SPEC-FIRST, joint spec with T2.6)
+### 8.1 Catalog and DSL design (T3.1, SPEC-FIRST, joint spec with T2.6)
+
+The catalog stores versioned `PrintingRecord`s and ordered faces separately from
+mechanics. One validated `CardDefinition` per §1.5 Oracle identity lowers into
+the same predicate/effect vocabulary used by the kernel; printings reference
+that identity. The source metadata provenance is mandatory and generated.
 
 New DSL `.frs` — human-writable, machine-emittable, one card per file, deliberately close in vocabulary to the legacy format to maximize translator fidelity. Example target:
 
@@ -481,7 +514,24 @@ card "Abrade" {
 }
 ```
 
-Compiler `forge-cardc`: parse → typed IR (`forge-carddef`) → validation (targets exist, costs well-formed, keywords known) → `carddb.bin` (bincode) + `carddb.index.json`. DoD: compiler round-trips (parse→emit→parse) losslessly; error messages carry file/line/column.
+Compiler `forge-cardc`: parse source AST → resolve/type-check → validated typed IR (`forge-carddef`) → kernel-lowered IR → versioned `carddb.bin` (bincode) + `carddb.index.json`. Unknown types, keywords, selectors, operations, references, and costs are compile errors, never open-ended runtime variants. DoD: compiler round-trips (parse→emit→parse) losslessly; error messages carry file/line/column; three clean builds have identical hashes.
+
+**CP-DSL threshold:** 100 reviewer-hand-translated cards across the exact 25
+mandatory mechanics strata declared in `docs/specs/T3.1.md`, with exactly four
+cards per stratum. Catalog-only records are classified and checked separately;
+they are not mechanics definitions. Every operation declares recursively
+enforced argument types; prose, bare symbols, and category-correct but
+argument-wrong trees fail compilation. All 100 cards round-trip; at least 50
+malformed sources produce file/line/column diagnostics; curated
+parser/compiler mutants achieve ≥90% kill rate with no surviving P0/P1
+validation mutant; corpus expressiveness and deterministic database hashes are
+included in the checkpoint packet. Ten layer scenarios must compile into a
+separate versioned database and lower into kernel effects without an
+independently executable fixture effect list. All five local fuzz targets must
+pass at least 2,400 aggregate address-sanitizer worker-seconds, with duration
+extended automatically on lower-core machines to preserve the aggregate floor.
+The local gate executes all semantic oracle packs, four isolated cross-target
+checks, and three clean deterministic compiler builds.
 
 ### 8.2 The translation factory (T3.2–T3.6)
 
@@ -516,7 +566,7 @@ flowchart LR
 | T3.4 | `.frs` emitter + batch driver: `cargo run -p forge-porttools -- translate --all --jobs 16` |
 | T3.5 | Auto smoke harness: for every translated card, synthesize a sandbox state where it is castable/playable, execute, assert invariants + expected zone destinations. Zero human input per card. |
 | T3.6 | Semantic test packs: for the top 2,000 play-rate cards (list mined from legacy precons + draft data), Rules-Oracle Agent writes behavior scenarios (e.g., "Lightning Bolt to face = 3 less life"). |
-| T3.7 | Coverage dashboard: `tools/coverage_report.py` → `docs/CARD_COVERAGE.md` (auto-committed nightly) with per-set %, quarantine reason histogram, API gap list feeding new T2.x keyword tasks. |
+| T3.7 | Coverage dashboard: `tools/coverage_report.py` → `docs/CARD_COVERAGE.md` with separate catalog/identity/playable/legacy metrics, per-set %, quarantine reason histogram, provenance, and API gaps feeding new T2.x keyword tasks. |
 | T3.8 | Hand-port lane: quarantined cards whose reason code is `NEEDS_NEW_PRIMITIVE` generate spec tickets automatically (`tools/quarantine_to_tickets.py`) routed to T2 backlog. |
 
 **Card-Port Agent operating procedure (spawn N in parallel; each owns one quarantine reason-code batch):**
@@ -526,7 +576,12 @@ flowchart LR
 3. Re-run translate on the batch; VL; attach before/after counts to the PR.
 4. Never hand-edit generated `.frs` files to force a pass — fix the pipeline (hand-written cards live only under `cards/handwritten/` with a linked ticket).
 
-**Recurring T3 check:** nightly `scripts/card_regression.sh` recompiles the entire shipped card set and re-runs all smoke tests; any newly failing card auto-quarantines with a git bisect hint.
+**Recurring T3 check:** each T3 integration and explicit local campaign runs `scripts/card_regression.sh`, recompiling every in-scope playable definition, validating every catalog/classification record, and rerunning smoke + semantic packs. Out-of-v1/catalog-only records must be classified but do not count as playable. Newly failing cards auto-quarantine with a git-bisect hint.
+
+Before the T3 exit gate, all ten T2 nightmare fixture classes are represented by
+compiled cards/decks or scenarios and flow through cardc, the runtime card
+loader, casting/activation, and normal game actions. Direct kernel fixtures stay
+as unit-level support but no longer stand in for card integration.
 
 ---
 
@@ -545,10 +600,10 @@ flowchart LR
 | T4.6 | Difficulty tier definition + arena calibration | Tiers = {policy, think_ms, determinizations, noise, mulligan quality}. `forge-arena --calibrate` binary-searches think_ms so each rung hits 65–75% vs the rung below; results into `ai_tiers.ron`. |
 | T4.7 | Behavioral guardrails | Table-driven "don't do obviously dumb things" filters for low tiers only (e.g., Novice may bolt own creature; Expert may not) — implemented as action-prior penalties, not hard rules, so search can still override when correct. |
 | T4.8 | (Optional, feature-flag `nn`) Learned policy/value net | Self-play data from arena (`--emit-training-data`), small ResNet/MLP over hand-crafted state planes, AlphaZero-style PUCT integration; export ONNX; on-device via `ort`/`candle` per ADR. Ship only if it beats T4.5 Master by ≥60% at equal latency. |
-| T4.9 | AI latency harness | `metrics/ai_latency.json` per tier on: desktop reference, Android reference (arm64 mid-tier), WASM. CI perf gate. |
+| T4.9 | AI latency harness | `metrics/ai_latency.json` per tier on: desktop reference, Android reference (arm64 mid-tier), WASM. Local perf gate. |
 | T4.10 | Explainability hooks for UI | Top-3 considered lines with visit counts + eval deltas, exposed via `forge-ai::api::LastDecisionReport` — powers the UI "AI hint" and postgame review features. |
 
-**Recurring T4 check:** weekly 2,000-game ladder (§4.3); Elo per tier tracked in `metrics/elo_history.json`; any rung inversion is a P1.
+**Recurring T4 check:** each calibration campaign runs the 2,000-game ladder (§4.3); Elo per tier is tracked in `metrics/elo_history.json`; any rung inversion is a P1.
 
 
 ---
@@ -572,7 +627,7 @@ flowchart LR
 | --- | --- | --- | --- |
 | T5.1 | App shell + navigation + settings | Router, theme, input map, audio hooks, profile store (RON in platform data dir) | Cold start ≤3 s reference Android |
 | T5.2 | **Match screen — core board** | Battlefield zones per player (1v1 + 4-player Commander layouts), hand fan, library/graveyard/exile piles with browsers, life/counters widgets, phase strip, priority indicator | 200-permanent stress board ≥60 fps desktop / ≥30 fps mobile |
-| T5.3 | Match screen — stack & targeting | Stack visualization (ordered cards with controller badges), targeting arrows (bezier overlays), target legality highlighting, choose-mode dialogs, X-cost and payment-plan picker (from T1.4 enumerator) | Every choice the engine can ask has a UI affordance — enumerated by walking the kernel `Choice` enum; CI test asserts exhaustive match |
+| T5.3 | Match screen — stack & targeting | Stack visualization (ordered cards with controller badges), targeting arrows (bezier overlays), target legality highlighting, choose-mode dialogs, X-cost and payment-plan picker (from T1.4 enumerator) | Every choice the engine can ask has a UI affordance — enumerated by walking the kernel `Choice` enum; VL asserts exhaustive match |
 | T5.4 | Match screen — combat | Attack declaration (tap-to-attack, drag to planeswalker/player), block assignment with damage-order reordering, first-strike sub-step clarity | Usability script step 7 |
 | T5.5 | Priority & stops system | Full-control vs auto-yield modes, per-step stop toggles (like legacy Forge's phase config), "hold priority" key, auto-pass with pending-trigger interrupt | Configurable per opponent-turn/own-turn |
 | T5.6 | Card inspection | Long-press/hover zoom, oracle text panel, rulings tab (offline data), token/copy provenance ("what made this") | |
@@ -594,8 +649,8 @@ Pointer (mouse/touch unified via egui), plus a complete keyboard map: space = pa
 | --- | --- |
 | T5.14 | Card renderer: text-first card frames drawn from data (name, cost via vector mana symbols drawn in-house — see §10.8, type line, rules text with symbol inlining, P/T) so the game is 100% playable with no downloaded art |
 | T5.15 | Image pipeline: async fetch → disk LRU cache (`~/.forge-rs/imgcache`, size-capped, setting-controlled) → GPU texture atlas; graceful text-frame fallback; never block the frame on I/O |
-| T5.16 | Screenshot regression suite: headless wgpu render of 40 canonical scenes → PNG → perceptual diff (`tools/imgdiff.py`, threshold 0.5%) in CI |
-| T5.17 | Frame budget instrumentation: per-screen frame time histogram in debug overlay; CI perf gate on stress scenes |
+| T5.16 | Screenshot regression suite: headless wgpu render of 40 canonical scenes → PNG → perceptual diff (`tools/imgdiff.py`, threshold 0.5%) in the local UI campaign |
+| T5.17 | Frame budget instrumentation: per-screen frame time histogram in debug overlay; local perf gate on stress scenes |
 
 ### 10.5 Platform shells
 
@@ -604,11 +659,11 @@ Pointer (mouse/touch unified via egui), plus a complete keyboard map: space = pa
 | T5.18 | Desktop (Win/mac/Linux) | `cargo build -p forge-app-desktop --release`; winit windowing, native file dialogs (`rfd`, ADR), single-instance lock |
 | T5.19 | Android | `cargo ndk -t arm64-v8a -o app/src/main/jniLibs build --release -p forge-app-android` + Gradle wrapper project; lifecycle (pause/resume snapshot), back-button semantics, IME for deck search |
 | T5.20 | iOS | `cargo build --target aarch64-apple-ios --release` static lib + minimal Xcode shell; Metal via wgpu; TestFlight profile owned by Release Agent |
-| T5.21 | WASM | `wasm-pack`/`wasm-bindgen` build of `forge-app-wasm`; IndexedDB-backed storage shim; card db streamed + cached; demo deployed to static hosting for CI preview links |
+| T5.21 | WASM | `wasm-pack`/`wasm-bindgen` build of `forge-app-wasm`; IndexedDB-backed storage shim; card db streamed + cached; demo verified in the local in-app browser before any Owner-approved deployment |
 
 ### 10.6 UI ↔ engine contract test
 
-`crates/forge-ui/tests/contract.rs` walks every variant of the kernel's `Choice`/`Prompt` enums and asserts a registered UI handler exists. Adding a new engine choice without a UI affordance fails CI — this is how UI completeness stays true as T2/T3 grow.
+`crates/forge-ui/tests/contract.rs` walks every variant of the kernel's `Choice`/`Prompt` enums and asserts a registered UI handler exists. Adding a new engine choice without a UI affordance fails VL — this is how UI completeness stays true as T2/T3 grow.
 
 ### 10.7 UI Agent operating procedure
 
@@ -642,7 +697,7 @@ Scripted 20-step walkthrough (new profile → build deck from collection → pla
 | T6.4 | Sealed/draft pod runner (8 seats, human in seat 1) |
 | T6.5 | Quest mode v1: opponent ladder, collection progression, currency/shop, save format (versioned RON + migration tests). Mines legacy quest world data; visual world map deferred to v1.1 |
 | T6.6 | Commander support surface: color identity in deck editor, command-zone UI polish, partner/backgrounds per card coverage |
-| T6.7 | Content validation suite: every shipped deck/set/quest node loads, all references resolve — `scripts/validate_content.sh` in CI |
+| T6.7 | Content validation suite: every shipped deck/set/quest node loads, all references resolve — `scripts/validate_content.sh` in the local gate |
 
 ---
 
@@ -677,21 +732,21 @@ Deterministic kernel + action-list replay makes lockstep multiplayer natural: pr
 | Level | Location | Runs | Purpose |
 | --- | --- | --- | --- |
 | Unit | each crate `src/**` + `tests/` | every VL | function-level correctness |
-| Oracle scenarios | `tests/oracle/**.ron` | subset per VL, full nightly | rules ground truth |
-| Card smoke | generated per card | nightly + on card change | every card executes without violating invariants |
-| Card semantic | `tests/cards/**` | nightly | behavior of high-play-rate cards |
-| Integration decks | `tests/nightmare/**` | nightly | cross-system interaction storms |
-| Fuzz | `fuzz/fuzz_targets/**` | nightly 60 min/target, 24 h pre-release | invariant violations, panics |
-| Perf | `benches/**` | per VL (smoke) + nightly (full) | regression fences |
-| Screenshot | `forge-ui/tests/shots` | per UI PR + nightly | visual regression |
-| Replay determinism | `scripts/review/determinism.sh` | every PR | cross-platform reproducibility |
+| Oracle scenarios | `tests/oracle/**.ron` | subset per VL, full gate campaign | rules ground truth |
+| Card smoke | generated per playable card | each T3 integration + gate | every card executes without violating invariants |
+| Card semantic | `tests/cards/**` | each T3 integration + gate | behavior of high-play-rate cards |
+| Integration decks | `tests/nightmare/**` | each T3 integration + gate | card-driven cross-system interaction storms |
+| Fuzz | `fuzz/fuzz_targets/**` | explicit local campaign, 24 h pre-release | invariant violations, panics |
+| Perf | `benches/**` | per VL (smoke) + gate campaign (full) | regression fences |
+| Screenshot | `forge-ui/tests/shots` | each UI integration + gate | visual regression |
+| Replay determinism | `scripts/review/determinism.sh` | every task integration | cross-platform reproducibility |
 
 ### 13.2 Invariants (the fuzzer's oracle — extend, never weaken)
 
 1. Zone conservation: every card object in exactly one zone; total object count changes only via token create/cease and copy rules.
 2. `legal_actions` never returns an action that `apply` rejects; `apply` on a returned action never panics.
 3. State hash equal ⇒ serialized state equal (hash honesty).
-4. Replay: (seed, action list) reapplied ⇒ identical final hash, on every platform (CI runs the same replays on Linux/mac/Windows and compares hashes).
+4. Replay: (seed, action list) reapplied ⇒ identical final hash on every platform (the local platform matrix runs the same replays on Linux/macOS/Windows and compares hashes).
 5. Life/counter/mana values within sane bounds (i32, no silent wrap).
 6. SBA fixpoint always terminates ≤64 iterations (detects rules loops).
 7. A game with both players random-legal terminates ≤ configured turn cap.
@@ -713,11 +768,27 @@ tools/crash_to_regression.py <artifact>      # emit tests/regressions/fuzz_<hash
 
 ### 13.5 Performance regression protocol
 
-`metrics/perf_baseline.json` is updated only by an explicit `perf-rebaseline` PR approved by the Perf Agent with justification. `tools/perf_diff.py` fails VL at >5% regression on: clone, legal_actions, apply, playout/sec, AI decision latency, UI stress-frame time, card-db load time.
+`metrics/perf_baseline.json` is updated only by an explicit `perf-rebaseline` task commit approved by the Perf Agent with justification. `tools/perf_diff.py` fails VL at >5% regression on: clone, legal_actions, apply, playout/sec, AI decision latency, UI stress-frame time, card-db load time.
 
 ### 13.6 Security & supply chain
 
-`cargo deny` (licenses: GPL-compatible only; sources: crates.io only), `cargo audit` weekly, lockfile committed, release builds `--locked`, reproducible-build check on Linux (two clean builds, hash compare) at T7.
+`cargo deny` (licenses: GPL-compatible only; sources: crates.io only), `cargo audit` before each tier gate, lockfile committed, release builds `--locked`, reproducible-build check in the local Linux VM (two clean builds, hash compare) at T7.
+
+### 13.7 Semantic breadth and mutation quality
+
+Raw test-file totals are supporting evidence, not semantic breadth. Generated
+metrics collapse cases that differ only by scalar values into one scenario
+family and report rule interactions, hand-authored cases, and generator origin.
+Each tier gate declares minimum family and interaction thresholds. CP-DSL uses
+the §8.1 thresholds; T3 requires ≥90% kill rate on curated compiler/translator
+mutants and no surviving P0/P1 validation mutant.
+
+The current T2/CP-DSL baseline must retain at least 1,200 oracle scenarios,
+150 scalar-collapsed structural families, 100 hand-authored scenarios, 40
+distinct action kinds, 15 distinct layer/replacement operations, 250 rule
+interaction keys, and four explicit provenance origins. The deterministic
+`tools/oracle_semantic_metrics.py` report is gate evidence; an unclassified
+scenario pack fails closed.
 
 ---
 
@@ -795,7 +866,7 @@ This section exists because the failure mode that kills agent-built projects is 
 `reports/gates/T<k>/bundle/` must contain, generated by `scripts/gates/make_bundle.sh T<k>`:
 
 1. `metrics_snapshot.json` — all §1.2 metrics current values + trend since last gate
-2. `test_log.txt` — full output of `scripts/gates/gate_T<k>.sh` on a **fresh clone** (script clones to a temp dir; no incremental state)
+2. `test_log.txt` — full output of `scripts/gates/gate_T<k>.sh` from an exact-commit detached fresh worktree with isolated target directories (no incremental state)
 3. `coverage.json` + uncovered-lines report for tier-touched crates
 4. `fuzz_report.md` — hours run, corpus size, crashes found/fixed this tier
 5. `replays/` — 10 seeded full-game replays sampled this tier (playable via `forge-cli replay`)
@@ -804,11 +875,15 @@ This section exists because the failure mode that kills agent-built projects is 
 8. `questions_open.md` — unanswered Question Queue items (a gate cannot pass with open P0/P1 questions)
 9. `blockers_history.md` — every blocker filed this tier and its resolution
 
+The bundle also records reviewed commit SHA, toolchain versions, local platform
+matrix results, and hashes of produced artifacts. A packet from another commit
+cannot authorize integration or signoff.
+
 ### 15.3 Standard gate checklist (G1–G10; reviewer records PASS/FAIL + evidence per item in SIGNOFF.md)
 
 | # | Check | Method |
 | --- | --- | --- |
-| G1 | Gate script green from scratch | Reviewer (or a clean runner they command) executes `git clone <repo> /tmp/gate && cd /tmp/gate && scripts/gates/gate_T<k>.sh` — never trusts a pasted log |
+| G1 | Gate script green from scratch | Reviewer (or a clean local runner they command) creates an exact-commit detached worktree with isolated targets and executes `scripts/gates/gate_T<k>.sh` — never trusts a pasted log |
 | G2 | Exit-criteria metrics meet §1.2 / tier targets | Compare bundle metrics vs plan tables; any hand-edited metrics file (git blame shows non-script author) = automatic FAIL |
 | G3 | **Test-quality audit** | Sample 10 tests from `tests_added.txt` (random + 2 reviewer-chosen). For each: does the assertion encode the *spec*, or the implementation's output? Run `scripts/review/mutation_check.sh` on 3 of them. ≥9/10 meaningful required |
 | G4 | Adversarial probe | Reviewer authors ≥5 novel oracle scenarios for this tier's subject matter, unseen by any implementer, derived from CR text. ≥4/5 must pass; every failure reopens the tier with a P0 |
@@ -828,7 +903,7 @@ Sign-off record format: `reports/gates/T<k>/SIGNOFF.md` = checklist table + comm
 | --- | --- | --- |
 | **CP-KERNEL** | after T1.7 (SBAs) merges | Reviewer audits the kernel API surface itself (§3.3 invariants read against real code); cheap to fix now, catastrophic later. |
 | **CP-LAYERS** | after T2.4 merges, **before any dependent task starts** | The project's crown-jewel checkpoint: (a) reviewer authors 15 novel layer-interaction scenarios (dependency ordering per CR 613.8, timestamp ties, characteristic-defining abilities, Humility-class stacking) — ≥14/15 must pass; (b) differential run vs legacy engine on a 100-card layered subset, every divergence adjudicated in writing; (c) memoization-invalidation audit: reviewer inspects the cache-invalidation paths and demands a fuzz target that interleaves mutations with characteristic queries; (d) explicit sign-off sentence: "I believe layer ordering is correct for the following reasons…". Three failed CP-LAYERS attempts triggers §16.3 kill-criteria review of the layer design. |
-| **CP-DSL** | after T3.1 (DSL spec) before mass translation | Freeze review of the card DSL: 20 diverse legacy cards hand-translated by the reviewer's reading of the spec must express cleanly; every awkward case becomes a spec patch NOW, not after 15k files exist. |
+| **CP-DSL** | after T3.1 (DSL spec) before mass translation | Freeze review of the card language and identity model using the §8.1 packet: 100 reviewer-hand-translated cards across the exact 25 mandatory mechanics strata, four per stratum, with catalog-only coverage verified separately; recursive closed argument signatures; 100/100 lossless round-trips; ≥50 malformed-source diagnostics with file/line/column; compiled card-to-kernel integration scenarios without independent fixture effects; deterministic database hashes across three clean builds; all semantic packs and four cross-target checks executed locally; corpus expressiveness report; and ≥90% curated mutant kill rate with no surviving P0/P1 validation mutant. Review is against an exact commit in a detached worktree. Every awkward case patches the spec before mass translation. |
 | **CP-PORT-20** | when card coverage crosses 20% | Translation-quality sample: 50 random shipped cards; reviewer diffs oracle text against observed behavior in the sandbox (`forge-cli sandbox --card <name>`). ≥48/50 faithful required; systematic error classes reopen mapper tasks. |
 | **CP-AI-LADDER** | after T4.6 calibration | Reviewer personally plays ≥5 games vs Expert and Master; sanity-reads T4.10 decision reports for pathological reasoning; verifies no hidden-information leak by code inspection of the `PlayerView` boundary + a canary test (poisoned hidden card that a peeking AI would exploit — arena must show no exploitation delta). |
 | **CP-NN-GO** | T4.8 decision point | Go/no-go on shipping the NN path per the ≥60%-at-equal-latency bar; a no-go here is a healthy outcome, not a failure. |
@@ -884,7 +959,7 @@ This plan is versioned and change-controlled like code. Agents never edit it. A 
 
 ### 16.4 v1.0 acceptance test (the literal definition of done)
 
-`scripts/acceptance_v1.sh` + human execution of `docs/usability_script.md` on each platform. The script asserts, in one run: fresh clone → build all platforms → full oracle corpus green → 24 h fuzz report present & clean → card coverage ≥ target → arena ladder metric green from live 400-game runs → all platform artifacts produced and launch to main menu (desktop automated, mobile via device-farm job) → license audit checklist file signed. v1.0 exists when this script's report and CP-RELEASE sign-off both exist for the same commit SHA. Nothing else counts as done.
+`scripts/acceptance_v1.sh` + human execution of `docs/usability_script.md` on each platform. The script asserts, in one exact-commit local packet: fresh detached worktree → build all platforms in the required local VM/simulator/device/browser matrix → full oracle corpus green → 24 h fuzz report present & clean → catalog/identity/playable/legacy coverage targets green → arena ladder metric green from live 400-game runs → all platform artifacts produced and launch to main menu → license audit checklist file signed. v1.0 exists when this script's report and CP-RELEASE sign-off both exist for the same commit SHA. Nothing else counts as done.
 
 ### 16.5 Weekly status heartbeat (Orchestrator → human, even when nothing is wrong)
 
@@ -959,10 +1034,10 @@ Agents: the tier-gate Brief's "TRY IT YOURSELF" section MUST include at least th
 
 | Tier | DO (copy-paste) | EXPECT (good) | RED FLAG (bad) |
 | --- | --- | --- | --- |
-| T0 | `scripts/vl.sh` | Every line green, ends `ALL CHECKS PASSED`; CI page: all jobs green on 3 OSes + Android + WASM | Any red; "command not found" (toolchain drift) |
+| T0 | `scripts/local_verify.sh task` | Every line green, ends `LOCAL VERIFICATION PASSED`; local matrix records macOS plus available target builds | Any red; "command not found" (toolchain drift) |
 | T1 | `cargo run -p forge-cli -- play --demo` | You play a real game of simplified Magic in the terminal: numbered choices each turn, game ends with a winner banner and a saved replay path | Hang with no prompt; being allowed an illegal move (e.g., casting with no mana); crash text |
 | T2 | `scripts/run_oracle.sh --all` then `cargo run -p forge-cli -- replay tests/nightmare/showcase.frsreplay --narrate` | `1200+ passed, 0 failed, 0 skipped`; a narrated replay of a complex game where effects like "creatures lose all abilities" visibly behave per the printed narration | Any `skipped` count (tests being dodged); narration contradicting card text |
-| T3 (M3) | Open `docs/CARD_COVERAGE.md`; then `cargo run -p forge-cli -- sandbox --card "Lightning Bolt"` | Coverage table ≥60% with per-set numbers; sandbox lets you cast the real card and see 3 damage happen | Coverage flat week-over-week; sandbox card behaving unlike its printed text |
+| T3 (M3) | Open `docs/CARD_COVERAGE.md`; then `cargo run -p forge-cli -- sandbox --card "Lightning Bolt"` | Catalog is 100% imported, identities are 100% classified, legacy playable coverage is ≥60%, and the sandbox deals 3 damage | Coverage terms conflated, missing/unclassified records, or sandbox behavior unlike printed text |
 | T4 (M4) | `cargo run -p forge-arena -- --ladder --games 100` then `cargo run -p forge-cli -- play --ai master` | Ladder table where each tier beats the one below (win% 65–75%); playing Master YOU should lose or sweat — expect it to make plays you didn't see coming | Any rung at ~50% (tiers identical) or 100% (broken opponent); Master making obviously idiotic plays repeatedly (report the replay file) |
 | T5 (M5) | Launch the desktop app; complete one game vs Apprentice using only the mouse | Every prompt the game asks has an obvious on-screen control; you never feel stuck; board stays smooth with many creatures out | Any state where you can't tell what the game is waiting for — that is a P1 by definition, send a screenshot |
 | T6 | In-app: run an 8-seat draft, then a 4-player Commander game vs 3 AIs | AI drafters produce sane 2-color decks; Commander game completes with command-zone rules working | Draft AI with 5-color garbage piles; Commander tax not increasing |
@@ -987,7 +1062,7 @@ Hard stops: 3 dead hypotheses **or** 24 h wall-clock stuck → blocker report + 
 ```
 TROUBLE BULLETIN TB-{{NNNN}}   severity: {{P0|P1|P2}}   {{date}}
 
-WHAT HAPPENED: ≤3 plain sentences. ("The nightly card check found 212 cards
+WHAT HAPPENED: ≤3 plain sentences. ("The local card campaign found 212 cards
 that stopped working after yesterday's rules change.")
 WHAT IT AFFECTS: feature/timeline impact in Owner terms. ("No milestone slip
 expected yet; card coverage number will dip this week.")
@@ -1027,7 +1102,7 @@ FIRST ACTIONS, in order:
 2. Initialize PLAN_STATE.json (tier 0), reports/questions/QUEUE.md,
    reports/status/, and the checkpoint calendar (§15.4 + §15.6 cadence guard).
 3. Emit tickets T0.1–T0.6 using the §4.2 format, populating plan_refs on each.
-4. Register the §4.3 recurring jobs.
+4. Register the §4.3 local campaign checklist; do not install a scheduler without Owner approval.
 5. Spawn agents per §14.3 using Appendix A prompts verbatim, filling placeholders.
 STANDING DUTIES: enforce tier ordering and §0.8 escalation boundaries; assemble
 gate bundles (§15.2) and request reviews; convert gate failures to remediation
@@ -1068,16 +1143,16 @@ Section 0 and Section 3.3 of FORGE_REBUILD_MASTER_PLAN.md.
 CONSTRAINTS: touch only scope_paths from the ticket; no new dependencies; no unwrap/expect
 in engine paths; no card names in forge-core/forge-ai; kernel stays std-only.
 PROCEDURE:
-1. git checkout -b task/{{TASK_ID}}-{{SLUG}} origin/main
+1. git switch -c task/{{TASK_ID}}-{{SLUG}} from the current verified local baseline
 2. Write failing tests for every acceptance item BEFORE implementation.
 3. Implement until scripts/vl.sh exits 0. Max 3 attempts, then write
    reports/blockers/{{TASK_ID}}.md and stop.
-4. Commit as "{{TASK_ID}}: <summary>". Open PR with the ticket YAML pasted in,
+4. Commit as "{{TASK_ID}}: <summary>". Attach the ticket YAML to the local review packet,
    PLUS a section "OWNER-BRIEF MATERIAL": 2-3 plain-language sentences on what
    this change lets a person see or do, and one DO/EXPECT/RED-FLAG line if the
    change is user-observable (the Orchestrator compiles these into §17.2 Briefs).
 NEVER: delete or #[ignore] an existing test; edit metrics/*.json by hand;
-merge your own PR.
+integrate your own task without independent review.
 ```
 
 ### A.2 Review Agent
@@ -1238,9 +1313,9 @@ Scenario(
 3. `PLAN_STATE.json`, Question Queue, status-report directory, and checkpoint calendar (§15.4, §15.6) initialized; gates stubbed; VL green on empty workspace.
 4. Agent roster spawned per §14.3 with Appendix A prompts (Orchestrator via A.0).
 5. First ticket batch emitted: T0.1–T0.6, each with `plan_refs` populated (§0.9).
-6. Nightly + biweekly recurring jobs from §4.3 registered.
+6. Local campaign checklist from §4.3 registered; no hosted workflow or unapproved background scheduler active.
 7. Owner channel recorded (ADR-0008) and O1/O2 input items from §17.3 completed; the T0 tier-start Owner Brief drafted and sent — the Owner's first artifact arrives before any code does.
-8. This document committed at repo root at v1.2; all agents instructed it supersedes their priors, and that ambiguity routes to the Question Queue, never to guessing.
+8. This document committed at repo root at v1.3; all agents instructed it supersedes their priors, and that ambiguity routes to the Question Queue, never to guessing.
 
 ---
 

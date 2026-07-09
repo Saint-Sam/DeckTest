@@ -1,0 +1,15 @@
+// CP-DSL stratum: calculated_values
+card "Crackle with Power" {
+  id: "273f5483-b67e-4dd6-bba8-c0a047fa34d7"
+  layout: normal
+  status: verified_playable
+  face "Crackle with Power" {
+    cost: "{X}{X}{X}{R}{R}"
+    types: "Sorcery"
+    oracle: "Crackle with Power deals five times X damage to each of up to X targets."
+    keywords: []
+    ability spell {
+      effect: deal_damage(target(all(any())), amount("X", 5))
+    }
+  }
+}

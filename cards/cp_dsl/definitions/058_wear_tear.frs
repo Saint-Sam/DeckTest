@@ -1,0 +1,24 @@
+// CP-DSL stratum: split_fuse
+card "Wear // Tear" {
+  id: "9842734c-1eac-4509-a731-4c22017ae586"
+  layout: split
+  status: verified_playable
+  face "Wear" {
+    cost: "{1}{R}"
+    types: "Instant"
+    oracle: "Destroy target artifact.\nFuse (You may cast one or both halves of this card from your hand.)"
+    keywords: [fuse]
+    ability spell {
+      effect: destroy(target(permanents(type_is("artifact"))))
+    }
+  }
+  face "Tear" {
+    cost: "{W}"
+    types: "Instant"
+    oracle: "Destroy target enchantment.\nFuse (You may cast one or both halves of this card from your hand.)"
+    keywords: [fuse]
+    ability spell {
+      effect: destroy(target(permanents(type_is("enchantment"))))
+    }
+  }
+}

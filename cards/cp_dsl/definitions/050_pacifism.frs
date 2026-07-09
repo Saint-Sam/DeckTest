@@ -1,0 +1,15 @@
+// CP-DSL stratum: attachments
+card "Pacifism" {
+  id: "5f5e0b10-c8cf-450c-bfd3-bcb0528ec330"
+  layout: normal
+  status: verified_playable
+  face "Pacifism" {
+    cost: "{1}{W}"
+    types: "Enchantment — Aura"
+    oracle: "Enchant creature\nEnchanted creature can't attack or block."
+    keywords: [enchant]
+    ability static {
+      effect: continuous(enchanted_object(source()), sequence(cannot_attack(any()), cannot_block(any())))
+    }
+  }
+}

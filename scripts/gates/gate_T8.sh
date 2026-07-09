@@ -6,4 +6,5 @@ if [[ "${1:-}" == "--self-test" ]]; then
   exit 0
 fi
 
-echo "SKIP: gate_T8.sh is a Tier 0 stub; fill in Tier 8 exit criteria when that tier opens"
+echo "ERROR: gate_T8.sh is unopened and fail-closed" >&2
+exit 1

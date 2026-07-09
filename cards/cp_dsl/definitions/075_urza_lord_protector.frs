@@ -1,0 +1,22 @@
+// CP-DSL stratum: meld
+card "Urza, Lord Protector" {
+  id: "df2af646-3e5b-43a3-8f3e-50565889f456"
+  layout: meld
+  status: verified_playable
+  face "Urza, Lord Protector" {
+    cost: "{1}{W}{U}"
+    types: "Legendary Creature — Human Artificer"
+    oracle: "Artifact, instant, and sorcery spells you cast cost {1} less to cast.\n{7}: If you both own and control Urza, Lord Protector and an artifact named The Mightstone and Weakstone, exile them, then meld them into Urza, Planeswalker. Activate only as a sorcery."
+    power: "2"
+    toughness: "4"
+    keywords: [meld]
+    ability static {
+      effect: continuous(spells(and(controlled_by(you()), or(type_is("artifact"), type_is("instant"), type_is("sorcery")))), cost_reduction(any(), 1))
+    }
+    ability activated {
+      costs: [mana_cost("{7}")]
+      timing: timing_sorcery()
+      effect: meld(source(), cards("The Mightstone and Weakstone"))
+    }
+  }
+}

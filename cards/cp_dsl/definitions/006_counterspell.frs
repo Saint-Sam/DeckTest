@@ -1,0 +1,15 @@
+// CP-DSL stratum: instant_sorcery
+card "Counterspell" {
+  id: "cc187110-1148-4090-bbb8-e205694a39f5"
+  layout: normal
+  status: verified_playable
+  face "Counterspell" {
+    cost: "{U}{U}"
+    types: "Instant"
+    oracle: "Counter target spell."
+    keywords: []
+    ability spell {
+      effect: counter_spell(target(spells()))
+    }
+  }
+}

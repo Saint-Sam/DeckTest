@@ -1,0 +1,27 @@
+// CP-DSL stratum: adventure
+card "Bonecrusher Giant // Stomp" {
+  id: "d6d72f5f-8f5d-4180-b514-f22ff5482902"
+  layout: adventure
+  status: verified_playable
+  face "Bonecrusher Giant" {
+    cost: "{2}{R}"
+    types: "Creature — Giant"
+    oracle: "Whenever this creature becomes the target of a spell, this creature deals 2 damage to that spell's controller."
+    power: "4"
+    toughness: "3"
+    keywords: []
+    ability triggered {
+      event: event_targeted(source(), spells())
+      effect: deal_damage(controller_of(triggered()), 2)
+    }
+  }
+  face "Stomp" {
+    cost: "{1}{R}"
+    types: "Instant — Adventure"
+    oracle: "Damage can't be prevented this turn. Stomp deals 2 damage to any target."
+    keywords: []
+    ability spell {
+      effect: sequence(damage_cannot_be_prevented(all(any()), "this_turn"), deal_damage(target(any()), 2))
+    }
+  }
+}

@@ -1,0 +1,22 @@
+// CP-DSL stratum: dungeon_initiative_monarch_energy
+card "Sefris of the Hidden Ways" {
+  id: "9b21e056-57e7-4e39-b2b4-2fdf8719d0d2"
+  layout: normal
+  status: verified_playable
+  face "Sefris of the Hidden Ways" {
+    cost: "{W}{U}{B}"
+    types: "Legendary Creature — Human Wizard"
+    oracle: "Whenever one or more creature cards are put into your graveyard from anywhere, venture into the dungeon. This ability triggers only once each turn. (To venture into the dungeon, enter the first room or advance to the next room.)\nCreate Undead — Whenever you complete a dungeon, return target creature card from your graveyard to the battlefield."
+    power: "2"
+    toughness: "3"
+    keywords: [venture_into_the_dungeon]
+    ability triggered {
+      event: event_zone_change(cards(type_is("creature")), "graveyard")
+      effect: venture(you())
+    }
+    ability triggered {
+      event: event_counter_added(you(), "dungeon_completed")
+      effect: move_zone(target(cards(and(zone_is("graveyard"), type_is("creature")))), "battlefield")
+    }
+  }
+}

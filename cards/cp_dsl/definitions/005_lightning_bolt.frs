@@ -1,0 +1,15 @@
+// CP-DSL stratum: instant_sorcery
+card "Lightning Bolt" {
+  id: "4457ed35-7c10-48c8-9776-456485fdf070"
+  layout: normal
+  status: verified_playable
+  face "Lightning Bolt" {
+    cost: "{R}"
+    types: "Instant"
+    oracle: "Lightning Bolt deals 3 damage to any target."
+    keywords: []
+    ability spell {
+      effect: deal_damage(target(any()), 3)
+    }
+  }
+}

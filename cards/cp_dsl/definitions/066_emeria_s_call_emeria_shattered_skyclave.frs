@@ -1,0 +1,26 @@
+// CP-DSL stratum: modal_dfc
+card "Emeria's Call // Emeria, Shattered Skyclave" {
+  id: "6ec2a242-9068-4ee2-8ac8-8341cc570f56"
+  layout: modal_dfc
+  status: verified_playable
+  face "Emeria's Call" {
+    cost: "{4}{W}{W}{W}"
+    types: "Sorcery"
+    oracle: "Create two 4/4 white Angel Warrior creature tokens with flying. Non-Angel creatures you control gain indestructible until your next turn."
+    keywords: []
+    ability spell {
+      effect: sequence(create_token("4/4 white Angel Warrior with flying", 2, you()), grant_keyword(all(permanents(and(type_is("creature"), controlled_by(you())))), "indestructible", "until_your_next_turn"))
+    }
+  }
+  face "Emeria, Shattered Skyclave" {
+    cost: ""
+    types: "Land"
+    oracle: "As this land enters, you may pay 3 life. If you don't, it enters tapped.\n{T}: Add {W}."
+    keywords: []
+    ability activated {
+      costs: [tap_self()]
+      effect: add_mana("{W}", you())
+      mana_ability: true
+    }
+  }
+}

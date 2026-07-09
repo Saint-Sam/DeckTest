@@ -1,0 +1,15 @@
+// CP-DSL stratum: turn_combat
+card "Relentless Assault" {
+  id: "dc1c0e8c-d0c1-445c-968f-7dec91e5d5fc"
+  layout: normal
+  status: verified_playable
+  face "Relentless Assault" {
+    cost: "{2}{R}{R}"
+    types: "Sorcery"
+    oracle: "Untap all creatures that attacked this turn. After this main phase, there is an additional combat phase followed by an additional main phase."
+    keywords: []
+    ability spell {
+      effect: sequence(untap(all(permanents(and(type_is("creature"), controlled_by(you()))))), extra_combat(you()))
+    }
+  }
+}

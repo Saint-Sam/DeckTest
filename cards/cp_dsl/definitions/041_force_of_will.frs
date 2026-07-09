@@ -1,0 +1,18 @@
+// CP-DSL stratum: alternate_additional_costs
+card "Force of Will" {
+  id: "956381ba-6d37-4a8a-846c-bad79222dbee"
+  layout: normal
+  status: verified_playable
+  face "Force of Will" {
+    cost: "{3}{U}{U}"
+    types: "Instant"
+    oracle: "You may pay 1 life and exile a blue card from your hand rather than pay this spell's mana cost.\nCounter target spell."
+    keywords: []
+    ability static {
+      effect: continuous(source(), alternate_cost(source(), exile_cost(cards(and(zone_is("hand"), color_is("blue")))), pay_life(1)))
+    }
+    ability spell {
+      effect: counter_spell(target(spells()))
+    }
+  }
+}

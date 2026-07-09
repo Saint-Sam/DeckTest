@@ -1,0 +1,15 @@
+// CP-DSL stratum: zones_lki
+card "Reanimate" {
+  id: "a044474a-cd72-4e9d-bd8d-a08f2de9cdc0"
+  layout: normal
+  status: verified_playable
+  face "Reanimate" {
+    cost: "{B}"
+    types: "Sorcery"
+    oracle: "Put target creature card from a graveyard onto the battlefield under your control. You lose life equal to that card's mana value."
+    keywords: []
+    ability spell {
+      effect: sequence(move_zone(target(cards(and(zone_is("graveyard"), type_is("creature")))), "battlefield"), lose_life(mana_value(triggered()), you()))
+    }
+  }
+}

@@ -1,0 +1,18 @@
+// CP-DSL stratum: meld
+card "Bruna, the Fading Light" {
+  id: "bce7e45d-b2c5-43aa-91a6-3a3c24f30850"
+  layout: meld
+  status: verified_playable
+  face "Bruna, the Fading Light" {
+    cost: "{5}{W}{W}"
+    types: "Legendary Creature — Angel Horror"
+    oracle: "When you cast this spell, you may return target Angel or Human creature card from your graveyard to the battlefield.\nFlying, vigilance\n(Melds with Gisela, the Broken Blade.)"
+    power: "5"
+    toughness: "7"
+    keywords: [flying, vigilance]
+    ability triggered {
+      event: event_cast(source())
+      effect: move_zone(target(cards(and(zone_is("graveyard"), or(subtype_is("Angel"), subtype_is("Human"))))), "battlefield")
+    }
+  }
+}

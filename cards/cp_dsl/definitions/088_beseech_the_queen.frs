@@ -1,0 +1,15 @@
+// CP-DSL stratum: unusual_mana
+card "Beseech the Queen" {
+  id: "cf94cafc-527e-4b27-8a28-7807435aaccf"
+  layout: normal
+  status: verified_playable
+  face "Beseech the Queen" {
+    cost: "{2/B}{2/B}{2/B}"
+    types: "Sorcery"
+    oracle: "({2/B} can be paid with any two mana or with {B}. This card's mana value is 6.)\nSearch your library for a card with mana value less than or equal to the number of lands you control, reveal it, put it into your hand, then shuffle."
+    keywords: []
+    ability spell {
+      effect: search_library(cards(and(zone_is("library"), less_than(mana_value(any()), amount(you(), "land_count")))), you())
+    }
+  }
+}

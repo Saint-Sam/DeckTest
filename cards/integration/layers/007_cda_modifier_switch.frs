@@ -1,0 +1,20 @@
+card "Layer Scenario: CDA Modifier Switch" {
+  id: "forge:scenario:layers:007"
+  layout: normal
+  status: verified_playable
+  face "Layer Scenario: CDA Modifier Switch" {
+    cost: "{0}"
+    types: "Enchantment"
+    oracle: "Compiled integration scenario for CDA, modifier, and switch ordering."
+    keywords: []
+    ability static {
+      effect: layer_effect(you(), remembered("fixture_object_0"), set_base_pt(remembered("fixture_object_0"), 2, 7), 1)
+    }
+    ability static {
+      effect: layer_effect(you(), remembered("fixture_object_0"), modify_pt(remembered("fixture_object_0"), 3, -1), 2)
+    }
+    ability static {
+      effect: layer_effect(you(), remembered("fixture_object_0"), switch_pt(remembered("fixture_object_0")), 3)
+    }
+  }
+}

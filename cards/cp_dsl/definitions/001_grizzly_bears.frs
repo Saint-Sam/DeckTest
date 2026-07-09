@@ -1,0 +1,14 @@
+// CP-DSL stratum: vanilla_keywords
+card "Grizzly Bears" {
+  id: "14c8f55d-d177-4c25-a931-ebeb9e6062a0"
+  layout: normal
+  status: verified_playable
+  face "Grizzly Bears" {
+    cost: "{1}{G}"
+    types: "Creature — Bear"
+    oracle: ""
+    power: "2"
+    toughness: "2"
+    keywords: []
+  }
+}

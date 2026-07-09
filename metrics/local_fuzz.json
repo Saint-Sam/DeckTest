@@ -1,0 +1,99 @@
+{
+  "schema_version": 1,
+  "source_sha256": "be574086ede9f54da6848d70f3d714bcc091f1b99806b8261caea35c89f99799",
+  "worker_count": 8,
+  "seconds_per_worker": 300,
+  "total_worker_seconds": 2400,
+  "sanitizer": "address",
+  "workers": [
+    {
+      "worker": 0,
+      "target": "fuzz_apply",
+      "seconds": 300,
+      "sanitizer": "address",
+      "status": "passed",
+      "reason": "clean",
+      "log": "target/local-fuzz/logs/worker-00-fuzz_apply.log",
+      "artifact_directory": "target/local-fuzz/worker-00-fuzz_apply/artifacts",
+      "target_directory": "target/local-fuzz/worker-00-fuzz_apply/target"
+    },
+    {
+      "worker": 1,
+      "target": "fuzz_characteristics",
+      "seconds": 300,
+      "sanitizer": "address",
+      "status": "passed",
+      "reason": "clean",
+      "log": "target/local-fuzz/logs/worker-01-fuzz_characteristics.log",
+      "artifact_directory": "target/local-fuzz/worker-01-fuzz_characteristics/artifacts",
+      "target_directory": "target/local-fuzz/worker-01-fuzz_characteristics/target"
+    },
+    {
+      "worker": 2,
+      "target": "fuzz_scenarioparse",
+      "seconds": 300,
+      "sanitizer": "address",
+      "status": "passed",
+      "reason": "clean",
+      "log": "target/local-fuzz/logs/worker-02-fuzz_scenarioparse.log",
+      "artifact_directory": "target/local-fuzz/worker-02-fuzz_scenarioparse/artifacts",
+      "target_directory": "target/local-fuzz/worker-02-fuzz_scenarioparse/target"
+    },
+    {
+      "worker": 3,
+      "target": "fuzz_carddsl",
+      "seconds": 300,
+      "sanitizer": "address",
+      "status": "passed",
+      "reason": "clean",
+      "log": "target/local-fuzz/logs/worker-03-fuzz_carddsl.log",
+      "artifact_directory": "target/local-fuzz/worker-03-fuzz_carddsl/artifacts",
+      "target_directory": "target/local-fuzz/worker-03-fuzz_carddsl/target"
+    },
+    {
+      "worker": 4,
+      "target": "fuzz_carddb",
+      "seconds": 300,
+      "sanitizer": "address",
+      "status": "passed",
+      "reason": "clean",
+      "log": "target/local-fuzz/logs/worker-04-fuzz_carddb.log",
+      "artifact_directory": "target/local-fuzz/worker-04-fuzz_carddb/artifacts",
+      "target_directory": "target/local-fuzz/worker-04-fuzz_carddb/target"
+    },
+    {
+      "worker": 5,
+      "target": "fuzz_apply",
+      "seconds": 300,
+      "sanitizer": "address",
+      "status": "passed",
+      "reason": "clean",
+      "log": "target/local-fuzz/logs/worker-05-fuzz_apply.log",
+      "artifact_directory": "target/local-fuzz/worker-05-fuzz_apply/artifacts",
+      "target_directory": "target/local-fuzz/worker-05-fuzz_apply/target"
+    },
+    {
+      "worker": 6,
+      "target": "fuzz_characteristics",
+      "seconds": 300,
+      "sanitizer": "address",
+      "status": "passed",
+      "reason": "clean",
+      "log": "target/local-fuzz/logs/worker-06-fuzz_characteristics.log",
+      "artifact_directory": "target/local-fuzz/worker-06-fuzz_characteristics/artifacts",
+      "target_directory": "target/local-fuzz/worker-06-fuzz_characteristics/target"
+    },
+    {
+      "worker": 7,
+      "target": "fuzz_scenarioparse",
+      "seconds": 300,
+      "sanitizer": "address",
+      "status": "passed",
+      "reason": "clean",
+      "log": "target/local-fuzz/logs/worker-07-fuzz_scenarioparse.log",
+      "artifact_directory": "target/local-fuzz/worker-07-fuzz_scenarioparse/artifacts",
+      "target_directory": "target/local-fuzz/worker-07-fuzz_scenarioparse/target"
+    }
+  ],
+  "passed": true
+}

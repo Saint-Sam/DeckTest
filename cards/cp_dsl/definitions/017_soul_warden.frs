@@ -1,0 +1,18 @@
+// CP-DSL stratum: triggered_delayed
+card "Soul Warden" {
+  id: "f3fad295-1af2-4ecc-8546-b121ad6be27b"
+  layout: normal
+  status: verified_playable
+  face "Soul Warden" {
+    cost: "{W}"
+    types: "Creature — Human Cleric"
+    oracle: "Whenever another creature enters, you gain 1 life."
+    power: "1"
+    toughness: "1"
+    keywords: []
+    ability triggered {
+      event: event_enters(permanents(and(type_is("creature"), not(equals(any(), source())))))
+      effect: gain_life(1, you())
+    }
+  }
+}

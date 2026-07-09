@@ -1,0 +1,17 @@
+card "Layer Scenario: Humility" {
+  id: "forge:scenario:layers:001"
+  layout: normal
+  status: verified_playable
+  face "Layer Scenario: Humility" {
+    cost: "{0}"
+    types: "Enchantment"
+    oracle: "Compiled integration scenario for global ability loss and base power/toughness."
+    keywords: []
+    ability static {
+      effect: layer_effect(you(), all(permanents()), remove_keyword(all(permanents()), "flying", "trample"), 1)
+    }
+    ability static {
+      effect: layer_effect(you(), all(permanents()), set_pt(all(permanents()), 1, 1), 2)
+    }
+  }
+}

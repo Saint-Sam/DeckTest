@@ -1,0 +1,27 @@
+// CP-DSL stratum: adventure
+card "Murderous Rider // Swift End" {
+  id: "1080c5b5-6651-4c6a-93e6-099fbe389e26"
+  layout: adventure
+  status: verified_playable
+  face "Murderous Rider" {
+    cost: "{1}{B}{B}"
+    types: "Creature — Zombie Knight"
+    oracle: "Lifelink\nWhen this creature dies, put it on the bottom of its owner's library."
+    power: "2"
+    toughness: "3"
+    keywords: [lifelink]
+    ability replacement {
+      event: event_dies(source())
+      effect: replace_event(triggered(), move_zone(source(), "library_bottom"))
+    }
+  }
+  face "Swift End" {
+    cost: "{1}{B}{B}"
+    types: "Instant — Adventure"
+    oracle: "Destroy target creature or planeswalker. You lose 2 life. (Then exile this card. You may cast the creature later from exile.)"
+    keywords: [lifelink]
+    ability spell {
+      effect: sequence(destroy(target(permanents(or(type_is("creature"), type_is("planeswalker"))))), lose_life(2, you()))
+    }
+  }
+}

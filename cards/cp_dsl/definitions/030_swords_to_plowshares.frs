@@ -1,0 +1,15 @@
+// CP-DSL stratum: targeting_restrictions
+card "Swords to Plowshares" {
+  id: "b1544f21-7e98-461b-aed5-e748b0168c52"
+  layout: normal
+  status: verified_playable
+  face "Swords to Plowshares" {
+    cost: "{W}"
+    types: "Instant"
+    oracle: "Exile target creature. Its controller gains life equal to its power."
+    keywords: []
+    ability spell {
+      effect: sequence(exile(target(permanents(type_is("creature")))), gain_life(power(triggered()), owner_of(triggered())))
+    }
+  }
+}

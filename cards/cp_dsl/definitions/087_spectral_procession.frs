@@ -1,0 +1,15 @@
+// CP-DSL stratum: unusual_mana
+card "Spectral Procession" {
+  id: "376271a6-80f0-47a6-990a-5ec5517aae42"
+  layout: normal
+  status: verified_playable
+  face "Spectral Procession" {
+    cost: "{2/W}{2/W}{2/W}"
+    types: "Sorcery"
+    oracle: "Create three 1/1 white Spirit creature tokens with flying."
+    keywords: []
+    ability spell {
+      effect: create_token("1/1 white Spirit with flying", 3, you())
+    }
+  }
+}

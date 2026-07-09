@@ -1,0 +1,35 @@
+// CP-DSL stratum: flip
+card "Jushi Apprentice // Tomoya the Revealer" {
+  id: "2b565791-1b94-4dad-a48d-be7fc2198e19"
+  layout: flip
+  status: verified_playable
+  face "Jushi Apprentice" {
+    cost: "{1}{U}"
+    types: "Creature — Human Wizard"
+    oracle: "{2}{U}, {T}: Draw a card. If you have nine or more cards in hand, flip this creature."
+    power: "1"
+    toughness: "2"
+    keywords: []
+    ability activated {
+      costs: [mana_cost("{2}{U}"), tap_self()]
+      effect: draw(1, you())
+    }
+    ability triggered {
+      event: event_draw(you())
+      condition: at_least(count(cards(and(zone_is("hand"), owned_by(you())))), 9)
+      effect: transform(source())
+    }
+  }
+  face "Tomoya the Revealer" {
+    cost: ""
+    types: "Legendary Creature — Human Wizard"
+    oracle: "{3}{U}{U}, {T}: Target player draws X cards, where X is the number of cards in your hand."
+    power: "2"
+    toughness: "3"
+    keywords: []
+    ability activated {
+      costs: [mana_cost("{3}{U}{U}"), tap_self()]
+      effect: draw(count(cards(and(zone_is("hand"), owned_by(you())))), target(any()))
+    }
+  }
+}

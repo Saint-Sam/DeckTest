@@ -1,0 +1,17 @@
+card "Test Card" {
+  id: "test-card"
+  layout: split
+  status: verified_playable
+  face "Test Card" {
+    cost: "{1}{G}"
+    types: "Creature — Elf"
+    oracle: "Flying. {T}: Draw a card."
+    power: "2"
+    toughness: "2"
+    keywords: [flying]
+    ability activated {
+      costs: [tap_self()]
+      effect: draw(1, you())
+    }
+  }
+}

@@ -1,0 +1,21 @@
+// CP-DSL stratum: meld
+card "The Mightstone and Weakstone" {
+  id: "c396db03-bf11-4e20-b630-4f9aa8fd78da"
+  layout: meld
+  status: verified_playable
+  face "The Mightstone and Weakstone" {
+    cost: "{5}"
+    types: "Legendary Artifact — Powerstone"
+    oracle: "When The Mightstone and Weakstone enters, choose one —\n• Draw two cards.\n• Target creature gets -5/-5 until end of turn.\n{T}: Add {C}{C}. This mana can't be spent to cast nonartifact spells.\n(Melds with Urza, Lord Protector.)"
+    keywords: []
+    ability triggered {
+      event: event_enters(source())
+      effect: choose_one(draw(2, you()), modify_pt(target(permanents(type_is("creature"))), -5, -5, "until_end_of_turn"))
+    }
+    ability activated {
+      costs: [tap_self()]
+      effect: add_mana("{C}{C}", you())
+      mana_ability: true
+    }
+  }
+}

@@ -1,0 +1,24 @@
+// CP-DSL stratum: vanilla_keywords
+card "Questing Beast" {
+  id: "b685757b-521e-4353-a233-97052359723d"
+  layout: normal
+  status: verified_playable
+  face "Questing Beast" {
+    cost: "{2}{G}{G}"
+    types: "Legendary Creature — Beast"
+    oracle: "Vigilance, deathtouch, haste\nQuesting Beast can't be blocked by creatures with power 2 or less.\nCombat damage that would be dealt by creatures you control can't be prevented.\nWhenever Questing Beast deals combat damage to an opponent, it deals that much damage to target planeswalker that player controls."
+    power: "4"
+    toughness: "4"
+    keywords: [deathtouch, haste, vigilance]
+    ability static {
+      effect: continuous(source(), cannot_be_blocked_by(source(), permanents(less_than(power(any()), 3))))
+    }
+    ability static {
+      effect: continuous(all(permanents(controlled_by(you()))), damage_cannot_be_prevented(any()))
+    }
+    ability triggered {
+      event: event_damage(source(), opponent(), "combat")
+      effect: deal_damage(target(permanents(type_is("planeswalker"))), amount(triggered()))
+    }
+  }
+}

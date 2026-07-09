@@ -1,0 +1,15 @@
+// CP-DSL stratum: replacement_prevention
+card "Fog" {
+  id: "27e9db49-7af7-4bef-ad4c-bf5dfb92030d"
+  layout: normal
+  status: verified_playable
+  face "Fog" {
+    cost: "{G}"
+    types: "Instant"
+    oracle: "Prevent all combat damage that would be dealt this turn."
+    keywords: []
+    ability spell {
+      effect: prevent_damage("combat", all(permanents(type_is("creature"))))
+    }
+  }
+}

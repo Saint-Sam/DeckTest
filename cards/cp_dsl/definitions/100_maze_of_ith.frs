@@ -1,0 +1,16 @@
+// CP-DSL stratum: turn_combat
+card "Maze of Ith" {
+  id: "38a12bd7-4394-44a8-91a0-6a4ff7fa4f71"
+  layout: normal
+  status: verified_playable
+  face "Maze of Ith" {
+    cost: ""
+    types: "Land"
+    oracle: "{T}: Untap target attacking creature. Prevent all combat damage that would be dealt to and dealt by that creature this turn."
+    keywords: []
+    ability activated {
+      costs: [tap_self()]
+      effect: sequence(untap(target(permanents(type_is("attacking_creature")))), prevent_damage(target(triggered()), "combat"))
+    }
+  }
+}

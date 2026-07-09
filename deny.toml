@@ -3,4 +3,8 @@ version = 2
 confidence-threshold = 0.8
 allow = [
     "GPL-3.0-only",
+    "MIT",
+    "Apache-2.0",
+    "Unlicense",
+    "Unicode-3.0",
 ]

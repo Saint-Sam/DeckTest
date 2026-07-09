@@ -1,0 +1,17 @@
+card "Layer Scenario: Type Removal" {
+  id: "forge:scenario:layers:006"
+  layout: normal
+  status: verified_playable
+  face "Layer Scenario: Type Removal" {
+    cost: "{0}"
+    types: "Enchantment"
+    oracle: "Compiled integration scenario for type removal before keyword grants."
+    keywords: []
+    ability static {
+      effect: layer_effect(you(), remembered("fixture_object_0"), remove_type(remembered("fixture_object_0"), "creature"), 1)
+    }
+    ability static {
+      effect: layer_effect(you(), remembered("fixture_object_0"), grant_keyword(remembered("fixture_object_0"), "flying"), 2)
+    }
+  }
+}

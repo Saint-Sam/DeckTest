@@ -1,0 +1,141 @@
+{
+  "schema_version": 1,
+  "passed": true,
+  "checks": {
+    "catalog_coverage": true,
+    "identity_classification": true,
+    "zero_dangling_references": true,
+    "one_hundred_roundtrips": true,
+    "mandatory_strata_exact": true,
+    "catalog_only_classification_separate": true,
+    "expressiveness_threshold": true,
+    "malformed_diagnostics_threshold": true,
+    "deterministic_database": true,
+    "versioned_database_header": true,
+    "runtime_loader": true,
+    "compiled_card_driven_nightmare_fixtures": true,
+    "mutation_threshold": true,
+    "local_sanitizer_fuzz": true,
+    "local_cross_target_checks": true,
+    "semantic_oracle_breadth": true,
+    "database_catalog_counts": true
+  },
+  "catalog": {
+    "source_english_printings": 113234,
+    "imported_english_printings": 113234,
+    "source_oracle_identities": 38225,
+    "fallback_identities": 81,
+    "classified_identities": 38306,
+    "dangling_references": 0
+  },
+  "corpus": {
+    "definitions": 100,
+    "canonical_roundtrips": 100,
+    "primary_strata": 25,
+    "mandatory_strata": [
+      "vanilla_keywords",
+      "instant_sorcery",
+      "modal_choices",
+      "activated_mana_loyalty",
+      "triggered_delayed",
+      "replacement_prevention",
+      "continuous_layers",
+      "targeting_restrictions",
+      "zones_lki",
+      "calculated_values",
+      "alternate_additional_costs",
+      "counters_tokens_copy",
+      "attachments",
+      "multiplayer_commander_voting",
+      "split_fuse",
+      "transform_day_night",
+      "modal_dfc",
+      "adventure",
+      "meld",
+      "flip",
+      "saga_class_case_leveler",
+      "unusual_mana",
+      "cast_from_zone",
+      "dungeon_initiative_monarch_energy",
+      "turn_combat"
+    ],
+    "missing_mandatory_strata": [],
+    "unexpected_strata": [],
+    "minimum_cards_per_stratum": 4,
+    "distinct_operations": 127,
+    "malformed_positioned_diagnostics": 64,
+    "card_driven_nightmare_fixtures": 10
+  },
+  "database": {
+    "schema_version": 1,
+    "identity_count": 38306,
+    "printing_count": 113234,
+    "definition_count": 100,
+    "sha256": "2840834d0dd5a8b558af7587569d5f0171d4ee0545eccdb8a3a2de750c402381",
+    "index_sha256": "18e60a8fe061400ec6dc2dd3323767b342144e3c287c5d6249270520fb7f0b5d",
+    "identical_clean_builds": 3,
+    "layer_scenario_sha256": "3b6906e2e29da0b5c6cd10f4e4cc5da87cb58866b5391ce9c22836296d840364",
+    "layer_scenario_index_sha256": "2b46cde3d897f0c85620a588264fdc15c9d1c955e96c24b0ff350dfa7435e40a",
+    "identical_layer_scenario_builds": 3
+  },
+  "mutation": {
+    "mutants": 28,
+    "killed": 28,
+    "survived": 0,
+    "invalid": 0,
+    "score_percent": 100.0
+  },
+  "local_fuzz": {
+    "workers": 8,
+    "seconds_per_worker": 300,
+    "total_worker_seconds": 2400,
+    "sanitizer": "address"
+  },
+  "local_platforms": {
+    "targets": [
+      {
+        "target": "wasm32-unknown-unknown",
+        "command": "cargo check --locked --offline --workspace --all-features --target wasm32-unknown-unknown",
+        "target_dir": "target/local-platforms/wasm32-unknown-unknown",
+        "exit_code": 0,
+        "passed": true
+      },
+      {
+        "target": "aarch64-linux-android",
+        "command": "cargo check --locked --offline --workspace --all-features --target aarch64-linux-android",
+        "target_dir": "target/local-platforms/aarch64-linux-android",
+        "exit_code": 0,
+        "passed": true
+      },
+      {
+        "target": "aarch64-apple-ios",
+        "command": "cargo check --locked --offline --workspace --all-features --target aarch64-apple-ios",
+        "target_dir": "target/local-platforms/aarch64-apple-ios",
+        "exit_code": 0,
+        "passed": true
+      },
+      {
+        "target": "x86_64-pc-windows-msvc",
+        "command": "cargo check --locked --offline --workspace --all-features --target x86_64-pc-windows-msvc",
+        "target_dir": "target/local-platforms/x86_64-pc-windows-msvc",
+        "exit_code": 0,
+        "passed": true
+      }
+    ],
+    "rustc": "rustc 1.96.1 (31fca3adb 2026-06-26)"
+  },
+  "oracle_semantics": {
+    "distinct_actions": 65,
+    "distinct_operations": 19,
+    "hand_authored_scenarios": 133,
+    "origins": 4,
+    "raw_scenarios": 1200,
+    "rule_interactions": 1839,
+    "structural_families": 379
+  },
+  "provenance": {
+    "source_snapshot_sha256": "df50b4384fcd7540442707974d023590ee220862de70dae820b236e501be73e1",
+    "catalog_source_sha256": "eeddab7b413016530fa8996b7898ab8f2a1f33b47e65f7924147382d49cc3d04",
+    "compiler_test_source_sha256": "7423dc28a0aba4de8648b00d79b60ddb36b0d915de54a000663630f3f673c231"
+  }
+}

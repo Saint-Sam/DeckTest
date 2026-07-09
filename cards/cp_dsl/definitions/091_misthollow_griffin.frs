@@ -1,0 +1,17 @@
+// CP-DSL stratum: cast_from_zone
+card "Misthollow Griffin" {
+  id: "a990e744-bfc4-435d-aef6-6256ac10f5a6"
+  layout: normal
+  status: verified_playable
+  face "Misthollow Griffin" {
+    cost: "{2}{U}{U}"
+    types: "Creature — Griffin"
+    oracle: "Flying\nYou may cast this card from exile."
+    power: "3"
+    toughness: "3"
+    keywords: [flying]
+    ability static {
+      effect: continuous(source(), cast(source(), "from_exile"))
+    }
+  }
+}

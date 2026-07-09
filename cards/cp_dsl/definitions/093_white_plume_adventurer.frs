@@ -1,0 +1,22 @@
+// CP-DSL stratum: dungeon_initiative_monarch_energy
+card "White Plume Adventurer" {
+  id: "51f091a7-9b0b-4362-8e9c-c174752f369b"
+  layout: normal
+  status: verified_playable
+  face "White Plume Adventurer" {
+    cost: "{2}{W}"
+    types: "Creature — Orc Cleric"
+    oracle: "When this creature enters, you take the initiative.\nAt the beginning of each opponent's upkeep, untap a creature you control. If you've completed a dungeon, untap all creatures you control instead."
+    power: "3"
+    toughness: "3"
+    keywords: []
+    ability triggered {
+      event: event_enters(source())
+      effect: take_initiative(you())
+    }
+    ability triggered {
+      event: event_upkeep(opponent())
+      effect: untap(target(permanents(controlled_by(you()))))
+    }
+  }
+}

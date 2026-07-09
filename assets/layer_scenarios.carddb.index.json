@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "identities": [
+    {
+      "id": "forge:scenario:layers:001",
+      "name": "Layer Scenario: Humility",
+      "layout": "normal",
+      "classification": "verified_playable"
+    },
+    {
+      "id": "forge:scenario:layers:002",
+      "name": "Layer Scenario: Opalescence",
+      "layout": "normal",
+      "classification": "verified_playable"
+    },
+    {
+      "id": "forge:scenario:layers:003",
+      "name": "Layer Scenario: Blood Moon",
+      "layout": "normal",
+      "classification": "verified_playable"
+    },
+    {
+      "id": "forge:scenario:layers:004",
+      "name": "Layer Scenario: Full Stack",
+      "layout": "normal",
+      "classification": "verified_playable"
+    },
+    {
+      "id": "forge:scenario:layers:005",
+      "name": "Layer Scenario: Dependency Order",
+      "layout": "normal",
+      "classification": "verified_playable"
+    },
+    {
+      "id": "forge:scenario:layers:006",
+      "name": "Layer Scenario: Type Removal",
+      "layout": "normal",
+      "classification": "verified_playable"
+    },
+    {
+      "id": "forge:scenario:layers:007",
+      "name": "Layer Scenario: CDA Modifier Switch",
+      "layout": "normal",
+      "classification": "verified_playable"
+    },
+    {
+      "id": "forge:scenario:layers:008",
+      "name": "Layer Scenario: Specific Color",
+      "layout": "normal",
+      "classification": "verified_playable"
+    },
+    {
+      "id": "forge:scenario:layers:009",
+      "name": "Layer Scenario: Control Change",
+      "layout": "normal",
+      "classification": "verified_playable"
+    },
+    {
+      "id": "forge:scenario:layers:010",
+      "name": "Layer Scenario: All Layers",
+      "layout": "normal",
+      "classification": "verified_playable"
+    }
+  ],
+  "printings": []
+}

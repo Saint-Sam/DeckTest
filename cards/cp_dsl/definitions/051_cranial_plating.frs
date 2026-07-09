@@ -1,0 +1,25 @@
+// CP-DSL stratum: attachments
+card "Cranial Plating" {
+  id: "75564721-e4e9-463a-b49e-f0c7cd6f53a7"
+  layout: normal
+  status: verified_playable
+  face "Cranial Plating" {
+    cost: "{2}"
+    types: "Artifact — Equipment"
+    oracle: "Equipped creature gets +1/+0 for each artifact you control.\n{B}{B}: Attach this Equipment to target creature you control.\nEquip {1}"
+    keywords: [equip]
+    ability activated {
+      costs: [mana_cost("{1}")]
+      timing: timing_sorcery()
+      effect: attach(source(), target(permanents(type_is("creature"))))
+    }
+    ability activated {
+      costs: [mana_cost("{B}{B}")]
+      timing: timing_instant()
+      effect: attach(source(), target(permanents(type_is("creature"))))
+    }
+    ability static {
+      effect: continuous(equipped_object(source()), modify_pt(any(), count(permanents(and(type_is("artifact"), controlled_by(you())))), 0))
+    }
+  }
+}

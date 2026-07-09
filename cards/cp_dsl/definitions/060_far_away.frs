@@ -1,0 +1,24 @@
+// CP-DSL stratum: split_fuse
+card "Far // Away" {
+  id: "e4b1ef6a-6f05-472e-aaed-1c24dd6605c7"
+  layout: split
+  status: verified_playable
+  face "Far" {
+    cost: "{1}{U}"
+    types: "Instant"
+    oracle: "Return target creature to its owner's hand.\nFuse (You may cast one or both halves of this card from your hand.)"
+    keywords: [fuse]
+    ability spell {
+      effect: return_to_hand(target(permanents(type_is("creature"))))
+    }
+  }
+  face "Away" {
+    cost: "{2}{B}"
+    types: "Instant"
+    oracle: "Target player sacrifices a creature of their choice.\nFuse (You may cast one or both halves of this card from your hand.)"
+    keywords: [fuse]
+    ability spell {
+      effect: sacrifice_effect(target(any()), permanents(type_is("creature")))
+    }
+  }
+}

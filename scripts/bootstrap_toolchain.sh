@@ -6,6 +6,8 @@ cd "$ROOT"
 
 LEGACY_FORGE_URL="https://github.com/Card-Forge/forge"
 LEGACY_FORGE_COMMIT="1f0a3e0815822d8f58f798e0304b33d4534248b1"
+RUST_STABLE="1.96.1"
+RUST_NIGHTLY="nightly-2026-07-05"
 
 if [[ "${1:-}" == "--self-test" ]]; then
   echo "PASS bootstrap_toolchain.sh self-test"
@@ -42,40 +44,59 @@ ensure_legacy_forge() {
   git -C vendor/legacy-forge checkout --quiet "$LEGACY_FORGE_COMMIT"
 }
 
-if ! command -v rustup >/dev/null 2>&1; then
-  echo "Installing rustup and Rust stable toolchain..."
-  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+mode="${1:---check}"
+if [[ "$mode" != "--check" && "$mode" != "--install" ]]; then
+  echo "usage: scripts/bootstrap_toolchain.sh [--check|--install]" >&2
+  exit 2
 fi
 
-if [[ -f "$HOME/.cargo/env" ]]; then
-  # shellcheck disable=SC1091
-  source "$HOME/.cargo/env"
+if [[ "$mode" == "--check" ]]; then
+  if [[ -e .git ]]; then
+    if [[ ! -f vendor/legacy-forge/.git && ! -f vendor/legacy-forge/.git/HEAD ]]; then
+      echo "ERROR: pinned legacy submodule is absent from this git checkout" >&2
+      echo "Run only after approval: git submodule update --init --recursive" >&2
+      exit 1
+    fi
+  else
+    reference="vendor/legacy-forge.reference.json"
+    if [[ ! -s "$reference" ]] \
+      || ! grep -q "\"commit\": \"$LEGACY_FORGE_COMMIT\"" "$reference" \
+      || ! grep -q '"required_for_baseline_build": false' "$reference"; then
+      echo "ERROR: source archive lacks the pinned legacy reference manifest" >&2
+      exit 1
+    fi
+    echo "Archive mode: baseline verification uses the bundled legacy pin manifest."
+  fi
+  scripts/check_toolchain.sh
+  echo "Bootstrap check complete. No software was installed and no network was used."
+  exit 0
 fi
 
+echo "Explicit install mode: this command uses the network and may install toolchains."
 if ! command -v rustup >/dev/null 2>&1; then
-  echo "ERROR: rustup is still not available after install. Restart your shell or source ~/.cargo/env." >&2
+  echo "ERROR: rustup is not installed." >&2
+  echo "Install rustup from https://rustup.rs, then rerun this command." >&2
   exit 1
 fi
 
-rustup toolchain install stable
-rustup component add rustfmt clippy llvm-tools-preview
-rustup target add \
+rustup toolchain install "$RUST_STABLE" --profile default
+rustup component add --toolchain "$RUST_STABLE" rustfmt clippy llvm-tools-preview
+rustup target add --toolchain "$RUST_STABLE" \
   wasm32-unknown-unknown \
   aarch64-linux-android \
   aarch64-apple-ios \
   x86_64-pc-windows-msvc
+rustup toolchain install "$RUST_NIGHTLY" --profile minimal
 
-cargo install \
-  cargo-llvm-cov \
-  cargo-fuzz \
-  cargo-deny \
-  cargo-audit \
-  wasm-bindgen-cli \
-  cargo-ndk \
-  critcmp
+cargo +"$RUST_STABLE" install cargo-llvm-cov --version 0.8.7 --locked
+cargo +"$RUST_STABLE" install cargo-fuzz --version 0.13.2 --locked
+cargo +"$RUST_STABLE" install cargo-deny --version 0.19.9 --locked
+cargo +"$RUST_STABLE" install cargo-audit --version 0.22.2 --locked
+cargo +"$RUST_STABLE" install wasm-bindgen-cli --version 0.2.126 --locked
+cargo +"$RUST_STABLE" install cargo-ndk --version 4.1.2 --locked
+cargo +"$RUST_STABLE" install critcmp --version 0.1.8 --locked
 
 ensure_legacy_forge
+scripts/check_toolchain.sh --write-lock
 
-scripts/check_toolchain.sh
-
-echo "Bootstrap complete. Run scripts/vl.sh next."
+echo "Bootstrap install complete. Run scripts/local_verify.sh task next."

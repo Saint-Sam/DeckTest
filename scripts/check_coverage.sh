@@ -39,4 +39,19 @@ cargo llvm-cov run -p forge-testkit --bin forge-testkit --no-report -- oracle --
 cargo llvm-cov run -p forge-testkit --bin forge-testkit --no-report -- oracle --path tests/oracle/t2_7_counters_tokens_copy --no-junit
 cargo llvm-cov run -p forge-testkit --bin forge-testkit --no-report -- oracle --path tests/oracle/t2_8_multiplayer_commander --no-junit
 cargo llvm-cov run -p forge-testkit --bin forge-testkit --no-report -- oracle --path tests/oracle/t2_9_keyword_wave1 --no-junit
+
+coverage_card_dir="target/coverage-card-regression"
+mkdir -p "$coverage_card_dir"
+cargo llvm-cov run -p forge-cardc --bin forge-cardc --no-report -- \
+  build cards/cp_dsl/definitions \
+  --catalog assets/card_catalog.json \
+  -o "$coverage_card_dir/carddb.bin"
+cargo llvm-cov run -p forge-cards --bin forge-cards --no-report -- \
+  validate "$coverage_card_dir/carddb.bin"
+cargo llvm-cov run -p forge-porttools --bin forge-porttools --no-report -- \
+  quarantine --list --catalog assets/card_catalog.json
+cargo llvm-cov run -p forge-arena --bin forge-arena --no-report -- \
+  --nightmare-suite --games 10 --max-turns 2
+cargo llvm-cov run -p forge-arena --bin forge-arena --no-report -- \
+  --smoke 1 --random --max-turns 2
 cargo llvm-cov report --fail-under-lines "$floor" --json --output-path metrics/coverage.json

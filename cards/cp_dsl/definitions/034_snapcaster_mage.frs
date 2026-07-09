@@ -1,0 +1,18 @@
+// CP-DSL stratum: zones_lki
+card "Snapcaster Mage" {
+  id: "2bb2eda7-3b38-4c56-870f-c3218a1056f5"
+  layout: normal
+  status: verified_playable
+  face "Snapcaster Mage" {
+    cost: "{1}{U}"
+    types: "Creature — Human Wizard"
+    oracle: "Flash\nWhen this creature enters, target instant or sorcery card in your graveyard gains flashback until end of turn. The flashback cost is equal to its mana cost. (You may cast that card from your graveyard for its flashback cost. Then exile it.)"
+    power: "2"
+    toughness: "1"
+    keywords: [flash]
+    ability triggered {
+      event: event_enters(source())
+      effect: grant_keyword(target(cards(and(zone_is("graveyard"), or(type_is("instant"), type_is("sorcery"))))), "flashback", "until_end_of_turn")
+    }
+  }
+}

@@ -1,0 +1,35 @@
+// CP-DSL stratum: flip
+card "Nezumi Shortfang // Stabwhisker the Odious" {
+  id: "45c8e860-5ce5-4a1c-aebe-97ddffcb2f74"
+  layout: flip
+  status: verified_playable
+  face "Nezumi Shortfang" {
+    cost: "{1}{B}"
+    types: "Creature — Rat Rogue"
+    oracle: "{1}{B}, {T}: Target opponent discards a card. Then if that player has no cards in hand, flip this creature."
+    power: "1"
+    toughness: "1"
+    keywords: []
+    ability activated {
+      costs: [mana_cost("{1}{B}"), tap_self()]
+      effect: discard_cards(1, target(opponent()))
+    }
+    ability triggered {
+      event: event_discard(opponent())
+      condition: equals(count(cards(and(zone_is("hand"), owned_by(opponent())))), 0)
+      effect: transform(source())
+    }
+  }
+  face "Stabwhisker the Odious" {
+    cost: ""
+    types: "Legendary Creature — Rat Shaman"
+    oracle: "At the beginning of each opponent's upkeep, that player loses 1 life for each card fewer than three in their hand."
+    power: "3"
+    toughness: "3"
+    keywords: []
+    ability triggered {
+      event: event_upkeep(opponent())
+      effect: lose_life(count(cards(and(zone_is("hand"), owned_by(opponent())))), opponent())
+    }
+  }
+}

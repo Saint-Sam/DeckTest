@@ -1,0 +1,20 @@
+card "Layer Scenario: Opalescence" {
+  id: "forge:scenario:layers:002"
+  layout: normal
+  status: verified_playable
+  face "Layer Scenario: Opalescence" {
+    cost: "{0}"
+    types: "Enchantment"
+    oracle: "Compiled integration scenario for type addition and base power/toughness."
+    keywords: []
+    ability static {
+      effect: layer_effect(you(), all(permanents()), set_type(all(permanents()), "enchantment"), 1)
+    }
+    ability static {
+      effect: layer_effect(you(), all(permanents()), add_type(all(permanents()), "creature"), 2)
+    }
+    ability static {
+      effect: layer_effect(you(), all(permanents()), set_pt(all(permanents()), 4, 4), 3)
+    }
+  }
+}

@@ -1,5 +1,5 @@
 {
-  "tier": 2,
+  "tier": 3,
   "tasks": {
     "T0.1": {
       "status": "verified",
@@ -232,6 +232,12 @@
       "attempts": 0,
       "verification": "cargo fmt --all -- --check, cargo clippy --workspace --all-targets --all-features -- -D warnings, cargo test --workspace --quiet, scripts/run_nightmare_suite.sh 1000 6, and scripts/vl.sh passed locally with 10 hand-authored layer-heavy nightmare fixtures, 1,000 random-legal games, 0 invariant violations, a VL nightmare-suite smoke hook, and a T2 gate scaffold for >=1,200 oracle scenarios plus 12-hour sanitizer fuzz evidence",
       "remote_ci": "GitHub Actions ci run 28956922550 passed all required jobs for commit 4a49fb36b9ac51a36159c3f5c5061f14aa444bec"
+    },
+    "T3.1": {
+      "status": "in_progress",
+      "branch": "task/T3.1-card-dsl",
+      "attempts": 0,
+      "verification": "CP-DSL reviewer remediation implemented and locally green: 100/100 definitions, exact 25 strata, 64 malformed diagnostics, 28/28 mutants killed, 2,400 address-sanitizer worker-seconds, 4/4 executed cross-target checks, three isolated deterministic builds, compiled layer scenario lowering, 1,200/1,200 semantic scenarios, and 80.08% coverage; exact-commit re-review pending"
     }
   },
   "gates_passed": [
@@ -241,14 +247,14 @@
     "CP-LAYERS",
     "T2"
   ],
-  "metrics_snapshot": "metrics/legacy_inventory.json",
+  "metrics_snapshot": "metrics/project_status.json",
   "gate_reviews": {
     "T0": {
       "status": "passed_conditional",
       "bundle": "reports/gates/T0/bundle",
       "signoff": "reports/gates/T0/SIGNOFF.md",
       "conditions": {
-        "T0.C1": "Before collaboration branches or release, configure GitHub main branch protection to require fmt, clippy, test-linux, test-macos, test-windows, build-wasm, build-android, coverage, deny-audit, verification-loop, and determinism-replay."
+        "T0.C1": "superseded by Owner-approved PC-0001: hosted CI and branch-protection checks are replaced by exact-commit local verification packets"
       },
       "remediation": {
         "T0.R1": "complete: remote CI run 28816494698 passed all required T0 jobs on current main head 3ee6166; branch protection equivalence documented in reports/gates/T0/remote-ci-2026-07-06.md",
@@ -302,15 +308,17 @@
   "owner_input": {
     "O1": "complete",
     "O2": "complete",
-    "O5": "complete"
+    "O4": "pending_cp_dsl_packet",
+    "O5": "complete",
+    "O9-PC-0001-PC-0003": "complete_2026-07-09"
   },
   "process_improvements": {
     "PI-2026-07-09-local-multiworker-fuzz": {
-      "status": "planned",
+      "status": "complete",
       "target": "before next long local fuzz gate after T2",
       "request": "Owner requested using more local resources for long fuzz gates because GitHub Actions budget is constrained.",
-      "implementation": "Add a local-only multi-worker fuzz mode to the gate/fuzz harness so future T3+ clean-clone gates can shard libFuzzer targets across available CPU resources without spending GitHub Actions minutes.",
-      "constraints": "Do not restart the active T2 clean-clone gate; do not push or trigger GitHub Actions unless owner explicitly approves."
+      "implementation": "Implemented resource-aware local-only multi-worker fuzzing and used eight isolated address-sanitizer workers for the CP-DSL 2,400-worker-second gate without GitHub Actions.",
+      "constraints": "Use resource-aware workers, preserve disk headroom, do not push, and never trigger GitHub Actions."
     }
   }
 }

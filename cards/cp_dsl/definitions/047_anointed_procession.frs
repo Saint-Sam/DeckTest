@@ -1,0 +1,16 @@
+// CP-DSL stratum: counters_tokens_copy
+card "Anointed Procession" {
+  id: "7246d45b-2185-4cdd-981b-5419b7d52bce"
+  layout: normal
+  status: verified_playable
+  face "Anointed Procession" {
+    cost: "{3}{W}"
+    types: "Enchantment"
+    oracle: "If an effect would create one or more tokens under your control, it creates twice that many of those tokens instead."
+    keywords: []
+    ability replacement {
+      event: event_enters(permanents(and(type_is("token"), controlled_by(you()))))
+      effect: double_event(triggered())
+    }
+  }
+}

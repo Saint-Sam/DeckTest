@@ -1,0 +1,16 @@
+// CP-DSL stratum: replacement_prevention
+card "Leyline of the Void" {
+  id: "f4e32fc1-1b8d-441e-8e76-71f19f98e925"
+  layout: normal
+  status: verified_playable
+  face "Leyline of the Void" {
+    cost: "{2}{B}{B}"
+    types: "Enchantment"
+    oracle: "If this card is in your opening hand, you may begin the game with it on the battlefield.\nIf a card would be put into an opponent's graveyard from anywhere, exile it instead."
+    keywords: []
+    ability replacement {
+      event: event_zone_change(cards(owned_by(opponent())), "graveyard")
+      effect: replace_event(triggered(), move_zone(triggered(), "exile"))
+    }
+  }
+}

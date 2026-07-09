@@ -1,0 +1,29 @@
+// CP-DSL stratum: activated_mana_loyalty
+card "Jace, the Mind Sculptor" {
+  id: "7f77a84e-5a4b-4834-aefa-3cecc175ae8e"
+  layout: normal
+  status: verified_playable
+  face "Jace, the Mind Sculptor" {
+    cost: "{2}{U}{U}"
+    types: "Legendary Planeswalker — Jace"
+    oracle: "+2: Look at the top card of target player's library. You may put that card on the bottom of that player's library.\n0: Draw three cards, then put two cards from your hand on top of your library in any order.\n−1: Return target creature to its owner's hand.\n−12: Exile all cards from target player's library, then that player shuffles their hand into their library."
+    loyalty: "3"
+    keywords: []
+    ability activated {
+      costs: [loyalty_cost(2)]
+      effect: look_at(cards(zone_is("library")), target(any()))
+    }
+    ability activated {
+      costs: [loyalty_cost(0)]
+      effect: sequence(draw(3, you()), move_zone(cards(zone_is("hand")), "library_top", 2))
+    }
+    ability activated {
+      costs: [loyalty_cost(-1)]
+      effect: return_to_hand(target(permanents(type_is("creature"))))
+    }
+    ability activated {
+      costs: [loyalty_cost(-12)]
+      effect: sequence(exile(cards(zone_is("library")), target(any())), move_zone(cards(zone_is("hand")), "library"))
+    }
+  }
+}

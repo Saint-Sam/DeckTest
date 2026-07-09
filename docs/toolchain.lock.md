@@ -1,6 +1,6 @@
 # Toolchain Lock
 
-Date: 2026-07-06T19:23:43Z
+Date: 2026-07-09T18:09:25Z
 
 ## Rust
 
@@ -10,8 +10,6 @@ rustc 1.96.1 (31fca3adb 2026-06-26)
 cargo 1.96.1 (356927216 2026-06-26)
 rustfmt 1.9.0-stable (31fca3adb2 2026-06-26)
 clippy 0.1.96 (31fca3adb2 2026-06-26)
-rustc +nightly 1.99.0-nightly (3659db0d3 2026-07-05)
-cargo +nightly 1.99.0-nightly (2f0e7011e 2026-07-05)
 ```
 
 ## Installed Targets

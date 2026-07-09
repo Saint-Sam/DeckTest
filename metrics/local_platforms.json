@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "source_sha256": "beeee1636ef389808db0243b88686b2d28916824c440fc9653c2312e05146b2e",
+  "rustc": "rustc 1.96.1 (31fca3adb 2026-06-26)",
+  "targets": [
+    {
+      "target": "wasm32-unknown-unknown",
+      "command": "cargo check --locked --offline --workspace --all-features --target wasm32-unknown-unknown",
+      "target_dir": "target/local-platforms/wasm32-unknown-unknown",
+      "exit_code": 0,
+      "passed": true
+    },
+    {
+      "target": "aarch64-linux-android",
+      "command": "cargo check --locked --offline --workspace --all-features --target aarch64-linux-android",
+      "target_dir": "target/local-platforms/aarch64-linux-android",
+      "exit_code": 0,
+      "passed": true
+    },
+    {
+      "target": "aarch64-apple-ios",
+      "command": "cargo check --locked --offline --workspace --all-features --target aarch64-apple-ios",
+      "target_dir": "target/local-platforms/aarch64-apple-ios",
+      "exit_code": 0,
+      "passed": true
+    },
+    {
+      "target": "x86_64-pc-windows-msvc",
+      "command": "cargo check --locked --offline --workspace --all-features --target x86_64-pc-windows-msvc",
+      "target_dir": "target/local-platforms/x86_64-pc-windows-msvc",
+      "exit_code": 0,
+      "passed": true
+    }
+  ],
+  "native_tests_and_benches_separate": true,
+  "passed": true
+}

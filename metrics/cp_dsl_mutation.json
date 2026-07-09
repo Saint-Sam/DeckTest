@@ -1,0 +1,182 @@
+{
+  "schema_version": 1,
+  "source_sha256": "7423dc28a0aba4de8648b00d79b60ddb36b0d915de54a000663630f3f673c231",
+  "worker_count": 21,
+  "mutant_count": 28,
+  "killed": 28,
+  "survived": 0,
+  "invalid": 0,
+  "mutation_score_percent": 100.0,
+  "minimum_score_percent": 90.0,
+  "mutants": [
+    {
+      "id": "id_allows_empty",
+      "risk": "P0",
+      "status": "killed",
+      "reason": "test suite failed"
+    },
+    {
+      "id": "id_allows_spaces",
+      "risk": "P0",
+      "status": "killed",
+      "reason": "test suite failed"
+    },
+    {
+      "id": "modal_dfc_collapses_to_normal",
+      "risk": "P1",
+      "status": "killed",
+      "reason": "test suite failed"
+    },
+    {
+      "id": "damage_operation_has_value_category",
+      "risk": "P0",
+      "status": "killed",
+      "reason": "test suite failed"
+    },
+    {
+      "id": "draw_accepts_zero_arguments",
+      "risk": "P1",
+      "status": "killed",
+      "reason": "test suite failed"
+    },
+    {
+      "id": "tap_accepts_two_arguments",
+      "risk": "P1",
+      "status": "killed",
+      "reason": "test suite failed"
+    },
+    {
+      "id": "unknown_keywords_are_accepted",
+      "risk": "P1",
+      "status": "killed",
+      "reason": "test suite failed"
+    },
+    {
+      "id": "expression_category_check_disabled",
+      "risk": "P0",
+      "status": "killed",
+      "reason": "test suite failed"
+    },
+    {
+      "id": "operation_argument_type_check_disabled",
+      "risk": "P0",
+      "status": "killed",
+      "reason": "test suite failed"
+    },
+    {
+      "id": "continuous_accepts_prose_effect",
+      "risk": "P1",
+      "status": "killed",
+      "reason": "test suite failed"
+    },
+    {
+      "id": "number_arguments_accept_selectors",
+      "risk": "P1",
+      "status": "killed",
+      "reason": "test suite failed"
+    },
+    {
+      "id": "activated_cost_requirement_disabled",
+      "risk": "P0",
+      "status": "killed",
+      "reason": "test suite failed"
+    },
+    {
+      "id": "trigger_event_requirement_disabled",
+      "risk": "P0",
+      "status": "killed",
+      "reason": "test suite failed"
+    },
+    {
+      "id": "mana_ability_kind_check_disabled",
+      "risk": "P0",
+      "status": "killed",
+      "reason": "test suite failed"
+    },
+    {
+      "id": "creature_stats_requirement_disabled",
+      "risk": "P0",
+      "status": "killed",
+      "reason": "test suite failed"
+    },
+    {
+      "id": "planeswalker_loyalty_requirement_disabled",
+      "risk": "P0",
+      "status": "killed",
+      "reason": "test suite failed"
+    },
+    {
+      "id": "battle_defense_requirement_disabled",
+      "risk": "P0",
+      "status": "killed",
+      "reason": "test suite failed"
+    },
+    {
+      "id": "empty_names_are_accepted",
+      "risk": "P1",
+      "status": "killed",
+      "reason": "test suite failed"
+    },
+    {
+      "id": "multiface_requirement_disabled",
+      "risk": "P0",
+      "status": "killed",
+      "reason": "test suite failed"
+    },
+    {
+      "id": "duplicate_fields_are_accepted",
+      "risk": "P0",
+      "status": "killed",
+      "reason": "test suite failed"
+    },
+    {
+      "id": "unknown_card_types_become_creatures",
+      "risk": "P0",
+      "status": "killed",
+      "reason": "test suite failed"
+    },
+    {
+      "id": "empty_card_type_set_is_accepted",
+      "risk": "P1",
+      "status": "killed",
+      "reason": "test suite failed"
+    },
+    {
+      "id": "definition_status_is_open",
+      "risk": "P0",
+      "status": "killed",
+      "reason": "test suite failed"
+    },
+    {
+      "id": "runtime_magic_check_disabled",
+      "risk": "P0",
+      "status": "killed",
+      "reason": "test suite failed"
+    },
+    {
+      "id": "runtime_trailing_data_check_disabled",
+      "risk": "P0",
+      "status": "killed",
+      "reason": "test suite failed"
+    },
+    {
+      "id": "runtime_sort_checks_disabled",
+      "risk": "P0",
+      "status": "killed",
+      "reason": "test suite failed"
+    },
+    {
+      "id": "runtime_header_schema_check_disabled",
+      "risk": "P0",
+      "status": "killed",
+      "reason": "test suite failed"
+    },
+    {
+      "id": "runtime_payload_schema_check_disabled",
+      "risk": "P0",
+      "status": "killed",
+      "reason": "test suite failed"
+    }
+  ],
+  "passed": true
+}

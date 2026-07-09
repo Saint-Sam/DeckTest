@@ -1,0 +1,5 @@
+card "Test Card" {
+  id: "test-card"
+  layout: normal
+  status: verified_playable
+}

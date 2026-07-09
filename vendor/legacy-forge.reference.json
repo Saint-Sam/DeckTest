@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "repository": "https://github.com/Card-Forge/forge",
+  "commit": "1f0a3e0815822d8f58f798e0304b33d4534248b1",
+  "license": "GPL-3.0-only",
+  "role": "read-only legacy behavior and data reference",
+  "required_for_baseline_build": false
+}

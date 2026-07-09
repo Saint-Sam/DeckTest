@@ -1,0 +1,31 @@
+// CP-DSL stratum: modal_dfc
+card "Birgi, God of Storytelling // Harnfel, Horn of Bounty" {
+  id: "fb81e4d3-1d8c-4779-be62-87cf49277e51"
+  layout: modal_dfc
+  status: verified_playable
+  face "Birgi, God of Storytelling" {
+    cost: "{2}{R}"
+    types: "Legendary Creature — God"
+    oracle: "Whenever you cast a spell, add {R}. Until end of turn, you don't lose this mana as steps and phases end.\nCreatures you control can boast twice during each of your turns rather than once."
+    power: "3"
+    toughness: "3"
+    keywords: []
+    ability triggered {
+      event: event_cast(spells(controlled_by(you())))
+      effect: add_mana("{R}", you())
+    }
+    ability static {
+      effect: continuous(all(permanents(controlled_by(you()))), activation_limit(any(), "boast", 2))
+    }
+  }
+  face "Harnfel, Horn of Bounty" {
+    cost: "{4}{R}"
+    types: "Legendary Artifact"
+    oracle: "Discard a card: Exile the top two cards of your library. You may play those cards this turn."
+    keywords: []
+    ability activated {
+      costs: [discard_cost(1, you())]
+      effect: sequence(exile(cards(zone_is("library_top")), 2), play(triggered(), "this_turn"))
+    }
+  }
+}

@@ -8,6 +8,8 @@ edition = "2021"
 cargo-fuzz = true
 
 [dependencies]
+forge-cardc = { path = "../crates/forge-cardc" }
+forge-cards = { path = "../crates/forge-cards" }
 forge-core = { path = "../crates/forge-core" }
 forge-testkit = { path = "../crates/forge-testkit" }
 libfuzzer-sys = "0.4"
@@ -29,6 +31,20 @@ bench = false
 [[bin]]
 name = "fuzz_characteristics"
 path = "fuzz_targets/fuzz_characteristics.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_carddsl"
+path = "fuzz_targets/fuzz_carddsl.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_carddb"
+path = "fuzz_targets/fuzz_carddb.rs"
 test = false
 doc = false
 bench = false

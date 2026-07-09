@@ -6,26 +6,33 @@ toolchain used by this repository.
 ## Recommended: Git Clone
 
 ```bash
-git clone --recurse-submodules <repo-url> forge-rs
-cd forge-rs
-bash scripts/bootstrap_toolchain.sh
-bash scripts/vl.sh
+git clone --recurse-submodules https://github.com/Saint-Sam/Forge-2.0.git forge-2.0
+cd forge-2.0
+bash scripts/bootstrap_toolchain.sh --check
+bash scripts/local_verify.sh task
 ```
 
 ## GitHub Download ZIP
 
-GitHub source ZIP files do not include git submodule contents. This repository's
-bootstrap script handles that by fetching the pinned legacy Forge reference.
+GitHub source ZIP files do not include git submodule contents. The ZIP includes
+the pinned legacy-reference manifest, and the baseline build and local task
+verification do not require the legacy source tree.
 
 ```bash
-cd forge-rs
-bash scripts/bootstrap_toolchain.sh
-bash scripts/vl.sh
+cd Forge-2.0-main
+bash scripts/bootstrap_toolchain.sh --check
+bash scripts/local_verify.sh task
 ```
+
+Legacy mining and differential tools are optional development workflows. Run
+`bash scripts/bootstrap_toolchain.sh --install` only after approving network
+access if those workflows need to materialize `vendor/legacy-forge`.
 
 ## What The Bootstrap Installs
 
-Running `bash scripts/bootstrap_toolchain.sh` may install or update:
+`bash scripts/bootstrap_toolchain.sh --check` performs no installation or
+network access. If it reports missing tools, the explicit
+`bash scripts/bootstrap_toolchain.sh --install` command may install:
 
 - rustup and the stable Rust toolchain
 - rustfmt, clippy, and llvm-tools-preview

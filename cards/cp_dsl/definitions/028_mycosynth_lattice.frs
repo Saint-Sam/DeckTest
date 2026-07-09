@@ -1,0 +1,21 @@
+// CP-DSL stratum: continuous_layers
+card "Mycosynth Lattice" {
+  id: "ae1f2ab5-c6a5-4d49-a746-3cb4668bf805"
+  layout: normal
+  status: verified_playable
+  face "Mycosynth Lattice" {
+    cost: "{6}"
+    types: "Artifact"
+    oracle: "All permanents are artifacts in addition to their other types.\nAll cards that aren't on the battlefield, spells, and permanents are colorless.\nPlayers may spend mana as though it were mana of any color."
+    keywords: []
+    ability static {
+      effect: continuous(all(permanents()), add_type(any(), "artifact"))
+    }
+    ability static {
+      effect: continuous(all(cards()), set_color(any(), "colorless"))
+    }
+    ability static {
+      effect: continuous(you(), spend_mana_as_any_color(you()))
+    }
+  }
+}

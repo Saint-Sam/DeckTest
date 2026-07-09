@@ -1,0 +1,19 @@
+// CP-DSL stratum: targeting_restrictions
+card "Deflecting Swat" {
+  id: "ae120613-97d6-4393-b39d-c3e6c076f5d6"
+  layout: normal
+  status: verified_playable
+  face "Deflecting Swat" {
+    cost: "{2}{R}"
+    types: "Instant"
+    oracle: "If you control a commander, you may cast this spell without paying its mana cost.\nYou may choose new targets for target spell or ability."
+    keywords: []
+    ability static {
+      condition: at_least(count(permanents(and(type_is("commander"), controlled_by(you())))), 1)
+      effect: continuous(source(), alternate_cost(source(), mana_cost("{0}")))
+    }
+    ability spell {
+      effect: change_target(target(spells()), target(any()))
+    }
+  }
+}

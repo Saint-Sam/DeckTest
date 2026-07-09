@@ -1,0 +1,19 @@
+// CP-DSL stratum: multiplayer_commander_voting
+card "Breena, the Demagogue" {
+  id: "d11e627b-8a48-411d-a261-2c9a02a758ba"
+  layout: normal
+  status: verified_playable
+  face "Breena, the Demagogue" {
+    cost: "{1}{W}{B}"
+    types: "Legendary Creature — Bird Warlock"
+    oracle: "Flying\nWhenever a player attacks one of your opponents, if that opponent has more life than another of your opponents, that attacking player draws a card and you put two +1/+1 counters on a creature you control."
+    power: "1"
+    toughness: "3"
+    keywords: [flying]
+    ability triggered {
+      event: event_attacks(permanents(and(controlled_by(any()), not(controlled_by(you())))), opponent())
+      condition: greater_than(amount(opponent(), "life"), amount(controller_of(triggered()), "life"))
+      effect: sequence(draw(1, controller_of(triggered())), add_counter(target(permanents(type_is("creature"))), "plus1_plus1", 2))
+    }
+  }
+}

@@ -1,0 +1,18 @@
+// CP-DSL stratum: dungeon_initiative_monarch_energy
+card "Palace Jailer" {
+  id: "180eda7c-fca2-403b-85cd-8ffebaf9f408"
+  layout: normal
+  status: verified_playable
+  face "Palace Jailer" {
+    cost: "{2}{W}{W}"
+    types: "Creature — Human Soldier"
+    oracle: "When this creature enters, you become the monarch.\nWhen this creature enters, exile target creature an opponent controls until an opponent becomes the monarch."
+    power: "2"
+    toughness: "2"
+    keywords: []
+    ability triggered {
+      event: event_enters(source())
+      effect: sequence(become_monarch(you()), exile(target(permanents(controlled_by(opponent()))), "until_opponent_is_monarch"))
+    }
+  }
+}

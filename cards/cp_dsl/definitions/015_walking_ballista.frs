@@ -1,0 +1,22 @@
+// CP-DSL stratum: activated_mana_loyalty
+card "Walking Ballista" {
+  id: "4b515bb0-f275-4400-8032-3173b799ab40"
+  layout: normal
+  status: verified_playable
+  face "Walking Ballista" {
+    cost: "{X}{X}"
+    types: "Artifact Creature — Construct"
+    oracle: "This creature enters with X +1/+1 counters on it.\n{4}: Put a +1/+1 counter on this creature.\nRemove a +1/+1 counter from this creature: It deals 1 damage to any target."
+    power: "0"
+    toughness: "0"
+    keywords: []
+    ability replacement {
+      event: event_enters(source())
+      effect: add_counter(source(), "plus1_plus1", amount("X"))
+    }
+    ability activated {
+      costs: [remove_counter_cost(source(), "plus1_plus1")]
+      effect: deal_damage(target(any()), 1)
+    }
+  }
+}

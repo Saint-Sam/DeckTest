@@ -1,0 +1,60 @@
+WHITESPACE = _{ " " | "\t" | NEWLINE }
+COMMENT = _{ "//" ~ (!NEWLINE ~ ANY)* }
+
+file = { SOI ~ card ~ EOI }
+card = { "card" ~ string ~ "{" ~ card_item* ~ "}" }
+card_item = _{ id_field | layout_field | status_field | face }
+
+id_field = { "id" ~ ":" ~ string }
+layout_field = { "layout" ~ ":" ~ identifier }
+status_field = { "status" ~ ":" ~ identifier }
+
+face = { "face" ~ string ~ "{" ~ face_item* ~ "}" }
+face_item = _{
+    cost_field
+  | types_field
+  | oracle_field
+  | power_field
+  | toughness_field
+  | loyalty_field
+  | defense_field
+  | keywords_field
+  | ability
+}
+
+cost_field = { "cost" ~ ":" ~ string }
+types_field = { "types" ~ ":" ~ string }
+oracle_field = { "oracle" ~ ":" ~ string }
+power_field = { "power" ~ ":" ~ string }
+toughness_field = { "toughness" ~ ":" ~ string }
+loyalty_field = { "loyalty" ~ ":" ~ string }
+defense_field = { "defense" ~ ":" ~ string }
+keywords_field = { "keywords" ~ ":" ~ list }
+
+ability = { "ability" ~ identifier ~ "{" ~ ability_item* ~ "}" }
+ability_item = _{
+    costs_field
+  | event_field
+  | condition_field
+  | timing_field
+  | effect_field
+  | mana_ability_field
+}
+costs_field = { "costs" ~ ":" ~ list }
+event_field = { "event" ~ ":" ~ expression }
+condition_field = { "condition" ~ ":" ~ expression }
+timing_field = { "timing" ~ ":" ~ expression }
+effect_field = { "effect" ~ ":" ~ expression }
+mana_ability_field = { "mana_ability" ~ ":" ~ boolean }
+
+expression = _{ call | list | string | integer | boolean | identifier }
+call = { identifier ~ "(" ~ arguments? ~ ")" }
+list = { "[" ~ arguments? ~ "]" }
+arguments = { expression ~ ("," ~ expression)* }
+
+boolean = { "true" | "false" }
+integer = @{ "-"? ~ ASCII_DIGIT+ }
+identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+string = @{ "\"" ~ string_character* ~ "\"" }
+string_character = _{ escape | !("\"" | "\\") ~ ANY }
+escape = { "\\" ~ ("\"" | "\\" | "n" | "r" | "t" | ("u" ~ ASCII_HEX_DIGIT{4})) }
