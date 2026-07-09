@@ -1,0 +1,30 @@
+(
+    name: "T2 generated targeting restriction oracle 062",
+    setup: (
+        players: 2,
+        objects: [
+            (card: 93186, owner: 0, controller: 0, zone: "Hand", player: 0),
+            (card: 93187, owner: 0, controller: 0, zone: "Hand", player: 0),
+            (card: 93188, owner: 1, controller: 1, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "set_base_creature", object: 2, power: 2, toughness: 4, keywords: []),
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "set_colors", colors: ["red"], timestamp: 1),
+        (action: "register_restriction", controller: 1, subject_object: 2, effect: "protection", colors: ["red"]),
+        (action: "assert_can_target", player: 0, source_object: 0, requirement: (kind: "permanent", controller: "opponent", required_types: ["creature"]), target_object: 2, expected: false),
+        (action: "assert_can_target", player: 0, source_object: 1, requirement: (kind: "permanent", controller: "opponent", required_types: ["creature"]), target_object: 2, expected: true),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Hand", player: 0, count: 2),
+            (zone: "Battlefield", count: 1),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

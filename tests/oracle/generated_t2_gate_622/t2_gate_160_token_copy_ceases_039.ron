@@ -1,0 +1,31 @@
+(
+    name: "T2 generated token copy oracle 039",
+    setup: (
+        players: 1,
+        objects: [
+            (card: 91039, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "set_base_creature", object: 0, power: 5, toughness: 5, keywords: ["haste"]),
+        (action: "create_permanent_copy", source: 0, owner: 0, controller: 0, token: true),
+        (action: "assert_object_flags", object: 1, token: true, copy: true, copy_source: 0),
+        (action: "assert_characteristics", object: 1, power: 5, toughness: 5, keywords: ["haste"]),
+        (action: "move_object", object: 1, zone: "Graveyard", player: 0),
+        (action: "check_state_based_actions"),
+        (action: "assert_object_zone", object: 1, zone: "Ceased"),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Battlefield", count: 1),
+            (zone: "Graveyard", player: 0, count: 0),
+            (zone: "Ceased", count: 1),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

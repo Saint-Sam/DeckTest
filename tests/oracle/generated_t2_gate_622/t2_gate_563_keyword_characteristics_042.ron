@@ -1,0 +1,27 @@
+(
+    name: "T2 generated keyword oracle 042",
+    setup: (
+        players: 1,
+        objects: [
+            (card: 95042, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "set_base_creature", object: 0, power: 2, toughness: 3, keywords: ["defender"]),
+        (action: "assert_characteristics", object: 0, keywords: ["defender"]),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Battlefield", count: 1),
+        ],
+        characteristics: [
+            (object: 0, keywords: ["defender"]),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

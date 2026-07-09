@@ -1,0 +1,26 @@
+(
+    name: "T2 generated counter oracle 116",
+    setup: (
+        players: 1,
+        objects: [
+            (card: 90116, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "set_base_creature", object: 0, power: 1, toughness: 3, keywords: []),
+        (action: "add_object_counters", object: 0, kind: "plus_one_plus_one", amount: 1),
+        (action: "assert_object_counters", object: 0, kind: "plus_one_plus_one", count: 1),
+        (action: "assert_characteristics", object: 0, power: 2, toughness: 4),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Battlefield", count: 1),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

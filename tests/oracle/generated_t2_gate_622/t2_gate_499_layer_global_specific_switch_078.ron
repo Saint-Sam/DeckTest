@@ -1,0 +1,34 @@
+(
+    name: "T2 generated layer oracle 078",
+    setup: (
+        players: 1,
+        objects: [
+            (card: 94156, owner: 0, controller: 0, zone: "Battlefield"),
+            (card: 94157, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "set_base_creature", object: 0, power: 2, toughness: 2, keywords: []),
+        (action: "set_base_creature", object: 1, power: 4, toughness: 4, keywords: []),
+        (action: "register_continuous_effect", controller: 0, all_objects: true, operation: "set_pt", power: 1, toughness: 1, timestamp: 1),
+        (action: "register_continuous_effect", controller: 0, target_object: 1, operation: "modify_pt", power: 3, toughness: 2, timestamp: 2),
+        (action: "register_continuous_effect", controller: 0, target_object: 1, operation: "switch_pt", timestamp: 3),
+        (action: "assert_characteristics", object: 0, power: 1, toughness: 1),
+        (action: "assert_characteristics", object: 1, power: 3, toughness: 4),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Battlefield", count: 2),
+        ],
+        characteristics: [
+            (object: 0, power: 1, toughness: 1),
+            (object: 1, power: 3, toughness: 4),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

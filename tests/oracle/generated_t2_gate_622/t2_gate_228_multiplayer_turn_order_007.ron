@@ -1,0 +1,19 @@
+(
+    name: "T2 generated multiplayer commander oracle 007",
+    setup: (
+        players: 4,
+    ),
+    script: [
+        (action: "set_turn_order", order: [3, 0, 1, 2]),
+        (action: "assert_turn_order", order: [3, 0, 1, 2]),
+        (action: "assert_range_of_influence", mode: "off"),
+    ],
+    expect: (
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

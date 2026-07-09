@@ -1,0 +1,25 @@
+(
+    name: "T2 generated token copy oracle 009",
+    setup: (
+        players: 1,
+    ),
+    script: [
+        (action: "create_token", card: 91009, owner: 0, controller: 0, power: 5, toughness: 3, keywords: ["flying"]),
+        (action: "move_object", object: 0, zone: "Graveyard", player: 0),
+        (action: "check_state_based_actions"),
+        (action: "assert_object_zone", object: 0, zone: "Ceased"),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Battlefield", count: 0),
+            (zone: "Graveyard", player: 0, count: 0),
+            (zone: "Ceased", count: 1),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

@@ -1,0 +1,36 @@
+(
+    name: "T2 generated keyword oracle 053",
+    setup: (
+        players: 1,
+        objects: [
+            (card: 95530, owner: 0, controller: 0, zone: "Hand", player: 0),
+            (card: 95531, owner: 0, controller: 0, zone: "Library", player: 0),
+        ],
+    ),
+    script: [
+        (action: "start_turn", player: 0),
+        (action: "advance_step"),
+        (action: "add_mana", player: 0, mana: (colorless: 1)),
+        (action: "cycle_auto", player: 0, object: 0, cost: (generic: 1)),
+        (action: "assert_object_zone", object: 0, zone: "Graveyard", player: 0),
+        (action: "assert_object_zone", object: 1, zone: "Hand", player: 0),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Hand", player: 0, count: 1),
+            (zone: "Graveyard", player: 0, count: 1),
+        ],
+        players: [
+            (player: 0, mana: ()),
+        ],
+        outcome: "in_progress",
+        active_player: 0,
+        priority_player: 0,
+        current_step: "Upkeep",
+        invariants: [
+            "zone_conservation",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

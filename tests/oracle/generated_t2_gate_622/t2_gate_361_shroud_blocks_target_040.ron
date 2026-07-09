@@ -1,0 +1,27 @@
+(
+    name: "T2 generated targeting restriction oracle 040",
+    setup: (
+        players: 2,
+        objects: [
+            (card: 93120, owner: 0, controller: 0, zone: "Hand", player: 0),
+            (card: 93121, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "set_base_creature", object: 1, power: 2, toughness: 2, keywords: []),
+        (action: "register_restriction", controller: 0, subject_object: 1, effect: "shroud"),
+        (action: "assert_can_target", player: 0, source_object: 0, requirement: (kind: "permanent", controller: "you", required_types: ["creature"]), target_object: 1, expected: false),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Hand", player: 0, count: 1),
+            (zone: "Battlefield", count: 1),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

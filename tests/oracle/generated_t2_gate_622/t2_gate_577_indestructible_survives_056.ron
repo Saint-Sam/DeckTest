@@ -1,0 +1,26 @@
+(
+    name: "T2 generated keyword oracle 056",
+    setup: (
+        players: 1,
+        objects: [
+            (card: 95056, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "set_base_creature", object: 0, power: 2, toughness: 2, keywords: ["indestructible"]),
+        (action: "mark_damage", object: 0, amount: 11),
+        (action: "check_state_based_actions"),
+        (action: "assert_object_zone", object: 0, zone: "Battlefield"),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Battlefield", count: 1),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

@@ -1,0 +1,26 @@
+(
+    name: "T2 generated keyword oracle 021",
+    setup: (
+        players: 1,
+        objects: [
+            (card: 95210, owner: 0, controller: 0, zone: "Library", player: 0),
+            (card: 95211, owner: 0, controller: 0, zone: "Library", player: 0),
+            (card: 95212, owner: 0, controller: 0, zone: "Library", player: 0),
+        ],
+    ),
+    script: [
+        (action: "scry", player: 0, count: 2, bottom: [2]),
+        (action: "assert_zone_order", zone: "Library", player: 0, objects: [2, 0, 1]),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Library", player: 0, count: 3),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

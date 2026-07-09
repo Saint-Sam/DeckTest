@@ -1,0 +1,297 @@
+{
+  "tier": 2,
+  "tasks": {
+    "T0.1": {
+      "status": "verified",
+      "branch": "task/T0.1-toolchain-bootstrap",
+      "attempts": 1
+    },
+    "T0.2": {
+      "status": "verified",
+      "branch": "task/T0.2-workspace-skeleton",
+      "attempts": 0
+    },
+    "T0.3": {
+      "status": "verified",
+      "branch": "task/T0.3-ci-pipeline",
+      "attempts": 0
+    },
+    "T0.4": {
+      "status": "verified",
+      "branch": "task/T0.4-gate-review-metrics-scripting",
+      "attempts": 0
+    },
+    "T0.5": {
+      "status": "verified",
+      "branch": "task/T0.5-vendor-legacy-rules",
+      "attempts": 0
+    },
+    "T0.6": {
+      "status": "verified",
+      "branch": "task/T0.6-legacy-mining-report",
+      "attempts": 0
+    },
+    "T1.1": {
+      "status": "verified_remote",
+      "branch": "task/T1.1-core-state",
+      "attempts": 0,
+      "remote_ci": "GitHub Actions ci #6 run 28818490265 passed all required jobs for commit 7f80433"
+    },
+    "T1.2": {
+      "status": "verified_remote",
+      "branch": "task/T1.2-turn-structure",
+      "attempts": 0,
+      "remote_ci": "GitHub Actions ci #7 run 28819302498 passed all required jobs for commit c151cb4"
+    },
+    "T1.3": {
+      "status": "verified_remote",
+      "branch": "task/T1.3-priority-stack",
+      "attempts": 0,
+      "remote_ci": "GitHub Actions ci #8 run 28820393577 passed all required jobs for commit 41fccc0"
+    },
+    "T1.4": {
+      "status": "verified_remote",
+      "branch": "task/T1.4-mana-payment",
+      "attempts": 0,
+      "remote_ci": "GitHub Actions ci #9 run 28821155679 passed all required jobs for commit be950cc"
+    },
+    "T1.5": {
+      "status": "verified_remote",
+      "branch": "task/T1.5-casting-pipeline",
+      "attempts": 0,
+      "remote_ci": "GitHub Actions ci #10 run 28822340130 passed all required jobs for commit 14ed220"
+    },
+    "T1.6": {
+      "status": "verified_remote",
+      "branch": "task/T1.6-combat",
+      "attempts": 0,
+      "remote_ci": "GitHub Actions ci #11 run 28823362044 passed all required jobs for commit d0f9fd3"
+    },
+    "T1.7": {
+      "status": "verified_remote",
+      "branch": "task/T1.7-state-based-actions",
+      "attempts": 0,
+      "remote_ci": "GitHub Actions ci #12 run 28824832805 passed all required jobs for commit 6491d5f"
+    },
+    "T1.8": {
+      "status": "verified_local",
+      "branch": "task/T1.8-opening-hands-mulligans",
+      "attempts": 0,
+      "verification": "scripts/vl.sh passed locally with deterministic turn-order decision, opening-hand draw, London mulligan redraw/keep/bottoming, setup-aware StartTurn guard, canonical hash coverage, and PlayerView hidden hand/library canaries"
+    },
+    "T1.9": {
+      "status": "verified_local",
+      "branch": "task/T1.9-forge-testkit-scenarios",
+      "attempts": 0,
+      "verification": "scripts/vl.sh passed locally with dependency-free RON scenario parsing, scenario runner, invariant assertions, hash determinism checks, JUnit-style XML output, CLI lint/oracle commands, and a smoke oracle scenario"
+    },
+    "T1.10": {
+      "status": "verified_local",
+      "branch": "task/T1.10-legacy-oracle-port",
+      "attempts": 0,
+      "verification": "scripts/vl.sh passed locally with 7 supplemental legacy game-simulation oracle scenarios ported, first-turn draw-skip rule fixed, poison/winner scenario support added, and mapping evidence committed",
+      "scope_decision": "Q-2026-07-07-T1.10 resolved by owner Option 1: use broader local forge-gui-desktop game-simulation tests as the T1.10 source set"
+    },
+    "T1.11": {
+      "status": "verified_local",
+      "branch": "task/T1.11-forge-cli-terminal-client",
+      "attempts": 0,
+      "verification": "scripts/vl.sh passed locally; `cargo run -p forge-cli -- play --demo --seed 5 --replay-out target/forge-cli/t1_11_demo.frsreplay` finished a game, and `cargo run -p forge-cli -- roundtrip target/forge-cli/t1_11_demo.frsreplay` preserved the seed/action list and final hash"
+    },
+    "T1.12": {
+      "status": "verified_local",
+      "branch": "task/T1.12-fuzz-targets",
+      "attempts": 0,
+      "verification": "cargo +nightly fuzz check passed; scripts/fuzz_nightly.sh --t1-gate completed a clean sanitizer-backed 6-hour aggregate run with fuzz_apply 6,530,854 runs in 10,801 seconds and fuzz_scenarioparse 895,666,102 runs in 10,801 seconds"
+    },
+    "T1.13": {
+      "status": "verified_local",
+      "branch": "task/T1.13-criterion-benches",
+      "attempts": 0,
+      "verification": "scripts/gates/gate_T1.sh passed locally on 2026-07-07 after T1 perf hot-path remediation; 300 oracle scenarios passed, perf_diff compared 4 Criterion metrics with 0 regressions, clone budget passed at 112.292 ns per 200-card state, arena smoke passed 10,000 games with 0 invariant violations, and forge-cli demo replay round-tripped"
+    },
+    "T1.R1": {
+      "status": "verified_local",
+      "branch": "remediation/T1.R1-action-surface",
+      "attempts": 0,
+      "verification": "scripts/vl.sh passed locally with public GameState mutator review for action/apply surface"
+    },
+    "T1.R2": {
+      "status": "verified_local",
+      "branch": "remediation/T1.R2-characteristics-boundary",
+      "attempts": 0,
+      "verification": "scripts/vl.sh passed locally with base creature characteristics and derived query path"
+    },
+    "T1.R3": {
+      "status": "verified_local",
+      "branch": "remediation/T1.R3-player-view",
+      "attempts": 0,
+      "verification": "scripts/vl.sh passed locally with PlayerView redaction, forge-ai view entrypoint, no public full snapshot, and hidden library/hand canary coverage"
+    },
+    "T1.R4": {
+      "status": "verified_local",
+      "branch": "remediation/T1.R4-clone-guard",
+      "attempts": 0,
+      "verification": "scripts/vl.sh and scripts/gates/gate_T1.sh passed locally with clone_surface_guard baseline persistent_allocation_field_count=18 and clone budget 112.292 ns per 200-card state"
+    },
+    "T1.R5": {
+      "status": "resolved_local",
+      "branch": "remediation/T1.R5-combat-oracle-coverage",
+      "attempts": 0,
+      "verification": "scripts/gates/gate_T1.sh passed locally with 300 oracle scenarios and 60 combat scenarios covering T1.6 feature requirements"
+    },
+    "T1.R6": {
+      "status": "resolved_local",
+      "branch": "remediation/T1.R6-blocker-hygiene",
+      "attempts": 0,
+      "verification": "reports/blockers/T1-combat-lifelink-blocked-schema.md records and closes the combat/lifelink schema blocker with linked oracle evidence"
+    },
+    "T1.R7": {
+      "status": "resolved_local",
+      "branch": "remediation/T1.R7-exact-tree-gate-evidence",
+      "attempts": 0,
+      "verification": "local clean clone at /private/tmp/forge-t1-bde958c770cc-clean checked out bde958c770cc03b7a1fe4c80b2ae1c2df9e38f75 and scripts/gates/gate_T1.sh ended with PASS gate_T1.sh"
+    },
+    "T1.R8": {
+      "status": "resolved_local",
+      "branch": "remediation/T1.R8-live-reviewer-checks",
+      "attempts": 0,
+      "verification": "reviewer live checks passed: three mutation checks caught mutants, five reviewer oracle scenarios passed, determinism replay passed 10 archived replays, live address-sanitizer fuzz passed two 1801-second targets, and seeds 11/14/20 spot replays matched"
+    },
+    "T1.R9": {
+      "status": "resolved_remote",
+      "branch": "remediation/T1.R9-final-tree-remote-ci",
+      "attempts": 0,
+      "verification": "GitHub Actions ci #18 run 28883217715 passed all required jobs for exact T1 gate evidence commit 2198493284299d9721d59ab3a23e3b2a2ab71f56"
+    },
+    "T2.1": {
+      "status": "verified_remote",
+      "branch": "task/T2.1-event-system",
+      "attempts": 0,
+      "verification": "scripts/vl.sh passed locally with typed data-only GameEvent/EventRecord, bounded current-turn event ring, cursor replay errors, failed-action cleanliness, event canonical hash coverage, clone-surface baseline persistent_allocation_field_count=19, 300 oracle scenarios green, and perf_diff reporting 0 regressions",
+      "remote_ci": "GitHub Actions ci #20 run 28885668849 passed all required jobs for commit 848f7002290aec7d168b66865f7341c831bfeae1"
+    },
+    "T2.2": {
+      "status": "verified_remote",
+      "branch": "task/T2.2-triggered-abilities",
+      "attempts": 0,
+      "verification": "scripts/vl.sh passed locally with data-only TriggerDefinition subscriptions over GameEvent/GameEventKind, pending-trigger queueing, APNAP stack placement, intervening-if gating, delayed-once retirement, priority blocking until triggers are stacked, trigger canonical hash coverage, clone-surface baseline persistent_allocation_field_count=21, 300 oracle scenarios green, and perf_diff reporting 0 regressions",
+      "remote_ci": "GitHub Actions ci #21 run 28887007796 passed all required jobs for commit 0dd68591784b832e6fdf9c123471c1a44f1ee40b"
+    },
+    "T2.3": {
+      "status": "verified_remote",
+      "branch": "task/T2.3-replacement-prevention",
+      "attempts": 0,
+      "verification": "scripts/vl.sh passed locally with data-only ReplacementDefinition effects, damage interception before final mutation, self-replacement precedence, affected-player/object-controller replacement ordering, once-only retirement, final combat damage records for lifelink/deathtouch/SBA consequences, replacement canonical hash coverage, clone-surface baseline persistent_allocation_field_count=23, 302 oracle scenarios green including 2 T2.3 replacement/prevention scenarios, and perf_diff reporting 0 regressions",
+      "remote_ci": "GitHub Actions ci #22 run 28888565460 passed all required jobs for commit 241e2f5efb224113ed89630b80333a5babac0a1d"
+    },
+    "T2.4": {
+      "status": "verified_remote",
+      "branch": "task/T2.4-layers",
+      "attempts": 0,
+      "verification": "scripts/vl.sh passed locally with data-only ContinuousEffectDefinition effects, CR 613 layer ordering through 7d, timestamp and same-layer dependency ordering, effective controller/characteristics queries feeding gameplay and SBAs, continuous-effect canonical hash coverage, clone-surface baseline persistent_allocation_field_count=24, 382 oracle scenarios green including 80 layer scenarios, coverage floor restored at 81.65% by running layer oracles under coverage, and perf_diff reporting 0 regressions",
+      "remote_ci": "GitHub Actions ci #23 run 28891474213 passed all required jobs for commit 81143e1e221ee5d5a01a7691f0adbe380cb357f7; manually triggered ci #24 run 28892313697 also passed for the same commit"
+    },
+    "T2.5": {
+      "status": "verified_local",
+      "branch": "task/T2.5-activated-abilities",
+      "attempts": 0,
+      "verification": "scripts/vl.sh passed locally with data-only activated ability definitions, no-stack mana ability resolution, stack-using non-mana activations, loyalty abilities with once-per-source-per-turn enforcement, activation cost modifiers, activated-ability canonical hash coverage, clone-surface baseline persistent_allocation_field_count=27, 539 oracle scenarios green including 4 T2.5 activated-ability scenarios, coverage gate including T2.5 oracles, and perf_diff reporting 0 regressions"
+    },
+    "T2.6": {
+      "status": "verified_remote",
+      "branch": "task/T2.6-targeting-restrictions",
+      "attempts": 0,
+      "verification": "scripts/vl.sh passed locally with data-only target predicates over player/object characteristics, shroud/hexproof/protection/ward targeting restrictions, cannot attack/cannot block/cannot be blocked combat restrictions, restriction canonical hash coverage, clone-surface baseline persistent_allocation_field_count=28, 547 oracle scenarios green including 8 T2.6 targeting/restriction scenarios, coverage gate including T2.6 oracles at 80.78% lines, and perf_diff reporting 0 regressions",
+      "remote_ci": "GitHub Actions ci #35 run 28945116782 passed all required jobs for commit 6635a9a5d1e567cd7434d8e520bbee8ea4ec44a3"
+    },
+    "T2.7": {
+      "status": "verified_remote",
+      "branch": "task/T2.7-counters-tokens-copy",
+      "attempts": 0,
+      "verification": "scripts/vl.sh passed locally with object counters (+1/+1, -1/-1, loyalty, named), counter pair cancellation SBAs, token creation and ceasing, permanent-copy provenance, stack-copy resolution metadata, counter/token/copy canonical hash coverage, clone-surface baseline persistent_allocation_field_count=29, 556 oracle scenarios green including 9 T2.7 counter/token/copy scenarios, coverage gate including T2.7 oracles at 81.00% lines, and perf_diff reporting 0 regressions",
+      "remote_ci": "GitHub Actions ci #37 run 28948191312 passed all required jobs for commit 6492f72d0b45d9d3d414315854754fd664be1239"
+    },
+    "T2.8": {
+      "status": "verified_remote",
+      "branch": "task/T2.8-multiplayer-commander",
+      "attempts": 0,
+      "verification": "scripts/vl.sh passed locally with explicit N-player turn order, range of influence off, command-zone commander hooks, commander tax and color identity metadata, command-zone casting tax integration, clone-surface baseline persistent_allocation_field_count=30, 562 oracle scenarios green including 6 T2.8 multiplayer/Commander scenarios, coverage gate including T2.8 oracles at 81.07% lines, and perf_diff reporting 0 regressions",
+      "remote_ci": "GitHub Actions ci #38 run 28950057313 passed all required jobs for commit fc381d5450dbc172e8d1ef94000e94c706956632"
+    },
+    "T2.9": {
+      "status": "verified_remote",
+      "branch": "task/T2.9-keyword-wave1",
+      "attempts": 0,
+      "verification": "scripts/vl.sh passed locally with wave-one keyword/plumbing support for defender, haste, hexproof restriction desugaring, indestructible, prowess metadata, flash, kicker, flashback, cycling, equip, aura attachment plumbing, sacrifice costs, scry/surveil, and ETB/dies trigger registration; clone-surface baseline persistent_allocation_field_count=30, 578 oracle scenarios green including 16 T2.9 keyword-wave scenarios, coverage gate including T2.9 oracles at 81.67% lines, and perf_diff reporting 0 regressions",
+      "remote_ci": "GitHub Actions ci #40 run 28955699444 passed all required jobs for commit 55e669999c5aee77e21a0508eb9f52ed857367d4"
+    },
+    "T2.10": {
+      "status": "verified_remote",
+      "branch": "task/T2.10-nightmare-decks",
+      "attempts": 0,
+      "verification": "cargo fmt --all -- --check, cargo clippy --workspace --all-targets --all-features -- -D warnings, cargo test --workspace --quiet, scripts/run_nightmare_suite.sh 1000 6, and scripts/vl.sh passed locally with 10 hand-authored layer-heavy nightmare fixtures, 1,000 random-legal games, 0 invariant violations, a VL nightmare-suite smoke hook, and a T2 gate scaffold for >=1,200 oracle scenarios plus 12-hour sanitizer fuzz evidence",
+      "remote_ci": "GitHub Actions ci run 28956922550 passed all required jobs for commit 4a49fb36b9ac51a36159c3f5c5061f14aa444bec"
+    }
+  },
+  "gates_passed": [
+    "T0",
+    "CP-KERNEL",
+    "T1",
+    "CP-LAYERS"
+  ],
+  "metrics_snapshot": "metrics/legacy_inventory.json",
+  "gate_reviews": {
+    "T0": {
+      "status": "passed_conditional",
+      "bundle": "reports/gates/T0/bundle",
+      "signoff": "reports/gates/T0/SIGNOFF.md",
+      "conditions": {
+        "T0.C1": "Before collaboration branches or release, configure GitHub main branch protection to require fmt, clippy, test-linux, test-macos, test-windows, build-wasm, build-android, coverage, deny-audit, verification-loop, and determinism-replay."
+      },
+      "remediation": {
+        "T0.R1": "complete: remote CI run 28816494698 passed all required T0 jobs on current main head 3ee6166; branch protection equivalence documented in reports/gates/T0/remote-ci-2026-07-06.md",
+        "T0.R2": "complete: T0 gate Owner Brief created",
+        "T0.R3": "complete: bundle regenerated with current PLAN_STATE",
+        "T0.R4": "complete: fresh-clone gate passed from current committed head 3ee6166 and initial foundation commit 93cad32"
+      }
+    },
+    "CP-KERNEL": {
+      "status": "passed",
+      "bundle": "reports/gates/CP-KERNEL/bundle",
+      "signoff": "reports/gates/CP-KERNEL/SIGNOFF.md",
+      "reviewed_commit": "d7fcb03",
+      "original_failed_commit": "6491d5fd12887eb5f5b7ad8d57eda83e1ff17783",
+      "remediation": {
+        "T1.R1": "verified_local: sealed the kernel behind legal_actions/apply and added public mutator review script",
+        "T1.R2": "verified_local: ObjectRecord stores base creature characteristics and rules code uses derived creature_characteristics query",
+        "T1.R3": "verified_local: PlayerView redacts hidden hand/library identities, forge-ai accepts PlayerView instead of GameState, and full-information snapshots/canonical bytes are not public consumer APIs",
+        "T1.R4": "verified_local: removed full-state snapshot surface, documented clone-surface invariants, and added clone_surface_guard baseline persistent_allocation_field_count=18"
+      },
+      "re_review": "PASS at d7fcb03; scoped re-review of T1.R1-T1.R4 plus fresh G1 verification found no blockers"
+    },
+    "T1": {
+      "status": "passed",
+      "bundle": "reports/gates/T1/bundle",
+      "signoff": "reports/gates/T1/SIGNOFF.md",
+      "reviewed_remote_green_commit": "2198493284299d9721d59ab3a23e3b2a2ab71f56",
+      "remote_ci": "GitHub Actions ci #18 run 28883217715 passed all required jobs for exact T1 gate evidence commit 2198493284299d9721d59ab3a23e3b2a2ab71f56",
+      "re_review": "PASS on 2026-07-07 after combat oracle remediation, live reviewer checks, clean-checkout gate evidence, and exact-commit remote CI."
+    },
+    "CP-LAYERS": {
+      "status": "passed",
+      "bundle": "reports/gates/CP-LAYERS/bundle",
+      "signoff": "reports/gates/CP-LAYERS/SIGNOFF.md",
+      "reviewed_remote_green_commit": "a3d16af655d55dc1d6030b47d5a3115660843719",
+      "t2_4_implementation_commit": "81143e1e221ee5d5a01a7691f0adbe380cb357f7",
+      "remote_ci": "GitHub Actions ci #33 run 28936524486 passed all required jobs for CP-LAYERS true importer differential commit a3d16af655d55dc1d6030b47d5a3115660843719; earlier T2.4 implementation CI #23/#24 and evidence CI #25 were also green.",
+      "review_requirements": "Section 15.4 completed with owner-approved stricter packet: 100 novel layer scenarios with no rules-observable failures, legacy differential on a 100-card layered subset with written adjudication, memoization-invalidation audit plus fuzz target, and explicit owner proceed approval before T2.5+ starts. Legacy Forge engine snapshot side emits 100/100 OK snapshots. The supplemental Forge 2.0 script bridge parses all 100 selected scripts and executes 53 representable layer-fragment scenarios with 53/53 pass. The true importer differential parses active legacy faces, instantiates 186 layer operations from 117 active-face continuous lines, and matches 100/100 selected legacy Java snapshots with 0 mismatches.",
+      "owner_signoff": "2026-07-08 Codex thread: CP-LAYERS signoff: proceed. I approve CP-LAYERS based on the 100 owner-approved reviewer scenarios passing, the 100-card true importer legacy differential matching 100/100 with 0 mismatches, fuzz/local verification passing, and no current blocking divergences."
+    }
+  },
+  "owner_input": {
+    "O1": "complete",
+    "O2": "complete",
+    "O5": "complete"
+  }
+}

@@ -1,0 +1,27 @@
+(
+    name: "T2 generated counter oracle 019",
+    setup: (
+        players: 1,
+        objects: [
+            (card: 90019, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "set_base_creature", object: 0, power: 2, toughness: 3, keywords: []),
+        (action: "add_object_counters", object: 0, kind: "named:7019", amount: 6),
+        (action: "remove_object_counters", object: 0, kind: "named:7019", amount: 1),
+        (action: "assert_object_counters", object: 0, kind: "named:7019", count: 5),
+        (action: "assert_characteristics", object: 0, power: 2, toughness: 3),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Battlefield", count: 1),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

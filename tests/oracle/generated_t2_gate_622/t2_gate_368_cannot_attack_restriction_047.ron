@@ -1,0 +1,37 @@
+(
+    name: "T2 generated targeting restriction oracle 047",
+    setup: (
+        players: 2,
+        libraries: [
+            (player: 0, cards: [93970, 93971]),
+        ],
+        objects: [
+            (card: 93047, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "set_base_creature", object: 0, power: 3, toughness: 3, keywords: []),
+        (action: "register_restriction", controller: 1, subject_object: 0, effect: "cannot_attack"),
+        (action: "start_turn", player: 0),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "assert_can_attack", player: 0, attack: (attacker: 0, defender: 1), expected: false),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Battlefield", count: 1),
+        ],
+        outcome: "in_progress",
+        active_player: 0,
+        priority_player: 0,
+        current_step: "DeclareAttackers",
+        invariants: [
+            "zone_conservation",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

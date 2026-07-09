@@ -1,0 +1,28 @@
+(
+    name: "T2 generated multiplayer commander oracle 009",
+    setup: (
+        players: 1,
+        objects: [
+            (card: 92018, owner: 0, controller: 0, zone: "Command"),
+            (card: 92019, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "designate_commander", object: 0, colors: ["red", "green"]),
+        (action: "set_object_color_identity", object: 1, colors: ["red"]),
+        (action: "assert_commander_identity_legal", player: 0, object: 1, expected: true),
+        (action: "validate_commander_color_identity", player: 0, objects: [1]),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Command", count: 1),
+            (zone: "Battlefield", count: 1),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

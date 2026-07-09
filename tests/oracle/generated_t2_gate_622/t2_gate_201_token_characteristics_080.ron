@@ -1,0 +1,22 @@
+(
+    name: "T2 generated token copy oracle 080",
+    setup: (
+        players: 1,
+    ),
+    script: [
+        (action: "create_token", card: 91080, owner: 0, controller: 0, power: 1, toughness: 2, keywords: []),
+        (action: "assert_object_flags", object: 0, token: true, copy: false),
+        (action: "assert_characteristics", object: 0, power: 1, toughness: 2, keywords: []),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Battlefield", count: 1),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

@@ -1,0 +1,31 @@
+# T2 Tests Added
+
+T2 brings the checked oracle corpus to 1,200 scenarios.
+
+## Generated T2 Gate Oracle Pack
+
+- Directory: `tests/oracle/generated_t2_gate_622/`
+- Generator: `tools/generate_t2_gate_oracle_pack.py`
+- Scenario count: 622
+- Purpose: fill the T2 exit-gate corpus to exactly 1,200 checked oracle
+  scenarios, with broad coverage over counters, tokens/copy semantics,
+  Commander/multiplayer state, targeting and restrictions, layers, keywords,
+  scry/surveil, cycling, and zone/accounting invariants.
+
+## Existing T2 Task Oracles Included In Gate
+
+- `tests/oracle/t2_3_replacement_prevention/`
+- `tests/oracle/t2_5_activated_abilities/`
+- `tests/oracle/t2_6_targeting_restrictions/`
+- `tests/oracle/t2_7_counters_tokens_copy/`
+- `tests/oracle/t2_8_multiplayer_commander/`
+- `tests/oracle/t2_9_keyword_wave1/`
+- CP-LAYERS reviewer and differential evidence oracles, already recorded under
+  `reports/gates/CP-LAYERS/`.
+
+## Nightmare Suite
+
+- Gate command: `scripts/run_nightmare_suite.sh 1000 6`
+- Result: 1,000 random-legal games, 10 layer-heavy fixtures, 0 invariant
+  violations.
+

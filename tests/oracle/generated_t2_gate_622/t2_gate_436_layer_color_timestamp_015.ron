@@ -1,0 +1,29 @@
+(
+    name: "T2 generated layer oracle 015",
+    setup: (
+        players: 1,
+        objects: [
+            (card: 94015, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "set_base_creature", object: 0, power: 2, toughness: 2, keywords: []),
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "set_colors", colors: ["green"], timestamp: 1),
+        (action: "register_continuous_effect", controller: 0, target_object: 0, operation: "set_colors", colors: ["blue"], timestamp: 2),
+        (action: "assert_characteristics", object: 0, colors: ["blue"], power: 2, toughness: 2),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Battlefield", count: 1),
+        ],
+        characteristics: [
+            (object: 0, colors: ["blue"], power: 2, toughness: 2),
+        ],
+        outcome: "in_progress",
+        invariants: [
+            "zone_conservation",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)

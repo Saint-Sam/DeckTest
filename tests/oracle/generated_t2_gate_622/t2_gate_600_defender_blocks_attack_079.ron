@@ -1,0 +1,36 @@
+(
+    name: "T2 generated keyword oracle 079",
+    setup: (
+        players: 2,
+        libraries: [
+            (player: 0, cards: [96290, 96291]),
+        ],
+        objects: [
+            (card: 95079, owner: 0, controller: 0, zone: "Battlefield"),
+        ],
+    ),
+    script: [
+        (action: "set_base_creature", object: 0, power: 2, toughness: 2, keywords: ["defender"]),
+        (action: "start_turn", player: 0),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "advance_step"),
+        (action: "assert_can_attack", player: 0, attack: (attacker: 0, defender: 1), expected: false),
+    ],
+    expect: (
+        zone_counts: [
+            (zone: "Battlefield", count: 1),
+        ],
+        outcome: "in_progress",
+        active_player: 0,
+        priority_player: 0,
+        current_step: "DeclareAttackers",
+        invariants: [
+            "zone_conservation",
+            "hash_consistency",
+        ],
+        hash_determinism: true,
+    ),
+)
