@@ -430,6 +430,8 @@ pub fn map_legacy_ability(
     prefix: LegacyAbilityPrefix,
     expression: &LegacyExpression,
 ) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    let (unconditioned, condition) = extract_presence_condition(expression)?;
+    let expression = &unconditioned;
     let Some(selector) = expression.fields.first() else {
         return Err(diagnostic("MALFORMED_API", "ability has no API selector"));
     };
@@ -463,6 +465,9 @@ pub fn map_legacy_ability(
     };
     let mut mapped = (spec.mapper)(prefix, api, selector_key, &parameters)?;
     mapped.timing = timing;
+    if let Some(condition) = condition {
+        mapped = apply_presence_condition(prefix, selector_key, mapped, condition)?;
+    }
     Ok(mapped)
 }
 
@@ -513,6 +518,25 @@ fn map_with_context(
     context: &MappingContext<'_>,
     stack: &mut Vec<String>,
 ) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    let (unconditioned, condition) = extract_presence_condition(expression)?;
+    let selector_key = unconditioned
+        .fields
+        .first()
+        .and_then(|field| field.key.as_deref())
+        .ok_or_else(|| diagnostic("MALFORMED_API", "ability has no API selector"))?;
+    let mut mapped = map_with_context_unconditioned(prefix, &unconditioned, context, stack)?;
+    if let Some(condition) = condition {
+        mapped = apply_presence_condition(prefix, selector_key, mapped, condition)?;
+    }
+    Ok(mapped)
+}
+
+fn map_with_context_unconditioned(
+    prefix: LegacyAbilityPrefix,
+    expression: &LegacyExpression,
+    context: &MappingContext<'_>,
+    stack: &mut Vec<String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
     let selector = expression
         .fields
         .first()
@@ -540,7 +564,10 @@ fn map_with_context(
             .fields
             .retain(|field| field.key.as_deref() != Some("SubAbility"));
     }
-    let mut mapped = map_legacy_ability(prefix, &base_expression)?;
+    let mut mapped = match map_dynamic_ability(prefix, &base_expression, context)? {
+        Some(mapped) => mapped,
+        None => map_legacy_ability(prefix, &base_expression)?,
+    };
     if let Some(name) = sub_ability {
         let linked = resolve_svar(&name, context, stack)?;
         if linked.event.is_some() || !linked.costs.is_empty() {
@@ -552,6 +579,562 @@ fn map_with_context(
         mapped.expression = sequence(mapped.expression, linked.expression);
     }
     Ok(mapped)
+}
+
+fn extract_presence_condition(
+    expression: &LegacyExpression,
+) -> Result<(LegacyExpression, Option<Expression>), MappingDiagnostic> {
+    let has_presence = expression
+        .fields
+        .iter()
+        .any(|field| field.key.as_deref() == Some("IsPresent"));
+    let has_comparison = expression
+        .fields
+        .iter()
+        .any(|field| field.key.as_deref() == Some("PresentCompare"));
+    if !has_presence && !has_comparison {
+        return Ok((expression.clone(), None));
+    }
+    let parameters = parameters(expression)?;
+    let present = parameters.get("IsPresent").ok_or_else(|| {
+        diagnostic(
+            "MISSING_PARAMETER",
+            "PresentCompare requires a matching IsPresent selector",
+        )
+    })?;
+    let selector = presence_selector(present)?;
+    let comparison = parameters
+        .get("PresentCompare")
+        .map(String::as_str)
+        .unwrap_or("GE1");
+    let condition = closed_count_comparison(
+        call(Operation::Count, vec![selector]),
+        comparison,
+        "PresentCompare",
+    )?;
+    let mut unconditioned = expression.clone();
+    unconditioned
+        .fields
+        .retain(|field| !matches!(field.key.as_deref(), Some("IsPresent" | "PresentCompare")));
+    Ok((unconditioned, Some(condition)))
+}
+
+fn apply_presence_condition(
+    prefix: LegacyAbilityPrefix,
+    selector_key: &str,
+    mut mapped: MappedLegacyAbility,
+    condition: Expression,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    match prefix {
+        LegacyAbilityPrefix::Triggered => {
+            let event = mapped.event.take().ok_or_else(|| {
+                diagnostic(
+                    "UNSUPPORTED_CONDITION",
+                    "trigger presence condition requires a typed event",
+                )
+            })?;
+            mapped.event = Some(call(Operation::EventWhen, vec![event, condition.clone()]));
+            mapped.expression = call(
+                Operation::WhileCondition,
+                vec![condition, mapped.expression],
+            );
+        }
+        LegacyAbilityPrefix::Replacement => {
+            if let Some(event) = mapped.event.take() {
+                mapped.event = Some(call(Operation::EventWhen, vec![event, condition.clone()]));
+            }
+            mapped.expression = call(
+                Operation::WhileCondition,
+                vec![condition, mapped.expression],
+            );
+        }
+        LegacyAbilityPrefix::Static => {
+            mapped.expression = call(
+                Operation::WhileCondition,
+                vec![condition, mapped.expression],
+            );
+        }
+        LegacyAbilityPrefix::Activated if selector_key == "AB" => {
+            if mapped.timing.is_some() {
+                return Err(diagnostic(
+                    "UNSUPPORTED_CONDITION",
+                    "presence condition cannot yet combine with another activation timing",
+                ));
+            }
+            mapped.timing = Some(call(Operation::TimingCondition, vec![condition]));
+        }
+        LegacyAbilityPrefix::Activated => {
+            mapped.expression = call(
+                Operation::WhileCondition,
+                vec![condition, mapped.expression],
+            );
+        }
+    }
+    Ok(mapped)
+}
+
+fn presence_selector(value: &str) -> Result<Expression, MappingDiagnostic> {
+    if value == "Card.IsCommander+YouCtrl" {
+        return Ok(call(
+            Operation::Permanents,
+            vec![call(
+                Operation::And,
+                vec![
+                    call(
+                        Operation::DesignationIs,
+                        vec![Expression::Text("commander".to_string())],
+                    ),
+                    call(Operation::ControlledBy, vec![call(Operation::You, vec![])]),
+                ],
+            )],
+        ));
+    }
+    if value == "Equipment.Attached" {
+        return Ok(call(
+            Operation::Permanents,
+            vec![call(
+                Operation::And,
+                vec![
+                    call(
+                        Operation::SubtypeIs,
+                        vec![Expression::Text("equipment".to_string())],
+                    ),
+                    call(Operation::AttachedTo, vec![call(Operation::Source, vec![])]),
+                ],
+            )],
+        ));
+    }
+    if let Some(counter_requirement) = value.strip_prefix("Card.Self+counters_") {
+        let (minimum, counter_type) = counter_requirement
+            .split_once('_')
+            .ok_or_else(|| unsupported_value("IsPresent", value))?;
+        let minimum = minimum
+            .strip_prefix("GE")
+            .ok_or_else(|| unsupported_value("IsPresent", value))?
+            .parse::<i64>()
+            .map_err(|_| unsupported_value("IsPresent", value))?;
+        return Ok(call(
+            Operation::Cards,
+            vec![call(
+                Operation::And,
+                vec![
+                    call(
+                        Operation::Equals,
+                        vec![
+                            call(Operation::Any, vec![]),
+                            call(Operation::Source, vec![]),
+                        ],
+                    ),
+                    call(
+                        Operation::WithCounter,
+                        vec![
+                            Expression::Text(counter_type.to_ascii_lowercase()),
+                            Expression::Integer(minimum),
+                        ],
+                    ),
+                ],
+            )],
+        ));
+    }
+    affected_selector(value).map_err(|_| unsupported_value("IsPresent", value))
+}
+
+fn closed_count_comparison(
+    subject: Expression,
+    comparison: &str,
+    key: &str,
+) -> Result<Expression, MappingDiagnostic> {
+    let (operator, amount) = ["GE", "LE", "EQ", "GT", "LT"]
+        .into_iter()
+        .find_map(|operator| {
+            comparison
+                .strip_prefix(operator)
+                .map(|amount| (operator, amount))
+        })
+        .ok_or_else(|| unsupported_value(key, comparison))?;
+    let amount = amount
+        .parse::<i64>()
+        .map_err(|_| unsupported_value(key, comparison))?;
+    Ok(match operator {
+        "GE" => call(
+            Operation::AtLeast,
+            vec![subject, Expression::Integer(amount)],
+        ),
+        "LE" => call(
+            Operation::LessThan,
+            vec![
+                subject,
+                Expression::Integer(
+                    amount
+                        .checked_add(1)
+                        .ok_or_else(|| unsupported_value(key, comparison))?,
+                ),
+            ],
+        ),
+        "EQ" => call(
+            Operation::Equals,
+            vec![subject, Expression::Integer(amount)],
+        ),
+        "GT" => call(
+            Operation::GreaterThan,
+            vec![subject, Expression::Integer(amount)],
+        ),
+        "LT" => call(
+            Operation::LessThan,
+            vec![subject, Expression::Integer(amount)],
+        ),
+        _ => return Err(unsupported_value(key, comparison)),
+    })
+}
+
+#[derive(Clone, Copy)]
+struct DynamicPatchSpec {
+    key: &'static str,
+    placeholder: &'static str,
+    operation: Operation,
+    argument: usize,
+}
+
+fn map_dynamic_ability(
+    prefix: LegacyAbilityPrefix,
+    expression: &LegacyExpression,
+    context: &MappingContext<'_>,
+) -> Result<Option<MappedLegacyAbility>, MappingDiagnostic> {
+    let selector = expression
+        .fields
+        .first()
+        .ok_or_else(|| diagnostic("MALFORMED_API", "ability has no API selector"))?;
+    let api = selector.value.trim();
+    let specs = match api {
+        "Mana" => vec![DynamicPatchSpec {
+            key: "Amount",
+            placeholder: "1",
+            operation: Operation::AddMana,
+            argument: 2,
+        }],
+        "Token" => vec![DynamicPatchSpec {
+            key: "TokenAmount",
+            placeholder: "1",
+            operation: Operation::CreateToken,
+            argument: 1,
+        }],
+        "GainLife" => vec![DynamicPatchSpec {
+            key: "LifeAmount",
+            placeholder: "1",
+            operation: Operation::GainLife,
+            argument: 0,
+        }],
+        "LoseLife" => vec![DynamicPatchSpec {
+            key: "LifeAmount",
+            placeholder: "1",
+            operation: Operation::LoseLife,
+            argument: 0,
+        }],
+        "Mill" => vec![DynamicPatchSpec {
+            key: "NumCards",
+            placeholder: "1",
+            operation: Operation::Mill,
+            argument: 0,
+        }],
+        "Draw" => vec![DynamicPatchSpec {
+            key: "NumCards",
+            placeholder: "1",
+            operation: Operation::Draw,
+            argument: 0,
+        }],
+        "DealDamage" | "DamageAll" => vec![DynamicPatchSpec {
+            key: "NumDmg",
+            placeholder: "1",
+            operation: Operation::DealDamage,
+            argument: 1,
+        }],
+        "Pump" | "PumpAll" => vec![
+            DynamicPatchSpec {
+                key: "NumAtt",
+                placeholder: "+1",
+                operation: Operation::ModifyPt,
+                argument: 1,
+            },
+            DynamicPatchSpec {
+                key: "NumDef",
+                placeholder: "+1",
+                operation: Operation::ModifyPt,
+                argument: 2,
+            },
+        ],
+        "Continuous" => vec![
+            DynamicPatchSpec {
+                key: "AddPower",
+                placeholder: "1",
+                operation: Operation::ModifyPt,
+                argument: 1,
+            },
+            DynamicPatchSpec {
+                key: "AddToughness",
+                placeholder: "1",
+                operation: Operation::ModifyPt,
+                argument: 2,
+            },
+        ],
+        "ReduceCost" => vec![DynamicPatchSpec {
+            key: "Amount",
+            placeholder: "1",
+            operation: Operation::CostReduction,
+            argument: 1,
+        }],
+        "PutCounter" | "PutCounterAll" => vec![DynamicPatchSpec {
+            key: "CounterNum",
+            placeholder: "1",
+            operation: Operation::AddCounter,
+            argument: 2,
+        }],
+        "RemoveCounter" => vec![DynamicPatchSpec {
+            key: "CounterNum",
+            placeholder: "1",
+            operation: Operation::RemoveCounters,
+            argument: 2,
+        }],
+        "Discard" => vec![DynamicPatchSpec {
+            key: "NumCards",
+            placeholder: "1",
+            operation: Operation::DiscardCards,
+            argument: 0,
+        }],
+        "Scry" => vec![DynamicPatchSpec {
+            key: "ScryNum",
+            placeholder: "1",
+            operation: Operation::Scry,
+            argument: 0,
+        }],
+        "Surveil" => vec![DynamicPatchSpec {
+            key: "Amount",
+            placeholder: "1",
+            operation: Operation::Surveil,
+            argument: 0,
+        }],
+        _ => Vec::new(),
+    };
+    if specs.is_empty() {
+        return Ok(None);
+    }
+
+    let parameters = parameters(expression)?;
+    let mut replacements = Vec::new();
+    let mut placeholder_expression = expression.clone();
+    for spec in specs {
+        let Some(replacement) = resolve_dynamic_parameter(&parameters, spec.key, context)? else {
+            continue;
+        };
+        for field in &mut placeholder_expression.fields {
+            if field.key.as_deref() == Some(spec.key) {
+                field.value = spec.placeholder.to_string();
+            }
+        }
+        replacements.push((spec, replacement));
+    }
+    if replacements.is_empty() {
+        return Ok(None);
+    }
+
+    let mut mapped = map_legacy_ability(prefix, &placeholder_expression)?;
+    for (spec, replacement) in replacements {
+        let replaced = replace_operation_argument(
+            &mut mapped.expression,
+            spec.operation,
+            spec.argument,
+            &replacement,
+        );
+        if replaced == 0 {
+            return Err(diagnostic(
+                "DYNAMIC_LOWERING_MISMATCH",
+                &format!(
+                    "dynamic parameter `{}` did not produce expected `{}` operation",
+                    spec.key,
+                    spec.operation.as_str()
+                ),
+            ));
+        }
+    }
+    Ok(Some(mapped))
+}
+
+fn resolve_dynamic_parameter(
+    parameters: &BTreeMap<String, String>,
+    key: &str,
+    context: &MappingContext<'_>,
+) -> Result<Option<Expression>, MappingDiagnostic> {
+    let Some(value) = parameters.get(key) else {
+        return Ok(None);
+    };
+    if value.parse::<i64>().is_ok() {
+        return Ok(None);
+    }
+    let reference = value.strip_prefix('+').unwrap_or(value);
+    if !context.svars.contains_key(reference) && !context.duplicate_svars.contains(reference) {
+        return Ok(None);
+    }
+    resolve_value_svar(reference, context).map(Some)
+}
+
+fn resolve_value_svar(
+    name: &str,
+    context: &MappingContext<'_>,
+) -> Result<Expression, MappingDiagnostic> {
+    if context.duplicate_svars.contains(name) {
+        return Err(diagnostic(
+            "DUPLICATE_SVAR",
+            &format!("SVar `{name}` is declared more than once"),
+        ));
+    }
+    let expression = context.svars.get(name).copied().ok_or_else(|| {
+        diagnostic(
+            "MISSING_SVAR",
+            &format!("referenced value SVar `{name}` is not declared"),
+        )
+    })?;
+    if expression.fields.len() != 1 {
+        return Err(diagnostic(
+            "UNSUPPORTED_VALUE_SVAR",
+            &format!("value SVar `{name}` is not a single closed expression"),
+        ));
+    }
+    let field = &expression.fields[0];
+    match field.key.as_deref() {
+        Some("Count") => map_count_value(name, &field.value),
+        Some("Targeted") => map_characteristic_value(
+            name,
+            call(Operation::Target, vec![call(Operation::Any, vec![])]),
+            &field.value,
+        ),
+        Some("Triggered") => {
+            map_characteristic_value(name, call(Operation::Triggered, vec![]), &field.value)
+        }
+        _ => Err(diagnostic(
+            "UNSUPPORTED_VALUE_SVAR",
+            &format!(
+                "value SVar `{name}` expression `{}` has no exact lowering",
+                expression.raw
+            ),
+        )),
+    }
+}
+
+fn map_count_value(name: &str, value: &str) -> Result<Expression, MappingDiagnostic> {
+    if value == "xPaid" {
+        return Ok(call(Operation::PaidX, vec![]));
+    }
+    if value == "CardPower" {
+        return Ok(call(
+            Operation::Power,
+            vec![call(Operation::Source, vec![])],
+        ));
+    }
+    if let Some(counter_type) = value.strip_prefix("CardCounters.") {
+        return Ok(call(
+            Operation::CounterCount,
+            vec![
+                call(Operation::Source, vec![]),
+                Expression::Text(counter_type.to_ascii_lowercase()),
+            ],
+        ));
+    }
+    if let Some(counter_type) = value.strip_prefix("YourCounters") {
+        if counter_type.is_empty() {
+            return Err(unsupported_value("SVar", value));
+        }
+        return Ok(call(
+            Operation::CounterCount,
+            vec![
+                call(Operation::You, vec![]),
+                Expression::Text(counter_type.to_ascii_lowercase()),
+            ],
+        ));
+    }
+    if let Some(color) = value.strip_prefix("Devotion.") {
+        if color.is_empty() {
+            return Err(unsupported_value("SVar", value));
+        }
+        return Ok(call(
+            Operation::Devotion,
+            vec![
+                call(Operation::You, vec![]),
+                Expression::Text(color.to_ascii_lowercase()),
+            ],
+        ));
+    }
+    if let Some(valid) = value.strip_prefix("Valid ") {
+        if let Some(selector) = valid.strip_suffix("$Colors") {
+            return Ok(call(
+                Operation::DistinctCount,
+                vec![
+                    affected_selector(selector)?,
+                    Expression::Text("colors".to_string()),
+                ],
+            ));
+        }
+        return Ok(call(Operation::Count, vec![affected_selector(valid)?]));
+    }
+    if let Some(valid) = value.strip_prefix("ThisTurnCast_") {
+        return Ok(call(
+            Operation::HistoryCount,
+            vec![
+                affected_selector(valid)?,
+                Expression::Text("cast_this_turn".to_string()),
+            ],
+        ));
+    }
+    Err(diagnostic(
+        "UNSUPPORTED_VALUE_SVAR",
+        &format!("value SVar `{name}` count `{value}` has no exact lowering"),
+    ))
+}
+
+fn map_characteristic_value(
+    name: &str,
+    selector: Expression,
+    value: &str,
+) -> Result<Expression, MappingDiagnostic> {
+    let operation = match value {
+        "CardPower" => Operation::Power,
+        "CardToughness" => Operation::Toughness,
+        "CardManaCost" => Operation::ManaValue,
+        _ => {
+            return Err(diagnostic(
+                "UNSUPPORTED_VALUE_SVAR",
+                &format!("value SVar `{name}` characteristic `{value}` has no exact lowering"),
+            ));
+        }
+    };
+    Ok(call(operation, vec![selector]))
+}
+
+fn replace_operation_argument(
+    expression: &mut Expression,
+    expected: Operation,
+    index: usize,
+    replacement: &Expression,
+) -> usize {
+    let Expression::Call {
+        operation,
+        arguments,
+    } = expression
+    else {
+        return 0;
+    };
+    let mut replaced = 0;
+    if *operation == expected {
+        if index < arguments.len() {
+            arguments[index] = replacement.clone();
+            replaced += 1;
+        } else if index == arguments.len() {
+            arguments.push(replacement.clone());
+            replaced += 1;
+        }
+    }
+    for argument in arguments {
+        replaced += replace_operation_argument(argument, expected, index, replacement);
+    }
+    replaced
 }
 
 fn resolve_svar(
@@ -5486,6 +6069,189 @@ mod tests {
     }
 
     #[test]
+    fn lowers_closed_presence_conditions_by_ability_kind() {
+        let mana = map_line(
+            "A:AB$ Mana | Cost$ T | Produced$ C | Amount$ 2 | IsPresent$ Land.YouCtrl | PresentCompare$ GE5 | SpellDescription$ Add mana.",
+        )
+        .unwrap_or_else(|error| panic!("conditional mana should map: {}", error.message));
+        assert!(matches!(
+            mana.timing,
+            Some(Expression::Call {
+                operation: Operation::TimingCondition,
+                ..
+            })
+        ));
+
+        for line in [
+            "S:Mode$ AlternativeCost | ValidSA$ Spell | ValidCard$ Card.Self | ValidPlayer$ You | Cost$ 0 | EffectZone$ All | IsPresent$ Card.IsCommander+YouCtrl | Description$ Free with commander.",
+            "S:Mode$ Continuous | Affected$ Card.Self | AddKeyword$ Double Strike | IsPresent$ Equipment.Attached | PresentCompare$ GE2 | Description$ Double strike.",
+            "S:Mode$ Continuous | Affected$ Creature.YouCtrl | AddPower$ 5 | AddToughness$ 5 | IsPresent$ Card.Self+counters_GE7_QUEST | Description$ Buff.",
+        ] {
+            let mapped = map_line(line).unwrap_or_else(|error| {
+                panic!("conditional static should map: {}", error.message)
+            });
+            assert!(matches!(
+                mapped.expression,
+                Expression::Call {
+                    operation: Operation::WhileCondition,
+                    ..
+                }
+            ));
+        }
+
+        let script = parse_legacy_script(
+            "conditional-trigger.txt",
+            concat!(
+                "Name:Conditional Trigger\n",
+                "T:Mode$ Phase | Phase$ Upkeep | ValidPlayer$ You | TriggerZones$ Battlefield | IsPresent$ Artifact.YouCtrl | Execute$ TrigToken | TriggerDescription$ Token.\n",
+                "SVar:TrigToken:DB$ Token | TokenScript$ c_1_1_thopter | TokenOwner$ You\n",
+            ),
+        )
+        .unwrap_or_else(|error| panic!("conditional trigger should parse: {error}"));
+        let context = MappingContext::from_script(&script);
+        let (prefix, expression) = script
+            .lines
+            .iter()
+            .find_map(|line| match &line.kind {
+                LegacyLineKind::Ability { prefix, expression } => Some((*prefix, expression)),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("conditional trigger has no root ability"));
+        let mapped = map_legacy_ability_in_context(prefix, expression, &context)
+            .unwrap_or_else(|error| panic!("conditional trigger should map: {}", error.message));
+        assert!(matches!(
+            mapped.event,
+            Some(Expression::Call {
+                operation: Operation::EventWhen,
+                ..
+            })
+        ));
+        assert!(matches!(
+            mapped.expression,
+            Expression::Call {
+                operation: Operation::WhileCondition,
+                ..
+            }
+        ));
+
+        let unsupported = map_line(
+            "A:AB$ Draw | IsPresent$ Card.Self | PresentCompare$ EQX | SpellDescription$ Draw.",
+        )
+        .err()
+        .unwrap_or_else(|| panic!("dynamic presence comparison must quarantine"));
+        assert_eq!(unsupported.code, "UNSUPPORTED_VALUE");
+    }
+
+    #[test]
+    fn lowers_closed_dynamic_svar_values() {
+        for (script_text, expected_value) in [
+            (
+                concat!(
+                    "Name:Dynamic Tokens\n",
+                    "A:AB$ Token | Cost$ T | TokenAmount$ X | TokenScript$ r_1_1_goblin | TokenOwner$ You | SpellDescription$ Tokens.\n",
+                    "SVar:X:Count$Valid Goblin.YouCtrl\n",
+                ),
+                Operation::Count,
+            ),
+            (
+                concat!(
+                    "Name:Paid X Tokens\n",
+                    "A:SP$ Token | TokenAmount$ X | TokenScript$ w_1_1_warrior | TokenOwner$ You | SpellDescription$ Tokens.\n",
+                    "SVar:X:Count$xPaid\n",
+                ),
+                Operation::PaidX,
+            ),
+            (
+                concat!(
+                    "Name:Target Power\n",
+                    "A:SP$ ChangeZone | ValidTgts$ Creature | Origin$ Battlefield | Destination$ Exile | SubAbility$ DBGainLife | SpellDescription$ Exile.\n",
+                    "SVar:DBGainLife:DB$ GainLife | Defined$ TargetedController | LifeAmount$ X\n",
+                    "SVar:X:Targeted$CardPower\n",
+                ),
+                Operation::Power,
+            ),
+            (
+                concat!(
+                    "Name:Dynamic Mana\n",
+                    "A:AB$ Mana | Cost$ T | Produced$ G | Amount$ X | SpellDescription$ Mana.\n",
+                    "SVar:X:Count$Valid Elf.YouCtrl\n",
+                ),
+                Operation::Count,
+            ),
+            (
+                concat!(
+                    "Name:Counter Mana\n",
+                    "A:AB$ Mana | Cost$ T | Produced$ G | Amount$ X | SpellDescription$ Mana.\n",
+                    "SVar:X:Count$CardCounters.P1P1\n",
+                ),
+                Operation::CounterCount,
+            ),
+            (
+                concat!(
+                    "Name:Devotion Mana\n",
+                    "A:AB$ Mana | Cost$ T | Produced$ G | Amount$ X | SpellDescription$ Mana.\n",
+                    "SVar:X:Count$Devotion.Green\n",
+                ),
+                Operation::Devotion,
+            ),
+            (
+                concat!(
+                    "Name:Distinct Colors\n",
+                    "S:Mode$ Continuous | Affected$ Card.Self | AddPower$ X | AddToughness$ X | Description$ Buff.\n",
+                    "SVar:X:Count$Valid Permanent.YouCtrl$Colors\n",
+                ),
+                Operation::DistinctCount,
+            ),
+            (
+                concat!(
+                    "Name:Turn History\n",
+                    "T:Mode$ SpellCast | ValidCard$ Card | ValidActivatingPlayer$ You | Execute$ TrigLife | TriggerZones$ Battlefield | TriggerDescription$ Life.\n",
+                    "SVar:TrigLife:DB$ GainLife | Defined$ You | LifeAmount$ X\n",
+                    "SVar:X:Count$ThisTurnCast_Card.YouCtrl\n",
+                ),
+                Operation::HistoryCount,
+            ),
+        ] {
+            let script = parse_legacy_script("dynamic-value.txt", script_text)
+                .unwrap_or_else(|error| panic!("dynamic fixture should parse: {error}"));
+            let context = MappingContext::from_script(&script);
+            let (prefix, expression) = script
+                .lines
+                .iter()
+                .find_map(|line| match &line.kind {
+                    LegacyLineKind::Ability { prefix, expression } => Some((*prefix, expression)),
+                    _ => None,
+                })
+                .unwrap_or_else(|| panic!("dynamic fixture has no root ability"));
+            let mapped = map_legacy_ability_in_context(prefix, expression, &context)
+                .unwrap_or_else(|error| panic!("dynamic value should map: {}", error.message));
+            assert!(
+                expression_contains_operation(&mapped.expression, expected_value),
+                "{} is missing {}",
+                script_text.lines().next().unwrap_or("dynamic fixture"),
+                expected_value.as_str()
+            );
+        }
+
+        let script = parse_legacy_script(
+            "unbound-sacrifice.txt",
+            concat!(
+                "A:AB$ Mill | Cost$ Sac<1/Creature> | NumCards$ X | ValidTgts$ Player | SpellDescription$ Mill.\n",
+                "SVar:X:Sacrificed$CardPower\n",
+            ),
+        )
+        .unwrap_or_else(|error| panic!("unbound sacrifice fixture should parse: {error}"));
+        let context = MappingContext::from_script(&script);
+        let LegacyLineKind::Ability { prefix, expression } = &script.lines[0].kind else {
+            panic!("unbound sacrifice fixture has no ability");
+        };
+        let error = map_legacy_ability_in_context(*prefix, expression, &context)
+            .err()
+            .unwrap_or_else(|| panic!("unbound sacrifice value must quarantine"));
+        assert_eq!(error.code, "UNSUPPORTED_VALUE_SVAR");
+    }
+
+    #[test]
     fn resolves_etb_and_upkeep_svar_effect_graphs() {
         for (script_text, expected_event, expected_effect) in [
             (
@@ -5866,6 +6632,21 @@ mod tests {
             panic!("mapping fixture is not an ability");
         };
         map_legacy_ability(*prefix, expression)
+    }
+
+    fn expression_contains_operation(expression: &Expression, expected: Operation) -> bool {
+        match expression {
+            Expression::Call {
+                operation,
+                arguments,
+            } => {
+                *operation == expected
+                    || arguments
+                        .iter()
+                        .any(|argument| expression_contains_operation(argument, expected))
+            }
+            _ => false,
+        }
     }
 
     fn run_git(root: &Path, args: &[&str]) {

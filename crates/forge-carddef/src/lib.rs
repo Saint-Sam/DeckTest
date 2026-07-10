@@ -869,7 +869,7 @@ operations! {
     GainLife => ("gain_life", Effect, 1, Some(2)),
     LoseLife => ("lose_life", Effect, 1, Some(2)),
     SetLife => ("set_life", Effect, 1, Some(2)),
-    AddMana => ("add_mana", Effect, 1, Some(2)),
+    AddMana => ("add_mana", Effect, 1, Some(3)),
     CounterSpell => ("counter_spell", Effect, 1, Some(2)),
     Copy => ("copy", Effect, 1, Some(2)),
     CreateToken => ("create_token", Effect, 1, Some(3)),
@@ -951,6 +951,15 @@ operations! {
     BooleanIs => ("boolean_is", Predicate, 1, Some(1)),
     Nonzero => ("nonzero", Predicate, 1, Some(1)),
     AtTiming => ("at_timing", Effect, 2, Some(2)),
+    DesignationIs => ("designation_is", Predicate, 1, Some(1)),
+    AttachedTo => ("attached_to", Predicate, 1, Some(1)),
+    EventWhen => ("event_when", Event, 2, Some(2)),
+    TimingCondition => ("timing_condition", Timing, 1, Some(1)),
+    PaidX => ("paid_x", Value, 0, Some(0)),
+    CounterCount => ("counter_count", Value, 2, Some(2)),
+    Devotion => ("devotion", Value, 2, Some(2)),
+    DistinctCount => ("distinct_count", Value, 2, Some(2)),
+    HistoryCount => ("history_count", Value, 2, Some(2)),
 }
 
 impl Operation {
@@ -1006,8 +1015,9 @@ impl Operation {
             | Self::ColorIs
             | Self::KeywordIs
             | Self::ZoneIs
-            | Self::During => Some(Text),
-            Self::ControlledBy | Self::OwnedBy => Some(Selector),
+            | Self::During
+            | Self::DesignationIs => Some(Text),
+            Self::ControlledBy | Self::OwnedBy | Self::AttachedTo => Some(Selector),
             Self::WithCounter => match index {
                 0 => Some(Text),
                 1 => Some(Number),
@@ -1058,6 +1068,11 @@ impl Operation {
             Self::EventCounterAdded | Self::EventZoneChange => match index {
                 0 => Some(Selector),
                 1 => Some(Text),
+                _ => None,
+            },
+            Self::EventWhen => match index {
+                0 => Some(Event),
+                1 => Some(Predicate),
                 _ => None,
             },
 
@@ -1115,6 +1130,7 @@ impl Operation {
             Self::AddMana => match index {
                 0 => Some(Text),
                 1 => Some(Selector),
+                2 => Some(Number),
                 _ => None,
             },
             Self::CounterSpell | Self::Copy => Some(Selector),
@@ -1293,8 +1309,17 @@ impl Operation {
 
             Self::TimingInstant | Self::TimingSorcery | Self::TimingYourTurn => None,
             Self::TimingOnceEachTurn => Some(Predicate),
+            Self::TimingCondition => Some(Predicate),
             Self::Count => Some(SelectorOrText),
             Self::Amount => Some(Comparable),
+            Self::PaidX => None,
+            Self::CounterCount | Self::Devotion | Self::DistinctCount | Self::HistoryCount => {
+                match index {
+                    0 => Some(Selector),
+                    1 => Some(Text),
+                    _ => None,
+                }
+            }
             Self::ManaValue | Self::Power | Self::Toughness => Some(Selector),
             Self::IfElse => {
                 if index == 0 {
@@ -1357,6 +1382,18 @@ mod tests {
         assert_eq!(
             Operation::LayerEffect.argument_kind(2),
             Some(ArgumentKind::Effect)
+        );
+        assert_eq!(
+            Operation::EventWhen.argument_kind(0),
+            Some(ArgumentKind::Event)
+        );
+        assert_eq!(
+            Operation::EventWhen.argument_kind(1),
+            Some(ArgumentKind::Predicate)
+        );
+        assert_eq!(
+            Operation::TimingCondition.argument_kind(0),
+            Some(ArgumentKind::Predicate)
         );
         assert_eq!(Operation::parse("card_specific_magic"), None);
     }

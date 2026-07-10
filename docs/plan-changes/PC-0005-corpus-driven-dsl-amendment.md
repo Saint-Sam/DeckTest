@@ -58,3 +58,14 @@ In the Codex thread on 2026-07-10, the Owner approved the bounded amendment and
 asked that the supplied Commander coverage list be included to maximize
 coverage. The Owner also approved using additional local hardware while
 avoiding GitHub Actions, duplicate caches, and wasteful subagents.
+
+## Implemented Amendment Wave
+
+The first incorporated wave adds typed presence predicates and count
+comparisons across activated, spell, static, replacement, and intervening-if
+trigger contexts. It also adds typed paid-X, counter-count, devotion,
+distinct-count, and history-count values, and an optional numeric amount on
+`add_mana`. New operation variants are appended after the original frozen
+registry to preserve every existing serialized discriminant. Structural tests,
+the existing card-database compatibility suite, canonical compiler round-trips,
+and the workspace coverage gate pass locally.
