@@ -94,10 +94,10 @@ if [[ "$mode" == "--exact-packet" ]]; then
   run_logged 06-platforms python3 tools/local_platform_metrics.py
   run_logged 07-fuzz scripts/fuzz_local_parallel.sh gate
   run_logged 08-mutation python3 tools/run_cp_dsl_mutation.py
+  run_logged 15-local-verify scripts/local_verify.sh task
   run_logged 09-card-regression scripts/card_regression.sh --gate
   run_logged 10-platform-validate python3 tools/local_platform_metrics.py --validate-only
   run_logged 11-oracle-semantics python3 tools/oracle_semantic_metrics.py --check
-  run_logged 15-local-verify scripts/local_verify.sh task
   run_logged 12-cp-dsl-metrics python3 tools/cp_dsl_metrics.py --check
   run_logged 13-bootstrap scripts/bootstrap_toolchain.sh --check
   run_logged 14-archive-bootstrap scripts/test_archive_bootstrap.sh
@@ -127,6 +127,7 @@ cargo test --locked --offline --quiet \
   -p forge-arena
 cargo deny --offline --locked check licenses bans sources
 python3 tools/local_platform_metrics.py
+scripts/check_coverage.sh
 
 if [[ "$mode" == "--reuse-current-evidence" ]]; then
   python3 tools/run_local_fuzz.py --check --minimum-worker-seconds 2400
@@ -138,7 +139,6 @@ else
 fi
 python3 tools/local_platform_metrics.py --validate-only
 python3 tools/oracle_semantic_metrics.py --check
-scripts/check_coverage.sh
 python3 tools/cp_dsl_metrics.py --check
 scripts/bootstrap_toolchain.sh --check
 scripts/test_archive_bootstrap.sh
