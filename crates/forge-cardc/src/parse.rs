@@ -519,7 +519,13 @@ fn parse_type_line(path: &str, pair: &Pair<'_, Rule>, text: &str) -> CardcResult
     if card_types.is_empty() {
         return Err(at(path, pair, "type line has no card type"));
     }
-    let subtypes = right.split_whitespace().map(ToString::to_string).collect();
+    let mut subtypes = Vec::new();
+    for subtype in right.split_whitespace() {
+        if matches!(subtype, "-" | "—") || subtype.chars().any(char::is_control) {
+            return Err(at(path, pair, format!("invalid subtype token `{subtype}`")));
+        }
+        subtypes.push(subtype.to_string());
+    }
     Ok(TypeLine {
         supertypes,
         card_types,

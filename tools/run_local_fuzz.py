@@ -40,6 +40,7 @@ def source_hash(root: Path) -> str:
         root / "Cargo.toml",
         root / "Cargo.lock",
         *sorted((root / "fuzz/fuzz_targets").glob("*.rs")),
+        *sorted((root / "fuzz/corpus/fuzz_carddsl").glob("*")),
     ]
     for crate in ("forge-cardc", "forge-carddef", "forge-cards", "forge-core", "forge-testkit"):
         paths.append(root / f"crates/{crate}/Cargo.toml")
@@ -117,7 +118,10 @@ def worker_budget(root: Path, requested: int | None) -> int:
 
 def shared_corpora(root: Path, target: str) -> list[Path]:
     if target == "fuzz_carddsl":
+        regression = root / "fuzz/corpus/fuzz_carddsl"
+        regression.mkdir(parents=True, exist_ok=True)
         return [
+            regression,
             root / "cards/cp_dsl/definitions",
             root / "cards/integration/layers",
         ]

@@ -1,0 +1,23 @@
+// CP-DSL stratum: counters_tokens_copy
+card "Sakashima the Impostor" {
+  id: "a7243d25-22a2-4df5-adaf-1f40f5330ec1"
+  layout: normal
+  status: verified_playable
+  face "Sakashima the Impostor" {
+    cost: "{2}{U}{U}"
+    types: "Legendary Creature — Human RogHueendary Creature — Human RogHue"
+    oracle: "You may have Sakashima the  Return Sakashima the Impostor to its owner's hand ep.\""
+    power: "3"
+    toughness: "1"
+    keywords: []
+    ability replacement {
+      event: event_enters(source())
+      effect: replace_event(triggered(), copy(target(permanents(type_is("creature")))))
+    }
+    ability activated {
+      costs: [mana_cost("{2}{U}{U}")]
+      timing: timing_your_turn()
+      effect: return_to_hand(source())
+    }
+  }
+}

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "case_count": 115,
+  "case_count": 117,
   "minimum_required": 50,
   "recursive_argument_case_count": 59,
   "recursive_argument_minimum_required": 50,
@@ -1112,6 +1112,18 @@
       "features": [
         "category_correct_wrong_argument"
       ]
+    },
+    {
+      "id": "repeated_type_delimiter",
+      "file": "cards/cp_dsl/malformed/116_repeated_type_delimiter.frs",
+      "expected_diagnostic": "invalid subtype token",
+      "sha256": "42378a3d57859efd5aa11b5a795aff5423988efe701d552f50f6d4fc0f6ff936"
+    },
+    {
+      "id": "control_character_subtype",
+      "file": "cards/cp_dsl/malformed/117_control_character_subtype.frs",
+      "expected_diagnostic": "invalid subtype token",
+      "sha256": "53ace08da5a3ddd6683152ff9064aaf3c5ed8497efe94a33f5b1e1178fa8f3f2"
     }
   ]
 }

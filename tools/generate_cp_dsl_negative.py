@@ -275,6 +275,12 @@ ADDITIONAL_RECURSIVE_ARGUMENT_CASES = [
 ]
 
 
+POST_RECURSIVE_CASES = [
+    ("repeated_type_delimiter", changed('types: "Creature — Elf"', 'types: "Creature — Elf — Rogue"'), "invalid subtype token", None),
+    ("control_character_subtype", changed('types: "Creature — Elf"', 'types: "Creature — Elf\\u007fRogue"'), "invalid subtype token", None),
+]
+
+
 def generate(root: Path, check: bool) -> int:
     output_dir = root / "cards/cp_dsl/malformed"
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -285,6 +291,7 @@ def generate(root: Path, check: bool) -> int:
         for name, source, diagnostic in CASES
     ]
     all_cases.extend(ADDITIONAL_RECURSIVE_ARGUMENT_CASES)
+    all_cases.extend(POST_RECURSIVE_CASES)
     for index, (name, source, diagnostic, metadata) in enumerate(all_cases, start=1):
         path = output_dir / f"{index:03d}_{name}.frs"
         content = source.encode("utf-8")
