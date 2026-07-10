@@ -953,6 +953,24 @@ operations! {
 }
 
 impl Operation {
+    /// Returns the first variadic position and its closed repeated type.
+    #[must_use]
+    pub const fn variadic_signature(self) -> Option<(usize, ArgumentKind)> {
+        use ArgumentKind::{Cost, Effect, Integer, Predicate, PredicateOrText, Scalar, Selector};
+
+        match self {
+            Self::All => Some((0, Selector)),
+            Self::Cards | Self::Permanents | Self::Spells => Some((0, PredicateOrText)),
+            Self::And | Self::Or => Some((0, Predicate)),
+            Self::Sequence | Self::ChooseOne => Some((0, Effect)),
+            Self::ChooseUpTo => Some((1, Effect)),
+            Self::SearchLibrary => Some((2, Scalar)),
+            Self::LayerEffect => Some((3, Integer)),
+            Self::AlternateCost => Some((1, Cost)),
+            _ => None,
+        }
+    }
+
     /// Returns the closed argument type for one accepted position.
     #[must_use]
     pub const fn argument_kind(self, index: usize) -> Option<ArgumentKind> {
@@ -961,6 +979,12 @@ impl Operation {
             RememberedValue, Scalar, Selector, SelectorOrEvent, SelectorOrNumber,
             SelectorOrPredicate, SelectorOrText, SelectorTextOrNumber, Text, Timing, Value,
         };
+
+        if let Some((first, kind)) = self.variadic_signature() {
+            if index >= first {
+                return Some(kind);
+            }
+        }
 
         match self {
             Self::All => Some(Selector),
@@ -1140,7 +1164,7 @@ impl Operation {
             Self::ChangeControl | Self::ChangeTarget | Self::Attach => Some(Selector),
             Self::SearchLibrary => match index {
                 0 | 1 => Some(Selector),
-                _ => Some(Scalar),
+                _ => None,
             },
             Self::Shuffle => Some(Selector),
             Self::Reveal => Some(Selector),
@@ -1191,7 +1215,7 @@ impl Operation {
             Self::LayerEffect => match index {
                 0 | 1 => Some(Selector),
                 2 => Some(Effect),
-                _ => Some(ArgumentKind::Integer),
+                _ => None,
             },
             Self::Continuous => match index {
                 0 => Some(Selector),
@@ -1225,7 +1249,7 @@ impl Operation {
                 if index == 0 {
                     Some(Selector)
                 } else {
-                    Some(ArgumentKind::Cost)
+                    None
                 }
             }
             Self::PlayExiled => Some(Selector),
@@ -1339,10 +1363,25 @@ mod tests {
     #[test]
     fn every_declared_operation_argument_has_a_closed_type() {
         for &operation in Operation::ALL {
-            let checked_positions = operation
-                .max_args()
-                .unwrap_or_else(|| operation.min_args().saturating_add(4));
-            for index in 0..checked_positions {
+            let checked_positions = operation.max_args().unwrap_or_else(|| {
+                let Some((first, kind)) = operation.variadic_signature() else {
+                    panic!(
+                        "{} is unbounded without a variadic signature",
+                        operation.as_str()
+                    );
+                };
+                for index in first..first.saturating_add(128) {
+                    assert_eq!(
+                        operation.argument_kind(index),
+                        Some(kind),
+                        "{} variadic argument {} changed type",
+                        operation.as_str(),
+                        index + 1
+                    );
+                }
+                first
+            });
+            for index in 0..checked_positions.max(operation.min_args()) {
                 assert!(
                     operation.argument_kind(index).is_some(),
                     "{} accepts argument {} without a closed type",

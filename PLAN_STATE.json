@@ -237,7 +237,7 @@
       "status": "in_progress",
       "branch": "task/T3.1-card-dsl",
       "attempts": 0,
-      "verification": "Second CP-DSL reviewer remediation implemented: 117 malformed diagnostics include 59 explicitly tagged recursive-argument cases covering every ArgumentKind, registry signatures are total over every accepted position, and mutation/fuzz evidence now requires controls, final statistics, retained full logs, hashes, and an exact detached local packet. A sanitizer-discovered type-line round-trip crash is fixed and retained as a regression seed. Prior product evidence remains green; the new exact-commit packet and re-review are pending."
+      "verification": "Third CP-DSL reviewer remediation implemented: 117 malformed diagnostics include 59 tagged recursive-argument cases covering every ArgumentKind; variadic signatures have explicit closed tails; mutation/fuzz evidence requires controls, final statistics, retained logs, and hashes; a sanitizer-discovered type-line round-trip crash is fixed and retained; and four clean platform-package lanes now emit and hash linked WASM, Android, iOS, and Windows artifacts. Exact detached packet regeneration and re-review are pending."
     }
   },
   "gates_passed": [

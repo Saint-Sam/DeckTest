@@ -20,20 +20,28 @@ reviewed mechanics definitions used to stress the language.
 - Exactly 100 reviewed definitions in the closed 25-stratum set, four cards in
   every stratum, with catalog-only records checked separately.
 - 127 typed operations, recursive argument validation, 100/100 canonical
-  round-trips, and 64/64 positioned malformed diagnostics.
+  round-trips, and 117/117 positioned malformed diagnostics. The tagged subset
+  contains 59 recursive-argument cases covering every argument kind.
 - Three isolated clean builds produced byte-identical main and layer-scenario
   databases.
 - The nightmare suite casts ten compiled scenario cards and lowers their
   validated `layer_effect` trees; 100 games pass with zero invariant failures.
-- 28/28 curated mutants killed, with zero survivor or invalid mutant.
-- All five address-sanitizer targets pass 2,400 aggregate worker-seconds.
-- Four actual local cross-target builds pass: WASM, Android, iOS, and Windows.
+- The unmutated control passes and 28/28 curated mutants are killed by expected
+  tests, with zero survivor or invalid mutant; all full logs are retained and
+  hashed.
+- All five address-sanitizer targets pass 2,408 verified worker-seconds with
+  retained libFuzzer final-stat logs.
+- Four clean platform-package builds emit a WASM module plus Android, iOS, and
+  Windows static libraries; every linked artifact has a retained log, nonzero
+  size, expected magic, and SHA-256.
 - All 1,200 semantic scenarios pass; the breadth audit measures 379 structural
   families and 1,839 interactions.
-- Workspace line coverage is 80.08% against an unchanged 80% floor.
+- Workspace line coverage remains above the unchanged 80% floor.
 - Full GPL-3.0 text, offline dependency-license checks, and a simulated GitHub
   ZIP bootstrap without submodule contents all pass.
 - Hosted Actions use is zero.
+- The exact detached packet binds its command logs, linked-platform records,
+  and artifacts to the reviewed commit and must pass its independent checker.
 
 ## Reviewer Remediation
 
@@ -42,6 +50,19 @@ are no longer supplied by hardcoded fixture seeds, nested operation arguments
 are typed and fail closed, strata are exact rather than count-only, token-set
 classification is corrected, and the gate now executes real platform,
 semantic, and isolated clean-build checks.
+
+The second independent review failed on evidence depth rather than runtime
+behavior. Its two P1 findings were fixed with 59 tagged recursive diagnostics
+and an exact packet that verifies controls, expected killer assertions, actual
+fuzz runtime/final statistics, complete logs, hashes, toolchains, and isolated
+targets. During the exact rerun, fuzzing found a type-line round-trip crash;
+that parser bug is fixed and the exact input is now a permanent regression
+seed.
+
+The third independent review rejected metadata-only cross-target checks. Those
+lanes now perform clean `cargo rustc` builds for the platform app packages and
+fail unless a linked target artifact exists and its retained log, size, magic,
+and SHA-256 validate.
 
 ## Owner Decision
 

@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -43,6 +44,15 @@ def source_hash(root: Path) -> str:
 
 
 def git_value(root: Path, value: str) -> str:
+    if not (root / ".git").exists():
+        environment_key = {
+            "HEAD": "FORGE_ARCHIVE_SOURCE_COMMIT",
+            "HEAD^{tree}": "FORGE_ARCHIVE_SOURCE_TREE",
+        }.get(value)
+        archived_value = os.environ.get(environment_key or "")
+        if archived_value:
+            return archived_value
+        raise ValueError(f"archive coverage provenance is missing for {value}")
     result = subprocess.run(
         ["git", "rev-parse", value],
         cwd=root,

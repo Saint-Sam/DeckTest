@@ -184,6 +184,18 @@ def build_report(root: Path) -> dict[str, object]:
         and int(local_fuzz.get("total_worker_seconds", 0)) >= 2400,
         "local_cross_target_checks": local_platforms.get("passed") is True
         and len(local_platforms.get("targets", [])) == 4,
+        "linked_cross_target_artifacts": int(
+            local_platforms.get("linked_artifact_count", 0)
+        )
+        == 4
+        and all(
+            isinstance(target, dict)
+            and isinstance(target.get("artifact"), dict)
+            and int(target["artifact"].get("size_bytes", 0)) > 0
+            and bool(target["artifact"].get("sha256"))
+            and bool(target.get("log_sha256"))
+            for target in local_platforms.get("targets", [])
+        ),
         "semantic_oracle_breadth": oracle_semantics.get("passed") is True,
         "database_catalog_counts": identity_count == int(catalog.get("classified_identities", 0))
         and printing_count == int(catalog.get("imported_english_printings", 0)),
@@ -242,6 +254,7 @@ def build_report(root: Path) -> dict[str, object]:
         "local_platforms": {
             "targets": local_platforms.get("targets"),
             "rustc": local_platforms.get("rustc"),
+            "linked_artifact_count": local_platforms.get("linked_artifact_count"),
         },
         "oracle_semantics": oracle_semantics.get("measured"),
         "provenance": {

@@ -120,6 +120,16 @@ def validated_reports(root: Path) -> dict[str, dict[str, object]]:
         raise ValueError("platform report did not pass")
     if len(reports["platforms"].get("targets", [])) != 4:
         raise ValueError("platform report does not contain four executed targets")
+    if int(reports["platforms"].get("linked_artifact_count", 0)) != 4:
+        raise ValueError("platform report does not contain four linked artifacts")
+    for target in reports["platforms"].get("targets", []):
+        if not isinstance(target, dict) or not isinstance(target.get("artifact"), dict):
+            raise ValueError("platform report lacks a linked artifact record")
+        artifact = target["artifact"]
+        if not artifact.get("sha256") or int(artifact.get("size_bytes", 0)) <= 0:
+            raise ValueError("platform artifact lacks a hash or nonzero size")
+        if not target.get("log_sha256"):
+            raise ValueError("platform target lacks a retained log hash")
     if reports["oracles"].get("passed") is not True:
         raise ValueError("semantic oracle report did not pass")
     if reports["verification"].get("passed") is not True:
@@ -133,7 +143,12 @@ def validated_reports(root: Path) -> dict[str, dict[str, object]]:
     return reports
 
 
-def command_records(root: Path, evidence_dir: Path) -> list[dict[str, object]]:
+def command_records(
+    root: Path,
+    evidence_dir: Path,
+    reviewed_commit: str,
+    reviewed_tree: str,
+) -> list[dict[str, object]]:
     commands = evidence_dir / "commands"
     rows = []
     for filename in REQUIRED_COMMAND_LOGS:
@@ -141,7 +156,13 @@ def command_records(root: Path, evidence_dir: Path) -> list[dict[str, object]]:
         record = file_record(root, path)
         text = path.read_text()
         if filename == "00-preflight.log":
-            for marker in ("clean=true", "detached=true", "reviewed_commit="):
+            for marker in (
+                "clean=true",
+                "detached=true",
+                "github_actions_used=false",
+                f"reviewed_commit={reviewed_commit}",
+                f"reviewed_tree={reviewed_tree}",
+            ):
                 if marker not in text:
                     raise ValueError(f"preflight log lacks {marker}")
         elif "exit_code=0" not in text:
@@ -169,6 +190,34 @@ def isolated_targets(reports: dict[str, dict[str, object]]) -> list[str]:
     return sorted(targets)
 
 
+def platform_evidence(
+    root: Path, reports: dict[str, dict[str, object]]
+) -> list[dict[str, object]]:
+    rows = []
+    for target in reports["platforms"].get("targets", []):
+        if not isinstance(target, dict):
+            raise ValueError("platform evidence row is not an object")
+        artifact = target.get("artifact")
+        if not isinstance(artifact, dict):
+            raise ValueError("platform evidence lacks a linked artifact record")
+        log_path = resolve_path(root, target.get("log", ""))
+        log = file_record(root, log_path)
+        if log["sha256"] != target.get("log_sha256"):
+            raise ValueError(f"platform log hash mismatch: {log_path}")
+        rows.append(
+            {
+                "target": target.get("target"),
+                "package": target.get("package"),
+                "crate_type": target.get("crate_type"),
+                "log": log,
+                "artifact": artifact,
+            }
+        )
+    if len(rows) != 4:
+        raise ValueError("platform evidence does not contain four linked artifacts")
+    return rows
+
+
 def create(
     root: Path,
     evidence_dir: Path,
@@ -186,8 +235,12 @@ def create(
             raise ValueError(f"{name} evidence is not bound to {reviewed_commit}")
     if reports["coverage"].get("reviewed_commit") != reviewed_commit:
         raise ValueError("coverage evidence is not bound to the reviewed commit")
-    command_rows = command_records(root, evidence_dir)
+    reviewed_tree = command_output(
+        ["git", "rev-parse", f"{reviewed_commit}^{{tree}}"], root
+    )
+    command_rows = command_records(root, evidence_dir, reviewed_commit, reviewed_tree)
     artifact_rows = [file_record(root, root / path) for path in REQUIRED_ARTIFACTS]
+    platform_rows = platform_evidence(root, reports)
     workflows = sorted((root / ".github/workflows").glob("*.y*ml"))
     if workflows:
         raise ValueError(f"hosted workflows are active: {workflows}")
@@ -197,9 +250,7 @@ def create(
         "runner": "local-only",
         "github_actions_used": False,
         "reviewed_commit": reviewed_commit,
-        "reviewed_tree": command_output(
-            ["git", "rev-parse", f"{reviewed_commit}^{{tree}}"], root
-        ),
+        "reviewed_tree": reviewed_tree,
         "detached_clean_start": True,
         "started_at": started_at,
         "finished_at": utc_now(),
@@ -213,6 +264,7 @@ def create(
         },
         "commands": command_rows,
         "artifacts": artifact_rows,
+        "platform_evidence": platform_rows,
         "isolated_target_directories": isolated_targets(reports),
         "source_bindings": {
             "mutation": reports["mutation"].get("source_sha256"),
@@ -232,6 +284,9 @@ def create(
                 "total_worker_seconds"
             ),
             "cross_targets": len(reports["platforms"].get("targets", [])),
+            "linked_platform_artifacts": reports["platforms"].get(
+                "linked_artifact_count"
+            ),
             "semantic_oracles": reports["oracles"].get("measured"),
         },
     }
@@ -262,12 +317,16 @@ def check(root: Path, evidence_dir: Path) -> int:
             raise ValueError(f"{name} evidence is not bound to the reviewed commit")
     if reports["coverage"].get("reviewed_commit") != reviewed_commit:
         raise ValueError("coverage evidence is not bound to the reviewed commit")
-    expected_commands = command_records(root, evidence_dir)
+    expected_commands = command_records(
+        root, evidence_dir, reviewed_commit, reviewed_tree
+    )
     if packet.get("commands") != expected_commands:
         raise ValueError("command-log manifest is stale")
     expected_artifacts = [file_record(root, root / path) for path in REQUIRED_ARTIFACTS]
     if packet.get("artifacts") != expected_artifacts:
         raise ValueError("artifact manifest is stale")
+    if packet.get("platform_evidence") != platform_evidence(root, reports):
+        raise ValueError("platform evidence manifest is stale")
     command_output(["python3", "tools/run_cp_dsl_mutation.py", "--check"], root)
     command_output(
         [

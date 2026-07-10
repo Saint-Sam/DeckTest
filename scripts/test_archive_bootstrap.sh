@@ -16,15 +16,23 @@ if [[ -n "${1:-}" ]]; then
 fi
 
 archive_root="$(mktemp -d "${TMPDIR:-/tmp}/forge-archive-bootstrap.XXXXXX")"
-mkdir -p "$archive_root/scripts" "$archive_root/vendor"
-cp "$ROOT/scripts/bootstrap_toolchain.sh" "$archive_root/scripts/"
-cp "$ROOT/scripts/check_toolchain.sh" "$archive_root/scripts/"
-cp "$ROOT/vendor/legacy-forge.reference.json" "$archive_root/vendor/"
+source_root="$archive_root/source"
+source_tar="$archive_root/source.tar"
+reviewed_commit="$(git -C "$ROOT" rev-parse HEAD)"
+reviewed_tree="$(git -C "$ROOT" rev-parse 'HEAD^{tree}')"
+mkdir -p "$source_root"
+git -C "$ROOT" archive --format=tar --output="$source_tar" HEAD
+tar -xf "$source_tar" -C "$source_root"
 
-if [[ -e "$archive_root/.git" ]]; then
+if [[ -e "$source_root/.git" ]]; then
   echo "ERROR: archive simulation unexpectedly contains .git" >&2
   exit 1
 fi
 
-FORGE_ROOT="$archive_root" "$archive_root/scripts/bootstrap_toolchain.sh" --check
-echo "PASS source-archive bootstrap simulation root=$archive_root"
+FORGE_ROOT="$source_root" "$source_root/scripts/bootstrap_toolchain.sh" --check
+FORGE_ROOT="$source_root" \
+FORGE_ARCHIVE_SOURCE_COMMIT="$reviewed_commit" \
+FORGE_ARCHIVE_SOURCE_TREE="$reviewed_tree" \
+CARGO_NET_OFFLINE=true \
+  "$source_root/scripts/local_verify.sh" task
+echo "PASS source-archive bootstrap and local verification root=$source_root commit=$reviewed_commit"

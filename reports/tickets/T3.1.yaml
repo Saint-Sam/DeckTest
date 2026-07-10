@@ -30,6 +30,7 @@ acceptance:
   - At least 50 tagged recursive argument cases cover every ArgumentKind, multiple depths, variadic positions, bare symbols, and prose misuse.
   - Curated mutation score is at least 90 percent with a passing unmutated control, expected killing assertions, and retained hashed logs.
   - All five local fuzz targets pass at least 2,400 verified address-sanitizer worker-seconds with retained final-stat logs.
+  - Four clean platform-package builds emit a WASM module plus Android, iOS, and Windows static libraries with retained logs and artifact hashes.
   - Ten T2 nightmare classes lower effects from a compiled scenario database with no independent fixture effect seeds.
   - Oracle breadth metrics collapse scalar-only variants and meet the declared family and interaction floors.
 dod:
