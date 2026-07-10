@@ -288,8 +288,15 @@ def tree_hash(root: Path) -> str:
     }
     for mutant in MUTANTS:
         paths.add(root / mutant.file)
-    paths.update((root / "crates/forge-cardc/tests").glob("*.rs"))
+    for crate in ("forge-carddef", "forge-cardc", "forge-cards"):
+        paths.update(
+            path
+            for path in (root / f"crates/{crate}").rglob("*")
+            if path.is_file()
+        )
     paths.update((root / "cards/cp_dsl/malformed").glob("*"))
+    paths.update((root / "cards/cp_dsl/definitions").glob("*.frs"))
+    paths.update((root / "cards/integration/layers").glob("*.frs"))
     for path in sorted(paths):
         if not path.is_file():
             continue

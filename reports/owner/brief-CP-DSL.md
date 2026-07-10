@@ -64,7 +64,20 @@ lanes now perform clean `cargo rustc` builds for the platform app packages and
 fail unless a linked target artifact exists and its retained log, size, magic,
 and SHA-256 validate.
 
+The fourth independent review confirmed that the exact detached gate and its
+supplied artifacts pass, but rejected the freeze. The generator labels all 100
+definitions `verified_playable`, which promises semantic verification, while
+the packet proves typing, round-tripping, compilation, and broad engine
+oracles rather than card-by-card fidelity. Sampled recipes contain intentional
+or accidental approximations. The reviewer also found three evidence-checker
+gaps; complete source hashing, direct linked-artifact validation, exact target
+coverage, full validator replay, and address-sanitizer command checks are now
+implemented locally and await the next exact rerun.
+
 ## Owner Decision
 
-Pending. The independent exact-commit Gate Reviewer verdict must be presented
-in the Codex thread before the Owner approves or fails CP-DSL and T3.2 begins.
+Blocked on one scope decision. The Owner must choose between making all 100
+recipes semantically faithful at T3.1, or approving an explicit clarification
+that relabels them as unverified DSL stress definitions and defers per-card
+fidelity to T3.6 and CP-PORT-20. T3.2 cannot begin before that decision, the
+resulting remediation, a new exact detached packet, and a passing re-review.

@@ -219,12 +219,21 @@ def build_target(
 
 
 def validate(root: Path, report: dict[str, object]) -> tuple[bool, str]:
+    if report.get("schema_version") != 2:
+        return False, "platform report schema is unsupported"
+    current_commit = command_output(["git", "rev-parse", "HEAD"], root)
+    current_tree = command_output(["git", "rev-parse", "HEAD^{tree}"], root)
+    if report.get("reviewed_commit") != current_commit:
+        return False, "platform report is not bound to the current commit"
+    if report.get("reviewed_tree") != current_tree:
+        return False, "platform report is not bound to the current tree"
     if report.get("source_sha256") != source_hash(root):
         return False, "platform report is stale for current source"
     rows = report.get("targets")
     if not isinstance(rows, list) or len(rows) != len(TARGETS):
         return False, "platform report does not contain four target records"
     expected = {str(spec["target"]): spec for spec in TARGETS}
+    observed: set[str] = set()
     for row in rows:
         if not isinstance(row, dict):
             return False, "platform record is not an object"
@@ -232,6 +241,11 @@ def validate(root: Path, report: dict[str, object]) -> tuple[bool, str]:
         spec = expected.get(target)
         if spec is None:
             return False, f"unexpected platform target {target}"
+        if target in observed:
+            return False, f"duplicate platform target {target}"
+        observed.add(target)
+        if row.get("package") != spec["package"] or row.get("crate_type") != spec["crate_type"]:
+            return False, f"platform package metadata mismatch for {target}"
         if row.get("command") != build_command(spec):
             return False, f"platform command mismatch for {target}"
         if row.get("exit_code") != 0 or row.get("passed") is not True:
@@ -242,6 +256,16 @@ def validate(root: Path, report: dict[str, object]) -> tuple[bool, str]:
         for marker in ("command=", "exit_code=0", "--- output ---"):
             if marker not in log_path.read_text():
                 return False, f"platform log lacks {marker} for {target}"
+        command_line = next(
+            (
+                line.removeprefix("command=")
+                for line in log_path.read_text().splitlines()
+                if line.startswith("command=")
+            ),
+            None,
+        )
+        if command_line is None or json.loads(command_line) != row.get("command"):
+            return False, f"platform log command mismatch for {target}"
         artifact = row.get("artifact")
         if not isinstance(artifact, dict):
             return False, f"platform artifact record is absent for {target}"
@@ -251,10 +275,18 @@ def validate(root: Path, report: dict[str, object]) -> tuple[bool, str]:
         if artifact.get("sha256") != sha256(artifact_path):
             return False, f"linked platform artifact hash changed for {target}"
         expected_magic = bytes(spec["magic"])
+        if artifact.get("magic_hex") != expected_magic.hex():
+            return False, f"linked platform artifact magic record changed for {target}"
         if artifact_path.read_bytes()[: len(expected_magic)] != expected_magic:
             return False, f"linked platform artifact magic changed for {target}"
-        if int(artifact.get("size_bytes", 0)) != artifact_path.stat().st_size:
+        if artifact_path.stat().st_size <= 0 or int(artifact.get("size_bytes", 0)) != artifact_path.stat().st_size:
             return False, f"linked platform artifact size changed for {target}"
+        if not artifact.get("file_description"):
+            return False, f"linked platform artifact description is absent for {target}"
+    if observed != set(expected):
+        return False, "platform report does not cover the exact target set"
+    if int(report.get("linked_artifact_count", 0)) != len(TARGETS):
+        return False, "platform linked artifact count is incorrect"
     return True, "verified four linked artifacts, logs, and hashes"
 
 

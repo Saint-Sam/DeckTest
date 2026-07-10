@@ -97,7 +97,11 @@ def resolve_path(root: Path, value: object) -> Path:
     return path if path.is_absolute() else root / path
 
 
-def validated_reports(root: Path) -> dict[str, dict[str, object]]:
+def validated_reports(
+    root: Path,
+    reviewed_commit: str,
+    reviewed_tree: str,
+) -> dict[str, dict[str, object]]:
     reports = {
         "mutation": load_json(root / "metrics/cp_dsl_mutation.json"),
         "fuzz": load_json(root / "metrics/local_fuzz.json"),
@@ -136,6 +140,11 @@ def validated_reports(root: Path) -> dict[str, dict[str, object]]:
         raise ValueError("CP-DSL verification report did not pass")
     if reports["coverage"].get("passed") is not True:
         raise ValueError("coverage report did not pass")
+    for name in ("mutation", "fuzz", "platforms", "coverage"):
+        if reports[name].get("reviewed_commit") != reviewed_commit:
+            raise ValueError(f"{name} evidence is not bound to {reviewed_commit}")
+        if reports[name].get("reviewed_tree") != reviewed_tree:
+            raise ValueError(f"{name} evidence is not bound to tree {reviewed_tree}")
     if int(reports["malformed"].get("recursive_argument_case_count", 0)) < 50:
         raise ValueError("fewer than 50 recursive-argument diagnostics are recorded")
     if reports["malformed"].get("missing_argument_kinds") != []:
@@ -194,6 +203,7 @@ def platform_evidence(
     root: Path, reports: dict[str, dict[str, object]]
 ) -> list[dict[str, object]]:
     rows = []
+    observed: set[str] = set()
     for target in reports["platforms"].get("targets", []):
         if not isinstance(target, dict):
             raise ValueError("platform evidence row is not an object")
@@ -204,9 +214,19 @@ def platform_evidence(
         log = file_record(root, log_path)
         if log["sha256"] != target.get("log_sha256"):
             raise ValueError(f"platform log hash mismatch: {log_path}")
+        target_name = str(target.get("target", ""))
+        if not target_name or target_name in observed:
+            raise ValueError(f"platform target is absent or duplicated: {target_name}")
+        observed.add(target_name)
+        artifact_path = resolve_path(root, artifact.get("path", ""))
+        artifact_record = file_record(root, artifact_path)
+        if artifact_record["sha256"] != artifact.get("sha256"):
+            raise ValueError(f"platform artifact hash mismatch: {artifact_path}")
+        if artifact_record["size_bytes"] != artifact.get("size_bytes"):
+            raise ValueError(f"platform artifact size mismatch: {artifact_path}")
         rows.append(
             {
-                "target": target.get("target"),
+                "target": target_name,
                 "package": target.get("package"),
                 "crate_type": target.get("crate_type"),
                 "log": log,
@@ -215,6 +235,13 @@ def platform_evidence(
         )
     if len(rows) != 4:
         raise ValueError("platform evidence does not contain four linked artifacts")
+    if observed != {
+        "wasm32-unknown-unknown",
+        "aarch64-linux-android",
+        "aarch64-apple-ios",
+        "x86_64-pc-windows-msvc",
+    }:
+        raise ValueError("platform evidence does not cover the exact target set")
     return rows
 
 
@@ -229,15 +256,10 @@ def create(
         raise ValueError(
             f"reviewed commit changed during the gate: {reviewed_commit} -> {current_commit}"
         )
-    reports = validated_reports(root)
-    for name in ("mutation", "fuzz"):
-        if reports[name].get("reviewed_commit") != reviewed_commit:
-            raise ValueError(f"{name} evidence is not bound to {reviewed_commit}")
-    if reports["coverage"].get("reviewed_commit") != reviewed_commit:
-        raise ValueError("coverage evidence is not bound to the reviewed commit")
     reviewed_tree = command_output(
         ["git", "rev-parse", f"{reviewed_commit}^{{tree}}"], root
     )
+    reports = validated_reports(root, reviewed_commit, reviewed_tree)
     command_rows = command_records(root, evidence_dir, reviewed_commit, reviewed_tree)
     artifact_rows = [file_record(root, root / path) for path in REQUIRED_ARTIFACTS]
     platform_rows = platform_evidence(root, reports)
@@ -311,12 +333,7 @@ def check(root: Path, evidence_dir: Path) -> int:
     reviewed_tree = command_output(["git", "rev-parse", f"{reviewed_commit}^{{tree}}"], root)
     if packet.get("reviewed_tree") != reviewed_tree:
         raise ValueError("reviewed tree hash does not match the reviewed commit")
-    reports = validated_reports(root)
-    for name in ("mutation", "fuzz"):
-        if reports[name].get("reviewed_commit") != reviewed_commit:
-            raise ValueError(f"{name} evidence is not bound to the reviewed commit")
-    if reports["coverage"].get("reviewed_commit") != reviewed_commit:
-        raise ValueError("coverage evidence is not bound to the reviewed commit")
+    reports = validated_reports(root, reviewed_commit, reviewed_tree)
     expected_commands = command_records(
         root, evidence_dir, reviewed_commit, reviewed_tree
     )
@@ -327,17 +344,7 @@ def check(root: Path, evidence_dir: Path) -> int:
         raise ValueError("artifact manifest is stale")
     if packet.get("platform_evidence") != platform_evidence(root, reports):
         raise ValueError("platform evidence manifest is stale")
-    command_output(["python3", "tools/run_cp_dsl_mutation.py", "--check"], root)
-    command_output(
-        [
-            "python3",
-            "tools/run_local_fuzz.py",
-            "--check",
-            "--minimum-worker-seconds",
-            "2400",
-        ],
-        root,
-    )
+    command_output(["python3", "tools/cp_dsl_metrics.py", "--check"], root)
     if sorted((root / ".github/workflows").glob("*.y*ml")):
         raise ValueError("hosted workflows became active after packet creation")
     print(

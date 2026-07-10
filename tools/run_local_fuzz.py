@@ -44,7 +44,13 @@ def source_hash(root: Path) -> str:
     ]
     for crate in ("forge-cardc", "forge-carddef", "forge-cards", "forge-core", "forge-testkit"):
         paths.append(root / f"crates/{crate}/Cargo.toml")
-        paths.extend(sorted((root / f"crates/{crate}/src").glob("*.rs")))
+        paths.extend(
+            sorted(
+                path
+                for path in (root / f"crates/{crate}/src").rglob("*")
+                if path.is_file()
+            )
+        )
     paths.extend(sorted((root / "cards/cp_dsl/definitions").glob("*.frs")))
     paths.extend(sorted((root / "cards/integration/layers").glob("*.frs")))
     for path in paths:
@@ -77,6 +83,23 @@ def display_path(root: Path, path: Path) -> str:
 def resolve_report_path(root: Path, value: object) -> Path:
     path = Path(str(value))
     return path if path.is_absolute() else root / path
+
+
+def uses_required_sanitizer(row: dict[str, object]) -> bool:
+    command = row.get("command")
+    if not isinstance(command, list) or not all(isinstance(value, str) for value in command):
+        return False
+    try:
+        sanitizer_index = command.index("--sanitizer")
+    except ValueError:
+        return False
+    return (
+        row.get("sanitizer") == "address"
+        and sanitizer_index + 1 < len(command)
+        and command[sanitizer_index + 1] == "address"
+        and str(row.get("target", "")) in command
+        and "-print_final_stats=1" in command
+    )
 
 
 def command_output(command: list[str], root: Path) -> str:
@@ -287,12 +310,15 @@ def evaluate(report: dict[str, object], minimum_worker_seconds: int) -> tuple[bo
         for row in rows
         if isinstance(row, dict)
     )
-    all_passed = len(rows) > 0 and all(
+    all_passed = report.get("sanitizer") == "address" and len(rows) > 0 and all(
         isinstance(row, dict)
         and row.get("status") == "passed"
+        and uses_required_sanitizer(row)
         and int(row.get("verified_runtime_seconds", 0))
         >= int(row.get("requested_seconds", 0))
         and int(row.get("completed_runs", 0)) > 0
+        and row.get("return_code") == 0
+        and row.get("timed_out") is False
         for row in rows
     )
     required = set(TARGETS)
@@ -312,6 +338,8 @@ def validate_evidence(root: Path, report: dict[str, object]) -> tuple[bool, str]
             return False, f"missing full fuzz log: {path}"
         if row.get("log_sha256") != file_hash(path):
             return False, f"fuzz log hash mismatch: {path}"
+        if not uses_required_sanitizer(row):
+            return False, f"fuzz worker did not use address sanitizer: {path}"
         text = path.read_text()
         for marker in (
             "started_at=",
@@ -325,6 +353,14 @@ def validate_evidence(root: Path, report: dict[str, object]) -> tuple[bool, str]
         ):
             if marker not in text:
                 return False, f"fuzz log lacks {marker}: {path}"
+        command_line = next(
+            (line.removeprefix("command=") for line in text.splitlines() if line.startswith("command=")),
+            None,
+        )
+        if command_line is None or json.loads(command_line) != row.get("command"):
+            return False, f"fuzz command record mismatch: {path}"
+        if row.get("return_code") != 0 or row.get("timed_out") is not False:
+            return False, f"fuzz worker did not exit cleanly: {path}"
         done_match = DONE_PATTERN.search(text)
         statistics = {
             match.group("name"): int(match.group("value"))

@@ -237,7 +237,7 @@
       "status": "in_progress",
       "branch": "task/T3.1-card-dsl",
       "attempts": 0,
-      "verification": "Third CP-DSL reviewer remediation implemented: 117 malformed diagnostics include 59 tagged recursive-argument cases covering every ArgumentKind; variadic signatures have explicit closed tails; mutation/fuzz evidence requires controls, final statistics, retained logs, and hashes; a sanitizer-discovered type-line round-trip crash is fixed and retained; and four clean platform-package lanes now emit and hash linked WASM, Android, iOS, and Windows artifacts. Exact detached packet regeneration and re-review are pending."
+      "verification": "Exact detached local packet passed at 90f5ce69e085fb270bc1b2e8c7cb253009f6547f with 117 malformed diagnostics, 59 tagged recursive-argument cases, 28/28 mutation kills, 2,408 address-sanitizer worker-seconds, four linked platform artifacts, 1,200 semantic scenarios, and 80.31% line coverage. Independent re-review failed because the 100 generated definitions are labeled verified_playable without per-card semantic proof and sampled recipes are approximations. Three evidence-checker gaps are remediated locally; O4 is blocked on the owner scope decision before the next exact rerun."
     }
   },
   "gates_passed": [
@@ -303,12 +303,21 @@
       "remote_ci": "GitHub Actions ci #44 run 28993856797 passed all required jobs for exact T2 evidence commit 0fdc23dea157ee55226eae24d8d4d817c46b5d59. Later closeout evidence/status commits are local-only because owner reported GitHub Actions budget pressure.",
       "clean_checkout_gate": "PASS on 2026-07-09 from /private/tmp/forge-t2-clean-gate/forge-t2-0fdc23d-clean at commit 0fdc23dea157ee55226eae24d8d4d817c46b5d59; archived in reports/gates/T2/clean-checkout-gate-0fdc23d-2026-07-09.log.",
       "re_review": "PASS on 2026-07-09 after clean-checkout T2 gate, 8 reviewer adversarial oracles, 3 mutation checks, 3 spot replays, and determinism replay evidence."
+    },
+    "CP-DSL": {
+      "status": "failed_remediation",
+      "reviewed_commit": "90f5ce69e085fb270bc1b2e8c7cb253009f6547f",
+      "exact_local_gate": "PASS from detached clean worktree /private/tmp/forge-cp-dsl-90f5ce6-clean with no GitHub Actions or network use.",
+      "reviewer": "gpt-5.6-luna xhigh independent Gate Reviewer subagent",
+      "verdict": "FAIL: sampled definitions are typed approximations but are unconditionally labeled verified_playable; evidence source binding omitted the Pest grammar; packet platform checks trusted artifact metadata; and fuzz recheck did not enforce address sanitizer.",
+      "technical_remediation": "Implemented complete crate-source hashing including Pest grammar, exact commit/tree bindings, direct linked-artifact validation with unique target coverage, full CP-DSL validator replay, and address-sanitizer command verification. Exact rerun awaits the semantic-scope decision.",
+      "owner_decision_required": "Choose whether T3.1 must make all 100 recipes semantically faithful before language freeze, or honestly classify them as unverified DSL stress definitions and defer per-card fidelity to T3.6 and CP-PORT-20 through an approved plan clarification."
     }
   },
   "owner_input": {
     "O1": "complete",
     "O2": "complete",
-    "O4": "pending_cp_dsl_packet",
+    "O4": "blocked_on_cp_dsl_semantic_scope_decision",
     "O5": "complete",
     "O9-PC-0001-PC-0003": "complete_2026-07-09"
   },
