@@ -49,6 +49,15 @@ pub(crate) struct ScriptMappingFailure {
     pub diagnostic: MappingDiagnostic,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct ScriptBlockerObservation {
+    pub line: usize,
+    pub source: String,
+    pub code: String,
+    pub message: String,
+    pub linked_root_fanout: usize,
+}
+
 /// Per-API mapping coverage row.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct ApiCoverageRow {
@@ -510,6 +519,180 @@ pub(crate) fn map_script_abilities(
         });
     }
     Ok(mapped)
+}
+
+pub(crate) fn collect_script_mapping_blockers(
+    script: &crate::legacy::LegacyScript,
+) -> Vec<ScriptBlockerObservation> {
+    let context = MappingContext::from_script(script);
+    let svar_names = context.svars.keys().cloned().collect::<BTreeSet<_>>();
+    let mut svar_lines = BTreeMap::new();
+    let mut svar_edges = BTreeMap::new();
+    for line in &script.lines {
+        let LegacyLineKind::SVar { name, expression } = &line.kind else {
+            continue;
+        };
+        svar_lines.entry(name.clone()).or_insert(line.line);
+        svar_edges.insert(
+            name.clone(),
+            expression_svar_references(expression, &svar_names),
+        );
+    }
+
+    let mut blockers = Vec::new();
+    let mut fanout = BTreeMap::<String, usize>::new();
+    for line in &script.lines {
+        let LegacyLineKind::Ability { prefix, expression } = &line.kind else {
+            continue;
+        };
+        let roots = expression_svar_references(expression, &svar_names);
+        let reachable = reachable_svars(&roots, &svar_edges);
+        for name in reachable {
+            *fanout.entry(name).or_insert(0) += 1;
+        }
+        for diagnostic in collect_mapping_diagnostics(*prefix, expression, &context, &[]) {
+            blockers.push(ScriptBlockerObservation {
+                line: line.line,
+                source: format!("root:{}", prefix.as_str()),
+                code: diagnostic.code,
+                message: diagnostic.message,
+                linked_root_fanout: 1,
+            });
+        }
+    }
+
+    for (name, linked_root_fanout) in fanout {
+        let line = svar_lines.get(&name).copied().unwrap_or(1);
+        if context.duplicate_svars.contains(&name) {
+            blockers.push(ScriptBlockerObservation {
+                line,
+                source: format!("svar:{name}"),
+                code: "DUPLICATE_SVAR".to_string(),
+                message: format!("SVar `{name}` is declared more than once"),
+                linked_root_fanout,
+            });
+            continue;
+        }
+        let Some(expression) = context.svars.get(&name).copied() else {
+            continue;
+        };
+        let Some(prefix) = linked_ability_prefix(expression) else {
+            continue;
+        };
+        for diagnostic in
+            collect_mapping_diagnostics(prefix, expression, &context, std::slice::from_ref(&name))
+        {
+            blockers.push(ScriptBlockerObservation {
+                line,
+                source: format!("svar:{name}"),
+                code: diagnostic.code,
+                message: diagnostic.message,
+                linked_root_fanout,
+            });
+        }
+    }
+
+    blockers.sort_by(|left, right| {
+        left.line
+            .cmp(&right.line)
+            .then_with(|| left.source.cmp(&right.source))
+            .then_with(|| left.code.cmp(&right.code))
+            .then_with(|| left.message.cmp(&right.message))
+    });
+    blockers
+}
+
+fn collect_mapping_diagnostics(
+    prefix: LegacyAbilityPrefix,
+    expression: &LegacyExpression,
+    context: &MappingContext<'_>,
+    initial_stack: &[String],
+) -> Vec<MappingDiagnostic> {
+    let mut candidate = expression.clone();
+    let mut removed_parameters = BTreeSet::new();
+    let mut diagnostics = Vec::new();
+    loop {
+        let mut stack = initial_stack.to_vec();
+        let Err(diagnostic) = map_with_context(prefix, &candidate, context, &mut stack) else {
+            break;
+        };
+        let removable = unsupported_parameter_key(&diagnostic)
+            .filter(|key| removed_parameters.insert(key.clone()));
+        diagnostics.push(diagnostic);
+        let Some(key) = removable else {
+            break;
+        };
+        let before = candidate.fields.len();
+        candidate
+            .fields
+            .retain(|field| field.key.as_deref() != Some(key.as_str()));
+        if candidate.fields.len() == before {
+            break;
+        }
+    }
+    diagnostics
+}
+
+fn unsupported_parameter_key(diagnostic: &MappingDiagnostic) -> Option<String> {
+    if diagnostic.code != "UNSUPPORTED_PARAMETER" {
+        return None;
+    }
+    diagnostic.message.split('`').nth(1).map(str::to_string)
+}
+
+fn linked_ability_prefix(expression: &LegacyExpression) -> Option<LegacyAbilityPrefix> {
+    match expression.fields.first()?.key.as_deref()? {
+        "Mode" | "ST" => Some(LegacyAbilityPrefix::Static),
+        "Event" => Some(LegacyAbilityPrefix::Replacement),
+        "AB" | "SP" | "DB" => Some(LegacyAbilityPrefix::Activated),
+        _ => None,
+    }
+}
+
+fn expression_svar_references(
+    expression: &LegacyExpression,
+    svar_names: &BTreeSet<String>,
+) -> BTreeSet<String> {
+    let mut references = BTreeSet::new();
+    for field in &expression.fields {
+        let key = field.key.as_deref().unwrap_or_default();
+        if key.contains("Description")
+            || key.contains("Prompt")
+            || matches!(key, "AILogic" | "AIHint" | "PrecostDesc")
+        {
+            continue;
+        }
+        for token in field
+            .value
+            .split(|character: char| {
+                character == ',' || character == '&' || character.is_whitespace()
+            })
+            .map(str::trim)
+            .filter(|token| !token.is_empty())
+        {
+            if svar_names.contains(token) {
+                references.insert(token.to_string());
+            }
+        }
+    }
+    references
+}
+
+fn reachable_svars(
+    roots: &BTreeSet<String>,
+    edges: &BTreeMap<String, BTreeSet<String>>,
+) -> BTreeSet<String> {
+    let mut reachable = BTreeSet::new();
+    let mut pending = roots.iter().cloned().collect::<Vec<_>>();
+    while let Some(name) = pending.pop() {
+        if !reachable.insert(name.clone()) {
+            continue;
+        }
+        if let Some(children) = edges.get(&name) {
+            pending.extend(children.iter().cloned());
+        }
+    }
+    reachable
 }
 
 fn map_with_context(
@@ -5584,7 +5767,8 @@ fn relative_path(root: &Path, path: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        audit_legacy_mappings, map_legacy_ability, map_legacy_ability_in_context, MappingContext,
+        audit_legacy_mappings, collect_script_mapping_blockers, map_legacy_ability,
+        map_legacy_ability_in_context, MappingContext,
     };
     use crate::legacy::{parse_legacy_script, LegacyLineKind};
     use forge_carddef::{Expression, Operation};
@@ -6538,6 +6722,28 @@ mod tests {
         .err()
         .unwrap_or_else(|| panic!("conditioned continuous effect must quarantine"));
         assert_eq!(conditioned_continuous.code, "UNSUPPORTED_PARAMETER");
+    }
+
+    #[test]
+    fn blocker_collection_peels_all_unknown_parameters_per_node() {
+        let script = parse_legacy_script(
+            "multi-parameter.txt",
+            concat!(
+                "A:SP$ Draw | Foo$ one | Bar$ two | NumCards$ 1\n",
+                "SVar:Unused:DB$ Draw | Ignored$ unused\n",
+            ),
+        )
+        .unwrap_or_else(|error| panic!("fixture should parse: {error}"));
+        let blockers = collect_script_mapping_blockers(&script);
+        let messages = blockers
+            .iter()
+            .map(|blocker| blocker.message.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(blockers.len(), 2);
+        assert!(messages.iter().any(|message| message.contains("`Bar`")));
+        assert!(messages.iter().any(|message| message.contains("`Foo`")));
+        assert!(messages.iter().all(|message| !message.contains("Ignored")));
     }
 
     #[test]

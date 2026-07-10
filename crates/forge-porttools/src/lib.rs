@@ -5,6 +5,7 @@
 
 pub mod legacy;
 pub mod mapper;
+mod planner;
 pub mod translator;
 
 use forge_carddef::{
@@ -146,32 +147,11 @@ pub fn import_scryfall_catalog(
 /// Runs the Forge porttools command-line surface.
 pub fn run_cli(args: Vec<String>) -> Result<String, String> {
     match args.as_slice() {
-        [translate, all, jobs_flag, jobs]
-            if translate == "translate" && all == "--all" && jobs_flag == "--jobs" =>
+        [translate, rest @ ..] if translate == "translate" => run_translate(rest),
+        [legacy, blocker_plan, rest @ ..]
+            if legacy == "legacy" && blocker_plan == "blocker-plan" =>
         {
-            let jobs = jobs
-                .parse::<usize>()
-                .map_err(|_| format!("invalid translation worker count `{jobs}`"))?;
-            let report = translator::translate_all(translator::TranslateOptions {
-                root: Path::new("vendor/legacy-forge/forge-gui/res/cardsfolder"),
-                catalog: Path::new("assets/card_catalog.json"),
-                output: Path::new("target/translated-cards"),
-                metrics: Path::new("metrics/translation.json"),
-                quarantine: Path::new("metrics/translation_quarantine.json"),
-                priority: Path::new("assets/coverage_priority.txt"),
-                priority_metrics: Path::new("metrics/priority_coverage.json"),
-                jobs,
-            })?;
-            Ok(format!(
-                "emitted {}/{} legacy scripts ({:.4}%) with {} local workers\npriority {}/{} requested cards ({:.4}%)\noutput target/translated-cards\nmetrics metrics/translation.json\npriority metrics metrics/priority_coverage.json\nquarantine metrics/translation_quarantine.json\n",
-                report.emitted_scripts,
-                report.total_scripts,
-                report.emitted_percent,
-                report.jobs,
-                report.priority_emitted,
-                report.priority_requested,
-                report.priority_emitted_percent,
-            ))
+            run_blocker_plan(rest)
         }
         [legacy, map_audit, root_flag, root, metrics_flag, metrics, quarantine_flag, quarantine]
             if legacy == "legacy"
@@ -271,6 +251,200 @@ pub fn run_cli(args: Vec<String>) -> Result<String, String> {
     }
 }
 
+fn run_translate(args: &[String]) -> Result<String, String> {
+    if args.first().map(String::as_str) != Some("--all") {
+        return Err(format!("translate requires --all\n{}", usage()));
+    }
+    let flags = parse_named_flags(
+        &args[1..],
+        &[
+            "--jobs",
+            "--root",
+            "--catalog",
+            "--output",
+            "--metrics",
+            "--quarantine",
+            "--priority",
+            "--priority-metrics",
+            "--write-output",
+        ],
+    )?;
+    let jobs = required_usize_flag(&flags, "--jobs", "translation worker count")?;
+    let write_output = optional_bool_flag(&flags, "--write-output", true)?;
+    let root = flags
+        .get("--root")
+        .map(String::as_str)
+        .unwrap_or("vendor/legacy-forge/forge-gui/res/cardsfolder");
+    let catalog = flags
+        .get("--catalog")
+        .map(String::as_str)
+        .unwrap_or("assets/card_catalog.json");
+    let output = flags
+        .get("--output")
+        .map(String::as_str)
+        .unwrap_or("target/translated-cards");
+    let metrics = flags
+        .get("--metrics")
+        .map(String::as_str)
+        .unwrap_or("metrics/translation.json");
+    let quarantine = flags
+        .get("--quarantine")
+        .map(String::as_str)
+        .unwrap_or("metrics/translation_quarantine.json");
+    let priority = flags
+        .get("--priority")
+        .map(String::as_str)
+        .unwrap_or("assets/coverage_priority.txt");
+    let priority_metrics = flags
+        .get("--priority-metrics")
+        .map(String::as_str)
+        .unwrap_or("metrics/priority_coverage.json");
+    let report = translator::translate_all(translator::TranslateOptions {
+        root: Path::new(root),
+        catalog: Path::new(catalog),
+        output: Path::new(output),
+        metrics: Path::new(metrics),
+        quarantine: Path::new(quarantine),
+        priority: Path::new(priority),
+        priority_metrics: Path::new(priority_metrics),
+        jobs,
+        write_output,
+    })?;
+    let output_status = if write_output {
+        output.to_string()
+    } else {
+        "skipped (fingerprint-only replay)".to_string()
+    };
+    Ok(format!(
+        "emitted {}/{} legacy scripts ({:.4}%) with {} local workers\npriority {}/{} requested cards ({:.4}%)\nfingerprint {}\noutput {output_status}\nmetrics {metrics}\npriority metrics {priority_metrics}\nquarantine {quarantine}\n",
+        report.emitted_scripts,
+        report.total_scripts,
+        report.emitted_percent,
+        report.jobs,
+        report.priority_emitted,
+        report.priority_requested,
+        report.priority_emitted_percent,
+        report.output_fingerprint,
+    ))
+}
+
+fn run_blocker_plan(args: &[String]) -> Result<String, String> {
+    let flags = parse_named_flags(
+        args,
+        &[
+            "--root",
+            "--priority",
+            "--output",
+            "--details",
+            "--jobs",
+            "--batch-size",
+            "--batch-count",
+        ],
+    )?;
+    let jobs = required_usize_flag(&flags, "--jobs", "blocker planner worker count")?;
+    let batch_size = optional_usize_flag(&flags, "--batch-size", 5)?;
+    let batch_count = optional_usize_flag(&flags, "--batch-count", 6)?;
+    let root = flags
+        .get("--root")
+        .map(String::as_str)
+        .unwrap_or("vendor/legacy-forge/forge-gui/res/cardsfolder");
+    let priority = flags
+        .get("--priority")
+        .map(String::as_str)
+        .unwrap_or("assets/coverage_priority.txt");
+    let output = flags
+        .get("--output")
+        .map(String::as_str)
+        .unwrap_or("metrics/blocker_plan.json");
+    let details = flags
+        .get("--details")
+        .map(String::as_str)
+        .unwrap_or("target/t3-blocker-plan/cards.json");
+    let report = planner::plan_blocker_batches(planner::BlockerPlanOptions {
+        root: Path::new(root),
+        priority: Path::new(priority),
+        output: Path::new(output),
+        details: Path::new(details),
+        jobs,
+        batch_size,
+        batch_count,
+    })?;
+    Ok(format!(
+        "analyzed {} scripts; {} have confirmed blockers across {} families\nrecommended {} blocker batches\nmetrics {output}\ndetails {details}\n",
+        report.analyzed_scripts,
+        report.scripts_with_confirmed_blockers,
+        report.unique_blocker_families,
+        report.recommended_batch_count(),
+    ))
+}
+
+fn parse_named_flags(
+    args: &[String],
+    allowed: &[&str],
+) -> Result<BTreeMap<String, String>, String> {
+    if args.len() % 2 != 0 {
+        return Err("command flags require a value".to_string());
+    }
+    let mut flags = BTreeMap::new();
+    for pair in args.chunks_exact(2) {
+        let flag = &pair[0];
+        if !allowed.contains(&flag.as_str()) {
+            return Err(format!("unknown flag `{flag}`\n{}", usage()));
+        }
+        if flags.insert(flag.clone(), pair[1].clone()).is_some() {
+            return Err(format!("duplicate flag `{flag}`"));
+        }
+    }
+    Ok(flags)
+}
+
+fn required_usize_flag(
+    flags: &BTreeMap<String, String>,
+    flag: &str,
+    label: &str,
+) -> Result<usize, String> {
+    let value = flags
+        .get(flag)
+        .ok_or_else(|| format!("missing required flag `{flag}`"))?;
+    value
+        .parse::<usize>()
+        .ok()
+        .filter(|value| *value > 0)
+        .ok_or_else(|| format!("invalid {label} `{value}`"))
+}
+
+fn optional_usize_flag(
+    flags: &BTreeMap<String, String>,
+    flag: &str,
+    default: usize,
+) -> Result<usize, String> {
+    let Some(value) = flags.get(flag) else {
+        return Ok(default);
+    };
+    value
+        .parse::<usize>()
+        .ok()
+        .filter(|value| *value > 0)
+        .ok_or_else(|| format!("invalid `{flag}` value `{value}`"))
+}
+
+fn optional_bool_flag(
+    flags: &BTreeMap<String, String>,
+    flag: &str,
+    default: bool,
+) -> Result<bool, String> {
+    let Some(value) = flags.get(flag) else {
+        return Ok(default);
+    };
+    match value.as_str() {
+        "true" => Ok(true),
+        "false" => Ok(false),
+        _ => Err(format!(
+            "invalid `{flag}` value `{value}`; expected true or false"
+        )),
+    }
+}
+
 fn list_quarantine(path: &Path) -> Result<String, String> {
     let file = File::open(path)
         .map_err(|error| format!("could not open catalog {}: {error}", path.display()))?;
@@ -309,7 +483,7 @@ fn list_quarantine(path: &Path) -> Result<String, String> {
 }
 
 fn usage() -> String {
-    "usage: forge-porttools translate --all --jobs <N> | forge-porttools legacy parse --root <cardsfolder> --metrics <metrics.json> --failures <failures.json> | forge-porttools legacy map-audit --root <cardsfolder> --metrics <metrics.json> --quarantine <quarantine.json> | forge-porttools catalog import --source <all-cards.json> --summary <summary.json> --output <catalog.json> --metrics <metrics.json> | forge-porttools catalog extract --source <all-cards.json> --summary <summary.json> --selection <selection.json> --output <source-cards.json> | forge-porttools quarantine --list --catalog <catalog.json>".to_string()
+    "usage: forge-porttools translate --all --jobs <N> [--output <dir> --metrics <json> --quarantine <json> --priority-metrics <json> --write-output <true|false>] | forge-porttools legacy blocker-plan --jobs <N> [--output <json> --details <json> --batch-size <N> --batch-count <N>] | forge-porttools legacy parse --root <cardsfolder> --metrics <metrics.json> --failures <failures.json> | forge-porttools legacy map-audit --root <cardsfolder> --metrics <metrics.json> --quarantine <quarantine.json> | forge-porttools catalog import --source <all-cards.json> --summary <summary.json> --output <catalog.json> --metrics <metrics.json> | forge-porttools catalog extract --source <all-cards.json> --summary <summary.json> --selection <selection.json> --output <source-cards.json> | forge-porttools quarantine --list --catalog <catalog.json>".to_string()
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -958,7 +1132,10 @@ fn repository_relative(path: &Path) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{source_classification, stream_cards, CatalogBuilder};
+    use super::{
+        optional_bool_flag, optional_usize_flag, parse_named_flags, required_usize_flag,
+        source_classification, stream_cards, CatalogBuilder,
+    };
     use forge_carddef::{CardClassification, CardLayout};
     use std::io::Cursor;
 
@@ -993,5 +1170,42 @@ mod tests {
             source_classification(CardLayout::Normal, "token"),
             CardClassification::CatalogOnly(_)
         ));
+    }
+
+    #[test]
+    fn parses_configurable_parallel_sweep_flags() {
+        let args = [
+            "--jobs".to_string(),
+            "12".to_string(),
+            "--output".to_string(),
+            "target/secondary".to_string(),
+        ];
+        let flags = parse_named_flags(&args, &["--jobs", "--output"])
+            .unwrap_or_else(|error| panic!("valid flags should parse: {error}"));
+        assert_eq!(required_usize_flag(&flags, "--jobs", "workers"), Ok(12));
+        assert_eq!(optional_usize_flag(&flags, "--batch-size", 5), Ok(5));
+        assert_eq!(optional_bool_flag(&flags, "--write-output", true), Ok(true));
+
+        let bool_args = ["--write-output".to_string(), "false".to_string()];
+        let bool_flags = parse_named_flags(&bool_args, &["--write-output"])
+            .unwrap_or_else(|error| panic!("valid bool flag should parse: {error}"));
+        assert_eq!(
+            optional_bool_flag(&bool_flags, "--write-output", true),
+            Ok(false)
+        );
+        let invalid_bool_args = ["--write-output".to_string(), "yes".to_string()];
+        let invalid_bool_flags = parse_named_flags(&invalid_bool_args, &["--write-output"])
+            .unwrap_or_else(|error| panic!("named flag should parse: {error}"));
+        assert!(optional_bool_flag(&invalid_bool_flags, "--write-output", true).is_err());
+
+        let duplicate = [
+            "--jobs".to_string(),
+            "6".to_string(),
+            "--jobs".to_string(),
+            "8".to_string(),
+        ];
+        assert!(parse_named_flags(&duplicate, &["--jobs"]).is_err());
+        assert!(parse_named_flags(&args, &["--jobs"]).is_err());
+        assert!(parse_named_flags(&args[..1], &["--jobs"]).is_err());
     }
 }

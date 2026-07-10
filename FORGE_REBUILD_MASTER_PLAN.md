@@ -1,4 +1,4 @@
-# FORGE-RS REBUILD — MASTER EXECUTION PLAN v1.6
+# FORGE-RS REBUILD — MASTER EXECUTION PLAN v1.7
 
 **Status:** Ready for agent orchestration — includes Gate Review & Checkpoint protocol (§15), plan governance (§16), and the Owner Interface (§17: expectation briefs, owner input map, trouble bulletins)
 **This document is the sole authority.** If any agent instruction, prior knowledge, or tool default conflicts with this plan, the plan wins; if the plan is ambiguous, use the Question Queue (§15.5) — do not guess.
@@ -22,6 +22,13 @@ general phase events, conditional/unless-paid costs, card-choice bindings, and
 explicit fight/regenerate operations. The Owner-supplied 365-card Commander
 priority list steers mapper order and gets a separate deterministic coverage
 report; it does not weaken global coverage or semantic gates.
+**v1.7 amendment (2026-07-10):** Owner-approved PC-0006 T3 coverage
+acceleration. Full-corpus planning now gathers all independently confirmed
+blockers, peels every unknown parameter per node, weights linked-ability
+fan-out and Owner-priority cards, and proposes co-occurrence-aware mapper
+batches. Local validation uses one shared cache/output and a measured staged
+schedule: a saturated materializing sweep followed by hash-only deterministic
+replay overlapped with compiler, blocker-planner, and mapping-audit work.
 **Prerequisite artifact:** `forge-rs` proof-of-concept (validated: 70 ns state clone, 5,080 playouts/sec, monotonic MCTS difficulty ladder)
 **License constraint:** GPL-3.0-only for any component that derives from Card-Forge/forge content (card scripts, AI profiles, rules-test scenarios)[^1]
 
@@ -583,8 +590,8 @@ flowchart LR
 | Task | Deliverable |
 | --- | --- |
 | T3.2 (`PARALLEL-OK` with T2.5+) | Legacy-format parser: full grammar for `A:`/`T:`/`R:`/`S:`/`K:`/`SVar:` lines into a legacy-AST; must parse ≥99.5% of corpus (parse-only) |
-| T3.3 | API mapper: table-driven translation of each legacy ability API + parameter set into IR. Implemented in T0.6 frequency order; each API mapping lands with its own test pack. `metrics/api_coverage.json` tracks {api, legacy_uses, mapped, verified}. |
-| T3.4 | `.frs` emitter + resource-aware batch driver: `cargo run -p forge-porttools -- translate --all --jobs <N>` plus deterministic tier-aware reporting for `assets/coverage_priority.txt` |
+| T3.3 | API mapper: table-driven translation of each legacy ability API + parameter set into IR. Implementation order combines T0.6 frequency, Owner priority, linked fan-out, and the deterministic all-confirmed-blocker co-occurrence plan. Each mapping family lands with its own test pack. `metrics/api_coverage.json` tracks {api, legacy_uses, mapped, verified}; `metrics/blocker_plan.json` records blocker families and recommended batches. |
+| T3.4 | `.frs` emitter + resource-aware local batch driver: `cargo run -p forge-porttools -- translate --all --jobs <N>` plus deterministic tier-aware reporting for `assets/coverage_priority.txt`, output fingerprints, hash-only replay, and `scripts/t3_parallel_sweep.sh` development/checkpoint modes. |
 | T3.5 | Auto smoke harness: for every translated card, synthesize a sandbox state where it is castable/playable, execute, assert invariants + expected zone destinations. Zero human input per card. |
 | T3.6 | Semantic test packs: for the top 2,000 play-rate cards (list mined from legacy precons + draft data), Rules-Oracle Agent writes behavior scenarios (e.g., "Lightning Bolt to face = 3 less life"). |
 | T3.7 | Coverage dashboard: `tools/coverage_report.py` → `docs/CARD_COVERAGE.md` with separate catalog/identity/playable/legacy metrics, per-set %, quarantine reason histogram, provenance, and API gaps feeding new T2.x keyword tasks. |
@@ -593,16 +600,45 @@ flowchart LR
 **Card-Port Agent operating procedure (spawn N in parallel; each owns one quarantine reason-code batch):**
 
 On the current 24-core local host, full translation campaigns use at most 24
-workers in the single shared output/cache tree. Because sorting, hashing,
-compiler finalization, disk output, and tail imbalance are partly serial, spare
-capacity is assigned to independent mapper audits and focused tests rather
-than additional translator workers. Mapper fixes are batched before full
-campaigns to avoid repeated corpus scans. No GitHub Actions, duplicate Cargo
-caches, or duplicate worktrees are used for routine T3 verification.
+workers in the single shared output/cache tree. Simultaneous materializing
+translation sweeps are forbidden: measurement showed that their filesystem
+and memory contention lengthens the critical path. The checkpoint schedule
+first gives all 24 workers to one materializing sweep, then overlaps a
+12-worker hash-only replay with a 6-worker blocker plan, mapping audit, and
+translated-card compiler. Reports are normalized only for worker-count
+metadata; output fingerprints, quarantine records, and priority results must
+match byte-for-byte. No GitHub Actions, duplicate Cargo caches, duplicate
+output trees, or duplicate worktrees are used for routine T3 verification.
 
-1. `cargo run -p forge-porttools -- quarantine --reason <CODE> --sample 50 --out work/<CODE>/`
-2. Diagnose the mapper gap; patch `mapper/tables/<api>.rs` or file a primitive ticket.
-3. Re-run translate on the batch; VL; attach before/after counts to the PR.
+The inner development loop runs `scripts/t3_parallel_sweep.sh development`:
+translation, all-confirmed-blocker planning, mapping audit, and focused
+porttools tests share the host, followed by card database build/validation.
+The integration/checkpoint loop runs `scripts/t3_parallel_sweep.sh checkpoint`
+and additionally requires deterministic replay plus full workspace fmt,
+clippy, tests, and coverage. A fast development result never substitutes for
+the full integration gate.
+
+All-confirmed-blocker batching follows this order:
+
+1. Scan every root ability, reachable SVar ability, and keyword; repeatedly
+   remove each diagnosed unknown parameter and re-evaluate the node.
+2. Build per-card blocker sets and rank reusable families by global card
+   impact, Owner-priority impact, linked-root fan-out, and an explicit effort
+   prior that favors parameter lowerings over similarly valuable new APIs.
+3. Implement one recommended multi-family batch with structural tests for
+   every family; never claim projected cards as translated before the real
+   translator emits and compiler-roundtrips them.
+4. Run the development loop while editing and the checkpoint loop before
+   integration. Refresh the plan after each landed batch so newly exposed
+   value-level blockers influence the next recommendation.
+5. Measure translated cards per engineering hour across the next three
+   batches. The target is 2-3x the pre-PC-0006 throughput; it is a measured
+   target, not a completion claim. If the observed gain is below 1.5x, retune
+   batch size/ranking before adding workers.
+
+1. `cargo run -p forge-porttools -- legacy blocker-plan --jobs <N> --batch-size 5 --batch-count 6`
+2. Diagnose the recommended reusable families; patch the mapper or file a primitive ticket.
+3. Re-run the local development sweep; then run the full checkpoint before integration and attach before/after counts.
 4. Never hand-edit generated `.frs` files to force a pass — fix the pipeline (hand-written cards live only under `cards/handwritten/` with a linked ticket).
 
 **Recurring T3 check:** each T3 integration and explicit local campaign runs `scripts/card_regression.sh`, recompiling every in-scope playable definition, validating every catalog/classification record, and rerunning smoke + semantic packs. Out-of-v1/catalog-only records must be classified but do not count as playable. Newly failing cards auto-quarantine with a git-bisect hint.

@@ -250,13 +250,13 @@
       "status": "in_progress",
       "branch": "task/T3.3-api-mapper",
       "attempts": 0,
-      "verification": "Fail-closed table-driven mapper packs passed cargo fmt, 32 forge-porttools tests, workspace tests, clippy -D warnings, deterministic full-corpus audit, recurring local verification, and the 80% workspace coverage gate locally. Exact effects, statics, structured costs, SVar-linked triggers/modes/replacements, player targeting, primitive restrictions and utility effects, closed selector comparisons, aggregate damage/combat markers, simple animation and transform, hand visibility, closed library searches and zone transitions, exact legacy defaults, fixed token bundles, Defined damage selectors, presence/count conditions, typed dynamic paid-X/selector/counter/devotion/distinct/history values, destroy-without-regeneration, and activation timing cover 15,506/43,649 top-level legacy ability uses (35.5243%); the remaining 28,143 uses are quarantined with stable global and per-API reason counts. New operation variants append after the frozen registry and the existing card-database compatibility suite passes. T3.3 remains in progress for additional conditions, bindings, APIs, and priority/fan-out-ranked packs under PC-0005."
+      "verification": "Fail-closed table-driven mapper packs passed cargo fmt, 40 forge-porttools tests, workspace tests, clippy -D warnings, deterministic full-corpus audit, recurring local verification, and the 80% workspace coverage gate locally. Exact effects, statics, structured costs, SVar-linked triggers/modes/replacements, player targeting, primitive restrictions and utility effects, closed selector comparisons, aggregate damage/combat markers, simple animation and transform, hand visibility, closed library searches and zone transitions, exact legacy defaults, fixed token bundles, Defined damage selectors, presence/count conditions, typed dynamic paid-X/selector/counter/devotion/distinct/history values, destroy-without-regeneration, and activation timing cover 15,506/43,649 top-level legacy ability uses (35.5243%); the remaining 28,143 uses are quarantined with stable global and per-API reason counts. PC-0006's all-confirmed-blocker planner analyzed 33,290 scripts, peeled all unknown parameters per independently evaluable node, and recorded 63,859 observations across 4,877 normalized families with linked-root fan-out 64,887. New operation variants append after the frozen registry and the existing card-database compatibility suite passes. T3.3 remains in progress for recommended multi-family batches under PC-0005 and PC-0006."
     },
     "T3.4": {
       "status": "verified_local",
       "branch": "task/T3.4-frs-emitter",
       "attempts": 0,
-      "verification": "PASS local 24-worker translation factory: 8,700/33,290 complete legacy scripts emitted as canonical .frs (26.1340%), with 24,590 fail-closed file quarantines, deterministic repeated sorted file-manifest SHA-1 75ca0d864b93e9bbbeb261e2c759b9ddfbef2e69, and 8,700/8,700 forge-cardc compiler roundtrips against 38,306 identities and 113,234 printings. All 365 Owner-priority names resolve; 173/365 emit (47.3973%): 35/58 T0, 84/161 T1, and 54/146 T2. Thirty-two forge-porttools tests, full workspace tests, clippy -D warnings, recurring local verification, card-database compatibility, and workspace line coverage 23,768/29,528 (80.4931%) passed locally with no network or GitHub Actions."
+      "verification": "PASS local PC-0006 checkpoint: 8,700/33,290 complete legacy scripts emitted as canonical .frs (26.1340%), with 24,590 fail-closed file quarantines and 8,700/8,700 compiler roundtrips against 38,306 identities and 113,234 printings. All 365 Owner-priority names resolve; 173/365 emit (47.3973%): 35/58 T0, 84/161 T1, and 54/146 T2. The 24-worker materialized pass and 12-worker hash-only replay matched fingerprint 392822b7a28413cec83d924fc970328e plus byte-identical quarantine and priority reports. Staged local validation reduced the comparable core phase from 56 to 37 seconds (33.93%) while 40 forge-porttools tests, full workspace tests, clippy -D warnings, compiler/database validation, and workspace line coverage 24,784/30,758 (80.5774%) passed with no network or GitHub Actions."
     }
   },
   "gates_passed": [
@@ -341,7 +341,8 @@
     "O5": "complete",
     "O9-PC-0001-PC-0003": "complete_2026-07-09",
     "O9-PC-0004": "complete_2026-07-10_owner_option_2",
-    "O9-PC-0005": "complete_2026-07-10_owner_approved_bounded_dsl_amendment_and_priority_list"
+    "O9-PC-0005": "complete_2026-07-10_owner_approved_bounded_dsl_amendment_and_priority_list",
+    "O9-PC-0006": "complete_2026-07-10_owner_approved_t3_all_blocker_batching_and_local_validation_acceleration"
   },
   "process_improvements": {
     "PI-2026-07-09-local-multiworker-fuzz": {
@@ -352,10 +353,10 @@
       "constraints": "Use resource-aware workers, preserve disk headroom, do not push, and never trigger GitHub Actions."
     },
     "PI-2026-07-10-resource-aware-translation": {
-      "status": "active",
+      "status": "complete",
       "target": "T3 translation and mapper campaigns",
       "request": "Owner requested faster local execution using available hardware without wasteful workers, duplicate caches, subagents, or GitHub Actions.",
-      "implementation": "Use one Cargo cache and output tree, up to 24 translation workers on the current host, independent local audits/tests in spare capacity, and batched mapper changes between full corpus sweeps.",
+      "implementation": "PC-0006 implemented one Cargo cache/output tree, a full-corpus all-confirmed-blocker planner, unknown-parameter peeling, weighted co-occurrence batches, a 24-worker materialized sweep, and a hash-only replay overlapped with compiler/planner/audit work. The measured core checkpoint fell from 56 to 37 seconds (33.93%) without weakening full local gates.",
       "constraints": "Cap workers when serial finalization, disk I/O, or tail imbalance dominates; do not push or trigger GitHub Actions."
     }
   }

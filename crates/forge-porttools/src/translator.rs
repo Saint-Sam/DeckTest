@@ -37,6 +37,8 @@ pub struct TranslateOptions<'a> {
     pub priority_metrics: &'a Path,
     /// Number of local worker threads.
     pub jobs: usize,
+    /// Whether to materialize the generated `.frs` output tree.
+    pub write_output: bool,
 }
 
 /// Deterministic summary of one translation campaign.
@@ -68,6 +70,8 @@ pub struct TranslationReport {
     pub priority_emitted: usize,
     /// Owner-priority file-level translation percentage.
     pub priority_emitted_percent: f64,
+    /// Stable dual-64-bit fingerprint of every sorted emitted path and source.
+    pub output_fingerprint: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -184,10 +188,13 @@ pub fn translate_all(options: TranslateOptions<'_>) -> Result<TranslationReport,
             .collect::<Vec<_>>()
     });
     outcomes.sort_by(|left, right| outcome_path(left).cmp(outcome_path(right)));
+    let output_fingerprint = translation_fingerprint(&outcomes);
     let priority_report =
         build_priority_report(options.priority, &priority_tiers, &catalog, &outcomes);
 
-    prepare_output(options.output)?;
+    if options.write_output {
+        prepare_output(options.output)?;
+    }
     let mut failures = Vec::new();
     let mut emitted_scripts = 0;
     for outcome in outcomes {
@@ -195,15 +202,17 @@ pub fn translate_all(options: TranslateOptions<'_>) -> Result<TranslationReport,
             TranslationOutcome::Emitted {
                 relative, source, ..
             } => {
-                let destination = options.output.join(relative).with_extension("frs");
-                if let Some(parent) = destination.parent() {
-                    fs::create_dir_all(parent).map_err(|error| {
-                        format!("could not create {}: {error}", parent.display())
+                if options.write_output {
+                    let destination = options.output.join(relative).with_extension("frs");
+                    if let Some(parent) = destination.parent() {
+                        fs::create_dir_all(parent).map_err(|error| {
+                            format!("could not create {}: {error}", parent.display())
+                        })?;
+                    }
+                    fs::write(&destination, source).map_err(|error| {
+                        format!("could not write {}: {error}", destination.display())
                     })?;
                 }
-                fs::write(&destination, source).map_err(|error| {
-                    format!("could not write {}: {error}", destination.display())
-                })?;
                 emitted_scripts += 1;
             }
             TranslationOutcome::Quarantined { failure, .. } => failures.push(failure),
@@ -216,7 +225,7 @@ pub fn translate_all(options: TranslateOptions<'_>) -> Result<TranslationReport,
     }
     let source_revision = git_revision(options.root)?;
     let report = TranslationReport {
-        schema_version: 1,
+        schema_version: 2,
         source_root: crate::repository_relative(options.root),
         source_revision: source_revision.clone(),
         total_scripts: paths.len(),
@@ -229,6 +238,7 @@ pub fn translate_all(options: TranslateOptions<'_>) -> Result<TranslationReport,
         priority_catalog_resolved: priority_report.catalog_resolved,
         priority_emitted: priority_report.emitted,
         priority_emitted_percent: priority_report.emitted_percent,
+        output_fingerprint,
     };
     crate::write_json(options.metrics, &report)?;
     crate::write_json(options.priority_metrics, &priority_report)?;
@@ -243,6 +253,41 @@ pub fn translate_all(options: TranslateOptions<'_>) -> Result<TranslationReport,
         },
     )?;
     Ok(report)
+}
+
+fn translation_fingerprint(outcomes: &[TranslationOutcome]) -> String {
+    let mut first = 0xcbf2_9ce4_8422_2325_u64;
+    let mut second = 0x9e37_79b1_85eb_ca87_u64;
+    for outcome in outcomes {
+        let TranslationOutcome::Emitted {
+            relative, source, ..
+        } = outcome
+        else {
+            continue;
+        };
+        fingerprint_bytes(
+            &mut first,
+            &mut second,
+            &(relative.len() as u64).to_le_bytes(),
+        );
+        fingerprint_bytes(&mut first, &mut second, relative.as_bytes());
+        fingerprint_bytes(
+            &mut first,
+            &mut second,
+            &(source.len() as u64).to_le_bytes(),
+        );
+        fingerprint_bytes(&mut first, &mut second, source.as_bytes());
+    }
+    format!("{first:016x}{second:016x}")
+}
+
+fn fingerprint_bytes(first: &mut u64, second: &mut u64, bytes: &[u8]) {
+    for byte in bytes {
+        *first ^= u64::from(*byte);
+        *first = first.wrapping_mul(0x0000_0100_0000_01b3);
+        *second ^= u64::from(*byte);
+        *second = second.rotate_left(13).wrapping_mul(0x9e37_79b1_85eb_ca87);
+    }
 }
 
 fn translate_one(root: &Path, path: &Path, identities: &CatalogIdentities) -> TranslationOutcome {
@@ -599,6 +644,21 @@ fn legacy_type_line(value: &str) -> Result<String, (usize, String, String)> {
     } else {
         format!("{left} \u{2014} {right}")
     })
+}
+
+pub(crate) fn collect_script_keyword_blockers(
+    script: &LegacyScript,
+) -> Vec<(usize, String, String)> {
+    let mut blockers = Vec::new();
+    for line in &script.lines {
+        if !matches!(line.kind, LegacyLineKind::Keyword { .. }) {
+            continue;
+        }
+        if let Err(blocker) = translate_keywords(&[line]) {
+            blockers.push(blocker);
+        }
+    }
+    blockers
 }
 
 fn translate_keywords(
@@ -1185,8 +1245,8 @@ fn outcome_aliases(outcome: &TranslationOutcome) -> &[String] {
 mod tests {
     use super::{
         build_priority_report, face_lines, legacy_mana_cost, legacy_type_line, percent,
-        read_priority_tiers, translate_keywords, translate_one_inner, CatalogIdentities,
-        CatalogIdentity, PriorityTier, TranslationFailure, TranslationOutcome,
+        read_priority_tiers, translate_keywords, translate_one_inner, translation_fingerprint,
+        CatalogIdentities, CatalogIdentity, PriorityTier, TranslationFailure, TranslationOutcome,
     };
     use forge_carddef::{
         CardCatalog, CardClassification, CardLayout, IdentityRecord, OracleId, SourceProvenance,
@@ -1404,6 +1464,58 @@ mod tests {
         assert_eq!(cards[4].status, "catalog_ambiguous");
         assert_eq!(cards[5].status, "catalog_missing");
         assert_eq!(percent(0, 0), 0.0);
+    }
+
+    #[test]
+    fn output_fingerprint_is_deterministic_and_content_sensitive() {
+        let first = vec![
+            TranslationOutcome::Emitted {
+                relative: "a/alpha.txt".to_string(),
+                source: "card alpha".to_string(),
+                aliases: Vec::new(),
+            },
+            TranslationOutcome::Quarantined {
+                failure: TranslationFailure {
+                    path: "b/blocked.txt".to_string(),
+                    line: 1,
+                    code: "FIXTURE".to_string(),
+                    message: "blocked".to_string(),
+                },
+                aliases: Vec::new(),
+            },
+            TranslationOutcome::Emitted {
+                relative: "z/zeta.txt".to_string(),
+                source: "card zeta".to_string(),
+                aliases: Vec::new(),
+            },
+        ];
+        let same = vec![
+            TranslationOutcome::Emitted {
+                relative: "a/alpha.txt".to_string(),
+                source: "card alpha".to_string(),
+                aliases: vec!["ignored alias".to_string()],
+            },
+            TranslationOutcome::Emitted {
+                relative: "z/zeta.txt".to_string(),
+                source: "card zeta".to_string(),
+                aliases: Vec::new(),
+            },
+        ];
+        let changed = vec![TranslationOutcome::Emitted {
+            relative: "a/alpha.txt".to_string(),
+            source: "card alpha changed".to_string(),
+            aliases: Vec::new(),
+        }];
+
+        assert_eq!(
+            translation_fingerprint(&first),
+            translation_fingerprint(&same)
+        );
+        assert_ne!(
+            translation_fingerprint(&first),
+            translation_fingerprint(&changed)
+        );
+        assert_eq!(translation_fingerprint(&first).len(), 32);
     }
 
     #[test]

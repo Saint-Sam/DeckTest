@@ -30,6 +30,10 @@ def generate() -> dict[str, object]:
     local_fuzz = load_json(ROOT / "metrics" / "local_fuzz.json")
     local_platforms = load_json(ROOT / "metrics" / "local_platforms.json")
     oracle_semantics = load_json(ROOT / "metrics" / "oracle_semantics.json")
+    translation = load_json(ROOT / "metrics" / "translation.json")
+    priority = load_json(ROOT / "metrics" / "priority_coverage.json")
+    blocker_plan = load_json(ROOT / "metrics" / "blocker_plan.json")
+    parallel_validation = load_json(ROOT / "metrics" / "t3_parallel_validation.json")
     tasks = state.get("tasks", {})
     if not isinstance(tasks, dict):
         raise ValueError("PLAN_STATE tasks must be an object")
@@ -46,9 +50,12 @@ def generate() -> dict[str, object]:
     oracle_measured = oracle_semantics.get("measured", {})
     if not isinstance(oracle_measured, dict):
         raise ValueError("oracle semantic measurements must be an object")
+    validation_durations = parallel_validation.get("durations_seconds", {})
+    if not isinstance(validation_durations, dict):
+        raise ValueError("T3 validation durations must be an object")
     hosted_workflows = sorted((ROOT / ".github" / "workflows").glob("*.yml"))
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "generator": "tools/write_project_status.py",
         "verification_mode": "local_only",
@@ -65,6 +72,24 @@ def generate() -> dict[str, object]:
         "oracle_distinct_action_count": oracle_measured.get("distinct_actions"),
         "oracle_distinct_operation_count": oracle_measured.get("distinct_operations"),
         "legacy_script_count": legacy.get("total_scripts"),
+        "legacy_translated_scripts": translation.get("emitted_scripts"),
+        "legacy_translation_percent": translation.get("emitted_percent"),
+        "priority_cards_emitted": priority.get("emitted"),
+        "priority_cards_requested": priority.get("total_requested"),
+        "blocker_families_confirmed": blocker_plan.get("unique_blocker_families"),
+        "blocker_observations_confirmed": blocker_plan.get("confirmed_observations"),
+        "t3_deterministic_replay_passed": parallel_validation.get(
+            "deterministic_parallel_replay"
+        ),
+        "t3_accelerated_core_seconds": validation_durations.get(
+            "accelerated_core_phase"
+        ),
+        "t3_serial_core_baseline_seconds": validation_durations.get(
+            "comparable_serial_core_baseline"
+        ),
+        "t3_core_validation_saved_percent": validation_durations.get(
+            "core_saved_percent"
+        ),
         "catalog_total_records": catalog.get("source_records"),
         "catalog_english_printings": catalog.get("imported_english_printings"),
         "catalog_classified_identities": catalog.get("classified_identities"),
