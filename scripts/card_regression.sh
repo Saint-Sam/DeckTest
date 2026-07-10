@@ -16,17 +16,24 @@ fi
 
 update_assets=false
 gate=false
+integration=false
 while (($#)); do
   case "$1" in
     --update) update_assets=true ;;
     --gate) gate=true ;;
+    --integration) integration=true ;;
     *)
-      echo "usage: scripts/card_regression.sh [--update] [--gate]" >&2
+      echo "usage: scripts/card_regression.sh [--update] [--gate] [--integration]" >&2
       exit 2
       ;;
   esac
   shift
 done
+
+if [[ "$gate" == true && "$integration" == true ]]; then
+  echo "ERROR: --gate and --integration are mutually exclusive" >&2
+  exit 2
+fi
 
 for command in cargo python3 cmp; do
   if ! command -v "$command" >/dev/null 2>&1; then
@@ -113,13 +120,19 @@ target/debug/forge-arena --nightmare-suite \
   --max-turns "${FORGE_CARD_NIGHTMARE_MAX_TURNS:-4}"
 scripts/run_oracle.sh --all
 
-if [[ "$gate" == true ]]; then
+evidence_scope="checkpoint"
+if [[ "$integration" == true ]]; then
+  evidence_scope="integration"
+  echo "Integration regression: exact CP-DSL mutation/fuzz/platform packet remains bound to its signed checkpoint commit"
+elif [[ "$gate" == true ]]; then
   if ! python3 tools/run_cp_dsl_mutation.py --check; then
     python3 tools/run_cp_dsl_mutation.py
   fi
 else
   python3 tools/run_cp_dsl_mutation.py --check
 fi
-python3 tools/cp_dsl_metrics.py
+if [[ "$integration" != true ]]; then
+  python3 tools/cp_dsl_metrics.py
+fi
 
-echo "PASS card regression: 100 cards, 25 strata, deterministic database, local-only evidence"
+echo "PASS card regression: 100 cards, 25 strata, deterministic database, local-only $evidence_scope evidence"
