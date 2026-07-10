@@ -3,6 +3,8 @@
 
 //! Streaming source-catalog import and explicit translation classification tools.
 
+pub mod legacy;
+
 use forge_carddef::{
     CardCatalog, CardClassification, CardLayout, IdentityRecord, OracleId, PrintingId,
     PrintingRecord, SourceProvenance,
@@ -142,6 +144,33 @@ pub fn import_scryfall_catalog(
 /// Runs the Forge porttools command-line surface.
 pub fn run_cli(args: Vec<String>) -> Result<String, String> {
     match args.as_slice() {
+        [legacy, parse, root_flag, root, metrics_flag, metrics, failures_flag, failures]
+            if legacy == "legacy"
+                && parse == "parse"
+                && root_flag == "--root"
+                && metrics_flag == "--metrics"
+                && failures_flag == "--failures" =>
+        {
+            let report = legacy::audit_legacy_corpus(
+                Path::new(root),
+                Path::new(metrics),
+                Path::new(failures),
+            )?;
+            if !report.passed {
+                return Err(format!(
+                    "legacy parse coverage {:.4}% is below the {:.1}% floor; see {}",
+                    report.parse_rate_percent, report.target_parse_rate_percent, failures
+                ));
+            }
+            Ok(format!(
+                "parsed {}/{} legacy scripts ({:.4}%)\nmetrics {}\nfailures {}\n",
+                report.parsed_files,
+                report.total_files,
+                report.parse_rate_percent,
+                metrics,
+                failures
+            ))
+        }
         [catalog, import, source_flag, source, summary_flag, summary, output_flag, output, metrics_flag, metrics]
             if catalog == "catalog"
                 && import == "import"
@@ -234,7 +263,7 @@ fn list_quarantine(path: &Path) -> Result<String, String> {
 }
 
 fn usage() -> String {
-    "usage: forge-porttools catalog import --source <all-cards.json> --summary <summary.json> --output <catalog.json> --metrics <metrics.json> | forge-porttools catalog extract --source <all-cards.json> --summary <summary.json> --selection <selection.json> --output <source-cards.json> | forge-porttools quarantine --list --catalog <catalog.json>".to_string()
+    "usage: forge-porttools legacy parse --root <cardsfolder> --metrics <metrics.json> --failures <failures.json> | forge-porttools catalog import --source <all-cards.json> --summary <summary.json> --output <catalog.json> --metrics <metrics.json> | forge-porttools catalog extract --source <all-cards.json> --summary <summary.json> --selection <selection.json> --output <source-cards.json> | forge-porttools quarantine --list --catalog <catalog.json>".to_string()
 }
 
 #[derive(Clone, Debug, Deserialize)]
