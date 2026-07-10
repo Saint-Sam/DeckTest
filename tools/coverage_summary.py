@@ -70,46 +70,80 @@ def git_value(root: Path, value: str) -> str:
     return result.stdout.strip()
 
 
+def build_report(root: Path, raw_path: Path, floor: int) -> dict[str, object]:
+    raw = json.loads(raw_path.read_text())
+    totals = raw["data"][0]["totals"]
+    lines = totals["lines"]
+    count = int(lines["count"])
+    covered = int(lines["covered"])
+    percent = float(lines["percent"])
+    return {
+        "schema_version": 2,
+        "passed": percent >= floor,
+        "reviewed_commit": git_value(root, "HEAD"),
+        "reviewed_tree": git_value(root, "HEAD^{tree}"),
+        "source_sha256": source_hash(root),
+        "raw_report_sha256": sha256(raw_path),
+        "raw_report_path": str(raw_path.resolve().relative_to(root.resolve())),
+        "floor_percent": floor,
+        "lines": {
+            "count": count,
+            "covered": covered,
+            "not_covered": count - covered,
+            "percent": percent,
+        },
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
-    parser.add_argument("--raw", type=Path, required=True)
+    parser.add_argument("--raw", type=Path)
     parser.add_argument("--output", type=Path)
-    parser.add_argument("--floor", type=int, required=True)
+    parser.add_argument("--floor", type=int)
+    parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
     output = args.output or args.root / "metrics/coverage.json"
-    raw_path = args.raw if args.raw.is_absolute() else args.root / args.raw
     try:
-        raw = json.loads(raw_path.read_text())
-        totals = raw["data"][0]["totals"]
-        lines = totals["lines"]
-        count = int(lines["count"])
-        covered = int(lines["covered"])
-        percent = float(lines["percent"])
-        report = {
-            "schema_version": 2,
-            "passed": percent >= args.floor,
-            "reviewed_commit": git_value(args.root, "HEAD"),
-            "reviewed_tree": git_value(args.root, "HEAD^{tree}"),
-            "source_sha256": source_hash(args.root),
-            "raw_report_sha256": sha256(raw_path),
-            "raw_report_path": str(raw_path.resolve().relative_to(args.root.resolve())),
-            "floor_percent": args.floor,
-            "lines": {
-                "count": count,
-                "covered": covered,
-                "not_covered": count - covered,
-                "percent": percent,
-            },
-        }
-        output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(json.dumps(report, indent=2) + "\n")
+        existing = None
+        if args.check:
+            if not output.is_file():
+                raise ValueError("coverage summary is absent")
+            existing = json.loads(output.read_text())
+            if not isinstance(existing, dict):
+                raise ValueError("coverage summary is not an object")
+            raw_value = existing.get("raw_report_path")
+            floor = int(existing.get("floor_percent", 0))
+        else:
+            if args.raw is None or args.floor is None:
+                raise ValueError("--raw and --floor are required unless --check is used")
+            raw_value = args.raw
+            floor = args.floor
+        raw_candidate = Path(str(raw_value))
+        raw_path = raw_candidate if raw_candidate.is_absolute() else args.root / raw_candidate
+        report = build_report(args.root, raw_path, floor)
+        rendered = json.dumps(report, indent=2) + "\n"
+        if args.check:
+            if existing != report:
+                raise ValueError("coverage summary or raw report is stale")
+        else:
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_text(rendered)
+        lines = report["lines"]
         print(
-            f"PASS coverage summary lines={covered}/{count} "
-            f"percent={percent:.4f}% floor={args.floor}%"
+            f"PASS coverage summary lines={lines['covered']}/{lines['count']} "
+            f"percent={lines['percent']:.4f}% floor={floor}%"
         )
         return 0 if report["passed"] else 1
-    except (OSError, KeyError, IndexError, TypeError, ValueError, json.JSONDecodeError) as error:
+    except (
+        OSError,
+        KeyError,
+        IndexError,
+        TypeError,
+        ValueError,
+        subprocess.SubprocessError,
+        json.JSONDecodeError,
+    ) as error:
         print(f"coverage_summary.py: {error}", file=sys.stderr)
         return 1
 

@@ -1,0 +1,50 @@
+# CP-DSL Independent Re-review
+
+Date: 2026-07-10
+
+Reviewed commit: `0a53df82ba9e06791e1f0844811d25de718a21c9`
+
+Reviewer: `gpt-5.6-luna`, xhigh reasoning, independent read-only Gate Reviewer
+
+Result: FAIL
+
+## Accepted Remediation
+
+- PC-0004 honestly classifies all 100 review definitions as
+  `unverified_playable`; zero claim semantic promotion.
+- Exact and up-to modal counts are distinct, and cross-face keyword leakage is
+  corrected.
+- Pest grammar and relevant source trees invalidate mutation/fuzz evidence.
+- Linked platform artifacts, exact target identities, ASAN commands, final
+  statistics, commit/tree bindings, and full CP-DSL validators are checked.
+- The supplied packet records 117/59 diagnostics, 28/28 mutation kills, 2,408
+  ASAN worker-seconds, 1,200 oracles, and 80.3077% line coverage.
+
+## Remaining Findings
+
+### P1: Coverage was not replayed
+
+The packet trusted the summary's passing flag and did not rehash the raw LLVM
+report or recompute its 80% floor.
+
+Remediation implemented after review: `coverage_summary.py --check` rebuilds
+the summary from the retained raw report, and the full CP-DSL validator invokes
+it after local verification produces current coverage.
+
+### P1: Provenance manifests were under-checked
+
+Oracle evidence did not bind its generator, and packet `source_bindings` and
+`acceptance` values were not compared during recheck. Corpus generators also
+were not replayed by the independent checker.
+
+Remediation implemented after review: Oracle source hashing includes its
+generator; packet source and acceptance manifests are recomputed; and positive
+plus malformed corpus generators rerun in `cp_dsl_metrics.py --check`.
+
+### P2: Exact counts were under-enforced
+
+The checker accepted threshold-level malformed and mutation totals rather than
+the packet's declared 117/59 diagnostics and unique 28/28 mutant set.
+
+Remediation implemented after review: all four counts and the exact unique
+mutant identities are now fail-closed.

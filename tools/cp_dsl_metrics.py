@@ -147,6 +147,9 @@ def build_report(root: Path) -> dict[str, object]:
         ["cargo", "test", "--quiet", "-p", "forge-cardc", "--test", "malformed_corpus"],
         root,
     )
+    run_checked(["python3", "tools/generate_cp_dsl.py", "--check"], root)
+    run_checked(["python3", "tools/generate_cp_dsl_negative.py", "--check"], root)
+    run_checked(["python3", "tools/coverage_summary.py", "--check"], root)
     run_checked(["python3", "tools/local_platform_metrics.py", "--validate-only"], root)
     run_checked(["python3", "tools/oracle_semantic_metrics.py", "--check"], root)
     run_checked(["python3", "tools/run_cp_dsl_mutation.py", "--check"], root)
@@ -177,7 +180,8 @@ def build_report(root: Path) -> dict[str, object]:
         "catalog_only_classification_separate": int(catalog.get("catalog_only", 0)) > 0
         and corpus.get("catalog_only_records_verified_separately") is True,
         "expressiveness_threshold": int(corpus.get("distinct_operations", 0)) >= 50,
-        "recursive_argument_diagnostics_threshold": len(recursive_argument_cases) >= 50
+        "recursive_argument_diagnostics_threshold": len(recursive_argument_cases) == 59
+        and int(malformed.get("case_count", 0)) == 117
         and int(malformed.get("recursive_argument_case_count", 0))
         == len(recursive_argument_cases)
         and recursive_argument_kinds == required_argument_kinds
@@ -196,7 +200,9 @@ def build_report(root: Path) -> dict[str, object]:
         in nightmare_output
         and layer_deterministic,
         "mutation_threshold": mutation.get("passed") is True
-        and float(mutation.get("mutation_score_percent", 0.0)) >= 90.0
+        and int(mutation.get("mutant_count", 0)) == 28
+        and int(mutation.get("killed", 0)) == 28
+        and float(mutation.get("mutation_score_percent", 0.0)) == 100.0
         and int(mutation.get("survived", 1)) == 0
         and int(mutation.get("invalid", 1)) == 0,
         "local_sanitizer_fuzz": local_fuzz.get("passed") is True

@@ -542,6 +542,14 @@ def evaluate(report: dict[str, object]) -> tuple[bool, str]:
     rows = report.get("mutants", [])
     if not isinstance(rows, list):
         return False, "mutant records are missing"
+    expected_ids = [mutant.id for mutant in MUTANTS]
+    observed_ids = [str(row.get("id", "")) for row in rows if isinstance(row, dict)]
+    exact_mutants = (
+        len(rows) == len(MUTANTS)
+        and len(observed_ids) == len(MUTANTS)
+        and len(set(observed_ids)) == len(MUTANTS)
+        and set(observed_ids) == set(expected_ids)
+    )
     high_survivors = [
         row["id"]
         for row in rows
@@ -566,16 +574,18 @@ def evaluate(report: dict[str, object]) -> tuple[bool, str]:
     )
     passed = (
         control_passed
-        and len(rows) == len(MUTANTS)
-        and killed + survived >= 20
+        and exact_mutants
+        and killed == len(MUTANTS)
+        and survived == 0
         and invalid == 0
-        and score >= 90.0
+        and score == 100.0
         and not high_survivors
         and auditable_kills
     )
     reason = (
-        f"control={control_passed} killed={killed} survived={survived} invalid={invalid} "
-        f"score={score:.2f}% high_survivors={high_survivors}"
+        f"control={control_passed} exact_mutants={exact_mutants} killed={killed} "
+        f"survived={survived} invalid={invalid} score={score:.2f}% "
+        f"high_survivors={high_survivors}"
     )
     return passed, reason
 
@@ -585,6 +595,15 @@ def validate_evidence(root: Path, report: dict[str, object]) -> tuple[bool, str]
     rows = report.get("mutants")
     if not isinstance(control, dict) or not isinstance(rows, list):
         return False, "control or mutant evidence is missing"
+    observed_ids = [str(row.get("id", "")) for row in rows if isinstance(row, dict)]
+    expected_ids = {mutant.id for mutant in MUTANTS}
+    if (
+        len(rows) != len(MUTANTS)
+        or len(observed_ids) != len(MUTANTS)
+        or len(set(observed_ids)) != len(MUTANTS)
+        or set(observed_ids) != expected_ids
+    ):
+        return False, "mutation evidence does not contain the exact unique mutant set"
     records = [control, *rows]
     for record in records:
         if not isinstance(record, dict):

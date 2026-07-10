@@ -74,6 +74,12 @@ gaps; complete source hashing, direct linked-artifact validation, exact target
 coverage, full validator replay, and address-sanitizer command checks are now
 implemented locally and await the next exact rerun.
 
+The fifth independent review accepted PC-0004 and the honest unverified status,
+but rejected remaining checker assumptions. Coverage now replays and hashes the
+raw LLVM report against the exact 80% floor; Oracle, source-binding, and
+acceptance manifests are recomputed; both corpus generators rerun; and the
+packet enforces exactly 117/59 diagnostics plus the unique 28/28 mutant set.
+
 ## Owner Decision
 
 The Owner chose the honest staged-verification option. PC-0004 relabels all 100

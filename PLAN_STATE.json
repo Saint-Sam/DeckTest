@@ -237,7 +237,7 @@
       "status": "in_progress",
       "branch": "task/T3.1-card-dsl",
       "attempts": 0,
-      "verification": "Exact detached local packet passed at 90f5ce69e085fb270bc1b2e8c7cb253009f6547f, but independent review failed its semantic-status and evidence-binding audit. Owner approved PC-0004 Option 2 on 2026-07-10: the 100 definitions are an unverified_playable language-stress corpus, with card-specific promotion deferred to T3.6 and CP-PORT-20. Honest classification, exact modal-count typing, cross-face keyword isolation, and evidence-checker hardening are implemented locally; a new exact detached packet and re-review are pending."
+      "verification": "Owner-approved PC-0004 honest classification, exact modal-count typing, and cross-face keyword isolation passed an exact detached packet at 0a53df82ba9e06791e1f0844811d25de718a21c9. Independent re-review accepted that scope but failed coverage replay, Oracle/packet provenance comparison, and exact acceptance-count enforcement. Raw coverage replay, source/acceptance manifest comparison, generator replay, and exact 117/59 plus 28/28 checks are implemented locally; another exact packet and re-review are pending."
     }
   },
   "gates_passed": [
@@ -306,11 +306,11 @@
     },
     "CP-DSL": {
       "status": "failed_remediation_in_progress",
-      "reviewed_commit": "90f5ce69e085fb270bc1b2e8c7cb253009f6547f",
-      "exact_local_gate": "PASS from detached clean worktree /private/tmp/forge-cp-dsl-90f5ce6-clean with no GitHub Actions or network use.",
+      "reviewed_commit": "0a53df82ba9e06791e1f0844811d25de718a21c9",
+      "exact_local_gate": "PASS from detached clean worktree /private/tmp/forge-cp-dsl-0a53df8-clean with no GitHub Actions or network use.",
       "reviewer": "gpt-5.6-luna xhigh independent Gate Reviewer subagent",
-      "verdict": "FAIL: sampled definitions are typed approximations but are unconditionally labeled verified_playable; evidence source binding omitted the Pest grammar; packet platform checks trusted artifact metadata; and fuzz recheck did not enforce address sanitizer.",
-      "technical_remediation": "Implemented complete crate-source hashing including Pest grammar, exact commit/tree bindings, direct linked-artifact validation with unique target coverage, full CP-DSL validator replay, and address-sanitizer command verification. Exact rerun awaits the semantic-scope decision.",
+      "verdict": "FAIL: PC-0004 semantic classification is accepted, but raw coverage was not replayed, Oracle/packet source and acceptance manifests were under-checked, generators were not replayed by the independent checker, and exact 117/59 plus 28/28 counts were under-enforced.",
+      "technical_remediation": "Implemented raw LLVM coverage hash/floor replay, Oracle metric self-binding, source/acceptance manifest comparison, generator and malformed-generator replay, exact diagnostic counts, and exact unique mutation-set enforcement. A new exact rerun is pending.",
       "owner_decision": "Owner chose Option 2 on 2026-07-10. PC-0004 honestly classifies the 100 definitions as unverified language-stress recipes and defers per-card semantic promotion to T3.6 and CP-PORT-20."
     }
   },

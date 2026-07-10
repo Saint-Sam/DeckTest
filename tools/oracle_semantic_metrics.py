@@ -179,9 +179,9 @@ def build_report(root: Path = ROOT) -> dict[str, object]:
     }
 
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "generator": "tools/oracle_semantic_metrics.py",
-        "source_sha256": source_hash(paths),
+        "source_sha256": source_hash([root / "tools/oracle_semantic_metrics.py", *paths]),
         "normalization": {
             "scenario_name": "collapsed",
             "numeric_scalars": "collapsed",

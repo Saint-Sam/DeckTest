@@ -118,6 +118,8 @@ def validated_reports(
         raise ValueError("mutation report lacks a passing unmutated control")
     if reports["fuzz"].get("passed") is not True:
         raise ValueError("fuzz report did not pass")
+    if reports["fuzz"].get("sanitizer") != "address":
+        raise ValueError("fuzz report did not use address sanitizer")
     if int(reports["fuzz"].get("total_worker_seconds", 0)) < 2400:
         raise ValueError("fuzz report lacks 2,400 verified worker-seconds")
     if reports["platforms"].get("passed") is not True:
@@ -140,15 +142,35 @@ def validated_reports(
         raise ValueError("CP-DSL verification report did not pass")
     if reports["coverage"].get("passed") is not True:
         raise ValueError("coverage report did not pass")
+    if int(reports["coverage"].get("floor_percent", 0)) != 80:
+        raise ValueError("coverage report does not enforce the 80 percent floor")
+    coverage_lines = reports["coverage"].get("lines")
+    if not isinstance(coverage_lines, dict) or float(coverage_lines.get("percent", 0.0)) < 80.0:
+        raise ValueError("coverage report is below the 80 percent floor")
     for name in ("mutation", "fuzz", "platforms", "coverage"):
         if reports[name].get("reviewed_commit") != reviewed_commit:
             raise ValueError(f"{name} evidence is not bound to {reviewed_commit}")
         if reports[name].get("reviewed_tree") != reviewed_tree:
             raise ValueError(f"{name} evidence is not bound to tree {reviewed_tree}")
-    if int(reports["malformed"].get("recursive_argument_case_count", 0)) < 50:
-        raise ValueError("fewer than 50 recursive-argument diagnostics are recorded")
+    if int(reports["malformed"].get("case_count", 0)) != 117:
+        raise ValueError("malformed corpus does not contain exactly 117 diagnostics")
+    if int(reports["malformed"].get("recursive_argument_case_count", 0)) != 59:
+        raise ValueError("malformed corpus does not contain exactly 59 recursive diagnostics")
     if reports["malformed"].get("missing_argument_kinds") != []:
         raise ValueError("recursive-argument diagnostics omit an argument kind")
+    if (
+        int(reports["mutation"].get("mutant_count", 0)) != 28
+        or int(reports["mutation"].get("killed", 0)) != 28
+        or int(reports["mutation"].get("survived", 1)) != 0
+        or int(reports["mutation"].get("invalid", 1)) != 0
+    ):
+        raise ValueError("mutation report does not contain the exact 28/28 result")
+    verification_checks = reports["verification"].get("checks")
+    if (
+        not isinstance(verification_checks, dict)
+        or verification_checks.get("review_corpus_honest_classification") is not True
+    ):
+        raise ValueError("verification report does not prove honest corpus classification")
     return reports
 
 
@@ -245,6 +267,40 @@ def platform_evidence(
     return rows
 
 
+def source_bindings(reports: dict[str, dict[str, object]]) -> dict[str, object]:
+    return {
+        "mutation": reports["mutation"].get("source_sha256"),
+        "fuzz": reports["fuzz"].get("source_sha256"),
+        "platforms": reports["platforms"].get("source_sha256"),
+        "oracles": reports["oracles"].get("source_sha256"),
+        "coverage": reports["coverage"].get("source_sha256"),
+        "catalog": reports["verification"].get("provenance"),
+    }
+
+
+def acceptance(reports: dict[str, dict[str, object]]) -> dict[str, object]:
+    return {
+        "malformed_diagnostics": reports["malformed"].get("case_count"),
+        "recursive_argument_diagnostics": reports["malformed"].get(
+            "recursive_argument_case_count"
+        ),
+        "review_definition_classification": reports["verification"]
+        .get("corpus", {})
+        .get("definition_classification"),
+        "semantically_verified_review_definitions": reports["verification"]
+        .get("corpus", {})
+        .get("semantically_verified_definitions"),
+        "mutation_control": "passed",
+        "mutants_killed": reports["mutation"].get("killed"),
+        "verified_fuzz_worker_seconds": reports["fuzz"].get("total_worker_seconds"),
+        "fuzz_sanitizer": reports["fuzz"].get("sanitizer"),
+        "cross_targets": len(reports["platforms"].get("targets", [])),
+        "linked_platform_artifacts": reports["platforms"].get("linked_artifact_count"),
+        "coverage_lines": reports["coverage"].get("lines"),
+        "semantic_oracles": reports["oracles"].get("measured"),
+    }
+
+
 def create(
     root: Path,
     evidence_dir: Path,
@@ -288,29 +344,8 @@ def create(
         "artifacts": artifact_rows,
         "platform_evidence": platform_rows,
         "isolated_target_directories": isolated_targets(reports),
-        "source_bindings": {
-            "mutation": reports["mutation"].get("source_sha256"),
-            "fuzz": reports["fuzz"].get("source_sha256"),
-            "platforms": reports["platforms"].get("source_sha256"),
-            "oracles": reports["oracles"].get("source_sha256"),
-            "coverage": reports["coverage"].get("source_sha256"),
-            "catalog": reports["verification"].get("provenance"),
-        },
-        "acceptance": {
-            "recursive_argument_diagnostics": reports["malformed"].get(
-                "recursive_argument_case_count"
-            ),
-            "mutation_control": "passed",
-            "mutants_killed": reports["mutation"].get("killed"),
-            "verified_fuzz_worker_seconds": reports["fuzz"].get(
-                "total_worker_seconds"
-            ),
-            "cross_targets": len(reports["platforms"].get("targets", [])),
-            "linked_platform_artifacts": reports["platforms"].get(
-                "linked_artifact_count"
-            ),
-            "semantic_oracles": reports["oracles"].get("measured"),
-        },
+        "source_bindings": source_bindings(reports),
+        "acceptance": acceptance(reports),
     }
     output = evidence_dir / "packet.json"
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -325,7 +360,12 @@ def create(
 def check(root: Path, evidence_dir: Path) -> int:
     packet_path = evidence_dir / "packet.json"
     packet = load_json(packet_path)
-    if packet.get("passed") is not True or packet.get("github_actions_used") is not False:
+    if (
+        packet.get("passed") is not True
+        or packet.get("runner") != "local-only"
+        or packet.get("github_actions_used") is not False
+        or packet.get("detached_clean_start") is not True
+    ):
         raise ValueError("evidence packet is not a passing local-only packet")
     reviewed_commit = str(packet.get("reviewed_commit", ""))
     if not reviewed_commit:
@@ -344,6 +384,10 @@ def check(root: Path, evidence_dir: Path) -> int:
         raise ValueError("artifact manifest is stale")
     if packet.get("platform_evidence") != platform_evidence(root, reports):
         raise ValueError("platform evidence manifest is stale")
+    if packet.get("source_bindings") != source_bindings(reports):
+        raise ValueError("source-binding manifest is stale")
+    if packet.get("acceptance") != acceptance(reports):
+        raise ValueError("acceptance manifest is stale")
     command_output(["python3", "tools/cp_dsl_metrics.py", "--check"], root)
     if sorted((root / ".github/workflows").glob("*.y*ml")):
         raise ValueError("hosted workflows became active after packet creation")
