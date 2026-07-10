@@ -1,0 +1,10 @@
+started_at=2026-07-10T05:46:57Z
+command=python3 tools/local_platform_metrics.py 
+--- output ---
+python3: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-asKeyRFY' (errno=Operation not permitted)
+python3: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-fN2prKQZ' (errno=Operation not permitted)
+Local platform report: verified four linked artifacts, logs, and hashes
+
+--- result ---
+finished_at=2026-07-10T05:46:58Z
+exit_code=0

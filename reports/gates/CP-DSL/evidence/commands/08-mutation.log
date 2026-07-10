@@ -1,0 +1,10 @@
+started_at=2026-07-10T05:53:12Z
+command=python3 tools/run_cp_dsl_mutation.py 
+--- output ---
+python3: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-2euBkQXr' (errno=Operation not permitted)
+python3: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-cysw6T4v' (errno=Operation not permitted)
+CP-DSL mutation: control=True exact_mutants=True killed=28 survived=0 invalid=0 score=100.00% high_survivors=[]; verified 29 full command logs
+
+--- result ---
+finished_at=2026-07-10T05:54:40Z
+exit_code=0

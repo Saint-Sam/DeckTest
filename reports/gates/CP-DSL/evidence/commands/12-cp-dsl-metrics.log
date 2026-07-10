@@ -1,0 +1,10 @@
+started_at=2026-07-10T05:56:32Z
+command=python3 tools/cp_dsl_metrics.py --check 
+--- output ---
+python3: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-J7Z53YkL' (errno=Operation not permitted)
+python3: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-MfPtXP2O' (errno=Operation not permitted)
+CP-DSL verification: passed=True cards=100 strata=25 mutation=100.0%
+
+--- result ---
+finished_at=2026-07-10T05:56:35Z
+exit_code=0

@@ -1,0 +1,325 @@
+{
+  "schema_version": 1,
+  "passed": true,
+  "runner": "local-only",
+  "github_actions_used": false,
+  "network_egress_used": false,
+  "cargo_net_offline": true,
+  "reviewed_commit": "af6c8508030aed0bc56c71eac61b398f9e00ec4f",
+  "reviewed_tree": "1857e5fc58586f9f5daf78c61bb82a17f70beb15",
+  "detached_clean_start": true,
+  "started_at": "2026-07-10T05:46:45Z",
+  "finished_at": "2026-07-10T05:58:03.938253+00:00",
+  "toolchains": {
+    "rustc": "rustc 1.96.1 (31fca3adb 2026-06-26)",
+    "cargo": "cargo 1.96.1 (356927216 2026-06-26)",
+    "rustup": "rustup 1.29.0 (28d1352db 2026-03-05)",
+    "cargo_deny": "cargo-deny 0.19.9",
+    "cargo_llvm_cov": "cargo-llvm-cov 0.8.7",
+    "cargo_fuzz": "cargo-fuzz 0.13.2"
+  },
+  "commands": [
+    {
+      "path": "reports/gates/CP-DSL/evidence/commands/00-preflight.log",
+      "sha256": "e2dbb865316f4e9e8f912771d8fb56e152be9536c8238e53973152e730d7ffad",
+      "size_bytes": 244
+    },
+    {
+      "path": "reports/gates/CP-DSL/evidence/commands/01-fmt-workspace.log",
+      "sha256": "fba83a71590737b32d464294865d315e31c57c8c42e27db02b5ae18e92bf716f",
+      "size_bytes": 144
+    },
+    {
+      "path": "reports/gates/CP-DSL/evidence/commands/02-fmt-fuzz.log",
+      "sha256": "36d5c497322ec513c2fc75bf6c8567ed4a6867fa7d0b29232b36e83b07d5d424",
+      "size_bytes": 176
+    },
+    {
+      "path": "reports/gates/CP-DSL/evidence/commands/03-clippy.log",
+      "sha256": "27b9e46291a38c0b45b586b74665b100bb0ab6765e5cc5b41810114971fa4e51",
+      "size_bytes": 1511
+    },
+    {
+      "path": "reports/gates/CP-DSL/evidence/commands/04-tests.log",
+      "sha256": "508867c9cdb2ffa58d76f6d046cb0c35147170a059a63142b1bbd99bb84f3dc1",
+      "size_bytes": 5923
+    },
+    {
+      "path": "reports/gates/CP-DSL/evidence/commands/05-deny.log",
+      "sha256": "f821987fd607830053ba984d0d6fd4c13dcd8079d724629ef363d82b7f36d286",
+      "size_bytes": 208
+    },
+    {
+      "path": "reports/gates/CP-DSL/evidence/commands/06-platforms.log",
+      "sha256": "846827d21c368e06742145abad3bcf7d1e0d3ce32fb0c80bacf3fd7969fa7385",
+      "size_bytes": 517
+    },
+    {
+      "path": "reports/gates/CP-DSL/evidence/commands/07-fuzz.log",
+      "sha256": "75d471f81755337e94f72b86ca25fc1e8340aaae96fd670c2b0a3e6823425a98",
+      "size_bytes": 653
+    },
+    {
+      "path": "reports/gates/CP-DSL/evidence/commands/08-mutation.log",
+      "sha256": "0c4ea0009e9fcb38cb2f646d546a0f2e74bb904513c376b45738ead4bef928f4",
+      "size_bytes": 585
+    },
+    {
+      "path": "reports/gates/CP-DSL/evidence/commands/09-card-regression.log",
+      "sha256": "1fa7b2179e2e898d0c79c9d794d3f7e6a0f24e9ee960f02e31f82920c73b6d9f",
+      "size_bytes": 99715
+    },
+    {
+      "path": "reports/gates/CP-DSL/evidence/commands/10-platform-validate.log",
+      "sha256": "3eb05ef03189ca7c384cda6d5d8e9759f89f99f8c8fd828f424a756e49e9366c",
+      "size_bytes": 533
+    },
+    {
+      "path": "reports/gates/CP-DSL/evidence/commands/11-oracle-semantics.log",
+      "sha256": "900c8aea7486593479115aa42479fe3be8d2ad05d00a9d212f1a36a9a8079a1d",
+      "size_bytes": 526
+    },
+    {
+      "path": "reports/gates/CP-DSL/evidence/commands/12-cp-dsl-metrics.log",
+      "sha256": "bbc4e895fd3d18d2f5cd21df0d1d859a4cb8363daf66ad7379bb09a6407eca49",
+      "size_bytes": 514
+    },
+    {
+      "path": "reports/gates/CP-DSL/evidence/commands/13-bootstrap.log",
+      "sha256": "2fe538898ee7776b835f04e216bac2f090a751b93c29b1ed53b941e38b74540c",
+      "size_bytes": 257
+    },
+    {
+      "path": "reports/gates/CP-DSL/evidence/commands/14-archive-bootstrap.log",
+      "sha256": "fef74bcfa5eaf179093dab3a676394085459ef10df312da1be640b4063fbd52e",
+      "size_bytes": 208674
+    },
+    {
+      "path": "reports/gates/CP-DSL/evidence/commands/15-local-verify.log",
+      "sha256": "5bc261e4bbcafc02ebdd9cca84c96d482f175e4678455636c3d456a6b998362e",
+      "size_bytes": 203000
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "assets/carddb.bin",
+      "sha256": "0dd65e72305bbc40c8da6037acc7eb2806dcc506104afd5415e5df37a667e0e5",
+      "size_bytes": 26163015
+    },
+    {
+      "path": "assets/carddb.index.json",
+      "sha256": "e971283702186a69eab402bcba285f1664d45292ff10a559864bb2b053bf3d1d",
+      "size_bytes": 27108820
+    },
+    {
+      "path": "assets/layer_scenarios.carddb.bin",
+      "sha256": "cd1e1ce66dd6e46b958f929f6ee5ea339a4f88c976c0ba874ba813fe715c794e",
+      "size_bytes": 9848
+    },
+    {
+      "path": "assets/layer_scenarios.carddb.index.json",
+      "sha256": "2b46cde3d897f0c85620a588264fdc15c9d1c955e96c24b0ff350dfa7435e40a",
+      "size_bytes": 1770
+    },
+    {
+      "path": "cards/cp_dsl/malformed/manifest.json",
+      "sha256": "72cf28fac14b89ca8ae7c5c88d2ed91b278009799811e72be2b86ed87bf11394",
+      "size_bytes": 41377
+    },
+    {
+      "path": "metrics/card_catalog.json",
+      "sha256": "69c4662acbc20750847355bd461f469578aa27bd4c7932b88ac1a47bbc43c05a",
+      "size_bytes": 674
+    },
+    {
+      "path": "metrics/cp_dsl_corpus.json",
+      "sha256": "8e66dcf0f81ce9625e969346291239e789d0606c179f800de704e969bec02bd7",
+      "size_bytes": 1047
+    },
+    {
+      "path": "metrics/cp_dsl_mutation.json",
+      "sha256": "cdbbc7fac7bac90a9c8b5579eb964c3d689438e50159c71a5724b82fc8268107",
+      "size_bytes": 39437
+    },
+    {
+      "path": "metrics/cp_dsl_verification.json",
+      "sha256": "b0155eae54ee10352e8150fc632f9f57f2c8dbb91e5621ff987992d005b6ec36",
+      "size_bytes": 9180
+    },
+    {
+      "path": "metrics/coverage.json",
+      "sha256": "95b266d68c9a8f7c92ebabf07c382b099ff7aba3462d7360007d62a7f1021a61",
+      "size_bytes": 549
+    },
+    {
+      "path": "metrics/local_fuzz.json",
+      "sha256": "72440e9a5d3b3e8d815063b61cbf0d5d671ac57b5ef869b9705dff6d17924dd1",
+      "size_bytes": 15439
+    },
+    {
+      "path": "metrics/local_platforms.json",
+      "sha256": "2276b8f85a05cec3c798ac4fef11069b5170b85b9d806a8f1eb0ce9daa551cf8",
+      "size_bytes": 5224
+    },
+    {
+      "path": "metrics/oracle_semantics.json",
+      "sha256": "401def585d647dafb90af2fc2a54ffe7cc95d92e12e45b38aa9942e63bd153d5",
+      "size_bytes": 208260
+    }
+  ],
+  "platform_evidence": [
+    {
+      "target": "wasm32-unknown-unknown",
+      "package": "forge-app-wasm",
+      "crate_type": "cdylib",
+      "log": {
+        "path": "reports/gates/CP-DSL/evidence/platforms/wasm32-unknown-unknown.log",
+        "sha256": "2873c8c15a5e44aa7d282a946cb4553bdd9b2587525715bc2f0dcae3e923b02b",
+        "size_bytes": 558
+      },
+      "artifact": {
+        "path": "target/local-platforms/wasm32-unknown-unknown/wasm32-unknown-unknown/release/deps/forge_app_wasm-054a76bee8d7cd95.wasm",
+        "sha256": "b11454273ec574d6def33d9131b2d714e6136040bb319bf44aca3cea6c0065c5",
+        "size_bytes": 382,
+        "magic_hex": "0061736d",
+        "file_description": "WebAssembly (wasm) binary module version 0x1 (MVP)"
+      }
+    },
+    {
+      "target": "aarch64-linux-android",
+      "package": "forge-app-android",
+      "crate_type": "staticlib",
+      "log": {
+        "path": "reports/gates/CP-DSL/evidence/platforms/aarch64-linux-android.log",
+        "sha256": "371c93ab724d23b961cd0e34abc715ecb05ce5d9e84708e1a29555cdb07caa33",
+        "size_bytes": 568
+      },
+      "artifact": {
+        "path": "target/local-platforms/aarch64-linux-android/aarch64-linux-android/release/deps/libforge_app_android-361b6173299eeb99.a",
+        "sha256": "2330ebde83878b2186146cb6dd27b55d0fcc9b7360fa7d4385f4f51f71254451",
+        "size_bytes": 22854892,
+        "magic_hex": "213c617263683e0a",
+        "file_description": "current ar archive"
+      }
+    },
+    {
+      "target": "aarch64-apple-ios",
+      "package": "forge-app-ios",
+      "crate_type": "staticlib",
+      "log": {
+        "path": "reports/gates/CP-DSL/evidence/platforms/aarch64-apple-ios.log",
+        "sha256": "c47a649ddf3e5c994709520add269e0f5a7753423241fb44b39a1221f6a5a4c3",
+        "size_bytes": 547
+      },
+      "artifact": {
+        "path": "target/local-platforms/aarch64-apple-ios/aarch64-apple-ios/release/deps/libforge_app_ios-e861c18fac6cba6d.a",
+        "sha256": "7e19357cbae065a8926b50b8c1c774e53a9cdbc709d7a22673011caf39eb20de",
+        "size_bytes": 17360584,
+        "magic_hex": "213c617263683e0a",
+        "file_description": "current ar archive"
+      }
+    },
+    {
+      "target": "x86_64-pc-windows-msvc",
+      "package": "forge-app-desktop",
+      "crate_type": "staticlib",
+      "log": {
+        "path": "reports/gates/CP-DSL/evidence/platforms/x86_64-pc-windows-msvc.log",
+        "sha256": "31e5d1fb6c2e7694c8f334f6ece8181e2a8138a4ff87741dcaad3ec76447b626",
+        "size_bytes": 570
+      },
+      "artifact": {
+        "path": "target/local-platforms/x86_64-pc-windows-msvc/x86_64-pc-windows-msvc/release/deps/forge_app_desktop-c5b7ddbb3fb0b0be.lib",
+        "sha256": "bc160b4c82e6863a4946b5b72c32971424238cac35b28aa0145151e10375aac1",
+        "size_bytes": 11981044,
+        "magic_hex": "213c617263683e0a",
+        "file_description": "current ar archive"
+      }
+    }
+  ],
+  "isolated_target_directories": [
+    "target/card-regression/isolated-1",
+    "target/card-regression/isolated-2",
+    "target/card-regression/isolated-3",
+    "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/activated_cost_requirement_disabled",
+    "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/battle_defense_requirement_disabled",
+    "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/continuous_accepts_prose_effect",
+    "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/control",
+    "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/creature_stats_requirement_disabled",
+    "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/damage_operation_has_value_category",
+    "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/definition_status_is_open",
+    "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/draw_accepts_zero_arguments",
+    "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/duplicate_fields_are_accepted",
+    "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/empty_card_type_set_is_accepted",
+    "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/empty_names_are_accepted",
+    "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/expression_category_check_disabled",
+    "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/id_allows_empty",
+    "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/id_allows_spaces",
+    "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/mana_ability_kind_check_disabled",
+    "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/modal_dfc_collapses_to_normal",
+    "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/multiface_requirement_disabled",
+    "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/number_arguments_accept_selectors",
+    "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/operation_argument_type_check_disabled",
+    "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/planeswalker_loyalty_requirement_disabled",
+    "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/runtime_header_schema_check_disabled",
+    "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/runtime_magic_check_disabled",
+    "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/runtime_payload_schema_check_disabled",
+    "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/runtime_sort_checks_disabled",
+    "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/runtime_trailing_data_check_disabled",
+    "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/tap_accepts_two_arguments",
+    "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/trigger_event_requirement_disabled",
+    "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/unknown_card_types_become_creatures",
+    "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/unknown_keywords_are_accepted",
+    "target/local-fuzz/runs/20260710T054659050865Z/worker-00-fuzz_apply/target",
+    "target/local-fuzz/runs/20260710T054659050865Z/worker-01-fuzz_characteristics/target",
+    "target/local-fuzz/runs/20260710T054659050865Z/worker-02-fuzz_scenarioparse/target",
+    "target/local-fuzz/runs/20260710T054659050865Z/worker-03-fuzz_carddsl/target",
+    "target/local-fuzz/runs/20260710T054659050865Z/worker-04-fuzz_carddb/target",
+    "target/local-fuzz/runs/20260710T054659050865Z/worker-05-fuzz_apply/target",
+    "target/local-fuzz/runs/20260710T054659050865Z/worker-06-fuzz_characteristics/target",
+    "target/local-fuzz/runs/20260710T054659050865Z/worker-07-fuzz_scenarioparse/target",
+    "target/local-platforms/aarch64-apple-ios",
+    "target/local-platforms/aarch64-linux-android",
+    "target/local-platforms/wasm32-unknown-unknown",
+    "target/local-platforms/x86_64-pc-windows-msvc"
+  ],
+  "source_bindings": {
+    "mutation": "d3923a885dd5656cec7c75cc4f83ece7c3b937322da815aa0ce54d188f230d91",
+    "fuzz": "73cca9923f388860865b858828c5acdced5de3fc57c8676206d3c35d0c667658",
+    "platforms": "9bff4105a84e923e9ae6ef62b5f1526945b9959bc5ad1cb6dae5635a9d42d64b",
+    "oracles": "df536d0e6f61d172cac26d9d572f6dc2c4c0b358a246e37c5324fdd83620b575",
+    "coverage": "ebd294fff12c4449d5a77e02ab6dd9e67f10c4a8d670d97da250e37e2e5f21c9",
+    "catalog": {
+      "source_snapshot_sha256": "df50b4384fcd7540442707974d023590ee220862de70dae820b236e501be73e1",
+      "catalog_source_sha256": "eeddab7b413016530fa8996b7898ab8f2a1f33b47e65f7924147382d49cc3d04",
+      "compiler_test_source_sha256": "d3923a885dd5656cec7c75cc4f83ece7c3b937322da815aa0ce54d188f230d91"
+    }
+  },
+  "acceptance": {
+    "malformed_diagnostics": 117,
+    "recursive_argument_diagnostics": 59,
+    "review_definition_classification": "unverified_playable",
+    "semantically_verified_review_definitions": 0,
+    "mutation_control": "passed",
+    "mutants_killed": 28,
+    "verified_fuzz_worker_seconds": 2408,
+    "fuzz_sanitizer": "address",
+    "cross_targets": 4,
+    "linked_platform_artifacts": 4,
+    "coverage_lines": {
+      "count": 22161,
+      "covered": 17797,
+      "not_covered": 4364,
+      "percent": 80.30774784531384
+    },
+    "semantic_oracles": {
+      "distinct_actions": 65,
+      "distinct_operations": 19,
+      "hand_authored_scenarios": 133,
+      "origins": 4,
+      "raw_scenarios": 1200,
+      "rule_interactions": 1839,
+      "structural_families": 379
+    }
+  }
+}

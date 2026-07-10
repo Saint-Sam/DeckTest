@@ -1,0 +1,45 @@
+started_at=2026-07-10T05:53:31.675778+00:00
+finished_at=2026-07-10T05:54:09.464038+00:00
+elapsed_seconds=37.788
+workspace=/private/tmp/forge-cp-dsl-af6c850-clean/target/cp-dsl-mutation/runs/20260710T055312515002Z/workspaces/damage_operation_has_value_category
+target_directory=/private/tmp/forge-cp-dsl-af6c850-clean/target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/damage_operation_has_value_category
+command=["cargo", "test", "--locked", "--offline", "--quiet", "-p", "forge-carddef", "-p", "forge-cardc", "-p", "forge-cards", "--all-targets"]
+return_code=101
+--- output ---
+
+running 5 tests
+.....
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+
+running 4 tests
+... 3/4
+tests::operation_registry_reports_context_and_arity --- FAILED
+
+failures:
+
+---- tests::operation_registry_reports_context_and_arity stdout ----
+
+thread 'tests::operation_registry_reports_context_and_arity' (25233772) panicked at crates/forge-carddef/src/lib.rs:1351:9:
+assertion `left == right` failed
+  left: Value
+ right: Effect
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    tests::operation_registry_reports_context_and_arity
+
+test result: FAILED. 3 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p forge-carddef --lib`

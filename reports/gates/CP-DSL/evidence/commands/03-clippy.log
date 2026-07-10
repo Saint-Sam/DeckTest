@@ -1,0 +1,34 @@
+started_at=2026-07-10T05:46:47Z
+command=cargo clippy --locked --offline -p forge-carddef -p forge-cardc -p forge-cards -p forge-porttools -p forge-arena --all-targets --all-features -- -D warnings 
+--- output ---
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.46
+   Compiling unicode-ident v1.0.24
+   Compiling serde_core v1.0.228
+   Compiling serde v1.0.228
+   Compiling zmij v1.0.21
+    Checking memchr v2.8.2
+   Compiling serde_json v1.0.150
+    Checking itoa v1.0.18
+   Compiling virtue v0.0.18
+    Checking unty v0.0.4
+   Compiling ucd-trie v0.1.7
+    Checking forge-core v0.0.0 (/private/tmp/forge-cp-dsl-af6c850-clean/crates/forge-core)
+    Checking pest v2.8.7
+   Compiling bincode_derive v2.0.1
+   Compiling pest_meta v2.8.7
+   Compiling syn v2.0.118
+   Compiling pest_generator v2.8.7
+   Compiling serde_derive v1.0.228
+   Compiling pest_derive v2.8.7
+    Checking forge-carddef v0.0.0 (/private/tmp/forge-cp-dsl-af6c850-clean/crates/forge-carddef)
+    Checking bincode v2.0.1
+    Checking forge-cardc v0.0.0 (/private/tmp/forge-cp-dsl-af6c850-clean/crates/forge-cardc)
+    Checking forge-cards v0.0.0 (/private/tmp/forge-cp-dsl-af6c850-clean/crates/forge-cards)
+    Checking forge-porttools v0.0.0 (/private/tmp/forge-cp-dsl-af6c850-clean/crates/forge-porttools)
+    Checking forge-arena v0.0.0 (/private/tmp/forge-cp-dsl-af6c850-clean/crates/forge-arena)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 5.03s
+
+--- result ---
+finished_at=2026-07-10T05:46:52Z
+exit_code=0

@@ -6,10 +6,11 @@
     "identity_classification": true,
     "zero_dangling_references": true,
     "one_hundred_roundtrips": true,
+    "review_corpus_honest_classification": true,
     "mandatory_strata_exact": true,
     "catalog_only_classification_separate": true,
     "expressiveness_threshold": true,
-    "malformed_diagnostics_threshold": true,
+    "recursive_argument_diagnostics_threshold": true,
     "deterministic_database": true,
     "versioned_database_header": true,
     "runtime_loader": true,
@@ -17,6 +18,7 @@
     "mutation_threshold": true,
     "local_sanitizer_fuzz": true,
     "local_cross_target_checks": true,
+    "linked_cross_target_artifacts": true,
     "semantic_oracle_breadth": true,
     "database_catalog_counts": true
   },
@@ -31,6 +33,8 @@
   "corpus": {
     "definitions": 100,
     "canonical_roundtrips": 100,
+    "definition_classification": "unverified_playable",
+    "semantically_verified_definitions": 0,
     "primary_strata": 25,
     "mandatory_strata": [
       "vanilla_keywords",
@@ -63,7 +67,30 @@
     "unexpected_strata": [],
     "minimum_cards_per_stratum": 4,
     "distinct_operations": 127,
-    "malformed_positioned_diagnostics": 64,
+    "malformed_positioned_diagnostics": 117,
+    "recursive_argument_diagnostics": 59,
+    "recursive_argument_kinds": [
+      "boolean",
+      "comparable",
+      "cost",
+      "effect",
+      "event",
+      "integer",
+      "number",
+      "predicate",
+      "predicate_or_text",
+      "remembered_value",
+      "scalar",
+      "selector",
+      "selector_or_event",
+      "selector_or_number",
+      "selector_or_predicate",
+      "selector_or_text",
+      "selector_text_or_number",
+      "text",
+      "timing",
+      "value"
+    ],
     "card_driven_nightmare_fixtures": 10
   },
   "database": {
@@ -71,10 +98,10 @@
     "identity_count": 38306,
     "printing_count": 113234,
     "definition_count": 100,
-    "sha256": "2840834d0dd5a8b558af7587569d5f0171d4ee0545eccdb8a3a2de750c402381",
-    "index_sha256": "18e60a8fe061400ec6dc2dd3323767b342144e3c287c5d6249270520fb7f0b5d",
+    "sha256": "0dd65e72305bbc40c8da6037acc7eb2806dcc506104afd5415e5df37a667e0e5",
+    "index_sha256": "e971283702186a69eab402bcba285f1664d45292ff10a559864bb2b053bf3d1d",
     "identical_clean_builds": 3,
-    "layer_scenario_sha256": "3b6906e2e29da0b5c6cd10f4e4cc5da87cb58866b5391ce9c22836296d840364",
+    "layer_scenario_sha256": "cd1e1ce66dd6e46b958f929f6ee5ea339a4f88c976c0ba874ba813fe715c794e",
     "layer_scenario_index_sha256": "2b46cde3d897f0c85620a588264fdc15c9d1c955e96c24b0ff350dfa7435e40a",
     "identical_layer_scenario_builds": 3
   },
@@ -88,41 +115,146 @@
   "local_fuzz": {
     "workers": 8,
     "seconds_per_worker": 300,
-    "total_worker_seconds": 2400,
+    "total_worker_seconds": 2408,
     "sanitizer": "address"
   },
   "local_platforms": {
     "targets": [
       {
         "target": "wasm32-unknown-unknown",
-        "command": "cargo check --locked --offline --workspace --all-features --target wasm32-unknown-unknown",
+        "package": "forge-app-wasm",
+        "crate_type": "cdylib",
+        "command": [
+          "cargo",
+          "rustc",
+          "--locked",
+          "--offline",
+          "--release",
+          "-p",
+          "forge-app-wasm",
+          "--target",
+          "wasm32-unknown-unknown",
+          "--",
+          "--crate-type=cdylib"
+        ],
         "target_dir": "target/local-platforms/wasm32-unknown-unknown",
+        "started_at": "2026-07-10T05:46:58.220443+00:00",
+        "finished_at": "2026-07-10T05:46:58.591526+00:00",
+        "elapsed_seconds": 0.371,
         "exit_code": 0,
+        "log": "reports/gates/CP-DSL/evidence/platforms/wasm32-unknown-unknown.log",
+        "log_sha256": "2873c8c15a5e44aa7d282a946cb4553bdd9b2587525715bc2f0dcae3e923b02b",
+        "artifact": {
+          "path": "target/local-platforms/wasm32-unknown-unknown/wasm32-unknown-unknown/release/deps/forge_app_wasm-054a76bee8d7cd95.wasm",
+          "sha256": "b11454273ec574d6def33d9131b2d714e6136040bb319bf44aca3cea6c0065c5",
+          "size_bytes": 382,
+          "magic_hex": "0061736d",
+          "file_description": "WebAssembly (wasm) binary module version 0x1 (MVP)"
+        },
         "passed": true
       },
       {
         "target": "aarch64-linux-android",
-        "command": "cargo check --locked --offline --workspace --all-features --target aarch64-linux-android",
+        "package": "forge-app-android",
+        "crate_type": "staticlib",
+        "command": [
+          "cargo",
+          "rustc",
+          "--locked",
+          "--offline",
+          "--release",
+          "-p",
+          "forge-app-android",
+          "--target",
+          "aarch64-linux-android",
+          "--",
+          "--crate-type=staticlib"
+        ],
         "target_dir": "target/local-platforms/aarch64-linux-android",
+        "started_at": "2026-07-10T05:46:58.220041+00:00",
+        "finished_at": "2026-07-10T05:46:58.532300+00:00",
+        "elapsed_seconds": 0.312,
         "exit_code": 0,
+        "log": "reports/gates/CP-DSL/evidence/platforms/aarch64-linux-android.log",
+        "log_sha256": "371c93ab724d23b961cd0e34abc715ecb05ce5d9e84708e1a29555cdb07caa33",
+        "artifact": {
+          "path": "target/local-platforms/aarch64-linux-android/aarch64-linux-android/release/deps/libforge_app_android-361b6173299eeb99.a",
+          "sha256": "2330ebde83878b2186146cb6dd27b55d0fcc9b7360fa7d4385f4f51f71254451",
+          "size_bytes": 22854892,
+          "magic_hex": "213c617263683e0a",
+          "file_description": "current ar archive"
+        },
         "passed": true
       },
       {
         "target": "aarch64-apple-ios",
-        "command": "cargo check --locked --offline --workspace --all-features --target aarch64-apple-ios",
+        "package": "forge-app-ios",
+        "crate_type": "staticlib",
+        "command": [
+          "cargo",
+          "rustc",
+          "--locked",
+          "--offline",
+          "--release",
+          "-p",
+          "forge-app-ios",
+          "--target",
+          "aarch64-apple-ios",
+          "--",
+          "--crate-type=staticlib"
+        ],
         "target_dir": "target/local-platforms/aarch64-apple-ios",
+        "started_at": "2026-07-10T05:46:58.220321+00:00",
+        "finished_at": "2026-07-10T05:46:58.499866+00:00",
+        "elapsed_seconds": 0.28,
         "exit_code": 0,
+        "log": "reports/gates/CP-DSL/evidence/platforms/aarch64-apple-ios.log",
+        "log_sha256": "c47a649ddf3e5c994709520add269e0f5a7753423241fb44b39a1221f6a5a4c3",
+        "artifact": {
+          "path": "target/local-platforms/aarch64-apple-ios/aarch64-apple-ios/release/deps/libforge_app_ios-e861c18fac6cba6d.a",
+          "sha256": "7e19357cbae065a8926b50b8c1c774e53a9cdbc709d7a22673011caf39eb20de",
+          "size_bytes": 17360584,
+          "magic_hex": "213c617263683e0a",
+          "file_description": "current ar archive"
+        },
         "passed": true
       },
       {
         "target": "x86_64-pc-windows-msvc",
-        "command": "cargo check --locked --offline --workspace --all-features --target x86_64-pc-windows-msvc",
+        "package": "forge-app-desktop",
+        "crate_type": "staticlib",
+        "command": [
+          "cargo",
+          "rustc",
+          "--locked",
+          "--offline",
+          "--release",
+          "-p",
+          "forge-app-desktop",
+          "--target",
+          "x86_64-pc-windows-msvc",
+          "--",
+          "--crate-type=staticlib"
+        ],
         "target_dir": "target/local-platforms/x86_64-pc-windows-msvc",
+        "started_at": "2026-07-10T05:46:58.220513+00:00",
+        "finished_at": "2026-07-10T05:46:58.467304+00:00",
+        "elapsed_seconds": 0.247,
         "exit_code": 0,
+        "log": "reports/gates/CP-DSL/evidence/platforms/x86_64-pc-windows-msvc.log",
+        "log_sha256": "31e5d1fb6c2e7694c8f334f6ece8181e2a8138a4ff87741dcaad3ec76447b626",
+        "artifact": {
+          "path": "target/local-platforms/x86_64-pc-windows-msvc/x86_64-pc-windows-msvc/release/deps/forge_app_desktop-c5b7ddbb3fb0b0be.lib",
+          "sha256": "bc160b4c82e6863a4946b5b72c32971424238cac35b28aa0145151e10375aac1",
+          "size_bytes": 11981044,
+          "magic_hex": "213c617263683e0a",
+          "file_description": "current ar archive"
+        },
         "passed": true
       }
     ],
-    "rustc": "rustc 1.96.1 (31fca3adb 2026-06-26)"
+    "rustc": "rustc 1.96.1 (31fca3adb 2026-06-26)",
+    "linked_artifact_count": 4
   },
   "oracle_semantics": {
     "distinct_actions": 65,
@@ -136,6 +268,6 @@
   "provenance": {
     "source_snapshot_sha256": "df50b4384fcd7540442707974d023590ee220862de70dae820b236e501be73e1",
     "catalog_source_sha256": "eeddab7b413016530fa8996b7898ab8f2a1f33b47e65f7924147382d49cc3d04",
-    "compiler_test_source_sha256": "7423dc28a0aba4de8648b00d79b60ddb36b0d915de54a000663630f3f673c231"
+    "compiler_test_source_sha256": "d3923a885dd5656cec7c75cc4f83ece7c3b937322da815aa0ce54d188f230d91"
   }
 }

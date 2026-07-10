@@ -20,7 +20,7 @@
     "CP-LAYERS",
     "T2"
   ],
-  "generated_at": "2026-07-10T05:45:25.405667+00:00",
+  "generated_at": "2026-07-10T06:04:41.257227+00:00",
   "generator": "tools/write_project_status.py",
   "hosted_workflow_count": 0,
   "legacy_script_count": 33290,
@@ -38,9 +38,9 @@
   "schema_version": 2,
   "task_count": 39,
   "task_status_counts": {
-    "in_progress": 1,
     "resolved_local": 4,
     "resolved_remote": 1,
+    "review_pending_owner": 1,
     "verified": 6,
     "verified_local": 11,
     "verified_remote": 16

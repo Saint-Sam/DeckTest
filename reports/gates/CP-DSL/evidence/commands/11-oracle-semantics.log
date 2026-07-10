@@ -1,0 +1,10 @@
+started_at=2026-07-10T05:56:31Z
+command=python3 tools/oracle_semantic_metrics.py --check 
+--- output ---
+python3: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-E6eysqjD' (errno=Operation not permitted)
+python3: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-d8TIZwM9' (errno=Operation not permitted)
+Oracle semantics: passed=True files=1200 families=379 interactions=1839
+
+--- result ---
+finished_at=2026-07-10T05:56:32Z
+exit_code=0

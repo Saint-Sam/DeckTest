@@ -1,0 +1,9 @@
+started_at=2026-07-10T05:46:58.220041+00:00
+finished_at=2026-07-10T05:46:58.532300+00:00
+elapsed_seconds=0.312
+target_directory=/private/tmp/forge-cp-dsl-af6c850-clean/target/local-platforms/aarch64-linux-android
+command=["cargo", "rustc", "--locked", "--offline", "--release", "-p", "forge-app-android", "--target", "aarch64-linux-android", "--", "--crate-type=staticlib"]
+exit_code=0
+--- output ---
+   Compiling forge-app-android v0.0.0 (/private/tmp/forge-cp-dsl-af6c850-clean/crates/forge-app-android)
+    Finished `release` profile [optimized] target(s) in 0.27s

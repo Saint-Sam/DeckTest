@@ -1,0 +1,8 @@
+started_at=2026-07-10T05:46:57Z
+command=cargo deny --offline --locked check licenses bans sources 
+--- output ---
+bans ok, licenses ok, sources ok
+
+--- result ---
+finished_at=2026-07-10T05:46:57Z
+exit_code=0

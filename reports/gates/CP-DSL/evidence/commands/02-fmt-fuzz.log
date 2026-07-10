@@ -1,0 +1,7 @@
+started_at=2026-07-10T05:46:47Z
+command=cargo fmt --manifest-path fuzz/Cargo.toml --all -- --check 
+--- output ---
+
+--- result ---
+finished_at=2026-07-10T05:46:47Z
+exit_code=0

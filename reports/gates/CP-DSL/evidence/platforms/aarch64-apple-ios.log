@@ -1,0 +1,9 @@
+started_at=2026-07-10T05:46:58.220321+00:00
+finished_at=2026-07-10T05:46:58.499866+00:00
+elapsed_seconds=0.28
+target_directory=/private/tmp/forge-cp-dsl-af6c850-clean/target/local-platforms/aarch64-apple-ios
+command=["cargo", "rustc", "--locked", "--offline", "--release", "-p", "forge-app-ios", "--target", "aarch64-apple-ios", "--", "--crate-type=staticlib"]
+exit_code=0
+--- output ---
+   Compiling forge-app-ios v0.0.0 (/private/tmp/forge-cp-dsl-af6c850-clean/crates/forge-app-ios)
+    Finished `release` profile [optimized] target(s) in 0.24s

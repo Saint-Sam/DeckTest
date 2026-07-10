@@ -1,6 +1,6 @@
 # OWNER BRIEF - CP-DSL Checkpoint
 
-Date: 2026-07-09
+Date: 2026-07-10
 
 ## What Approval Freezes
 
@@ -92,10 +92,15 @@ commit and tree. Validation now requires exact `HEAD`/tree equality and rejects
 all checkout changes except the five regenerated metrics and files inside the
 evidence directory.
 
+The final exact packet at `af6c8508030aed0bc56c71eac61b398f9e00ec4f`
+passed from a clean detached worktree. The final independent Gate Reviewer
+reported no blocking findings and returned **PASS**. A deliberate stale-checkout
+replay was rejected, confirming the new commit binding.
+
 ## Owner Decision
 
 The Owner chose the honest staged-verification option. PC-0004 relabels all 100
 recipes as `unverified_playable`, reserves `verified_playable` for definitions
 with card-specific semantic tests, and leaves promotion to T3.6 and
-CP-PORT-20. O4 remains pending until the resulting remediation passes a new
-exact detached packet and independent re-review.
+CP-PORT-20. The remediation packet and independent re-review now pass. O4 is
+ready for the Owner's identity/language/database freeze decision.

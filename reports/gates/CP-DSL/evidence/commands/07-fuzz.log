@@ -1,0 +1,10 @@
+started_at=2026-07-10T05:46:58Z
+command=scripts/fuzz_local_parallel.sh gate 
+--- output ---
+python3: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-z2gUR03E' (errno=Operation not permitted)
+python3: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-DVwHvJ9z' (errno=Operation not permitted)
+Local fuzz: passed=True workers=8 verified_worker_seconds=2408 targets=['fuzz_apply', 'fuzz_carddb', 'fuzz_carddsl', 'fuzz_characteristics', 'fuzz_scenarioparse']; verified 8 full fuzz logs and final-stat blocks
+
+--- result ---
+finished_at=2026-07-10T05:53:12Z
+exit_code=0

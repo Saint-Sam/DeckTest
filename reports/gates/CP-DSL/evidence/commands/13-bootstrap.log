@@ -1,0 +1,9 @@
+started_at=2026-07-10T05:56:35Z
+command=scripts/bootstrap_toolchain.sh --check 
+--- output ---
+PASS check_toolchain.sh
+Bootstrap check complete. No software was installed and no network was used.
+
+--- result ---
+finished_at=2026-07-10T05:56:36Z
+exit_code=0

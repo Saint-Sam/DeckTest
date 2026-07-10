@@ -1,7 +1,58 @@
 {
-  "schema_version": 1,
-  "source_sha256": "7423dc28a0aba4de8648b00d79b60ddb36b0d915de54a000663630f3f673c231",
+  "schema_version": 2,
+  "reviewed_commit": "af6c8508030aed0bc56c71eac61b398f9e00ec4f",
+  "reviewed_tree": "1857e5fc58586f9f5daf78c61bb82a17f70beb15",
+  "source_sha256": "d3923a885dd5656cec7c75cc4f83ece7c3b937322da815aa0ce54d188f230d91",
+  "started_at": "2026-07-10T05:53:12.475651+00:00",
+  "finished_at": "2026-07-10T05:54:40.096004+00:00",
+  "toolchains": {
+    "rustc": "rustc 1.96.1 (31fca3adb 2026-06-26)",
+    "cargo": "cargo 1.96.1 (356927216 2026-06-26)"
+  },
+  "test_command": [
+    "cargo",
+    "test",
+    "--locked",
+    "--offline",
+    "--quiet",
+    "-p",
+    "forge-carddef",
+    "-p",
+    "forge-cardc",
+    "-p",
+    "forge-cards",
+    "--all-targets"
+  ],
+  "run_directory": "target/cp-dsl-mutation/runs/20260710T055312515002Z",
+  "evidence_directory": "reports/gates/CP-DSL/evidence/mutation",
   "worker_count": 21,
+  "control": {
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "--offline",
+      "--quiet",
+      "-p",
+      "forge-carddef",
+      "-p",
+      "forge-cardc",
+      "-p",
+      "forge-cards",
+      "--all-targets"
+    ],
+    "started_at": "2026-07-10T05:53:12.620021+00:00",
+    "finished_at": "2026-07-10T05:53:30.844197+00:00",
+    "elapsed_seconds": 18.224,
+    "return_code": 0,
+    "timed_out": false,
+    "workspace": "target/cp-dsl-mutation/runs/20260710T055312515002Z/workspaces/control",
+    "target_directory": "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/control",
+    "log": "reports/gates/CP-DSL/evidence/mutation/control.log",
+    "log_sha256": "c86b6aea9583f3d6c16dccb6e3a45afd0adf3003fb2390f455672cd59d1e6de7",
+    "status": "passed",
+    "reason": "unmutated test suite passed"
+  },
   "mutant_count": 28,
   "killed": 28,
   "survived": 0,
@@ -10,173 +61,960 @@
   "minimum_score_percent": 90.0,
   "mutants": [
     {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--quiet",
+        "-p",
+        "forge-carddef",
+        "-p",
+        "forge-cardc",
+        "-p",
+        "forge-cards",
+        "--all-targets"
+      ],
+      "started_at": "2026-07-10T05:53:31.762897+00:00",
+      "finished_at": "2026-07-10T05:54:19.676657+00:00",
+      "elapsed_seconds": 47.914,
+      "return_code": 101,
+      "timed_out": false,
+      "workspace": "target/cp-dsl-mutation/runs/20260710T055312515002Z/workspaces/id_allows_empty",
+      "target_directory": "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/id_allows_empty",
+      "log": "reports/gates/CP-DSL/evidence/mutation/id_allows_empty.log",
+      "log_sha256": "944c47d37bf5e6e4e3d6d351ffca39c570932fc3595c8587395b68289a7763c3",
+      "mutated_file_sha256": "347ce5cac3931b133be5417405b330dd69d2f9a3b39caf17bf44d5e520fe6309",
       "id": "id_allows_empty",
       "risk": "P0",
       "status": "killed",
-      "reason": "test suite failed"
+      "reason": "expected assertion failed: every_malformed_fixture_has_a_positioned_diagnostic",
+      "expected_killers": [
+        "ids_are_portable_and_nonempty",
+        "every_malformed_fixture_has_a_positioned_diagnostic"
+      ],
+      "matched_killer": "every_malformed_fixture_has_a_positioned_diagnostic"
     },
     {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--quiet",
+        "-p",
+        "forge-carddef",
+        "-p",
+        "forge-cardc",
+        "-p",
+        "forge-cards",
+        "--all-targets"
+      ],
+      "started_at": "2026-07-10T05:53:31.702517+00:00",
+      "finished_at": "2026-07-10T05:54:11.883701+00:00",
+      "elapsed_seconds": 40.181,
+      "return_code": 101,
+      "timed_out": false,
+      "workspace": "target/cp-dsl-mutation/runs/20260710T055312515002Z/workspaces/id_allows_spaces",
+      "target_directory": "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/id_allows_spaces",
+      "log": "reports/gates/CP-DSL/evidence/mutation/id_allows_spaces.log",
+      "log_sha256": "5fbe84b1a00805d67d962578772cb11dbf97f77bf9e22cd804afc877db7321a5",
+      "mutated_file_sha256": "7d392e01d56648fc22c7f68b65b4124e2abd0f17e46821d5eb41097278a51452",
       "id": "id_allows_spaces",
       "risk": "P0",
       "status": "killed",
-      "reason": "test suite failed"
+      "reason": "expected assertion failed: every_malformed_fixture_has_a_positioned_diagnostic",
+      "expected_killers": [
+        "ids_are_portable_and_nonempty",
+        "every_malformed_fixture_has_a_positioned_diagnostic"
+      ],
+      "matched_killer": "every_malformed_fixture_has_a_positioned_diagnostic"
     },
     {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--quiet",
+        "-p",
+        "forge-carddef",
+        "-p",
+        "forge-cardc",
+        "-p",
+        "forge-cards",
+        "--all-targets"
+      ],
+      "started_at": "2026-07-10T05:53:31.709726+00:00",
+      "finished_at": "2026-07-10T05:54:19.368125+00:00",
+      "elapsed_seconds": 47.658,
+      "return_code": 101,
+      "timed_out": false,
+      "workspace": "target/cp-dsl-mutation/runs/20260710T055312515002Z/workspaces/modal_dfc_collapses_to_normal",
+      "target_directory": "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/modal_dfc_collapses_to_normal",
+      "log": "reports/gates/CP-DSL/evidence/mutation/modal_dfc_collapses_to_normal.log",
+      "log_sha256": "13ab2ae2d81ef7eed1ffd8f44a75d5f99eeb25b6c2f9675f41119f440ffcf565",
+      "mutated_file_sha256": "b73529c685afc310eb29718be8029cbdbaa093746593882c16fc6117c9f78a1b",
       "id": "modal_dfc_collapses_to_normal",
       "risk": "P1",
       "status": "killed",
-      "reason": "test suite failed"
+      "reason": "expected assertion failed: layout_registry_is_closed",
+      "expected_killers": [
+        "layout_registry_is_closed"
+      ],
+      "matched_killer": "layout_registry_is_closed"
     },
     {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--quiet",
+        "-p",
+        "forge-carddef",
+        "-p",
+        "forge-cardc",
+        "-p",
+        "forge-cards",
+        "--all-targets"
+      ],
+      "started_at": "2026-07-10T05:53:31.675778+00:00",
+      "finished_at": "2026-07-10T05:54:09.464038+00:00",
+      "elapsed_seconds": 37.788,
+      "return_code": 101,
+      "timed_out": false,
+      "workspace": "target/cp-dsl-mutation/runs/20260710T055312515002Z/workspaces/damage_operation_has_value_category",
+      "target_directory": "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/damage_operation_has_value_category",
+      "log": "reports/gates/CP-DSL/evidence/mutation/damage_operation_has_value_category.log",
+      "log_sha256": "9b50f8ed4e6fe5955ff556478b12f929159a9e426ab6ffc0bbd4e85c035295db",
+      "mutated_file_sha256": "39ada2cc0dbea78a62b001156793c47d2d004af5c3a274011dd7e601d829fba7",
       "id": "damage_operation_has_value_category",
       "risk": "P0",
       "status": "killed",
-      "reason": "test suite failed"
+      "reason": "expected assertion failed: operation_registry_reports_context_and_arity",
+      "expected_killers": [
+        "operation_registry_reports_context_and_arity"
+      ],
+      "matched_killer": "operation_registry_reports_context_and_arity"
     },
     {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--quiet",
+        "-p",
+        "forge-carddef",
+        "-p",
+        "forge-cardc",
+        "-p",
+        "forge-cards",
+        "--all-targets"
+      ],
+      "started_at": "2026-07-10T05:53:31.706277+00:00",
+      "finished_at": "2026-07-10T05:54:12.522044+00:00",
+      "elapsed_seconds": 40.816,
+      "return_code": 101,
+      "timed_out": false,
+      "workspace": "target/cp-dsl-mutation/runs/20260710T055312515002Z/workspaces/draw_accepts_zero_arguments",
+      "target_directory": "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/draw_accepts_zero_arguments",
+      "log": "reports/gates/CP-DSL/evidence/mutation/draw_accepts_zero_arguments.log",
+      "log_sha256": "e624848e834c6ec58daa16a0d5e9ce4f6b4549482890e7574a6317ea87fa431f",
+      "mutated_file_sha256": "93835fbba3af54fbd64066bbf6075d74e3419531b8531f63c3b1052c4c08df62",
       "id": "draw_accepts_zero_arguments",
       "risk": "P1",
       "status": "killed",
-      "reason": "test suite failed"
+      "reason": "expected assertion failed: every_malformed_fixture_has_a_positioned_diagnostic",
+      "expected_killers": [
+        "every_malformed_fixture_has_a_positioned_diagnostic"
+      ],
+      "matched_killer": "every_malformed_fixture_has_a_positioned_diagnostic"
     },
     {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--quiet",
+        "-p",
+        "forge-carddef",
+        "-p",
+        "forge-cardc",
+        "-p",
+        "forge-cards",
+        "--all-targets"
+      ],
+      "started_at": "2026-07-10T05:53:31.780026+00:00",
+      "finished_at": "2026-07-10T05:54:20.657081+00:00",
+      "elapsed_seconds": 48.877,
+      "return_code": 101,
+      "timed_out": false,
+      "workspace": "target/cp-dsl-mutation/runs/20260710T055312515002Z/workspaces/tap_accepts_two_arguments",
+      "target_directory": "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/tap_accepts_two_arguments",
+      "log": "reports/gates/CP-DSL/evidence/mutation/tap_accepts_two_arguments.log",
+      "log_sha256": "b8234c91c4b3610a8393bf596e391c1abd00de56370c12b7644c18bfe6748e63",
+      "mutated_file_sha256": "ab32e9f18c6a060fe8c67955bce1b93f59b241de9d37c5a5792fbae9464087ab",
       "id": "tap_accepts_two_arguments",
       "risk": "P1",
       "status": "killed",
-      "reason": "test suite failed"
+      "reason": "expected assertion failed: every_malformed_fixture_has_a_positioned_diagnostic",
+      "expected_killers": [
+        "every_malformed_fixture_has_a_positioned_diagnostic"
+      ],
+      "matched_killer": "every_malformed_fixture_has_a_positioned_diagnostic"
     },
     {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--quiet",
+        "-p",
+        "forge-carddef",
+        "-p",
+        "forge-cardc",
+        "-p",
+        "forge-cards",
+        "--all-targets"
+      ],
+      "started_at": "2026-07-10T05:53:31.736796+00:00",
+      "finished_at": "2026-07-10T05:54:19.222559+00:00",
+      "elapsed_seconds": 47.486,
+      "return_code": 101,
+      "timed_out": false,
+      "workspace": "target/cp-dsl-mutation/runs/20260710T055312515002Z/workspaces/unknown_keywords_are_accepted",
+      "target_directory": "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/unknown_keywords_are_accepted",
+      "log": "reports/gates/CP-DSL/evidence/mutation/unknown_keywords_are_accepted.log",
+      "log_sha256": "d618ab8c2aedee68d6bd92e5b0e0f660fe6df434c31aece8f12dcfde9716e7a0",
+      "mutated_file_sha256": "d1b042f5689bfdc2f7c7d6fb8bd0b0f2c1e8e87b564686484a14d4fa3ef3602a",
       "id": "unknown_keywords_are_accepted",
       "risk": "P1",
       "status": "killed",
-      "reason": "test suite failed"
+      "reason": "expected assertion failed: every_malformed_fixture_has_a_positioned_diagnostic",
+      "expected_killers": [
+        "every_malformed_fixture_has_a_positioned_diagnostic"
+      ],
+      "matched_killer": "every_malformed_fixture_has_a_positioned_diagnostic"
     },
     {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--quiet",
+        "-p",
+        "forge-carddef",
+        "-p",
+        "forge-cardc",
+        "-p",
+        "forge-cards",
+        "--all-targets"
+      ],
+      "started_at": "2026-07-10T05:53:31.765403+00:00",
+      "finished_at": "2026-07-10T05:54:20.498368+00:00",
+      "elapsed_seconds": 48.733,
+      "return_code": 101,
+      "timed_out": false,
+      "workspace": "target/cp-dsl-mutation/runs/20260710T055312515002Z/workspaces/expression_category_check_disabled",
+      "target_directory": "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/expression_category_check_disabled",
+      "log": "reports/gates/CP-DSL/evidence/mutation/expression_category_check_disabled.log",
+      "log_sha256": "5e96dfe4cc650c893510750db8d735a4e3128c432eba5bc7563dc79273858159",
+      "mutated_file_sha256": "494ad0c3ec5082fe871689a748f82e379d867da6f4a68a459a66d60e3216f36a",
       "id": "expression_category_check_disabled",
       "risk": "P0",
       "status": "killed",
-      "reason": "test suite failed"
+      "reason": "expected assertion failed: every_malformed_fixture_has_a_positioned_diagnostic",
+      "expected_killers": [
+        "every_malformed_fixture_has_a_positioned_diagnostic"
+      ],
+      "matched_killer": "every_malformed_fixture_has_a_positioned_diagnostic"
     },
     {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--quiet",
+        "-p",
+        "forge-carddef",
+        "-p",
+        "forge-cardc",
+        "-p",
+        "forge-cards",
+        "--all-targets"
+      ],
+      "started_at": "2026-07-10T05:53:31.698853+00:00",
+      "finished_at": "2026-07-10T05:54:12.214556+00:00",
+      "elapsed_seconds": 40.516,
+      "return_code": 101,
+      "timed_out": false,
+      "workspace": "target/cp-dsl-mutation/runs/20260710T055312515002Z/workspaces/operation_argument_type_check_disabled",
+      "target_directory": "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/operation_argument_type_check_disabled",
+      "log": "reports/gates/CP-DSL/evidence/mutation/operation_argument_type_check_disabled.log",
+      "log_sha256": "fbbaacae64eac1c9e2b7cc9dce6c44339fe19eda31232e551a79581641070c3a",
+      "mutated_file_sha256": "5ee17dd89a2eb4d04e60cb9655ed3aa0d6183eb17f6a62a60aa87256cbf9b85d",
       "id": "operation_argument_type_check_disabled",
       "risk": "P0",
       "status": "killed",
-      "reason": "test suite failed"
+      "reason": "expected assertion failed: every_malformed_fixture_has_a_positioned_diagnostic",
+      "expected_killers": [
+        "every_malformed_fixture_has_a_positioned_diagnostic"
+      ],
+      "matched_killer": "every_malformed_fixture_has_a_positioned_diagnostic"
     },
     {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--quiet",
+        "-p",
+        "forge-carddef",
+        "-p",
+        "forge-cardc",
+        "-p",
+        "forge-cards",
+        "--all-targets"
+      ],
+      "started_at": "2026-07-10T05:53:31.728378+00:00",
+      "finished_at": "2026-07-10T05:54:18.177815+00:00",
+      "elapsed_seconds": 46.449,
+      "return_code": 101,
+      "timed_out": false,
+      "workspace": "target/cp-dsl-mutation/runs/20260710T055312515002Z/workspaces/continuous_accepts_prose_effect",
+      "target_directory": "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/continuous_accepts_prose_effect",
+      "log": "reports/gates/CP-DSL/evidence/mutation/continuous_accepts_prose_effect.log",
+      "log_sha256": "98fa7d15bf853faf40592b1412f2d25ef58560b2ccb1ae97bec08826afb683a3",
+      "mutated_file_sha256": "1cea6bae0a3b5d329c1e035a16e24116d2c3c4e9fff585e760e588b859f34314",
       "id": "continuous_accepts_prose_effect",
       "risk": "P1",
       "status": "killed",
-      "reason": "test suite failed"
+      "reason": "expected assertion failed: every_malformed_fixture_has_a_positioned_diagnostic",
+      "expected_killers": [
+        "every_malformed_fixture_has_a_positioned_diagnostic"
+      ],
+      "matched_killer": "every_malformed_fixture_has_a_positioned_diagnostic"
     },
     {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--quiet",
+        "-p",
+        "forge-carddef",
+        "-p",
+        "forge-cardc",
+        "-p",
+        "forge-cards",
+        "--all-targets"
+      ],
+      "started_at": "2026-07-10T05:53:31.770803+00:00",
+      "finished_at": "2026-07-10T05:54:20.014127+00:00",
+      "elapsed_seconds": 48.243,
+      "return_code": 101,
+      "timed_out": false,
+      "workspace": "target/cp-dsl-mutation/runs/20260710T055312515002Z/workspaces/number_arguments_accept_selectors",
+      "target_directory": "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/number_arguments_accept_selectors",
+      "log": "reports/gates/CP-DSL/evidence/mutation/number_arguments_accept_selectors.log",
+      "log_sha256": "866b681e30b4b00869f9bb0837e4dc06523ae96e75bcccabd0e56f92d731bf18",
+      "mutated_file_sha256": "aaaff8cf90dd1c4714071ee0d498a335bb11f9d2206bd933299aac820bce1f9f",
       "id": "number_arguments_accept_selectors",
       "risk": "P1",
       "status": "killed",
-      "reason": "test suite failed"
+      "reason": "expected assertion failed: every_malformed_fixture_has_a_positioned_diagnostic",
+      "expected_killers": [
+        "every_malformed_fixture_has_a_positioned_diagnostic"
+      ],
+      "matched_killer": "every_malformed_fixture_has_a_positioned_diagnostic"
     },
     {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--quiet",
+        "-p",
+        "forge-carddef",
+        "-p",
+        "forge-cardc",
+        "-p",
+        "forge-cards",
+        "--all-targets"
+      ],
+      "started_at": "2026-07-10T05:53:31.690393+00:00",
+      "finished_at": "2026-07-10T05:54:08.856841+00:00",
+      "elapsed_seconds": 37.166,
+      "return_code": 101,
+      "timed_out": false,
+      "workspace": "target/cp-dsl-mutation/runs/20260710T055312515002Z/workspaces/activated_cost_requirement_disabled",
+      "target_directory": "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/activated_cost_requirement_disabled",
+      "log": "reports/gates/CP-DSL/evidence/mutation/activated_cost_requirement_disabled.log",
+      "log_sha256": "372770c4572389df62d4d0c287c6795accd0872ddf61342e3290f232054d394f",
+      "mutated_file_sha256": "69cb7b6adb2d468f99deba73aa4ef5326b626e8e114d7a99b0318aee3d71e09b",
       "id": "activated_cost_requirement_disabled",
       "risk": "P0",
       "status": "killed",
-      "reason": "test suite failed"
+      "reason": "expected assertion failed: every_malformed_fixture_has_a_positioned_diagnostic",
+      "expected_killers": [
+        "every_malformed_fixture_has_a_positioned_diagnostic"
+      ],
+      "matched_killer": "every_malformed_fixture_has_a_positioned_diagnostic"
     },
     {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--quiet",
+        "-p",
+        "forge-carddef",
+        "-p",
+        "forge-cardc",
+        "-p",
+        "forge-cards",
+        "--all-targets"
+      ],
+      "started_at": "2026-07-10T05:53:31.755275+00:00",
+      "finished_at": "2026-07-10T05:54:18.475631+00:00",
+      "elapsed_seconds": 46.72,
+      "return_code": 101,
+      "timed_out": false,
+      "workspace": "target/cp-dsl-mutation/runs/20260710T055312515002Z/workspaces/trigger_event_requirement_disabled",
+      "target_directory": "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/trigger_event_requirement_disabled",
+      "log": "reports/gates/CP-DSL/evidence/mutation/trigger_event_requirement_disabled.log",
+      "log_sha256": "7ccad2c1e7872807dd5ea1ede78e4590b4a8fd788769f62aa1e9bb9a2374a6ac",
+      "mutated_file_sha256": "1be8c2093cdba70d3e1ae627a1d1916e3614af9dccded0150aeb293aa9741194",
       "id": "trigger_event_requirement_disabled",
       "risk": "P0",
       "status": "killed",
-      "reason": "test suite failed"
+      "reason": "expected assertion failed: every_malformed_fixture_has_a_positioned_diagnostic",
+      "expected_killers": [
+        "every_malformed_fixture_has_a_positioned_diagnostic"
+      ],
+      "matched_killer": "every_malformed_fixture_has_a_positioned_diagnostic"
     },
     {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--quiet",
+        "-p",
+        "forge-carddef",
+        "-p",
+        "forge-cardc",
+        "-p",
+        "forge-cards",
+        "--all-targets"
+      ],
+      "started_at": "2026-07-10T05:53:31.747690+00:00",
+      "finished_at": "2026-07-10T05:54:17.730133+00:00",
+      "elapsed_seconds": 45.982,
+      "return_code": 101,
+      "timed_out": false,
+      "workspace": "target/cp-dsl-mutation/runs/20260710T055312515002Z/workspaces/mana_ability_kind_check_disabled",
+      "target_directory": "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/mana_ability_kind_check_disabled",
+      "log": "reports/gates/CP-DSL/evidence/mutation/mana_ability_kind_check_disabled.log",
+      "log_sha256": "f847abc545e4f6e24f7bacdd5e46a53532d2245e6c9863e7123232f207832d99",
+      "mutated_file_sha256": "d9a3dae7e35bf7fca0efad9c1070f960399da88bc4e37093653ab6b923b9975a",
       "id": "mana_ability_kind_check_disabled",
       "risk": "P0",
       "status": "killed",
-      "reason": "test suite failed"
+      "reason": "expected assertion failed: every_malformed_fixture_has_a_positioned_diagnostic",
+      "expected_killers": [
+        "every_malformed_fixture_has_a_positioned_diagnostic"
+      ],
+      "matched_killer": "every_malformed_fixture_has_a_positioned_diagnostic"
     },
     {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--quiet",
+        "-p",
+        "forge-carddef",
+        "-p",
+        "forge-cardc",
+        "-p",
+        "forge-cards",
+        "--all-targets"
+      ],
+      "started_at": "2026-07-10T05:53:31.690635+00:00",
+      "finished_at": "2026-07-10T05:54:11.564348+00:00",
+      "elapsed_seconds": 39.874,
+      "return_code": 101,
+      "timed_out": false,
+      "workspace": "target/cp-dsl-mutation/runs/20260710T055312515002Z/workspaces/creature_stats_requirement_disabled",
+      "target_directory": "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/creature_stats_requirement_disabled",
+      "log": "reports/gates/CP-DSL/evidence/mutation/creature_stats_requirement_disabled.log",
+      "log_sha256": "66fa3b4d7d0c4c0f90c4feb749bc5a3b30abfc6de8b983d175e2049717f39d34",
+      "mutated_file_sha256": "5f799f81086b0cb3b4d672be9ea60680a68ee6e6fe1e579f5d57c7cb12a9f3bc",
       "id": "creature_stats_requirement_disabled",
       "risk": "P0",
       "status": "killed",
-      "reason": "test suite failed"
+      "reason": "expected assertion failed: every_malformed_fixture_has_a_positioned_diagnostic",
+      "expected_killers": [
+        "every_malformed_fixture_has_a_positioned_diagnostic"
+      ],
+      "matched_killer": "every_malformed_fixture_has_a_positioned_diagnostic"
     },
     {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--quiet",
+        "-p",
+        "forge-carddef",
+        "-p",
+        "forge-cardc",
+        "-p",
+        "forge-cards",
+        "--all-targets"
+      ],
+      "started_at": "2026-07-10T05:53:31.774550+00:00",
+      "finished_at": "2026-07-10T05:54:20.326597+00:00",
+      "elapsed_seconds": 48.552,
+      "return_code": 101,
+      "timed_out": false,
+      "workspace": "target/cp-dsl-mutation/runs/20260710T055312515002Z/workspaces/planeswalker_loyalty_requirement_disabled",
+      "target_directory": "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/planeswalker_loyalty_requirement_disabled",
+      "log": "reports/gates/CP-DSL/evidence/mutation/planeswalker_loyalty_requirement_disabled.log",
+      "log_sha256": "afe7e0e29b99a69ee42d55d06ab2bafb10693adcff7017cde546ad909a602267",
+      "mutated_file_sha256": "adf937ecc3a25714a887ccae180b91f1b6ca65cd5efb892529a168b30e01bf88",
       "id": "planeswalker_loyalty_requirement_disabled",
       "risk": "P0",
       "status": "killed",
-      "reason": "test suite failed"
+      "reason": "expected assertion failed: every_malformed_fixture_has_a_positioned_diagnostic",
+      "expected_killers": [
+        "every_malformed_fixture_has_a_positioned_diagnostic"
+      ],
+      "matched_killer": "every_malformed_fixture_has_a_positioned_diagnostic"
     },
     {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--quiet",
+        "-p",
+        "forge-carddef",
+        "-p",
+        "forge-cardc",
+        "-p",
+        "forge-cards",
+        "--all-targets"
+      ],
+      "started_at": "2026-07-10T05:53:31.733230+00:00",
+      "finished_at": "2026-07-10T05:54:18.780368+00:00",
+      "elapsed_seconds": 47.047,
+      "return_code": 101,
+      "timed_out": false,
+      "workspace": "target/cp-dsl-mutation/runs/20260710T055312515002Z/workspaces/battle_defense_requirement_disabled",
+      "target_directory": "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/battle_defense_requirement_disabled",
+      "log": "reports/gates/CP-DSL/evidence/mutation/battle_defense_requirement_disabled.log",
+      "log_sha256": "2e63b7746721552b3a6cfe18769380bd46d9ccade02c29131227988fb6500f88",
+      "mutated_file_sha256": "3a0d5139e4598c31e37b84b745bfbee1efb7584e6ffdbd30ff8b3df1e572e857",
       "id": "battle_defense_requirement_disabled",
       "risk": "P0",
       "status": "killed",
-      "reason": "test suite failed"
+      "reason": "expected assertion failed: every_malformed_fixture_has_a_positioned_diagnostic",
+      "expected_killers": [
+        "every_malformed_fixture_has_a_positioned_diagnostic"
+      ],
+      "matched_killer": "every_malformed_fixture_has_a_positioned_diagnostic"
     },
     {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--quiet",
+        "-p",
+        "forge-carddef",
+        "-p",
+        "forge-cardc",
+        "-p",
+        "forge-cards",
+        "--all-targets"
+      ],
+      "started_at": "2026-07-10T05:53:31.752398+00:00",
+      "finished_at": "2026-07-10T05:54:20.163693+00:00",
+      "elapsed_seconds": 48.411,
+      "return_code": 101,
+      "timed_out": false,
+      "workspace": "target/cp-dsl-mutation/runs/20260710T055312515002Z/workspaces/empty_names_are_accepted",
+      "target_directory": "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/empty_names_are_accepted",
+      "log": "reports/gates/CP-DSL/evidence/mutation/empty_names_are_accepted.log",
+      "log_sha256": "1939ed73dacfe23e9ee82e7f3b570b4f8380b92ee3af6625efd1b29167da6ea6",
+      "mutated_file_sha256": "0492c342ba21824174c340851ed7ff89f9ea935d1a720059ed5cfb340504e101",
       "id": "empty_names_are_accepted",
       "risk": "P1",
       "status": "killed",
-      "reason": "test suite failed"
+      "reason": "expected assertion failed: every_malformed_fixture_has_a_positioned_diagnostic",
+      "expected_killers": [
+        "every_malformed_fixture_has_a_positioned_diagnostic"
+      ],
+      "matched_killer": "every_malformed_fixture_has_a_positioned_diagnostic"
     },
     {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--quiet",
+        "-p",
+        "forge-carddef",
+        "-p",
+        "forge-cardc",
+        "-p",
+        "forge-cards",
+        "--all-targets"
+      ],
+      "started_at": "2026-07-10T05:53:31.722780+00:00",
+      "finished_at": "2026-07-10T05:54:19.849494+00:00",
+      "elapsed_seconds": 48.127,
+      "return_code": 101,
+      "timed_out": false,
+      "workspace": "target/cp-dsl-mutation/runs/20260710T055312515002Z/workspaces/multiface_requirement_disabled",
+      "target_directory": "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/multiface_requirement_disabled",
+      "log": "reports/gates/CP-DSL/evidence/mutation/multiface_requirement_disabled.log",
+      "log_sha256": "3677e85d836e1724784cbcf683065b068120e34190e0be0d42db9475450cffa8",
+      "mutated_file_sha256": "b2a8e8fdb2f068ec49946d8f4c8c6090010ccb7dcddef49eabe945e42950dece",
       "id": "multiface_requirement_disabled",
       "risk": "P0",
       "status": "killed",
-      "reason": "test suite failed"
+      "reason": "expected assertion failed: every_malformed_fixture_has_a_positioned_diagnostic",
+      "expected_killers": [
+        "every_malformed_fixture_has_a_positioned_diagnostic"
+      ],
+      "matched_killer": "every_malformed_fixture_has_a_positioned_diagnostic"
     },
     {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--quiet",
+        "-p",
+        "forge-carddef",
+        "-p",
+        "forge-cardc",
+        "-p",
+        "forge-cards",
+        "--all-targets"
+      ],
+      "started_at": "2026-07-10T05:53:31.715500+00:00",
+      "finished_at": "2026-07-10T05:54:17.139230+00:00",
+      "elapsed_seconds": 45.424,
+      "return_code": 101,
+      "timed_out": false,
+      "workspace": "target/cp-dsl-mutation/runs/20260710T055312515002Z/workspaces/duplicate_fields_are_accepted",
+      "target_directory": "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/duplicate_fields_are_accepted",
+      "log": "reports/gates/CP-DSL/evidence/mutation/duplicate_fields_are_accepted.log",
+      "log_sha256": "740e09be0d12838060ce2fbd7815a71247fc24a882d5f882bc4c570b1055b611",
+      "mutated_file_sha256": "7a9f0ab62bb9663a94ae9ce6ed937704c0d9b0847b4163954a2386365cb84740",
       "id": "duplicate_fields_are_accepted",
       "risk": "P0",
       "status": "killed",
-      "reason": "test suite failed"
+      "reason": "expected assertion failed: every_malformed_fixture_has_a_positioned_diagnostic",
+      "expected_killers": [
+        "every_malformed_fixture_has_a_positioned_diagnostic"
+      ],
+      "matched_killer": "every_malformed_fixture_has_a_positioned_diagnostic"
     },
     {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--quiet",
+        "-p",
+        "forge-carddef",
+        "-p",
+        "forge-cardc",
+        "-p",
+        "forge-cards",
+        "--all-targets"
+      ],
+      "started_at": "2026-07-10T05:53:31.720500+00:00",
+      "finished_at": "2026-07-10T05:54:16.108252+00:00",
+      "elapsed_seconds": 44.388,
+      "return_code": 101,
+      "timed_out": false,
+      "workspace": "target/cp-dsl-mutation/runs/20260710T055312515002Z/workspaces/unknown_card_types_become_creatures",
+      "target_directory": "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/unknown_card_types_become_creatures",
+      "log": "reports/gates/CP-DSL/evidence/mutation/unknown_card_types_become_creatures.log",
+      "log_sha256": "4c90981a7634cf237149c76844ed0ef5b1550c5437d704ccbc87d09eff131426",
+      "mutated_file_sha256": "a8134b997ddff3b33e40236ec1035017853455e855e41355d5763ebba867a186",
       "id": "unknown_card_types_become_creatures",
       "risk": "P0",
       "status": "killed",
-      "reason": "test suite failed"
+      "reason": "expected assertion failed: every_malformed_fixture_has_a_positioned_diagnostic",
+      "expected_killers": [
+        "every_malformed_fixture_has_a_positioned_diagnostic"
+      ],
+      "matched_killer": "every_malformed_fixture_has_a_positioned_diagnostic"
     },
     {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--quiet",
+        "-p",
+        "forge-carddef",
+        "-p",
+        "forge-cardc",
+        "-p",
+        "forge-cards",
+        "--all-targets"
+      ],
+      "started_at": "2026-07-10T05:54:09.248749+00:00",
+      "finished_at": "2026-07-10T05:54:35.042087+00:00",
+      "elapsed_seconds": 25.793,
+      "return_code": 101,
+      "timed_out": false,
+      "workspace": "target/cp-dsl-mutation/runs/20260710T055312515002Z/workspaces/empty_card_type_set_is_accepted",
+      "target_directory": "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/empty_card_type_set_is_accepted",
+      "log": "reports/gates/CP-DSL/evidence/mutation/empty_card_type_set_is_accepted.log",
+      "log_sha256": "35f733d627af8f9a51c3a3a0c9f2f1553e98fa83bc292ced8089270dd66c6782",
+      "mutated_file_sha256": "8d9b351e1ec4ec566ab8baba19fc234d456d6e0f1512c19ba8861b8b8bea4362",
       "id": "empty_card_type_set_is_accepted",
       "risk": "P1",
       "status": "killed",
-      "reason": "test suite failed"
+      "reason": "expected assertion failed: every_malformed_fixture_has_a_positioned_diagnostic",
+      "expected_killers": [
+        "every_malformed_fixture_has_a_positioned_diagnostic"
+      ],
+      "matched_killer": "every_malformed_fixture_has_a_positioned_diagnostic"
     },
     {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--quiet",
+        "-p",
+        "forge-carddef",
+        "-p",
+        "forge-cardc",
+        "-p",
+        "forge-cards",
+        "--all-targets"
+      ],
+      "started_at": "2026-07-10T05:54:09.775035+00:00",
+      "finished_at": "2026-07-10T05:54:35.955747+00:00",
+      "elapsed_seconds": 26.181,
+      "return_code": 101,
+      "timed_out": false,
+      "workspace": "target/cp-dsl-mutation/runs/20260710T055312515002Z/workspaces/definition_status_is_open",
+      "target_directory": "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/definition_status_is_open",
+      "log": "reports/gates/CP-DSL/evidence/mutation/definition_status_is_open.log",
+      "log_sha256": "3f9dda28c055697291123c9803c945c05652c3ae4ddd0ded56178b3302f6beda",
+      "mutated_file_sha256": "c26a23bb8e81419c73bf4622e67a7d6c93ab5f9b4114affcca7346446e148a9c",
       "id": "definition_status_is_open",
       "risk": "P0",
       "status": "killed",
-      "reason": "test suite failed"
+      "reason": "expected assertion failed: every_malformed_fixture_has_a_positioned_diagnostic",
+      "expected_killers": [
+        "every_malformed_fixture_has_a_positioned_diagnostic"
+      ],
+      "matched_killer": "every_malformed_fixture_has_a_positioned_diagnostic"
     },
     {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--quiet",
+        "-p",
+        "forge-carddef",
+        "-p",
+        "forge-cardc",
+        "-p",
+        "forge-cards",
+        "--all-targets"
+      ],
+      "started_at": "2026-07-10T05:54:11.658908+00:00",
+      "finished_at": "2026-07-10T05:54:37.514389+00:00",
+      "elapsed_seconds": 25.855,
+      "return_code": 101,
+      "timed_out": false,
+      "workspace": "target/cp-dsl-mutation/runs/20260710T055312515002Z/workspaces/runtime_magic_check_disabled",
+      "target_directory": "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/runtime_magic_check_disabled",
+      "log": "reports/gates/CP-DSL/evidence/mutation/runtime_magic_check_disabled.log",
+      "log_sha256": "8a7d04915906a2945c2a450e15460134f43e5db41fce49a3b945733b9a35da76",
+      "mutated_file_sha256": "d22d024b44923e06fae431edc0bbb6d4da70e010b99628dd723d1b3869a2327b",
       "id": "runtime_magic_check_disabled",
       "risk": "P0",
       "status": "killed",
-      "reason": "test suite failed"
+      "reason": "expected assertion failed: rejects_bad_magic_and_trailing_data",
+      "expected_killers": [
+        "rejects_bad_magic_and_trailing_data"
+      ],
+      "matched_killer": "rejects_bad_magic_and_trailing_data"
     },
     {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--quiet",
+        "-p",
+        "forge-carddef",
+        "-p",
+        "forge-cardc",
+        "-p",
+        "forge-cards",
+        "--all-targets"
+      ],
+      "started_at": "2026-07-10T05:54:12.017999+00:00",
+      "finished_at": "2026-07-10T05:54:38.702696+00:00",
+      "elapsed_seconds": 26.685,
+      "return_code": 101,
+      "timed_out": false,
+      "workspace": "target/cp-dsl-mutation/runs/20260710T055312515002Z/workspaces/runtime_trailing_data_check_disabled",
+      "target_directory": "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/runtime_trailing_data_check_disabled",
+      "log": "reports/gates/CP-DSL/evidence/mutation/runtime_trailing_data_check_disabled.log",
+      "log_sha256": "ff939f655022a258f2fe0f126364a37ca1989f6526aae16299a39596ab958a83",
+      "mutated_file_sha256": "b2652121a9acd23a059bba903f9ae3a3d3b0b735b957b59e58d000908f182edc",
       "id": "runtime_trailing_data_check_disabled",
       "risk": "P0",
       "status": "killed",
-      "reason": "test suite failed"
+      "reason": "expected assertion failed: rejects_bad_magic_and_trailing_data",
+      "expected_killers": [
+        "rejects_bad_magic_and_trailing_data"
+      ],
+      "matched_killer": "rejects_bad_magic_and_trailing_data"
     },
     {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--quiet",
+        "-p",
+        "forge-carddef",
+        "-p",
+        "forge-cardc",
+        "-p",
+        "forge-cards",
+        "--all-targets"
+      ],
+      "started_at": "2026-07-10T05:54:12.328906+00:00",
+      "finished_at": "2026-07-10T05:54:39.383914+00:00",
+      "elapsed_seconds": 27.055,
+      "return_code": 101,
+      "timed_out": false,
+      "workspace": "target/cp-dsl-mutation/runs/20260710T055312515002Z/workspaces/runtime_sort_checks_disabled",
+      "target_directory": "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/runtime_sort_checks_disabled",
+      "log": "reports/gates/CP-DSL/evidence/mutation/runtime_sort_checks_disabled.log",
+      "log_sha256": "bfe1e4d34631fee312257117971d7a57c68b75676a9bdc01d895463ec7e74dc1",
+      "mutated_file_sha256": "58e6c246b88cf4910c49e4e686fee5b7534875f072eb1f01f5cbdecbd3005538",
       "id": "runtime_sort_checks_disabled",
       "risk": "P0",
       "status": "killed",
-      "reason": "test suite failed"
+      "reason": "expected assertion failed: rejects_unsorted_identities",
+      "expected_killers": [
+        "rejects_unsorted_identities"
+      ],
+      "matched_killer": "rejects_unsorted_identities"
     },
     {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--quiet",
+        "-p",
+        "forge-carddef",
+        "-p",
+        "forge-cardc",
+        "-p",
+        "forge-cards",
+        "--all-targets"
+      ],
+      "started_at": "2026-07-10T05:54:12.628216+00:00",
+      "finished_at": "2026-07-10T05:54:39.802231+00:00",
+      "elapsed_seconds": 27.174,
+      "return_code": 101,
+      "timed_out": false,
+      "workspace": "target/cp-dsl-mutation/runs/20260710T055312515002Z/workspaces/runtime_header_schema_check_disabled",
+      "target_directory": "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/runtime_header_schema_check_disabled",
+      "log": "reports/gates/CP-DSL/evidence/mutation/runtime_header_schema_check_disabled.log",
+      "log_sha256": "036415559da55b949fd39fb8b402a86159b565a9638eb5c3a2c40e19a4df4e5b",
+      "mutated_file_sha256": "cf41b855a18652590d32b3978f83cded8308721975f18d45ee0a2a66582bd38a",
       "id": "runtime_header_schema_check_disabled",
       "risk": "P0",
       "status": "killed",
-      "reason": "test suite failed"
+      "reason": "expected assertion failed: rejects_header_and_payload_schema_mismatches",
+      "expected_killers": [
+        "rejects_header_and_payload_schema_mismatches"
+      ],
+      "matched_killer": "rejects_header_and_payload_schema_mismatches"
     },
     {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "--offline",
+        "--quiet",
+        "-p",
+        "forge-carddef",
+        "-p",
+        "forge-cardc",
+        "-p",
+        "forge-cards",
+        "--all-targets"
+      ],
+      "started_at": "2026-07-10T05:54:16.219567+00:00",
+      "finished_at": "2026-07-10T05:54:40.077721+00:00",
+      "elapsed_seconds": 23.858,
+      "return_code": 101,
+      "timed_out": false,
+      "workspace": "target/cp-dsl-mutation/runs/20260710T055312515002Z/workspaces/runtime_payload_schema_check_disabled",
+      "target_directory": "target/cp-dsl-mutation/runs/20260710T055312515002Z/targets/runtime_payload_schema_check_disabled",
+      "log": "reports/gates/CP-DSL/evidence/mutation/runtime_payload_schema_check_disabled.log",
+      "log_sha256": "d439855d89b2ded297225ce36ed6c1f06234cbbe48aa3c34269b710462696f1b",
+      "mutated_file_sha256": "60ca3337fa694bf9c2ba1f8e400f8dc64bd4156bc421dd0db0babf851bd6adf9",
       "id": "runtime_payload_schema_check_disabled",
       "risk": "P0",
       "status": "killed",
-      "reason": "test suite failed"
+      "reason": "expected assertion failed: rejects_header_and_payload_schema_mismatches",
+      "expected_killers": [
+        "rejects_header_and_payload_schema_mismatches"
+      ],
+      "matched_killer": "rejects_header_and_payload_schema_mismatches"
     }
   ],
+  "evidence_validation": "verified 29 full command logs",
   "passed": true
 }

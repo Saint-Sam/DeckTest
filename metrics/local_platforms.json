@@ -1,37 +1,145 @@
 {
-  "schema_version": 1,
-  "source_sha256": "beeee1636ef389808db0243b88686b2d28916824c440fc9653c2312e05146b2e",
+  "schema_version": 2,
+  "reviewed_commit": "af6c8508030aed0bc56c71eac61b398f9e00ec4f",
+  "reviewed_tree": "1857e5fc58586f9f5daf78c61bb82a17f70beb15",
+  "source_sha256": "9bff4105a84e923e9ae6ef62b5f1526945b9959bc5ad1cb6dae5635a9d42d64b",
   "rustc": "rustc 1.96.1 (31fca3adb 2026-06-26)",
+  "evidence_directory": "reports/gates/CP-DSL/evidence/platforms",
   "targets": [
     {
       "target": "wasm32-unknown-unknown",
-      "command": "cargo check --locked --offline --workspace --all-features --target wasm32-unknown-unknown",
+      "package": "forge-app-wasm",
+      "crate_type": "cdylib",
+      "command": [
+        "cargo",
+        "rustc",
+        "--locked",
+        "--offline",
+        "--release",
+        "-p",
+        "forge-app-wasm",
+        "--target",
+        "wasm32-unknown-unknown",
+        "--",
+        "--crate-type=cdylib"
+      ],
       "target_dir": "target/local-platforms/wasm32-unknown-unknown",
+      "started_at": "2026-07-10T05:46:58.220443+00:00",
+      "finished_at": "2026-07-10T05:46:58.591526+00:00",
+      "elapsed_seconds": 0.371,
       "exit_code": 0,
+      "log": "reports/gates/CP-DSL/evidence/platforms/wasm32-unknown-unknown.log",
+      "log_sha256": "2873c8c15a5e44aa7d282a946cb4553bdd9b2587525715bc2f0dcae3e923b02b",
+      "artifact": {
+        "path": "target/local-platforms/wasm32-unknown-unknown/wasm32-unknown-unknown/release/deps/forge_app_wasm-054a76bee8d7cd95.wasm",
+        "sha256": "b11454273ec574d6def33d9131b2d714e6136040bb319bf44aca3cea6c0065c5",
+        "size_bytes": 382,
+        "magic_hex": "0061736d",
+        "file_description": "WebAssembly (wasm) binary module version 0x1 (MVP)"
+      },
       "passed": true
     },
     {
       "target": "aarch64-linux-android",
-      "command": "cargo check --locked --offline --workspace --all-features --target aarch64-linux-android",
+      "package": "forge-app-android",
+      "crate_type": "staticlib",
+      "command": [
+        "cargo",
+        "rustc",
+        "--locked",
+        "--offline",
+        "--release",
+        "-p",
+        "forge-app-android",
+        "--target",
+        "aarch64-linux-android",
+        "--",
+        "--crate-type=staticlib"
+      ],
       "target_dir": "target/local-platforms/aarch64-linux-android",
+      "started_at": "2026-07-10T05:46:58.220041+00:00",
+      "finished_at": "2026-07-10T05:46:58.532300+00:00",
+      "elapsed_seconds": 0.312,
       "exit_code": 0,
+      "log": "reports/gates/CP-DSL/evidence/platforms/aarch64-linux-android.log",
+      "log_sha256": "371c93ab724d23b961cd0e34abc715ecb05ce5d9e84708e1a29555cdb07caa33",
+      "artifact": {
+        "path": "target/local-platforms/aarch64-linux-android/aarch64-linux-android/release/deps/libforge_app_android-361b6173299eeb99.a",
+        "sha256": "2330ebde83878b2186146cb6dd27b55d0fcc9b7360fa7d4385f4f51f71254451",
+        "size_bytes": 22854892,
+        "magic_hex": "213c617263683e0a",
+        "file_description": "current ar archive"
+      },
       "passed": true
     },
     {
       "target": "aarch64-apple-ios",
-      "command": "cargo check --locked --offline --workspace --all-features --target aarch64-apple-ios",
+      "package": "forge-app-ios",
+      "crate_type": "staticlib",
+      "command": [
+        "cargo",
+        "rustc",
+        "--locked",
+        "--offline",
+        "--release",
+        "-p",
+        "forge-app-ios",
+        "--target",
+        "aarch64-apple-ios",
+        "--",
+        "--crate-type=staticlib"
+      ],
       "target_dir": "target/local-platforms/aarch64-apple-ios",
+      "started_at": "2026-07-10T05:46:58.220321+00:00",
+      "finished_at": "2026-07-10T05:46:58.499866+00:00",
+      "elapsed_seconds": 0.28,
       "exit_code": 0,
+      "log": "reports/gates/CP-DSL/evidence/platforms/aarch64-apple-ios.log",
+      "log_sha256": "c47a649ddf3e5c994709520add269e0f5a7753423241fb44b39a1221f6a5a4c3",
+      "artifact": {
+        "path": "target/local-platforms/aarch64-apple-ios/aarch64-apple-ios/release/deps/libforge_app_ios-e861c18fac6cba6d.a",
+        "sha256": "7e19357cbae065a8926b50b8c1c774e53a9cdbc709d7a22673011caf39eb20de",
+        "size_bytes": 17360584,
+        "magic_hex": "213c617263683e0a",
+        "file_description": "current ar archive"
+      },
       "passed": true
     },
     {
       "target": "x86_64-pc-windows-msvc",
-      "command": "cargo check --locked --offline --workspace --all-features --target x86_64-pc-windows-msvc",
+      "package": "forge-app-desktop",
+      "crate_type": "staticlib",
+      "command": [
+        "cargo",
+        "rustc",
+        "--locked",
+        "--offline",
+        "--release",
+        "-p",
+        "forge-app-desktop",
+        "--target",
+        "x86_64-pc-windows-msvc",
+        "--",
+        "--crate-type=staticlib"
+      ],
       "target_dir": "target/local-platforms/x86_64-pc-windows-msvc",
+      "started_at": "2026-07-10T05:46:58.220513+00:00",
+      "finished_at": "2026-07-10T05:46:58.467304+00:00",
+      "elapsed_seconds": 0.247,
       "exit_code": 0,
+      "log": "reports/gates/CP-DSL/evidence/platforms/x86_64-pc-windows-msvc.log",
+      "log_sha256": "31e5d1fb6c2e7694c8f334f6ece8181e2a8138a4ff87741dcaad3ec76447b626",
+      "artifact": {
+        "path": "target/local-platforms/x86_64-pc-windows-msvc/x86_64-pc-windows-msvc/release/deps/forge_app_desktop-c5b7ddbb3fb0b0be.lib",
+        "sha256": "bc160b4c82e6863a4946b5b72c32971424238cac35b28aa0145151e10375aac1",
+        "size_bytes": 11981044,
+        "magic_hex": "213c617263683e0a",
+        "file_description": "current ar archive"
+      },
       "passed": true
     }
   ],
+  "linked_artifact_count": 4,
   "native_tests_and_benches_separate": true,
   "passed": true
 }

@@ -1,6 +1,6 @@
 # CP-DSL Local Verification
 
-Date: 2026-07-09
+Date: 2026-07-10
 
 Mode: local-only under PC-0001. No GitHub Actions, push, network access, or new
 installation was used. The detached packet records the exact reviewed commit
@@ -62,9 +62,9 @@ SHA-256 validate.
 | Positioned malformed diagnostics | 117 / 117 |
 | Tagged recursive-argument diagnostics | 59, every ArgumentKind represented |
 | Main database clean builds | 3 / 3 byte-identical |
-| Main database SHA-256 | `2840834d0dd5a8b558af7587569d5f0171d4ee0545eccdb8a3a2de750c402381` |
+| Main database SHA-256 | `0dd65e72305bbc40c8da6037acc7eb2806dcc506104afd5415e5df37a667e0e5` |
 | Layer scenario database clean builds | 3 / 3 byte-identical |
-| Layer scenario SHA-256 | `3b6906e2e29da0b5c6cd10f4e4cc5da87cb58866b5391ce9c22836296d840364` |
+| Layer scenario SHA-256 | `cd1e1ce66dd6e46b958f929f6ee5ea339a4f88c976c0ba874ba813fe715c794e` |
 | Curated compiler/loader mutants | passing control; 28 killed by expected tests, 0 survived, 0 invalid |
 | Address-sanitizer fuzz | 8 workers, 2,408 verified worker-seconds |
 | Fuzz target breadth | all 5 targets represented and clean |
@@ -72,11 +72,11 @@ SHA-256 validate.
 | Compiled nightmare suite | 100 games, 10 classes, 0 invariant violations |
 | Semantic oracle execution | 1,200 passed, 0 failed |
 | Oracle structural breadth | 379 scalar-collapsed families, 1,839 interactions |
-| Workspace line coverage | above the unchanged 80% floor |
+| Workspace line coverage | 17,797 / 22,161 lines, 80.3077% |
 | Dependency licenses/bans/sources | `cargo deny` passed offline |
 | GitHub ZIP bootstrap simulation | passed offline without submodule contents |
 | Hosted workflow files | 0 |
-| Exact local evidence packet | full command logs, artifact hashes, and packet self-check required |
+| Exact local evidence packet | PASS at `af6c8508030aed0bc56c71eac61b398f9e00ec4f`; final reviewer PASS |
 
 ## Evidence Files
 

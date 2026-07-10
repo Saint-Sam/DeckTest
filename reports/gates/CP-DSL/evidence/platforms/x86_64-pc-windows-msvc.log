@@ -1,0 +1,9 @@
+started_at=2026-07-10T05:46:58.220513+00:00
+finished_at=2026-07-10T05:46:58.467304+00:00
+elapsed_seconds=0.247
+target_directory=/private/tmp/forge-cp-dsl-af6c850-clean/target/local-platforms/x86_64-pc-windows-msvc
+command=["cargo", "rustc", "--locked", "--offline", "--release", "-p", "forge-app-desktop", "--target", "x86_64-pc-windows-msvc", "--", "--crate-type=staticlib"]
+exit_code=0
+--- output ---
+   Compiling forge-app-desktop v0.0.0 (/private/tmp/forge-cp-dsl-af6c850-clean/crates/forge-app-desktop)
+    Finished `release` profile [optimized] target(s) in 0.20s
