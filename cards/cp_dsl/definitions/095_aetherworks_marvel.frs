@@ -2,7 +2,7 @@
 card "Aetherworks Marvel" {
   id: "470ec98e-120c-446d-ade6-7d80aa836b55"
   layout: normal
-  status: verified_playable
+  status: unverified_playable
   face "Aetherworks Marvel" {
     cost: "{4}"
     types: "Legendary Artifact"

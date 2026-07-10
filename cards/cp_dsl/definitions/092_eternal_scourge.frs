@@ -2,7 +2,7 @@
 card "Eternal Scourge" {
   id: "c8b0436e-16d2-4d48-a894-454d69a3743b"
   layout: normal
-  status: verified_playable
+  status: unverified_playable
   face "Eternal Scourge" {
     cost: "{3}"
     types: "Creature — Eldrazi Horror"

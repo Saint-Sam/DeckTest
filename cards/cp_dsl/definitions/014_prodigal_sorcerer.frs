@@ -2,7 +2,7 @@
 card "Prodigal Sorcerer" {
   id: "5e961d15-5972-4e4b-9385-1cd7cd7c6bbe"
   layout: normal
-  status: verified_playable
+  status: unverified_playable
   face "Prodigal Sorcerer" {
     cost: "{2}{U}"
     types: "Creature — Human Wizard Sorcerer"

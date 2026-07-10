@@ -2,7 +2,7 @@
 card "True-Name Nemesis" {
   id: "112322ad-8f66-4cd4-98a1-f425d61a69ce"
   layout: normal
-  status: verified_playable
+  status: unverified_playable
   face "True-Name Nemesis" {
     cost: "{1}{U}{U}"
     types: "Creature — Merfolk Rogue"

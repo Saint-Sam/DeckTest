@@ -2,7 +2,7 @@
 card "Sea Gate Restoration // Sea Gate, Reborn" {
   id: "4a8d41fe-e04d-484b-a7d1-19be311e6ca7"
   layout: modal_dfc
-  status: verified_playable
+  status: unverified_playable
   face "Sea Gate Restoration" {
     cost: "{4}{U}{U}{U}"
     types: "Sorcery"

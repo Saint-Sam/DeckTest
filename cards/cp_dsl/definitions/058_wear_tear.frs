@@ -2,7 +2,7 @@
 card "Wear // Tear" {
   id: "9842734c-1eac-4509-a731-4c22017ae586"
   layout: split
-  status: verified_playable
+  status: unverified_playable
   face "Wear" {
     cost: "{1}{R}"
     types: "Instant"

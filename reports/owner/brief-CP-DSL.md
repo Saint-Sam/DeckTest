@@ -76,8 +76,8 @@ implemented locally and await the next exact rerun.
 
 ## Owner Decision
 
-Blocked on one scope decision. The Owner must choose between making all 100
-recipes semantically faithful at T3.1, or approving an explicit clarification
-that relabels them as unverified DSL stress definitions and defers per-card
-fidelity to T3.6 and CP-PORT-20. T3.2 cannot begin before that decision, the
-resulting remediation, a new exact detached packet, and a passing re-review.
+The Owner chose the honest staged-verification option. PC-0004 relabels all 100
+recipes as `unverified_playable`, reserves `verified_playable` for definitions
+with card-specific semantic tests, and leaves promotion to T3.6 and
+CP-PORT-20. O4 remains pending until the resulting remediation passes a new
+exact detached packet and independent re-review.

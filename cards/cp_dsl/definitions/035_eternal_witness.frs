@@ -2,7 +2,7 @@
 card "Eternal Witness" {
   id: "30b24e8e-3b0e-4d8e-90f3-f66eb7c1858c"
   layout: normal
-  status: verified_playable
+  status: unverified_playable
   face "Eternal Witness" {
     cost: "{1}{G}{G}"
     types: "Creature — Human Shaman"

@@ -2,7 +2,7 @@
 card "Counterspell" {
   id: "cc187110-1148-4090-bbb8-e205694a39f5"
   layout: normal
-  status: verified_playable
+  status: unverified_playable
   face "Counterspell" {
     cost: "{U}{U}"
     types: "Instant"

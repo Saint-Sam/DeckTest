@@ -2,7 +2,7 @@
 card "Lightning Bolt" {
   id: "4457ed35-7c10-48c8-9776-456485fdf070"
   layout: normal
-  status: verified_playable
+  status: unverified_playable
   face "Lightning Bolt" {
     cost: "{R}"
     types: "Instant"

@@ -2,7 +2,7 @@
 card "Llanowar Elves" {
   id: "68954295-54e3-4303-a6bc-fc4547a4e3a3"
   layout: normal
-  status: verified_playable
+  status: unverified_playable
   face "Llanowar Elves" {
     cost: "{G}"
     types: "Creature — Elf Druid"

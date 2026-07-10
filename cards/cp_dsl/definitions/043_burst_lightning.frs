@@ -2,7 +2,7 @@
 card "Burst Lightning" {
   id: "ac2086fe-98ee-4280-9c7c-c5c2d6548a8b"
   layout: normal
-  status: verified_playable
+  status: unverified_playable
   face "Burst Lightning" {
     cost: "{R}"
     types: "Instant"

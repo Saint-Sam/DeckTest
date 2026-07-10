@@ -2,7 +2,7 @@
 card "Maze of Ith" {
   id: "38a12bd7-4394-44a8-91a0-6a4ff7fa4f71"
   layout: normal
-  status: verified_playable
+  status: unverified_playable
   face "Maze of Ith" {
     cost: ""
     types: "Land"

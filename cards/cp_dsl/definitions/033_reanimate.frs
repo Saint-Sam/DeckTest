@@ -2,7 +2,7 @@
 card "Reanimate" {
   id: "a044474a-cd72-4e9d-bd8d-a08f2de9cdc0"
   layout: normal
-  status: verified_playable
+  status: unverified_playable
   face "Reanimate" {
     cost: "{B}"
     types: "Sorcery"

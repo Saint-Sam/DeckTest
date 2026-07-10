@@ -2,7 +2,7 @@
 card "Gitaxian Probe" {
   id: "1d67f5ff-1fce-45e5-b6a1-416c569351e2"
   layout: normal
-  status: verified_playable
+  status: unverified_playable
   face "Gitaxian Probe" {
     cost: "{U/P}"
     types: "Sorcery"

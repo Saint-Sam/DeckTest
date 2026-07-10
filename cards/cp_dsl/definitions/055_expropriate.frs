@@ -2,7 +2,7 @@
 card "Expropriate" {
   id: "a69265b2-0e37-4d86-866e-e4a923233b4d"
   layout: normal
-  status: verified_playable
+  status: unverified_playable
   face "Expropriate" {
     cost: "{7}{U}{U}"
     types: "Sorcery"

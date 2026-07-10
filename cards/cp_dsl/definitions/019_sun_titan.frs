@@ -2,7 +2,7 @@
 card "Sun Titan" {
   id: "b2e950fb-cb7e-40a0-a311-5bbdd0477b29"
   layout: normal
-  status: verified_playable
+  status: unverified_playable
   face "Sun Titan" {
     cost: "{4}{W}{W}"
     types: "Creature — Giant"

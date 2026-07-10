@@ -2,7 +2,7 @@
 card "Boros Charm" {
   id: "2679d0dd-ba30-4a1c-b6a0-b3ac6c790496"
   layout: normal
-  status: verified_playable
+  status: unverified_playable
   face "Boros Charm" {
     cost: "{R}{W}"
     types: "Instant"

@@ -2,7 +2,7 @@
 card "Bloodghast" {
   id: "e97f9c2b-b41e-4f36-9245-77c0ac125647"
   layout: normal
-  status: verified_playable
+  status: unverified_playable
   face "Bloodghast" {
     cost: "{B}{B}"
     types: "Creature — Vampire Spirit"

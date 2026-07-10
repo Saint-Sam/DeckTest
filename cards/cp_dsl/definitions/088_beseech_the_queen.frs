@@ -2,7 +2,7 @@
 card "Beseech the Queen" {
   id: "cf94cafc-527e-4b27-8a28-7807435aaccf"
   layout: normal
-  status: verified_playable
+  status: unverified_playable
   face "Beseech the Queen" {
     cost: "{2/B}{2/B}{2/B}"
     types: "Sorcery"

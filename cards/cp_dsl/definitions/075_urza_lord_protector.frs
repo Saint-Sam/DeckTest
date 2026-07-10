@@ -2,7 +2,7 @@
 card "Urza, Lord Protector" {
   id: "df2af646-3e5b-43a3-8f3e-50565889f456"
   layout: meld
-  status: verified_playable
+  status: unverified_playable
   face "Urza, Lord Protector" {
     cost: "{1}{W}{U}"
     types: "Legendary Creature — Human Artificer"

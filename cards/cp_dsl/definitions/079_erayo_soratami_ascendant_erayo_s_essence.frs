@@ -2,7 +2,7 @@
 card "Erayo, Soratami Ascendant // Erayo's Essence" {
   id: "d83bb32d-f409-421a-9d93-bd7ea3240b47"
   layout: flip
-  status: verified_playable
+  status: unverified_playable
   face "Erayo, Soratami Ascendant" {
     cost: "{1}{U}"
     types: "Legendary Creature — Moonfolk Monk"
@@ -20,7 +20,7 @@ card "Erayo, Soratami Ascendant // Erayo's Essence" {
     cost: ""
     types: "Legendary Enchantment"
     oracle: "Whenever an opponent casts their first spell each turn, counter that spell."
-    keywords: [flying]
+    keywords: []
     ability replacement {
       event: event_cast(spells(controlled_by(opponent())))
       condition: equals(count(spells(and(controlled_by(opponent()), during("this_turn")))), 1)

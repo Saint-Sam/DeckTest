@@ -75,9 +75,24 @@ def build_report(root: Path) -> dict[str, object]:
     first_bytes = databases[0].read_bytes()[:12]
     versioned_header = first_bytes[:8] == b"FORGECDB" and first_bytes[8:12] == (1).to_bytes(4, "little")
     index = load_json(indexes[0])
-    identity_count = len(index.get("identities", []))
+    identity_rows = index.get("identities", [])
+    identity_count = len(identity_rows)
     printing_count = len(index.get("printings", []))
     definition_count = int(manifest.get("card_count", 0))
+    review_cards = manifest.get("cards", [])
+    review_ids = {
+        str(card.get("oracle_id"))
+        for card in review_cards
+        if isinstance(card, dict) and card.get("oracle_id")
+    } if isinstance(review_cards, list) else set()
+    classifications_by_id = {
+        str(row.get("id")): str(row.get("classification"))
+        for row in identity_rows
+        if isinstance(row, dict)
+    } if isinstance(identity_rows, list) else {}
+    review_classifications = {
+        classifications_by_id.get(oracle_id) for oracle_id in review_ids
+    }
     malformed_cases = malformed.get("cases", [])
     recursive_argument_cases = [
         case
@@ -154,6 +169,10 @@ def build_report(root: Path) -> dict[str, object]:
         == expected_identities,
         "zero_dangling_references": catalog.get("dangling_printing_references") == 0,
         "one_hundred_roundtrips": definition_count == 100,
+        "review_corpus_honest_classification": len(review_ids) == 100
+        and manifest.get("definition_classification") == "unverified_playable"
+        and corpus.get("definition_classification") == "unverified_playable"
+        and review_classifications == {"unverified_playable"},
         "mandatory_strata_exact": closed_strata,
         "catalog_only_classification_separate": int(catalog.get("catalog_only", 0)) > 0
         and corpus.get("catalog_only_records_verified_separately") is True,
@@ -215,6 +234,12 @@ def build_report(root: Path) -> dict[str, object]:
         "corpus": {
             "definitions": definition_count,
             "canonical_roundtrips": definition_count,
+            "definition_classification": manifest.get("definition_classification"),
+            "semantically_verified_definitions": sum(
+                1
+                for oracle_id in review_ids
+                if classifications_by_id.get(oracle_id) == "verified_playable"
+            ),
             "primary_strata": corpus.get("distinct_primary_strata"),
             "mandatory_strata": mandatory_strata,
             "missing_mandatory_strata": corpus.get("missing_mandatory_strata"),

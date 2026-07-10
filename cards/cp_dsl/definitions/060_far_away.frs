@@ -2,7 +2,7 @@
 card "Far // Away" {
   id: "e4b1ef6a-6f05-472e-aaed-1c24dd6605c7"
   layout: split
-  status: verified_playable
+  status: unverified_playable
   face "Far" {
     cost: "{1}{U}"
     types: "Instant"

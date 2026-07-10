@@ -2,7 +2,7 @@
 card "Questing Beast" {
   id: "b685757b-521e-4353-a233-97052359723d"
   layout: normal
-  status: verified_playable
+  status: unverified_playable
   face "Questing Beast" {
     cost: "{2}{G}{G}"
     types: "Legendary Creature — Beast"

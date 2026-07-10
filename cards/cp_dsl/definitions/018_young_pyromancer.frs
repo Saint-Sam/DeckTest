@@ -2,7 +2,7 @@
 card "Young Pyromancer" {
   id: "5fac139a-07d3-4e6c-98e3-d98b199f7a6f"
   layout: normal
-  status: verified_playable
+  status: unverified_playable
   face "Young Pyromancer" {
     cost: "{1}{R}"
     types: "Creature — Human Shaman"

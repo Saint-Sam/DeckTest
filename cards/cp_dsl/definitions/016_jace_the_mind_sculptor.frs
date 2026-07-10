@@ -2,7 +2,7 @@
 card "Jace, the Mind Sculptor" {
   id: "7f77a84e-5a4b-4834-aefa-3cecc175ae8e"
   layout: normal
-  status: verified_playable
+  status: unverified_playable
   face "Jace, the Mind Sculptor" {
     cost: "{2}{U}{U}"
     types: "Legendary Planeswalker — Jace"

@@ -2,7 +2,7 @@
 card "Gravecrawler" {
   id: "09ff28b1-b6c9-48e6-b12e-2f0e644f709f"
   layout: normal
-  status: verified_playable
+  status: unverified_playable
   face "Gravecrawler" {
     cost: "{B}"
     types: "Creature — Zombie"

@@ -2,7 +2,7 @@
 card "Fire // Ice" {
   id: "ae92942b-919c-4ea9-b693-85fcef765d5a"
   layout: split
-  status: verified_playable
+  status: unverified_playable
   face "Fire" {
     cost: "{1}{R}"
     types: "Instant"

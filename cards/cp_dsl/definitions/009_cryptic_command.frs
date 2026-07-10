@@ -2,14 +2,14 @@
 card "Cryptic Command" {
   id: "a3e51a35-09df-4189-b131-08a21e6a557d"
   layout: normal
-  status: verified_playable
+  status: unverified_playable
   face "Cryptic Command" {
     cost: "{1}{U}{U}{U}"
     types: "Instant"
     oracle: "Choose two —\n• Counter target spell.\n• Return target permanent to its owner's hand.\n• Tap all creatures your opponents control.\n• Draw a card."
     keywords: []
     ability spell {
-      effect: choose_up_to(2, counter_spell(target(spells())), return_to_hand(target(permanents())), tap(all(permanents(and(type_is("creature"), controlled_by(opponent()))))), draw(1, you()))
+      effect: choose_exactly(2, counter_spell(target(spells())), return_to_hand(target(permanents())), tap(all(permanents(and(type_is("creature"), controlled_by(opponent()))))), draw(1, you()))
     }
   }
 }

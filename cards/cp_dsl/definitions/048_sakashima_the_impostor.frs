@@ -2,7 +2,7 @@
 card "Sakashima the Impostor" {
   id: "a7243d25-22a2-4df5-adaf-1f40f5330ec1"
   layout: normal
-  status: verified_playable
+  status: unverified_playable
   face "Sakashima the Impostor" {
     cost: "{2}{U}{U}"
     types: "Legendary Creature — Human Rogue"

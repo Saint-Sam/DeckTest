@@ -2,7 +2,7 @@
 card "Valki, God of Lies // Tibalt, Cosmic Impostor" {
   id: "907ae517-22d5-4ac7-bc3a-3f4d5eaeeb57"
   layout: modal_dfc
-  status: verified_playable
+  status: unverified_playable
   face "Valki, God of Lies" {
     cost: "{1}{B}"
     types: "Legendary Creature — God"

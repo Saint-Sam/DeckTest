@@ -2,7 +2,7 @@
 card "The Eldest Reborn" {
   id: "44ed4c0c-a012-4895-a547-b04150553bba"
   layout: saga
-  status: verified_playable
+  status: unverified_playable
   face "The Eldest Reborn" {
     cost: "{4}{B}"
     types: "Enchantment — Saga"

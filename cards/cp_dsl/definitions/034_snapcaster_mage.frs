@@ -2,7 +2,7 @@
 card "Snapcaster Mage" {
   id: "2bb2eda7-3b38-4c56-870f-c3218a1056f5"
   layout: normal
-  status: verified_playable
+  status: unverified_playable
   face "Snapcaster Mage" {
     cost: "{1}{U}"
     types: "Creature — Human Wizard"

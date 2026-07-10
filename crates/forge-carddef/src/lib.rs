@@ -855,6 +855,7 @@ operations! {
     EventTargeted => ("event_targeted", Event, 0, Some(2)),
     Sequence => ("sequence", Effect, 1, None),
     ChooseOne => ("choose_one", Effect, 2, None),
+    ChooseExactly => ("choose_exactly", Effect, 3, None),
     ChooseUpTo => ("choose_up_to", Effect, 2, None),
     DealDamage => ("deal_damage", Effect, 2, Some(3)),
     Destroy => ("destroy", Effect, 1, Some(2)),
@@ -963,7 +964,7 @@ impl Operation {
             Self::Cards | Self::Permanents | Self::Spells => Some((0, PredicateOrText)),
             Self::And | Self::Or => Some((0, Predicate)),
             Self::Sequence | Self::ChooseOne => Some((0, Effect)),
-            Self::ChooseUpTo => Some((1, Effect)),
+            Self::ChooseExactly | Self::ChooseUpTo => Some((1, Effect)),
             Self::SearchLibrary => Some((2, Scalar)),
             Self::LayerEffect => Some((3, Integer)),
             Self::AlternateCost => Some((1, Cost)),
@@ -1061,7 +1062,7 @@ impl Operation {
             },
 
             Self::Sequence | Self::ChooseOne => Some(Effect),
-            Self::ChooseUpTo => {
+            Self::ChooseExactly | Self::ChooseUpTo => {
                 if index == 0 {
                     Some(Number)
                 } else {

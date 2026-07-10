@@ -2,7 +2,7 @@
 card "Emeria's Call // Emeria, Shattered Skyclave" {
   id: "6ec2a242-9068-4ee2-8ac8-8341cc570f56"
   layout: modal_dfc
-  status: verified_playable
+  status: unverified_playable
   face "Emeria's Call" {
     cost: "{4}{W}{W}{W}"
     types: "Sorcery"

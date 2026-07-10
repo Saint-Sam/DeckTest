@@ -2,7 +2,7 @@
 card "Humility" {
   id: "ed7bdb3e-5c51-4547-9266-76a791e0b2b0"
   layout: normal
-  status: verified_playable
+  status: unverified_playable
   face "Humility" {
     cost: "{2}{W}{W}"
     types: "Enchantment"

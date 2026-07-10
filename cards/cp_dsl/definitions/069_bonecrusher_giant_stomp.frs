@@ -2,7 +2,7 @@
 card "Bonecrusher Giant // Stomp" {
   id: "d6d72f5f-8f5d-4180-b514-f22ff5482902"
   layout: adventure
-  status: verified_playable
+  status: unverified_playable
   face "Bonecrusher Giant" {
     cost: "{2}{R}"
     types: "Creature — Giant"

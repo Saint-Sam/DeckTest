@@ -2,7 +2,7 @@
 card "Nezumi Shortfang // Stabwhisker the Odious" {
   id: "45c8e860-5ce5-4a1c-aebe-97ddffcb2f74"
   layout: flip
-  status: verified_playable
+  status: unverified_playable
   face "Nezumi Shortfang" {
     cost: "{1}{B}"
     types: "Creature — Rat Rogue"

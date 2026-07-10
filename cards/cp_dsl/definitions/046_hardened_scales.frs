@@ -2,7 +2,7 @@
 card "Hardened Scales" {
   id: "a1f3da21-af6d-450e-bf0b-985d158418e6"
   layout: normal
-  status: verified_playable
+  status: unverified_playable
   face "Hardened Scales" {
     cost: "{G}"
     types: "Enchantment"

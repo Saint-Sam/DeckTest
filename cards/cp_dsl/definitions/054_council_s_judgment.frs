@@ -2,7 +2,7 @@
 card "Council's Judgment" {
   id: "acf4d685-a718-42f7-9a7a-dee069ae8db2"
   layout: normal
-  status: verified_playable
+  status: unverified_playable
   face "Council's Judgment" {
     cost: "{1}{W}{W}"
     types: "Sorcery"

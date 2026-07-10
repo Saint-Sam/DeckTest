@@ -2,7 +2,7 @@
 card "Sefris of the Hidden Ways" {
   id: "9b21e056-57e7-4e39-b2b4-2fdf8719d0d2"
   layout: normal
-  status: verified_playable
+  status: unverified_playable
   face "Sefris of the Hidden Ways" {
     cost: "{W}{U}{B}"
     types: "Legendary Creature — Human Wizard"

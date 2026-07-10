@@ -1,4 +1,4 @@
-# FORGE-RS REBUILD — MASTER EXECUTION PLAN v1.4
+# FORGE-RS REBUILD — MASTER EXECUTION PLAN v1.5
 
 **Status:** Ready for agent orchestration — includes Gate Review & Checkpoint protocol (§15), plan governance (§16), and the Owner Interface (§17: expectation briefs, owner input map, trouble bulletins)
 **This document is the sole authority.** If any agent instruction, prior knowledge, or tool default conflicts with this plan, the plan wins; if the plan is ambiguous, use the Question Queue (§15.5) — do not guess.
@@ -11,6 +11,11 @@ closed recursive operation-argument signatures, exact mandatory mechanics
 strata with catalog-only coverage measured separately, compiled scenario
 lowering instead of fixture-provided effects, executed local platform checks,
 and exact-commit detached verification before O4.
+**v1.5 amendment (2026-07-10):** Owner-approved PC-0004 honest CP-DSL
+classification: the 100-card packet is an `unverified_playable` language-stress
+corpus. CP-DSL freezes identity, grammar, closed typing, canonical emission,
+and database contracts; T3.6 and CP-PORT-20 own per-card semantic promotion to
+`verified_playable`.
 **Prerequisite artifact:** `forge-rs` proof-of-concept (validated: 70 ns state clone, 5,080 playouts/sec, monotonic MCTS difficulty ladder)
 **License constraint:** GPL-3.0-only for any component that derives from Card-Forge/forge content (card scripts, AI profiles, rules-test scenarios)[^1]
 
@@ -516,10 +521,13 @@ card "Abrade" {
 
 Compiler `forge-cardc`: parse source AST → resolve/type-check → validated typed IR (`forge-carddef`) → kernel-lowered IR → versioned `carddb.bin` (bincode) + `carddb.index.json`. Unknown types, keywords, selectors, operations, references, and costs are compile errors, never open-ended runtime variants. DoD: compiler round-trips (parse→emit→parse) losslessly; error messages carry file/line/column; three clean builds have identical hashes.
 
-**CP-DSL threshold:** 100 reviewer-hand-translated cards across the exact 25
-mandatory mechanics strata declared in `docs/specs/T3.1.md`, with exactly four
-cards per stratum. Catalog-only records are classified and checked separately;
-they are not mechanics definitions. Every operation declares recursively
+**CP-DSL threshold:** 100 reviewer-authored language-stress definitions across
+the exact 25 mandatory mechanics strata declared in `docs/specs/T3.1.md`, with
+exactly four cards per stratum. These definitions are `unverified_playable`:
+they exercise the language but do not claim card-specific semantic
+equivalence. Promotion to `verified_playable` requires card-specific semantic
+evidence in T3.6 or CP-PORT-20. Catalog-only records are classified and checked
+separately; they are not mechanics definitions. Every operation declares recursively
 enforced argument types; prose, bare symbols, and category-correct but
 argument-wrong trees fail compilation. All 100 cards round-trip; at least 50
 malformed sources produce file/line/column diagnostics; curated
@@ -903,7 +911,7 @@ Sign-off record format: `reports/gates/T<k>/SIGNOFF.md` = checklist table + comm
 | --- | --- | --- |
 | **CP-KERNEL** | after T1.7 (SBAs) merges | Reviewer audits the kernel API surface itself (§3.3 invariants read against real code); cheap to fix now, catastrophic later. |
 | **CP-LAYERS** | after T2.4 merges, **before any dependent task starts** | The project's crown-jewel checkpoint: (a) reviewer authors 15 novel layer-interaction scenarios (dependency ordering per CR 613.8, timestamp ties, characteristic-defining abilities, Humility-class stacking) — ≥14/15 must pass; (b) differential run vs legacy engine on a 100-card layered subset, every divergence adjudicated in writing; (c) memoization-invalidation audit: reviewer inspects the cache-invalidation paths and demands a fuzz target that interleaves mutations with characteristic queries; (d) explicit sign-off sentence: "I believe layer ordering is correct for the following reasons…". Three failed CP-LAYERS attempts triggers §16.3 kill-criteria review of the layer design. |
-| **CP-DSL** | after T3.1 (DSL spec) before mass translation | Freeze review of the card language and identity model using the §8.1 packet: 100 reviewer-hand-translated cards across the exact 25 mandatory mechanics strata, four per stratum, with catalog-only coverage verified separately; recursive closed argument signatures; 100/100 lossless round-trips; ≥50 malformed-source diagnostics with file/line/column; compiled card-to-kernel integration scenarios without independent fixture effects; deterministic database hashes across three clean builds; all semantic packs and four cross-target checks executed locally; corpus expressiveness report; and ≥90% curated mutant kill rate with no surviving P0/P1 validation mutant. Review is against an exact commit in a detached worktree. Every awkward case patches the spec before mass translation. |
+| **CP-DSL** | after T3.1 (DSL spec) before mass translation | Freeze review of the card language and identity model using the §8.1 packet: 100 reviewer-authored `unverified_playable` language-stress definitions across the exact 25 mandatory mechanics strata, four per stratum, with catalog-only coverage verified separately; no definition may claim `verified_playable` without card-specific semantic evidence; recursive closed argument signatures; 100/100 lossless round-trips; ≥50 malformed-source diagnostics with file/line/column; compiled card-to-kernel integration scenarios without independent fixture effects; deterministic database hashes across three clean builds; all semantic packs and four cross-target checks executed locally; corpus expressiveness report; and ≥90% curated mutant kill rate with no surviving P0/P1 validation mutant. Review is against an exact commit in a detached worktree. Every awkward language case patches the spec before mass translation; card fidelity promotion remains gated by T3.6 and CP-PORT-20. |
 | **CP-PORT-20** | when card coverage crosses 20% | Translation-quality sample: 50 random shipped cards; reviewer diffs oracle text against observed behavior in the sandbox (`forge-cli sandbox --card <name>`). ≥48/50 faithful required; systematic error classes reopen mapper tasks. |
 | **CP-AI-LADDER** | after T4.6 calibration | Reviewer personally plays ≥5 games vs Expert and Master; sanity-reads T4.10 decision reports for pathological reasoning; verifies no hidden-information leak by code inspection of the `PlayerView` boundary + a canary test (poisoned hidden card that a peeking AI would exploit — arena must show no exploitation delta). |
 | **CP-NN-GO** | T4.8 decision point | Go/no-go on shipping the NN path per the ≥60%-at-equal-latency bar; a no-go here is a healthy outcome, not a failure. |
@@ -1017,7 +1025,7 @@ A tier gate is not complete without its Brief: this is check **G11** in §15.3.
 | O1 | Pre-flight | Approve/assign the Gate Reviewer (ADR-0007) and your contact channel (ADR-0008) | Short memo: candidates + tradeoffs | 15 min |
 | O2 | Pre-flight | Confirm license posture GPL-3.0 + IP rules (§1.4) | 1-page summary of §1.4 in plain language | 10 min |
 | O3 | T0 end | Skim the T0 Owner Brief; run its two "try it yourself" commands if you wish | Brief per §17.2 | 10 min |
-| O4 | CP-DSL | Approve freezing the card language (this is a one-way door) | Brief + 5 example cards in the new format with plain-English readbacks | 20 min |
+| O4 | CP-DSL | Approve freezing card identity, grammar, closed typing, canonical emission, and database contracts; this does not semantically approve the 100 unverified stress recipes | Brief + 5 example cards in the new format with plain-English readbacks | 20 min |
 | O5 | CP-LAYERS | Read the Gate Reviewer's sign-off justification; say "proceed" | SIGNOFF.md + Brief translating it | 15 min |
 | O6 | Each tier gate | Read Brief; optionally spot-run the EXPECT items; reply "acknowledged" (acknowledgment, not technical approval — the Gate Reviewer holds technical sign-off) | Brief | 10–20 min |
 | O7 | CP-AI-LADDER | Play 2–3 games vs the AI yourself and say whether it *feels* smart/fun — the one quality no metric captures | Brief with launch command + difficulty guide + what to look for | 30–60 min |

@@ -2,7 +2,7 @@
 card "Kitchen Finks" {
   id: "5470dcfa-4eff-43da-abf7-19922841f719"
   layout: normal
-  status: verified_playable
+  status: unverified_playable
   face "Kitchen Finks" {
     cost: "{1}{G/W}{G/W}"
     types: "Creature — Ouphe"

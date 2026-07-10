@@ -2,6 +2,7 @@
   "schema_version": 1,
   "source_snapshot_sha256": "df50b4384fcd7540442707974d023590ee220862de70dae820b236e501be73e1",
   "reviewed_card_count": 100,
+  "definition_classification": "unverified_playable",
   "distinct_primary_strata": 25,
   "minimum_cards_per_stratum": 4,
   "mandatory_strata": [

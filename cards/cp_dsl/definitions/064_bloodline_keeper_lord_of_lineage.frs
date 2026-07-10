@@ -2,7 +2,7 @@
 card "Bloodline Keeper // Lord of Lineage" {
   id: "434e82b5-abd4-41ac-a5b1-2dd01c667374"
   layout: transform
-  status: verified_playable
+  status: unverified_playable
   face "Bloodline Keeper" {
     cost: "{2}{B}{B}"
     types: "Creature — Vampire"
@@ -26,7 +26,7 @@ card "Bloodline Keeper // Lord of Lineage" {
     oracle: "Flying\nOther Vampire creatures you control get +2/+2.\n{T}: Create a 2/2 black Vampire creature token with flying."
     power: "5"
     toughness: "5"
-    keywords: [flying, transform]
+    keywords: [flying]
     ability static {
       effect: continuous(all(permanents(and(subtype_is("Vampire"), controlled_by(you())))), modify_pt(any(), 2, 2))
     }

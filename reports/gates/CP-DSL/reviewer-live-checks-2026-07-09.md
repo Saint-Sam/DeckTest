@@ -65,3 +65,7 @@ state, final-stat flag, and exact logged command are now validated.
 After the owner semantic-scope decision is implemented, regenerate all affected
 artifacts in a new clean detached worktree, rerun the exact local packet, and
 submit the new commit to an independent Gate Reviewer.
+
+Owner decision on 2026-07-10: Option 2. PC-0004 defines the 100-card packet as
+an `unverified_playable` language-stress corpus and requires card-specific
+semantic evidence before any later promotion to `verified_playable`.

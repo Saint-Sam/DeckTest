@@ -9,6 +9,7 @@
   },
   "source_snapshot_sha256": "df50b4384fcd7540442707974d023590ee220862de70dae820b236e501be73e1",
   "review_status": "gate-reviewer remediation; owner signoff pending",
+  "definition_classification": "unverified_playable",
   "card_count": 100,
   "stratum_count": 25,
   "strata": {
@@ -91,8 +92,8 @@
     "cast",
     "change_control",
     "change_target",
+    "choose_exactly",
     "choose_one",
-    "choose_up_to",
     "chosen",
     "color_is",
     "continuous",
@@ -204,8 +205,9 @@
       "oracle_id": "14c8f55d-d177-4c25-a931-ebeb9e6062a0",
       "stratum": "vanilla_keywords",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/001_grizzly_bears.frs",
-      "sha256": "512293e3911c4bd7f7962982cf1f40d5c56fee56b38797e278efc96e5019b37a"
+      "sha256": "2e20d4b007f36ab89ec4106239bcf3422a59d8b4937111f934191159af6df8fd"
     },
     {
       "index": 2,
@@ -213,8 +215,9 @@
       "oracle_id": "4b7ac066-e5c7-43e6-9e7e-2739b24a905d",
       "stratum": "vanilla_keywords",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/002_serra_angel.frs",
-      "sha256": "731e6dabbd264b1471653d8a0edf3178c415f89a34a588e0838fdc70ad3d521f"
+      "sha256": "a0790bddb17abe1c1cd95627fb76553e4ae1ba9cc78dc0a414a47c850ced7399"
     },
     {
       "index": 3,
@@ -222,8 +225,9 @@
       "oracle_id": "feb244f8-bcb1-44cf-9940-2719221a7309",
       "stratum": "vanilla_keywords",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/003_vampire_nighthawk.frs",
-      "sha256": "eeb718893ab881486883549d876c876a28b25f2dd05db821b77d891e587692b4"
+      "sha256": "938a5ad9504092bb1fa70930f8773bd149b65426507ae0ed1fb05b0666ca7a3f"
     },
     {
       "index": 4,
@@ -231,8 +235,9 @@
       "oracle_id": "b685757b-521e-4353-a233-97052359723d",
       "stratum": "vanilla_keywords",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/004_questing_beast.frs",
-      "sha256": "c34b3e53aef3d94a23573b90f75697b8d45357d337c45306504961a4c0679a58"
+      "sha256": "273748df8724f3e1cf1e2769a41727c43c81cc9f56e0599a7c366c79aa369346"
     },
     {
       "index": 5,
@@ -240,8 +245,9 @@
       "oracle_id": "4457ed35-7c10-48c8-9776-456485fdf070",
       "stratum": "instant_sorcery",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/005_lightning_bolt.frs",
-      "sha256": "d1e9e3e34a320db50a5870f0d2cbc934b6050c2ad561dde569916ac764f6f168"
+      "sha256": "218ddee1ceacaf572c4bb637b1a6b0081be35ee5ef0936b3e0ccf3588f5c4ea2"
     },
     {
       "index": 6,
@@ -249,8 +255,9 @@
       "oracle_id": "cc187110-1148-4090-bbb8-e205694a39f5",
       "stratum": "instant_sorcery",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/006_counterspell.frs",
-      "sha256": "308027d7550b5ed95c059e3ecb8c06d41798b1a2da4dec5c6682208075cdc9ac"
+      "sha256": "fb534d4a792c266919b0974eddaf13fe79ec9208bdec265f02b0e4e1b2803fc7"
     },
     {
       "index": 7,
@@ -258,8 +265,9 @@
       "oracle_id": "273b339c-964b-4a18-8eb5-ceb8abcdfd9e",
       "stratum": "instant_sorcery",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/007_divination.frs",
-      "sha256": "09a690579fddd535483fb6ed66c3baec51395198d39c6f2565e5ee1d04dd70d9"
+      "sha256": "5990b105b806dbcab9e5b19b0b4fb1845d0d4f51ec3c1100922cce870c638be5"
     },
     {
       "index": 8,
@@ -267,8 +275,9 @@
       "oracle_id": "59e7f2ae-4535-4191-98be-3e65b6b2befa",
       "stratum": "instant_sorcery",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/008_doom_blade.frs",
-      "sha256": "c1ba5b7cb6e1b05a6014202125b84a37685b5b9b80893d1ec85aba0347269c42"
+      "sha256": "183ebfbd9d5933f1cf1c2d94aaae1ca9ae5101653d5d06c1f36195b9c1db43ec"
     },
     {
       "index": 9,
@@ -276,8 +285,9 @@
       "oracle_id": "a3e51a35-09df-4189-b131-08a21e6a557d",
       "stratum": "modal_choices",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/009_cryptic_command.frs",
-      "sha256": "d406f2a6fe0ca70b04ff9dc098a6e92165e85eddda5a7e3485f84b75bcbe093a"
+      "sha256": "c14fe70baf694e7ede41166cfb04a6cd754dae17f4b1d524b66e3661132fdcde"
     },
     {
       "index": 10,
@@ -285,8 +295,9 @@
       "oracle_id": "45f1e957-09f0-4d46-8e32-238f26060a87",
       "stratum": "modal_choices",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/010_kolaghan_s_command.frs",
-      "sha256": "7ddf5e1f492dccd699b72881ddf9c84ccc6f469d92d4c0d437e07fbc6b0d6936"
+      "sha256": "b6486ac32efd23aba516c842e78a8fd0e156f8f5219b8400c603280f39777cfe"
     },
     {
       "index": 11,
@@ -294,8 +305,9 @@
       "oracle_id": "85cbb035-25df-43bb-ae06-ab098f448b02",
       "stratum": "modal_choices",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/011_archmage_s_charm.frs",
-      "sha256": "73bdab4c901234aee696b4bb44e4de716fc07434ece4f1fb8ff85df06d101288"
+      "sha256": "d28d9dc8d349db94ee406a5cae72754613892c65df984ca33101338087cc44b9"
     },
     {
       "index": 12,
@@ -303,8 +315,9 @@
       "oracle_id": "2679d0dd-ba30-4a1c-b6a0-b3ac6c790496",
       "stratum": "modal_choices",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/012_boros_charm.frs",
-      "sha256": "ae5e5927f77efc3dbc405b6053e5d4a3271cc2103e1612a4f08d82bc22125d06"
+      "sha256": "fa6d067df6dbaf44b17c2355ae41438e54fad15cb0d8accf057bb42c5abf9151"
     },
     {
       "index": 13,
@@ -312,8 +325,9 @@
       "oracle_id": "68954295-54e3-4303-a6bc-fc4547a4e3a3",
       "stratum": "activated_mana_loyalty",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/013_llanowar_elves.frs",
-      "sha256": "91aea2118da3bc1e0f73a7089ebb03ea07742dd05c35641ba29bc1aae5bea90e"
+      "sha256": "63ad85c348a0376480ed442e72af4278ade5af5f17c3685bff73aa9feb05eb45"
     },
     {
       "index": 14,
@@ -321,8 +335,9 @@
       "oracle_id": "5e961d15-5972-4e4b-9385-1cd7cd7c6bbe",
       "stratum": "activated_mana_loyalty",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/014_prodigal_sorcerer.frs",
-      "sha256": "4088c2ef83862153bc9670435f0d7c1d9d6e2d67de92745efe0fb5c6e6453554"
+      "sha256": "23b5234e8df2c0698ce09f427805f8ec2973c88b62e53ac78ff669b34d6fb06e"
     },
     {
       "index": 15,
@@ -330,8 +345,9 @@
       "oracle_id": "4b515bb0-f275-4400-8032-3173b799ab40",
       "stratum": "activated_mana_loyalty",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/015_walking_ballista.frs",
-      "sha256": "da8ea590d2b1682ffe4d0aaa6ce0ee8b6abbcb50f1d2a448d1da94ec098a3195"
+      "sha256": "91d86f57fcdaaf3d91b906c78dbfc1b720f8a57ebcfa1c58e226ce1378aed232"
     },
     {
       "index": 16,
@@ -339,8 +355,9 @@
       "oracle_id": "7f77a84e-5a4b-4834-aefa-3cecc175ae8e",
       "stratum": "activated_mana_loyalty",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/016_jace_the_mind_sculptor.frs",
-      "sha256": "6b0c994bf36a22789ec68aace9ebc2425a77883ec9d305abb5ca6c01feea8463"
+      "sha256": "da403f298266b4d874205d9bf8aed6fb311e3c34408c19c6d00132c7e88bcb4a"
     },
     {
       "index": 17,
@@ -348,8 +365,9 @@
       "oracle_id": "f3fad295-1af2-4ecc-8546-b121ad6be27b",
       "stratum": "triggered_delayed",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/017_soul_warden.frs",
-      "sha256": "24b52bd6147fb633658623f779edaaea2cd9bf2765f898e845fe7039313f7b42"
+      "sha256": "f421c800e0cbfb6466f18050d2fde8c94ebade53ca11b105acd952b5997dcf72"
     },
     {
       "index": 18,
@@ -357,8 +375,9 @@
       "oracle_id": "5fac139a-07d3-4e6c-98e3-d98b199f7a6f",
       "stratum": "triggered_delayed",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/018_young_pyromancer.frs",
-      "sha256": "49e1c200b2d9849c761afad70463b244cc7e09981217a7bdfdd5bf851ab979b8"
+      "sha256": "f9b199db0329ce17ad9d41282b0f8b12b2d91418a854ca3584a717f5947f7941"
     },
     {
       "index": 19,
@@ -366,8 +385,9 @@
       "oracle_id": "b2e950fb-cb7e-40a0-a311-5bbdd0477b29",
       "stratum": "triggered_delayed",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/019_sun_titan.frs",
-      "sha256": "07574bdcf9e65f99353c486fa7abb95e137f9de927cfb50465e0876aaa9d532b"
+      "sha256": "e69813e0776bc846cce180fc1d0b915d8acde3ea6e8649a5239d76276523eff5"
     },
     {
       "index": 20,
@@ -375,8 +395,9 @@
       "oracle_id": "dfbd3afc-9905-4cff-a4f4-df08a4d0a7fa",
       "stratum": "triggered_delayed",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/020_restoration_angel.frs",
-      "sha256": "0039cab449251b71e838d4bc339152465745f832e72ea1f6c04ec69a6b64b229"
+      "sha256": "ab4911aeea52a294ed603deba37d988c030d13aa04e60c51153f05da0a59b2dd"
     },
     {
       "index": 21,
@@ -384,8 +405,9 @@
       "oracle_id": "01546b7d-a233-4176-8843-d732074dc5b6",
       "stratum": "replacement_prevention",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/021_doubling_season.frs",
-      "sha256": "8506ec586b54394c317cf668265d4614fe9d9362e1b00e28d6531553ae6ca95c"
+      "sha256": "5bdc721709e3192ab6cacfeb0507da936dfd9683bb7ba59aa3f977565928272f"
     },
     {
       "index": 22,
@@ -393,8 +415,9 @@
       "oracle_id": "087f9ad7-e74f-40e2-8102-1ed2925d0418",
       "stratum": "replacement_prevention",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/022_rest_in_peace.frs",
-      "sha256": "ca02d4ca8e92e0e79a185164a250b42a06448b1630fce2ff50e329443e044ce9"
+      "sha256": "f5e6e54ebbafe13ed7a33973ab88563c95fa4171756d0a272ac9973ea71a6eb3"
     },
     {
       "index": 23,
@@ -402,8 +425,9 @@
       "oracle_id": "f4e32fc1-1b8d-441e-8e76-71f19f98e925",
       "stratum": "replacement_prevention",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/023_leyline_of_the_void.frs",
-      "sha256": "dc1d1ad315589e82493792ad9d17a52c049084a8467abb9e486d9655e1e9f09f"
+      "sha256": "71e4aa73a9985e7d80a4ddebbc66b3fa683074460707b4d40071a91531041a6c"
     },
     {
       "index": 24,
@@ -411,8 +435,9 @@
       "oracle_id": "27e9db49-7af7-4bef-ad4c-bf5dfb92030d",
       "stratum": "replacement_prevention",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/024_fog.frs",
-      "sha256": "1e38732a29632123f976529e68dd3fd7c609356dff2eef90d5f332c098d373fb"
+      "sha256": "e41daa4edb465077a10a981c06c7b00e9c4c4a36fb7cc764d93263f54b5e1764"
     },
     {
       "index": 25,
@@ -420,8 +445,9 @@
       "oracle_id": "ed7bdb3e-5c51-4547-9266-76a791e0b2b0",
       "stratum": "continuous_layers",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/025_humility.frs",
-      "sha256": "3e862be2693c499d8d484bae81351f61e10dbf52c9aaaa77e816e6da1462ebdd"
+      "sha256": "1b27f1ba65452772ced43219eb31cf842d818bc84b6ddc523062e84210226b1c"
     },
     {
       "index": 26,
@@ -429,8 +455,9 @@
       "oracle_id": "59489b46-9d02-4f3c-bcd0-884e7605e9a5",
       "stratum": "continuous_layers",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/026_opalescence.frs",
-      "sha256": "704946516ba225e35509547ec190c41025b3858a8b5867bb61124f0f646f98e4"
+      "sha256": "2d8553b2c734a549652fd4f58648f0f228916d7ba3428ffddce49ac18f7c1e7a"
     },
     {
       "index": 27,
@@ -438,8 +465,9 @@
       "oracle_id": "94fac5fe-97d5-4c12-a80c-8efff9d853ae",
       "stratum": "continuous_layers",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/027_blood_moon.frs",
-      "sha256": "5570139584aff42ea0f040120c88877f1bcf02de22ebb2c1c527fbb5986322f3"
+      "sha256": "c34f95b51a0e5323e675c0d88c9e475f139cac52188fc8058dd43a7321ee9104"
     },
     {
       "index": 28,
@@ -447,8 +475,9 @@
       "oracle_id": "ae1f2ab5-c6a5-4d49-a746-3cb4668bf805",
       "stratum": "continuous_layers",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/028_mycosynth_lattice.frs",
-      "sha256": "f6041ba757d379f9e29cc23cce14e61014f2157f8e4831cf4a259a7bbde160db"
+      "sha256": "816df39c2cc4015b9e10343eb5dd02b5328ea3d027d5f3f6335d2951d747782f"
     },
     {
       "index": 29,
@@ -456,8 +485,9 @@
       "oracle_id": "89457fa8-b0e2-4277-b6a9-c6601c59b46d",
       "stratum": "targeting_restrictions",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/029_hex.frs",
-      "sha256": "6ed72b3b178a4dfcbc5e499a7c8438e02587ad733bb6e3a4a09b244d4d745c73"
+      "sha256": "c744d8e12ab6647f80cbc4978495957548d68010beecdcc36676b1d7191e759b"
     },
     {
       "index": 30,
@@ -465,8 +495,9 @@
       "oracle_id": "b1544f21-7e98-461b-aed5-e748b0168c52",
       "stratum": "targeting_restrictions",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/030_swords_to_plowshares.frs",
-      "sha256": "eb4aaf44570927b50e2a43694a28fcdb33648e899ec61bc0c7563201da1acabc"
+      "sha256": "f616397fdc448561d53d606723f4679f5f2838a8670c6e3aa5eb5806d95fe26f"
     },
     {
       "index": 31,
@@ -474,8 +505,9 @@
       "oracle_id": "ae120613-97d6-4393-b39d-c3e6c076f5d6",
       "stratum": "targeting_restrictions",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/031_deflecting_swat.frs",
-      "sha256": "30258b03886f6a474668e8127c176549e0ed6569ed7f0ced4168c9cc1b1ddccf"
+      "sha256": "d0d125dc446234824cfd2709742e953471ab71ba662fd3affb6f51e0b5e3dc71"
     },
     {
       "index": 32,
@@ -483,8 +515,9 @@
       "oracle_id": "112322ad-8f66-4cd4-98a1-f425d61a69ce",
       "stratum": "targeting_restrictions",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/032_true_name_nemesis.frs",
-      "sha256": "e2cf45ff29ba9afdd6b39a1c9115f6258fd09f9b34dd0b240b0347eccf94c2a3"
+      "sha256": "8753e5abff0ef56d2a2549cc7516593bfb851ed4440ad7d9cb8458137ad62234"
     },
     {
       "index": 33,
@@ -492,8 +525,9 @@
       "oracle_id": "a044474a-cd72-4e9d-bd8d-a08f2de9cdc0",
       "stratum": "zones_lki",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/033_reanimate.frs",
-      "sha256": "bc14deddb3130c2ac2bb62af9e75d36cece857fbe4a60509df13259af51506f1"
+      "sha256": "3b87f5888692aee741b7c3b54f2cf1e851a5316d544d63a47025f641b4d2bf92"
     },
     {
       "index": 34,
@@ -501,8 +535,9 @@
       "oracle_id": "2bb2eda7-3b38-4c56-870f-c3218a1056f5",
       "stratum": "zones_lki",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/034_snapcaster_mage.frs",
-      "sha256": "b8efc8f5c88e295734e7a231cf26b19bd0d1dafc0ca4ba2a0a88f1be1b0a262b"
+      "sha256": "982347d5239198771ea2b3dc6aa695e18d6fbf938d5270c798eff82f284e75e4"
     },
     {
       "index": 35,
@@ -510,8 +545,9 @@
       "oracle_id": "30b24e8e-3b0e-4d8e-90f3-f66eb7c1858c",
       "stratum": "zones_lki",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/035_eternal_witness.frs",
-      "sha256": "ccb436e6461e177e88570870becce1b694376cfd98e5488e1c55d684c2298fe2"
+      "sha256": "01746d98951ca8bda5907414aa6e3207a36b8fcb5baeb724d531c4b3c25d0d85"
     },
     {
       "index": 36,
@@ -519,8 +555,9 @@
       "oracle_id": "1ff25f67-36a7-4cfa-a2b1-2135b5b6fb67",
       "stratum": "zones_lki",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/036_scavenging_ooze.frs",
-      "sha256": "51002756902918c7d876131ca5f6c97589376ac75ab5b31096b191e16ba1919e"
+      "sha256": "7d21375851d90f700d15565b12e63a5a2c7db600ac9232a97a5da277ed07644b"
     },
     {
       "index": 37,
@@ -528,8 +565,9 @@
       "oracle_id": "45900b2f-f6a9-4c42-9642-008f3c1cf6dd",
       "stratum": "calculated_values",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/037_tarmogoyf.frs",
-      "sha256": "8d73a7cafeede99a9726d9c985ef6a3edd1ec7572b86c3f737ec807ad2c6cb1c"
+      "sha256": "7f8683a1d590a279fca6e956f5de00851846890b87f524c000ec6d825da3af0a"
     },
     {
       "index": 38,
@@ -537,8 +575,9 @@
       "oracle_id": "ea5e3401-bd6c-47bb-a52a-8eec5f09455d",
       "stratum": "calculated_values",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/038_lord_of_extinction.frs",
-      "sha256": "0e50426d6e6e32718d31f79d335cba54ec31bec0f093f2883bd740da8d038a91"
+      "sha256": "b07a1d725994f5b75c88debdf4e56d8a5935d2016367fb8ee7e785beb91e07f4"
     },
     {
       "index": 39,
@@ -546,8 +585,9 @@
       "oracle_id": "7b8f1458-c638-4907-9363-f7cc22d04605",
       "stratum": "calculated_values",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/039_chameleon_colossus.frs",
-      "sha256": "cc1b9677307ee6b2c7a040c66977c3d0e29716c086ae19f973e0ce29bdcb2f98"
+      "sha256": "1d4b3d069520e7cc57b6589e1be5716c3e1ae973e520f49d1ddafdac37020cdb"
     },
     {
       "index": 40,
@@ -555,8 +595,9 @@
       "oracle_id": "273f5483-b67e-4dd6-bba8-c0a047fa34d7",
       "stratum": "calculated_values",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/040_crackle_with_power.frs",
-      "sha256": "c992994be1c747e4bdef7eea3ab12c6cf561f3817e0a21cb2a8f10aaa9754be1"
+      "sha256": "e8cb7b79fa42904d9b0928d2493b340cd345ccb7e157b2bb9f702a4fa0f63d72"
     },
     {
       "index": 41,
@@ -564,8 +605,9 @@
       "oracle_id": "956381ba-6d37-4a8a-846c-bad79222dbee",
       "stratum": "alternate_additional_costs",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/041_force_of_will.frs",
-      "sha256": "27441e8865044da9b73847d9183d8b5f090262897c589a31ec3298df4ce13929"
+      "sha256": "5f1fdffb831282e5a626b0d9fff28299f350e4a08e9b7d104cbd57afe0e2265e"
     },
     {
       "index": 42,
@@ -573,8 +615,9 @@
       "oracle_id": "24227761-b50e-4b9e-93a2-e82d053b3e3d",
       "stratum": "alternate_additional_costs",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/042_fling.frs",
-      "sha256": "a4b28b3e8f3cde68f5d929b48bc2792ea6773781113e2bf9078ce21f70698ac0"
+      "sha256": "2c60b292f88f97b020ff57d9b3837fdf3127875c958eb8e559367da33f051730"
     },
     {
       "index": 43,
@@ -582,8 +625,9 @@
       "oracle_id": "ac2086fe-98ee-4280-9c7c-c5c2d6548a8b",
       "stratum": "alternate_additional_costs",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/043_burst_lightning.frs",
-      "sha256": "739251a23abffc523a732656cee13302e2cf355e7f37dcc51be1c38504921059"
+      "sha256": "4f8f4f50f1c0a0b00af31d92d67251ab5f704c906d3f2ffe6e710fa10b8f6f17"
     },
     {
       "index": 44,
@@ -591,8 +635,9 @@
       "oracle_id": "5b6bdf5a-2742-4851-92cd-a857a3852836",
       "stratum": "alternate_additional_costs",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/044_treasure_cruise.frs",
-      "sha256": "8eb66cab63f5a38820c928eccf925fa834f195539627c4ac62f3ee6b1b59f039"
+      "sha256": "cfe5f754371d0c68bc68d111ecdfca2c1458d7cc8125c2108b84027d4f150cba"
     },
     {
       "index": 45,
@@ -600,8 +645,9 @@
       "oracle_id": "42226b87-0746-4ebf-9fd0-108d508462af",
       "stratum": "counters_tokens_copy",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/045_clone.frs",
-      "sha256": "819e62aed0d786a30bdbbc4cc014f7fcb9cfd6c7d9a95b235c8b4a7fe2a7f930"
+      "sha256": "2076c3e34e89fa8ea561693602ed28e826d52b097c8dcb7473bfcc060a45c25c"
     },
     {
       "index": 46,
@@ -609,8 +655,9 @@
       "oracle_id": "a1f3da21-af6d-450e-bf0b-985d158418e6",
       "stratum": "counters_tokens_copy",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/046_hardened_scales.frs",
-      "sha256": "d74aaeb706927eeb8a5043b27eb2e964f708b2b4ecf6d195e750d0ac932b3f43"
+      "sha256": "69445c4bb2bc8d096dc7ca2e08d1bfab1db2b25df80fbdc98af9d0479b53d484"
     },
     {
       "index": 47,
@@ -618,8 +665,9 @@
       "oracle_id": "7246d45b-2185-4cdd-981b-5419b7d52bce",
       "stratum": "counters_tokens_copy",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/047_anointed_procession.frs",
-      "sha256": "2f720a0a2984e6b6a405466546e1b8d024be879961b43ce1bfa34a46c8e6fb4c"
+      "sha256": "b3911dc003e3025352bd7107c3e3886f1d20222fa2edac2b417168aeb2ec8199"
     },
     {
       "index": 48,
@@ -627,8 +675,9 @@
       "oracle_id": "a7243d25-22a2-4df5-adaf-1f40f5330ec1",
       "stratum": "counters_tokens_copy",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/048_sakashima_the_impostor.frs",
-      "sha256": "fc1f2616590fc6b4bf2b919fa463d1ecb85e043a2242a83300d47255192ff2b1"
+      "sha256": "336336c77c880f04e5c7296cf55d9620cf34cf9fb950dc3ff01a61a768cbcec4"
     },
     {
       "index": 49,
@@ -636,8 +685,9 @@
       "oracle_id": "ca204b66-8d0c-431a-8d34-282f7c2d17da",
       "stratum": "attachments",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/049_lightning_greaves.frs",
-      "sha256": "e2a75743a449a775107b5e42bf17467daadb81231bfe3b32d3ea03f90f670735"
+      "sha256": "2ea5e408ac1a4d5297b22303ec124ea98f9fd249b74dc15679882ec4bf791aa5"
     },
     {
       "index": 50,
@@ -645,8 +695,9 @@
       "oracle_id": "5f5e0b10-c8cf-450c-bfd3-bcb0528ec330",
       "stratum": "attachments",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/050_pacifism.frs",
-      "sha256": "dd21d5fdfbe6d31b8b845b447aba5183dfd728d26777ce9fd705256bcc1ba4a3"
+      "sha256": "85d209690b2accc4ab3c75d0190a41f2fd3f23a8e5b94b5edbca2396a780400b"
     },
     {
       "index": 51,
@@ -654,8 +705,9 @@
       "oracle_id": "75564721-e4e9-463a-b49e-f0c7cd6f53a7",
       "stratum": "attachments",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/051_cranial_plating.frs",
-      "sha256": "03ab381a9f16dbf1156a387f9de2d14067c1f52ebc3cee57d8777a4d12b348c1"
+      "sha256": "2510fa9919b81523d106af221f99f88d40abea1e37ea8989b6254c061bca6f69"
     },
     {
       "index": 52,
@@ -663,8 +715,9 @@
       "oracle_id": "8ec03b88-8d3a-4a32-8b7c-7da59b0c03d0",
       "stratum": "attachments",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/052_colossus_hammer.frs",
-      "sha256": "2bdf107edfc87dde36e8d825f0a64cf7e1b519fa5b74b48498cdd34154ac35f6"
+      "sha256": "c73ac8f01eda63c9bca037ee66fbe76b7ffc39f149b4cea9ebf767ceecdf4efa"
     },
     {
       "index": 53,
@@ -672,8 +725,9 @@
       "oracle_id": "0895c9b7-ae7d-4bb3-af17-3b75deb50a25",
       "stratum": "multiplayer_commander_voting",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/053_command_tower.frs",
-      "sha256": "494654e5cd0f33cd36d3d9c387b935f994b30ef25798a0c7666b478b1e7e21f5"
+      "sha256": "1d32f6dc48f705aae27bdf7cabe8961ee2fe7d60c23ecb70cba6d66d1e93d61b"
     },
     {
       "index": 54,
@@ -681,8 +735,9 @@
       "oracle_id": "acf4d685-a718-42f7-9a7a-dee069ae8db2",
       "stratum": "multiplayer_commander_voting",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/054_council_s_judgment.frs",
-      "sha256": "20c1dc94db3f226fd367580eb97005e6ddc3a7230ee3d8d99779475db863e95e"
+      "sha256": "dedead7dc5123bd38bffb8a6bfcee27953c0c2d7af2fb5bd5efe834de18fb748"
     },
     {
       "index": 55,
@@ -690,8 +745,9 @@
       "oracle_id": "a69265b2-0e37-4d86-866e-e4a923233b4d",
       "stratum": "multiplayer_commander_voting",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/055_expropriate.frs",
-      "sha256": "b0e164959056e824dfa03b2f07d6d6cce8c78caabbe8adec2d63a544fc716e8b"
+      "sha256": "7f21fcd9788ee2561d6e3c25043e5f29dd289c06876cca8c19eb11774c0262bc"
     },
     {
       "index": 56,
@@ -699,8 +755,9 @@
       "oracle_id": "d11e627b-8a48-411d-a261-2c9a02a758ba",
       "stratum": "multiplayer_commander_voting",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/056_breena_the_demagogue.frs",
-      "sha256": "8027a31f2ac34f128b359d44030347c1fb8b5ae73bed101e56cee3c1873c095c"
+      "sha256": "f45101d88b151657ad654e8a548bca98643aa4b1b7ca1fc8cc64913e56d425c9"
     },
     {
       "index": 57,
@@ -708,8 +765,9 @@
       "oracle_id": "ae92942b-919c-4ea9-b693-85fcef765d5a",
       "stratum": "split_fuse",
       "layout": "split",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/057_fire_ice.frs",
-      "sha256": "a7c4ddb8492cffc2133fdd900d4583c87839b86a4087b725f251e1b965b49d93"
+      "sha256": "7f483bd2e74120c0af4f6b2c7ad0149f8b9984cbb5f786b0f96a41b704dc0ec1"
     },
     {
       "index": 58,
@@ -717,8 +775,9 @@
       "oracle_id": "9842734c-1eac-4509-a731-4c22017ae586",
       "stratum": "split_fuse",
       "layout": "split",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/058_wear_tear.frs",
-      "sha256": "1b34b77f137bf95f4526d841d9fc959956260eaaf9c23f7ce9a39d1aac464d09"
+      "sha256": "f225f8d173099088614aeb26859eafb5bf476a66d1b8aeb71bc834da2161d825"
     },
     {
       "index": 59,
@@ -726,8 +785,9 @@
       "oracle_id": "5b8472c8-a7e7-46f2-aecf-e954082a5ef5",
       "stratum": "split_fuse",
       "layout": "split",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/059_beck_call.frs",
-      "sha256": "1214b09ce86c85932d5554f43814dd946bf8b9346141f8c5b14364752baee133"
+      "sha256": "987bd3132cf1513f06f09b3034bdd02d23a19b228297a3bff77ef230174fe494"
     },
     {
       "index": 60,
@@ -735,8 +795,9 @@
       "oracle_id": "e4b1ef6a-6f05-472e-aaed-1c24dd6605c7",
       "stratum": "split_fuse",
       "layout": "split",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/060_far_away.frs",
-      "sha256": "7ce8ef492429cce1259be1490606d3e134cb7bfa8f6cd11c544f24773da9f314"
+      "sha256": "92d4038328914ea2f12c7feb07f8c6f750dd96d3651c21abc2b1afda951fea19"
     },
     {
       "index": 61,
@@ -744,8 +805,9 @@
       "oracle_id": "edd531b9-f615-4399-8c8c-1c5e18c4acbf",
       "stratum": "transform_day_night",
       "layout": "transform",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/061_delver_of_secrets_insectile_aberration.frs",
-      "sha256": "48dd6c8e825d7a196197cb7afd51d865545814df3ee2d9fafe0773663308341f"
+      "sha256": "0554baf4ae7baf960717c238f833d1a2e59fdb533fe1429ddd43122a041e1c04"
     },
     {
       "index": 62,
@@ -753,8 +815,9 @@
       "oracle_id": "582328cd-660d-47a4-bb23-e91e80b9a907",
       "stratum": "transform_day_night",
       "layout": "transform",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/062_huntmaster_of_the_fells_ravager_of_the_fells.frs",
-      "sha256": "a13374c74e66e0369b682d4a2a2de96d462f8646870b972887f1d07191ee4fdd"
+      "sha256": "198ef5d37d923b78b531e7dc56037c46f89dc6d0d2977f95b33f4b626e9cb186"
     },
     {
       "index": 63,
@@ -762,8 +825,9 @@
       "oracle_id": "1ed2d8e0-462b-468e-8fd3-1f3c6d99fb8a",
       "stratum": "transform_day_night",
       "layout": "transform",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/063_brutal_cathar_moonrage_brute.frs",
-      "sha256": "a1d6f39426ba0880822589b1406d91b31719104da22df00931c2781bc8e83786"
+      "sha256": "242e1fed108aaaa2f1b4c28e8beb0334504aa52fafee9b9c80db8ef5e3990178"
     },
     {
       "index": 64,
@@ -771,8 +835,9 @@
       "oracle_id": "434e82b5-abd4-41ac-a5b1-2dd01c667374",
       "stratum": "transform_day_night",
       "layout": "transform",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/064_bloodline_keeper_lord_of_lineage.frs",
-      "sha256": "044e55e94906bb8f0914fe8810171f0b7b2f7778d88451da14b75b8adc8d8f13"
+      "sha256": "9b865779f373a8b766ef3928be9b8fb82abf5b3e524f6bc168487127f3f71b68"
     },
     {
       "index": 65,
@@ -780,8 +845,9 @@
       "oracle_id": "4a8d41fe-e04d-484b-a7d1-19be311e6ca7",
       "stratum": "modal_dfc",
       "layout": "modal_dfc",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/065_sea_gate_restoration_sea_gate_reborn.frs",
-      "sha256": "41653c9185eaeb283a60c384c62b96a0da20320a1bbe8b5df55e80874c54ac3d"
+      "sha256": "407d1f6d6ef9212ab61a8c8090d26709900a65f34d39f4ccf48753839ffb47c3"
     },
     {
       "index": 66,
@@ -789,8 +855,9 @@
       "oracle_id": "6ec2a242-9068-4ee2-8ac8-8341cc570f56",
       "stratum": "modal_dfc",
       "layout": "modal_dfc",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/066_emeria_s_call_emeria_shattered_skyclave.frs",
-      "sha256": "8a7ed1a7465403e39b0e1a393bf026ca8bf478de39eed09ca9e3129d11ec1a99"
+      "sha256": "02f6954119692639d60d3c44bddccc9978d1782b8c6a4dedabcca39f05be9049"
     },
     {
       "index": 67,
@@ -798,8 +865,9 @@
       "oracle_id": "907ae517-22d5-4ac7-bc3a-3f4d5eaeeb57",
       "stratum": "modal_dfc",
       "layout": "modal_dfc",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/067_valki_god_of_lies_tibalt_cosmic_impostor.frs",
-      "sha256": "344b5c2c1e8a6a585adf6f40d3e3e721fb8e8c789cf266f4e362c278374732a7"
+      "sha256": "68adedd4e826a92b03231391e51fd90763c020c15dda16add0a4b33326476b61"
     },
     {
       "index": 68,
@@ -807,8 +875,9 @@
       "oracle_id": "fb81e4d3-1d8c-4779-be62-87cf49277e51",
       "stratum": "modal_dfc",
       "layout": "modal_dfc",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/068_birgi_god_of_storytelling_harnfel_horn_of_bounty.frs",
-      "sha256": "5ea514de74befb2beaac4760d62c7fc02f068441f08e713d2fa9c8b1f35862b1"
+      "sha256": "e3298a118dedce45f89aa0e1b6529c08e71f1a946b1845cec2afa313eeb8f227"
     },
     {
       "index": 69,
@@ -816,8 +885,9 @@
       "oracle_id": "d6d72f5f-8f5d-4180-b514-f22ff5482902",
       "stratum": "adventure",
       "layout": "adventure",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/069_bonecrusher_giant_stomp.frs",
-      "sha256": "90d5e3784857842b146b935912d3b3b28e508521901ab27cd80731520c490833"
+      "sha256": "0cacbf301f9cd7956acbb33454cde97741e511c8cee38bb260fbd287096e5902"
     },
     {
       "index": 70,
@@ -825,8 +895,9 @@
       "oracle_id": "c7b044c3-3cfa-407e-bf20-2875e8e04b7b",
       "stratum": "adventure",
       "layout": "adventure",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/070_brazen_borrower_petty_theft.frs",
-      "sha256": "f17fb07a33f3f777426d1bcd70d1b335739a188938b824833fef8dfaed84a239"
+      "sha256": "89cbdaf842651e71e0b9cdc2256deaf6f965289f62e1b4fa4a1bd9ea203deb0d"
     },
     {
       "index": 71,
@@ -834,8 +905,9 @@
       "oracle_id": "1080c5b5-6651-4c6a-93e6-099fbe389e26",
       "stratum": "adventure",
       "layout": "adventure",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/071_murderous_rider_swift_end.frs",
-      "sha256": "1e03e895eabc7cd338d693cac980f258cbfedb0952d93365ba4e890d4e28db3a"
+      "sha256": "b4ff0ebb73e76050ea9d2fc93f85a5e603bb523aa0087df3bfc949f8b3045a23"
     },
     {
       "index": 72,
@@ -843,8 +915,9 @@
       "oracle_id": "7e84aff5-2cb6-4214-befd-3d2de31229e5",
       "stratum": "adventure",
       "layout": "adventure",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/072_lovestruck_beast_heart_s_desire.frs",
-      "sha256": "83f5b5f796f549f501d43541031b9e7c45fd3400ec99fb781653aace94643666"
+      "sha256": "0cd017b26f85185745853d513372de1746084b20e6bd119fc5eb3666a08948cd"
     },
     {
       "index": 73,
@@ -852,8 +925,9 @@
       "oracle_id": "bce7e45d-b2c5-43aa-91a6-3a3c24f30850",
       "stratum": "meld",
       "layout": "meld",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/073_bruna_the_fading_light.frs",
-      "sha256": "92b53bcebca3687e958e91e1a6419ff2964a98e971e507314ffb792ed099bb90"
+      "sha256": "5abb981751b04249d197dfe9e493897e677239592861b547496a01a3366de72e"
     },
     {
       "index": 74,
@@ -861,8 +935,9 @@
       "oracle_id": "f3e23d5e-bd88-4e7c-a3fb-db2a8cb05b22",
       "stratum": "meld",
       "layout": "meld",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/074_gisela_the_broken_blade.frs",
-      "sha256": "047a04565bd5df70c2ae79f819de8d40e53da36957d196fc4fd0dc2c14d9fe30"
+      "sha256": "20ec55f706d4e4749dd113496d1db48961ee80fc270e3d65b9ae7fdaac183c5f"
     },
     {
       "index": 75,
@@ -870,8 +945,9 @@
       "oracle_id": "df2af646-3e5b-43a3-8f3e-50565889f456",
       "stratum": "meld",
       "layout": "meld",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/075_urza_lord_protector.frs",
-      "sha256": "d98f50496933f518ea44b3d4ab3a64eadab088b96ef76725ea501374d1eef302"
+      "sha256": "0319d6124643a36fde41012231d99c921fb2560813e6617a320edd7dea2c2c6b"
     },
     {
       "index": 76,
@@ -879,8 +955,9 @@
       "oracle_id": "c396db03-bf11-4e20-b630-4f9aa8fd78da",
       "stratum": "meld",
       "layout": "meld",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/076_the_mightstone_and_weakstone.frs",
-      "sha256": "dc6196205c1344741515d41f10802836f6446283901f2bf311f77e93713a81c2"
+      "sha256": "c0fb028941ce999685803db6aa9ff3d7b761c21abbad67633d8102cf04d845ad"
     },
     {
       "index": 77,
@@ -888,8 +965,9 @@
       "oracle_id": "45c8e860-5ce5-4a1c-aebe-97ddffcb2f74",
       "stratum": "flip",
       "layout": "flip",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/077_nezumi_shortfang_stabwhisker_the_odious.frs",
-      "sha256": "a4919d2460245e074097aa587ad09251e33e170cc7c941c9a6cd1dc5db8e31eb"
+      "sha256": "a46537021827a668cefe445f5a083b2715eb64e44098a8d7696ba02f636e73e2"
     },
     {
       "index": 78,
@@ -897,8 +975,9 @@
       "oracle_id": "cb952c81-c7bb-4670-938d-296d35551986",
       "stratum": "flip",
       "layout": "flip",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/078_budoka_gardener_dokai_weaver_of_life.frs",
-      "sha256": "b0e76954a110da915dfcb2620c2655535639910ef976b079c4b06107d3614cfb"
+      "sha256": "9de88514a145dad741fcafa77ee523da7f7ea32fb5b9d661033b331d941b413f"
     },
     {
       "index": 79,
@@ -906,8 +985,9 @@
       "oracle_id": "d83bb32d-f409-421a-9d93-bd7ea3240b47",
       "stratum": "flip",
       "layout": "flip",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/079_erayo_soratami_ascendant_erayo_s_essence.frs",
-      "sha256": "a4e4a6fc7ac267bb22b88ae3f3f9b3a0f502c8b0b7b38546b8f75cc4e932f5c3"
+      "sha256": "5eaddc526a67d78690c9bc9cd0bd326a9c185e0fa1482547699be94e2c1fe64a"
     },
     {
       "index": 80,
@@ -915,8 +995,9 @@
       "oracle_id": "2b565791-1b94-4dad-a48d-be7fc2198e19",
       "stratum": "flip",
       "layout": "flip",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/080_jushi_apprentice_tomoya_the_revealer.frs",
-      "sha256": "78940df90e4752341646e3441903332b64f1a9500595e02cb72c582695c7b4a0"
+      "sha256": "e6a77c899c7e9d320b3d9202cbda752e354c1d2f65a28e7e67a7802795e07b9c"
     },
     {
       "index": 81,
@@ -924,8 +1005,9 @@
       "oracle_id": "44ed4c0c-a012-4895-a547-b04150553bba",
       "stratum": "saga_class_case_leveler",
       "layout": "saga",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/081_the_eldest_reborn.frs",
-      "sha256": "f3dba17315246e4de79de35d20a49839ecfab237742805942b4cddac5fa35aee"
+      "sha256": "0204944f2519c4443b4ee21f6e745a00710bfc97ba17a1a156b7ef26883c3c83"
     },
     {
       "index": 82,
@@ -933,8 +1015,9 @@
       "oracle_id": "36f68aa3-9955-46f1-bc87-497f16ef5222",
       "stratum": "saga_class_case_leveler",
       "layout": "class",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/082_wizard_class.frs",
-      "sha256": "4318a3049a51ea2dc6911034a34b4c743e10a5f7f0870ad706e501529f23c75a"
+      "sha256": "42e401bb4b50d3a8fadf4e2028ab22b7c253a98b2fc6a9a9545b8354e8f7d273"
     },
     {
       "index": 83,
@@ -942,8 +1025,9 @@
       "oracle_id": "2380fd04-6d19-4f5a-8a9e-c17d9ae09fb6",
       "stratum": "saga_class_case_leveler",
       "layout": "case",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/083_case_of_the_locked_hothouse.frs",
-      "sha256": "ea616b0a94f3f0a80a0f2421c96a0dd64b42e019758f79ee62d8edc5944fcc01"
+      "sha256": "0cf2d54f436ee809d9e45caceaae189f07ab6a201ee6f43f63785cf595f0cf95"
     },
     {
       "index": 84,
@@ -951,8 +1035,9 @@
       "oracle_id": "0bc2875b-3a5a-4885-86b9-16ab7330ac10",
       "stratum": "saga_class_case_leveler",
       "layout": "leveler",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/084_student_of_warfare.frs",
-      "sha256": "bdbb0ceb1d37c0469180dc47616a3d6b662268dac295dab3d026f3b63b908078"
+      "sha256": "c0e118047d7b586ddebeed0284189a2b3cad1196326df4ddebd89e27ac660c8c"
     },
     {
       "index": 85,
@@ -960,8 +1045,9 @@
       "oracle_id": "5470dcfa-4eff-43da-abf7-19922841f719",
       "stratum": "unusual_mana",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/085_kitchen_finks.frs",
-      "sha256": "eb4424daec35dd9d7288c5316cc567b633f61f49397a54e037c954744b7026e3"
+      "sha256": "60efec82c53dcbf8e7ade8d9c432ed379847fb7c53ab3b751ed9da28d6fcc61e"
     },
     {
       "index": 86,
@@ -969,8 +1055,9 @@
       "oracle_id": "1d67f5ff-1fce-45e5-b6a1-416c569351e2",
       "stratum": "unusual_mana",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/086_gitaxian_probe.frs",
-      "sha256": "a0cab3433226324da2dc52f08b3a947b7458f890a12349b3f5b84c6ccbcd0f9f"
+      "sha256": "d14e4305c5149d7c63edf9b0ab81fb0cbad9dc354a091f087fa64d49456260ab"
     },
     {
       "index": 87,
@@ -978,8 +1065,9 @@
       "oracle_id": "376271a6-80f0-47a6-990a-5ec5517aae42",
       "stratum": "unusual_mana",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/087_spectral_procession.frs",
-      "sha256": "54d013ded7de2074ba9f81a87ceb5797802e5020bb22bcaa4683ed5bd0eea92a"
+      "sha256": "6b61bce6cdbde83711e5ae0f7a8a44c04b0a872b84cf3fd1b4f8b75c69fb51e8"
     },
     {
       "index": 88,
@@ -987,8 +1075,9 @@
       "oracle_id": "cf94cafc-527e-4b27-8a28-7807435aaccf",
       "stratum": "unusual_mana",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/088_beseech_the_queen.frs",
-      "sha256": "6a3560bf471bbdfe42b150cace07f229de2d623db8375e00c97258abbdbc6761"
+      "sha256": "e22a4a95558859c0fcb5ecb4653a7881889243e481932f226d4149201e55432c"
     },
     {
       "index": 89,
@@ -996,8 +1085,9 @@
       "oracle_id": "09ff28b1-b6c9-48e6-b12e-2f0e644f709f",
       "stratum": "cast_from_zone",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/089_gravecrawler.frs",
-      "sha256": "e2f6b4650a7392417097bd2a3a46811134126de6f80cb7251bb01916bba38704"
+      "sha256": "1bcb2abb4cf0f17461f2b34f20393214efaa28948f7dff11f578e70b26d3ed42"
     },
     {
       "index": 90,
@@ -1005,8 +1095,9 @@
       "oracle_id": "e97f9c2b-b41e-4f36-9245-77c0ac125647",
       "stratum": "cast_from_zone",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/090_bloodghast.frs",
-      "sha256": "49f0be8978dd452188d8092e65e21f3a1723c0ffe184c28cff022ccbfaa091b1"
+      "sha256": "816c2107cd3c9255e9f1e10b164b91feeddf32bf682c3b5d2acd17cc87f5778e"
     },
     {
       "index": 91,
@@ -1014,8 +1105,9 @@
       "oracle_id": "a990e744-bfc4-435d-aef6-6256ac10f5a6",
       "stratum": "cast_from_zone",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/091_misthollow_griffin.frs",
-      "sha256": "350788c87fc18899088eb5392c3840f0549e03d3e45b03b5cf338c8ccbc5dfc2"
+      "sha256": "c389c9ecf4740f78d3c9b63e95d32eb04ffd7884cd04826caff25299b2bc89f1"
     },
     {
       "index": 92,
@@ -1023,8 +1115,9 @@
       "oracle_id": "c8b0436e-16d2-4d48-a894-454d69a3743b",
       "stratum": "cast_from_zone",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/092_eternal_scourge.frs",
-      "sha256": "6126fad434dc75d4c1f77145621339e3425d6edc5a9a8a2b3c57f9f03ed7ba45"
+      "sha256": "0a52e22e68f37b9c3a70c171056760b49e45f07f77b453c1bd0185bdee512448"
     },
     {
       "index": 93,
@@ -1032,8 +1125,9 @@
       "oracle_id": "51f091a7-9b0b-4362-8e9c-c174752f369b",
       "stratum": "dungeon_initiative_monarch_energy",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/093_white_plume_adventurer.frs",
-      "sha256": "e847be46ae8b411c5cfaa20c812445d0c998c7dae9e5b2b0d9152b4968fc2f8d"
+      "sha256": "721118da78f2b9615d0eb3d2094e85f8646ee448502569f0c56333a743bfe805"
     },
     {
       "index": 94,
@@ -1041,8 +1135,9 @@
       "oracle_id": "180eda7c-fca2-403b-85cd-8ffebaf9f408",
       "stratum": "dungeon_initiative_monarch_energy",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/094_palace_jailer.frs",
-      "sha256": "dcc8084f8b7373572865304f22efd61bd3ae8253dca5761fae50b799e3d0c239"
+      "sha256": "babff6ff1dcec48ef26c4ea8cdd90257d13e1e77200fd9f0509247cc35824af2"
     },
     {
       "index": 95,
@@ -1050,8 +1145,9 @@
       "oracle_id": "470ec98e-120c-446d-ade6-7d80aa836b55",
       "stratum": "dungeon_initiative_monarch_energy",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/095_aetherworks_marvel.frs",
-      "sha256": "58c480a2389b85e2436090ea194b45b3f892444c98324dca973f8fb62f2ba9bf"
+      "sha256": "bba354d0fb8e235a5c9df572b90e521e09d2358ecfb16ab1997066108e95f873"
     },
     {
       "index": 96,
@@ -1059,8 +1155,9 @@
       "oracle_id": "9b21e056-57e7-4e39-b2b4-2fdf8719d0d2",
       "stratum": "dungeon_initiative_monarch_energy",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/096_sefris_of_the_hidden_ways.frs",
-      "sha256": "cdf7c769dfd40c19e5a8821439fa33732c8af6c1d41bc51d146f9aa7ffab3040"
+      "sha256": "a53fb7d8ce35709a03e9095509f5cb5ead4b1f1294cc2bc1166e3428779d0aa8"
     },
     {
       "index": 97,
@@ -1068,8 +1165,9 @@
       "oracle_id": "dc1c0e8c-d0c1-445c-968f-7dec91e5d5fc",
       "stratum": "turn_combat",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/097_relentless_assault.frs",
-      "sha256": "5450552b63e0d75c56c46ba4bc43cf5c7d8d84975045c1e20e6807f494bd090c"
+      "sha256": "8a4336f0ec60d2b1f44ac0b27eecaaf9f402064035d7df643419e2c1d11364d9"
     },
     {
       "index": 98,
@@ -1077,8 +1175,9 @@
       "oracle_id": "dbd6a94b-62ff-4a10-9d52-bdd90b26e425",
       "stratum": "turn_combat",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/098_time_warp.frs",
-      "sha256": "a7124e1b8efb5331881e2b9e4464c363211151fbc80108d95d05de545cd428f8"
+      "sha256": "76f405c51cd191e040acc070e89c25bd2b52fe486733525a0176f48bb4590e31"
     },
     {
       "index": 99,
@@ -1086,8 +1185,9 @@
       "oracle_id": "8aed54cb-d1bb-45ad-adbe-38e55d84ff31",
       "stratum": "turn_combat",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/099_silence.frs",
-      "sha256": "06c47251ee29b2a75e0e36ebb5d36ee3d9df3d93a7880c278645fa6de31b3db6"
+      "sha256": "c032badefd774d390f3f4a1f01966de6c0758d7db5813960fe35a9e0c759008d"
     },
     {
       "index": 100,
@@ -1095,8 +1195,9 @@
       "oracle_id": "38a12bd7-4394-44a8-91a0-6a4ff7fa4f71",
       "stratum": "turn_combat",
       "layout": "normal",
+      "classification": "unverified_playable",
       "source_file": "cards/cp_dsl/definitions/100_maze_of_ith.frs",
-      "sha256": "d347abfe779cc9993bb2dcd72622cbdfb995a932bb4392cbaa8f51623a53ff8b"
+      "sha256": "dbf0ddba255461533574a6eb919f20e2568f1bd4265de5e6293c17f72b7918d7"
     }
   ]
 }

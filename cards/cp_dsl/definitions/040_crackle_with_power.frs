@@ -2,7 +2,7 @@
 card "Crackle with Power" {
   id: "273f5483-b67e-4dd6-bba8-c0a047fa34d7"
   layout: normal
-  status: verified_playable
+  status: unverified_playable
   face "Crackle with Power" {
     cost: "{X}{X}{X}{R}{R}"
     types: "Sorcery"

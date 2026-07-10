@@ -2,7 +2,7 @@
 card "Birgi, God of Storytelling // Harnfel, Horn of Bounty" {
   id: "fb81e4d3-1d8c-4779-be62-87cf49277e51"
   layout: modal_dfc
-  status: verified_playable
+  status: unverified_playable
   face "Birgi, God of Storytelling" {
     cost: "{2}{R}"
     types: "Legendary Creature — God"

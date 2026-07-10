@@ -2,7 +2,7 @@
 card "Leyline of the Void" {
   id: "f4e32fc1-1b8d-441e-8e76-71f19f98e925"
   layout: normal
-  status: verified_playable
+  status: unverified_playable
   face "Leyline of the Void" {
     cost: "{2}{B}{B}"
     types: "Enchantment"

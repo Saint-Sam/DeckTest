@@ -2,7 +2,7 @@
 card "Fling" {
   id: "24227761-b50e-4b9e-93a2-e82d053b3e3d"
   layout: normal
-  status: verified_playable
+  status: unverified_playable
   face "Fling" {
     cost: "{1}{R}"
     types: "Instant"

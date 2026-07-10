@@ -2,14 +2,14 @@
 card "Brutal Cathar // Moonrage Brute" {
   id: "1ed2d8e0-462b-468e-8fd3-1f3c6d99fb8a"
   layout: transform
-  status: verified_playable
+  status: unverified_playable
   face "Brutal Cathar" {
     cost: "{2}{W}"
     types: "Creature — Human Soldier Werewolf"
     oracle: "Whenever this creature enters or transforms into Brutal Cathar, exile target creature an opponent controls until this creature leaves the battlefield.\nDaybound (If a player casts no spells during their own turn, it becomes night next turn.)"
     power: "2"
     toughness: "2"
-    keywords: [daybound, first_strike, nightbound, ward]
+    keywords: [daybound]
     ability triggered {
       event: event_enters(source())
       effect: exile(target(permanents(and(type_is("creature"), controlled_by(opponent())))), "until_source_leaves")
@@ -21,6 +21,6 @@ card "Brutal Cathar // Moonrage Brute" {
     oracle: "First strike\nWard—Pay 3 life.\nNightbound (If a player casts at least two spells during their own turn, it becomes day next turn.)"
     power: "3"
     toughness: "3"
-    keywords: [daybound, first_strike, nightbound, ward]
+    keywords: [first_strike, nightbound, ward]
   }
 }

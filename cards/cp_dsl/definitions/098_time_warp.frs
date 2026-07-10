@@ -2,7 +2,7 @@
 card "Time Warp" {
   id: "dbd6a94b-62ff-4a10-9d52-bdd90b26e425"
   layout: normal
-  status: verified_playable
+  status: unverified_playable
   face "Time Warp" {
     cost: "{3}{U}{U}"
     types: "Sorcery"

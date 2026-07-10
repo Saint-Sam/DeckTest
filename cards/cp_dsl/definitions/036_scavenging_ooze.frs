@@ -2,7 +2,7 @@
 card "Scavenging Ooze" {
   id: "1ff25f67-36a7-4cfa-a2b1-2135b5b6fb67"
   layout: normal
-  status: verified_playable
+  status: unverified_playable
   face "Scavenging Ooze" {
     cost: "{1}{G}"
     types: "Creature — Ooze"

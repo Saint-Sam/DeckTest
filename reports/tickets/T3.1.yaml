@@ -27,6 +27,7 @@ acceptance:
   - Unknown fields, layouts, ability kinds, operators, keywords, and mana symbols fail closed.
   - Versioned bincode database and JSON index are deterministic and load through forge-cards.
   - 100-card CP-DSL corpus covers the exact 25 mandatory strata with four cards each and round-trips 100/100.
+  - The 100-card language-stress corpus is unverified_playable; verified_playable is forbidden until card-specific semantic tests pass in T3.6 or CP-PORT-20.
   - At least 50 tagged recursive argument cases cover every ArgumentKind, multiple depths, variadic positions, bare symbols, and prose misuse.
   - Curated mutation score is at least 90 percent with a passing unmutated control, expected killing assertions, and retained hashed logs.
   - All five local fuzz targets pass at least 2,400 verified address-sanitizer worker-seconds with retained final-stat logs.

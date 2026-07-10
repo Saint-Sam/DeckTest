@@ -2,7 +2,7 @@
 card "Archmage's Charm" {
   id: "85cbb035-25df-43bb-ae06-ab098f448b02"
   layout: normal
-  status: verified_playable
+  status: unverified_playable
   face "Archmage's Charm" {
     cost: "{U}{U}{U}"
     types: "Instant"

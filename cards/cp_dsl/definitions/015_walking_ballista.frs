@@ -2,7 +2,7 @@
 card "Walking Ballista" {
   id: "4b515bb0-f275-4400-8032-3173b799ab40"
   layout: normal
-  status: verified_playable
+  status: unverified_playable
   face "Walking Ballista" {
     cost: "{X}{X}"
     types: "Artifact Creature — Construct"

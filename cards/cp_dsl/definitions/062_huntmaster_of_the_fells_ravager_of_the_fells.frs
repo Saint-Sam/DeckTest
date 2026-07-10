@@ -2,14 +2,14 @@
 card "Huntmaster of the Fells // Ravager of the Fells" {
   id: "582328cd-660d-47a4-bb23-e91e80b9a907"
   layout: transform
-  status: verified_playable
+  status: unverified_playable
   face "Huntmaster of the Fells" {
     cost: "{2}{R}{G}"
     types: "Creature — Human Werewolf"
     oracle: "Whenever this creature enters or transforms into Huntmaster of the Fells, create a 2/2 green Wolf creature token and you gain 2 life.\nAt the beginning of each upkeep, if no spells were cast last turn, transform this creature."
     power: "2"
     toughness: "2"
-    keywords: [trample, transform]
+    keywords: [transform]
     ability triggered {
       event: event_enters(source())
       effect: sequence(create_token("2/2 green Wolf", 1, you()), gain_life(2, you()))

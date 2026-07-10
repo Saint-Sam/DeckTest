@@ -2,7 +2,7 @@
 card "Bruna, the Fading Light" {
   id: "bce7e45d-b2c5-43aa-91a6-3a3c24f30850"
   layout: meld
-  status: verified_playable
+  status: unverified_playable
   face "Bruna, the Fading Light" {
     cost: "{5}{W}{W}"
     types: "Legendary Creature — Angel Horror"

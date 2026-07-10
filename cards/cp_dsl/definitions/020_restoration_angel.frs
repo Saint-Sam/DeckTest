@@ -2,7 +2,7 @@
 card "Restoration Angel" {
   id: "dfbd3afc-9905-4cff-a4f4-df08a4d0a7fa"
   layout: normal
-  status: verified_playable
+  status: unverified_playable
   face "Restoration Angel" {
     cost: "{3}{W}"
     types: "Creature — Angel"

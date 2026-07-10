@@ -2,7 +2,7 @@
 card "Doom Blade" {
   id: "59e7f2ae-4535-4191-98be-3e65b6b2befa"
   layout: normal
-  status: verified_playable
+  status: unverified_playable
   face "Doom Blade" {
     cost: "{1}{B}"
     types: "Instant"

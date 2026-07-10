@@ -2,7 +2,7 @@
 card "Lovestruck Beast // Heart's Desire" {
   id: "7e84aff5-2cb6-4214-befd-3d2de31229e5"
   layout: adventure
-  status: verified_playable
+  status: unverified_playable
   face "Lovestruck Beast" {
     cost: "{2}{G}"
     types: "Creature — Beast Noble"

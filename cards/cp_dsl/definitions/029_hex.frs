@@ -2,7 +2,7 @@
 card "Hex" {
   id: "89457fa8-b0e2-4277-b6a9-c6601c59b46d"
   layout: normal
-  status: verified_playable
+  status: unverified_playable
   face "Hex" {
     cost: "{4}{B}{B}"
     types: "Sorcery"

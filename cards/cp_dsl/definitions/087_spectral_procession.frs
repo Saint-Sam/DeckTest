@@ -2,7 +2,7 @@
 card "Spectral Procession" {
   id: "376271a6-80f0-47a6-990a-5ec5517aae42"
   layout: normal
-  status: verified_playable
+  status: unverified_playable
   face "Spectral Procession" {
     cost: "{2/W}{2/W}{2/W}"
     types: "Sorcery"

@@ -2,7 +2,7 @@
 card "Brazen Borrower // Petty Theft" {
   id: "c7b044c3-3cfa-407e-bf20-2875e8e04b7b"
   layout: adventure
-  status: verified_playable
+  status: unverified_playable
   face "Brazen Borrower" {
     cost: "{1}{U}{U}"
     types: "Creature — Faerie Rogue"
@@ -18,7 +18,7 @@ card "Brazen Borrower // Petty Theft" {
     cost: "{1}{U}"
     types: "Instant — Adventure"
     oracle: "Return target nonland permanent an opponent controls to its owner's hand."
-    keywords: [flash, flying]
+    keywords: []
     ability spell {
       effect: return_to_hand(target(permanents(and(not(type_is("land")), controlled_by(opponent())))))
     }

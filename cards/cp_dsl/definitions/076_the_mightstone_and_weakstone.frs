@@ -2,7 +2,7 @@
 card "The Mightstone and Weakstone" {
   id: "c396db03-bf11-4e20-b630-4f9aa8fd78da"
   layout: meld
-  status: verified_playable
+  status: unverified_playable
   face "The Mightstone and Weakstone" {
     cost: "{5}"
     types: "Legendary Artifact — Powerstone"

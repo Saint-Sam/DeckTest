@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the reviewed CP-DSL sources from pinned Scryfall text and explicit recipes."""
+"""Generate the CP-DSL language-stress corpus from pinned text and explicit recipes."""
 
 from __future__ import annotations
 
@@ -40,6 +40,8 @@ MANDATORY_STRATA = (
     "dungeon_initiative_monarch_energy",
     "turn_combat",
 )
+
+REVIEW_CLASSIFICATION = "unverified_playable"
 
 
 def ability(
@@ -107,8 +109,9 @@ def replacement(
     return ability("replacement", effect, event=event, condition=condition)
 
 
-# These recipes are the reviewable mechanics translation. Source characteristics and
-# Oracle text come from source_cards.json; no ability is inferred from prose.
+# These explicit recipes stress the language without claiming per-card semantic
+# verification. Source characteristics and Oracle text come from source_cards.json;
+# no ability is inferred from prose.
 TRANSLATIONS: dict[str, dict[str, list[dict[str, object]]]] = {
     "Grizzly Bears": {"*": []},
     "Serra Angel": {"*": []},
@@ -132,14 +135,14 @@ TRANSLATIONS: dict[str, dict[str, list[dict[str, object]]]] = {
     "Cryptic Command": {
         "*": [
             spell(
-                'choose_up_to(2, counter_spell(target(spells())), return_to_hand(target(permanents())), tap(all(permanents(and(type_is("creature"), controlled_by(opponent()))))), draw(1, you()))'
+                'choose_exactly(2, counter_spell(target(spells())), return_to_hand(target(permanents())), tap(all(permanents(and(type_is("creature"), controlled_by(opponent()))))), draw(1, you()))'
             )
         ]
     },
     "Kolaghan's Command": {
         "*": [
             spell(
-                'choose_up_to(2, return_to_hand(target(cards(and(zone_is("graveyard"), type_is("creature"))))), discard_cards(1, target(any())), destroy(target(permanents(type_is("artifact")))), deal_damage(target(any()), 2))'
+                'choose_exactly(2, return_to_hand(target(cards(and(zone_is("graveyard"), type_is("creature"))))), discard_cards(1, target(any())), destroy(target(permanents(type_is("artifact")))), deal_damage(target(any()), 2))'
             )
         ]
     },
@@ -767,21 +770,30 @@ def render_card(entry: dict[str, object]) -> str:
     name = card["name"]
     oracle_id = card["oracle_id"]
     if not oracle_id:
-        raise ValueError(f"reviewed playable card has no Oracle id: {name}")
+        raise ValueError(f"review corpus card has no Oracle id: {name}")
     face_recipes = TRANSLATIONS[name]
     lines = [
         f"// CP-DSL stratum: {entry['stratum']}",
         f"card {json_string(name)} {{",
         f"  id: {json_string(oracle_id)}",
         f"  layout: {card['layout']}",
-        "  status: verified_playable",
+        f"  status: {REVIEW_CLASSIFICATION}",
     ]
     for face in source_faces(card):
         face_name = face["name"]
+        if card.get("card_faces"):
+            face_oracle = str(face.get("oracle_text", "")).casefold()
+            inherited_keywords = [
+                keyword
+                for keyword in card.get("keywords", [])
+                if str(keyword).casefold() in face_oracle
+            ]
+        else:
+            inherited_keywords = card.get("keywords", [])
         keywords = sorted(
             {
                 keyword_id(keyword)
-                for keyword in [*card.get("keywords", []), *face.get("keywords", [])]
+                for keyword in [*inherited_keywords, *face.get("keywords", [])]
             }
         )
         lines.extend(
@@ -842,6 +854,7 @@ def generate(root: Path, check: bool) -> int:
                 "oracle_id": entry["source_card"]["oracle_id"],
                 "stratum": entry["stratum"],
                 "layout": entry["source_card"]["layout"],
+                "classification": REVIEW_CLASSIFICATION,
                 "source_file": str(path.relative_to(root)),
                 "sha256": sha256_bytes(content),
             }
@@ -879,6 +892,7 @@ def generate(root: Path, check: bool) -> int:
         "source": document["source"],
         "source_snapshot_sha256": sha256_bytes(source_bytes),
         "review_status": "gate-reviewer remediation; owner signoff pending",
+        "definition_classification": REVIEW_CLASSIFICATION,
         "card_count": len(cards),
         "stratum_count": len(stratum_counts),
         "strata": dict(sorted(stratum_counts.items())),
@@ -896,6 +910,7 @@ def generate(root: Path, check: bool) -> int:
         "schema_version": 1,
         "source_snapshot_sha256": manifest["source_snapshot_sha256"],
         "reviewed_card_count": len(cards),
+        "definition_classification": REVIEW_CLASSIFICATION,
         "distinct_primary_strata": len(stratum_counts),
         "minimum_cards_per_stratum": min(stratum_counts.values()),
         "mandatory_strata": list(MANDATORY_STRATA),

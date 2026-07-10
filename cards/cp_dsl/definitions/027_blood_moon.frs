@@ -2,7 +2,7 @@
 card "Blood Moon" {
   id: "94fac5fe-97d5-4c12-a80c-8efff9d853ae"
   layout: normal
-  status: verified_playable
+  status: unverified_playable
   face "Blood Moon" {
     cost: "{2}{R}"
     types: "Enchantment"

@@ -2,7 +2,7 @@
 card "Anointed Procession" {
   id: "7246d45b-2185-4cdd-981b-5419b7d52bce"
   layout: normal
-  status: verified_playable
+  status: unverified_playable
   face "Anointed Procession" {
     cost: "{3}{W}"
     types: "Enchantment"

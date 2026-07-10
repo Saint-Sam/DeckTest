@@ -2,7 +2,7 @@
 card "Breena, the Demagogue" {
   id: "d11e627b-8a48-411d-a261-2c9a02a758ba"
   layout: normal
-  status: verified_playable
+  status: unverified_playable
   face "Breena, the Demagogue" {
     cost: "{1}{W}{B}"
     types: "Legendary Creature — Bird Warlock"

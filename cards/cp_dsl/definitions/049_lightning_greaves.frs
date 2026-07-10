@@ -2,7 +2,7 @@
 card "Lightning Greaves" {
   id: "ca204b66-8d0c-431a-8d34-282f7c2d17da"
   layout: normal
-  status: verified_playable
+  status: unverified_playable
   face "Lightning Greaves" {
     cost: "{2}"
     types: "Artifact — Equipment"

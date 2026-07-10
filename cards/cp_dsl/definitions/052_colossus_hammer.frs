@@ -2,7 +2,7 @@
 card "Colossus Hammer" {
   id: "8ec03b88-8d3a-4a32-8b7c-7da59b0c03d0"
   layout: normal
-  status: verified_playable
+  status: unverified_playable
   face "Colossus Hammer" {
     cost: "{1}"
     types: "Artifact — Equipment"

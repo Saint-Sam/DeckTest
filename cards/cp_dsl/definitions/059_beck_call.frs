@@ -2,7 +2,7 @@
 card "Beck // Call" {
   id: "5b8472c8-a7e7-46f2-aecf-e954082a5ef5"
   layout: split
-  status: verified_playable
+  status: unverified_playable
   face "Beck" {
     cost: "{G}{U}"
     types: "Sorcery"

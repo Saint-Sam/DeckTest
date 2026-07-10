@@ -2,7 +2,7 @@
 card "Rest in Peace" {
   id: "087f9ad7-e74f-40e2-8102-1ed2925d0418"
   layout: normal
-  status: verified_playable
+  status: unverified_playable
   face "Rest in Peace" {
     cost: "{1}{W}"
     types: "Enchantment"

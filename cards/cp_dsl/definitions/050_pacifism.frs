@@ -2,7 +2,7 @@
 card "Pacifism" {
   id: "5f5e0b10-c8cf-450c-bfd3-bcb0528ec330"
   layout: normal
-  status: verified_playable
+  status: unverified_playable
   face "Pacifism" {
     cost: "{1}{W}"
     types: "Enchantment — Aura"

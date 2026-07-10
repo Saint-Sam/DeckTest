@@ -2,7 +2,7 @@
 card "Case of the Locked Hothouse" {
   id: "2380fd04-6d19-4f5a-8a9e-c17d9ae09fb6"
   layout: case
-  status: verified_playable
+  status: unverified_playable
   face "Case of the Locked Hothouse" {
     cost: "{3}{G}"
     types: "Enchantment — Case"

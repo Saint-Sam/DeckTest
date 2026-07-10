@@ -2,7 +2,7 @@
 card "Budoka Gardener // Dokai, Weaver of Life" {
   id: "cb952c81-c7bb-4670-938d-296d35551986"
   layout: flip
-  status: verified_playable
+  status: unverified_playable
   face "Budoka Gardener" {
     cost: "{1}{G}"
     types: "Creature — Human Monk"
