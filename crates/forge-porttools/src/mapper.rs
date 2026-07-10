@@ -251,6 +251,11 @@ const MAPPERS: &[MapperSpec] = &[
         api: "Animate",
         mapper: map_animate,
     },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Static,
+        api: "AlternativeCost",
+        mapper: map_alternative_cost,
+    },
 ];
 
 struct MappingContext<'a> {
@@ -557,6 +562,9 @@ fn map_triggered_ability(
         "Attacks" => map_attacks_event(&parameters)?,
         "SpellCast" => map_spell_cast_event(&parameters)?,
         "DamageDone" => map_damage_done_event(&parameters)?,
+        "Drawn" => map_drawn_event(&parameters)?,
+        "AttackersDeclared" => map_attackers_declared_event(&parameters)?,
+        "Blocks" => map_blocks_event(&parameters)?,
         _ => {
             return Err(diagnostic(
                 "UNMAPPED_API",
@@ -710,6 +718,121 @@ fn map_damage_done_event(
         arguments.push(Expression::Text("combat".to_string()));
     }
     Ok(call(Operation::EventDamage, arguments))
+}
+
+fn map_drawn_event(parameters: &BTreeMap<String, String>) -> Result<Expression, MappingDiagnostic> {
+    reject_unknown(
+        parameters,
+        &[
+            "Execute",
+            "ValidCard",
+            "ValidPlayer",
+            "TriggerZones",
+            "TriggerDescription",
+        ],
+    )?;
+    require_battlefield_zone(parameters, "TriggerZones")?;
+    if parameters.contains_key("ValidCard") && parameters.contains_key("ValidPlayer") {
+        return Err(diagnostic(
+            "UNSUPPORTED_EVENT",
+            "Drawn trigger has both ValidCard and ValidPlayer filters",
+        ));
+    }
+    let drawer = if let Some(value) = parameters.get("ValidPlayer") {
+        draw_player_selector(value, "ValidPlayer")?
+    } else {
+        draw_card_owner_selector(required(parameters, "ValidCard")?)?
+    };
+    Ok(call(Operation::EventDraw, vec![drawer]))
+}
+
+fn map_attackers_declared_event(
+    parameters: &BTreeMap<String, String>,
+) -> Result<Expression, MappingDiagnostic> {
+    reject_unknown(
+        parameters,
+        &[
+            "Execute",
+            "AttackingPlayer",
+            "ValidAttackers",
+            "TriggerZones",
+            "TriggerDescription",
+        ],
+    )?;
+    require_battlefield_zone(parameters, "TriggerZones")?;
+    let mut attackers = parameters
+        .get("ValidAttackers")
+        .map(|value| affected_selector(value))
+        .transpose()?
+        .unwrap_or_else(|| {
+            call(
+                Operation::Permanents,
+                vec![call(
+                    Operation::TypeIs,
+                    vec![Expression::Text("creature".to_string())],
+                )],
+            )
+        });
+    if let Some(value) = parameters.get("AttackingPlayer") {
+        attackers = add_collection_predicate(
+            attackers,
+            call(
+                Operation::ControlledBy,
+                vec![draw_player_selector(value, "AttackingPlayer")?],
+            ),
+        )?;
+    }
+    Ok(call(
+        Operation::EventAttacks,
+        vec![attackers, Expression::Text("declaration".to_string())],
+    ))
+}
+
+fn map_blocks_event(
+    parameters: &BTreeMap<String, String>,
+) -> Result<Expression, MappingDiagnostic> {
+    reject_unknown(
+        parameters,
+        &[
+            "Execute",
+            "ValidCard",
+            "Secondary",
+            "TriggerZones",
+            "TriggerDescription",
+        ],
+    )?;
+    require_battlefield_zone(parameters, "TriggerZones")?;
+    if parameters
+        .get("Secondary")
+        .is_some_and(|value| value != "True")
+    {
+        return Err(unsupported_value(
+            "Secondary",
+            required(parameters, "Secondary")?,
+        ));
+    }
+    Ok(call(
+        Operation::EventBlocks,
+        vec![affected_selector(required(parameters, "ValidCard")?)?],
+    ))
+}
+
+fn draw_player_selector(value: &str, key: &str) -> Result<Expression, MappingDiagnostic> {
+    match value {
+        "Any" | "Player" => Ok(call(Operation::Any, vec![])),
+        "You" | "Player.You" => Ok(call(Operation::You, vec![])),
+        "Opponent" | "Player.Opponent" => Ok(call(Operation::Opponent, vec![])),
+        _ => Err(unsupported_value(key, value)),
+    }
+}
+
+fn draw_card_owner_selector(value: &str) -> Result<Expression, MappingDiagnostic> {
+    match value {
+        "Card" => Ok(call(Operation::Any, vec![])),
+        "Card.YouCtrl" | "Card.YouOwn" => Ok(call(Operation::You, vec![])),
+        "Card.OppCtrl" | "Card.OppOwn" => Ok(call(Operation::Opponent, vec![])),
+        _ => Err(unsupported_value("ValidCard", value)),
+    }
 }
 
 fn damage_event_selector(value: &str, key: &str) -> Result<Expression, MappingDiagnostic> {
@@ -1429,7 +1552,15 @@ fn map_change_zone(
     let replacement_object = parameters
         .get("Defined")
         .is_some_and(|value| value == "ReplacedCard");
-    if origin != "Battlefield" && !(origin == "All" && replacement_object) {
+    let identity_bound = parameters
+        .get("Defined")
+        .is_some_and(|value| matches!(value.as_str(), "Self" | "TriggeredCard" | "ReplacedCard"))
+        && !parameters.contains_key("ValidTgts");
+    let closed_origin = matches!(origin, "Graveyard" | "Hand" | "Exile" | "Stack");
+    if origin != "Battlefield"
+        && !(origin == "All" && replacement_object)
+        && !(closed_origin && identity_bound)
+    {
         return Err(unsupported_value("Origin", origin));
     }
     let affected = object_selector(parameters, DefaultSelector::Source)?;
@@ -1440,6 +1571,10 @@ fn map_change_zone(
         ),
         "Exile" => call(Operation::Exile, vec![affected]),
         "Hand" => call(Operation::ReturnToHand, vec![affected]),
+        "Battlefield" => call(
+            Operation::MoveZone,
+            vec![affected, Expression::Text("battlefield".to_string())],
+        ),
         value => return Err(unsupported_value("Destination", value)),
     };
     mapped_direct(prefix, api, parameters, expression)
@@ -1611,25 +1746,31 @@ fn map_counter_spell(
             "TargetType",
             "ValidTgts",
             "TgtPrompt",
+            "Destination",
             "SpellDescription",
             "StackDescription",
             "AILogic",
         ],
     )?;
-    if required(parameters, "TargetType")? != "Spell"
-        || required(parameters, "ValidTgts")? != "Spell"
-    {
-        return Err(diagnostic(
-            "UNSUPPORTED_SELECTOR",
-            "simple Counter requires TargetType$ Spell and ValidTgts$ Spell",
+    if required(parameters, "TargetType")? != "Spell" {
+        return Err(unsupported_value(
+            "TargetType",
+            required(parameters, "TargetType")?,
         ));
     }
+    if parameters
+        .get("Destination")
+        .is_some_and(|destination| destination != "Graveyard")
+    {
+        return Err(unsupported_value(
+            "Destination",
+            required(parameters, "Destination")?,
+        ));
+    }
+    let spells = spell_selector(required(parameters, "ValidTgts")?)?;
     let expression = call(
         Operation::CounterSpell,
-        vec![call(
-            Operation::Target,
-            vec![call(Operation::Spells, vec![])],
-        )],
+        vec![call(Operation::Target, vec![spells])],
     );
     mapped_direct(prefix, api, parameters, expression)
 }
@@ -1922,6 +2063,78 @@ fn map_animate(
     mapped_direct(prefix, api, parameters, expression)
 }
 
+fn map_alternative_cost(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector(selector, "Mode")?;
+    reject_unknown(
+        parameters,
+        &[
+            "ValidSA",
+            "ValidCard",
+            "ValidPlayer",
+            "Cost",
+            "EffectZone",
+            "Description",
+        ],
+    )?;
+    if parameters
+        .get("EffectZone")
+        .is_some_and(|zone| zone != "All")
+    {
+        return Err(unsupported_value(
+            "EffectZone",
+            required(parameters, "EffectZone")?,
+        ));
+    }
+    let valid_sa = required(parameters, "ValidSA")?;
+    let mut spells = match valid_sa {
+        "Spell.Self" => {
+            if parameters.contains_key("ValidCard") {
+                return Err(diagnostic(
+                    "UNSUPPORTED_SELECTOR",
+                    "self-spell alternative cost also supplies ValidCard",
+                ));
+            }
+            spell_selector("Card.Self")?
+        }
+        "Spell" => parameters
+            .get("ValidCard")
+            .map(|value| spell_selector(value))
+            .transpose()?
+            .unwrap_or_else(|| call(Operation::Spells, vec![])),
+        value => return Err(unsupported_value("ValidSA", value)),
+    };
+    if let Some(value) = parameters.get("ValidPlayer") {
+        spells = add_collection_predicate(
+            spells,
+            call(
+                Operation::ControlledBy,
+                vec![draw_player_selector(value, "ValidPlayer")?],
+            ),
+        )?;
+    }
+    let costs = parse_simple_cost(parameters.get("Cost"))?;
+    if costs.is_empty() {
+        return Err(diagnostic(
+            "MISSING_PARAMETER",
+            "AlternativeCost requires a typed non-empty cost",
+        ));
+    }
+    let mut arguments = vec![spells];
+    arguments.extend(costs);
+    Ok(MappedLegacyAbility {
+        prefix,
+        api: api.to_string(),
+        costs: Vec::new(),
+        event: None,
+        expression: call(Operation::AlternateCost, arguments),
+    })
+}
+
 fn parse_animate_colors(value: &str) -> Result<Vec<String>, MappingDiagnostic> {
     let colors = value.split(',').map(str::trim).collect::<Vec<_>>();
     if colors.is_empty()
@@ -1955,10 +2168,13 @@ fn add_collection_predicate(
             "expected a typed collection selector",
         ));
     };
-    if operation != Operation::Spells {
+    if !matches!(
+        operation,
+        Operation::Cards | Operation::Permanents | Operation::Spells
+    ) {
         return Err(diagnostic(
             "UNSUPPORTED_SELECTOR",
-            "cost reduction requires a spell collection",
+            "predicate composition requires a card collection",
         ));
     }
     let combined = match arguments.len() {
@@ -1967,7 +2183,7 @@ fn add_collection_predicate(
         _ => {
             return Err(diagnostic(
                 "UNSUPPORTED_SELECTOR",
-                "spell collection has an invalid predicate shape",
+                "card collection has an invalid predicate shape",
             ));
         }
     };
@@ -2036,7 +2252,17 @@ fn parse_simple_cost(value: Option<&String>) -> Result<Vec<Expression>, MappingD
             if amount == 1 && validity == "CARDNAME" {
                 costs.push(call(Operation::SacrificeSelf, vec![]));
             } else {
-                return Err(unsupported_value("Cost", value));
+                let selector =
+                    affected_selector(validity).map_err(|_| unsupported_value("Cost", value))?;
+                let selector = add_collection_predicate(
+                    selector,
+                    call(Operation::ControlledBy, vec![call(Operation::You, vec![])]),
+                )
+                .map_err(|_| unsupported_value("Cost", value))?;
+                costs.push(call(
+                    Operation::Sacrifice,
+                    vec![selector, Expression::Integer(amount)],
+                ));
             }
         } else if let Some(payload) = cost_payload(&token, "PayLife") {
             costs.push(call(
@@ -2045,12 +2271,33 @@ fn parse_simple_cost(value: Option<&String>) -> Result<Vec<Expression>, MappingD
             ));
         } else if let Some(payload) = cost_payload(&token, "Discard") {
             let (amount, validity) = parse_counted_cost(payload, "Discard")?;
-            if validity != "Card" && validity != "Hand" {
-                return Err(unsupported_value("Cost", value));
-            }
             costs.push(call(
                 Operation::DiscardCost,
-                vec![Expression::Integer(amount), call(Operation::Cards, vec![])],
+                vec![
+                    Expression::Integer(amount),
+                    cost_card_selector(validity, None)
+                        .map_err(|_| unsupported_value("Cost", value))?,
+                ],
+            ));
+        } else if let Some(payload) = cost_payload(&token, "ExileFromGrave") {
+            let (amount, validity) = parse_counted_cost(payload, "ExileFromGrave")?;
+            costs.push(call(
+                Operation::ExileCost,
+                vec![
+                    cost_card_selector(validity, Some("graveyard"))
+                        .map_err(|_| unsupported_value("Cost", value))?,
+                    Expression::Integer(amount),
+                ],
+            ));
+        } else if let Some(payload) = cost_payload(&token, "ExileFromHand") {
+            let (amount, validity) = parse_counted_cost(payload, "ExileFromHand")?;
+            costs.push(call(
+                Operation::ExileCost,
+                vec![
+                    cost_card_selector(validity, Some("hand"))
+                        .map_err(|_| unsupported_value("Cost", value))?,
+                    Expression::Integer(amount),
+                ],
             ));
         } else if let Some(payload) = cost_payload(&token, "Exile") {
             let (amount, validity) = parse_counted_cost(payload, "Exile")?;
@@ -2062,7 +2309,7 @@ fn parse_simple_cost(value: Option<&String>) -> Result<Vec<Expression>, MappingD
                 vec![call(Operation::Source, vec![]), Expression::Integer(amount)],
             ));
         } else if let Some(payload) = cost_payload(&token, "AddCounter") {
-            let (amount, counter) = parse_counted_cost(payload, "AddCounter")?;
+            let (amount, counter) = parse_counted_cost_nonnegative(payload, "AddCounter")?;
             if counter != "LOYALTY" {
                 return Err(unsupported_value("Cost", value));
             }
@@ -2077,16 +2324,16 @@ fn parse_simple_cost(value: Option<&String>) -> Result<Vec<Expression>, MappingD
                     Operation::LoyaltyCost,
                     vec![Expression::Integer(-amount)],
                 ));
-            } else if amount == 1 {
-                costs.push(call(
-                    Operation::RemoveCounterCost,
-                    vec![
-                        call(Operation::Source, vec![]),
-                        Expression::Text(counter.to_ascii_lowercase()),
-                    ],
-                ));
             } else {
-                return Err(unsupported_value("Cost", value));
+                for _ in 0..amount {
+                    costs.push(call(
+                        Operation::RemoveCounterCost,
+                        vec![
+                            call(Operation::Source, vec![]),
+                            Expression::Text(counter.to_ascii_lowercase()),
+                        ],
+                    ));
+                }
             }
         } else {
             return Err(unsupported_value("Cost", value));
@@ -2096,6 +2343,52 @@ fn parse_simple_cost(value: Option<&String>) -> Result<Vec<Expression>, MappingD
         costs.insert(0, call(Operation::ManaCost, vec![Expression::Text(mana)]));
     }
     Ok(costs)
+}
+
+fn cost_card_selector(validity: &str, zone: Option<&str>) -> Result<Expression, MappingDiagnostic> {
+    if validity == "Hand" || validity == "Card" {
+        let selector = call(Operation::Cards, vec![]);
+        return zone.map_or(Ok(selector.clone()), |zone| {
+            add_collection_predicate(
+                selector,
+                call(Operation::ZoneIs, vec![Expression::Text(zone.to_string())]),
+            )
+        });
+    }
+    if validity == "CARDNAME" && zone.is_none() {
+        return Ok(call(Operation::Source, vec![]));
+    }
+    let mut selector = if validity == "CARDNAME" {
+        call(
+            Operation::Cards,
+            vec![call(
+                Operation::Equals,
+                vec![
+                    call(Operation::Any, vec![]),
+                    call(Operation::Source, vec![]),
+                ],
+            )],
+        )
+    } else {
+        let Expression::Call {
+            operation,
+            arguments,
+        } = affected_selector(validity)?
+        else {
+            return Err(unsupported_value("Cost", validity));
+        };
+        if !matches!(operation, Operation::Cards | Operation::Permanents) {
+            return Err(unsupported_value("Cost", validity));
+        }
+        call(Operation::Cards, arguments)
+    };
+    if let Some(zone) = zone {
+        selector = add_collection_predicate(
+            selector,
+            call(Operation::ZoneIs, vec![Expression::Text(zone.to_string())]),
+        )?;
+    }
+    Ok(selector)
 }
 
 fn split_cost_tokens(value: &str) -> Result<Vec<String>, MappingDiagnostic> {
@@ -2150,6 +2443,25 @@ fn parse_counted_cost<'a>(
         return Err(unsupported_value("Cost", payload));
     }
     Ok((positive_integer(amount_text, key)?, validity))
+}
+
+fn parse_counted_cost_nonnegative<'a>(
+    payload: &'a str,
+    key: &str,
+) -> Result<(i64, &'a str), MappingDiagnostic> {
+    let mut fields = payload.splitn(3, '/');
+    let amount_text = fields.next().unwrap_or_default();
+    let validity = fields.next().unwrap_or_default();
+    if validity.is_empty() {
+        return Err(unsupported_value("Cost", payload));
+    }
+    let amount = amount_text
+        .parse::<i64>()
+        .map_err(|_| unsupported_value(key, amount_text))?;
+    if amount < 0 {
+        return Err(unsupported_value(key, amount_text));
+    }
+    Ok((amount, validity))
 }
 
 fn normalize_mana(value: &str, amount: i64) -> Result<String, MappingDiagnostic> {
@@ -2436,6 +2748,12 @@ fn affected_selector_branch(value: &str) -> Result<Expression, MappingDiagnostic
     if value == "You" {
         return Ok(call(Operation::You, vec![]));
     }
+    if value == "Opponent" {
+        return Ok(call(Operation::Opponent, vec![]));
+    }
+    if matches!(value, "Any" | "Player") {
+        return Ok(call(Operation::Any, vec![]));
+    }
     if matches!(value, "Card.Self" | "Creature.Self" | "Self") {
         return Ok(call(Operation::Source, vec![]));
     }
@@ -2481,6 +2799,18 @@ fn affected_selector_branch(value: &str) -> Result<Expression, MappingDiagnostic
             let predicate = match modifier {
                 "YouCtrl" => call(Operation::ControlledBy, vec![call(Operation::You, vec![])]),
                 "YouOwn" => call(Operation::OwnedBy, vec![call(Operation::You, vec![])]),
+                "OppCtrl" => call(
+                    Operation::ControlledBy,
+                    vec![call(Operation::Opponent, vec![])],
+                ),
+                "OppOwn" => call(Operation::OwnedBy, vec![call(Operation::Opponent, vec![])]),
+                "YouDontCtrl" => call(
+                    Operation::Not,
+                    vec![call(
+                        Operation::ControlledBy,
+                        vec![call(Operation::You, vec![])],
+                    )],
+                ),
                 "Other" => call(
                     Operation::Not,
                     vec![call(
@@ -2491,7 +2821,78 @@ fn affected_selector_branch(value: &str) -> Result<Expression, MappingDiagnostic
                         ],
                     )],
                 ),
-                _ => return Err(unsupported_value("Affected", value)),
+                "Artifact" | "Battle" | "Creature" | "Enchantment" | "Instant" | "Land"
+                | "Planeswalker" | "Sorcery" => call(
+                    Operation::TypeIs,
+                    vec![Expression::Text(modifier.to_ascii_lowercase())],
+                ),
+                "White" | "Blue" | "Black" | "Red" | "Green" => call(
+                    Operation::ColorIs,
+                    vec![Expression::Text(modifier.to_ascii_lowercase())],
+                ),
+                "Legendary" => call(
+                    Operation::SupertypeIs,
+                    vec![Expression::Text("legendary".to_string())],
+                ),
+                "nonLand" => call(
+                    Operation::Not,
+                    vec![call(
+                        Operation::TypeIs,
+                        vec![Expression::Text("land".to_string())],
+                    )],
+                ),
+                "nonCreature" => call(
+                    Operation::Not,
+                    vec![call(
+                        Operation::TypeIs,
+                        vec![Expression::Text("creature".to_string())],
+                    )],
+                ),
+                "nonArtifact" => call(
+                    Operation::Not,
+                    vec![call(
+                        Operation::TypeIs,
+                        vec![Expression::Text("artifact".to_string())],
+                    )],
+                ),
+                "withFlying" => call(
+                    Operation::KeywordIs,
+                    vec![Expression::Text("flying".to_string())],
+                ),
+                "withoutFlying" => call(
+                    Operation::Not,
+                    vec![call(
+                        Operation::KeywordIs,
+                        vec![Expression::Text("flying".to_string())],
+                    )],
+                ),
+                literal_subtype
+                    if literal_subtype
+                        .chars()
+                        .next()
+                        .is_some_and(char::is_uppercase)
+                        && literal_subtype.chars().all(|character| {
+                            character.is_ascii_alphanumeric() || character == '-'
+                        })
+                        && !literal_subtype.starts_with("Is")
+                        && !literal_subtype.starts_with("Chosen") =>
+                {
+                    call(
+                        Operation::SubtypeIs,
+                        vec![Expression::Text(literal_subtype.to_ascii_lowercase())],
+                    )
+                }
+                _ => {
+                    if let Some(predicate) = closed_numeric_predicate(modifier) {
+                        predicate?
+                    } else if let Some(predicate) = closed_negated_predicate(modifier) {
+                        predicate
+                    } else if let Some(predicate) = closed_keyword_predicate(modifier) {
+                        predicate
+                    } else {
+                        return Err(unsupported_value("Affected", value));
+                    }
+                }
             };
             predicates.push(predicate);
         }
@@ -2507,6 +2908,109 @@ fn affected_selector_branch(value: &str) -> Result<Expression, MappingDiagnostic
         Operation::Permanents
     };
     Ok(call(operation, predicate.into_iter().collect()))
+}
+
+fn closed_numeric_predicate(value: &str) -> Option<Result<Expression, MappingDiagnostic>> {
+    let (operation, comparison) = [
+        ("power", Operation::Power),
+        ("toughness", Operation::Toughness),
+        ("cmc", Operation::ManaValue),
+    ]
+    .into_iter()
+    .find_map(|(prefix, operation)| {
+        value
+            .strip_prefix(prefix)
+            .map(|comparison| (operation, comparison))
+    })?;
+    let (comparison, amount_text) =
+        ["GE", "LE", "EQ", "GT", "LT"]
+            .into_iter()
+            .find_map(|prefix| {
+                comparison
+                    .strip_prefix(prefix)
+                    .map(|amount| (prefix, amount))
+            })?;
+    let amount = match amount_text.parse::<i64>() {
+        Ok(amount) => amount,
+        Err(_) => return Some(Err(unsupported_value("Affected", value))),
+    };
+    let subject = call(operation, vec![call(Operation::Any, vec![])]);
+    let predicate = match comparison {
+        "GE" => call(
+            Operation::AtLeast,
+            vec![subject, Expression::Integer(amount)],
+        ),
+        "LE" => match amount.checked_add(1) {
+            Some(exclusive) => call(
+                Operation::LessThan,
+                vec![subject, Expression::Integer(exclusive)],
+            ),
+            None => return Some(Err(unsupported_value("Affected", value))),
+        },
+        "EQ" => call(
+            Operation::Equals,
+            vec![subject, Expression::Integer(amount)],
+        ),
+        "GT" => call(
+            Operation::GreaterThan,
+            vec![subject, Expression::Integer(amount)],
+        ),
+        "LT" => call(
+            Operation::LessThan,
+            vec![subject, Expression::Integer(amount)],
+        ),
+        _ => return Some(Err(unsupported_value("Affected", value))),
+    };
+    Some(Ok(predicate))
+}
+
+fn closed_negated_predicate(value: &str) -> Option<Expression> {
+    let excluded = value.strip_prefix("non")?;
+    if !excluded.chars().next().is_some_and(char::is_uppercase)
+        || !excluded
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || character == '-')
+    {
+        return None;
+    }
+    let operation = if matches!(excluded, "White" | "Blue" | "Black" | "Red" | "Green") {
+        Operation::ColorIs
+    } else if matches!(
+        excluded,
+        "Artifact"
+            | "Battle"
+            | "Creature"
+            | "Enchantment"
+            | "Instant"
+            | "Land"
+            | "Planeswalker"
+            | "Sorcery"
+    ) {
+        Operation::TypeIs
+    } else {
+        Operation::SubtypeIs
+    };
+    Some(call(
+        Operation::Not,
+        vec![call(
+            operation,
+            vec![Expression::Text(excluded.to_ascii_lowercase())],
+        )],
+    ))
+}
+
+fn closed_keyword_predicate(value: &str) -> Option<Expression> {
+    let (keyword, negated) = value
+        .strip_prefix("without")
+        .map(|keyword| (keyword, true))
+        .or_else(|| value.strip_prefix("with").map(|keyword| (keyword, false)))?;
+    let normalized = normalize_simple_keyword(keyword).ok()?;
+    let predicate = call(Operation::KeywordIs, vec![Expression::Text(normalized)]);
+    Some(if negated {
+        call(Operation::Not, vec![predicate])
+    } else {
+        predicate
+    })
 }
 
 fn normalize_simple_keyword(value: &str) -> Result<String, MappingDiagnostic> {
@@ -2893,6 +3397,31 @@ mod tests {
     }
 
     #[test]
+    fn maps_closed_selector_predicates() {
+        for line in [
+            "A:AB$ Pump | ValidTgts$ Creature.OppCtrl+Legendary | NumAtt$ 1 | NumDef$ 1 | SpellDescription$ Pump.",
+            "A:AB$ Destroy | ValidTgts$ Permanent.YouDontCtrl+nonLand | SpellDescription$ Destroy.",
+            "A:AB$ Tap | ValidTgts$ Creature.Blue+withoutFlying | SpellDescription$ Tap.",
+            "A:AB$ Pump | ValidTgts$ Creature.Sliver+YouCtrl | NumAtt$ 1 | NumDef$ 1 | SpellDescription$ Pump.",
+            "A:SP$ Counter | TargetType$ Spell | ValidTgts$ Card.nonCreature | Destination$ Graveyard | SpellDescription$ Counter.",
+            "A:DB$ ChangeZone | Defined$ TriggeredCard | Origin$ Graveyard | Destination$ Battlefield | SpellDescription$ Return.",
+            "S:Mode$ AlternativeCost | ValidSA$ Spell.Self | EffectZone$ All | Cost$ 2 W W | Description$ Alternative.",
+            "A:AB$ Pump | ValidTgts$ Creature.nonHuman+powerGE4+toughnessLE6 | NumAtt$ 1 | NumDef$ 1 | SpellDescription$ Pump.",
+        ] {
+            map_line(line).unwrap_or_else(|error| {
+                panic!("closed selector should map: {}", error.message);
+            });
+        }
+        let error = match map_line(
+            "A:AB$ Pump | ValidTgts$ Creature.attacking | NumAtt$ 1 | NumDef$ 1 | SpellDescription$ Pump.",
+        ) {
+            Ok(_) => panic!("combat-state selector must remain quarantined"),
+            Err(error) => error,
+        };
+        assert_eq!(error.code, "UNSUPPORTED_VALUE");
+    }
+
+    #[test]
     fn resolves_charm_mode_graph() {
         let script = parse_legacy_script(
             "charm.txt",
@@ -3029,6 +3558,11 @@ mod tests {
                 1,
             ),
             (
+                "A:AB$ Draw | Cost$ AddCounter<0/LOYALTY> | NumCards$ 1 | SpellDescription$ Draw.",
+                Operation::Draw,
+                1,
+            ),
+            (
                 "A:AB$ Destroy | Cost$ T Sac<1/CARDNAME> | ValidTgts$ Creature | SpellDescription$ Destroy.",
                 Operation::Destroy,
                 2,
@@ -3039,9 +3573,29 @@ mod tests {
                 1,
             ),
             (
+                "A:AB$ Draw | Cost$ SubCounter<3/CHARGE> | NumCards$ 1 | SpellDescription$ Draw.",
+                Operation::Draw,
+                3,
+            ),
+            (
                 "A:AB$ Mill | Cost$ B Discard<1/Card> | NumCards$ 2 | SpellDescription$ Mill.",
                 Operation::Mill,
                 2,
+            ),
+            (
+                "A:AB$ Draw | Cost$ 2 T Sac<1/Land> | NumCards$ 1 | SpellDescription$ Draw.",
+                Operation::Draw,
+                3,
+            ),
+            (
+                "A:AB$ Draw | Cost$ B Discard<1/Land> | NumCards$ 1 | SpellDescription$ Draw.",
+                Operation::Draw,
+                2,
+            ),
+            (
+                "A:AB$ GainLife | Cost$ ExileFromGrave<1/Creature> | LifeAmount$ 2 | SpellDescription$ Life.",
+                Operation::GainLife,
+                1,
             ),
             (
                 "A:AB$ ChangeZone | Cost$ Exile<1/CARDNAME> | Origin$ Battlefield | Destination$ Exile | Defined$ Self | SpellDescription$ Exile.",
@@ -3100,6 +3654,33 @@ mod tests {
                     "SVar:TrigDraw:DB$ Draw | Defined$ You\n",
                 ),
                 Operation::EventDamage,
+                Operation::Draw,
+            ),
+            (
+                concat!(
+                    "Name:Graph Draw\n",
+                    "T:Mode$ Drawn | ValidCard$ Card.OppOwn | TriggerZones$ Battlefield | Execute$ TrigDraw | TriggerDescription$ Draw.\n",
+                    "SVar:TrigDraw:DB$ Draw | Defined$ You\n",
+                ),
+                Operation::EventDraw,
+                Operation::Draw,
+            ),
+            (
+                concat!(
+                    "Name:Graph Attack Declaration\n",
+                    "T:Mode$ AttackersDeclared | AttackingPlayer$ You | TriggerZones$ Battlefield | Execute$ TrigDraw | TriggerDescription$ Draw.\n",
+                    "SVar:TrigDraw:DB$ Draw | Defined$ You\n",
+                ),
+                Operation::EventAttacks,
+                Operation::Draw,
+            ),
+            (
+                concat!(
+                    "Name:Graph Blocks\n",
+                    "T:Mode$ Blocks | ValidCard$ Card.Self | TriggerZones$ Battlefield | Execute$ TrigDraw | TriggerDescription$ Draw.\n",
+                    "SVar:TrigDraw:DB$ Draw | Defined$ You\n",
+                ),
+                Operation::EventBlocks,
                 Operation::Draw,
             ),
         ] {
@@ -3195,7 +3776,7 @@ mod tests {
         assert_eq!(chained.code, "UNSUPPORTED_PARAMETER");
 
         let qualified_target = map_line(
-            "A:SP$ Destroy | ValidTgts$ Creature.nonBlack | SpellDescription$ Qualified target.",
+            "A:SP$ Destroy | ValidTgts$ Creature.counters_GE1_P1P1 | SpellDescription$ Qualified target.",
         )
         .err()
         .unwrap_or_else(|| panic!("qualified target must quarantine"));

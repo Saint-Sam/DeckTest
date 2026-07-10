@@ -250,7 +250,7 @@
       "status": "in_progress",
       "branch": "task/T3.3-api-mapper",
       "attempts": 0,
-      "verification": "Seven fail-closed table-driven mapper packs passed cargo fmt, 16 forge-porttools tests, clippy -D warnings, deterministic full-corpus audit, and the 80% workspace coverage gate locally. Exact effects, statics, structured costs, simple animation, SVar-linked triggers/modes/replacements, and utility mappings cover 9,205/43,649 top-level legacy ability uses (21.0887%); the remaining 34,444 uses are quarantined with stable global and per-API reason counts. Workspace line coverage is 20,489/25,332 (80.8819%). T3.3 remains in progress for dynamic values, conditions, richer costs/selectors, and additional frequency-ordered API packs."
+      "verification": "Eight fail-closed table-driven mapper packs passed cargo fmt, 17 forge-porttools tests, clippy -D warnings, deterministic full-corpus audit, all 235 local oracle scenarios, and the 80% workspace coverage gate locally. Exact effects, statics, structured costs, simple animation, SVar-linked triggers/modes/replacements, combat events, closed selector comparisons, counterspells, alternative costs, and utility mappings cover 11,024/43,649 top-level legacy ability uses (25.2560%); the remaining 32,625 uses are quarantined with stable global and per-API reason counts. Workspace line coverage is 20,921/25,847 (80.9417%). T3.3 remains in progress for dynamic values, conditions, richer graph bindings, and additional frequency-ordered API packs."
     }
   },
   "gates_passed": [
