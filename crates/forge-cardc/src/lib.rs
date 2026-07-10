@@ -14,6 +14,12 @@ pub use emit::emit_card;
 pub use error::{CardcError, CardcResult};
 pub use parse::{parse_card, parse_card_named};
 
+/// Returns whether a normalized keyword id belongs to the compiler registry.
+#[must_use]
+pub fn is_known_keyword(value: &str) -> bool {
+    validate::KNOWN_KEYWORDS.contains(&value)
+}
+
 /// Parses, canonically emits, and reparses one card source.
 pub fn roundtrip_source(source: &str) -> CardcResult<String> {
     roundtrip_source_named("<memory>", source)

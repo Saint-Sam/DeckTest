@@ -5,6 +5,7 @@
 
 pub mod legacy;
 pub mod mapper;
+pub mod translator;
 
 use forge_carddef::{
     CardCatalog, CardClassification, CardLayout, IdentityRecord, OracleId, PrintingId,
@@ -145,6 +146,28 @@ pub fn import_scryfall_catalog(
 /// Runs the Forge porttools command-line surface.
 pub fn run_cli(args: Vec<String>) -> Result<String, String> {
     match args.as_slice() {
+        [translate, all, jobs_flag, jobs]
+            if translate == "translate" && all == "--all" && jobs_flag == "--jobs" =>
+        {
+            let jobs = jobs
+                .parse::<usize>()
+                .map_err(|_| format!("invalid translation worker count `{jobs}`"))?;
+            let report = translator::translate_all(translator::TranslateOptions {
+                root: Path::new("vendor/legacy-forge/forge-gui/res/cardsfolder"),
+                catalog: Path::new("assets/card_catalog.json"),
+                output: Path::new("target/translated-cards"),
+                metrics: Path::new("metrics/translation.json"),
+                quarantine: Path::new("metrics/translation_quarantine.json"),
+                jobs,
+            })?;
+            Ok(format!(
+                "emitted {}/{} legacy scripts ({:.4}%) with {} local workers\noutput target/translated-cards\nmetrics metrics/translation.json\nquarantine metrics/translation_quarantine.json\n",
+                report.emitted_scripts,
+                report.total_scripts,
+                report.emitted_percent,
+                report.jobs
+            ))
+        }
         [legacy, map_audit, root_flag, root, metrics_flag, metrics, quarantine_flag, quarantine]
             if legacy == "legacy"
                 && map_audit == "map-audit"
@@ -281,7 +304,7 @@ fn list_quarantine(path: &Path) -> Result<String, String> {
 }
 
 fn usage() -> String {
-    "usage: forge-porttools legacy parse --root <cardsfolder> --metrics <metrics.json> --failures <failures.json> | forge-porttools legacy map-audit --root <cardsfolder> --metrics <metrics.json> --quarantine <quarantine.json> | forge-porttools catalog import --source <all-cards.json> --summary <summary.json> --output <catalog.json> --metrics <metrics.json> | forge-porttools catalog extract --source <all-cards.json> --summary <summary.json> --selection <selection.json> --output <source-cards.json> | forge-porttools quarantine --list --catalog <catalog.json>".to_string()
+    "usage: forge-porttools translate --all --jobs <N> | forge-porttools legacy parse --root <cardsfolder> --metrics <metrics.json> --failures <failures.json> | forge-porttools legacy map-audit --root <cardsfolder> --metrics <metrics.json> --quarantine <quarantine.json> | forge-porttools catalog import --source <all-cards.json> --summary <summary.json> --output <catalog.json> --metrics <metrics.json> | forge-porttools catalog extract --source <all-cards.json> --summary <summary.json> --selection <selection.json> --output <source-cards.json> | forge-porttools quarantine --list --catalog <catalog.json>".to_string()
 }
 
 #[derive(Clone, Debug, Deserialize)]

@@ -250,7 +250,13 @@
       "status": "in_progress",
       "branch": "task/T3.3-api-mapper",
       "attempts": 0,
-      "verification": "Ten fail-closed table-driven mapper packs passed cargo fmt, 18 forge-porttools tests, clippy -D warnings, deterministic full-corpus audit, all 235 local oracle scenarios, and the 80% workspace coverage gate locally. Exact effects, statics, structured costs, SVar-linked triggers/modes/replacements, player targeting, primitive restrictions and utility effects, closed selector comparisons, aggregate damage/combat markers, simple animation and transform, hand visibility, and closed zone transitions cover 13,143/43,649 top-level legacy ability uses (30.1107%); the remaining 30,506 uses are quarantined with stable global and per-API reason counts. Workspace line coverage is 22,076/27,155 (81.2963%). T3.3 remains in progress for dynamic values, conditions, richer graph bindings, and additional frequency-ordered API packs."
+      "verification": "Ten fail-closed table-driven mapper packs passed cargo fmt, 18 forge-porttools tests, clippy -D warnings, deterministic full-corpus audit, all 235 local oracle scenarios, and the 80% workspace coverage gate locally. Exact effects, statics, structured costs, SVar-linked triggers/modes/replacements, player targeting, primitive restrictions and utility effects, closed selector comparisons, aggregate damage/combat markers, simple animation and transform, hand visibility, and closed zone transitions cover 13,143/43,649 top-level legacy ability uses (30.1107%); the remaining 30,506 uses are quarantined with stable global and per-API reason counts. T3.3 remains in progress for dynamic values, conditions, richer graph bindings, and additional file-impact-ranked API packs."
+    },
+    "T3.4": {
+      "status": "verified_local",
+      "branch": "task/T3.4-frs-emitter",
+      "attempts": 0,
+      "verification": "PASS local 16-worker translation factory: 6,289/33,290 complete single-face legacy scripts emitted as canonical .frs (18.8916%), 27,001 fail-closed file quarantines, deterministic repeated output-tree SHA-1 f71aad3d2285d54911afeafa580c5436a445f347, and 6,289/6,289 forge-cardc compiler roundtrips against 38,306 identities and 113,234 printings. Twenty forge-porttools tests, clippy -D warnings, all 235 recurring oracles, and workspace line coverage 22,255/27,676 (80.4126%) passed locally with no network or GitHub Actions."
     }
   },
   "gates_passed": [

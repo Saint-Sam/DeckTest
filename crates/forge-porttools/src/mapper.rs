@@ -36,6 +36,17 @@ pub struct MappingDiagnostic {
     pub message: String,
 }
 
+pub(crate) struct MappedScriptAbility {
+    pub line: usize,
+    pub selector: String,
+    pub ability: MappedLegacyAbility,
+}
+
+pub(crate) struct ScriptMappingFailure {
+    pub line: usize,
+    pub diagnostic: MappingDiagnostic,
+}
+
 /// Per-API mapping coverage row.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct ApiCoverageRow {
@@ -455,6 +466,39 @@ fn map_legacy_ability_in_context(
     context: &MappingContext<'_>,
 ) -> Result<MappedLegacyAbility, MappingDiagnostic> {
     map_with_context(prefix, expression, context, &mut Vec::new())
+}
+
+pub(crate) fn map_script_abilities(
+    script: &crate::legacy::LegacyScript,
+) -> Result<Vec<MappedScriptAbility>, ScriptMappingFailure> {
+    let context = MappingContext::from_script(script);
+    let mut mapped = Vec::new();
+    for line in &script.lines {
+        let LegacyLineKind::Ability { prefix, expression } = &line.kind else {
+            continue;
+        };
+        let selector = expression
+            .fields
+            .first()
+            .and_then(|field| field.key.clone())
+            .ok_or_else(|| ScriptMappingFailure {
+                line: line.line,
+                diagnostic: diagnostic("MALFORMED_API", "ability has no typed selector"),
+            })?;
+        let ability =
+            map_legacy_ability_in_context(*prefix, expression, &context).map_err(|diagnostic| {
+                ScriptMappingFailure {
+                    line: line.line,
+                    diagnostic,
+                }
+            })?;
+        mapped.push(MappedScriptAbility {
+            line: line.line,
+            selector,
+            ability,
+        });
+    }
+    Ok(mapped)
 }
 
 fn map_with_context(
