@@ -3715,7 +3715,9 @@ fn parameters(
     Ok(parameters)
 }
 
-fn parse_simple_cost(value: Option<&String>) -> Result<Vec<Expression>, MappingDiagnostic> {
+pub(crate) fn parse_simple_cost(
+    value: Option<&String>,
+) -> Result<Vec<Expression>, MappingDiagnostic> {
     let Some(value) = value else {
         return Ok(Vec::new());
     };
@@ -4070,7 +4072,7 @@ fn defined_player_selector(value: &str) -> Result<Expression, MappingDiagnostic>
     }
 }
 
-fn valid_target_selector(value: &str) -> Result<Expression, MappingDiagnostic> {
+pub(crate) fn valid_target_selector(value: &str) -> Result<Expression, MappingDiagnostic> {
     if value == "Any" {
         return Ok(call(Operation::Target, vec![call(Operation::Any, vec![])]));
     }

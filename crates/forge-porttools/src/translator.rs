@@ -5,11 +5,12 @@ use crate::{
         collect_scripts, git_revision, parse_legacy_script, LegacyLine, LegacyLineKind,
         LegacyScript,
     },
-    mapper::map_script_abilities,
+    mapper::{map_script_abilities, parse_simple_cost, valid_target_selector},
 };
 use forge_cardc::{emit_card, is_known_keyword, parse_card_named};
 use forge_carddef::{
-    AbilityDefinition, AbilityKind, CardCatalog, CardClassification, CardLayout, OracleId,
+    AbilityDefinition, AbilityKind, CardCatalog, CardClassification, CardLayout, Expression,
+    Operation, OracleId,
 };
 use rayon::{prelude::*, ThreadPoolBuilder};
 use serde::Serialize;
@@ -89,6 +90,12 @@ struct CatalogIdentity {
 struct CatalogIdentities {
     by_name: BTreeMap<String, Option<CatalogIdentity>>,
     by_faces: BTreeMap<Vec<String>, Option<CatalogIdentity>>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct TranslatedKeywords {
+    ids: Vec<String>,
+    abilities: Vec<AbilityDefinition>,
 }
 
 /// Translates every legacy script in parallel and emits only complete validated cards.
@@ -318,7 +325,7 @@ fn parse_base_card(
         if let Some(defense) = properties.get("Defense") {
             fields.push_str(&format!("    defense: {}\n", quote(defense)));
         }
-        let keywords = simple_keywords(lines)?;
+        let keywords = translate_keywords(lines)?;
         face_sources.push_str(&format!(
             "  face {} {{\n    cost: {}\n    types: {}\n    oracle: {}\n{}    keywords: [{}]\n  }}\n",
             quote(name),
@@ -326,7 +333,7 @@ fn parse_base_card(
             quote(&types),
             quote(&oracle),
             fields,
-            keywords.join(", "),
+            keywords.ids.join(", "),
         ));
     }
     let source = format!(
@@ -342,6 +349,9 @@ fn parse_base_card(
             error.to_string(),
         )
     })?;
+    for (face, lines) in card.faces.iter_mut().zip(faces) {
+        face.abilities.extend(translate_keywords(lines)?.abilities);
+    }
     card.status = CardClassification::UnverifiedPlayable;
     Ok(card)
 }
@@ -478,8 +488,10 @@ fn legacy_type_line(value: &str) -> Result<String, (usize, String, String)> {
     })
 }
 
-fn simple_keywords(lines: &[&LegacyLine]) -> Result<Vec<String>, (usize, String, String)> {
-    let mut keywords = Vec::new();
+fn translate_keywords(
+    lines: &[&LegacyLine],
+) -> Result<TranslatedKeywords, (usize, String, String)> {
+    let mut translated = TranslatedKeywords::default();
     for line in lines {
         let LegacyLineKind::Keyword {
             name, arguments, ..
@@ -487,26 +499,185 @@ fn simple_keywords(lines: &[&LegacyLine]) -> Result<Vec<String>, (usize, String,
         else {
             continue;
         };
-        if !arguments.is_empty() {
-            return Err((
-                line.line,
-                "UNSUPPORTED_KEYWORD".to_string(),
-                format!("parameterized keyword `{name}` requires a typed mapper"),
-            ));
-        }
         let keyword = name.trim().to_ascii_lowercase().replace(' ', "_");
-        if !is_known_keyword(&keyword) {
-            return Err((
-                line.line,
-                "UNSUPPORTED_KEYWORD".to_string(),
-                format!("keyword `{name}` is outside the closed translation pack"),
-            ));
+        let (keyword_id, ability) = match (keyword.as_str(), arguments.as_slice()) {
+            ("etbcounter", [counter, amount]) => {
+                let amount = amount.parse::<i64>().map_err(|_| {
+                    (
+                        line.line,
+                        "UNSUPPORTED_KEYWORD".to_string(),
+                        format!("keyword `{name}` counter amount `{amount}` is not fixed"),
+                    )
+                })?;
+                if amount <= 0 || counter.trim().is_empty() {
+                    return Err((
+                        line.line,
+                        "UNSUPPORTED_KEYWORD".to_string(),
+                        format!("keyword `{name}` has invalid counter parameters"),
+                    ));
+                }
+                (
+                    None,
+                    Some(AbilityDefinition {
+                        kind: AbilityKind::Replacement,
+                        costs: Vec::new(),
+                        event: Some(expression_call(
+                            Operation::EventEnters,
+                            vec![expression_call(Operation::Source, vec![])],
+                        )),
+                        condition: None,
+                        timing: None,
+                        effect: expression_call(
+                            Operation::AddCounter,
+                            vec![
+                                expression_call(Operation::Source, vec![]),
+                                Expression::Text(counter.to_ascii_lowercase()),
+                                Expression::Integer(amount),
+                            ],
+                        ),
+                        mana_ability: false,
+                    }),
+                )
+            }
+            (_, []) => (Some(keyword.clone()), None),
+            ("cycling", [cost]) => {
+                let full_cost = format!("{cost} Discard<1/CARDNAME>");
+                let costs = parse_simple_cost(Some(&full_cost))
+                    .map_err(|diagnostic| (line.line, diagnostic.code, diagnostic.message))?;
+                (
+                    Some(keyword.clone()),
+                    Some(AbilityDefinition {
+                        kind: AbilityKind::Activated,
+                        costs,
+                        event: None,
+                        condition: None,
+                        timing: None,
+                        effect: expression_call(
+                            Operation::Draw,
+                            vec![
+                                Expression::Integer(1),
+                                expression_call(Operation::You, vec![]),
+                            ],
+                        ),
+                        mana_ability: false,
+                    }),
+                )
+            }
+            (
+                "flashback" | "madness" | "foretell" | "dash" | "spectacle" | "overload" | "escape"
+                | "blitz" | "disturb" | "evoke" | "bestow",
+                [cost],
+            ) => (
+                Some(keyword.clone()),
+                Some(alternative_cost_ability(cost, line.line)?),
+            ),
+            ("equip", [cost]) => {
+                let costs = parse_simple_cost(Some(cost))
+                    .map_err(|diagnostic| (line.line, diagnostic.code, diagnostic.message))?;
+                (
+                    Some(keyword.clone()),
+                    Some(AbilityDefinition {
+                        kind: AbilityKind::Activated,
+                        costs,
+                        event: None,
+                        condition: None,
+                        timing: Some(expression_call(Operation::TimingSorcery, vec![])),
+                        effect: expression_call(
+                            Operation::Attach,
+                            vec![
+                                expression_call(Operation::Source, vec![]),
+                                valid_target_selector("Creature.YouCtrl").map_err(
+                                    |diagnostic| (line.line, diagnostic.code, diagnostic.message),
+                                )?,
+                            ],
+                        ),
+                        mana_ability: false,
+                    }),
+                )
+            }
+            ("enchant", [validity]) | ("enchant", [validity, _]) => (
+                Some(keyword.clone()),
+                Some(AbilityDefinition {
+                    kind: AbilityKind::Spell,
+                    costs: Vec::new(),
+                    event: None,
+                    condition: None,
+                    timing: None,
+                    effect: expression_call(
+                        Operation::Attach,
+                        vec![
+                            expression_call(Operation::Source, vec![]),
+                            valid_target_selector(validity).map_err(|diagnostic| {
+                                (line.line, diagnostic.code, diagnostic.message)
+                            })?,
+                        ],
+                    ),
+                    mana_ability: false,
+                }),
+            ),
+            _ => {
+                return Err((
+                    line.line,
+                    "UNSUPPORTED_KEYWORD".to_string(),
+                    format!("parameterized keyword `{name}` requires a typed mapper"),
+                ));
+            }
+        };
+        if let Some(keyword) = keyword_id {
+            if !is_known_keyword(&keyword) {
+                return Err((
+                    line.line,
+                    "UNSUPPORTED_KEYWORD".to_string(),
+                    format!("keyword `{name}` is outside the closed translation pack"),
+                ));
+            }
+            translated.ids.push(keyword);
         }
-        keywords.push(keyword);
+        translated.abilities.extend(ability);
     }
-    keywords.sort();
-    keywords.dedup();
-    Ok(keywords)
+    translated.ids.sort();
+    translated.ids.dedup();
+    Ok(translated)
+}
+
+fn expression_call(operation: Operation, arguments: Vec<Expression>) -> Expression {
+    Expression::Call {
+        operation,
+        arguments,
+    }
+}
+
+fn alternative_cost_ability(
+    cost: &str,
+    line: usize,
+) -> Result<AbilityDefinition, (usize, String, String)> {
+    let cost = cost.to_string();
+    let costs = parse_simple_cost(Some(&cost))
+        .map_err(|diagnostic| (line, diagnostic.code, diagnostic.message))?;
+    if costs.is_empty() {
+        return Err((
+            line,
+            "UNSUPPORTED_KEYWORD".to_string(),
+            "alternative keyword cost is empty".to_string(),
+        ));
+    }
+    let mut arguments = vec![expression_call(Operation::Source, vec![])];
+    arguments.extend(costs);
+    Ok(AbilityDefinition {
+        kind: AbilityKind::Static,
+        costs: Vec::new(),
+        event: None,
+        condition: None,
+        timing: None,
+        effect: expression_call(
+            Operation::Continuous,
+            vec![
+                expression_call(Operation::Source, vec![]),
+                expression_call(Operation::AlternateCost, arguments),
+            ],
+        ),
+        mana_ability: false,
+    })
 }
 
 fn catalog_identities(catalog: &CardCatalog) -> CatalogIdentities {
@@ -629,7 +800,8 @@ fn outcome_path(outcome: &TranslationOutcome) -> &str {
 #[cfg(test)]
 mod tests {
     use super::{
-        legacy_mana_cost, legacy_type_line, translate_one_inner, CatalogIdentities, CatalogIdentity,
+        face_lines, legacy_mana_cost, legacy_type_line, translate_keywords, translate_one_inner,
+        CatalogIdentities, CatalogIdentity,
     };
     use forge_carddef::{CardLayout, OracleId};
     use std::{fs, path::PathBuf};
@@ -728,5 +900,91 @@ mod tests {
         assert!(emitted.contains("face \"Back Face\""));
         fs::remove_dir_all(&root)
             .unwrap_or_else(|error| panic!("could not remove translator fixture: {error}"));
+    }
+
+    #[test]
+    fn desugars_parameterized_attachment_keywords() {
+        let root = std::env::temp_dir().join(format!(
+            "forge-porttools-keyword-translation-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&root)
+            .unwrap_or_else(|error| panic!("could not create translator fixture: {error}"));
+        let path = root.join("fixture_equipment.txt");
+        fs::write(
+            &path,
+            concat!(
+                "Name:Fixture Equipment\n",
+                "ManaCost:2\n",
+                "Types:Artifact Equipment\n",
+                "K:Equip:3\n",
+                "Oracle:Equip {3}\n",
+            ),
+        )
+        .unwrap_or_else(|error| panic!("could not write translator fixture: {error}"));
+        let mut identities = CatalogIdentities::default();
+        identities.by_name.insert(
+            "Fixture Equipment".to_string(),
+            Some(CatalogIdentity {
+                id: OracleId::parse("fixture-equipment")
+                    .unwrap_or_else(|| panic!("fixture id should parse")),
+                name: "Fixture Equipment".to_string(),
+                layout: CardLayout::Normal,
+                face_names: vec!["Fixture Equipment".to_string()],
+            }),
+        );
+        let emitted = translate_one_inner(&path, "f/fixture_equipment.txt", &identities)
+            .unwrap_or_else(|error| panic!("fixture should translate: {error:?}"));
+        assert!(emitted.contains("keywords: [equip]"));
+        assert!(emitted.contains("costs: [mana_cost(\"{3}\")]"));
+        assert!(emitted.contains("effect: attach(source(), target(permanents("));
+        fs::remove_dir_all(&root)
+            .unwrap_or_else(|error| panic!("could not remove translator fixture: {error}"));
+    }
+
+    #[test]
+    fn desugars_fixed_enters_with_counters_pseudo_keyword() {
+        let script = crate::legacy::parse_legacy_script("fixture.txt", "K:etbCounter:P1P1:2\n")
+            .unwrap_or_else(|error| panic!("fixture should parse: {error}"));
+        let faces = face_lines(&script);
+        let translated = translate_keywords(&faces[0])
+            .unwrap_or_else(|error| panic!("keyword should translate: {error:?}"));
+        assert!(translated.ids.is_empty());
+        assert_eq!(translated.abilities.len(), 1);
+        assert_eq!(
+            translated.abilities[0].kind,
+            forge_carddef::AbilityKind::Replacement
+        );
+    }
+
+    #[test]
+    fn desugars_fixed_cost_cycling() {
+        let script = crate::legacy::parse_legacy_script("fixture.txt", "K:Cycling:2\n")
+            .unwrap_or_else(|error| panic!("fixture should parse: {error}"));
+        let faces = face_lines(&script);
+        let translated = translate_keywords(&faces[0])
+            .unwrap_or_else(|error| panic!("keyword should translate: {error:?}"));
+        assert_eq!(translated.ids, vec!["cycling"]);
+        assert_eq!(translated.abilities.len(), 1);
+        assert_eq!(translated.abilities[0].costs.len(), 2);
+        assert_eq!(
+            translated.abilities[0].kind,
+            forge_carddef::AbilityKind::Activated
+        );
+    }
+
+    #[test]
+    fn desugars_fixed_keyword_alternative_cost() {
+        let script = crate::legacy::parse_legacy_script("fixture.txt", "K:Flashback:2 U\n")
+            .unwrap_or_else(|error| panic!("fixture should parse: {error}"));
+        let faces = face_lines(&script);
+        let translated = translate_keywords(&faces[0])
+            .unwrap_or_else(|error| panic!("keyword should translate: {error:?}"));
+        assert_eq!(translated.ids, vec!["flashback"]);
+        assert_eq!(translated.abilities.len(), 1);
+        assert_eq!(
+            translated.abilities[0].kind,
+            forge_carddef::AbilityKind::Static
+        );
     }
 }
