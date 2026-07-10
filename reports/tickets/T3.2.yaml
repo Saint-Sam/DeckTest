@@ -1,0 +1,25 @@
+id: T3.2
+title: Full legacy card-script parser
+role: Implementer
+status: complete
+branch: task/T3.2-legacy-parser
+depends_on: [T3.1, CP-DSL]
+plan_refs: ["8.2", "PC-0001"]
+scope_paths:
+  - crates/forge-porttools/src/legacy.rs
+  - crates/forge-porttools/src/lib.rs
+  - docs/specs/T3.2.md
+  - metrics/legacy_parse.json
+  - metrics/legacy_parse_failures.json
+  - scripts/gates/gate_T3_2.sh
+acceptance:
+  - Parse A, T, R, S, K, and SVar lines into a positioned legacy AST.
+  - Preserve unknown metadata and pipe fields for later mapping.
+  - Parse at least 99.5 percent of the pinned local corpus.
+  - Bind metrics to the exact vendored legacy Forge revision.
+  - Emit deterministic reason-coded failure evidence.
+dod:
+  - cargo test --locked --offline -p forge-porttools
+  - cargo clippy --locked --offline -p forge-porttools --all-targets -- -D warnings
+  - scripts/gates/gate_T3_2.sh
+result: 33290/33290 scripts parsed, 0 failures, 100.0000 percent, local gate PASS

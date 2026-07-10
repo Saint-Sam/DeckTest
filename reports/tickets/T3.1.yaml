@@ -1,7 +1,7 @@
 id: T3.1
 title: Versioned card identity catalog and typed DSL
 role: Implementer
-status: in_progress
+status: complete
 branch: task/T3.1-card-dsl
 depends_on: [T2.6, T2]
 plan_refs: ["0", "1.5", "5.3", "8.1", "13.7", "15.4", "PC-0001", "PC-0002", "PC-0003"]

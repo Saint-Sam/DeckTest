@@ -240,10 +240,17 @@
       "verification": "Exact local-only detached packet PASS at af6c8508030aed0bc56c71eac61b398f9e00ec4f. Final independent Gate Reviewer PASS with no blocking findings after reconciling the 100-definition honest corpus, exact 117/59 diagnostics, 28/28 mutation result, 2,408 ASAN worker-seconds, 1,200 oracles, 80.3077% bound raw coverage, four linked platform artifacts, forced offline execution, and exact checkout binding. Owner approved O4 in the Codex thread on 2026-07-10."
     },
     "T3.2": {
-      "status": "in_progress",
+      "status": "verified_local",
       "branch": "task/T3.2-legacy-parser",
       "attempts": 0,
-      "verification": "Legacy-format parser implementation and local full-corpus parse audit started after O4 approval. Target is at least 99.5% parse-only coverage with deterministic reason-coded failures."
+      "verification": "PASS scripts/gates/gate_T3_2.sh at 3b4bbd38ff6b79f6e84b6419eedfc570f77f05dd. Parsed 33,290/33,290 pinned legacy scripts (100.0000%) into a positioned AST with zero failures and no lossy UTF-8. Unit tests cover all required line families, fail-closed diagnostics, and the exact 99.5% boundary. Recurring integration passed deterministic card builds, catalog validation, nightmares, all 1,200 oracles, and 80.3285% workspace line coverage locally with no GitHub Actions or network.",
+      "remote_ci": "Intentionally not run under Owner-approved PC-0001 local-only verification."
+    },
+    "T3.3": {
+      "status": "in_progress",
+      "branch": "task/T3.3-api-mapper",
+      "attempts": 0,
+      "verification": "Table-driven legacy API mapper implementation started in T0.6 frequency order after T3.2 reached 100% parse-only coverage."
     }
   },
   "gates_passed": [
