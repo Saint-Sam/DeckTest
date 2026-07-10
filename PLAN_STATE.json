@@ -250,13 +250,13 @@
       "status": "in_progress",
       "branch": "task/T3.3-api-mapper",
       "attempts": 0,
-      "verification": "Ten fail-closed table-driven mapper packs passed cargo fmt, 18 forge-porttools tests, clippy -D warnings, deterministic full-corpus audit, all 235 local oracle scenarios, and the 80% workspace coverage gate locally. Exact effects, statics, structured costs, SVar-linked triggers/modes/replacements, player targeting, primitive restrictions and utility effects, closed selector comparisons, aggregate damage/combat markers, simple animation and transform, hand visibility, and closed zone transitions cover 13,143/43,649 top-level legacy ability uses (30.1107%); the remaining 30,506 uses are quarantined with stable global and per-API reason counts. T3.3 remains in progress for dynamic values, conditions, richer graph bindings, and additional file-impact-ranked API packs."
+      "verification": "Fail-closed table-driven mapper packs passed cargo fmt, 22 forge-porttools tests, clippy -D warnings, deterministic full-corpus audit, all 235 local oracle scenarios, and the 80% workspace coverage gate locally. Exact effects, statics, structured costs, SVar-linked triggers/modes/replacements, player targeting, primitive restrictions and utility effects, closed selector comparisons, aggregate damage/combat markers, simple animation and transform, hand visibility, closed zone transitions, exact legacy defaults, destroy-without-regeneration, and sorcery/your-turn/once-per-turn activation timing cover 13,417/43,649 top-level legacy ability uses (30.7384%); the remaining 30,232 uses are quarantined with stable global and per-API reason counts. T3.3 remains in progress for dynamic values, conditions, richer graph bindings, and additional file-impact-ranked API packs."
     },
     "T3.4": {
       "status": "verified_local",
       "branch": "task/T3.4-frs-emitter",
       "attempts": 0,
-      "verification": "PASS local 16-worker translation factory: 6,289/33,290 complete single-face legacy scripts emitted as canonical .frs (18.8916%), 27,001 fail-closed file quarantines, deterministic repeated output-tree SHA-1 f71aad3d2285d54911afeafa580c5436a445f347, and 6,289/6,289 forge-cardc compiler roundtrips against 38,306 identities and 113,234 printings. Twenty forge-porttools tests, clippy -D warnings, all 235 recurring oracles, and workspace line coverage 22,255/27,676 (80.4126%) passed locally with no network or GitHub Actions."
+      "verification": "PASS local 16-worker translation factory: 6,531/33,290 complete legacy scripts emitted as canonical .frs (19.6185%), including 94 multi-face definitions, with 26,759 fail-closed file quarantines, deterministic repeated output-tree SHA-1 aabd771258aaf687f1eb74d30fe518dec838c524, and 6,531/6,531 forge-cardc compiler roundtrips against 38,306 identities and 113,234 printings. Twenty-two forge-porttools tests, clippy -D warnings, all 235 recurring oracles, and workspace line coverage 22,432/27,891 (80.4274%) passed locally with no network or GitHub Actions."
     }
   },
   "gates_passed": [

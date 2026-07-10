@@ -1,7 +1,10 @@
 //! Deterministic full-card translation from legacy scripts into canonical Forge source.
 
 use crate::{
-    legacy::{collect_scripts, git_revision, parse_legacy_script, LegacyLineKind},
+    legacy::{
+        collect_scripts, git_revision, parse_legacy_script, LegacyLine, LegacyLineKind,
+        LegacyScript,
+    },
     mapper::map_script_abilities,
 };
 use forge_cardc::{emit_card, is_known_keyword, parse_card_named};
@@ -74,7 +77,19 @@ enum TranslationOutcome {
     Quarantined(TranslationFailure),
 }
 
-type CatalogIdentities = BTreeMap<String, Option<(OracleId, CardLayout)>>;
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct CatalogIdentity {
+    id: OracleId,
+    name: String,
+    layout: CardLayout,
+    face_names: Vec<String>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct CatalogIdentities {
+    by_name: BTreeMap<String, Option<CatalogIdentity>>,
+    by_faces: BTreeMap<Vec<String>, Option<CatalogIdentity>>,
+}
 
 /// Translates every legacy script in parallel and emits only complete validated cards.
 pub fn translate_all(options: TranslateOptions<'_>) -> Result<TranslationReport, String> {
@@ -191,40 +206,28 @@ fn translate_one_inner(
     })?;
     let script = parse_legacy_script(relative, text)
         .map_err(|error| (error.line, "PARSE_ERROR".to_string(), error.to_string()))?;
-    if script.face_count != 1 {
+    let faces = face_lines(&script);
+    let face_properties = faces
+        .iter()
+        .map(|face| properties(face))
+        .collect::<Result<Vec<_>, _>>()?;
+    let face_names = face_properties
+        .iter()
+        .map(|properties| required_property(properties, "Name").map(str::to_string))
+        .collect::<Result<Vec<_>, _>>()?;
+    let identity = catalog_identity(identities, &face_names)?;
+    if identity.face_names.len() != faces.len() {
         return Err((
             1,
-            "UNSUPPORTED_LAYOUT".to_string(),
-            "multi-face emission is not implemented".to_string(),
-        ));
-    }
-    let properties = properties(&script)?;
-    let name = required_property(&properties, "Name")?;
-    let identity = identities.get(name).ok_or_else(|| {
-        (
-            1,
-            "MISSING_CATALOG_IDENTITY".to_string(),
-            format!("catalog has no exact identity for `{name}`"),
-        )
-    })?;
-    let (id, layout) = identity.as_ref().ok_or_else(|| {
-        (
-            1,
-            "AMBIGUOUS_CATALOG_IDENTITY".to_string(),
-            format!("catalog name `{name}` resolves to multiple identities"),
-        )
-    })?;
-    if *layout != CardLayout::Normal {
-        return Err((
-            1,
-            "UNSUPPORTED_LAYOUT".to_string(),
+            "LAYOUT_MISMATCH".to_string(),
             format!(
-                "catalog layout `{}` requires multi-face emission",
-                layout.as_str()
+                "catalog identity has {} face(s), but the legacy script has {}",
+                identity.face_names.len(),
+                faces.len()
             ),
         ));
     }
-    let mut card = parse_base_card(relative, id, name, &properties, &script)?;
+    let mut card = parse_base_card(relative, identity, &face_properties, &faces)?;
     let mapped = map_script_abilities(&script).map_err(|failure| {
         (
             failure.line,
@@ -252,12 +255,19 @@ fn translate_one_inner(
             crate::legacy::LegacyAbilityPrefix::Replacement => AbilityKind::Replacement,
             crate::legacy::LegacyAbilityPrefix::Static => AbilityKind::Static,
         };
-        card.faces[0].abilities.push(AbilityDefinition {
+        let face_index = face_index_for_line(&faces, line).ok_or_else(|| {
+            (
+                line,
+                "ABILITY_FACE_MISMATCH".to_string(),
+                "ability source line does not belong to a card face".to_string(),
+            )
+        })?;
+        card.faces[face_index].abilities.push(AbilityDefinition {
             kind,
             costs: ability.costs,
             event: ability.event,
             condition: None,
-            timing: None,
+            timing: ability.timing,
             effect: ability.expression,
             mana_ability: ability.api == "Mana" && kind == AbilityKind::Activated,
         });
@@ -277,46 +287,53 @@ fn translate_one_inner(
 
 fn parse_base_card(
     relative: &str,
-    id: &OracleId,
-    name: &str,
-    properties: &BTreeMap<String, String>,
-    script: &crate::legacy::LegacyScript,
+    identity: &CatalogIdentity,
+    face_properties: &[BTreeMap<String, String>],
+    faces: &[Vec<&LegacyLine>],
 ) -> Result<forge_carddef::CardDefinition, (usize, String, String)> {
-    let mana = legacy_mana_cost(properties.get("ManaCost").map(String::as_str).unwrap_or(""))?;
-    let types = legacy_type_line(required_property(properties, "Types")?)?;
-    let oracle = properties
-        .get("Oracle")
-        .map(|value| value.replace("\\n", "\n"))
-        .unwrap_or_default();
-    let mut fields = String::new();
-    if let Some(pt) = properties.get("PT") {
-        let (power, toughness) = pt.split_once('/').ok_or_else(|| {
-            (
-                1,
-                "INVALID_CHARACTERISTICS".to_string(),
-                format!("PT `{pt}` has no slash"),
-            )
-        })?;
-        fields.push_str(&format!("    power: {}\n", quote(power)));
-        fields.push_str(&format!("    toughness: {}\n", quote(toughness)));
+    let mut face_sources = String::new();
+    for (properties, lines) in face_properties.iter().zip(faces) {
+        let name = required_property(properties, "Name")?;
+        let mana = legacy_mana_cost(properties.get("ManaCost").map(String::as_str).unwrap_or(""))?;
+        let types = legacy_type_line(required_property(properties, "Types")?)?;
+        let oracle = properties
+            .get("Oracle")
+            .map(|value| value.replace("\\n", "\n"))
+            .unwrap_or_default();
+        let mut fields = String::new();
+        if let Some(pt) = properties.get("PT") {
+            let (power, toughness) = pt.split_once('/').ok_or_else(|| {
+                (
+                    1,
+                    "INVALID_CHARACTERISTICS".to_string(),
+                    format!("PT `{pt}` has no slash"),
+                )
+            })?;
+            fields.push_str(&format!("    power: {}\n", quote(power)));
+            fields.push_str(&format!("    toughness: {}\n", quote(toughness)));
+        }
+        if let Some(loyalty) = properties.get("Loyalty") {
+            fields.push_str(&format!("    loyalty: {}\n", quote(loyalty)));
+        }
+        if let Some(defense) = properties.get("Defense") {
+            fields.push_str(&format!("    defense: {}\n", quote(defense)));
+        }
+        let keywords = simple_keywords(lines)?;
+        face_sources.push_str(&format!(
+            "  face {} {{\n    cost: {}\n    types: {}\n    oracle: {}\n{}    keywords: [{}]\n  }}\n",
+            quote(name),
+            quote(&mana),
+            quote(&types),
+            quote(&oracle),
+            fields,
+            keywords.join(", "),
+        ));
     }
-    if let Some(loyalty) = properties.get("Loyalty") {
-        fields.push_str(&format!("    loyalty: {}\n", quote(loyalty)));
-    }
-    if let Some(defense) = properties.get("Defense") {
-        fields.push_str(&format!("    defense: {}\n", quote(defense)));
-    }
-    let keywords = simple_keywords(script)?;
     let source = format!(
-        "card {} {{\n  id: {}\n  layout: normal\n  status: unverified_playable\n  face {} {{\n    cost: {}\n    types: {}\n    oracle: {}\n{}    keywords: [{}]\n  }}\n}}\n",
-        quote(name),
-        quote(id.as_str()),
-        quote(name),
-        quote(&mana),
-        quote(&types),
-        quote(&oracle),
-        fields,
-        keywords.join(", "),
+        "card {} {{\n  id: {}\n  layout: {}\n  status: unverified_playable\n{face_sources}}}\n",
+        quote(&identity.name),
+        quote(identity.id.as_str()),
+        identity.layout.as_str(),
     );
     let mut card = parse_card_named(relative, &source).map_err(|error| {
         (
@@ -329,11 +346,9 @@ fn parse_base_card(
     Ok(card)
 }
 
-fn properties(
-    script: &crate::legacy::LegacyScript,
-) -> Result<BTreeMap<String, String>, (usize, String, String)> {
+fn properties(lines: &[&LegacyLine]) -> Result<BTreeMap<String, String>, (usize, String, String)> {
     let mut properties = BTreeMap::new();
-    for line in &script.lines {
+    for line in lines {
         let LegacyLineKind::Property { key, value } = &line.kind else {
             continue;
         };
@@ -463,11 +478,9 @@ fn legacy_type_line(value: &str) -> Result<String, (usize, String, String)> {
     })
 }
 
-fn simple_keywords(
-    script: &crate::legacy::LegacyScript,
-) -> Result<Vec<String>, (usize, String, String)> {
+fn simple_keywords(lines: &[&LegacyLine]) -> Result<Vec<String>, (usize, String, String)> {
     let mut keywords = Vec::new();
-    for line in &script.lines {
+    for line in lines {
         let LegacyLineKind::Keyword {
             name, arguments, ..
         } = &line.kind
@@ -497,11 +510,31 @@ fn simple_keywords(
 }
 
 fn catalog_identities(catalog: &CardCatalog) -> CatalogIdentities {
-    let mut identities = BTreeMap::new();
+    let mut identities = CatalogIdentities::default();
     for identity in &catalog.identities {
-        match identities.entry(identity.name.clone()) {
+        if !matches!(
+            identity.classification,
+            CardClassification::VerifiedPlayable | CardClassification::UnverifiedPlayable
+        ) {
+            continue;
+        }
+        let value = CatalogIdentity {
+            id: identity.id.clone(),
+            name: identity.name.clone(),
+            layout: identity.layout,
+            face_names: identity.face_names.clone(),
+        };
+        match identities.by_name.entry(identity.name.clone()) {
             std::collections::btree_map::Entry::Vacant(entry) => {
-                entry.insert(Some((identity.id.clone(), identity.layout)));
+                entry.insert(Some(value.clone()));
+            }
+            std::collections::btree_map::Entry::Occupied(mut entry) => {
+                entry.insert(None);
+            }
+        }
+        match identities.by_faces.entry(identity.face_names.clone()) {
+            std::collections::btree_map::Entry::Vacant(entry) => {
+                entry.insert(Some(value));
             }
             std::collections::btree_map::Entry::Occupied(mut entry) => {
                 entry.insert(None);
@@ -509,6 +542,56 @@ fn catalog_identities(catalog: &CardCatalog) -> CatalogIdentities {
         }
     }
     identities
+}
+
+fn catalog_identity<'a>(
+    identities: &'a CatalogIdentities,
+    face_names: &[String],
+) -> Result<&'a CatalogIdentity, (usize, String, String)> {
+    let identity = if face_names.len() == 1 {
+        identities.by_name.get(&face_names[0])
+    } else {
+        identities.by_faces.get(face_names)
+    }
+    .ok_or_else(|| {
+        (
+            1,
+            "MISSING_CATALOG_IDENTITY".to_string(),
+            format!(
+                "catalog has no exact identity for faces `{}`",
+                face_names.join(" // ")
+            ),
+        )
+    })?;
+    identity.as_ref().ok_or_else(|| {
+        (
+            1,
+            "AMBIGUOUS_CATALOG_IDENTITY".to_string(),
+            format!(
+                "catalog faces `{}` resolve to multiple identities",
+                face_names.join(" // ")
+            ),
+        )
+    })
+}
+
+fn face_lines(script: &LegacyScript) -> Vec<Vec<&LegacyLine>> {
+    let mut faces = vec![Vec::new()];
+    for line in &script.lines {
+        if matches!(line.kind, LegacyLineKind::Alternate) {
+            faces.push(Vec::new());
+        } else if let Some(face) = faces.last_mut() {
+            face.push(line);
+        }
+    }
+    faces
+}
+
+fn face_index_for_line(faces: &[Vec<&LegacyLine>], line: usize) -> Option<usize> {
+    faces.iter().position(|face| {
+        face.first().is_some_and(|first| first.line <= line)
+            && face.last().is_some_and(|last| line <= last.line)
+    })
 }
 
 fn prepare_output(output: &Path) -> Result<(), String> {
@@ -545,7 +628,9 @@ fn outcome_path(outcome: &TranslationOutcome) -> &str {
 
 #[cfg(test)]
 mod tests {
-    use super::{legacy_mana_cost, legacy_type_line, translate_one_inner, CatalogIdentities};
+    use super::{
+        legacy_mana_cost, legacy_type_line, translate_one_inner, CatalogIdentities, CatalogIdentity,
+    };
     use forge_carddef::{CardLayout, OracleId};
     use std::{fs, path::PathBuf};
 
@@ -578,19 +663,69 @@ mod tests {
             ),
         )
         .unwrap_or_else(|error| panic!("could not write translator fixture: {error}"));
-        let mut identities = CatalogIdentities::new();
-        identities.insert(
+        let mut identities = CatalogIdentities::default();
+        identities.by_name.insert(
             "Grizzly Bears".to_string(),
-            Some((
-                OracleId::parse("fixture-grizzly")
+            Some(CatalogIdentity {
+                id: OracleId::parse("fixture-grizzly")
                     .unwrap_or_else(|| panic!("fixture id should parse")),
-                CardLayout::Normal,
-            )),
+                name: "Grizzly Bears".to_string(),
+                layout: CardLayout::Normal,
+                face_names: vec!["Grizzly Bears".to_string()],
+            }),
         );
         let emitted = translate_one_inner(&path, "g/grizzly_bears.txt", &identities)
             .unwrap_or_else(|error| panic!("fixture should translate: {error:?}"));
         assert!(emitted.contains("card \"Grizzly Bears\""));
         assert!(emitted.contains("types: \"Creature "));
+        fs::remove_dir_all(&root)
+            .unwrap_or_else(|error| panic!("could not remove translator fixture: {error}"));
+    }
+
+    #[test]
+    fn emits_and_roundtrips_ordered_transform_faces() {
+        let root = std::env::temp_dir().join(format!(
+            "forge-porttools-transform-translation-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&root)
+            .unwrap_or_else(|error| panic!("could not create translator fixture: {error}"));
+        let path = root.join("fixture_transform.txt");
+        fs::write(
+            &path,
+            concat!(
+                "Name:Front Face\n",
+                "ManaCost:1 U\n",
+                "Types:Creature Human\n",
+                "PT:1/1\n",
+                "Oracle:\n",
+                "ALTERNATE\n",
+                "Name:Back Face\n",
+                "ManaCost:no cost\n",
+                "Types:Creature Spirit\n",
+                "PT:2/2\n",
+                "K:Flying\n",
+                "Oracle:Flying\n",
+            ),
+        )
+        .unwrap_or_else(|error| panic!("could not write translator fixture: {error}"));
+        let face_names = vec!["Front Face".to_string(), "Back Face".to_string()];
+        let mut identities = CatalogIdentities::default();
+        identities.by_faces.insert(
+            face_names,
+            Some(CatalogIdentity {
+                id: OracleId::parse("fixture-transform")
+                    .unwrap_or_else(|| panic!("fixture id should parse")),
+                name: "Front Face // Back Face".to_string(),
+                layout: CardLayout::Transform,
+                face_names: vec!["Front Face".to_string(), "Back Face".to_string()],
+            }),
+        );
+        let emitted = translate_one_inner(&path, "f/fixture_transform.txt", &identities)
+            .unwrap_or_else(|error| panic!("fixture should translate: {error:?}"));
+        assert!(emitted.contains("layout: transform"));
+        assert!(emitted.contains("face \"Front Face\""));
+        assert!(emitted.contains("face \"Back Face\""));
         fs::remove_dir_all(&root)
             .unwrap_or_else(|error| panic!("could not remove translator fixture: {error}"));
     }

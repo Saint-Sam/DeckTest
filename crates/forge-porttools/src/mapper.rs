@@ -23,6 +23,8 @@ pub struct MappedLegacyAbility {
     pub costs: Vec<Expression>,
     /// Typed trigger/replacement event when this is not a direct effect.
     pub event: Option<Expression>,
+    /// Typed activation timing restriction when present.
+    pub timing: Option<Expression>,
     /// Typed Forge effect or event expression.
     pub expression: Expression,
 }
@@ -447,7 +449,9 @@ pub fn map_legacy_ability(
     if api.is_empty() {
         return Err(diagnostic("MALFORMED_API", "ability API name is empty"));
     }
-    let parameters = parameters(expression)?;
+    let mut parameters = parameters(expression)?;
+    normalize_legacy_defaults(&mut parameters);
+    let timing = extract_legacy_timing(&mut parameters)?;
     let Some(spec) = MAPPERS
         .iter()
         .find(|spec| spec.prefix == prefix && spec.api == api)
@@ -457,7 +461,9 @@ pub fn map_legacy_ability(
             &format!("no mapper is registered for {}:{api}", prefix.as_str()),
         ));
     };
-    (spec.mapper)(prefix, api, selector_key, &parameters)
+    let mut mapped = (spec.mapper)(prefix, api, selector_key, &parameters)?;
+    mapped.timing = timing;
+    Ok(mapped)
 }
 
 fn map_legacy_ability_in_context(
@@ -715,6 +721,7 @@ fn map_moved_replacement(
         api: "Moved".to_string(),
         costs: Vec::new(),
         event: Some(event),
+        timing: None,
         expression: linked.expression,
     })
 }
@@ -786,6 +793,7 @@ fn map_triggered_ability(
         api: api.to_string(),
         costs: Vec::new(),
         event: Some(event),
+        timing: None,
         expression,
     })
 }
@@ -1498,6 +1506,7 @@ fn map_mana(
         api: api.to_string(),
         costs: parse_simple_cost(parameters.get("Cost"))?,
         event: None,
+        timing: None,
         expression: call(
             Operation::AddMana,
             vec![Expression::Text(mana), call(Operation::You, vec![])],
@@ -1537,6 +1546,7 @@ fn map_draw(
         api: api.to_string(),
         costs: parse_simple_cost(parameters.get("Cost"))?,
         event: None,
+        timing: None,
         expression: call(
             Operation::Draw,
             vec![Expression::Integer(amount), call(Operation::You, vec![])],
@@ -1568,6 +1578,7 @@ fn map_damage(
         api: api.to_string(),
         costs: parse_simple_cost(parameters.get("Cost"))?,
         event: None,
+        timing: None,
         expression: call(
             Operation::DealDamage,
             vec![valid_target_selector(targets)?, Expression::Integer(amount)],
@@ -1622,6 +1633,7 @@ fn map_pump(
         api: api.to_string(),
         costs: parse_simple_cost(parameters.get("Cost"))?,
         event: None,
+        timing: None,
         expression,
     })
 }
@@ -1671,6 +1683,7 @@ fn map_pump_all(
         api: api.to_string(),
         costs: parse_simple_cost(parameters.get("Cost"))?,
         event: None,
+        timing: None,
         expression,
     })
 }
@@ -1768,6 +1781,7 @@ fn map_life_change(
         api: api.to_string(),
         costs: parse_simple_cost(parameters.get("Cost"))?,
         event: None,
+        timing: None,
         expression: call(operation, vec![Expression::Integer(amount), affected]),
     })
 }
@@ -1809,6 +1823,7 @@ fn map_mill(
         api: api.to_string(),
         costs: parse_simple_cost(parameters.get("Cost"))?,
         event: None,
+        timing: None,
         expression: call(Operation::Mill, vec![Expression::Integer(amount), affected]),
     })
 }
@@ -1860,6 +1875,7 @@ fn map_object_effect(
             "IsCurse",
             "AILogic",
             "ETB",
+            "NoRegen",
         ],
     )?;
     if let Some(etb) = parameters.get("ETB") {
@@ -1867,15 +1883,20 @@ fn map_object_effect(
             return Err(unsupported_value("ETB", etb));
         }
     }
+    let mut arguments = vec![object_selector(parameters, DefaultSelector::Source)?];
+    if let Some(value) = parameters.get("NoRegen") {
+        if operation != Operation::Destroy || value != "True" {
+            return Err(unsupported_value("NoRegen", value));
+        }
+        arguments.push(Expression::Text("cannot_regenerate".to_string()));
+    }
     Ok(MappedLegacyAbility {
         prefix,
         api: api.to_string(),
         costs: parse_simple_cost(parameters.get("Cost"))?,
         event: None,
-        expression: call(
-            operation,
-            vec![object_selector(parameters, DefaultSelector::Source)?],
-        ),
+        timing: None,
+        expression: call(operation, arguments),
     })
 }
 
@@ -1911,6 +1932,7 @@ fn map_put_counter(
         api: api.to_string(),
         costs: parse_simple_cost(parameters.get("Cost"))?,
         event: None,
+        timing: None,
         expression: call(
             Operation::AddCounter,
             vec![
@@ -2054,6 +2076,7 @@ fn map_continuous(
         api: api.to_string(),
         costs: Vec::new(),
         event: None,
+        timing: None,
         expression: call(Operation::Continuous, vec![affected, effect]),
     })
 }
@@ -2410,6 +2433,7 @@ fn map_reduce_cost(
         api: api.to_string(),
         costs: Vec::new(),
         event: None,
+        timing: None,
         expression: call(
             Operation::Continuous,
             vec![
@@ -2457,6 +2481,7 @@ fn map_cant_block_by(
         api: api.to_string(),
         costs: Vec::new(),
         event: None,
+        timing: None,
         expression: call(
             Operation::Continuous,
             vec![
@@ -2700,6 +2725,7 @@ fn map_alternative_cost(
         api: api.to_string(),
         costs: Vec::new(),
         event: None,
+        timing: None,
         expression: call(Operation::AlternateCost, arguments),
     })
 }
@@ -3136,6 +3162,7 @@ fn map_cant_attack_or_block(
         api: api.to_string(),
         costs: Vec::new(),
         event: None,
+        timing: None,
         expression: call(Operation::Continuous, vec![affected, restriction]),
     })
 }
@@ -3171,6 +3198,7 @@ fn map_cant_be_cast(
         api: api.to_string(),
         costs: Vec::new(),
         event: None,
+        timing: None,
         expression: call(
             Operation::Continuous,
             vec![
@@ -3580,6 +3608,73 @@ fn add_collection_predicate(
     Ok(call(operation, vec![combined]))
 }
 
+fn extract_legacy_timing(
+    parameters: &mut BTreeMap<String, String>,
+) -> Result<Option<Expression>, MappingDiagnostic> {
+    let sorcery = parameters
+        .remove("SorcerySpeed")
+        .map(|value| {
+            if value == "True" {
+                Ok(())
+            } else {
+                Err(unsupported_value("SorcerySpeed", &value))
+            }
+        })
+        .transpose()?
+        .is_some();
+    let your_turn = parameters
+        .remove("PlayerTurn")
+        .map(|value| match value.as_str() {
+            "True" | "You" => Ok(()),
+            _ => Err(unsupported_value("PlayerTurn", &value)),
+        })
+        .transpose()?
+        .is_some();
+    let once = parameters
+        .remove("ActivationLimit")
+        .map(|value| {
+            if value == "1" {
+                Ok(())
+            } else {
+                Err(unsupported_value("ActivationLimit", &value))
+            }
+        })
+        .transpose()?
+        .is_some();
+    if once && (sorcery || your_turn) {
+        return Err(diagnostic(
+            "UNSUPPORTED_PARAMETER",
+            "combined activation limit and phase timing has no closed timing conjunction",
+        ));
+    }
+    Ok(if once {
+        Some(call(Operation::TimingOnceEachTurn, vec![]))
+    } else if sorcery {
+        Some(call(Operation::TimingSorcery, vec![]))
+    } else if your_turn {
+        Some(call(Operation::TimingYourTurn, vec![]))
+    } else {
+        None
+    })
+}
+
+fn normalize_legacy_defaults(parameters: &mut BTreeMap<String, String>) {
+    if let Some(maximum) = parameters.get("TargetMax") {
+        let minimum = parameters.get("TargetMin").map(String::as_str);
+        if maximum == "1" && matches!(minimum, None | Some("1")) {
+            parameters.remove("TargetMax");
+            parameters.remove("TargetMin");
+        }
+    } else if parameters.get("TargetMin").map(String::as_str) == Some("1") {
+        parameters.remove("TargetMin");
+    }
+    for key in ["ActivationZone", "TgtZone"] {
+        if parameters.get(key).map(String::as_str) == Some("Battlefield") {
+            parameters.remove(key);
+        }
+    }
+}
+
 fn mapped_direct(
     prefix: LegacyAbilityPrefix,
     api: &str,
@@ -3591,6 +3686,7 @@ fn mapped_direct(
         api: api.to_string(),
         costs: parse_simple_cost(parameters.get("Cost"))?,
         event: None,
+        timing: None,
         expression,
     })
 }
@@ -4593,6 +4689,7 @@ fn is_nonsemantic_metadata(key: &str) -> bool {
     matches!(
         key,
         "AILogic"
+            | "AITgts"
             | "CostDesc"
             | "IsCurse"
             | "Planeswalker"
@@ -4603,6 +4700,7 @@ fn is_nonsemantic_metadata(key: &str) -> bool {
             | "TgtPrompt"
             | "Ultimate"
             | "ValidDescription"
+            | "ValidTgtsDesc"
     )
 }
 
@@ -4816,6 +4914,8 @@ mod tests {
             "A:SP$ LoseLife | ValidTgts$ Opponent | LifeAmount$ 2 | SpellDescription$ Lose life.",
             "A:SP$ Mill | ValidTgts$ Player | NumCards$ 2 | SpellDescription$ Mill.",
             "A:SP$ Discard | ValidTgts$ Player | NumCards$ 1 | Mode$ TgtChoose | SpellDescription$ Discard.",
+            "A:SP$ Destroy | ValidTgts$ Creature | TargetMin$ 1 | TargetMax$ 1 | NoRegen$ True | SpellDescription$ Destroy.",
+            "A:AB$ Tap | ValidTgts$ Permanent | ActivationZone$ Battlefield | TgtZone$ Battlefield | SpellDescription$ Tap.",
         ] {
             map_line(line).unwrap_or_else(|error| {
                 panic!("closed selector should map: {}", error.message);
@@ -5125,6 +5225,31 @@ mod tests {
             ),
         ] {
             assert_operation(line, operation, costs);
+        }
+    }
+
+    #[test]
+    fn lifts_shared_activation_timing() {
+        for (line, expected) in [
+            (
+                "A:AB$ SetState | Defined$ Self | Mode$ Transform | SorcerySpeed$ True | SpellDescription$ Transform.",
+                Operation::TimingSorcery,
+            ),
+            (
+                "A:AB$ Draw | Defined$ You | PlayerTurn$ True | SpellDescription$ Draw.",
+                Operation::TimingYourTurn,
+            ),
+            (
+                "A:AB$ Draw | Defined$ You | ActivationLimit$ 1 | SpellDescription$ Draw.",
+                Operation::TimingOnceEachTurn,
+            ),
+        ] {
+            let mapped = map_line(line)
+                .unwrap_or_else(|error| panic!("timing fixture should map: {}", error.message));
+            assert!(matches!(
+                mapped.timing,
+                Some(Expression::Call { operation, .. }) if operation == expected
+            ));
         }
     }
 
