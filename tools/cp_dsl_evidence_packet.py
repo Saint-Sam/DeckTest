@@ -47,6 +47,14 @@ REQUIRED_ARTIFACTS = [
     "metrics/oracle_semantics.json",
 ]
 
+ALLOWED_TRACKED_EVIDENCE_CHANGES = {
+    "metrics/coverage.json",
+    "metrics/cp_dsl_mutation.json",
+    "metrics/cp_dsl_verification.json",
+    "metrics/local_fuzz.json",
+    "metrics/local_platforms.json",
+}
+
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -95,6 +103,63 @@ def file_record(root: Path, path: Path) -> dict[str, object]:
 def resolve_path(root: Path, value: object) -> Path:
     path = Path(str(value))
     return path if path.is_absolute() else root / path
+
+
+def validate_checkout(
+    root: Path,
+    evidence_dir: Path,
+    reviewed_commit: str,
+    reviewed_tree: str,
+) -> None:
+    head_commit = command_output(["git", "rev-parse", "HEAD"], root)
+    if head_commit != reviewed_commit:
+        raise ValueError(
+            f"evidence packet reviews {reviewed_commit}, but HEAD is {head_commit}"
+        )
+    head_tree = command_output(["git", "rev-parse", "HEAD^{tree}"], root)
+    if head_tree != reviewed_tree:
+        raise ValueError(
+            f"evidence packet reviews tree {reviewed_tree}, but HEAD has {head_tree}"
+        )
+
+    changed = {
+        path
+        for path in command_output(
+            ["git", "diff", "--name-only", "HEAD", "--"], root
+        ).splitlines()
+        if path
+    }
+    unexpected_changed = changed - ALLOWED_TRACKED_EVIDENCE_CHANGES
+    if unexpected_changed:
+        raise ValueError(
+            "non-evidence tracked files changed after the reviewed commit: "
+            + ", ".join(sorted(unexpected_changed))
+        )
+
+    untracked = {
+        path
+        for path in command_output(
+            ["git", "ls-files", "--others", "--exclude-standard"], root
+        ).splitlines()
+        if path
+    }
+    try:
+        evidence_prefix = str(
+            evidence_dir.resolve().relative_to(root.resolve())
+        ).rstrip("/")
+    except ValueError:
+        evidence_prefix = ""
+    unexpected_untracked = {
+        path
+        for path in untracked
+        if not evidence_prefix
+        or (path != evidence_prefix and not path.startswith(f"{evidence_prefix}/"))
+    }
+    if unexpected_untracked:
+        raise ValueError(
+            "untracked files outside the evidence directory: "
+            + ", ".join(sorted(unexpected_untracked))
+        )
 
 
 def validated_reports(
@@ -379,6 +444,7 @@ def check(root: Path, evidence_dir: Path) -> int:
     reviewed_tree = command_output(["git", "rev-parse", f"{reviewed_commit}^{{tree}}"], root)
     if packet.get("reviewed_tree") != reviewed_tree:
         raise ValueError("reviewed tree hash does not match the reviewed commit")
+    validate_checkout(root, evidence_dir, reviewed_commit, reviewed_tree)
     reports = validated_reports(root, reviewed_commit, reviewed_tree)
     expected_commands = command_records(
         root, evidence_dir, reviewed_commit, reviewed_tree

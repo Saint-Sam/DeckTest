@@ -57,3 +57,12 @@ the gate because `CARGO_NET_OFFLINE=false` could override the local-only
 default. Gate, local verification, card regression, and metric subprocesses now
 force offline Cargo mode. Preflight and packet validation require explicit zero
 network egress and `cargo_net_offline=true` evidence.
+
+## Exact Checkout-binding Re-review
+
+Commit `257f207cfe9bc227484c9b6dc4abf5125d759cdb` passed the exact packet with
+forced offline Cargo mode. The reviewer reconciled all requested evidence and
+confirmed that `CARGO_NET_OFFLINE=false` is overwritten, then failed the gate
+because packet reuse did not compare the reviewed commit/tree to the current
+`HEAD`/tree or reject non-evidence worktree changes. Packet validation now
+enforces both bindings and limits checkout changes to exact-gate outputs.

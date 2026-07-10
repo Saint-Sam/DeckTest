@@ -85,6 +85,13 @@ found that a caller could set `CARGO_NET_OFFLINE=false`. All gate entry points
 now force offline Cargo mode, and exact preflight plus packet validation require
 both `cargo_net_offline=true` and `network_egress_used=false`.
 
+The seventh independent review confirmed the forced offline behavior and
+reconciled the full exact packet at `257f207`. It found one remaining reuse
+gap: packet checking did not require the current checkout to be the reviewed
+commit and tree. Validation now requires exact `HEAD`/tree equality and rejects
+all checkout changes except the five regenerated metrics and files inside the
+evidence directory.
+
 ## Owner Decision
 
 The Owner chose the honest staged-verification option. PC-0004 relabels all 100
