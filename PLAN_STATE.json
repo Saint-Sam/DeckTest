@@ -250,7 +250,7 @@
       "status": "in_progress",
       "branch": "task/T3.3-api-mapper",
       "attempts": 0,
-      "verification": "Initial fail-closed table-driven mapper slice passed cargo fmt, 8 forge-porttools tests, clippy -D warnings, and deterministic full-corpus audit locally. Exact primitive Mana, Draw, and DealDamage families map 1,552/43,649 top-level legacy ability uses (3.5556%); the remaining 42,097 uses are quarantined with stable reason codes. T3.3 remains in progress for SVar graph resolution and additional frequency-ordered API packs."
+      "verification": "Two fail-closed table-driven mapper packs passed cargo fmt, 10 forge-porttools tests, clippy -D warnings, deterministic full-corpus audit, and the 80% workspace coverage gate locally. Exact primitive effects plus simple battlefield Continuous mappings cover 3,406/43,649 top-level legacy ability uses (7.8032%); the remaining 40,243 uses are quarantined with stable reason codes. Workspace line coverage is 19,102/23,706 (80.5788%). T3.3 remains in progress for SVar graph resolution and additional frequency-ordered API packs."
     }
   },
   "gates_passed": [
