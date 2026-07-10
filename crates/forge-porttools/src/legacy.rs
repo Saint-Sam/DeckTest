@@ -93,7 +93,9 @@ impl LegacyAbilityPrefix {
         }
     }
 
-    const fn as_str(self) -> &'static str {
+    /// Returns the legacy one-letter line prefix.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
         match self {
             Self::Activated => "A",
             Self::Triggered => "T",
@@ -456,7 +458,7 @@ fn diagnostic(line: usize, column: usize, code: &str, message: &str) -> LegacyPa
     }
 }
 
-fn collect_scripts(root: &Path, paths: &mut Vec<PathBuf>) -> Result<(), String> {
+pub(crate) fn collect_scripts(root: &Path, paths: &mut Vec<PathBuf>) -> Result<(), String> {
     let entries = fs::read_dir(root)
         .map_err(|error| format!("could not read directory {}: {error}", root.display()))?;
     for entry in entries {
@@ -478,7 +480,7 @@ fn collect_scripts(root: &Path, paths: &mut Vec<PathBuf>) -> Result<(), String> 
     Ok(())
 }
 
-fn git_revision(root: &Path) -> Result<String, String> {
+pub(crate) fn git_revision(root: &Path) -> Result<String, String> {
     let output = Command::new("git")
         .arg("-C")
         .arg(root)

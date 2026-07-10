@@ -4,6 +4,7 @@
 //! Streaming source-catalog import and explicit translation classification tools.
 
 pub mod legacy;
+pub mod mapper;
 
 use forge_carddef::{
     CardCatalog, CardClassification, CardLayout, IdentityRecord, OracleId, PrintingId,
@@ -144,6 +145,23 @@ pub fn import_scryfall_catalog(
 /// Runs the Forge porttools command-line surface.
 pub fn run_cli(args: Vec<String>) -> Result<String, String> {
     match args.as_slice() {
+        [legacy, map_audit, root_flag, root, metrics_flag, metrics, quarantine_flag, quarantine]
+            if legacy == "legacy"
+                && map_audit == "map-audit"
+                && root_flag == "--root"
+                && metrics_flag == "--metrics"
+                && quarantine_flag == "--quarantine" =>
+        {
+            let report = mapper::audit_legacy_mappings(
+                Path::new(root),
+                Path::new(metrics),
+                Path::new(quarantine),
+            )?;
+            Ok(format!(
+                "mapped {}/{} legacy ability uses ({:.4}%)\nmetrics {}\nquarantine {}\n",
+                report.mapped_uses, report.legacy_uses, report.mapped_percent, metrics, quarantine
+            ))
+        }
         [legacy, parse, root_flag, root, metrics_flag, metrics, failures_flag, failures]
             if legacy == "legacy"
                 && parse == "parse"
@@ -263,7 +281,7 @@ fn list_quarantine(path: &Path) -> Result<String, String> {
 }
 
 fn usage() -> String {
-    "usage: forge-porttools legacy parse --root <cardsfolder> --metrics <metrics.json> --failures <failures.json> | forge-porttools catalog import --source <all-cards.json> --summary <summary.json> --output <catalog.json> --metrics <metrics.json> | forge-porttools catalog extract --source <all-cards.json> --summary <summary.json> --selection <selection.json> --output <source-cards.json> | forge-porttools quarantine --list --catalog <catalog.json>".to_string()
+    "usage: forge-porttools legacy parse --root <cardsfolder> --metrics <metrics.json> --failures <failures.json> | forge-porttools legacy map-audit --root <cardsfolder> --metrics <metrics.json> --quarantine <quarantine.json> | forge-porttools catalog import --source <all-cards.json> --summary <summary.json> --output <catalog.json> --metrics <metrics.json> | forge-porttools catalog extract --source <all-cards.json> --summary <summary.json> --selection <selection.json> --output <source-cards.json> | forge-porttools quarantine --list --catalog <catalog.json>".to_string()
 }
 
 #[derive(Clone, Debug, Deserialize)]

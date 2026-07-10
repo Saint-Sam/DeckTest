@@ -250,7 +250,7 @@
       "status": "in_progress",
       "branch": "task/T3.3-api-mapper",
       "attempts": 0,
-      "verification": "Table-driven legacy API mapper implementation started in T0.6 frequency order after T3.2 reached 100% parse-only coverage."
+      "verification": "Initial fail-closed table-driven mapper slice passed cargo fmt, 8 forge-porttools tests, clippy -D warnings, and deterministic full-corpus audit locally. Exact primitive Mana, Draw, and DealDamage families map 1,552/43,649 top-level legacy ability uses (3.5556%); the remaining 42,097 uses are quarantined with stable reason codes. T3.3 remains in progress for SVar graph resolution and additional frequency-ordered API packs."
     }
   },
   "gates_passed": [
