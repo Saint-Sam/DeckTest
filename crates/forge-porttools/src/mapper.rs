@@ -335,6 +335,9 @@ fn map_with_context(
     if prefix == LegacyAbilityPrefix::Activated && api == "Charm" {
         return map_charm_ability(prefix, selector_key, expression, context, stack);
     }
+    if prefix == LegacyAbilityPrefix::Replacement && api == "Moved" {
+        return map_moved_replacement(prefix, selector_key, expression, context, stack);
+    }
     if prefix == LegacyAbilityPrefix::Triggered {
         return map_triggered_ability(prefix, api, selector_key, expression, context, stack);
     }
@@ -463,6 +466,73 @@ fn map_charm_ability(
         ));
     };
     mapped_direct(prefix, "Charm", &parameters, expression)
+}
+
+fn map_moved_replacement(
+    prefix: LegacyAbilityPrefix,
+    selector: &str,
+    expression: &LegacyExpression,
+    context: &MappingContext<'_>,
+    stack: &mut Vec<String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector(selector, "Event")?;
+    let parameters = parameters(expression)?;
+    reject_unknown(
+        &parameters,
+        &[
+            "ValidCard",
+            "Origin",
+            "Destination",
+            "ReplaceWith",
+            "ReplacementResult",
+            "ActiveZones",
+            "Description",
+        ],
+    )?;
+    require_battlefield_zone(&parameters, "ActiveZones")?;
+    if parameters
+        .get("Origin")
+        .is_some_and(|origin| origin != "Any")
+    {
+        return Err(unsupported_value(
+            "Origin",
+            required(&parameters, "Origin")?,
+        ));
+    }
+    if parameters
+        .get("ReplacementResult")
+        .is_some_and(|result| result != "Updated")
+    {
+        return Err(unsupported_value(
+            "ReplacementResult",
+            required(&parameters, "ReplacementResult")?,
+        ));
+    }
+    let destination = required(&parameters, "Destination")?;
+    let affected = affected_selector(required(&parameters, "ValidCard")?)?;
+    let event = if destination == "Battlefield" {
+        call(Operation::EventEnters, vec![affected])
+    } else {
+        call(
+            Operation::EventZoneChange,
+            vec![affected, Expression::Text(destination.to_ascii_lowercase())],
+        )
+    };
+    let replace_with = required(&parameters, "ReplaceWith")?;
+    let linked = resolve_svar(replace_with, context, stack)?;
+    if linked.event.is_some() || !linked.costs.is_empty() {
+        return Err(diagnostic(
+            "UNSUPPORTED_LINK",
+            &format!("ReplaceWith `{replace_with}` is not a cost-free effect chain"),
+        ));
+    }
+    Ok(MappedLegacyAbility {
+        prefix,
+        api: "Moved".to_string(),
+        costs: Vec::new(),
+        event: Some(event),
+        expression: linked.expression,
+    })
 }
 
 fn map_triggered_ability(
@@ -883,9 +953,6 @@ fn map_damage(
         ],
     )?;
     let targets = required(parameters, "ValidTgts")?;
-    if targets != "Any" {
-        return Err(unsupported_value("ValidTgts", targets));
-    }
     let amount = positive_integer(required(parameters, "NumDmg")?, "NumDmg")?;
     Ok(MappedLegacyAbility {
         prefix,
@@ -894,10 +961,7 @@ fn map_damage(
         event: None,
         expression: call(
             Operation::DealDamage,
-            vec![
-                call(Operation::Target, vec![call(Operation::Any, vec![])]),
-                Expression::Integer(amount),
-            ],
+            vec![valid_target_selector(targets)?, Expression::Integer(amount)],
         ),
     })
 }
@@ -918,6 +982,7 @@ fn map_pump(
             "TgtPrompt",
             "NumAtt",
             "NumDef",
+            "KW",
             "Duration",
             "SpellDescription",
             "StackDescription",
@@ -925,30 +990,30 @@ fn map_pump(
             "AILogic",
         ],
     )?;
-    let power = optional_signed_integer(parameters, "NumAtt")?.unwrap_or(0);
-    let toughness = optional_signed_integer(parameters, "NumDef")?.unwrap_or(0);
-    if !parameters.contains_key("NumAtt") && !parameters.contains_key("NumDef") {
-        return Err(diagnostic(
-            "MISSING_PARAMETER",
-            "simple Pump requires NumAtt or NumDef",
-        ));
-    }
     require_end_of_turn_duration(parameters)?;
     let affected = object_selector(parameters, DefaultSelector::Source)?;
+    let mut effects = Vec::new();
+    if parameters.contains_key("NumAtt") || parameters.contains_key("NumDef") {
+        let power = optional_signed_integer(parameters, "NumAtt")?.unwrap_or(0);
+        let toughness = optional_signed_integer(parameters, "NumDef")?.unwrap_or(0);
+        effects.push(call(
+            Operation::ModifyPt,
+            vec![
+                affected.clone(),
+                Expression::Integer(power),
+                Expression::Integer(toughness),
+                Expression::Text("until_end_of_turn".to_string()),
+            ],
+        ));
+    }
+    append_keyword_grants(&mut effects, &affected, parameters.get("KW"))?;
+    let expression = combine_effects(effects, "simple Pump requires a PT or keyword modifier")?;
     Ok(MappedLegacyAbility {
         prefix,
         api: api.to_string(),
         costs: parse_simple_cost(parameters.get("Cost"))?,
         event: None,
-        expression: call(
-            Operation::ModifyPt,
-            vec![
-                affected,
-                Expression::Integer(power),
-                Expression::Integer(toughness),
-                Expression::Text("until_end_of_turn".to_string()),
-            ],
-        ),
+        expression,
     })
 }
 
@@ -966,6 +1031,7 @@ fn map_pump_all(
             "ValidCards",
             "NumAtt",
             "NumDef",
+            "KW",
             "Duration",
             "SpellDescription",
             "StackDescription",
@@ -973,30 +1039,30 @@ fn map_pump_all(
             "AILogic",
         ],
     )?;
-    let power = optional_signed_integer(parameters, "NumAtt")?.unwrap_or(0);
-    let toughness = optional_signed_integer(parameters, "NumDef")?.unwrap_or(0);
-    if !parameters.contains_key("NumAtt") && !parameters.contains_key("NumDef") {
-        return Err(diagnostic(
-            "MISSING_PARAMETER",
-            "simple PumpAll requires NumAtt or NumDef",
+    require_end_of_turn_duration(parameters)?;
+    let affected = affected_selector(required(parameters, "ValidCards")?)?;
+    let mut effects = Vec::new();
+    if parameters.contains_key("NumAtt") || parameters.contains_key("NumDef") {
+        let power = optional_signed_integer(parameters, "NumAtt")?.unwrap_or(0);
+        let toughness = optional_signed_integer(parameters, "NumDef")?.unwrap_or(0);
+        effects.push(call(
+            Operation::ModifyPt,
+            vec![
+                affected.clone(),
+                Expression::Integer(power),
+                Expression::Integer(toughness),
+                Expression::Text("until_end_of_turn".to_string()),
+            ],
         ));
     }
-    require_end_of_turn_duration(parameters)?;
-    let affected = valid_cards_selector(required(parameters, "ValidCards")?)?;
+    append_keyword_grants(&mut effects, &affected, parameters.get("KW"))?;
+    let expression = combine_effects(effects, "simple PumpAll requires a PT or keyword modifier")?;
     Ok(MappedLegacyAbility {
         prefix,
         api: api.to_string(),
         costs: parse_simple_cost(parameters.get("Cost"))?,
         event: None,
-        expression: call(
-            Operation::ModifyPt,
-            vec![
-                affected,
-                Expression::Integer(power),
-                Expression::Integer(toughness),
-                Expression::Text("until_end_of_turn".to_string()),
-            ],
-        ),
+        expression,
     })
 }
 
@@ -1133,8 +1199,14 @@ fn map_object_effect(
             "StackDescription",
             "IsCurse",
             "AILogic",
+            "ETB",
         ],
     )?;
+    if let Some(etb) = parameters.get("ETB") {
+        if operation != Operation::Tap || etb != "True" {
+            return Err(unsupported_value("ETB", etb));
+        }
+    }
     Ok(MappedLegacyAbility {
         prefix,
         api: api.to_string(),
@@ -1204,6 +1276,14 @@ fn map_continuous(
             "AddPower",
             "AddToughness",
             "AddKeyword",
+            "SetPower",
+            "SetToughness",
+            "AddType",
+            "RemoveType",
+            "SetColor",
+            "RemoveAllAbilities",
+            "GainControl",
+            "SetMaxHandSize",
             "AffectedZone",
             "EffectZone",
             "Description",
@@ -1212,8 +1292,12 @@ fn map_continuous(
     require_battlefield_zone(parameters, "AffectedZone")?;
     require_battlefield_zone(parameters, "EffectZone")?;
     let affected = affected_selector(required(parameters, "Affected")?)?;
+    let affected_player = required(parameters, "Affected")? == "You";
     let mut effects = Vec::new();
     if parameters.contains_key("AddPower") || parameters.contains_key("AddToughness") {
+        if affected_player {
+            return Err(unsupported_value("Affected", "You"));
+        }
         let power = optional_signed_integer(parameters, "AddPower")?.unwrap_or(0);
         let toughness = optional_signed_integer(parameters, "AddToughness")?.unwrap_or(0);
         effects.push(call(
@@ -1235,6 +1319,65 @@ fn map_continuous(
                 ],
             ));
         }
+    }
+    if parameters.contains_key("SetPower") || parameters.contains_key("SetToughness") {
+        if affected_player {
+            return Err(unsupported_value("Affected", "You"));
+        }
+        let power = optional_number_or_value(parameters, "SetPower", Operation::Power)?;
+        let toughness = optional_number_or_value(parameters, "SetToughness", Operation::Toughness)?;
+        effects.push(call(
+            Operation::SetPt,
+            vec![call(Operation::Any, vec![]), power, toughness],
+        ));
+    }
+    if let Some(types) = parameters.get("AddType") {
+        if affected_player {
+            return Err(unsupported_value("Affected", "You"));
+        }
+        append_text_effects(&mut effects, Operation::AddType, types, "AddType")?;
+    }
+    if let Some(types) = parameters.get("RemoveType") {
+        if affected_player {
+            return Err(unsupported_value("Affected", "You"));
+        }
+        append_text_effects(&mut effects, Operation::RemoveType, types, "RemoveType")?;
+    }
+    if let Some(colors) = parameters.get("SetColor") {
+        if affected_player {
+            return Err(unsupported_value("Affected", "You"));
+        }
+        let colors = parse_closed_colors(colors)?;
+        let mut arguments = vec![call(Operation::Any, vec![])];
+        arguments.extend(colors.into_iter().map(Expression::Text));
+        effects.push(call(Operation::SetColor, arguments));
+    }
+    if let Some(value) = parameters.get("RemoveAllAbilities") {
+        if value != "True" || affected_player {
+            return Err(unsupported_value("RemoveAllAbilities", value));
+        }
+        effects.push(call(
+            Operation::RemoveAllAbilities,
+            vec![call(Operation::Any, vec![])],
+        ));
+    }
+    if let Some(controller) = parameters.get("GainControl") {
+        if affected_player || controller != "You" {
+            return Err(unsupported_value("GainControl", controller));
+        }
+        effects.push(call(
+            Operation::ChangeControl,
+            vec![call(Operation::Any, vec![]), call(Operation::You, vec![])],
+        ));
+    }
+    if let Some(maximum) = parameters.get("SetMaxHandSize") {
+        if !affected_player || maximum != "Unlimited" {
+            return Err(unsupported_value("SetMaxHandSize", maximum));
+        }
+        effects.push(call(
+            Operation::NoMaximumHandSize,
+            vec![call(Operation::You, vec![])],
+        ));
     }
     let effect = match effects.len() {
         0 => {
@@ -1278,7 +1421,10 @@ fn map_change_zone(
         ],
     )?;
     let origin = required(parameters, "Origin")?;
-    if origin != "Battlefield" {
+    let replacement_object = parameters
+        .get("Defined")
+        .is_some_and(|value| value == "ReplacedCard");
+    if origin != "Battlefield" && !(origin == "All" && replacement_object) {
         return Err(unsupported_value("Origin", origin));
     }
     let affected = object_selector(parameters, DefaultSelector::Source)?;
@@ -1760,15 +1906,75 @@ fn parse_simple_cost(value: Option<&String>) -> Result<Vec<Expression>, MappingD
     };
     let mut mana = String::new();
     let mut costs = Vec::new();
-    for token in value.split_whitespace() {
+    for token in split_cost_tokens(value)? {
         if token == "T" {
             costs.push(call(Operation::TapSelf, vec![]));
         } else if token.chars().all(|character| character.is_ascii_digit())
-            || matches!(token, "W" | "U" | "B" | "R" | "G" | "C" | "X" | "Y" | "Z")
+            || matches!(
+                token.as_str(),
+                "W" | "U" | "B" | "R" | "G" | "C" | "X" | "Y" | "Z"
+            )
         {
             mana.push('{');
-            mana.push_str(token);
+            mana.push_str(&token);
             mana.push('}');
+        } else if let Some(payload) = cost_payload(&token, "Sac") {
+            let (amount, validity) = parse_counted_cost(payload, "Sac")?;
+            if amount == 1 && validity == "CARDNAME" {
+                costs.push(call(Operation::SacrificeSelf, vec![]));
+            } else {
+                return Err(unsupported_value("Cost", value));
+            }
+        } else if let Some(payload) = cost_payload(&token, "PayLife") {
+            costs.push(call(
+                Operation::PayLife,
+                vec![Expression::Integer(positive_integer(payload, "Cost")?)],
+            ));
+        } else if let Some(payload) = cost_payload(&token, "Discard") {
+            let (amount, validity) = parse_counted_cost(payload, "Discard")?;
+            if validity != "Card" && validity != "Hand" {
+                return Err(unsupported_value("Cost", value));
+            }
+            costs.push(call(
+                Operation::DiscardCost,
+                vec![Expression::Integer(amount), call(Operation::Cards, vec![])],
+            ));
+        } else if let Some(payload) = cost_payload(&token, "Exile") {
+            let (amount, validity) = parse_counted_cost(payload, "Exile")?;
+            if validity != "CARDNAME" {
+                return Err(unsupported_value("Cost", value));
+            }
+            costs.push(call(
+                Operation::ExileCost,
+                vec![call(Operation::Source, vec![]), Expression::Integer(amount)],
+            ));
+        } else if let Some(payload) = cost_payload(&token, "AddCounter") {
+            let (amount, counter) = parse_counted_cost(payload, "AddCounter")?;
+            if counter != "LOYALTY" {
+                return Err(unsupported_value("Cost", value));
+            }
+            costs.push(call(
+                Operation::LoyaltyCost,
+                vec![Expression::Integer(amount)],
+            ));
+        } else if let Some(payload) = cost_payload(&token, "SubCounter") {
+            let (amount, counter) = parse_counted_cost(payload, "SubCounter")?;
+            if counter == "LOYALTY" {
+                costs.push(call(
+                    Operation::LoyaltyCost,
+                    vec![Expression::Integer(-amount)],
+                ));
+            } else if amount == 1 {
+                costs.push(call(
+                    Operation::RemoveCounterCost,
+                    vec![
+                        call(Operation::Source, vec![]),
+                        Expression::Text(counter.to_ascii_lowercase()),
+                    ],
+                ));
+            } else {
+                return Err(unsupported_value("Cost", value));
+            }
         } else {
             return Err(unsupported_value("Cost", value));
         }
@@ -1777,6 +1983,60 @@ fn parse_simple_cost(value: Option<&String>) -> Result<Vec<Expression>, MappingD
         costs.insert(0, call(Operation::ManaCost, vec![Expression::Text(mana)]));
     }
     Ok(costs)
+}
+
+fn split_cost_tokens(value: &str) -> Result<Vec<String>, MappingDiagnostic> {
+    let mut tokens = Vec::new();
+    let mut current = String::new();
+    let mut depth = 0_u8;
+    for character in value.chars() {
+        match character {
+            '<' => {
+                depth = depth.saturating_add(1);
+                current.push(character);
+            }
+            '>' => {
+                if depth == 0 {
+                    return Err(unsupported_value("Cost", value));
+                }
+                depth -= 1;
+                current.push(character);
+            }
+            character if character.is_whitespace() && depth == 0 => {
+                if !current.is_empty() {
+                    tokens.push(std::mem::take(&mut current));
+                }
+            }
+            _ => current.push(character),
+        }
+    }
+    if depth != 0 {
+        return Err(unsupported_value("Cost", value));
+    }
+    if !current.is_empty() {
+        tokens.push(current);
+    }
+    Ok(tokens)
+}
+
+fn cost_payload<'a>(token: &'a str, name: &str) -> Option<&'a str> {
+    token
+        .strip_prefix(name)
+        .and_then(|value| value.strip_prefix('<'))
+        .and_then(|value| value.strip_suffix('>'))
+}
+
+fn parse_counted_cost<'a>(
+    payload: &'a str,
+    key: &str,
+) -> Result<(i64, &'a str), MappingDiagnostic> {
+    let mut fields = payload.splitn(3, '/');
+    let amount_text = fields.next().unwrap_or_default();
+    let validity = fields.next().unwrap_or_default();
+    if validity.is_empty() {
+        return Err(unsupported_value("Cost", payload));
+    }
+    Ok((positive_integer(amount_text, key)?, validity))
 }
 
 fn normalize_mana(value: &str, amount: i64) -> Result<String, MappingDiagnostic> {
@@ -1870,6 +2130,7 @@ fn defined_selector(value: &str) -> Result<Expression, MappingDiagnostic> {
             Operation::ControllerOf,
             vec![call(Operation::Triggered, vec![])],
         )),
+        "ReplacedCard" => Ok(call(Operation::Triggered, vec![])),
         _ => Err(unsupported_value("Defined", value)),
     }
 }
@@ -1890,7 +2151,10 @@ fn valid_target_selector(value: &str) -> Result<Expression, MappingDiagnostic> {
     if value == "Any" {
         return Ok(call(Operation::Target, vec![call(Operation::Any, vec![])]));
     }
-    Ok(call(Operation::Target, vec![valid_cards_selector(value)?]))
+    Ok(call(
+        Operation::Target,
+        vec![affected_selector(value).map_err(|_| unsupported_value("ValidTgts", value))?],
+    ))
 }
 
 fn valid_cards_selector(value: &str) -> Result<Expression, MappingDiagnostic> {
@@ -2056,6 +2320,9 @@ fn affected_selector(value: &str) -> Result<Expression, MappingDiagnostic> {
 }
 
 fn affected_selector_branch(value: &str) -> Result<Expression, MappingDiagnostic> {
+    if value == "You" {
+        return Ok(call(Operation::You, vec![]));
+    }
     if matches!(value, "Card.Self" | "Creature.Self" | "Self") {
         return Ok(call(Operation::Source, vec![]));
     }
@@ -2073,7 +2340,7 @@ fn affected_selector_branch(value: &str) -> Result<Expression, MappingDiagnostic
     }
 
     let (base, modifiers) = value.split_once('.').unwrap_or((value, ""));
-    if base.is_empty() || base == "You" {
+    if base.is_empty() {
         return Err(unsupported_value("Affected", value));
     }
     let mut predicates = Vec::new();
@@ -2160,6 +2427,99 @@ fn normalize_simple_keyword(value: &str) -> Result<String, MappingDiagnostic> {
     }
 }
 
+fn append_keyword_grants(
+    effects: &mut Vec<Expression>,
+    affected: &Expression,
+    keywords: Option<&String>,
+) -> Result<(), MappingDiagnostic> {
+    let Some(keywords) = keywords else {
+        return Ok(());
+    };
+    for keyword in keywords.split(" & ") {
+        effects.push(call(
+            Operation::GrantKeyword,
+            vec![
+                affected.clone(),
+                Expression::Text(normalize_simple_keyword(keyword)?),
+                Expression::Text("until_end_of_turn".to_string()),
+            ],
+        ));
+    }
+    Ok(())
+}
+
+fn optional_number_or_value(
+    parameters: &BTreeMap<String, String>,
+    key: &str,
+    fallback: Operation,
+) -> Result<Expression, MappingDiagnostic> {
+    parameters.get(key).map_or_else(
+        || Ok(call(fallback, vec![call(Operation::Any, vec![])])),
+        |value| {
+            value
+                .parse::<i64>()
+                .map(Expression::Integer)
+                .map_err(|_| unsupported_value(key, value))
+        },
+    )
+}
+
+fn append_text_effects(
+    effects: &mut Vec<Expression>,
+    operation: Operation,
+    value: &str,
+    key: &str,
+) -> Result<(), MappingDiagnostic> {
+    let values = value.split(" & ").map(str::trim).collect::<Vec<_>>();
+    if values.is_empty()
+        || values
+            .iter()
+            .any(|value| value.is_empty() || value.contains(','))
+    {
+        return Err(unsupported_value(key, value));
+    }
+    for value in values {
+        effects.push(call(
+            operation,
+            vec![
+                call(Operation::Any, vec![]),
+                Expression::Text(value.to_string()),
+            ],
+        ));
+    }
+    Ok(())
+}
+
+fn parse_closed_colors(value: &str) -> Result<Vec<String>, MappingDiagnostic> {
+    let colors = value.split(" & ").map(str::trim).collect::<Vec<_>>();
+    if colors.is_empty()
+        || colors.len() > 2
+        || colors.iter().any(|color| {
+            !matches!(
+                *color,
+                "White" | "Blue" | "Black" | "Red" | "Green" | "Colorless"
+            )
+        })
+    {
+        return Err(unsupported_value("SetColor", value));
+    }
+    Ok(colors
+        .into_iter()
+        .map(|color| color.to_ascii_lowercase())
+        .collect())
+}
+
+fn combine_effects(
+    mut effects: Vec<Expression>,
+    missing_message: &str,
+) -> Result<Expression, MappingDiagnostic> {
+    match effects.len() {
+        0 => Err(diagnostic("MISSING_PARAMETER", missing_message)),
+        1 => Ok(effects.remove(0)),
+        _ => Ok(call(Operation::Sequence, effects)),
+    }
+}
+
 fn require_battlefield_zone(
     parameters: &BTreeMap<String, String>,
     key: &str,
@@ -2196,7 +2556,7 @@ fn reject_unknown(
 ) -> Result<(), MappingDiagnostic> {
     if let Some(key) = parameters
         .keys()
-        .find(|key| !allowed.contains(&key.as_str()))
+        .find(|key| !allowed.contains(&key.as_str()) && !is_nonsemantic_metadata(key))
     {
         return Err(diagnostic(
             "UNSUPPORTED_PARAMETER",
@@ -2204,6 +2564,23 @@ fn reject_unknown(
         ));
     }
     Ok(())
+}
+
+fn is_nonsemantic_metadata(key: &str) -> bool {
+    matches!(
+        key,
+        "AILogic"
+            | "CostDesc"
+            | "IsCurse"
+            | "Planeswalker"
+            | "PreCostDesc"
+            | "PrecostDesc"
+            | "SpellDescription"
+            | "StackDescription"
+            | "TgtPrompt"
+            | "Ultimate"
+            | "ValidDescription"
+    )
 }
 
 fn required<'a>(
@@ -2369,6 +2746,16 @@ mod tests {
                 Operation::AddCounter,
                 1,
             ),
+            (
+                "A:SP$ Pump | ValidTgts$ Creature.YouCtrl | KW$ Flying & Vigilance | SpellDescription$ Keywords.",
+                Operation::Sequence,
+                0,
+            ),
+            (
+                "A:SP$ DealDamage | ValidTgts$ Creature.YouCtrl | NumDmg$ 2 | SpellDescription$ Damage.",
+                Operation::DealDamage,
+                0,
+            ),
         ] {
             assert_operation(line, operation, costs);
         }
@@ -2383,6 +2770,10 @@ mod tests {
             "S:Mode$ Continuous | Affected$ Spirit.YouCtrl | AddPower$ 1 | AddKeyword$ Flying & Vigilance | Description$ Spirits get +1/+0 and keywords.",
             "S:Mode$ ReduceCost | ValidCard$ Instant,Sorcery | Type$ Spell | Activator$ You | Amount$ 1 | Description$ Reduce costs.",
             "S:Mode$ CantBlockBy | ValidAttacker$ Creature.Self | Description$ This creature can't be blocked.",
+            "S:Mode$ Continuous | Affected$ Card.Self | SetPower$ 4 | SetToughness$ 5 | AddType$ Creature | SetColor$ Blue | Description$ Becomes a creature.",
+            "S:Mode$ Continuous | Affected$ Creature.YouCtrl | RemoveAllAbilities$ True | Description$ Remove abilities.",
+            "S:Mode$ Continuous | Affected$ Creature.EnchantedBy | GainControl$ You | Description$ Gain control.",
+            "S:Mode$ Continuous | Affected$ You | SetMaxHandSize$ Unlimited | Description$ No maximum hand size.",
         ] {
             assert_operation(line, Operation::Continuous, 0);
         }
@@ -2417,6 +2808,50 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    #[test]
+    fn resolves_moved_replacement_graphs() {
+        for (script_text, expected_event, expected_effect) in [
+            (
+                concat!(
+                    "R:Event$ Moved | ValidCard$ Card.Self | Destination$ Battlefield | ReplacementResult$ Updated | ReplaceWith$ ETBTapped | Description$ Enters tapped.\n",
+                    "SVar:ETBTapped:DB$ Tap | Defined$ Self | ETB$ True\n",
+                ),
+                Operation::EventEnters,
+                Operation::Tap,
+            ),
+            (
+                concat!(
+                    "R:Event$ Moved | ValidCard$ Card.Self | Destination$ Graveyard | ReplaceWith$ Exile | Description$ Exile instead.\n",
+                    "SVar:Exile:DB$ ChangeZone | Defined$ ReplacedCard | Origin$ All | Destination$ Exile\n",
+                ),
+                Operation::EventZoneChange,
+                Operation::Exile,
+            ),
+        ] {
+            let script = parse_legacy_script("replacement.txt", script_text)
+                .unwrap_or_else(|error| panic!("replacement fixture should parse: {error}"));
+            let context = MappingContext::from_script(&script);
+            let (prefix, expression) = script
+                .lines
+                .iter()
+                .find_map(|line| match &line.kind {
+                    LegacyLineKind::Ability { prefix, expression } => Some((*prefix, expression)),
+                    _ => None,
+                })
+                .unwrap_or_else(|| panic!("replacement fixture has no root ability"));
+            let mapped = map_legacy_ability_in_context(prefix, expression, &context)
+                .unwrap_or_else(|error| panic!("replacement should map: {}", error.message));
+            assert!(matches!(
+                mapped.event,
+                Some(Expression::Call { operation, .. }) if operation == expected_event
+            ));
+            assert!(matches!(
+                mapped.expression,
+                Expression::Call { operation, .. } if operation == expected_effect
+            ));
+        }
     }
 
     #[test]
@@ -2460,6 +2895,44 @@ mod tests {
             ),
         ] {
             assert_operation(line, operation, 0);
+        }
+    }
+
+    #[test]
+    fn maps_supported_structured_costs() {
+        for (line, operation, costs) in [
+            (
+                "A:AB$ GainLife | Cost$ PayLife<2> | LifeAmount$ 3 | SpellDescription$ Life.",
+                Operation::GainLife,
+                1,
+            ),
+            (
+                "A:AB$ Token | Cost$ AddCounter<1/LOYALTY> | TokenScript$ w_1_1_soldier | SpellDescription$ Token.",
+                Operation::CreateToken,
+                1,
+            ),
+            (
+                "A:AB$ Destroy | Cost$ T Sac<1/CARDNAME> | ValidTgts$ Creature | SpellDescription$ Destroy.",
+                Operation::Destroy,
+                2,
+            ),
+            (
+                "A:AB$ Scry | Cost$ SubCounter<1/OIL> | ScryNum$ 1 | SpellDescription$ Scry.",
+                Operation::Scry,
+                1,
+            ),
+            (
+                "A:AB$ Mill | Cost$ B Discard<1/Card> | NumCards$ 2 | SpellDescription$ Mill.",
+                Operation::Mill,
+                2,
+            ),
+            (
+                "A:AB$ ChangeZone | Cost$ Exile<1/CARDNAME> | Origin$ Battlefield | Destination$ Exile | Defined$ Self | SpellDescription$ Exile.",
+                Operation::Exile,
+                1,
+            ),
+        ] {
+            assert_operation(line, operation, costs);
         }
     }
 
