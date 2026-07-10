@@ -1565,13 +1565,20 @@ fn map_damage(
         parameters,
         &[
             "Cost",
+            "Defined",
             "ValidTgts",
             "NumDmg",
             "SpellDescription",
             "TgtPrompt",
         ],
     )?;
-    let targets = required(parameters, "ValidTgts")?;
+    if !parameters.contains_key("Defined") && !parameters.contains_key("ValidTgts") {
+        return Err(diagnostic(
+            "MISSING_PARAMETER",
+            "DealDamage requires Defined or ValidTgts",
+        ));
+    }
+    let target = object_selector(parameters, DefaultSelector::Source)?;
     let amount = positive_integer(required(parameters, "NumDmg")?, "NumDmg")?;
     Ok(MappedLegacyAbility {
         prefix,
@@ -1581,7 +1588,7 @@ fn map_damage(
         timing: None,
         expression: call(
             Operation::DealDamage,
-            vec![valid_target_selector(targets)?, Expression::Integer(amount)],
+            vec![target, Expression::Integer(amount)],
         ),
     })
 }
@@ -2097,6 +2104,18 @@ fn map_change_zone(
             "TgtPrompt",
             "Origin",
             "Destination",
+            "ChangeType",
+            "ChangeTypeDesc",
+            "ChangeNum",
+            "Tapped",
+            "Reveal",
+            "Shuffle",
+            "ShuffleNonMandatory",
+            "LibraryPosition",
+            "Mandatory",
+            "NoLooking",
+            "SelectPrompt",
+            "RememberChanged",
             "SpellDescription",
             "StackDescription",
             "IsCurse",
@@ -2104,6 +2123,9 @@ fn map_change_zone(
         ],
     )?;
     let origin = required(parameters, "Origin")?;
+    if origin == "Library" {
+        return map_library_search(prefix, api, parameters);
+    }
     let replacement_object = parameters
         .get("Defined")
         .is_some_and(|value| value == "ReplacedCard");
@@ -2112,13 +2134,27 @@ fn map_change_zone(
         .is_some_and(|value| matches!(value.as_str(), "Self" | "TriggeredCard" | "ReplacedCard"))
         && !parameters.contains_key("ValidTgts");
     let closed_origin = matches!(origin, "Graveyard" | "Hand" | "Exile" | "Stack");
-    if origin != "Battlefield"
-        && !(origin == "All" && replacement_object)
-        && !(closed_origin && identity_bound)
+    let zone_targeted = closed_origin
+        && parameters.contains_key("ValidTgts")
+        && !parameters.contains_key("Defined");
+    if !(origin == "Battlefield"
+        || zone_targeted
+        || origin == "All" && replacement_object
+        || closed_origin && identity_bound)
     {
         return Err(unsupported_value("Origin", origin));
     }
-    let affected = object_selector(parameters, DefaultSelector::Source)?;
+    let affected = if zone_targeted {
+        call(
+            Operation::Target,
+            vec![card_selector_in_zone(
+                required(parameters, "ValidTgts")?,
+                &origin.to_ascii_lowercase(),
+            )?],
+        )
+    } else {
+        object_selector(parameters, DefaultSelector::Source)?
+    };
     let expression = match required(parameters, "Destination")? {
         "Graveyard" => call(
             Operation::MoveZone,
@@ -2130,9 +2166,123 @@ fn map_change_zone(
             Operation::MoveZone,
             vec![affected, Expression::Text("battlefield".to_string())],
         ),
+        "Library" => {
+            let destination = match required(parameters, "LibraryPosition")? {
+                "0" => "library_top",
+                "-1" => "library_bottom",
+                value => return Err(unsupported_value("LibraryPosition", value)),
+            };
+            call(
+                Operation::MoveZone,
+                vec![affected, Expression::Text(destination.to_string())],
+            )
+        }
         value => return Err(unsupported_value("Destination", value)),
     };
     mapped_direct(prefix, api, parameters, expression)
+}
+
+fn map_library_search(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    for unsupported in ["RememberChanged", "NoLooking"] {
+        if parameters.contains_key(unsupported) {
+            return Err(diagnostic(
+                "UNSUPPORTED_PARAMETER",
+                &format!("parameter `{unsupported}` requires remembered search binding"),
+            ));
+        }
+    }
+    if let Some(value) = parameters.get("Tapped") {
+        if value != "True" {
+            return Err(unsupported_value("Tapped", value));
+        }
+    }
+    if let Some(value) = parameters.get("Reveal") {
+        if value != "True" {
+            return Err(unsupported_value("Reveal", value));
+        }
+    }
+    if let Some(value) = parameters.get("Shuffle") {
+        if value != "False" && value != "True" {
+            return Err(unsupported_value("Shuffle", value));
+        }
+    }
+    if let Some(value) = parameters.get("ShuffleNonMandatory") {
+        if value != "True" {
+            return Err(unsupported_value("ShuffleNonMandatory", value));
+        }
+    }
+    if let Some(value) = parameters.get("Mandatory") {
+        if value != "True" {
+            return Err(unsupported_value("Mandatory", value));
+        }
+    }
+    let amount = optional_positive_integer(parameters, "ChangeNum")?.unwrap_or(1);
+    let cards = card_selector_in_zone(required(parameters, "ChangeType")?, "library")?;
+    let chosen = call(Operation::Chosen, vec![cards.clone()]);
+    let mut effects = vec![call(
+        Operation::SearchLibrary,
+        vec![
+            cards,
+            call(Operation::You, vec![]),
+            Expression::Integer(amount),
+        ],
+    )];
+    if parameters.contains_key("Reveal") {
+        effects.push(call(Operation::Reveal, vec![chosen.clone()]));
+    }
+    let destination = required(parameters, "Destination")?.to_ascii_lowercase();
+    if !matches!(
+        destination.as_str(),
+        "battlefield" | "graveyard" | "hand" | "exile" | "library"
+    ) {
+        return Err(unsupported_value(
+            "Destination",
+            required(parameters, "Destination")?,
+        ));
+    }
+    let should_shuffle = parameters.get("Shuffle").map(String::as_str) != Some("False");
+    let destination = if destination == "library" {
+        match required(parameters, "LibraryPosition")? {
+            "0" => "library_top".to_string(),
+            "-1" => "library_bottom".to_string(),
+            value => return Err(unsupported_value("LibraryPosition", value)),
+        }
+    } else {
+        if parameters.contains_key("LibraryPosition") {
+            return Err(diagnostic(
+                "UNSUPPORTED_PARAMETER",
+                "LibraryPosition is only valid for a library destination",
+            ));
+        }
+        destination
+    };
+    if should_shuffle && destination.starts_with("library_") {
+        effects.push(call(Operation::Shuffle, vec![call(Operation::You, vec![])]));
+    }
+    effects.push(call(
+        Operation::MoveZone,
+        vec![
+            chosen.clone(),
+            Expression::Text(destination.clone()),
+            Expression::Integer(amount),
+        ],
+    ));
+    if parameters.contains_key("Tapped") {
+        effects.push(call(Operation::Tap, vec![chosen]));
+    }
+    if should_shuffle && !destination.starts_with("library_") {
+        effects.push(call(Operation::Shuffle, vec![call(Operation::You, vec![])]));
+    }
+    mapped_direct(
+        prefix,
+        api,
+        parameters,
+        combine_effects(effects, "library search requires effects")?,
+    )
 }
 
 fn map_token(
@@ -2154,9 +2304,15 @@ fn map_token(
             "AILogic",
         ],
     )?;
-    let token = required(parameters, "TokenScript")?;
-    if token.is_empty() || token.contains(',') {
-        return Err(unsupported_value("TokenScript", token));
+    let token_scripts = required(parameters, "TokenScript")?
+        .split(',')
+        .map(str::trim)
+        .collect::<Vec<_>>();
+    if token_scripts.is_empty() || token_scripts.iter().any(|token| token.is_empty()) {
+        return Err(unsupported_value(
+            "TokenScript",
+            required(parameters, "TokenScript")?,
+        ));
     }
     let amount = optional_positive_integer(parameters, "TokenAmount")?.unwrap_or(1);
     let owner = parameters
@@ -2164,14 +2320,22 @@ fn map_token(
         .map(|value| defined_player_selector(value))
         .transpose()?
         .unwrap_or_else(|| call(Operation::You, vec![]));
-    let expression = call(
-        Operation::CreateToken,
-        vec![
-            Expression::Text(token.to_string()),
-            Expression::Integer(amount),
-            owner,
-        ],
-    );
+    let expression = combine_effects(
+        token_scripts
+            .into_iter()
+            .map(|token| {
+                call(
+                    Operation::CreateToken,
+                    vec![
+                        Expression::Text(token.to_string()),
+                        Expression::Integer(amount),
+                        owner.clone(),
+                    ],
+                )
+            })
+            .collect(),
+        "Token requires at least one TokenScript",
+    )?;
     mapped_direct(prefix, api, parameters, expression)
 }
 
@@ -2517,10 +2681,14 @@ fn map_change_zone_all(
         ],
     )?;
     let origin = required(parameters, "Origin")?;
-    if origin != "Battlefield" {
-        return Err(unsupported_value("Origin", origin));
-    }
-    let affected = valid_cards_selector(required(parameters, "ChangeType")?)?;
+    let affected = match origin {
+        "Battlefield" => valid_cards_selector(required(parameters, "ChangeType")?)?,
+        "Graveyard" | "Hand" | "Exile" => card_selector_in_zone(
+            required(parameters, "ChangeType")?,
+            &origin.to_ascii_lowercase(),
+        )?,
+        value => return Err(unsupported_value("Origin", value)),
+    };
     let expression = match required(parameters, "Destination")? {
         "Graveyard" => call(
             Operation::MoveZone,
@@ -4086,27 +4254,33 @@ pub(crate) fn card_selector_in_zone(
     value: &str,
     zone: &str,
 ) -> Result<Expression, MappingDiagnostic> {
-    let selector = if value == "Basic" {
-        call(
-            Operation::Cards,
-            vec![call(
+    let mut predicates = Vec::new();
+    for branch in value.split(',') {
+        if branch == "Basic" {
+            predicates.push(call(
                 Operation::SupertypeIs,
                 vec![Expression::Text("basic".to_string())],
-            )],
-        )
-    } else {
+            ));
+            continue;
+        }
         let Expression::Call {
             operation,
-            arguments,
-        } = affected_selector(value)?
+            mut arguments,
+        } = affected_selector_branch(branch)?
         else {
             return Err(unsupported_value("ValidCards", value));
         };
-        if !matches!(operation, Operation::Cards | Operation::Permanents) {
+        if !matches!(operation, Operation::Cards | Operation::Permanents) || arguments.len() > 1 {
             return Err(unsupported_value("ValidCards", value));
         }
-        call(Operation::Cards, arguments)
+        predicates.push(arguments.pop().unwrap_or(Expression::Boolean(true)));
+    }
+    let predicate = match predicates.len() {
+        0 => return Err(unsupported_value("ValidCards", value)),
+        1 => predicates.remove(0),
+        _ => call(Operation::Or, predicates),
     };
+    let selector = call(Operation::Cards, vec![predicate]);
     add_collection_predicate(
         selector,
         call(Operation::ZoneIs, vec![Expression::Text(zone.to_string())]),
@@ -4365,9 +4539,9 @@ fn affected_selector_branch(value: &str) -> Result<Expression, MappingDiagnostic
                     Operation::ZoneIs,
                     vec![Expression::Text("battlefield".to_string())],
                 ),
-                "Legendary" => call(
+                "Basic" | "Legendary" => call(
                     Operation::SupertypeIs,
-                    vec![Expression::Text("legendary".to_string())],
+                    vec![Expression::Text(modifier.to_ascii_lowercase())],
                 ),
                 "nonLand" => call(
                     Operation::Not,
@@ -4850,6 +5024,11 @@ mod tests {
             Operation::DealDamage,
             0,
         );
+        assert_operation(
+            "A:DB$ DealDamage | Defined$ You | NumDmg$ 1",
+            Operation::DealDamage,
+            0,
+        );
     }
 
     #[test]
@@ -5046,8 +5225,24 @@ mod tests {
                 Operation::Exile,
             ),
             (
+                "A:SP$ ChangeZone | Origin$ Library | Destination$ Battlefield | ChangeType$ Land.Basic | ChangeNum$ 1 | Tapped$ True | ShuffleNonMandatory$ True | SpellDescription$ Search.",
+                Operation::Sequence,
+            ),
+            (
+                "A:SP$ ChangeZone | Origin$ Library | Destination$ Library | LibraryPosition$ 0 | ChangeType$ Instant,Sorcery | SpellDescription$ Tutor.",
+                Operation::Sequence,
+            ),
+            (
+                "A:SP$ ChangeZone | Origin$ Graveyard | Destination$ Hand | ValidTgts$ Card.YouCtrl | SpellDescription$ Return.",
+                Operation::ReturnToHand,
+            ),
+            (
                 "A:SP$ Token | TokenScript$ g_1_1_saproling | TokenOwner$ You | TokenAmount$ 2 | SpellDescription$ Tokens.",
                 Operation::CreateToken,
+            ),
+            (
+                "A:SP$ Token | TokenScript$ c_3_3_wurm_deathtouch,c_3_3_wurm_lifelink | TokenOwner$ You | SpellDescription$ Two tokens.",
+                Operation::Sequence,
             ),
             (
                 "A:SP$ DestroyAll | ValidCards$ Creature | SpellDescription$ Destroy all.",
@@ -5075,6 +5270,10 @@ mod tests {
             ),
             (
                 "A:SP$ ChangeZoneAll | ChangeType$ Creature | Origin$ Battlefield | Destination$ Exile | SpellDescription$ Exile all creatures.",
+                Operation::Exile,
+            ),
+            (
+                "A:SP$ ChangeZoneAll | ChangeType$ Card | Origin$ Graveyard | Destination$ Exile | SpellDescription$ Exile graveyards.",
                 Operation::Exile,
             ),
             (

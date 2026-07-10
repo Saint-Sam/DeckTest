@@ -31,6 +31,10 @@ pub struct TranslateOptions<'a> {
     pub metrics: &'a Path,
     /// Generated file-level quarantine JSON.
     pub quarantine: &'a Path,
+    /// Owner-approved card coverage priority list.
+    pub priority: &'a Path,
+    /// Generated tier-aware priority coverage JSON.
+    pub priority_metrics: &'a Path,
     /// Number of local worker threads.
     pub jobs: usize,
 }
@@ -56,6 +60,53 @@ pub struct TranslationReport {
     pub jobs: usize,
     /// Quarantine counts by stable code.
     pub quarantine_reason_counts: BTreeMap<String, usize>,
+    /// Owner-priority card names requested.
+    pub priority_requested: usize,
+    /// Owner-priority names resolved to playable catalog identities.
+    pub priority_catalog_resolved: usize,
+    /// Owner-priority cards emitted by this campaign.
+    pub priority_emitted: usize,
+    /// Owner-priority file-level translation percentage.
+    pub priority_emitted_percent: f64,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize)]
+struct PriorityCoverageReport {
+    schema_version: u32,
+    source_path: String,
+    total_requested: usize,
+    catalog_resolved: usize,
+    emitted: usize,
+    emitted_percent: f64,
+    tiers: Vec<PriorityTierReport>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize)]
+struct PriorityTierReport {
+    tier: u8,
+    label: String,
+    requested: usize,
+    catalog_resolved: usize,
+    emitted: usize,
+    emitted_percent: f64,
+    cards: Vec<PriorityCardResult>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+struct PriorityCardResult {
+    requested_name: String,
+    catalog_name: Option<String>,
+    status: String,
+    path: Option<String>,
+    code: Option<String>,
+    message: Option<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct PriorityTier {
+    tier: u8,
+    label: String,
+    names: Vec<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
@@ -76,8 +127,15 @@ struct TranslationFailure {
 }
 
 enum TranslationOutcome {
-    Emitted { relative: String, source: String },
-    Quarantined(TranslationFailure),
+    Emitted {
+        relative: String,
+        source: String,
+        aliases: Vec<String>,
+    },
+    Quarantined {
+        failure: TranslationFailure,
+        aliases: Vec<String>,
+    },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -110,6 +168,7 @@ pub fn translate_all(options: TranslateOptions<'_>) -> Result<TranslationReport,
     let catalog: CardCatalog = serde_json::from_reader(catalog_file)
         .map_err(|error| format!("invalid {}: {error}", options.catalog.display()))?;
     let identities = catalog_identities(&catalog);
+    let priority_tiers = read_priority_tiers(options.priority)?;
 
     let mut paths = Vec::new();
     collect_scripts(options.root, &mut paths)?;
@@ -125,13 +184,17 @@ pub fn translate_all(options: TranslateOptions<'_>) -> Result<TranslationReport,
             .collect::<Vec<_>>()
     });
     outcomes.sort_by(|left, right| outcome_path(left).cmp(outcome_path(right)));
+    let priority_report =
+        build_priority_report(options.priority, &priority_tiers, &catalog, &outcomes);
 
     prepare_output(options.output)?;
     let mut failures = Vec::new();
     let mut emitted_scripts = 0;
     for outcome in outcomes {
         match outcome {
-            TranslationOutcome::Emitted { relative, source } => {
+            TranslationOutcome::Emitted {
+                relative, source, ..
+            } => {
                 let destination = options.output.join(relative).with_extension("frs");
                 if let Some(parent) = destination.parent() {
                     fs::create_dir_all(parent).map_err(|error| {
@@ -143,7 +206,7 @@ pub fn translate_all(options: TranslateOptions<'_>) -> Result<TranslationReport,
                 })?;
                 emitted_scripts += 1;
             }
-            TranslationOutcome::Quarantined(failure) => failures.push(failure),
+            TranslationOutcome::Quarantined { failure, .. } => failures.push(failure),
         }
     }
 
@@ -162,8 +225,13 @@ pub fn translate_all(options: TranslateOptions<'_>) -> Result<TranslationReport,
         emitted_percent: emitted_scripts as f64 * 100.0 / paths.len() as f64,
         jobs: options.jobs,
         quarantine_reason_counts: reason_counts.clone(),
+        priority_requested: priority_report.total_requested,
+        priority_catalog_resolved: priority_report.catalog_resolved,
+        priority_emitted: priority_report.emitted,
+        priority_emitted_percent: priority_report.emitted_percent,
     };
     crate::write_json(options.metrics, &report)?;
+    crate::write_json(options.priority_metrics, &priority_report)?;
     crate::write_json(
         options.quarantine,
         &TranslationQuarantine {
@@ -183,22 +251,58 @@ fn translate_one(root: &Path, path: &Path, identities: &CatalogIdentities) -> Tr
         .unwrap_or(path)
         .to_string_lossy()
         .replace('\\', "/");
-    match translate_one_inner(path, &relative, identities) {
-        Ok(source) => TranslationOutcome::Emitted { relative, source },
-        Err((line, code, message)) => TranslationOutcome::Quarantined(TranslationFailure {
-            path: relative,
-            line,
-            code,
-            message,
-        }),
+    let script = match read_legacy_script(path, &relative) {
+        Ok(script) => script,
+        Err((line, code, message)) => {
+            return TranslationOutcome::Quarantined {
+                failure: TranslationFailure {
+                    path: relative,
+                    line,
+                    code,
+                    message,
+                },
+                aliases: Vec::new(),
+            };
+        }
+    };
+    let mut aliases = candidate_names(&script);
+    match translate_script(&relative, &script, identities) {
+        Ok((source, catalog_name)) => {
+            aliases.push(catalog_name);
+            aliases.sort();
+            aliases.dedup();
+            TranslationOutcome::Emitted {
+                relative,
+                source,
+                aliases,
+            }
+        }
+        Err((line, code, message)) => TranslationOutcome::Quarantined {
+            failure: TranslationFailure {
+                path: relative,
+                line,
+                code,
+                message,
+            },
+            aliases,
+        },
     }
 }
 
+#[cfg(test)]
 fn translate_one_inner(
     path: &Path,
     relative: &str,
     identities: &CatalogIdentities,
 ) -> Result<String, (usize, String, String)> {
+    let script = read_legacy_script(path, relative)?;
+    translate_script(relative, &script, identities).map(|(source, _)| source)
+}
+
+fn read_legacy_script(
+    path: &Path,
+    relative: &str,
+) -> Result<LegacyScript, (usize, String, String)> {
     let bytes = fs::read(path).map_err(|error| {
         (
             1,
@@ -213,9 +317,16 @@ fn translate_one_inner(
             format!("source is not UTF-8: {error}"),
         )
     })?;
-    let script = parse_legacy_script(relative, text)
-        .map_err(|error| (error.line, "PARSE_ERROR".to_string(), error.to_string()))?;
-    let faces = face_lines(&script);
+    parse_legacy_script(relative, text)
+        .map_err(|error| (error.line, "PARSE_ERROR".to_string(), error.to_string()))
+}
+
+fn translate_script(
+    relative: &str,
+    script: &LegacyScript,
+    identities: &CatalogIdentities,
+) -> Result<(String, String), (usize, String, String)> {
+    let faces = face_lines(script);
     let face_properties = faces
         .iter()
         .map(|face| properties(face))
@@ -237,7 +348,7 @@ fn translate_one_inner(
         ));
     }
     let mut card = parse_base_card(relative, identity, &face_properties, &faces)?;
-    let mapped = map_script_abilities(&script).map_err(|failure| {
+    let mapped = map_script_abilities(script).map_err(|failure| {
         (
             failure.line,
             failure.diagnostic.code,
@@ -291,7 +402,7 @@ fn translate_one_inner(
             "canonical compiler roundtrip changed the translated card".to_string(),
         ));
     }
-    Ok(emitted)
+    Ok((emitted, identity.name.clone()))
 }
 
 fn parse_base_card(
@@ -773,6 +884,245 @@ fn catalog_identity<'a>(
     })
 }
 
+fn candidate_names(script: &LegacyScript) -> Vec<String> {
+    let mut names = script
+        .lines
+        .iter()
+        .filter_map(|line| match &line.kind {
+            LegacyLineKind::Property { key, value } if key == "Name" => Some(value.clone()),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    names.sort();
+    names.dedup();
+    names
+}
+
+fn read_priority_tiers(path: &Path) -> Result<Vec<PriorityTier>, String> {
+    let text = fs::read_to_string(path)
+        .map_err(|error| format!("could not read {}: {error}", path.display()))?;
+    let mut tiers = Vec::new();
+    let mut current: Option<PriorityTier> = None;
+    let mut seen_names = std::collections::BTreeSet::new();
+    for (index, raw_line) in text.lines().enumerate() {
+        let line = raw_line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        if let Some(header) = line.strip_prefix("# TIER ") {
+            if let Some(tier) = current.take() {
+                tiers.push(tier);
+            }
+            let (tier, label) = header.split_once(" - ").ok_or_else(|| {
+                format!(
+                    "{}:{} priority tier header requires `# TIER N - label`",
+                    path.display(),
+                    index + 1
+                )
+            })?;
+            let tier = tier.parse::<u8>().map_err(|_| {
+                format!(
+                    "{}:{} priority tier `{tier}` is not an integer",
+                    path.display(),
+                    index + 1
+                )
+            })?;
+            current = Some(PriorityTier {
+                tier,
+                label: label.to_string(),
+                names: Vec::new(),
+            });
+            continue;
+        }
+        if line.starts_with('#') {
+            continue;
+        }
+        let tier = current.as_mut().ok_or_else(|| {
+            format!(
+                "{}:{} priority names appear before a tier header",
+                path.display(),
+                index + 1
+            )
+        })?;
+        for name in line
+            .split('|')
+            .map(str::trim)
+            .filter(|name| !name.is_empty())
+        {
+            if !seen_names.insert(name.to_string()) {
+                return Err(format!(
+                    "{}:{} duplicate priority card `{name}`",
+                    path.display(),
+                    index + 1
+                ));
+            }
+            tier.names.push(name.to_string());
+        }
+    }
+    if let Some(tier) = current {
+        tiers.push(tier);
+    }
+    if tiers.is_empty() || tiers.iter().any(|tier| tier.names.is_empty()) {
+        return Err(format!(
+            "{} must contain at least one nonempty priority tier",
+            path.display()
+        ));
+    }
+    tiers.sort_by_key(|tier| tier.tier);
+    Ok(tiers)
+}
+
+fn build_priority_report(
+    source: &Path,
+    tiers: &[PriorityTier],
+    catalog: &CardCatalog,
+    outcomes: &[TranslationOutcome],
+) -> PriorityCoverageReport {
+    let mut tier_reports = Vec::new();
+    for tier in tiers {
+        let mut cards = Vec::new();
+        for requested_name in &tier.names {
+            cards.push(priority_card_result(requested_name, catalog, outcomes));
+        }
+        let catalog_resolved = cards
+            .iter()
+            .filter(|card| card.catalog_name.is_some())
+            .count();
+        let emitted = cards.iter().filter(|card| card.status == "emitted").count();
+        tier_reports.push(PriorityTierReport {
+            tier: tier.tier,
+            label: tier.label.clone(),
+            requested: cards.len(),
+            catalog_resolved,
+            emitted,
+            emitted_percent: percent(emitted, cards.len()),
+            cards,
+        });
+    }
+    let total_requested = tier_reports.iter().map(|tier| tier.requested).sum();
+    let catalog_resolved = tier_reports.iter().map(|tier| tier.catalog_resolved).sum();
+    let emitted = tier_reports.iter().map(|tier| tier.emitted).sum();
+    PriorityCoverageReport {
+        schema_version: 1,
+        source_path: crate::repository_relative(source),
+        total_requested,
+        catalog_resolved,
+        emitted,
+        emitted_percent: percent(emitted, total_requested),
+        tiers: tier_reports,
+    }
+}
+
+fn priority_card_result(
+    requested_name: &str,
+    catalog: &CardCatalog,
+    outcomes: &[TranslationOutcome],
+) -> PriorityCardResult {
+    let playable = catalog
+        .identities
+        .iter()
+        .filter(|identity| {
+            matches!(
+                identity.classification,
+                CardClassification::VerifiedPlayable | CardClassification::UnverifiedPlayable
+            )
+        })
+        .collect::<Vec<_>>();
+    let exact_matches = playable
+        .iter()
+        .copied()
+        .filter(|identity| identity.name == requested_name)
+        .collect::<Vec<_>>();
+    let matches = if exact_matches.is_empty() {
+        playable
+            .into_iter()
+            .filter(|identity| {
+                identity
+                    .face_names
+                    .iter()
+                    .any(|name| name == requested_name)
+            })
+            .collect::<Vec<_>>()
+    } else {
+        exact_matches
+    };
+    let Some(identity) = matches.first().copied() else {
+        return PriorityCardResult {
+            requested_name: requested_name.to_string(),
+            catalog_name: None,
+            status: "catalog_missing".to_string(),
+            path: None,
+            code: Some("PRIORITY_CATALOG_MISSING".to_string()),
+            message: Some("no playable catalog identity matches this requested name".to_string()),
+        };
+    };
+    if matches.len() > 1 {
+        return PriorityCardResult {
+            requested_name: requested_name.to_string(),
+            catalog_name: None,
+            status: "catalog_ambiguous".to_string(),
+            path: None,
+            code: Some("PRIORITY_CATALOG_AMBIGUOUS".to_string()),
+            message: Some(format!(
+                "{} playable catalog identities match this requested name",
+                matches.len()
+            )),
+        };
+    }
+    let aliases = identity
+        .face_names
+        .iter()
+        .chain(std::iter::once(&identity.name))
+        .collect::<Vec<_>>();
+    let candidates = outcomes
+        .iter()
+        .filter(|outcome| {
+            outcome_aliases(outcome)
+                .iter()
+                .any(|alias| aliases.contains(&alias))
+        })
+        .collect::<Vec<_>>();
+    if let Some(outcome) = candidates
+        .iter()
+        .find(|outcome| matches!(outcome, TranslationOutcome::Emitted { .. }))
+    {
+        return PriorityCardResult {
+            requested_name: requested_name.to_string(),
+            catalog_name: Some(identity.name.clone()),
+            status: "emitted".to_string(),
+            path: Some(outcome_path(outcome).to_string()),
+            code: None,
+            message: None,
+        };
+    }
+    if let Some(TranslationOutcome::Quarantined { failure, .. }) = candidates.first().copied() {
+        return PriorityCardResult {
+            requested_name: requested_name.to_string(),
+            catalog_name: Some(identity.name.clone()),
+            status: "quarantined".to_string(),
+            path: Some(failure.path.clone()),
+            code: Some(failure.code.clone()),
+            message: Some(failure.message.clone()),
+        };
+    }
+    PriorityCardResult {
+        requested_name: requested_name.to_string(),
+        catalog_name: Some(identity.name.clone()),
+        status: "legacy_missing".to_string(),
+        path: None,
+        code: Some("PRIORITY_LEGACY_MISSING".to_string()),
+        message: Some("playable catalog identity has no matching legacy script".to_string()),
+    }
+}
+
+fn percent(numerator: usize, denominator: usize) -> f64 {
+    if denominator == 0 {
+        0.0
+    } else {
+        numerator as f64 * 100.0 / denominator as f64
+    }
+}
+
 fn face_lines(script: &LegacyScript) -> Vec<Vec<&LegacyLine>> {
     let mut faces = vec![Vec::new()];
     for line in &script.lines {
@@ -820,18 +1170,62 @@ fn quote(value: &str) -> String {
 fn outcome_path(outcome: &TranslationOutcome) -> &str {
     match outcome {
         TranslationOutcome::Emitted { relative, .. } => relative,
-        TranslationOutcome::Quarantined(failure) => &failure.path,
+        TranslationOutcome::Quarantined { failure, .. } => &failure.path,
+    }
+}
+
+fn outcome_aliases(outcome: &TranslationOutcome) -> &[String] {
+    match outcome {
+        TranslationOutcome::Emitted { aliases, .. }
+        | TranslationOutcome::Quarantined { aliases, .. } => aliases,
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        face_lines, legacy_mana_cost, legacy_type_line, translate_keywords, translate_one_inner,
-        CatalogIdentities, CatalogIdentity,
+        build_priority_report, face_lines, legacy_mana_cost, legacy_type_line, percent,
+        read_priority_tiers, translate_keywords, translate_one_inner, CatalogIdentities,
+        CatalogIdentity, PriorityTier, TranslationFailure, TranslationOutcome,
     };
-    use forge_carddef::{CardLayout, OracleId};
+    use forge_carddef::{
+        CardCatalog, CardClassification, CardLayout, IdentityRecord, OracleId, SourceProvenance,
+    };
     use std::{fs, path::PathBuf};
+
+    fn fixture_identity(
+        id: &str,
+        name: &str,
+        face_names: &[&str],
+        classification: CardClassification,
+    ) -> IdentityRecord {
+        IdentityRecord {
+            id: OracleId::parse(id).unwrap_or_else(|| panic!("fixture id should parse")),
+            name: name.to_string(),
+            layout: if face_names.len() > 1 {
+                CardLayout::ModalDfc
+            } else {
+                CardLayout::Normal
+            },
+            face_names: face_names.iter().map(|name| (*name).to_string()).collect(),
+            classification,
+        }
+    }
+
+    fn fixture_catalog(identities: Vec<IdentityRecord>) -> CardCatalog {
+        CardCatalog {
+            schema_version: 1,
+            provenance: SourceProvenance {
+                source: "fixture".to_string(),
+                source_path: "fixture.json".to_string(),
+                source_updated_at: "2026-07-10".to_string(),
+                source_sha256: "fixture".to_string(),
+                generator: "fixture".to_string(),
+            },
+            identities,
+            printings: Vec::new(),
+        }
+    }
 
     #[test]
     fn normalizes_closed_characteristics() {
@@ -840,6 +1234,176 @@ mod tests {
             legacy_type_line("Legendary Creature Elf Druid"),
             Ok("Legendary Creature \u{2014} Elf Druid".to_string())
         );
+    }
+
+    #[test]
+    fn owner_priority_fixture_has_three_unique_complete_tiers() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../assets/coverage_priority.txt");
+        let tiers = read_priority_tiers(&path)
+            .unwrap_or_else(|error| panic!("priority fixture should parse: {error}"));
+        assert_eq!(tiers.len(), 3);
+        assert_eq!(tiers[0].names.len(), 58);
+        assert_eq!(tiers[1].names.len(), 161);
+        assert_eq!(tiers[2].names.len(), 146);
+        assert_eq!(
+            tiers.iter().map(|tier| tier.names.len()).sum::<usize>(),
+            365
+        );
+    }
+
+    #[test]
+    fn priority_parser_rejects_malformed_empty_and_duplicate_tiers() {
+        let root = std::env::temp_dir().join(format!(
+            "forge-porttools-priority-parser-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&root)
+            .unwrap_or_else(|error| panic!("could not create priority fixture: {error}"));
+        let path = root.join("priority.txt");
+
+        for (source, expected) in [
+            ("Card Before Tier\n", "before a tier header"),
+            ("# TIER 0\nCard\n", "requires `# TIER N - label`"),
+            ("# TIER X - Invalid\nCard\n", "is not an integer"),
+            ("# TIER 0 - Empty\n", "at least one nonempty priority tier"),
+            (
+                "# TIER 0 - Duplicate\nCard|Card\n",
+                "duplicate priority card",
+            ),
+        ] {
+            fs::write(&path, source)
+                .unwrap_or_else(|error| panic!("could not write priority fixture: {error}"));
+            let Err(error) = read_priority_tiers(&path) else {
+                panic!("malformed priority fixture should be rejected");
+            };
+            assert!(error.contains(expected), "unexpected error: {error}");
+        }
+
+        fs::write(
+            &path,
+            "# ignored\n# TIER 2 - Later\nSecond\n# TIER 0 - First\nFirst|Another\n",
+        )
+        .unwrap_or_else(|error| panic!("could not write priority fixture: {error}"));
+        let tiers = read_priority_tiers(&path)
+            .unwrap_or_else(|error| panic!("valid priority fixture should parse: {error}"));
+        assert_eq!(
+            tiers.iter().map(|tier| tier.tier).collect::<Vec<_>>(),
+            [0, 2]
+        );
+        assert_eq!(tiers[0].names, ["First", "Another"]);
+
+        fs::remove_dir_all(&root)
+            .unwrap_or_else(|error| panic!("could not remove priority fixture: {error}"));
+    }
+
+    #[test]
+    fn priority_report_prefers_exact_names_and_records_every_status() {
+        let catalog = fixture_catalog(vec![
+            fixture_identity(
+                "fixture-front",
+                "Front",
+                &["Front"],
+                CardClassification::UnverifiedPlayable,
+            ),
+            fixture_identity(
+                "fixture-modal",
+                "Front // Back",
+                &["Front", "Back"],
+                CardClassification::UnverifiedPlayable,
+            ),
+            fixture_identity(
+                "fixture-blocked",
+                "Blocked",
+                &["Blocked"],
+                CardClassification::UnverifiedPlayable,
+            ),
+            fixture_identity(
+                "fixture-no-legacy",
+                "No Legacy",
+                &["No Legacy"],
+                CardClassification::VerifiedPlayable,
+            ),
+            fixture_identity(
+                "fixture-shared-one",
+                "One // Shared",
+                &["One", "Shared"],
+                CardClassification::UnverifiedPlayable,
+            ),
+            fixture_identity(
+                "fixture-shared-two",
+                "Two // Shared",
+                &["Two", "Shared"],
+                CardClassification::UnverifiedPlayable,
+            ),
+            fixture_identity(
+                "fixture-catalog-only",
+                "Catalog Only",
+                &["Catalog Only"],
+                CardClassification::CatalogOnly("fixture".to_string()),
+            ),
+        ]);
+        let tiers = vec![PriorityTier {
+            tier: 0,
+            label: "Fixture".to_string(),
+            names: [
+                "Front",
+                "Back",
+                "Blocked",
+                "No Legacy",
+                "Shared",
+                "Catalog Only",
+            ]
+            .into_iter()
+            .map(str::to_string)
+            .collect(),
+        }];
+        let outcomes = vec![
+            TranslationOutcome::Emitted {
+                relative: "f/front.txt".to_string(),
+                source: "front".to_string(),
+                aliases: vec!["Front".to_string()],
+            },
+            TranslationOutcome::Emitted {
+                relative: "f/modal.txt".to_string(),
+                source: "modal".to_string(),
+                aliases: vec!["Front // Back".to_string(), "Back".to_string()],
+            },
+            TranslationOutcome::Quarantined {
+                failure: TranslationFailure {
+                    path: "b/blocked.txt".to_string(),
+                    line: 7,
+                    code: "UNSUPPORTED_VALUE".to_string(),
+                    message: "fixture blocker".to_string(),
+                },
+                aliases: vec!["Blocked".to_string()],
+            },
+        ];
+
+        let report = build_priority_report(
+            std::path::Path::new("assets/priority.txt"),
+            &tiers,
+            &catalog,
+            &outcomes,
+        );
+        assert_eq!(report.total_requested, 6);
+        assert_eq!(report.catalog_resolved, 4);
+        assert_eq!(report.emitted, 2);
+        assert_eq!(report.emitted_percent, 100.0 / 3.0);
+        assert_eq!(report.tiers[0].catalog_resolved, 4);
+        assert_eq!(report.tiers[0].emitted_percent, 100.0 / 3.0);
+
+        let cards = &report.tiers[0].cards;
+        assert_eq!(cards[0].catalog_name.as_deref(), Some("Front"));
+        assert_eq!(cards[0].status, "emitted");
+        assert_eq!(cards[1].catalog_name.as_deref(), Some("Front // Back"));
+        assert_eq!(cards[1].status, "emitted");
+        assert_eq!(cards[2].status, "quarantined");
+        assert_eq!(cards[2].code.as_deref(), Some("UNSUPPORTED_VALUE"));
+        assert_eq!(cards[3].status, "legacy_missing");
+        assert_eq!(cards[4].status, "catalog_ambiguous");
+        assert_eq!(cards[5].status, "catalog_missing");
+        assert_eq!(percent(0, 0), 0.0);
     }
 
     #[test]

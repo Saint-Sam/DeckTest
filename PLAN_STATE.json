@@ -250,13 +250,13 @@
       "status": "in_progress",
       "branch": "task/T3.3-api-mapper",
       "attempts": 0,
-      "verification": "Fail-closed table-driven mapper packs passed cargo fmt, 22 forge-porttools tests, clippy -D warnings, deterministic full-corpus audit, all 235 local oracle scenarios, and the 80% workspace coverage gate locally. Exact effects, statics, structured costs, SVar-linked triggers/modes/replacements, player targeting, primitive restrictions and utility effects, closed selector comparisons, aggregate damage/combat markers, simple animation and transform, hand visibility, closed zone transitions, exact legacy defaults, destroy-without-regeneration, and sorcery/your-turn/once-per-turn activation timing cover 13,417/43,649 top-level legacy ability uses (30.7384%); the remaining 30,232 uses are quarantined with stable global and per-API reason counts. T3.3 remains in progress for dynamic values, conditions, richer graph bindings, and additional file-impact-ranked API packs."
+      "verification": "Fail-closed table-driven mapper packs passed cargo fmt, 30 forge-porttools tests, clippy -D warnings, deterministic full-corpus audit, recurring local verification, and the 80% workspace coverage gate locally. Exact effects, statics, structured costs, SVar-linked triggers/modes/replacements, player targeting, primitive restrictions and utility effects, closed selector comparisons, aggregate damage/combat markers, simple animation and transform, hand visibility, closed library searches and zone transitions, exact legacy defaults, fixed token bundles, Defined damage selectors, destroy-without-regeneration, and sorcery/your-turn/once-per-turn activation timing cover 14,446/43,649 top-level legacy ability uses (33.0958%); the remaining 29,203 uses are quarantined with stable global and per-API reason counts. T3.3 remains in progress for dynamic values, conditions, richer graph bindings, and additional priority/fan-out-ranked API packs under PC-0005."
     },
     "T3.4": {
       "status": "verified_local",
       "branch": "task/T3.4-frs-emitter",
       "attempts": 0,
-      "verification": "PASS local 16-worker translation factory: 7,382/33,290 complete legacy scripts emitted as canonical .frs (22.1748%), including 96 multi-face definitions, with 25,908 fail-closed file quarantines, deterministic repeated output-tree SHA-1 a702db484259dc435f0f90f7debfc851ee46b7cc, and 7,382/7,382 forge-cardc compiler roundtrips against 38,306 identities and 113,234 printings. Existing typed operations now preserve common enchant, equip, fixed cycling and typecycling, fixed enters-with-counters, and fixed alternative-cost keyword parameters without changing the frozen DSL. Twenty-seven forge-porttools tests, clippy -D warnings, all 235 recurring oracles, and workspace line coverage 22,604/28,111 (80.4098%) passed locally with no network or GitHub Actions."
+      "verification": "PASS local 24-worker translation factory: 8,024/33,290 complete legacy scripts emitted as canonical .frs (24.1033%), with 25,266 fail-closed file quarantines, deterministic repeated output-tree SHA-1 c2f41ff326f4c6fcc470cff01ed89a02f6e0b3f6, and 8,024/8,024 forge-cardc compiler roundtrips against 38,306 identities and 113,234 printings. All 365 Owner-priority names resolve; 149/365 emit (40.8219%) with deterministic per-tier and per-card blocker reporting. Thirty forge-porttools tests, clippy -D warnings, recurring local verification, and workspace line coverage 23,338/28,977 (80.5397%) passed locally with no network or GitHub Actions."
     }
   },
   "gates_passed": [
@@ -340,7 +340,8 @@
     "O4": "complete_2026-07-10_owner_approved_cp_dsl_freeze",
     "O5": "complete",
     "O9-PC-0001-PC-0003": "complete_2026-07-09",
-    "O9-PC-0004": "complete_2026-07-10_owner_option_2"
+    "O9-PC-0004": "complete_2026-07-10_owner_option_2",
+    "O9-PC-0005": "complete_2026-07-10_owner_approved_bounded_dsl_amendment_and_priority_list"
   },
   "process_improvements": {
     "PI-2026-07-09-local-multiworker-fuzz": {
@@ -349,6 +350,13 @@
       "request": "Owner requested using more local resources for long fuzz gates because GitHub Actions budget is constrained.",
       "implementation": "Implemented resource-aware local-only multi-worker fuzzing and used eight isolated address-sanitizer workers for the CP-DSL 2,400-worker-second gate without GitHub Actions.",
       "constraints": "Use resource-aware workers, preserve disk headroom, do not push, and never trigger GitHub Actions."
+    },
+    "PI-2026-07-10-resource-aware-translation": {
+      "status": "active",
+      "target": "T3 translation and mapper campaigns",
+      "request": "Owner requested faster local execution using available hardware without wasteful workers, duplicate caches, subagents, or GitHub Actions.",
+      "implementation": "Use one Cargo cache and output tree, up to 24 translation workers on the current host, independent local audits/tests in spare capacity, and batched mapper changes between full corpus sweeps.",
+      "constraints": "Cap workers when serial finalization, disk I/O, or tail imbalance dominates; do not push or trigger GitHub Actions."
     }
   }
 }

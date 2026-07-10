@@ -1,4 +1,4 @@
-# FORGE-RS REBUILD — MASTER EXECUTION PLAN v1.5
+# FORGE-RS REBUILD — MASTER EXECUTION PLAN v1.6
 
 **Status:** Ready for agent orchestration — includes Gate Review & Checkpoint protocol (§15), plan governance (§16), and the Owner Interface (§17: expectation briefs, owner input map, trouble bulletins)
 **This document is the sole authority.** If any agent instruction, prior knowledge, or tool default conflicts with this plan, the plan wins; if the plan is ambiguous, use the Question Queue (§15.5) — do not guess.
@@ -16,6 +16,12 @@ classification: the 100-card packet is an `unverified_playable` language-stress
 corpus. CP-DSL freezes identity, grammar, closed typing, canonical emission,
 and database contracts; T3.6 and CP-PORT-20 own per-card semantic promotion to
 `verified_playable`.
+**v1.6 amendment (2026-07-10):** Owner-approved PC-0005 bounded, corpus-driven
+CP-DSL amendment for parameterized keyword values/costs, activation zones and
+general phase events, conditional/unless-paid costs, card-choice bindings, and
+explicit fight/regenerate operations. The Owner-supplied 365-card Commander
+priority list steers mapper order and gets a separate deterministic coverage
+report; it does not weaken global coverage or semantic gates.
 **Prerequisite artifact:** `forge-rs` proof-of-concept (validated: 70 ns state clone, 5,080 playouts/sec, monotonic MCTS difficulty ladder)
 **License constraint:** GPL-3.0-only for any component that derives from Card-Forge/forge content (card scripts, AI profiles, rules-test scenarios)[^1]
 
@@ -541,6 +547,13 @@ extended automatically on lower-core machines to preserve the aggregate floor.
 The local gate executes all semantic oracle packs, four isolated cross-target
 checks, and three clean deterministic compiler builds.
 
+PC-0005 permits a bounded evidence-driven amendment after the initial freeze
+for five corpus-proven operation families: parameterized keyword values/costs,
+activation zones and general phase events, conditional/unless-paid costs,
+card-choice bindings, and explicit fight/regenerate operations. Each addition
+must remain closed and typed, round-trip canonically, reject approximation, and
+land with structural tests before the operation surface is re-frozen.
+
 ### 8.2 The translation factory (T3.2–T3.6)
 
 ```mermaid
@@ -571,13 +584,21 @@ flowchart LR
 | --- | --- |
 | T3.2 (`PARALLEL-OK` with T2.5+) | Legacy-format parser: full grammar for `A:`/`T:`/`R:`/`S:`/`K:`/`SVar:` lines into a legacy-AST; must parse ≥99.5% of corpus (parse-only) |
 | T3.3 | API mapper: table-driven translation of each legacy ability API + parameter set into IR. Implemented in T0.6 frequency order; each API mapping lands with its own test pack. `metrics/api_coverage.json` tracks {api, legacy_uses, mapped, verified}. |
-| T3.4 | `.frs` emitter + batch driver: `cargo run -p forge-porttools -- translate --all --jobs 16` |
+| T3.4 | `.frs` emitter + resource-aware batch driver: `cargo run -p forge-porttools -- translate --all --jobs <N>` plus deterministic tier-aware reporting for `assets/coverage_priority.txt` |
 | T3.5 | Auto smoke harness: for every translated card, synthesize a sandbox state where it is castable/playable, execute, assert invariants + expected zone destinations. Zero human input per card. |
 | T3.6 | Semantic test packs: for the top 2,000 play-rate cards (list mined from legacy precons + draft data), Rules-Oracle Agent writes behavior scenarios (e.g., "Lightning Bolt to face = 3 less life"). |
 | T3.7 | Coverage dashboard: `tools/coverage_report.py` → `docs/CARD_COVERAGE.md` with separate catalog/identity/playable/legacy metrics, per-set %, quarantine reason histogram, provenance, and API gaps feeding new T2.x keyword tasks. |
 | T3.8 | Hand-port lane: quarantined cards whose reason code is `NEEDS_NEW_PRIMITIVE` generate spec tickets automatically (`tools/quarantine_to_tickets.py`) routed to T2 backlog. |
 
 **Card-Port Agent operating procedure (spawn N in parallel; each owns one quarantine reason-code batch):**
+
+On the current 24-core local host, full translation campaigns use at most 24
+workers in the single shared output/cache tree. Because sorting, hashing,
+compiler finalization, disk output, and tail imbalance are partly serial, spare
+capacity is assigned to independent mapper audits and focused tests rather
+than additional translator workers. Mapper fixes are batched before full
+campaigns to avoid repeated corpus scans. No GitHub Actions, duplicate Cargo
+caches, or duplicate worktrees are used for routine T3 verification.
 
 1. `cargo run -p forge-porttools -- quarantine --reason <CODE> --sample 50 --out work/<CODE>/`
 2. Diagnose the mapper gap; patch `mapper/tables/<api>.rs` or file a primitive ticket.

@@ -158,14 +158,19 @@ pub fn run_cli(args: Vec<String>) -> Result<String, String> {
                 output: Path::new("target/translated-cards"),
                 metrics: Path::new("metrics/translation.json"),
                 quarantine: Path::new("metrics/translation_quarantine.json"),
+                priority: Path::new("assets/coverage_priority.txt"),
+                priority_metrics: Path::new("metrics/priority_coverage.json"),
                 jobs,
             })?;
             Ok(format!(
-                "emitted {}/{} legacy scripts ({:.4}%) with {} local workers\noutput target/translated-cards\nmetrics metrics/translation.json\nquarantine metrics/translation_quarantine.json\n",
+                "emitted {}/{} legacy scripts ({:.4}%) with {} local workers\npriority {}/{} requested cards ({:.4}%)\noutput target/translated-cards\nmetrics metrics/translation.json\npriority metrics metrics/priority_coverage.json\nquarantine metrics/translation_quarantine.json\n",
                 report.emitted_scripts,
                 report.total_scripts,
                 report.emitted_percent,
-                report.jobs
+                report.jobs,
+                report.priority_emitted,
+                report.priority_requested,
+                report.priority_emitted_percent,
             ))
         }
         [legacy, map_audit, root_flag, root, metrics_flag, metrics, quarantine_flag, quarantine]
