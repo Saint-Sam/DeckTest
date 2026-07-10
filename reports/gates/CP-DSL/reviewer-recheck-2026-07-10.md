@@ -48,3 +48,12 @@ the packet's declared 117/59 diagnostics and unique 28/28 mutant set.
 
 Remediation implemented after review: all four counts and the exact unique
 mutant identities are now fail-closed.
+
+## Subsequent Offline Re-review
+
+Commit `dd828b2d96498f81cbe404cf74095d1d734e9e69` passed the fully hardened exact
+packet. The reviewer reconciled every requested artifact and count, but failed
+the gate because `CARGO_NET_OFFLINE=false` could override the local-only
+default. Gate, local verification, card regression, and metric subprocesses now
+force offline Cargo mode. Preflight and packet validation require explicit zero
+network egress and `cargo_net_offline=true` evidence.

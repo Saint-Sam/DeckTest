@@ -20,7 +20,7 @@ fi
 
 workers="$("$ROOT/scripts/local_workers.sh")"
 export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-$workers}"
-export CARGO_NET_OFFLINE="${CARGO_NET_OFFLINE:-true}"
+export CARGO_NET_OFFLINE=true
 
 echo "Local verification mode=$mode workers=$CARGO_BUILD_JOBS cargo_offline=$CARGO_NET_OFFLINE"
 

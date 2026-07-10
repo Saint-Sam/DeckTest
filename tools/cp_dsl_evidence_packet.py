@@ -191,6 +191,8 @@ def command_records(
                 "clean=true",
                 "detached=true",
                 "github_actions_used=false",
+                "network_egress_used=false",
+                "cargo_net_offline=true",
                 f"reviewed_commit={reviewed_commit}",
                 f"reviewed_tree={reviewed_tree}",
             ):
@@ -327,6 +329,8 @@ def create(
         "passed": True,
         "runner": "local-only",
         "github_actions_used": False,
+        "network_egress_used": False,
+        "cargo_net_offline": True,
         "reviewed_commit": reviewed_commit,
         "reviewed_tree": reviewed_tree,
         "detached_clean_start": True,
@@ -364,6 +368,8 @@ def check(root: Path, evidence_dir: Path) -> int:
         packet.get("passed") is not True
         or packet.get("runner") != "local-only"
         or packet.get("github_actions_used") is not False
+        or packet.get("network_egress_used") is not False
+        or packet.get("cargo_net_offline") is not True
         or packet.get("detached_clean_start") is not True
     ):
         raise ValueError("evidence packet is not a passing local-only packet")

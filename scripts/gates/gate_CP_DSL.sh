@@ -23,7 +23,7 @@ if [[ -n "$mode" \
   exit 2
 fi
 
-export CARGO_NET_OFFLINE="${CARGO_NET_OFFLINE:-true}"
+export CARGO_NET_OFFLINE=true
 export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-$(scripts/local_workers.sh)}"
 
 if [[ "$mode" == "--exact-packet" ]]; then
@@ -50,6 +50,8 @@ if [[ "$mode" == "--exact-packet" ]]; then
     echo "clean=true"
     echo "detached=true"
     echo "github_actions_used=false"
+    echo "network_egress_used=false"
+    echo "cargo_net_offline=$CARGO_NET_OFFLINE"
   } >"$commands_dir/00-preflight.log"
 
   run_logged() {

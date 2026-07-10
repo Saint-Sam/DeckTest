@@ -80,6 +80,11 @@ raw LLVM report against the exact 80% floor; Oracle, source-binding, and
 acceptance manifests are recomputed; both corpus generators rerun; and the
 packet enforces exactly 117/59 diagnostics plus the unique 28/28 mutant set.
 
+The sixth independent review reconciled every semantic and evidence result but
+found that a caller could set `CARGO_NET_OFFLINE=false`. All gate entry points
+now force offline Cargo mode, and exact preflight plus packet validation require
+both `cargo_net_offline=true` and `network_egress_used=false`.
+
 ## Owner Decision
 
 The Owner chose the honest staged-verification option. PC-0004 relabels all 100

@@ -29,7 +29,7 @@ def sha256(path: Path) -> str:
 
 def run_checked(command: list[str], root: Path) -> str:
     environment = os.environ.copy()
-    environment.setdefault("CARGO_NET_OFFLINE", "true")
+    environment["CARGO_NET_OFFLINE"] = "true"
     result = subprocess.run(
         command,
         cwd=root,

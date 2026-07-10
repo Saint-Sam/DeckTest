@@ -43,7 +43,7 @@ done
 
 workers="$("$ROOT/scripts/local_workers.sh")"
 export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-$workers}"
-export CARGO_NET_OFFLINE="${CARGO_NET_OFFLINE:-true}"
+export CARGO_NET_OFFLINE=true
 
 python3 tools/generate_cp_dsl.py --check
 python3 tools/generate_cp_dsl_negative.py --check

@@ -237,7 +237,7 @@
       "status": "in_progress",
       "branch": "task/T3.1-card-dsl",
       "attempts": 0,
-      "verification": "Owner-approved PC-0004 honest classification, exact modal-count typing, and cross-face keyword isolation passed an exact detached packet at 0a53df82ba9e06791e1f0844811d25de718a21c9. Independent re-review accepted that scope but failed coverage replay, Oracle/packet provenance comparison, and exact acceptance-count enforcement. Raw coverage replay, source/acceptance manifest comparison, generator replay, and exact 117/59 plus 28/28 checks are implemented locally; another exact packet and re-review are pending."
+      "verification": "Owner-approved PC-0004 and all semantic/evidence remediations passed an exact detached packet at dd828b2d96498f81cbe404cf74095d1d734e9e69. Independent review reconciled every requested count and artifact but found that CARGO_NET_OFFLINE=false could override local-only execution. Gate, local verification, card regression, and CP-DSL metrics now force offline Cargo mode, and the packet records and checks zero network egress plus cargo_net_offline=true. Final exact rerun and re-review are pending."
     }
   },
   "gates_passed": [
@@ -306,11 +306,11 @@
     },
     "CP-DSL": {
       "status": "failed_remediation_in_progress",
-      "reviewed_commit": "0a53df82ba9e06791e1f0844811d25de718a21c9",
-      "exact_local_gate": "PASS from detached clean worktree /private/tmp/forge-cp-dsl-0a53df8-clean with no GitHub Actions or network use.",
+      "reviewed_commit": "dd828b2d96498f81cbe404cf74095d1d734e9e69",
+      "exact_local_gate": "PASS from detached clean worktree /private/tmp/forge-cp-dsl-dd828b2-clean; supplied evidence used no GitHub Actions or network.",
       "reviewer": "gpt-5.6-luna xhigh independent Gate Reviewer subagent",
-      "verdict": "FAIL: PC-0004 semantic classification is accepted, but raw coverage was not replayed, Oracle/packet source and acceptance manifests were under-checked, generators were not replayed by the independent checker, and exact 117/59 plus 28/28 counts were under-enforced.",
-      "technical_remediation": "Implemented raw LLVM coverage hash/floor replay, Oracle metric self-binding, source/acceptance manifest comparison, generator and malformed-generator replay, exact diagnostic counts, and exact unique mutation-set enforcement. A new exact rerun is pending.",
+      "verdict": "FAIL: all semantic and evidence checks reconcile, but local-only execution was not fail-closed because CARGO_NET_OFFLINE=false could override the default.",
+      "technical_remediation": "Gate, local verification, card regression, and CP-DSL metric subprocesses now force CARGO_NET_OFFLINE=true. The exact preflight and packet require cargo_net_offline=true and network_egress_used=false. Final exact rerun is pending.",
       "owner_decision": "Owner chose Option 2 on 2026-07-10. PC-0004 honestly classifies the 100 definitions as unverified language-stress recipes and defers per-card semantic promotion to T3.6 and CP-PORT-20."
     }
   },
