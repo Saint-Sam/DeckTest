@@ -51,6 +51,8 @@ pub struct ApiCoverageRow {
     pub verified: usize,
     /// Uses sent to reason-coded quarantine.
     pub quarantined: usize,
+    /// Quarantined uses grouped by stable reason code.
+    pub quarantine_reasons: BTreeMap<String, usize>,
 }
 
 /// Full-corpus API mapping metrics.
@@ -107,6 +109,7 @@ struct MutableCoverage {
     legacy_uses: usize,
     mapped: usize,
     verified: usize,
+    quarantine_reasons: BTreeMap<String, usize>,
 }
 
 type MapperFn = fn(
@@ -228,6 +231,21 @@ const MAPPERS: &[MapperSpec] = &[
         api: "Surveil",
         mapper: map_surveil,
     },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Static,
+        api: "ReduceCost",
+        mapper: map_reduce_cost,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Static,
+        api: "CantBlockBy",
+        mapper: map_cant_block_by,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Activated,
+        api: "ChangeZoneAll",
+        mapper: map_change_zone_all,
+    },
 ];
 
 struct MappingContext<'a> {
@@ -314,6 +332,9 @@ fn map_with_context(
         .as_deref()
         .ok_or_else(|| diagnostic("MALFORMED_API", "first ability field has no selector key"))?;
     let api = selector.value.trim();
+    if prefix == LegacyAbilityPrefix::Activated && api == "Charm" {
+        return map_charm_ability(prefix, selector_key, expression, context, stack);
+    }
     if prefix == LegacyAbilityPrefix::Triggered {
         return map_triggered_ability(prefix, api, selector_key, expression, context, stack);
     }
@@ -385,6 +406,65 @@ fn resolve_svar(
     result
 }
 
+fn map_charm_ability(
+    prefix: LegacyAbilityPrefix,
+    selector: &str,
+    expression: &LegacyExpression,
+    context: &MappingContext<'_>,
+    stack: &mut Vec<String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["AB", "SP", "DB"])?;
+    let parameters = parameters(expression)?;
+    reject_unknown(
+        &parameters,
+        &[
+            "Cost",
+            "Choices",
+            "CharmNum",
+            "MinCharmNum",
+            "AdditionalDescription",
+            "PrecostDesc",
+        ],
+    )?;
+    let choice_names = required(&parameters, "Choices")?
+        .split(',')
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .collect::<Vec<_>>();
+    if choice_names.len() < 2 {
+        return Err(unsupported_value(
+            "Choices",
+            required(&parameters, "Choices")?,
+        ));
+    }
+    let mut effects = Vec::new();
+    for name in choice_names {
+        let linked = resolve_svar(name, context, stack)?;
+        if linked.event.is_some() || !linked.costs.is_empty() {
+            return Err(diagnostic(
+                "UNSUPPORTED_LINK",
+                &format!("Charm choice `{name}` is not a cost-free effect chain"),
+            ));
+        }
+        effects.push(linked.expression);
+    }
+    let maximum = optional_positive_integer(&parameters, "CharmNum")?.unwrap_or(1);
+    let minimum = optional_positive_integer(&parameters, "MinCharmNum")?.unwrap_or(maximum);
+    let expression = if minimum == 1 && maximum == 1 {
+        call(Operation::ChooseOne, effects)
+    } else if minimum == maximum {
+        let mut arguments = vec![Expression::Integer(maximum)];
+        arguments.extend(effects);
+        call(Operation::ChooseExactly, arguments)
+    } else {
+        return Err(diagnostic(
+            "UNSUPPORTED_VALUE",
+            &format!("Charm range {minimum}..={maximum} has no exact lowering"),
+        ));
+    };
+    mapped_direct(prefix, "Charm", &parameters, expression)
+}
+
 fn map_triggered_ability(
     prefix: LegacyAbilityPrefix,
     api: &str,
@@ -401,6 +481,7 @@ fn map_triggered_ability(
         "Phase" => map_phase_event(&parameters)?,
         "Attacks" => map_attacks_event(&parameters)?,
         "SpellCast" => map_spell_cast_event(&parameters)?,
+        "DamageDone" => map_damage_done_event(&parameters)?,
         _ => {
             return Err(diagnostic(
                 "UNMAPPED_API",
@@ -528,6 +609,45 @@ fn map_spell_cast_event(
     Ok(call(Operation::EventCast, arguments))
 }
 
+fn map_damage_done_event(
+    parameters: &BTreeMap<String, String>,
+) -> Result<Expression, MappingDiagnostic> {
+    reject_unknown(
+        parameters,
+        &[
+            "Execute",
+            "ValidSource",
+            "ValidTarget",
+            "CombatDamage",
+            "TriggerZones",
+            "TriggerDescription",
+        ],
+    )?;
+    require_battlefield_zone(parameters, "TriggerZones")?;
+    let mut arguments = vec![
+        damage_event_selector(required(parameters, "ValidSource")?, "ValidSource")?,
+        damage_event_selector(required(parameters, "ValidTarget")?, "ValidTarget")?,
+    ];
+    if let Some(value) = parameters.get("CombatDamage") {
+        if value != "True" {
+            return Err(unsupported_value("CombatDamage", value));
+        }
+        arguments.push(Expression::Text("combat".to_string()));
+    }
+    Ok(call(Operation::EventDamage, arguments))
+}
+
+fn damage_event_selector(value: &str, key: &str) -> Result<Expression, MappingDiagnostic> {
+    match value {
+        "Any" | "Card" => Ok(call(Operation::Any, vec![])),
+        "Card.Self" | "Creature.Self" => Ok(call(Operation::Source, vec![])),
+        "You" | "Player.You" => Ok(call(Operation::You, vec![])),
+        "Opponent" | "Player.Opponent" => Ok(call(Operation::Opponent, vec![])),
+        "Player" => Ok(call(Operation::Any, vec![])),
+        _ => affected_selector(value).map_err(|_| unsupported_value(key, value)),
+    }
+}
+
 fn sequence(first: Expression, second: Expression) -> Expression {
     let mut expressions = Vec::new();
     match first {
@@ -587,6 +707,7 @@ pub fn audit_legacy_mappings(
             mapped: row.mapped,
             verified: row.verified,
             quarantined: row.legacy_uses - row.mapped,
+            quarantine_reasons: row.quarantine_reasons,
         })
         .collect::<Vec<_>>();
     apis.sort_by(|left, right| {
@@ -661,6 +782,9 @@ fn audit_file(
             Err(error) => {
                 *total_quarantined += 1;
                 *reason_counts.entry(error.code.clone()).or_insert(0) += 1;
+                *row.quarantine_reasons
+                    .entry(error.code.clone())
+                    .or_insert(0) += 1;
                 if samples.len() < 250 {
                     samples.push(QuarantineSample {
                         path: relative.clone(),
@@ -1418,6 +1542,179 @@ fn map_self_number_effect(
     mapped_direct(prefix, api, parameters, expression)
 }
 
+fn map_reduce_cost(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector(selector, "Mode")?;
+    reject_unknown(
+        parameters,
+        &[
+            "Type",
+            "ValidCard",
+            "Activator",
+            "Amount",
+            "EffectZone",
+            "Description",
+        ],
+    )?;
+    if required(parameters, "Type")? != "Spell" {
+        return Err(unsupported_value("Type", required(parameters, "Type")?));
+    }
+    require_battlefield_zone(parameters, "EffectZone")?;
+    let amount = positive_integer(required(parameters, "Amount")?, "Amount")?;
+    let mut spells = parameters
+        .get("ValidCard")
+        .map(|value| spell_selector(value))
+        .transpose()?
+        .unwrap_or_else(|| call(Operation::Spells, vec![]));
+    if let Some(activator) = parameters.get("Activator") {
+        let player = match activator.as_str() {
+            "You" => call(Operation::You, vec![]),
+            "Opponent" | "Player.Opponent" => call(Operation::Opponent, vec![]),
+            "Player" | "Any" => call(Operation::Any, vec![]),
+            _ => return Err(unsupported_value("Activator", activator)),
+        };
+        spells = add_collection_predicate(spells, call(Operation::ControlledBy, vec![player]))?;
+    }
+    Ok(MappedLegacyAbility {
+        prefix,
+        api: api.to_string(),
+        costs: Vec::new(),
+        event: None,
+        expression: call(
+            Operation::Continuous,
+            vec![
+                spells,
+                call(
+                    Operation::CostReduction,
+                    vec![call(Operation::Any, vec![]), Expression::Integer(amount)],
+                ),
+            ],
+        ),
+    })
+}
+
+fn map_cant_block_by(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector(selector, "Mode")?;
+    reject_unknown(
+        parameters,
+        &["ValidAttacker", "Description", "Secondary", "EffectZone"],
+    )?;
+    require_battlefield_zone(parameters, "EffectZone")?;
+    if parameters
+        .get("Secondary")
+        .is_some_and(|value| value != "True")
+    {
+        return Err(unsupported_value(
+            "Secondary",
+            required(parameters, "Secondary")?,
+        ));
+    }
+    let attacker = affected_selector(required(parameters, "ValidAttacker")?)?;
+    let blockers = call(
+        Operation::Permanents,
+        vec![call(
+            Operation::TypeIs,
+            vec![Expression::Text("creature".to_string())],
+        )],
+    );
+    Ok(MappedLegacyAbility {
+        prefix,
+        api: api.to_string(),
+        costs: Vec::new(),
+        event: None,
+        expression: call(
+            Operation::Continuous,
+            vec![
+                attacker,
+                call(
+                    Operation::CannotBeBlockedBy,
+                    vec![call(Operation::Any, vec![]), blockers],
+                ),
+            ],
+        ),
+    })
+}
+
+fn map_change_zone_all(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["AB", "SP", "DB"])?;
+    reject_unknown(
+        parameters,
+        &[
+            "Cost",
+            "ChangeType",
+            "Origin",
+            "Destination",
+            "SpellDescription",
+            "StackDescription",
+            "ValidDescription",
+            "AILogic",
+            "IsCurse",
+        ],
+    )?;
+    let origin = required(parameters, "Origin")?;
+    if origin != "Battlefield" {
+        return Err(unsupported_value("Origin", origin));
+    }
+    let affected = valid_cards_selector(required(parameters, "ChangeType")?)?;
+    let expression = match required(parameters, "Destination")? {
+        "Graveyard" => call(
+            Operation::MoveZone,
+            vec![affected, Expression::Text("graveyard".to_string())],
+        ),
+        "Exile" => call(Operation::Exile, vec![affected]),
+        "Hand" => call(Operation::ReturnToHand, vec![affected]),
+        value => return Err(unsupported_value("Destination", value)),
+    };
+    mapped_direct(prefix, api, parameters, expression)
+}
+
+fn add_collection_predicate(
+    selector: Expression,
+    predicate: Expression,
+) -> Result<Expression, MappingDiagnostic> {
+    let Expression::Call {
+        operation,
+        mut arguments,
+    } = selector
+    else {
+        return Err(diagnostic(
+            "UNSUPPORTED_SELECTOR",
+            "expected a typed collection selector",
+        ));
+    };
+    if operation != Operation::Spells {
+        return Err(diagnostic(
+            "UNSUPPORTED_SELECTOR",
+            "cost reduction requires a spell collection",
+        ));
+    }
+    let combined = match arguments.len() {
+        0 => predicate,
+        1 => call(Operation::And, vec![arguments.remove(0), predicate]),
+        _ => {
+            return Err(diagnostic(
+                "UNSUPPORTED_SELECTOR",
+                "spell collection has an invalid predicate shape",
+            ));
+        }
+    };
+    Ok(call(operation, vec![combined]))
+}
+
 fn mapped_direct(
     prefix: LegacyAbilityPrefix,
     api: &str,
@@ -1759,7 +2056,7 @@ fn affected_selector(value: &str) -> Result<Expression, MappingDiagnostic> {
 }
 
 fn affected_selector_branch(value: &str) -> Result<Expression, MappingDiagnostic> {
-    if matches!(value, "Card.Self" | "Self") {
+    if matches!(value, "Card.Self" | "Creature.Self" | "Self") {
         return Ok(call(Operation::Source, vec![]));
     }
     if matches!(value, "Card.EquippedBy" | "Creature.EquippedBy") {
@@ -2084,9 +2381,42 @@ mod tests {
             "S:Mode$ Continuous | Affected$ Creature.YouCtrl+Other | AddPower$ 1 | AddToughness$ 1 | Description$ Other creatures get +1/+1.",
             "S:Mode$ Continuous | Affected$ Creature.EquippedBy | AddKeyword$ First Strike | Description$ Equipped creature has first strike.",
             "S:Mode$ Continuous | Affected$ Spirit.YouCtrl | AddPower$ 1 | AddKeyword$ Flying & Vigilance | Description$ Spirits get +1/+0 and keywords.",
+            "S:Mode$ ReduceCost | ValidCard$ Instant,Sorcery | Type$ Spell | Activator$ You | Amount$ 1 | Description$ Reduce costs.",
+            "S:Mode$ CantBlockBy | ValidAttacker$ Creature.Self | Description$ This creature can't be blocked.",
         ] {
             assert_operation(line, Operation::Continuous, 0);
         }
+    }
+
+    #[test]
+    fn resolves_charm_mode_graph() {
+        let script = parse_legacy_script(
+            "charm.txt",
+            concat!(
+                "A:SP$ Charm | Choices$ ModeDraw,ModeLife | CharmNum$ 1\n",
+                "SVar:ModeDraw:DB$ Draw | Defined$ You\n",
+                "SVar:ModeLife:DB$ GainLife | Defined$ You | LifeAmount$ 2\n",
+            ),
+        )
+        .unwrap_or_else(|error| panic!("charm fixture should parse: {error}"));
+        let context = MappingContext::from_script(&script);
+        let (prefix, expression) = script
+            .lines
+            .iter()
+            .find_map(|line| match &line.kind {
+                LegacyLineKind::Ability { prefix, expression } => Some((*prefix, expression)),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("charm fixture has no root ability"));
+        let mapped = map_legacy_ability_in_context(prefix, expression, &context)
+            .unwrap_or_else(|error| panic!("charm graph should map: {}", error.message));
+        assert!(matches!(
+            mapped.expression,
+            Expression::Call {
+                operation: Operation::ChooseOne,
+                ..
+            }
+        ));
     }
 
     #[test]
@@ -2123,6 +2453,10 @@ mod tests {
             (
                 "A:SP$ Surveil | Amount$ 1 | SpellDescription$ Surveil.",
                 Operation::Surveil,
+            ),
+            (
+                "A:SP$ ChangeZoneAll | ChangeType$ Creature | Origin$ Battlefield | Destination$ Exile | SpellDescription$ Exile all creatures.",
+                Operation::Exile,
             ),
         ] {
             assert_operation(line, operation, 0);
@@ -2168,6 +2502,15 @@ mod tests {
                 ),
                 Operation::EventCast,
                 Operation::AddCounter,
+            ),
+            (
+                concat!(
+                    "Name:Graph Damage\n",
+                    "T:Mode$ DamageDone | ValidSource$ Card.Self | ValidTarget$ Player.Opponent | CombatDamage$ True | TriggerZones$ Battlefield | Execute$ TrigDraw | TriggerDescription$ Draw.\n",
+                    "SVar:TrigDraw:DB$ Draw | Defined$ You\n",
+                ),
+                Operation::EventDamage,
+                Operation::Draw,
             ),
         ] {
             let script = parse_legacy_script("graph.txt", script_text)
