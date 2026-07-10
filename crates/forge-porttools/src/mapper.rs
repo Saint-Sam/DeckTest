@@ -4082,6 +4082,37 @@ pub(crate) fn valid_target_selector(value: &str) -> Result<Expression, MappingDi
     ))
 }
 
+pub(crate) fn card_selector_in_zone(
+    value: &str,
+    zone: &str,
+) -> Result<Expression, MappingDiagnostic> {
+    let selector = if value == "Basic" {
+        call(
+            Operation::Cards,
+            vec![call(
+                Operation::SupertypeIs,
+                vec![Expression::Text("basic".to_string())],
+            )],
+        )
+    } else {
+        let Expression::Call {
+            operation,
+            arguments,
+        } = affected_selector(value)?
+        else {
+            return Err(unsupported_value("ValidCards", value));
+        };
+        if !matches!(operation, Operation::Cards | Operation::Permanents) {
+            return Err(unsupported_value("ValidCards", value));
+        }
+        call(Operation::Cards, arguments)
+    };
+    add_collection_predicate(
+        selector,
+        call(Operation::ZoneIs, vec![Expression::Text(zone.to_string())]),
+    )
+}
+
 fn valid_cards_selector(value: &str) -> Result<Expression, MappingDiagnostic> {
     if value == "Permanent" {
         return Ok(call(Operation::Permanents, vec![]));

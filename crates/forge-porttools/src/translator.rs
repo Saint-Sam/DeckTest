@@ -5,7 +5,9 @@ use crate::{
         collect_scripts, git_revision, parse_legacy_script, LegacyLine, LegacyLineKind,
         LegacyScript,
     },
-    mapper::{map_script_abilities, parse_simple_cost, valid_target_selector},
+    mapper::{
+        card_selector_in_zone, map_script_abilities, parse_simple_cost, valid_target_selector,
+    },
 };
 use forge_cardc::{emit_card, is_known_keyword, parse_card_named};
 use forge_carddef::{
@@ -563,6 +565,31 @@ fn translate_keywords(
                     }),
                 )
             }
+            ("typecycling", [validity, cost]) | ("typecycling", [validity, cost, _]) => {
+                let full_cost = format!("{cost} Discard<1/CARDNAME>");
+                let costs = parse_simple_cost(Some(&full_cost))
+                    .map_err(|diagnostic| (line.line, diagnostic.code, diagnostic.message))?;
+                (
+                    Some(keyword.clone()),
+                    Some(AbilityDefinition {
+                        kind: AbilityKind::Activated,
+                        costs,
+                        event: None,
+                        condition: None,
+                        timing: None,
+                        effect: expression_call(
+                            Operation::SearchLibrary,
+                            vec![
+                                card_selector_in_zone(validity, "library").map_err(
+                                    |diagnostic| (line.line, diagnostic.code, diagnostic.message),
+                                )?,
+                                expression_call(Operation::You, vec![]),
+                            ],
+                        ),
+                        mana_ability: false,
+                    }),
+                )
+            }
             (
                 "flashback" | "madness" | "foretell" | "dash" | "spectacle" | "overload" | "escape"
                 | "blitz" | "disturb" | "evoke" | "bestow",
@@ -986,5 +1013,17 @@ mod tests {
             translated.abilities[0].kind,
             forge_carddef::AbilityKind::Static
         );
+    }
+
+    #[test]
+    fn desugars_fixed_typecycling_search() {
+        let script = crate::legacy::parse_legacy_script("fixture.txt", "K:TypeCycling:Forest:2\n")
+            .unwrap_or_else(|error| panic!("fixture should parse: {error}"));
+        let faces = face_lines(&script);
+        let translated = translate_keywords(&faces[0])
+            .unwrap_or_else(|error| panic!("keyword should translate: {error:?}"));
+        assert_eq!(translated.ids, vec!["typecycling"]);
+        assert_eq!(translated.abilities.len(), 1);
+        assert_eq!(translated.abilities[0].costs.len(), 2);
     }
 }

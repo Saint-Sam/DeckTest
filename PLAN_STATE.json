@@ -256,7 +256,7 @@
       "status": "verified_local",
       "branch": "task/T3.4-frs-emitter",
       "attempts": 0,
-      "verification": "PASS local 16-worker translation factory: 7,329/33,290 complete legacy scripts emitted as canonical .frs (22.0156%), including 96 multi-face definitions, with 25,961 fail-closed file quarantines, deterministic repeated output-tree SHA-1 140c192f1f8427364cf4553248b647c27909eaf0, and 7,329/7,329 forge-cardc compiler roundtrips against 38,306 identities and 113,234 printings. Existing typed operations now preserve common enchant, equip, fixed cycling, fixed enters-with-counters, and fixed alternative-cost keyword parameters without changing the frozen DSL. Twenty-six forge-porttools tests, clippy -D warnings, all 235 recurring oracles, and workspace line coverage 22,604/28,111 (80.4098%) passed locally with no network or GitHub Actions."
+      "verification": "PASS local 16-worker translation factory: 7,382/33,290 complete legacy scripts emitted as canonical .frs (22.1748%), including 96 multi-face definitions, with 25,908 fail-closed file quarantines, deterministic repeated output-tree SHA-1 a702db484259dc435f0f90f7debfc851ee46b7cc, and 7,382/7,382 forge-cardc compiler roundtrips against 38,306 identities and 113,234 printings. Existing typed operations now preserve common enchant, equip, fixed cycling and typecycling, fixed enters-with-counters, and fixed alternative-cost keyword parameters without changing the frozen DSL. Twenty-seven forge-porttools tests, clippy -D warnings, all 235 recurring oracles, and workspace line coverage 22,604/28,111 (80.4098%) passed locally with no network or GitHub Actions."
     }
   },
   "gates_passed": [

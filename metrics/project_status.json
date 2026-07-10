@@ -21,7 +21,7 @@
     "T2",
     "CP-DSL"
   ],
-  "generated_at": "2026-07-10T17:25:53.833331+00:00",
+  "generated_at": "2026-07-10T17:29:09.147539+00:00",
   "generator": "tools/write_project_status.py",
   "hosted_workflow_count": 0,
   "legacy_script_count": 33290,
