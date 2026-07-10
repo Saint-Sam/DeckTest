@@ -503,7 +503,8 @@ fn git_revision(root: &Path) -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_legacy_script, LegacyAbilityPrefix, LegacyLineKind};
+    use super::{audit_legacy_corpus, parse_legacy_script, LegacyAbilityPrefix, LegacyLineKind};
+    use std::{fs, path::Path, process::Command};
 
     #[test]
     fn parses_required_line_families_and_alternate_faces() {
@@ -555,5 +556,75 @@ Name:Back
             Ok(_) => panic!("unnamed SVar must fail"),
         };
         assert_eq!(empty_svar.code, "empty_svar_name");
+    }
+
+    #[test]
+    fn audits_the_exact_parse_floor_and_reason_codes_failures() {
+        let root = std::env::temp_dir().join(format!(
+            "forge-porttools-legacy-audit-{}",
+            std::process::id()
+        ));
+        if root.exists() {
+            fs::remove_dir_all(&root).unwrap_or_else(|error| {
+                panic!("could not clear audit fixture: {error}");
+            });
+        }
+        let cards = root.join("cards/a");
+        fs::create_dir_all(&cards).unwrap_or_else(|error| {
+            panic!("could not create audit fixture: {error}");
+        });
+        for index in 0..200 {
+            fs::write(
+                cards.join(format!("passing-{index:03}.txt")),
+                format!("Name:Passing {index}\nA:AB$ Mana | Cost$ T | Produced$ G\n"),
+            )
+            .unwrap_or_else(|error| panic!("could not write passing fixture: {error}"));
+        }
+        fs::write(cards.join("failing.txt"), "not a structured line\n")
+            .unwrap_or_else(|error| panic!("could not write failing fixture: {error}"));
+        run_git(&root, &["init", "--quiet"]);
+        run_git(
+            &root,
+            &["config", "user.email", "forge-test@example.invalid"],
+        );
+        run_git(&root, &["config", "user.name", "Forge Test"]);
+        run_git(&root, &["add", "cards"]);
+        run_git(&root, &["commit", "--quiet", "-m", "fixture"]);
+
+        let metrics = root.join("metrics.json");
+        let failures = root.join("failures.json");
+        let report = audit_legacy_corpus(&root.join("cards"), &metrics, &failures)
+            .unwrap_or_else(|error| panic!("audit should complete: {error}"));
+        assert_eq!(report.total_files, 201);
+        assert_eq!(report.parsed_files, 200);
+        assert_eq!(report.failed_files, 1);
+        assert!(report.passed);
+        assert_eq!(
+            report.failure_reason_counts.get("missing_key_separator"),
+            Some(&1)
+        );
+        assert!(metrics.is_file());
+        let failure_text = fs::read_to_string(&failures)
+            .unwrap_or_else(|error| panic!("could not read failure output: {error}"));
+        assert!(failure_text.contains("missing_key_separator"));
+
+        fs::remove_dir_all(&root).unwrap_or_else(|error| {
+            panic!("could not remove audit fixture: {error}");
+        });
+    }
+
+    fn run_git(root: &Path, args: &[&str]) {
+        let output = Command::new("git")
+            .arg("-C")
+            .arg(root)
+            .args(args)
+            .output()
+            .unwrap_or_else(|error| panic!("could not run git fixture command: {error}"));
+        if !output.status.success() {
+            panic!(
+                "git fixture command failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
     }
 }

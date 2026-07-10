@@ -30,6 +30,7 @@ cargo run --locked --offline -p forge-porttools -- \
   --root "$cards_root" \
   --metrics "$metrics" \
   --failures "$failures"
+scripts/check_coverage.sh
 scripts/card_regression.sh
 
 git ls-files --error-unmatch "$metrics" "$failures" >/dev/null
