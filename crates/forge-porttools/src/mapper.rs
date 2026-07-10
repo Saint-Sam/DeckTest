@@ -153,6 +153,11 @@ const MAPPERS: &[MapperSpec] = &[
     },
     MapperSpec {
         prefix: LegacyAbilityPrefix::Activated,
+        api: "Debuff",
+        mapper: map_debuff,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Activated,
         api: "GainLife",
         mapper: map_gain_life,
     },
@@ -252,6 +257,11 @@ const MAPPERS: &[MapperSpec] = &[
         mapper: map_animate,
     },
     MapperSpec {
+        prefix: LegacyAbilityPrefix::Activated,
+        api: "SetState",
+        mapper: map_set_state,
+    },
+    MapperSpec {
         prefix: LegacyAbilityPrefix::Static,
         api: "AlternativeCost",
         mapper: map_alternative_cost,
@@ -293,6 +303,11 @@ const MAPPERS: &[MapperSpec] = &[
     },
     MapperSpec {
         prefix: LegacyAbilityPrefix::Activated,
+        api: "TapAll",
+        mapper: map_tap_all,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Activated,
         api: "TapOrUntap",
         mapper: map_tap_or_untap,
     },
@@ -318,8 +333,58 @@ const MAPPERS: &[MapperSpec] = &[
     },
     MapperSpec {
         prefix: LegacyAbilityPrefix::Static,
+        api: "CantAttack,CantBlock",
+        mapper: map_cant_attack_or_block,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Static,
         api: "CantBeCast",
         mapper: map_cant_be_cast,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Activated,
+        api: "Shuffle",
+        mapper: map_shuffle,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Activated,
+        api: "SetLife",
+        mapper: map_set_life,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Activated,
+        api: "Venture",
+        mapper: map_owner_marker_effect,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Activated,
+        api: "BecomeMonarch",
+        mapper: map_owner_marker_effect,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Activated,
+        api: "TakeInitiative",
+        mapper: map_owner_marker_effect,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Activated,
+        api: "Investigate",
+        mapper: map_investigate,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Activated,
+        api: "Attach",
+        mapper: map_attach,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Activated,
+        api: "RevealHand",
+        mapper: map_reveal_hand,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Activated,
+        api: "AnimateAll",
+        mapper: map_animate_all,
     },
 ];
 
@@ -638,10 +703,15 @@ fn map_triggered_ability(
         "Phase" => map_phase_event(&parameters)?,
         "Attacks" => map_attacks_event(&parameters)?,
         "SpellCast" => map_spell_cast_event(&parameters)?,
+        "SpellCastOrCopy" => map_spell_cast_or_copy_event(&parameters)?,
         "DamageDone" => map_damage_done_event(&parameters)?,
+        "DamageDoneOnce" | "DamageDealtOnce" => map_damage_done_once_event(&parameters)?,
         "Drawn" => map_drawn_event(&parameters)?,
         "AttackersDeclared" => map_attackers_declared_event(&parameters)?,
         "Blocks" => map_blocks_event(&parameters)?,
+        "AttackerBlocked" => map_attacker_blocked_event(&parameters)?,
+        "AttackerBlockedByCreature" => map_attacker_blocked_by_creature_event(&parameters)?,
+        "AttackerUnblocked" => map_attacker_unblocked_event(&parameters)?,
         "BecomesTarget" => map_becomes_target_event(&parameters)?,
         "Discarded" => map_discarded_event(&parameters)?,
         "CounterAddedOnce" => map_counter_added_event(&parameters)?,
@@ -829,6 +899,37 @@ fn map_spell_cast_event(
     Ok(call(Operation::EventCast, arguments))
 }
 
+fn map_spell_cast_or_copy_event(
+    parameters: &BTreeMap<String, String>,
+) -> Result<Expression, MappingDiagnostic> {
+    reject_unknown(
+        parameters,
+        &[
+            "Execute",
+            "ValidCard",
+            "ValidActivatingPlayer",
+            "TriggerZones",
+            "TriggerDescription",
+        ],
+    )?;
+    require_battlefield_zone(parameters, "TriggerZones")?;
+    let spells = parameters
+        .get("ValidCard")
+        .map(|value| spell_selector(value))
+        .transpose()?
+        .unwrap_or_else(|| call(Operation::Spells, vec![]));
+    let actor = match parameters.get("ValidActivatingPlayer").map(String::as_str) {
+        None | Some("Any") | Some("Player") => "any",
+        Some("You") => "you",
+        Some("Opponent") | Some("Player.Opponent") => "opponent",
+        Some(value) => return Err(unsupported_value("ValidActivatingPlayer", value)),
+    };
+    Ok(call(
+        Operation::EventCast,
+        vec![spells, Expression::Text(format!("cast_or_copy:{actor}"))],
+    ))
+}
+
 fn map_damage_done_event(
     parameters: &BTreeMap<String, String>,
 ) -> Result<Expression, MappingDiagnostic> {
@@ -849,12 +950,61 @@ fn map_damage_done_event(
         damage_event_selector(required(parameters, "ValidTarget")?, "ValidTarget")?,
     ];
     if let Some(value) = parameters.get("CombatDamage") {
-        if value != "True" {
-            return Err(unsupported_value("CombatDamage", value));
-        }
-        arguments.push(Expression::Text("combat".to_string()));
+        arguments.push(Expression::Text(
+            match value.as_str() {
+                "True" => "combat",
+                "False" => "noncombat",
+                _ => return Err(unsupported_value("CombatDamage", value)),
+            }
+            .to_string(),
+        ));
     }
     Ok(call(Operation::EventDamage, arguments))
+}
+
+fn map_damage_done_once_event(
+    parameters: &BTreeMap<String, String>,
+) -> Result<Expression, MappingDiagnostic> {
+    reject_unknown(
+        parameters,
+        &[
+            "Execute",
+            "ValidSource",
+            "ValidTarget",
+            "CombatDamage",
+            "TriggerZones",
+            "TriggerDescription",
+        ],
+    )?;
+    require_battlefield_zone(parameters, "TriggerZones")?;
+    let damage_kind = parameters
+        .get("CombatDamage")
+        .map(String::as_str)
+        .unwrap_or("Any");
+    Ok(call(
+        Operation::EventDamage,
+        vec![
+            parameters
+                .get("ValidSource")
+                .map(|value| damage_event_selector(value, "ValidSource"))
+                .transpose()?
+                .unwrap_or_else(|| call(Operation::Any, vec![])),
+            parameters
+                .get("ValidTarget")
+                .map(|value| damage_event_selector(value, "ValidTarget"))
+                .transpose()?
+                .unwrap_or_else(|| call(Operation::Any, vec![])),
+            Expression::Text(
+                match damage_kind {
+                    "Any" => "once",
+                    "True" => "combat_once",
+                    "False" => "noncombat_once",
+                    value => return Err(unsupported_value("CombatDamage", value)),
+                }
+                .to_string(),
+            ),
+        ],
+    ))
 }
 
 fn map_drawn_event(parameters: &BTreeMap<String, String>) -> Result<Expression, MappingDiagnostic> {
@@ -951,6 +1101,63 @@ fn map_blocks_event(
     Ok(call(
         Operation::EventBlocks,
         vec![affected_selector(required(parameters, "ValidCard")?)?],
+    ))
+}
+
+fn map_attacker_blocked_event(
+    parameters: &BTreeMap<String, String>,
+) -> Result<Expression, MappingDiagnostic> {
+    reject_unknown(
+        parameters,
+        &["Execute", "ValidCard", "TriggerZones", "TriggerDescription"],
+    )?;
+    require_battlefield_zone(parameters, "TriggerZones")?;
+    Ok(call(
+        Operation::EventBlocks,
+        vec![
+            affected_selector(required(parameters, "ValidCard")?)?,
+            Expression::Text("attacker_blocked_once".to_string()),
+        ],
+    ))
+}
+
+fn map_attacker_blocked_by_creature_event(
+    parameters: &BTreeMap<String, String>,
+) -> Result<Expression, MappingDiagnostic> {
+    reject_unknown(
+        parameters,
+        &[
+            "Execute",
+            "ValidCard",
+            "ValidBlocker",
+            "TriggerZones",
+            "TriggerDescription",
+        ],
+    )?;
+    require_battlefield_zone(parameters, "TriggerZones")?;
+    Ok(call(
+        Operation::EventBlocks,
+        vec![
+            affected_selector(required(parameters, "ValidCard")?)?,
+            affected_selector(required(parameters, "ValidBlocker")?)?,
+        ],
+    ))
+}
+
+fn map_attacker_unblocked_event(
+    parameters: &BTreeMap<String, String>,
+) -> Result<Expression, MappingDiagnostic> {
+    reject_unknown(
+        parameters,
+        &["Execute", "ValidCard", "TriggerZones", "TriggerDescription"],
+    )?;
+    require_battlefield_zone(parameters, "TriggerZones")?;
+    Ok(call(
+        Operation::EventAttacks,
+        vec![
+            affected_selector(required(parameters, "ValidCard")?)?,
+            Expression::Text("unblocked".to_string()),
+        ],
     ))
 }
 
@@ -1424,6 +1631,53 @@ fn map_pump_all(
     })
 }
 
+fn map_debuff(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["AB", "SP", "DB"])?;
+    reject_unknown(
+        parameters,
+        &[
+            "Cost",
+            "Defined",
+            "ValidTgts",
+            "TgtPrompt",
+            "Keywords",
+            "Duration",
+            "SpellDescription",
+            "StackDescription",
+            "IsCurse",
+            "AILogic",
+        ],
+    )?;
+    let affected = object_selector(parameters, DefaultSelector::Source)?;
+    let duration = match parameters.get("Duration").map(String::as_str) {
+        None | Some("UntilEndOfTurn") => Some("until_end_of_turn"),
+        Some("Permanent") => None,
+        Some(value) => return Err(unsupported_value("Duration", value)),
+    };
+    let mut effects = Vec::new();
+    for keyword in required(parameters, "Keywords")?.split(" & ") {
+        let mut arguments = vec![
+            affected.clone(),
+            Expression::Text(normalize_simple_keyword(keyword)?),
+        ];
+        if let Some(duration) = duration {
+            arguments.push(Expression::Text(duration.to_string()));
+        }
+        effects.push(call(Operation::RemoveKeyword, arguments));
+    }
+    mapped_direct(
+        prefix,
+        api,
+        parameters,
+        combine_effects(effects, "Debuff requires at least one closed keyword")?,
+    )
+}
+
 fn map_gain_life(
     prefix: LegacyAbilityPrefix,
     api: &str,
@@ -1455,6 +1709,8 @@ fn map_life_change(
         &[
             "Cost",
             "Defined",
+            "ValidTgts",
+            "TgtPrompt",
             "LifeAmount",
             "SpellDescription",
             "StackDescription",
@@ -1484,6 +1740,8 @@ fn map_mill(
         &[
             "Cost",
             "Defined",
+            "ValidTgts",
+            "TgtPrompt",
             "NumCards",
             "Destination",
             "SpellDescription",
@@ -1936,6 +2194,8 @@ fn map_discard(
         &[
             "Cost",
             "Defined",
+            "ValidTgts",
+            "TgtPrompt",
             "Mode",
             "NumCards",
             "SpellDescription",
@@ -2293,6 +2553,41 @@ fn map_animate(
     mapped_direct(prefix, api, parameters, expression)
 }
 
+fn map_set_state(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["AB", "SP", "DB"])?;
+    reject_unknown(
+        parameters,
+        &[
+            "Cost",
+            "Defined",
+            "ValidTgts",
+            "TgtPrompt",
+            "Mode",
+            "SpellDescription",
+            "StackDescription",
+            "AILogic",
+        ],
+    )?;
+    let mode = required(parameters, "Mode")?;
+    if mode != "Transform" {
+        return Err(unsupported_value("Mode", mode));
+    }
+    mapped_direct(
+        prefix,
+        api,
+        parameters,
+        call(
+            Operation::Transform,
+            vec![object_selector(parameters, DefaultSelector::Source)?],
+        ),
+    )
+}
+
 fn map_alternative_cost(
     prefix: LegacyAbilityPrefix,
     api: &str,
@@ -2624,6 +2919,46 @@ fn map_untap_all(
     )
 }
 
+fn map_tap_all(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["AB", "SP", "DB"])?;
+    reject_unknown(
+        parameters,
+        &[
+            "Cost",
+            "ValidCards",
+            "ValidTgts",
+            "TgtPrompt",
+            "SpellDescription",
+            "StackDescription",
+            "AILogic",
+        ],
+    )?;
+    let mut affected = affected_selector(required(parameters, "ValidCards")?)?;
+    if let Some(player) = parameters.get("ValidTgts") {
+        affected = add_collection_predicate(
+            affected,
+            call(
+                Operation::ControlledBy,
+                vec![call(
+                    Operation::Target,
+                    vec![draw_player_selector(player, "ValidTgts")?],
+                )],
+            ),
+        )?;
+    }
+    mapped_direct(
+        prefix,
+        api,
+        parameters,
+        call(Operation::Tap, vec![affected]),
+    )
+}
+
 fn map_tap_or_untap(
     prefix: LegacyAbilityPrefix,
     api: &str,
@@ -2739,23 +3074,25 @@ fn map_cant_attack_or_block(
         ));
     }
     let affected = affected_selector(required(parameters, "ValidCard")?)?;
-    let restriction = if api == "CantAttack" {
-        Operation::CannotAttack
-    } else {
-        Operation::CannotBlock
+    let restrictions = match api {
+        "CantAttack" => vec![Operation::CannotAttack],
+        "CantBlock" => vec![Operation::CannotBlock],
+        "CantAttack,CantBlock" => vec![Operation::CannotAttack, Operation::CannotBlock],
+        _ => return Err(diagnostic("UNMAPPED_API", "unknown combat restriction")),
     };
+    let restriction = combine_effects(
+        restrictions
+            .into_iter()
+            .map(|operation| call(operation, vec![call(Operation::Any, vec![])]))
+            .collect(),
+        "combat restriction requires an effect",
+    )?;
     Ok(MappedLegacyAbility {
         prefix,
         api: api.to_string(),
         costs: Vec::new(),
         event: None,
-        expression: call(
-            Operation::Continuous,
-            vec![
-                affected,
-                call(restriction, vec![call(Operation::Any, vec![])]),
-            ],
-        ),
+        expression: call(Operation::Continuous, vec![affected, restriction]),
     })
 }
 
@@ -2798,6 +3135,350 @@ fn map_cant_be_cast(
             ],
         ),
     })
+}
+
+fn map_shuffle(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["AB", "SP", "DB"])?;
+    reject_unknown(
+        parameters,
+        &[
+            "Cost",
+            "Defined",
+            "ValidTgts",
+            "TgtPrompt",
+            "SpellDescription",
+            "StackDescription",
+            "AILogic",
+        ],
+    )?;
+    mapped_direct(
+        prefix,
+        api,
+        parameters,
+        call(
+            Operation::Shuffle,
+            vec![player_selector(parameters, DefaultSelector::You)?],
+        ),
+    )
+}
+
+fn map_set_life(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["AB", "SP", "DB"])?;
+    reject_unknown(
+        parameters,
+        &[
+            "Cost",
+            "Defined",
+            "ValidTgts",
+            "TgtPrompt",
+            "LifeAmount",
+            "SpellDescription",
+            "StackDescription",
+        ],
+    )?;
+    let amount = positive_integer(required(parameters, "LifeAmount")?, "LifeAmount")?;
+    mapped_direct(
+        prefix,
+        api,
+        parameters,
+        call(
+            Operation::SetLife,
+            vec![
+                Expression::Integer(amount),
+                player_selector(parameters, DefaultSelector::You)?,
+            ],
+        ),
+    )
+}
+
+fn map_owner_marker_effect(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["AB", "SP", "DB"])?;
+    reject_unknown(
+        parameters,
+        &["Cost", "Defined", "SpellDescription", "StackDescription"],
+    )?;
+    if parameters
+        .get("Defined")
+        .is_some_and(|player| player != "You")
+    {
+        return Err(unsupported_value(
+            "Defined",
+            required(parameters, "Defined")?,
+        ));
+    }
+    let operation = match api {
+        "Venture" => Operation::Venture,
+        "BecomeMonarch" => Operation::BecomeMonarch,
+        "TakeInitiative" => Operation::TakeInitiative,
+        _ => return Err(diagnostic("UNMAPPED_API", "unknown owner marker effect")),
+    };
+    mapped_direct(prefix, api, parameters, call(operation, vec![]))
+}
+
+fn map_investigate(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["AB", "SP", "DB"])?;
+    reject_unknown(
+        parameters,
+        &[
+            "Cost",
+            "Defined",
+            "Num",
+            "SpellDescription",
+            "StackDescription",
+        ],
+    )?;
+    if parameters
+        .get("Defined")
+        .is_some_and(|player| player != "You")
+    {
+        return Err(unsupported_value(
+            "Defined",
+            required(parameters, "Defined")?,
+        ));
+    }
+    let amount = optional_positive_integer(parameters, "Num")?.unwrap_or(1);
+    mapped_direct(
+        prefix,
+        api,
+        parameters,
+        call(
+            Operation::CreateToken,
+            vec![
+                Expression::Text("c_a_clue_draw".to_string()),
+                Expression::Integer(amount),
+                call(Operation::You, vec![]),
+            ],
+        ),
+    )
+}
+
+fn map_attach(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["AB", "SP", "DB"])?;
+    reject_unknown(
+        parameters,
+        &[
+            "Cost",
+            "Defined",
+            "ValidTgts",
+            "TgtPrompt",
+            "SpellDescription",
+            "StackDescription",
+            "AILogic",
+        ],
+    )?;
+    let target = object_selector(parameters, DefaultSelector::Source)?;
+    mapped_direct(
+        prefix,
+        api,
+        parameters,
+        call(
+            Operation::Attach,
+            vec![call(Operation::Source, vec![]), target],
+        ),
+    )
+}
+
+fn map_reveal_hand(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["AB", "SP", "DB"])?;
+    reject_unknown(
+        parameters,
+        &[
+            "Cost",
+            "Defined",
+            "ValidTgts",
+            "TgtPrompt",
+            "Look",
+            "SpellDescription",
+            "StackDescription",
+            "IsCurse",
+            "AIPhyrexianPayment",
+        ],
+    )?;
+    let player = match (
+        parameters.get("Defined").map(String::as_str),
+        parameters.get("ValidTgts"),
+    ) {
+        (None | Some("Targeted"), Some(value)) => call(
+            Operation::Target,
+            vec![draw_player_selector(value, "ValidTgts")?],
+        ),
+        (Some(value), None) => defined_player_selector(value)?,
+        (None, None) => call(Operation::You, vec![]),
+        (Some(value), Some(_)) => return Err(unsupported_value("Defined", value)),
+    };
+    let hand = call(
+        Operation::Cards,
+        vec![call(
+            Operation::And,
+            vec![
+                call(
+                    Operation::ZoneIs,
+                    vec![Expression::Text("hand".to_string())],
+                ),
+                call(Operation::OwnedBy, vec![player]),
+            ],
+        )],
+    );
+    let expression = match parameters.get("Look").map(String::as_str) {
+        None => call(Operation::Reveal, vec![hand]),
+        Some("True") => call(Operation::LookAt, vec![hand, call(Operation::You, vec![])]),
+        Some(value) => return Err(unsupported_value("Look", value)),
+    };
+    mapped_direct(prefix, api, parameters, expression)
+}
+
+fn map_animate_all(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["AB", "SP", "DB"])?;
+    reject_unknown(
+        parameters,
+        &[
+            "Cost",
+            "ValidCards",
+            "Power",
+            "Toughness",
+            "Types",
+            "Colors",
+            "OverwriteColors",
+            "Keywords",
+            "RemoveKeywords",
+            "RemoveAllAbilities",
+            "Duration",
+            "SpellDescription",
+            "StackDescription",
+            "IsCurse",
+            "AILogic",
+        ],
+    )?;
+    let affected = affected_selector(required(parameters, "ValidCards")?)?;
+    let mut effects = Vec::new();
+    match (parameters.get("Power"), parameters.get("Toughness")) {
+        (Some(power), Some(toughness)) => effects.push(call(
+            Operation::SetPt,
+            vec![
+                affected.clone(),
+                Expression::Integer(
+                    power
+                        .parse::<i64>()
+                        .map_err(|_| unsupported_value("Power", power))?,
+                ),
+                Expression::Integer(
+                    toughness
+                        .parse::<i64>()
+                        .map_err(|_| unsupported_value("Toughness", toughness))?,
+                ),
+            ],
+        )),
+        (None, None) => {}
+        _ => {
+            return Err(diagnostic(
+                "UNSUPPORTED_PARAMETER",
+                "AnimateAll requires Power and Toughness together",
+            ));
+        }
+    }
+    if let Some(types) = parameters.get("Types") {
+        for card_type in types.split(',').map(str::trim) {
+            if card_type.is_empty() {
+                return Err(unsupported_value("Types", types));
+            }
+            effects.push(call(
+                Operation::AddType,
+                vec![affected.clone(), Expression::Text(card_type.to_string())],
+            ));
+        }
+    }
+    if let Some(colors) = parameters.get("Colors") {
+        if parameters.get("OverwriteColors").map(String::as_str) != Some("True") {
+            return Err(diagnostic(
+                "UNSUPPORTED_PARAMETER",
+                "AnimateAll Colors requires OverwriteColors$ True",
+            ));
+        }
+        let mut arguments = vec![affected.clone()];
+        arguments.extend(
+            parse_animate_colors(colors)?
+                .into_iter()
+                .map(Expression::Text),
+        );
+        effects.push(call(Operation::SetColor, arguments));
+    } else if parameters.contains_key("OverwriteColors") {
+        return Err(diagnostic(
+            "MISSING_PARAMETER",
+            "OverwriteColors requires Colors",
+        ));
+    }
+    if let Some(keywords) = parameters.get("Keywords") {
+        for keyword in keywords.split(" & ") {
+            effects.push(call(
+                Operation::GrantKeyword,
+                vec![
+                    affected.clone(),
+                    Expression::Text(normalize_simple_keyword(keyword)?),
+                ],
+            ));
+        }
+    }
+    if let Some(keywords) = parameters.get("RemoveKeywords") {
+        for keyword in keywords.split(" & ") {
+            effects.push(call(
+                Operation::RemoveKeyword,
+                vec![
+                    affected.clone(),
+                    Expression::Text(normalize_simple_keyword(keyword)?),
+                ],
+            ));
+        }
+    }
+    if let Some(value) = parameters.get("RemoveAllAbilities") {
+        if value != "True" {
+            return Err(unsupported_value("RemoveAllAbilities", value));
+        }
+        effects.push(call(Operation::RemoveAllAbilities, vec![affected]));
+    }
+    let mut expression = combine_effects(effects, "simple AnimateAll has no typed changes")?;
+    match parameters.get("Duration").map(String::as_str) {
+        None | Some("EndOfTurn") | Some("UntilEndOfTurn") => {
+            expression = call(Operation::UntilEndOfTurn, vec![expression]);
+        }
+        Some("Permanent") => {}
+        Some(value) => return Err(unsupported_value("Duration", value)),
+    }
+    mapped_direct(prefix, api, parameters, expression)
 }
 
 fn parse_animate_colors(value: &str) -> Result<Vec<String>, MappingDiagnostic> {
@@ -3183,10 +3864,16 @@ fn player_selector(
     parameters: &BTreeMap<String, String>,
     default: DefaultSelector,
 ) -> Result<Expression, MappingDiagnostic> {
-    if parameters.contains_key("ValidTgts") {
+    if parameters.contains_key("Defined") && parameters.contains_key("ValidTgts") {
         return Err(diagnostic(
             "UNSUPPORTED_SELECTOR",
-            "targeted player mapping requires a typed player-target predicate",
+            "simultaneous Defined and ValidTgts player selectors are ambiguous",
+        ));
+    }
+    if let Some(value) = parameters.get("ValidTgts") {
+        return Ok(call(
+            Operation::Target,
+            vec![draw_player_selector(value, "ValidTgts")?],
         ));
     }
     parameters
@@ -3229,6 +3916,12 @@ fn defined_player_selector(value: &str) -> Result<Expression, MappingDiagnostic>
     match value {
         "You" => Ok(call(Operation::You, vec![])),
         "Opponent" | "Player.Opponent" => Ok(call(Operation::Opponent, vec![])),
+        "Player" => Ok(call(Operation::Any, vec![])),
+        "Targeted" => Ok(call(Operation::Target, vec![call(Operation::Any, vec![])])),
+        "TargetedController" => Ok(call(
+            Operation::ControllerOf,
+            vec![call(Operation::Target, vec![call(Operation::Any, vec![])])],
+        )),
         "TriggeredCardController" => Ok(call(
             Operation::ControllerOf,
             vec![call(Operation::Triggered, vec![])],
@@ -4076,6 +4769,9 @@ mod tests {
             "A:DB$ ChangeZone | Defined$ TriggeredCard | Origin$ Graveyard | Destination$ Battlefield | SpellDescription$ Return.",
             "S:Mode$ AlternativeCost | ValidSA$ Spell.Self | EffectZone$ All | Cost$ 2 W W | Description$ Alternative.",
             "A:AB$ Pump | ValidTgts$ Creature.nonHuman+powerGE4+toughnessLE6 | NumAtt$ 1 | NumDef$ 1 | SpellDescription$ Pump.",
+            "A:SP$ LoseLife | ValidTgts$ Opponent | LifeAmount$ 2 | SpellDescription$ Lose life.",
+            "A:SP$ Mill | ValidTgts$ Player | NumCards$ 2 | SpellDescription$ Mill.",
+            "A:SP$ Discard | ValidTgts$ Player | NumCards$ 1 | Mode$ TgtChoose | SpellDescription$ Discard.",
         ] {
             map_line(line).unwrap_or_else(|error| {
                 panic!("closed selector should map: {}", error.message);
@@ -4268,6 +4964,58 @@ mod tests {
                 "S:Mode$ CantBeCast | ValidCard$ Card.nonCreature | Caster$ Opponent | Description$ Cannot cast.",
                 Operation::Continuous,
             ),
+            (
+                "A:SP$ Shuffle | ValidTgts$ Player | SpellDescription$ Shuffle.",
+                Operation::Shuffle,
+            ),
+            (
+                "A:SP$ SetLife | ValidTgts$ Player | LifeAmount$ 10 | SpellDescription$ Life.",
+                Operation::SetLife,
+            ),
+            (
+                "A:SP$ Venture | Defined$ You | SpellDescription$ Venture.",
+                Operation::Venture,
+            ),
+            (
+                "A:SP$ BecomeMonarch | Defined$ You | SpellDescription$ Monarch.",
+                Operation::BecomeMonarch,
+            ),
+            (
+                "A:SP$ TakeInitiative | SpellDescription$ Initiative.",
+                Operation::TakeInitiative,
+            ),
+            (
+                "A:SP$ Investigate | Num$ 2 | SpellDescription$ Investigate.",
+                Operation::CreateToken,
+            ),
+            (
+                "A:SP$ Attach | ValidTgts$ Creature.YouCtrl | SpellDescription$ Attach.",
+                Operation::Attach,
+            ),
+            (
+                "A:AB$ Debuff | Defined$ Self | Keywords$ Defender | SpellDescription$ Lose defender.",
+                Operation::RemoveKeyword,
+            ),
+            (
+                "A:SP$ TapAll | ValidTgts$ Opponent | ValidCards$ Creature | SpellDescription$ Tap all.",
+                Operation::Tap,
+            ),
+            (
+                "S:Mode$ CantAttack,CantBlock | ValidCard$ Creature.EnchantedBy | Description$ Cannot attack or block.",
+                Operation::Continuous,
+            ),
+            (
+                "A:SP$ RevealHand | ValidTgts$ Opponent | Look$ True | SpellDescription$ Look.",
+                Operation::LookAt,
+            ),
+            (
+                "A:SP$ AnimateAll | ValidCards$ Creature.YouCtrl | Power$ 3 | Toughness$ 3 | Keywords$ Trample | SpellDescription$ Animate all.",
+                Operation::UntilEndOfTurn,
+            ),
+            (
+                "A:AB$ SetState | Defined$ Self | Mode$ Transform | SpellDescription$ Transform.",
+                Operation::Transform,
+            ),
         ] {
             assert_operation(line, operation, 0);
         }
@@ -4387,8 +5135,35 @@ mod tests {
             ),
             (
                 concat!(
+                    "Name:Graph Spell Cast Or Copy\n",
+                    "T:Mode$ SpellCastOrCopy | ValidCard$ Instant,Sorcery | ValidActivatingPlayer$ You | TriggerZones$ Battlefield | Execute$ TrigDraw | TriggerDescription$ Draw.\n",
+                    "SVar:TrigDraw:DB$ Draw | Defined$ You\n",
+                ),
+                Operation::EventCast,
+                Operation::Draw,
+            ),
+            (
+                concat!(
                     "Name:Graph Damage\n",
                     "T:Mode$ DamageDone | ValidSource$ Card.Self | ValidTarget$ Player.Opponent | CombatDamage$ True | TriggerZones$ Battlefield | Execute$ TrigDraw | TriggerDescription$ Draw.\n",
+                    "SVar:TrigDraw:DB$ Draw | Defined$ You\n",
+                ),
+                Operation::EventDamage,
+                Operation::Draw,
+            ),
+            (
+                concat!(
+                    "Name:Graph Damage Once\n",
+                    "T:Mode$ DamageDoneOnce | ValidSource$ Creature.YouCtrl | ValidTarget$ Player | CombatDamage$ True | TriggerZones$ Battlefield | Execute$ TrigDraw | TriggerDescription$ Draw.\n",
+                    "SVar:TrigDraw:DB$ Draw | Defined$ You\n",
+                ),
+                Operation::EventDamage,
+                Operation::Draw,
+            ),
+            (
+                concat!(
+                    "Name:Graph Damage Dealt Once\n",
+                    "T:Mode$ DamageDealtOnce | ValidSource$ Card.Self | TriggerZones$ Battlefield | Execute$ TrigDraw | TriggerDescription$ Draw.\n",
                     "SVar:TrigDraw:DB$ Draw | Defined$ You\n",
                 ),
                 Operation::EventDamage,
@@ -4419,6 +5194,33 @@ mod tests {
                     "SVar:TrigDraw:DB$ Draw | Defined$ You\n",
                 ),
                 Operation::EventBlocks,
+                Operation::Draw,
+            ),
+            (
+                concat!(
+                    "Name:Graph Attacker Blocked\n",
+                    "T:Mode$ AttackerBlocked | ValidCard$ Card.Self | TriggerZones$ Battlefield | Execute$ TrigDraw | TriggerDescription$ Draw.\n",
+                    "SVar:TrigDraw:DB$ Draw | Defined$ You\n",
+                ),
+                Operation::EventBlocks,
+                Operation::Draw,
+            ),
+            (
+                concat!(
+                    "Name:Graph Attacker Blocked By Creature\n",
+                    "T:Mode$ AttackerBlockedByCreature | ValidCard$ Card.Self | ValidBlocker$ Creature | TriggerZones$ Battlefield | Execute$ TrigDraw | TriggerDescription$ Draw.\n",
+                    "SVar:TrigDraw:DB$ Draw | Defined$ You\n",
+                ),
+                Operation::EventBlocks,
+                Operation::Draw,
+            ),
+            (
+                concat!(
+                    "Name:Graph Attacker Unblocked\n",
+                    "T:Mode$ AttackerUnblocked | ValidCard$ Card.Self | TriggerZones$ Battlefield | Execute$ TrigDraw | TriggerDescription$ Draw.\n",
+                    "SVar:TrigDraw:DB$ Draw | Defined$ You\n",
+                ),
+                Operation::EventAttacks,
                 Operation::Draw,
             ),
             (
