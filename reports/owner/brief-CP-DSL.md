@@ -103,4 +103,6 @@ The Owner chose the honest staged-verification option. PC-0004 relabels all 100
 recipes as `unverified_playable`, reserves `verified_playable` for definitions
 with card-specific semantic tests, and leaves promotion to T3.6 and
 CP-PORT-20. The remediation packet and independent re-review now pass. O4 is
-ready for the Owner's identity/language/database freeze decision.
+approved. The Owner supplied this decision in the Codex thread on 2026-07-10:
+
+> O4: approve CP-DSL freeze and proceed to T3.2.

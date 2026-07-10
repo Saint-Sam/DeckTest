@@ -234,10 +234,16 @@
       "remote_ci": "GitHub Actions ci run 28956922550 passed all required jobs for commit 4a49fb36b9ac51a36159c3f5c5061f14aa444bec"
     },
     "T3.1": {
-      "status": "review_pending_owner",
+      "status": "verified_local",
       "branch": "task/T3.1-card-dsl",
       "attempts": 0,
-      "verification": "Exact local-only detached packet PASS at af6c8508030aed0bc56c71eac61b398f9e00ec4f. Final independent Gate Reviewer PASS with no blocking findings after reconciling the 100-definition honest corpus, exact 117/59 diagnostics, 28/28 mutation result, 2,408 ASAN worker-seconds, 1,200 oracles, 80.3077% bound raw coverage, four linked platform artifacts, forced offline execution, and exact checkout binding. O4 owner freeze decision is pending."
+      "verification": "Exact local-only detached packet PASS at af6c8508030aed0bc56c71eac61b398f9e00ec4f. Final independent Gate Reviewer PASS with no blocking findings after reconciling the 100-definition honest corpus, exact 117/59 diagnostics, 28/28 mutation result, 2,408 ASAN worker-seconds, 1,200 oracles, 80.3077% bound raw coverage, four linked platform artifacts, forced offline execution, and exact checkout binding. Owner approved O4 in the Codex thread on 2026-07-10."
+    },
+    "T3.2": {
+      "status": "in_progress",
+      "branch": "task/T3.2-legacy-parser",
+      "attempts": 0,
+      "verification": "Legacy-format parser implementation and local full-corpus parse audit started after O4 approval. Target is at least 99.5% parse-only coverage with deterministic reason-coded failures."
     }
   },
   "gates_passed": [
@@ -245,7 +251,8 @@
     "CP-KERNEL",
     "T1",
     "CP-LAYERS",
-    "T2"
+    "T2",
+    "CP-DSL"
   ],
   "metrics_snapshot": "metrics/project_status.json",
   "gate_reviews": {
@@ -305,19 +312,19 @@
       "re_review": "PASS on 2026-07-09 after clean-checkout T2 gate, 8 reviewer adversarial oracles, 3 mutation checks, 3 spot replays, and determinism replay evidence."
     },
     "CP-DSL": {
-      "status": "passed_pending_owner",
+      "status": "passed",
       "reviewed_commit": "af6c8508030aed0bc56c71eac61b398f9e00ec4f",
       "exact_local_gate": "PASS from detached clean worktree /private/tmp/forge-cp-dsl-af6c850-clean with forced offline Cargo mode, no GitHub Actions, and no network use.",
       "reviewer": "gpt-5.6-luna xhigh independent Gate Reviewer subagent",
       "verdict": "PASS: no blocking findings. Both prior P1s are closed; exact evidence and live checks reconcile.",
       "technical_remediation": "Complete. Cargo offline mode is forced, packet validation binds current HEAD/tree, unexpected checkout changes fail closed, and an explicit stale-checkout test was rejected.",
-      "owner_decision": "Owner chose Option 2 on 2026-07-10. PC-0004 honestly classifies the 100 definitions as unverified language-stress recipes and defers per-card semantic promotion to T3.6 and CP-PORT-20. O4 language/identity/database freeze approval remains pending."
+      "owner_decision": "Owner chose Option 2 on 2026-07-10, then approved O4 in the Codex thread: approve CP-DSL freeze and proceed to T3.2. PC-0004 keeps the 100 definitions unverified and defers card-specific semantic promotion to T3.6 and CP-PORT-20."
     }
   },
   "owner_input": {
     "O1": "complete",
     "O2": "complete",
-    "O4": "pending_owner_freeze_decision",
+    "O4": "complete_2026-07-10_owner_approved_cp_dsl_freeze",
     "O5": "complete",
     "O9-PC-0001-PC-0003": "complete_2026-07-09",
     "O9-PC-0004": "complete_2026-07-10_owner_option_2"

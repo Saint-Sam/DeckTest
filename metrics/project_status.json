@@ -18,9 +18,10 @@
     "CP-KERNEL",
     "T1",
     "CP-LAYERS",
-    "T2"
+    "T2",
+    "CP-DSL"
   ],
-  "generated_at": "2026-07-10T06:04:41.257227+00:00",
+  "generated_at": "2026-07-10T11:57:16.837235+00:00",
   "generator": "tools/write_project_status.py",
   "hosted_workflow_count": 0,
   "legacy_script_count": 33290,
@@ -36,13 +37,13 @@
   "oracle_rule_interaction_count": 1839,
   "oracle_structural_family_count": 379,
   "schema_version": 2,
-  "task_count": 39,
+  "task_count": 40,
   "task_status_counts": {
+    "in_progress": 1,
     "resolved_local": 4,
     "resolved_remote": 1,
-    "review_pending_owner": 1,
     "verified": 6,
-    "verified_local": 11,
+    "verified_local": 12,
     "verified_remote": 16
   },
   "tier": 3,
