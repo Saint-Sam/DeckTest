@@ -246,6 +246,11 @@ const MAPPERS: &[MapperSpec] = &[
         api: "ChangeZoneAll",
         mapper: map_change_zone_all,
     },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Activated,
+        api: "Animate",
+        mapper: map_animate,
+    },
 ];
 
 struct MappingContext<'a> {
@@ -1828,6 +1833,114 @@ fn map_change_zone_all(
     mapped_direct(prefix, api, parameters, expression)
 }
 
+fn map_animate(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["AB", "SP", "DB"])?;
+    reject_unknown(
+        parameters,
+        &[
+            "Cost",
+            "Defined",
+            "ValidTgts",
+            "Power",
+            "Toughness",
+            "Types",
+            "Colors",
+            "OverwriteColors",
+            "Keywords",
+            "RemoveAllAbilities",
+            "Duration",
+        ],
+    )?;
+    let affected = object_selector(parameters, DefaultSelector::Source)?;
+    let mut effects = Vec::new();
+    if parameters.contains_key("Power") || parameters.contains_key("Toughness") {
+        let power = optional_number_or_value(parameters, "Power", Operation::Power)?;
+        let toughness = optional_number_or_value(parameters, "Toughness", Operation::Toughness)?;
+        effects.push(call(
+            Operation::SetPt,
+            vec![affected.clone(), power, toughness],
+        ));
+    }
+    if let Some(types) = parameters.get("Types") {
+        for card_type in types.split(',').map(str::trim) {
+            if card_type.is_empty() {
+                return Err(unsupported_value("Types", types));
+            }
+            effects.push(call(
+                Operation::AddType,
+                vec![affected.clone(), Expression::Text(card_type.to_string())],
+            ));
+        }
+    }
+    if let Some(colors) = parameters.get("Colors") {
+        if parameters.get("OverwriteColors").map(String::as_str) != Some("True") {
+            return Err(diagnostic(
+                "UNSUPPORTED_PARAMETER",
+                "Animate Colors requires OverwriteColors$ True",
+            ));
+        }
+        let colors = parse_animate_colors(colors)?;
+        let mut arguments = vec![affected.clone()];
+        arguments.extend(colors.into_iter().map(Expression::Text));
+        effects.push(call(Operation::SetColor, arguments));
+    } else if parameters.contains_key("OverwriteColors") {
+        return Err(diagnostic(
+            "MISSING_PARAMETER",
+            "OverwriteColors requires Colors",
+        ));
+    }
+    if let Some(keywords) = parameters.get("Keywords") {
+        for keyword in keywords.split(" & ") {
+            effects.push(call(
+                Operation::GrantKeyword,
+                vec![
+                    affected.clone(),
+                    Expression::Text(normalize_simple_keyword(keyword)?),
+                ],
+            ));
+        }
+    }
+    if let Some(value) = parameters.get("RemoveAllAbilities") {
+        if value != "True" {
+            return Err(unsupported_value("RemoveAllAbilities", value));
+        }
+        effects.push(call(Operation::RemoveAllAbilities, vec![affected.clone()]));
+    }
+    let mut expression = combine_effects(effects, "simple Animate has no typed changes")?;
+    match parameters.get("Duration").map(String::as_str) {
+        None | Some("EndOfTurn") => {
+            expression = call(Operation::UntilEndOfTurn, vec![expression]);
+        }
+        Some("Permanent") => {}
+        Some(value) => return Err(unsupported_value("Duration", value)),
+    }
+    mapped_direct(prefix, api, parameters, expression)
+}
+
+fn parse_animate_colors(value: &str) -> Result<Vec<String>, MappingDiagnostic> {
+    let colors = value.split(',').map(str::trim).collect::<Vec<_>>();
+    if colors.is_empty()
+        || colors.len() > 2
+        || colors.iter().any(|color| {
+            !matches!(
+                *color,
+                "White" | "Blue" | "Black" | "Red" | "Green" | "Colorless"
+            )
+        })
+    {
+        return Err(unsupported_value("Colors", value));
+    }
+    Ok(colors
+        .into_iter()
+        .map(|color| color.to_ascii_lowercase())
+        .collect())
+}
+
 fn add_collection_predicate(
     selector: Expression,
     predicate: Expression,
@@ -2892,6 +3005,10 @@ mod tests {
             (
                 "A:SP$ ChangeZoneAll | ChangeType$ Creature | Origin$ Battlefield | Destination$ Exile | SpellDescription$ Exile all creatures.",
                 Operation::Exile,
+            ),
+            (
+                "A:AB$ Animate | Defined$ Self | Power$ 3 | Toughness$ 3 | Types$ Creature,Elemental | Colors$ Blue | OverwriteColors$ True | Keywords$ Flying | SpellDescription$ Animate.",
+                Operation::UntilEndOfTurn,
             ),
         ] {
             assert_operation(line, operation, 0);
