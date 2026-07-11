@@ -960,13 +960,17 @@ operations! {
     Devotion => ("devotion", Value, 2, Some(2)),
     DistinctCount => ("distinct_count", Value, 2, Some(2)),
     HistoryCount => ("history_count", Value, 2, Some(2)),
+    UnlessPaid => ("unless_paid", Effect, 3, None),
+    TimingAll => ("timing_all", Timing, 2, None),
 }
 
 impl Operation {
     /// Returns the first variadic position and its closed repeated type.
     #[must_use]
     pub const fn variadic_signature(self) -> Option<(usize, ArgumentKind)> {
-        use ArgumentKind::{Cost, Effect, Integer, Predicate, PredicateOrText, Scalar, Selector};
+        use ArgumentKind::{
+            Cost, Effect, Integer, Predicate, PredicateOrText, Scalar, Selector, Timing,
+        };
 
         match self {
             Self::All => Some((0, Selector)),
@@ -977,6 +981,8 @@ impl Operation {
             Self::SearchLibrary => Some((2, Scalar)),
             Self::LayerEffect => Some((3, Integer)),
             Self::AlternateCost => Some((1, Cost)),
+            Self::UnlessPaid => Some((2, Cost)),
+            Self::TimingAll => Some((0, Timing)),
             _ => None,
         }
     }
@@ -1335,6 +1341,12 @@ impl Operation {
                     Some(Effect)
                 }
             }
+            Self::UnlessPaid => match index {
+                0 => Some(Effect),
+                1 => Some(Selector),
+                _ => None,
+            },
+            Self::TimingAll => None,
         }
     }
 }
@@ -1394,6 +1406,22 @@ mod tests {
         assert_eq!(
             Operation::TimingCondition.argument_kind(0),
             Some(ArgumentKind::Predicate)
+        );
+        assert_eq!(
+            Operation::UnlessPaid.argument_kind(0),
+            Some(ArgumentKind::Effect)
+        );
+        assert_eq!(
+            Operation::UnlessPaid.argument_kind(1),
+            Some(ArgumentKind::Selector)
+        );
+        assert_eq!(
+            Operation::UnlessPaid.argument_kind(2),
+            Some(ArgumentKind::Cost)
+        );
+        assert_eq!(
+            Operation::TimingAll.argument_kind(3),
+            Some(ArgumentKind::Timing)
         );
         assert_eq!(Operation::parse("card_specific_magic"), None);
     }

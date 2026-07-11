@@ -446,6 +446,7 @@ pub fn map_legacy_ability(
     };
     let (unconditioned, legacy_condition) =
         extract_legacy_conditions(&unconditioned, &empty_context)?;
+    let (unconditioned, unless_clause) = extract_unless_clause(&unconditioned)?;
     let condition = combine_conditions(
         [presence_condition, legacy_condition]
             .into_iter()
@@ -486,6 +487,9 @@ pub fn map_legacy_ability(
     };
     let mut mapped = (spec.mapper)(prefix, api, selector_key, &parameters)?;
     mapped.timing = timing;
+    if let Some(unless_clause) = unless_clause {
+        mapped.expression = apply_unless_clause(mapped.expression, unless_clause);
+    }
     if let Some(condition) = condition {
         mapped = apply_legacy_condition(prefix, selector_key, mapped, condition)?;
     }
@@ -721,16 +725,7 @@ fn map_with_context(
             .flatten()
             .collect(),
     );
-    let selector_key = unconditioned
-        .fields
-        .first()
-        .and_then(|field| field.key.as_deref())
-        .ok_or_else(|| diagnostic("MALFORMED_API", "ability has no API selector"))?;
-    let mut mapped = map_with_context_unconditioned(prefix, &unconditioned, context, stack)?;
-    if let Some(condition) = condition {
-        mapped = apply_legacy_condition(prefix, selector_key, mapped, condition)?;
-    }
-    Ok(mapped)
+    map_with_context_unconditioned(prefix, &unconditioned, context, stack, condition)
 }
 
 fn map_with_context_unconditioned(
@@ -738,6 +733,7 @@ fn map_with_context_unconditioned(
     expression: &LegacyExpression,
     context: &MappingContext<'_>,
     stack: &mut Vec<String>,
+    condition: Option<Expression>,
 ) -> Result<MappedLegacyAbility, MappingDiagnostic> {
     let selector = expression
         .fields
@@ -749,13 +745,16 @@ fn map_with_context_unconditioned(
         .ok_or_else(|| diagnostic("MALFORMED_API", "first ability field has no selector key"))?;
     let api = selector.value.trim();
     if prefix == LegacyAbilityPrefix::Activated && api == "Charm" {
-        return map_charm_ability(prefix, selector_key, expression, context, stack);
+        let mapped = map_charm_ability(prefix, selector_key, expression, context, stack)?;
+        return apply_optional_legacy_condition(prefix, selector_key, mapped, condition);
     }
     if prefix == LegacyAbilityPrefix::Replacement && api == "Moved" {
-        return map_moved_replacement(prefix, selector_key, expression, context, stack);
+        let mapped = map_moved_replacement(prefix, selector_key, expression, context, stack)?;
+        return apply_optional_legacy_condition(prefix, selector_key, mapped, condition);
     }
     if prefix == LegacyAbilityPrefix::Triggered {
-        return map_triggered_ability(prefix, api, selector_key, expression, context, stack);
+        let mapped = map_triggered_ability(prefix, api, selector_key, expression, context, stack)?;
+        return apply_optional_legacy_condition(prefix, selector_key, mapped, condition);
     }
 
     let parameter_map = parameters(expression)?;
@@ -770,6 +769,7 @@ fn map_with_context_unconditioned(
         Some(mapped) => mapped,
         None => map_legacy_ability(prefix, &base_expression)?,
     };
+    mapped = apply_optional_legacy_condition(prefix, selector_key, mapped, condition)?;
     if let Some(name) = sub_ability {
         let linked = resolve_svar(&name, context, stack)?;
         if linked.event.is_some() || !linked.costs.is_empty() {
@@ -781,6 +781,18 @@ fn map_with_context_unconditioned(
         mapped.expression = sequence(mapped.expression, linked.expression);
     }
     Ok(mapped)
+}
+
+fn apply_optional_legacy_condition(
+    prefix: LegacyAbilityPrefix,
+    selector_key: &str,
+    mapped: MappedLegacyAbility,
+    condition: Option<Expression>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    match condition {
+        Some(condition) => apply_legacy_condition(prefix, selector_key, mapped, condition),
+        None => Ok(mapped),
+    }
 }
 
 fn extract_presence_condition(
@@ -867,6 +879,84 @@ fn combine_conditions(mut conditions: Vec<Expression>) -> Option<Expression> {
         1 => conditions.pop(),
         _ => Some(call(Operation::And, conditions)),
     }
+}
+
+struct UnlessClause {
+    payer: Expression,
+    costs: Vec<Expression>,
+}
+
+fn extract_unless_clause(
+    expression: &LegacyExpression,
+) -> Result<(LegacyExpression, Option<UnlessClause>), MappingDiagnostic> {
+    let parameters = parameters(expression)?;
+    let unless_cost = parameters.get("UnlessCost");
+    let unless_payer = parameters.get("UnlessPayer");
+    if unless_cost.is_none() && unless_payer.is_none() {
+        return Ok((expression.clone(), None));
+    }
+    let cost_text = unless_cost.ok_or_else(|| {
+        diagnostic(
+            "MISSING_PARAMETER",
+            "UnlessPayer requires a matching UnlessCost",
+        )
+    })?;
+    let payer_value = unless_payer
+        .map(String::as_str)
+        .unwrap_or("TargetedController");
+    let payer = defined_player_selector(payer_value).map_err(|mut error| {
+        error.message = error.message.replace("`Defined`", "`UnlessPayer`");
+        error
+    })?;
+    let costs = parse_unless_cost(cost_text, payer_value, &payer)?;
+    let mut unconditional = expression.clone();
+    unconditional
+        .fields
+        .retain(|field| !matches!(field.key.as_deref(), Some("UnlessCost" | "UnlessPayer")));
+    Ok((unconditional, Some(UnlessClause { payer, costs })))
+}
+
+fn parse_unless_cost(
+    value: &String,
+    payer_value: &str,
+    payer: &Expression,
+) -> Result<Vec<Expression>, MappingDiagnostic> {
+    let tokens = split_cost_tokens(value).map_err(|mut error| {
+        error.message = error.message.replace("`Cost`", "`UnlessCost`");
+        error
+    })?;
+    if tokens
+        .iter()
+        .any(|token| matches!(token.as_str(), "Y" | "Z"))
+    {
+        return Err(unsupported_value("UnlessCost", value));
+    }
+    if payer_value != "You"
+        && tokens.iter().any(|token| {
+            cost_payload(token, "Sac").is_some_and(|payload| {
+                payload
+                    .split('/')
+                    .nth(1)
+                    .is_some_and(|validity| validity == "CARDNAME")
+            })
+        })
+    {
+        return Err(unsupported_value("UnlessCost", value));
+    }
+    let costs = parse_cost_with_controller(Some(value), payer.clone()).map_err(|mut error| {
+        error.message = error.message.replace("`Cost`", "`UnlessCost`");
+        error
+    })?;
+    if costs.is_empty() {
+        return Err(unsupported_value("UnlessCost", value));
+    }
+    Ok(costs)
+}
+
+fn apply_unless_clause(effect: Expression, clause: UnlessClause) -> Expression {
+    let mut arguments = vec![effect, clause.payer];
+    arguments.extend(clause.costs);
+    call(Operation::UnlessPaid, arguments)
 }
 
 fn legacy_named_condition(value: &str) -> Result<Expression, MappingDiagnostic> {
@@ -975,13 +1065,9 @@ fn apply_legacy_condition(
             );
         }
         LegacyAbilityPrefix::Activated if selector_key == "AB" => {
-            if mapped.timing.is_some() {
-                return Err(diagnostic(
-                    "UNSUPPORTED_CONDITION",
-                    "ability condition cannot yet combine with another activation timing",
-                ));
-            }
-            mapped.timing = Some(call(Operation::TimingCondition, vec![condition]));
+            let mut timings = mapped.timing.into_iter().collect::<Vec<_>>();
+            timings.push(call(Operation::TimingCondition, vec![condition]));
+            mapped.timing = combine_timings(timings);
         }
         LegacyAbilityPrefix::Activated => {
             mapped.expression = call(
@@ -3027,6 +3113,7 @@ fn map_change_zone(
             "LibraryPosition",
             "Mandatory",
             "NoLooking",
+            "Hidden",
             "SelectPrompt",
             "RememberChanged",
             "SpellDescription",
@@ -3036,9 +3123,6 @@ fn map_change_zone(
         ],
     )?;
     let origin = required(parameters, "Origin")?;
-    if origin == "Library" {
-        return map_library_search(prefix, api, parameters);
-    }
     let replacement_object = parameters
         .get("Defined")
         .is_some_and(|value| value == "ReplacedCard");
@@ -3046,6 +3130,17 @@ fn map_change_zone(
         .get("Defined")
         .is_some_and(|value| matches!(value.as_str(), "Self" | "TriggeredCard" | "ReplacedCard"))
         && !parameters.contains_key("ValidTgts");
+    if let Some(value) = parameters.get("Hidden") {
+        if value != "True" {
+            return Err(unsupported_value("Hidden", value));
+        }
+        if !matches!(origin, "Library" | "Hand") {
+            return Err(unsupported_value("Hidden", value));
+        }
+    }
+    if origin == "Library" {
+        return map_library_search(prefix, api, parameters);
+    }
     let closed_origin = matches!(origin, "Graveyard" | "Hand" | "Exile" | "Stack");
     let zone_targeted = closed_origin
         && parameters.contains_key("ValidTgts")
@@ -4751,6 +4846,26 @@ fn add_collection_predicate(
 fn extract_legacy_timing(
     parameters: &mut BTreeMap<String, String>,
 ) -> Result<Option<Expression>, MappingDiagnostic> {
+    let source_zone = parameters
+        .remove("ActivationZone")
+        .map(|value| {
+            let zone = match value.as_str() {
+                "Graveyard" => "graveyard",
+                "Hand" => "hand",
+                "Command" => "command",
+                "Exile" => "exile",
+                "Stack" => "stack",
+                _ => return Err(unsupported_value("ActivationZone", &value)),
+            };
+            Ok(call(
+                Operation::TimingCondition,
+                vec![call(
+                    Operation::ZoneIs,
+                    vec![Expression::Text(zone.to_string())],
+                )],
+            ))
+        })
+        .transpose()?;
     let sorcery = parameters
         .remove("SorcerySpeed")
         .map(|value| {
@@ -4781,21 +4896,28 @@ fn extract_legacy_timing(
         })
         .transpose()?
         .is_some();
-    if once && (sorcery || your_turn) {
-        return Err(diagnostic(
-            "UNSUPPORTED_PARAMETER",
-            "combined activation limit and phase timing has no closed timing conjunction",
-        ));
+    let mut timings = Vec::new();
+    if let Some(source_zone) = source_zone {
+        timings.push(source_zone);
     }
-    Ok(if once {
-        Some(call(Operation::TimingOnceEachTurn, vec![]))
-    } else if sorcery {
-        Some(call(Operation::TimingSorcery, vec![]))
-    } else if your_turn {
-        Some(call(Operation::TimingYourTurn, vec![]))
-    } else {
-        None
-    })
+    if sorcery {
+        timings.push(call(Operation::TimingSorcery, vec![]));
+    }
+    if your_turn {
+        timings.push(call(Operation::TimingYourTurn, vec![]));
+    }
+    if once {
+        timings.push(call(Operation::TimingOnceEachTurn, vec![]));
+    }
+    Ok(combine_timings(timings))
+}
+
+fn combine_timings(mut timings: Vec<Expression>) -> Option<Expression> {
+    match timings.len() {
+        0 => None,
+        1 => timings.pop(),
+        _ => Some(call(Operation::TimingAll, timings)),
+    }
 }
 
 fn normalize_legacy_defaults(parameters: &mut BTreeMap<String, String>) {
@@ -4858,6 +4980,13 @@ fn parameters(
 pub(crate) fn parse_simple_cost(
     value: Option<&String>,
 ) -> Result<Vec<Expression>, MappingDiagnostic> {
+    parse_cost_with_controller(value, call(Operation::You, vec![]))
+}
+
+fn parse_cost_with_controller(
+    value: Option<&String>,
+    controller: Expression,
+) -> Result<Vec<Expression>, MappingDiagnostic> {
     let Some(value) = value else {
         return Ok(Vec::new());
     };
@@ -4884,7 +5013,7 @@ pub(crate) fn parse_simple_cost(
                     affected_selector(validity).map_err(|_| unsupported_value("Cost", value))?;
                 let selector = add_collection_predicate(
                     selector,
-                    call(Operation::ControlledBy, vec![call(Operation::You, vec![])]),
+                    call(Operation::ControlledBy, vec![controller.clone()]),
                 )
                 .map_err(|_| unsupported_value("Cost", value))?;
                 costs.push(call(
@@ -5201,6 +5330,7 @@ fn default_selector(default: DefaultSelector) -> Expression {
 fn defined_selector(value: &str) -> Result<Expression, MappingDiagnostic> {
     match value {
         "Self" => Ok(call(Operation::Source, vec![])),
+        "Targeted" => Ok(call(Operation::Target, vec![call(Operation::Any, vec![])])),
         "You" => Ok(call(Operation::You, vec![])),
         "Opponent" | "Player.Opponent" => Ok(call(Operation::Opponent, vec![])),
         "Equipped" => Ok(call(
@@ -5892,12 +6022,14 @@ fn reject_unknown(
 }
 
 fn is_nonsemantic_metadata(key: &str) -> bool {
+    // Legacy observes Hidden only in ChangeZoneEffect; that mapper validates it separately.
     matches!(
         key,
         "AILogic"
             | "AITgts"
             | "CostDesc"
             | "IsCurse"
+            | "Hidden"
             | "Planeswalker"
             | "PreCostDesc"
             | "PrecostDesc"
@@ -6679,6 +6811,129 @@ mod tests {
                 &mapped.expression,
                 Operation::Target
             ));
+        }
+    }
+
+    #[test]
+    fn lowers_unless_zone_hidden_and_targeted_bindings_fail_closed() {
+        let zoned = map_line(
+            "A:AB$ Draw | Defined$ You | ActivationZone$ Graveyard | SorcerySpeed$ True | IsPresent$ Creature.YouCtrl | PresentCompare$ GE1 | SpellDescription$ Draw.",
+        )
+        .unwrap_or_else(|error| panic!("combined source-zone timing should map: {}", error.message));
+        let timing = zoned
+            .timing
+            .as_ref()
+            .unwrap_or_else(|| panic!("source-zone activation should retain timing"));
+        assert!(expression_contains_operation(timing, Operation::TimingAll));
+        assert!(expression_contains_operation(
+            timing,
+            Operation::TimingCondition
+        ));
+        assert!(expression_contains_operation(timing, Operation::ZoneIs));
+        assert!(expression_contains_operation(timing, Operation::AtLeast));
+        assert!(expression_contains_operation(
+            timing,
+            Operation::TimingSorcery
+        ));
+
+        let targeted = map_line(
+            "A:SP$ Pump | Defined$ Targeted | NumAtt$ 1 | NumDef$ 1 | SpellDescription$ Pump.",
+        )
+        .unwrap_or_else(|error| panic!("targeted object binding should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &targeted.expression,
+            Operation::Target
+        ));
+
+        map_line(
+            "A:SP$ ChangeZone | Hidden$ True | Origin$ Hand | Destination$ Exile | ValidTgts$ Card | SpellDescription$ Exile.",
+        )
+        .unwrap_or_else(|error| {
+            panic!("intrinsically hidden-zone move should map: {}", error.message)
+        });
+        let unsafe_hidden = map_line(
+            "A:DB$ ChangeZone | Hidden$ True | Origin$ All | Destination$ Exile | Defined$ ReplacedCard",
+        )
+        .err()
+        .unwrap_or_else(|| panic!("public-zone identity-bound Hidden must quarantine"));
+        assert_eq!(unsafe_hidden.code, "UNSUPPORTED_VALUE");
+
+        let unless = map_script_root(concat!(
+            "Name:Unless Chain\n",
+            "A:SP$ Counter | TargetType$ Spell | ValidTgts$ Card | UnlessCost$ 2 | UnlessPayer$ TargetedController | SubAbility$ DBLife | SpellDescription$ Counter.\n",
+            "SVar:DBLife:DB$ GainLife | Defined$ You | LifeAmount$ 1\n",
+        ))
+        .unwrap_or_else(|error| panic!("typed unless-paid chain should map: {}", error.message));
+        assert!(matches!(
+            &unless.expression,
+            Expression::Call {
+                operation: Operation::Sequence,
+                arguments,
+            } if matches!(
+                arguments.first(),
+                Some(Expression::Call {
+                    operation: Operation::UnlessPaid,
+                    ..
+                })
+            ) && matches!(
+                arguments.get(1),
+                Some(Expression::Call {
+                    operation: Operation::GainLife,
+                    ..
+                })
+            )
+        ));
+        assert!(expression_contains_operation(
+            &unless.expression,
+            Operation::ManaCost
+        ));
+
+        let payer_relative = map_line(
+            "A:SP$ Destroy | ValidTgts$ Creature | UnlessCost$ Sac<1/Creature> | UnlessPayer$ TargetedController | SpellDescription$ Destroy.",
+        )
+        .unwrap_or_else(|error| panic!("payer-relative sacrifice should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &payer_relative.expression,
+            Operation::Sacrifice
+        ));
+        assert!(expression_contains_operation(
+            &payer_relative.expression,
+            Operation::ControllerOf
+        ));
+
+        let conditional_chain = map_script_root(concat!(
+            "Name:Conditional Chain\n",
+            "A:SP$ Draw | Defined$ You | IsPresent$ Creature.YouCtrl | SubAbility$ DBLife | SpellDescription$ Draw.\n",
+            "SVar:DBLife:DB$ GainLife | Defined$ You | LifeAmount$ 1\n",
+        ))
+        .unwrap_or_else(|error| panic!("conditional chain should map: {}", error.message));
+        assert!(matches!(
+            &conditional_chain.expression,
+            Expression::Call {
+                operation: Operation::Sequence,
+                arguments,
+            } if matches!(
+                arguments.first(),
+                Some(Expression::Call {
+                    operation: Operation::WhileCondition,
+                    ..
+                })
+            ) && matches!(
+                arguments.get(1),
+                Some(Expression::Call {
+                    operation: Operation::GainLife,
+                    ..
+                })
+            )
+        ));
+
+        for line in [
+            "A:SP$ Draw | Defined$ You | ActivationZone$ Sideboard | SpellDescription$ Draw.",
+            "A:SP$ Draw | Defined$ You | UnlessPayer$ You | SpellDescription$ Draw.",
+            "A:SP$ Draw | Defined$ You | UnlessCost$ Y | UnlessPayer$ You | SpellDescription$ Draw.",
+            "A:SP$ Draw | Defined$ You | UnlessCost$ PayEnergy<2> | UnlessPayer$ You | SpellDescription$ Draw.",
+        ] {
+            assert!(map_line(line).is_err(), "open timing/unless form must quarantine");
         }
     }
 
