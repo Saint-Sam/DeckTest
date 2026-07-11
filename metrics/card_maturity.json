@@ -8,10 +8,10 @@
   "detail": {
     "path": "target/card-maturity/identities.json",
     "record_count": 38306,
-    "sha256": "3f96e1492d56fc40a657406cb1e9ce108ea5f8bf67618baffffc68f678b93420",
+    "sha256": "c3533915eb3cf4ee09821b6717577d09727810bfde192bb2838ace66f8cd7018",
     "tracked": false
   },
-  "generated_at": "2026-07-11T01:14:25.927486+00:00",
+  "generated_at": "2026-07-11T01:48:49.575614+00:00",
   "generator": "tools/write_card_maturity.py",
   "implementation_maturity": {
     "compiler_evidence": {
@@ -131,6 +131,11 @@
     "requested": 365,
     "unit": "owner_priority_card_name"
   },
+  "product_binding": {
+    "commit": "2deef788122070ac5b3b1d1efb5d2cb6447b1403",
+    "source": "metrics/coverage.json",
+    "tree": "b49de638c48d0dcdfc5195d0d87f020291218933"
+  },
   "scenario_evidence": {
     "distinct_operations": 19,
     "distinct_scenario_commands": 65,
@@ -156,6 +161,7 @@
     "assets/card_catalog.json": "6c7c41ba91b524b8ac59cf7e215fbceaa31c1f9567ae11623dcfa15f6b3f8321",
     "metrics/api_coverage.json": "33601ba6af0f1b98deb6204f7fb95cea2cd5d871a0190d442e3d1b315a472d95",
     "metrics/card_catalog.json": "69c4662acbc20750847355bd461f469578aa27bd4c7932b88ac1a47bbc43c05a",
+    "metrics/coverage.json": "ad353ecb6049cf1d7468f1179a1787afe5d3534e704068b8649fe72704323cea",
     "metrics/cp_dsl_corpus.json": "8e66dcf0f81ce9625e969346291239e789d0606c179f800de704e969bec02bd7",
     "metrics/legacy_parse.json": "b5782a750b8840efebf74859e1359bf95c746a6c594a3ede504f5b197e4b0603",
     "metrics/local_platforms.json": "2276b8f85a05cec3c798ac4fef11069b5170b85b9d806a8f1eb0ce9daa551cf8",
@@ -163,7 +169,7 @@
     "metrics/priority_coverage.json": "f25b3af0efafa2346016dd1b5875439603ca3420d98690443ddf05c7f2cfaeb0",
     "metrics/t3_parallel_validation.json": "374bc6318d50e2a3fc0c9c32c80d60343fd672d80019128ae09fdfc1501dc7ec",
     "metrics/translation.json": "f26fbfec51ddfc0e5eba6de2cec9385a740134b298aa76a77f10ad6746fcf188",
-    "tools/write_card_maturity.py": "d517c522e4cc1dcc4d78e455723fb616a6717a70a86594443c7b384d90f62573"
+    "tools/write_card_maturity.py": "f465ec1ae456fefc2f322918b553a931ee2828041af32741510e3aac64e7b57d"
   },
   "units_are_separate": true
 }

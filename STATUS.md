@@ -1,6 +1,6 @@
 # DeckTest / Forge 2.0 Status
 
-Generated: 2026-07-11T01:14:25.927486+00:00 by `tools/write_card_maturity.py`
+Generated: 2026-07-11T01:48:49.575614+00:00 by `tools/write_card_maturity.py`
 
 Plan: v1.8
 
@@ -81,4 +81,4 @@ onto identities.
 
 Per-identity generated detail: `target/card-maturity/identities.json` (untracked,
 38,306 records; SHA-256
-`3f96e1492d56fc40a657406cb1e9ce108ea5f8bf67618baffffc68f678b93420`).
+`c3533915eb3cf4ee09821b6717577d09727810bfde192bb2838ace66f8cd7018`).

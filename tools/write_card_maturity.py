@@ -114,9 +114,25 @@ def definition_tree_sha256(root: Path) -> str:
     return digest.hexdigest()
 
 
+def exact_product_binding(coverage: dict) -> dict[str, str]:
+    if coverage.get("schema_version") != 2 or coverage.get("passed") is not True:
+        raise ValueError("coverage evidence is not a passing schema-v2 record")
+    binding = {}
+    for evidence_field, coverage_field in (
+        ("product_commit", "reviewed_commit"),
+        ("product_tree", "reviewed_tree"),
+    ):
+        object_id = coverage.get(coverage_field)
+        if not isinstance(object_id, str) or GIT_OBJECT_ID.fullmatch(object_id) is None:
+            raise ValueError(f"coverage evidence has invalid {coverage_field}")
+        binding[evidence_field] = object_id
+    return binding
+
+
 def validate_stage_evidence(
     value: dict,
     stage: str,
+    expected_product: dict[str, str],
     expected_source: dict[str, str],
     catalog_ids: set[str],
     in_scope_ids: set[str],
@@ -131,10 +147,12 @@ def validate_stage_evidence(
         raise ValueError(f"{stage} evidence has no generated_at provenance")
     if not isinstance(value.get("generator"), str) or not value["generator"]:
         raise ValueError(f"{stage} evidence has no generator provenance")
-    for field in ("product_commit", "product_tree"):
+    for field, expected in expected_product.items():
         object_id = value.get(field)
         if not isinstance(object_id, str) or GIT_OBJECT_ID.fullmatch(object_id) is None:
             raise ValueError(f"{stage} evidence has invalid {field}")
+        if object_id != expected:
+            raise ValueError(f"{stage} evidence has stale {field}")
     source = value.get("source")
     if not isinstance(source, dict):
         raise ValueError(f"{stage} evidence has no source binding")
@@ -161,6 +179,7 @@ def validate_stage_evidence(
 def optional_stage_ids(
     path: Path,
     stage: str,
+    expected_product: dict[str, str],
     expected_source: dict[str, str],
     catalog_ids: set[str],
     in_scope_ids: set[str],
@@ -169,7 +188,12 @@ def optional_stage_ids(
         return set()
     value = load_json(path)
     return validate_stage_evidence(
-        value, stage, expected_source, catalog_ids, in_scope_ids
+        value,
+        stage,
+        expected_product,
+        expected_source,
+        catalog_ids,
+        in_scope_ids,
     )
 
 
@@ -203,6 +227,8 @@ def build(timestamp: str) -> tuple[dict, dict, str]:
     platforms = load_json(ROOT / "metrics/local_platforms.json")
     corpus = load_json(ROOT / "metrics/cp_dsl_corpus.json")
     parallel = load_json(ROOT / "metrics/t3_parallel_validation.json")
+    coverage = load_json(ROOT / "metrics/coverage.json")
+    expected_product = exact_product_binding(coverage)
 
     identities = catalog.get("identities")
     printings = catalog.get("printings")
@@ -270,7 +296,12 @@ def build(timestamp: str) -> tuple[dict, dict, str]:
     stage_index = {stage: index for index, stage in enumerate(MATURITY_STAGES)}
     for stage, path in OPTIONAL_STAGE_FILES.items():
         ids = optional_stage_ids(
-            path, stage, expected_stage_source, set(identity_by_id), in_scope_ids
+            path,
+            stage,
+            expected_product,
+            expected_stage_source,
+            set(identity_by_id),
+            in_scope_ids,
         )
         optional_ids[stage] = ids
         optional_evidence[stage] = {
@@ -333,6 +364,11 @@ def build(timestamp: str) -> tuple[dict, dict, str]:
         "generated_at": timestamp,
         "generator": "tools/write_card_maturity.py",
         "plan_version": state.get("plan_version"),
+        "product_binding": {
+            "commit": expected_product["product_commit"],
+            "tree": expected_product["product_tree"],
+            "source": "metrics/coverage.json",
+        },
         "units_are_separate": True,
         "overall_completion_percent": None,
         "scope": {
@@ -432,6 +468,7 @@ def build(timestamp: str) -> tuple[dict, dict, str]:
                 ROOT / "metrics/oracle_semantics.json",
                 ROOT / "metrics/local_platforms.json",
                 ROOT / "metrics/cp_dsl_corpus.json",
+                ROOT / "metrics/coverage.json",
                 ROOT / "metrics/t3_parallel_validation.json",
             )
         },
@@ -554,6 +591,18 @@ def self_test() -> None:
         "card_database_sha256": "b" * 64,
         "translation_fingerprint": "fingerprint",
     }
+    product = {
+        "product_commit": "1" * 40,
+        "product_tree": "2" * 40,
+    }
+    assert exact_product_binding(
+        {
+            "schema_version": 2,
+            "passed": True,
+            "reviewed_commit": product["product_commit"],
+            "reviewed_tree": product["product_tree"],
+        }
+    ) == product
     valid = {
         "schema_version": 1,
         "stage": "runtime_smoke_passed",
@@ -568,7 +617,12 @@ def self_test() -> None:
     catalog_ids = {"in-scope-a", "in-scope-b", "out-of-scope"}
     in_scope_ids = {"in-scope-a", "in-scope-b"}
     assert validate_stage_evidence(
-        valid, "runtime_smoke_passed", source, catalog_ids, in_scope_ids
+        valid,
+        "runtime_smoke_passed",
+        product,
+        source,
+        catalog_ids,
+        in_scope_ids,
     ) == {"in-scope-a"}
 
     def rejects(mutator) -> None:
@@ -578,6 +632,7 @@ def self_test() -> None:
             validate_stage_evidence(
                 candidate,
                 "runtime_smoke_passed",
+                product,
                 source,
                 catalog_ids,
                 in_scope_ids,
@@ -589,6 +644,8 @@ def self_test() -> None:
     rejects(lambda value: value.update(passed=False))
     rejects(lambda value: value.update(schema_version=2))
     rejects(lambda value: value.update(stage="semantic_verified"))
+    rejects(lambda value: value.update(product_commit="3" * 40))
+    rejects(lambda value: value.update(product_tree="4" * 40))
     rejects(lambda value: value["source"].update(card_catalog_sha256="stale"))
     rejects(lambda value: value.update(identity_ids=["in-scope-a", "in-scope-a"]))
     rejects(lambda value: value.update(identity_ids=["unknown"]))
