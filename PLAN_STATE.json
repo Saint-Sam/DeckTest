@@ -290,6 +290,15 @@
       "entry_condition": "freeze the first 100 Commander semantic identities and strata",
       "checkpoint": "CP-CARD-SEMANTICS-100"
     },
+    "T3.7": {
+      "status": "verified_local_exact_product",
+      "branch": "main",
+      "attempts": 1,
+      "checkpoint": "CP-STATUS-TRUTH",
+      "product_commit": "b8feca541605b1f83abbac9d01c156ec6d0f881b",
+      "product_tree": "526ffd78c7625d9bbd9ed449a1e00aef1bf5e56f",
+      "verification": "Exact detached-product checkpoint passed locally with exact optional-stage product binding, fail-closed two-axis card maturity, current generated status, deterministic 24/12 translation and 6/1 planner replay, 80.5841% line coverage, self-tests, and offline dependency policy."
+    },
     "T3.9": {
       "status": "pending",
       "branch": "task/T3.9-four-integration-decks",
@@ -304,15 +313,22 @@
     "T1",
     "CP-LAYERS",
     "T2",
-    "CP-DSL"
+    "CP-DSL",
+    "CP-STATUS-TRUTH"
   ],
   "checkpoints": {
     "CP-STATUS-TRUTH": {
-      "status": "in_progress",
+      "status": "passed_local_exact_product",
       "task": "T3.7",
+      "product_commit": "b8feca541605b1f83abbac9d01c156ec6d0f881b",
+      "product_tree": "526ffd78c7625d9bbd9ed449a1e00aef1bf5e56f",
       "evidence": [
         "STATUS.md",
-        "metrics/card_maturity.json"
+        "metrics/card_maturity.json",
+        "metrics/project_status.json",
+        "reports/gates/CP-STATUS-TRUTH/EVIDENCE.json",
+        "reports/gates/CP-STATUS-TRUTH/GATE_REVIEW.md",
+        "reports/gates/CP-STATUS-TRUTH/SIGNOFF.md"
       ]
     },
     "CP-CARD-SEMANTICS-100": {

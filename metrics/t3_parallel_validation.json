@@ -18,8 +18,8 @@
     "accelerated_core_phase": 37,
     "comparable_serial_core_baseline": null,
     "core_saved_percent": null,
-    "full_workspace_verification": 38,
-    "total": 76
+    "full_workspace_verification": 49,
+    "total": 94
   },
   "github_actions_used": false,
   "local_only": true,

@@ -1,0 +1,192 @@
+{
+  "schema_version": 2,
+  "generated_at": "2026-07-11T01:56:10Z",
+  "checkpoint": "CP-STATUS-TRUTH",
+  "technical_result": "pass",
+  "evidence_model": "exact_product_commit_followed_by_evidence_only_commit",
+  "product_binding": {
+    "commit": "b8feca541605b1f83abbac9d01c156ec6d0f881b",
+    "tree": "526ffd78c7625d9bbd9ed449a1e00aef1bf5e56f",
+    "subject": "T3.7: bind maturity evidence to exact product",
+    "verified_in_detached_worktree": true,
+    "product_source_changed_by_verification": false
+  },
+  "source_binding": {
+    "legacy_forge_commit": "1f0a3e0815822d8f58f798e0304b33d4534248b1",
+    "legacy_source_was_clean": true,
+    "translation_fingerprint": "392822b7a28413cec83d924fc970328e",
+    "card_database_sha256": "a36c10bee8f6ea719ae981765d8a1f0e2d17a1c251ca47c23014bd31192d6e4f",
+    "translated_definition_tree_sha256": "a96426a82e052e681cce07d874f805a06991c5b3eeb158228a503ea624f83332",
+    "cp_dsl_definition_tree_sha256": "a610dc560deadda953b81d7132149cd2881011e4adaafa4360ee29f263282ea9",
+    "cargo_lock_sha256": "6c04449459faa1f542d25555f8bf6f78209d9df91140c60f243f6fec1d584531"
+  },
+  "governance_binding": {
+    "plan_version": "1.8",
+    "product_master_plan_sha256": "2dfe286e9fa24dde0cb5b3a5cd3cae62990d3eb947b712390efe896b748d2637",
+    "product_plan_state_sha256": "84d9ae04477c4e87c3223aff22de7bb275a5a44dfe7b91ff98e2850984ce1b58",
+    "evidence_state_plan_sha256": "f6c5454bf9b61c58a1ef2a62d761b6eb8b441308dbce631e6c2607552ceba63b",
+    "approved_pc_0007_sha256": "8a63ec707562fd50353b028c27152dd215186b014c35af919e7c870f2a02aed6",
+    "approved_gp_pc_0001_sha256": "9972644f84fc2f8f4f501ec450d2ae9df5ed72560556b3fb521b7290a94322b9",
+    "license": "GPL-3.0-only"
+  },
+  "verification_environment": {
+    "local_only": true,
+    "github_actions_used": false,
+    "network_attempted_in_final_verification": false,
+    "network_transfer_used": false,
+    "install_performed": false,
+    "worker_ceiling": 24,
+    "shared_cargo_target_per_worktree": true,
+    "source_hydration": "clean pinned source copied from the existing local submodule and bound to the existing local object database"
+  },
+  "commands": [
+    {
+      "command": "python3 tools/write_card_maturity.py --check",
+      "exit_code": 0,
+      "result": "generated maturity summary, untracked identity detail, and STATUS.md were current before and after the exact checkpoint"
+    },
+    {
+      "command": "python3 tools/write_project_status.py --check",
+      "exit_code": 0,
+      "result": "project status was current before and after the exact checkpoint"
+    },
+    {
+      "command": "scripts/selftest.sh",
+      "exit_code": 0,
+      "result": "all script and generator self-tests passed, including stale product commit/tree rejection"
+    },
+    {
+      "command": "FORGE_T3_TOTAL_WORKERS=24 CARGO_BUILD_JOBS=24 scripts/t3_parallel_sweep.sh checkpoint",
+      "exit_code": 0,
+      "result": "format, clippy -D warnings, workspace tests, 24/12 translation replay, 6/1 planner replay, compiler/database validation, and coverage passed",
+      "accelerated_core_phase_seconds": 37,
+      "full_workspace_verification_seconds": 49,
+      "total_seconds": 94
+    },
+    {
+      "command": "negative optional-stage evidence check with a stale product_commit",
+      "exit_code": 1,
+      "expected_failure": true,
+      "result": "runtime_smoke_passed evidence has stale product_commit; no identity promotion survived"
+    },
+    {
+      "command": "cargo deny --offline --locked check licenses bans sources",
+      "exit_code": 0,
+      "result": "bans ok, licenses ok, sources ok"
+    }
+  ],
+  "status_claims": {
+    "scope": {
+      "english_printings_represented": 113234,
+      "oracle_identities_classified": 38306,
+      "in_v1_scope": 32792,
+      "out_of_v1": 1900,
+      "catalog_only": 3614
+    },
+    "identity_maturity": {
+      "compiler_valid": 8768,
+      "runtime_smoke_passed": 0,
+      "semantic_verified": 0,
+      "pod_integration_verified": 0,
+      "ai_supported": 0,
+      "product_eligible": 0,
+      "outside_in_v1_scope": 0
+    },
+    "legacy_scripts": {
+      "total": 33290,
+      "parsed": 33290,
+      "compiler_valid_translated_definitions": 8700,
+      "quarantined_definitions": 24590
+    },
+    "legacy_ability_uses": {
+      "total": 43649,
+      "structurally_tested_uses": 15506,
+      "quarantined_uses": 28143
+    },
+    "owner_priority_cards": {
+      "requested": 365,
+      "catalog_resolved": 365,
+      "compiler_valid_translated_definitions": 173
+    },
+    "scenario_evidence": {
+      "scenario_files": 1200,
+      "hand_authored_scenarios": 133,
+      "distinct_scenario_commands": 65,
+      "distinct_operations": 19,
+      "observed_semantic_atom_combinations": 1839
+    },
+    "platform_evidence": {
+      "cross_compile_artifacts_passed": 4
+    },
+    "line_coverage": {
+      "covered": 24807,
+      "count": 30784,
+      "percent": 80.58406964656965
+    }
+  },
+  "fail_closed_checks": {
+    "optional_stage_schema_required": true,
+    "passed_true_required": true,
+    "exact_product_commit_and_tree_match_coverage_binding_required": true,
+    "coverage_binding_included_in_source_artifact_hashes": true,
+    "catalog_and_card_database_hashes_required": true,
+    "translation_fingerprint_required": true,
+    "unique_known_in_scope_identity_ids_required": true,
+    "maturity_prerequisite_closure_required": true,
+    "missing_optional_stage_evidence_promotes_zero_identities": true,
+    "self_tests_cover_false_malformed_stale_product_stale_source_duplicate_unknown_out_of_scope_and_prerequisite_skipping": true
+  },
+  "claim_boundaries": [
+    "Catalog representation is not mechanics maturity.",
+    "Script and ability-use units are not projected onto Oracle identity maturity.",
+    "Compiler-valid is not runtime-smoke, semantic, playable, AI-supported, or product-eligible.",
+    "The 100 CP-DSL definitions remain language-stress evidence unless separately promoted by card-specific semantic evidence.",
+    "No runtime, semantic, pod, AI, or product-eligibility promotion is claimed by this checkpoint."
+  ],
+  "privacy_boundary": {
+    "full_grand_plan_in_public_repository": false,
+    "business_strategy_in_public_repository": false,
+    "private_research_package_in_public_repository": false,
+    "public_content": "sanitized Forge bridge, intake, decisions, and verification evidence only",
+    "github_push_or_pull_request_performed": false
+  },
+  "artifacts": {
+    "PLAN_STATE.json": "f6c5454bf9b61c58a1ef2a62d761b6eb8b441308dbce631e6c2607552ceba63b",
+    "docs/transition/GRAND_PLAN_V2_INTAKE.json": "06f45d75b3aa923b0bc6f447e1ce6f08deae5ef0a39e545a454934aa13643456",
+    "STATUS.md": "c8a5749a4414faf94a7ecf5eccc9b62007a647b4405ade3bd64d17a5025351b9",
+    "metrics/coverage.json": "f2a2e428ef3598d0c31dc0bad9236f154c1613e129515e041be9226aa9325a36",
+    "metrics/t3_parallel_validation.json": "f9d10949b2ad7b367a31b5f371804e46f7d9d5c4e5383ca8f140ec5f3049f0ac",
+    "metrics/card_maturity.json": "845d0b9601c90f883f53f56a8bf94e8d77005205aaa573cf6ad16dab087fa3ff",
+    "metrics/project_status.json": "c338057fd9519ae60417a6fe425ea5cb8a44da31090ade2601935c2c52d11763",
+    "metrics/translation.json": "f26fbfec51ddfc0e5eba6de2cec9385a740134b298aa76a77f10ad6746fcf188",
+    "metrics/translation_quarantine.json": "4242754e1d13dbad943a61e73ddab27d7aa1d57cc99ce22f42bbd1c73b06c2d0",
+    "metrics/priority_coverage.json": "f25b3af0efafa2346016dd1b5875439603ca3420d98690443ddf05c7f2cfaeb0",
+    "metrics/blocker_plan.json": "cb574004a272f6de34c621cf7e357a92d52a00cd83af145f73bf09ee945c7447",
+    "metrics/api_coverage.json": "33601ba6af0f1b98deb6204f7fb95cea2cd5d871a0190d442e3d1b315a472d95",
+    "metrics/api_quarantine.json": "25cb57deae37db1da59d42446db9935995fea353518fce4dfd69c9885b4ae8c3",
+    "tools/write_card_maturity.py": "f465ec1ae456fefc2f322918b553a931ee2828041af32741510e3aac64e7b57d",
+    "tools/write_project_status.py": "6eae2f9cea2dd27d7abbe92133f35b06355c086f207c6fbb2cfd5f7d5621e114",
+    "scripts/t3_parallel_sweep.sh": "9eb925f95a4db1dd2312dc22f69e525a35f3b5d570802bb409f25fc97396ca1d"
+  },
+  "untracked_local_evidence": {
+    "identity_detail_sha256": "af7027b72704e1c8c02a3d7ac5a9f37930276d6e67a45832c38a8a80b0a9e9bd",
+    "identity_detail_records": 38306,
+    "exact_product_verification_log_sha256": "bd8e6bd853c8cfa65e0733760151b3b027ab25f00573d7f7edc842f8ed02e836",
+    "stale_binding_negative_log_sha256": "3a6ebad5ecf206412ff771cbc6b8833235ec97e954c4e0f28a3fee9cf6841e00",
+    "retention": "local untracked evidence; public evidence records only sanitized hashes and reproducible commands"
+  },
+  "review_history": [
+    {
+      "attempt": 1,
+      "verdict": "FAIL",
+      "reviewed_evidence_sha256": "379c9fe3e5c973bb41c1c0ddada3438fc426629bbc8f4b00107e25a32c1fd4ad",
+      "finding": "optional stage product IDs were shape-checked but not compared with the exact reviewed product binding",
+      "remediation": "product commit b8feca541605b1f83abbac9d01c156ec6d0f881b now compares both IDs with passing schema-v2 coverage evidence and tests stale commit/tree rejection"
+    }
+  ],
+  "review": {
+    "required_role": "Gate Reviewer",
+    "record": "reports/gates/CP-STATUS-TRUTH/GATE_REVIEW.md",
+    "signoff": "reports/gates/CP-STATUS-TRUTH/SIGNOFF.md"
+  }
+}

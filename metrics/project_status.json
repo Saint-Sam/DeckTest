@@ -47,9 +47,10 @@
     "T1",
     "CP-LAYERS",
     "T2",
-    "CP-DSL"
+    "CP-DSL",
+    "CP-STATUS-TRUTH"
   ],
-  "generated_at": "2026-07-11T01:14:29.114257+00:00",
+  "generated_at": "2026-07-11T01:55:16.600473+00:00",
   "generator": "tools/write_project_status.py",
   "hand_authored_scenario_count": 133,
   "hosted_workflow_count": 0,
@@ -74,7 +75,7 @@
   "t3_core_validation_saved_percent": null,
   "t3_serial_core_baseline_seconds": null,
   "t3_translation_deterministic_replay_passed": true,
-  "task_count": 46,
+  "task_count": 47,
   "task_status_counts": {
     "in_progress": 1,
     "pending": 4,
@@ -83,6 +84,7 @@
     "verified": 6,
     "verified_demo_only": 1,
     "verified_local": 12,
+    "verified_local_exact_product": 1,
     "verified_local_with_signed_tier_addendum": 1,
     "verified_remote": 16
   },
