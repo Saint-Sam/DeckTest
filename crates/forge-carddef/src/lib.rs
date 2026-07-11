@@ -972,6 +972,8 @@ operations! {
     HiddenInformation => ("hidden_information", Effect, 1, Some(1)),
     TargetRange => ("target_range", Selector, 3, Some(3)),
     EventPhase => ("event_phase", Event, 2, Some(2)),
+    TargetAllocation => ("target_allocation", Selector, 2, Some(2)),
+    Negate => ("negate", Value, 1, Some(1)),
 }
 
 impl Operation {
@@ -1020,6 +1022,11 @@ impl Operation {
             Self::TargetRange => match index {
                 0 => Some(SelectorOrPredicate),
                 1 | 2 => Some(Integer),
+                _ => None,
+            },
+            Self::TargetAllocation => match index {
+                0 => Some(Selector),
+                1 => Some(Number),
                 _ => None,
             },
             Self::ControllerOf | Self::OwnerOf => Some(Selector),
@@ -1383,6 +1390,7 @@ impl Operation {
                 }
             }
             Self::ManaValue | Self::Power | Self::Toughness => Some(Selector),
+            Self::Negate => Some(Number),
             Self::IfElse => {
                 if index == 0 {
                     Some(Predicate)
@@ -1513,6 +1521,8 @@ mod tests {
         assert_eq!(Operation::HiddenInformation as u32, 172);
         assert_eq!(Operation::TargetRange as u32, 173);
         assert_eq!(Operation::EventPhase as u32, 174);
+        assert_eq!(Operation::TargetAllocation as u32, 175);
+        assert_eq!(Operation::Negate as u32, 176);
 
         let config = bincode::config::standard()
             .with_fixed_int_encoding()

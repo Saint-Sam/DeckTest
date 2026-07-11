@@ -832,6 +832,30 @@ fn map_with_context_unconditioned(
 
     let parameter_map = parameters(expression)?;
     let sub_ability = parameter_map.get("SubAbility").cloned();
+    let divided_allocation = parameter_map
+        .get("DividedAsYouChoose")
+        .map(|allocation| {
+            let (amount_key, operation, target_index, amount_index) = match api {
+                "DealDamage" => ("NumDmg", Operation::DealDamage, 0, 1),
+                "PutCounter" => ("CounterNum", Operation::AddCounter, 0, 2),
+                "PreventDamage" => ("Amount", Operation::PreventDamage, 1, 2),
+                _ => return Err(unsupported_value("DividedAsYouChoose", allocation)),
+            };
+            let amount = parameter_map.get(amount_key).ok_or_else(|| {
+                diagnostic(
+                    "MISSING_PARAMETER",
+                    &format!("DividedAsYouChoose requires {amount_key}"),
+                )
+            })?;
+            if allocation != amount {
+                return Err(diagnostic(
+                    "UNSUPPORTED_VALUE",
+                    "DividedAsYouChoose must exactly match the effect amount",
+                ));
+            }
+            Ok((operation, target_index, amount_index))
+        })
+        .transpose()?;
     let optional_effect = if prefix == LegacyAbilityPrefix::Activated && api != "Dig" {
         match parameter_map.get("Optional").map(String::as_str) {
             None => false,
@@ -842,10 +866,12 @@ fn map_with_context_unconditioned(
         false
     };
     let mut base_expression = expression.clone();
-    if sub_ability.is_some() || optional_effect {
+    if sub_ability.is_some() || optional_effect || divided_allocation.is_some() {
         base_expression.fields.retain(|field| {
             field.key.as_deref() != Some("SubAbility")
                 && (!optional_effect || field.key.as_deref() != Some("Optional"))
+                && (divided_allocation.is_none()
+                    || field.key.as_deref() != Some("DividedAsYouChoose"))
         });
     }
     let mut mapped = match map_dynamic_ability(prefix, &base_expression, context)? {
@@ -857,6 +883,20 @@ fn map_with_context_unconditioned(
             Operation::ChooseUpTo,
             vec![Expression::Integer(1), mapped.expression],
         );
+    }
+    if let Some((operation, target_index, amount_index)) = divided_allocation {
+        let applied = apply_target_allocation(
+            &mut mapped.expression,
+            operation,
+            target_index,
+            amount_index,
+        )?;
+        if applied != 1 {
+            return Err(diagnostic(
+                "TARGET_ALLOCATION_MISMATCH",
+                "divided allocation did not produce exactly one typed target declaration",
+            ));
+        }
     }
     mapped = apply_optional_legacy_condition(prefix, selector_key, mapped, condition)?;
     if let Some(name) = sub_ability {
@@ -1498,11 +1538,63 @@ fn resolve_dynamic_parameter(
     if value.parse::<i64>().is_ok() {
         return Ok(None);
     }
-    let reference = value.strip_prefix('+').unwrap_or(value);
+    let (reference, negative) = match value.strip_prefix('-') {
+        Some(reference) => (reference, true),
+        None => (value.strip_prefix('+').unwrap_or(value), false),
+    };
     if !context.svars.contains_key(reference) && !context.duplicate_svars.contains(reference) {
         return Ok(None);
     }
-    resolve_value_svar(reference, context).map(Some)
+    let resolved = resolve_value_svar(reference, context)?;
+    Ok(Some(if negative {
+        call(Operation::Negate, vec![resolved])
+    } else {
+        resolved
+    }))
+}
+
+fn apply_target_allocation(
+    expression: &mut Expression,
+    expected: Operation,
+    target_index: usize,
+    amount_index: usize,
+) -> Result<usize, MappingDiagnostic> {
+    let Expression::Call {
+        operation,
+        arguments,
+    } = expression
+    else {
+        return Ok(0);
+    };
+    if *operation == expected {
+        if amount_index >= arguments.len() || target_index >= arguments.len() {
+            return Err(diagnostic(
+                "TARGET_ALLOCATION_MISMATCH",
+                "effect does not expose the expected target and amount arguments",
+            ));
+        }
+        let amount = arguments[amount_index].clone();
+        let target = arguments[target_index].clone();
+        if !matches!(
+            target,
+            Expression::Call {
+                operation: Operation::Target | Operation::TargetRange,
+                ..
+            }
+        ) {
+            return Err(diagnostic(
+                "TARGET_ALLOCATION_MISMATCH",
+                "divided allocation requires a typed target declaration",
+            ));
+        }
+        arguments[target_index] = call(Operation::TargetAllocation, vec![target, amount]);
+        return Ok(1);
+    }
+    let mut applied = 0;
+    for argument in arguments {
+        applied += apply_target_allocation(argument, expected, target_index, amount_index)?;
+    }
+    Ok(applied)
 }
 
 fn resolve_value_svar(
@@ -7451,6 +7543,72 @@ mod tests {
     }
 
     #[test]
+    fn preserves_divided_target_allocations_and_rejects_mismatches() {
+        for (script_text, expected_effect, expected_amount) in [
+            (
+                "A:SP$ DealDamage | ValidTgts$ Any | NumDmg$ 4 | TargetMin$ 0 | TargetMax$ 4 | DividedAsYouChoose$ 4 | SpellDescription$ Damage.",
+                Operation::DealDamage,
+                4,
+            ),
+            (
+                "A:SP$ PutCounter | ValidTgts$ Creature | CounterType$ P1P1 | CounterNum$ 3 | TargetMin$ 1 | TargetMax$ 3 | DividedAsYouChoose$ 3 | SpellDescription$ Counters.",
+                Operation::AddCounter,
+                3,
+            ),
+            (
+                "A:SP$ PreventDamage | ValidTgts$ Any | Amount$ 2 | TargetMin$ 0 | TargetMax$ 2 | DividedAsYouChoose$ 2 | SpellDescription$ Prevent.",
+                Operation::PreventDamage,
+                2,
+            ),
+        ] {
+            let mapped = map_script_root(script_text).unwrap_or_else(|error| {
+                panic!(
+                    "divided allocation should map for `{script_text}`: {}",
+                    error.message
+                )
+            });
+            assert!(expression_contains_operation(
+                &mapped.expression,
+                expected_effect
+            ));
+            let allocation_index = if expected_effect == Operation::PreventDamage {
+                1
+            } else {
+                0
+            };
+            assert!(matches!(
+                &mapped.expression,
+                Expression::Call { arguments, .. }
+                    if matches!(
+                        arguments.get(allocation_index),
+                        Some(Expression::Call {
+                            operation: Operation::TargetAllocation,
+                            arguments: allocation,
+                        }) if allocation.get(1) == Some(&Expression::Integer(expected_amount))
+                            && matches!(
+                                allocation.first(),
+                                Some(Expression::Call {
+                                    operation: Operation::TargetRange,
+                                    ..
+                                })
+                            )
+                    )
+            ));
+        }
+
+        for script_text in [
+            "A:SP$ DealDamage | ValidTgts$ Any | NumDmg$ 4 | TargetMin$ 0 | TargetMax$ 4 | DividedAsYouChoose$ 3",
+            "A:SP$ DealDamage | Defined$ You | NumDmg$ 4 | DividedAsYouChoose$ 4",
+            "A:SP$ Draw | Defined$ You | NumCards$ 4 | DividedAsYouChoose$ 4",
+        ] {
+            assert!(
+                map_script_root(script_text).is_err(),
+                "open divided allocation must quarantine"
+            );
+        }
+    }
+
+    #[test]
     fn resolves_charm_mode_graph() {
         let script = parse_legacy_script(
             "charm.txt",
@@ -8237,6 +8395,14 @@ mod tests {
                     "SVar:X:Count$ThisTurnCast_Card.YouCtrl\n",
                 ),
                 Operation::HistoryCount,
+            ),
+            (
+                concat!(
+                    "Name:Negative Dynamic Power\n",
+                    "A:SP$ Pump | ValidTgts$ Creature | NumAtt$ -X | NumDef$ -X | SpellDescription$ Shrink.\n",
+                    "SVar:X:Count$CardPower\n",
+                ),
+                Operation::Negate,
             ),
         ] {
             let script = parse_legacy_script("dynamic-value.txt", script_text)
