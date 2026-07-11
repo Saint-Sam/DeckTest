@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-11T23:16:40Z",
+  "task": "T3.3",
+  "batch": "Static EffectZone All",
+  "technical_result": "pass",
+  "product_binding": {
+    "mapper_commit": "2dadf5b",
+    "exact_product_commit": "2dadf5bfae2992be410de7ad395fc1fa436ab539",
+    "exact_product_tree": "924a26ecfdea42d31103cb64ba79b4c08ccc1074",
+    "verified_in_detached_worktree": true
+  },
+  "source_binding": {
+    "legacy_forge_commit": "1f0a3e0815822d8f58f798e0304b33d4534248b1",
+    "legacy_source": "existing local pinned checkout linked into detached worktree",
+    "translation_fingerprint": "098f7a335f0c800cac6cf9eea04574e0",
+    "cargo_lock_sha256": "f9fb1cd7230cb19b3277c1f4cb4c6750699e188f197cff4ef4e2965363675268"
+  },
+  "verification_environment": {
+    "local_only": true,
+    "github_actions_used": false,
+    "network_attempted": false,
+    "install_performed": false,
+    "worker_ceiling": 24,
+    "shared_cargo_cache": true,
+    "detached_target_debug_symlinked": true,
+    "detached_target_coverage_local": true
+  },
+  "coverage_delta": {
+    "before": {
+      "complete_scripts": 10587,
+      "mapped_ability_uses": 18466,
+      "owner_priority_complete": 187,
+      "quarantined_scripts": 22703,
+      "quarantined_ability_uses": 25183
+    },
+    "after": {
+      "complete_scripts": 10629,
+      "total_scripts": 33290,
+      "complete_script_percent": 31.92850705917693,
+      "mapped_ability_uses": 18527,
+      "total_ability_uses": 43649,
+      "owner_priority_complete": 189,
+      "owner_priority_requested": 365,
+      "quarantined_scripts": 22661,
+      "quarantined_ability_uses": 25122
+    },
+    "gain": {
+      "complete_scripts": 42,
+      "mapped_ability_uses": 61,
+      "owner_priority_complete": 2
+    }
+  },
+  "semantic_boundaries": {
+    "exactly_lowered": [
+      "EffectZone=All on S:Continuous",
+      "EffectZone=All on S:ReduceCost",
+      "EffectZone=All on S:CantBlockBy",
+      "EffectZone=All on S:CantAttackOrBlock",
+      "EffectZone=All on S:CantBeCast"
+    ],
+    "still_quarantined": [
+      "unknown EffectZone values",
+      "dynamic or conditional static effects without closed bindings",
+      "linked APIs or parameters outside the existing static mapper surfaces"
+    ],
+    "claim": "structural translation and compiler validity only; runtime and card-specific semantic maturity remain separate T3.5 and T3.6 evidence"
+  },
+  "commands": [
+    {
+      "command": "cargo test -p forge-porttools mapper::tests::maps_simple_continuous_effects -- --nocapture",
+      "exit_code": 0
+    },
+    {
+      "command": "FORGE_T3_TOTAL_WORKERS=24 CARGO_BUILD_JOBS=24 scripts/t3_parallel_sweep.sh development",
+      "exit_code": 0
+    },
+    {
+      "command": "cargo fmt --all -- --check",
+      "exit_code": 0
+    },
+    {
+      "command": "cargo clippy --workspace --all-targets --all-features -- -D warnings",
+      "exit_code": 0
+    },
+    {
+      "command": "FORGE_T3_TOTAL_WORKERS=24 CARGO_BUILD_JOBS=24 scripts/t3_parallel_sweep.sh checkpoint",
+      "exit_code": 0,
+      "accelerated_core_phase_seconds": 36,
+      "full_workspace_verification_seconds": 67,
+      "total_seconds": 109
+    }
+  ],
+  "line_coverage": {
+    "covered": 27253,
+    "count": 33740,
+    "percent": 80.77356253704802,
+    "floor_percent": 80
+  },
+  "planner": {
+    "analyzed_scripts": 33290,
+    "scripts_with_confirmed_blockers": 22488,
+    "priority_scripts_with_confirmed_blockers": 170,
+    "confirmed_observations": 52991,
+    "unique_blocker_families": 5348,
+    "linked_root_fanout": 53991
+  },
+  "continuation": {
+    "t3_3_remains_active": true,
+    "exit_floor_reached": false,
+    "next_t3_3_batch_source": "metrics/blocker_plan.json recommended_batches[0]"
+  }
+}
