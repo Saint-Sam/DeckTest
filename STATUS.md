@@ -1,6 +1,6 @@
 # DeckTest / Forge 2.0 Status
 
-Generated: 2026-07-11T23:42:55.295617+00:00 by `tools/write_card_maturity.py`
+Generated: 2026-07-11T23:55:46.759886+00:00 by `tools/write_card_maturity.py`
 
 Plan: v1.8
 
@@ -32,19 +32,19 @@ Exclusive highest evidence stage for the 32,792 in-v1 Oracle identities:
 
 | Highest stage | Identities |
 | --- | ---: |
-| Absent identity-bound definition evidence | 22,011 |
+| Absent identity-bound definition evidence | 21,972 |
 | Parsed | 0 |
 | Mapped partial | 0 |
 | Structurally translated | 0 |
-| Compiler valid | 10,781 |
+| Compiler valid | 10,820 |
 | Runtime smoke passed | 0 |
 | Semantic verified | 0 |
 | Pod integration verified | 0 |
 | AI supported | 0 |
 | Product eligible | 0 |
 
-Compiler-valid evidence currently reaches 10,781/32,792
-in-v1 identities (32.8769%). This includes the
+Compiler-valid evidence currently reaches 10,820/32,792
+in-v1 identities (32.9959%). This includes the
 unverified CP-DSL language-stress corpus and therefore is not a playable claim.
 Parsing and mapping remain below in their own units rather than being guessed
 onto identities.
@@ -54,21 +54,20 @@ onto identities.
 | Literal unit | Result |
 | --- | ---: |
 | Legacy scripts parsed | 33,290/33,290 |
-| Compiler-valid translated legacy definitions | 10,720 |
-| Fail-closed quarantined legacy definitions | 22,570 |
-| Structurally tested legacy ability uses | 18,676/43,649 |
-| Quarantined legacy ability uses | 24,973 |
-| Owner-priority compiler-valid definitions | 192/365 |
+| Compiler-valid translated legacy definitions | 10,759 |
+| Fail-closed quarantined legacy definitions | 22,531 |
+| Structurally tested legacy ability uses | 18,735/43,649 |
+| Quarantined legacy ability uses | 24,914 |
+| Owner-priority compiler-valid definitions | 193/365 |
 
-The latest exact T3.3 mapper batch (`0215ed9`) adds the closed
-`Produced$ Combo ColorIdentity` mana form as the typed
-`command_color_identity` token. It raises complete legacy scripts to
-10,720/33,290 (32.2019%), mapped ability uses to 18,676/43,649 (42.7868%),
-and Owner-priority emission to 192/365. Cards with separate
-`AddsCounters` or `TriggersWhenSpent` semantics remain fail-closed. The
-detached local checkpoint passed deterministic translation/planner replay,
-full workspace tests, compiler/database validation, 235 oracles, clippy, and
-80.8443% line coverage. T3.3 remains active below its 60% exit floor.
+T3.3 remains active after exact local product `1d760f6`: closed
+`GainControl=True` battlefield `ChangeZone` and `ChangeZoneAll` moves now
+lower as typed move-then-control sequences. Chosen-player, delayed, and
+non-battlefield variants remain fail-closed. The detached 24-worker checkpoint
+passed deterministic 24/12 translation and 6/1 planner replay, full workspace
+tests, clippy, compiler/database validation, 235 oracle scenarios plus gated
+subsets, nightmare/smoke checks, and 80.8678% line coverage. The 60%
+complete-script exit floor is not reached.
 
 ## Evidence Breadth
 
@@ -92,4 +91,4 @@ full workspace tests, compiler/database validation, 235 oracles, clippy, and
 
 Per-identity generated detail: `target/card-maturity/identities.json` (untracked,
 38,306 records; SHA-256
-`c85f2f3fcfb47536eef8514d893bf7ba27334614959d53fd82459af94b838209`).
+`cca4c1ecf0297aaff80dc5f2cf4ffbcbc87c2ca73bd8fa34e443b63ca5998106`).

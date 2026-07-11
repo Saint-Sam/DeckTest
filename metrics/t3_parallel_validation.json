@@ -1,47 +1,42 @@
 {
   "blocker_plan": {
     "analyzed_scripts": 33290,
-    "confirmed_observations": 52757,
-    "linked_root_fanout": 53757,
-    "scripts_with_confirmed_blockers": 22397,
-    "unique_blocker_families": 5355
+    "confirmed_observations": 52465,
+    "linked_root_fanout": 53460,
+    "scripts_with_confirmed_blockers": 22357,
+    "unique_blocker_families": 5357
   },
-  "coverage": {
-    "count": 33875,
-    "covered": 27386,
-    "not_covered": 6489,
-    "percent": 80.84428044280443
-  },
-  "deterministic_blocker_plan_replay": true,
-  "deterministic_parallel_replay": true,
+  "coverage": null,
+  "deterministic_blocker_plan_replay": false,
+  "deterministic_parallel_replay": false,
   "durations_seconds": {
-    "accelerated_core_phase": 36,
+    "accelerated_core_phase": 32,
     "comparable_serial_core_baseline": null,
     "core_saved_percent": null,
-    "full_workspace_verification": 74,
-    "total": 116
+    "full_workspace_verification": 0,
+    "total": 33
   },
   "github_actions_used": false,
   "local_only": true,
-  "mode": "checkpoint",
-  "schedule": "materialize_then_parallel_replay_compile_plan_audit",
+  "mode": "development",
+  "schedule": "parallel_translate_plan_audit_test_then_compile",
   "schema_version": 3,
   "shared_cargo_target": true,
   "translation": {
-    "emitted_percent": 32.20186242114749,
-    "emitted_scripts": 10720,
-    "output_fingerprint": "b2ea3f132f5e0048d34ee9b5e965eb32",
-    "priority_emitted": 192,
+    "emitted_percent": 32.31901471913488,
+    "emitted_scripts": 10759,
+    "output_fingerprint": "b8dd8e7d74cbdfed3235f0030e657b34",
+    "priority_emitted": 193,
     "priority_requested": 365,
     "total_scripts": 33290
   },
   "workers": {
     "blocker_planner": 6,
-    "blocker_planner_replay": 1,
+    "blocker_planner_replay": 0,
     "ceiling": 24,
-    "fingerprint_replay": 12,
+    "fingerprint_replay": 0,
     "map_audit_reserved": 2,
-    "primary_translation": 24,
+    "primary_translation": 16,
     "total": 24
   }
 }
