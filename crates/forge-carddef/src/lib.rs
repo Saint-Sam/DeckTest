@@ -851,7 +851,6 @@ operations! {
     EventDraw => ("event_draw", Event, 0, Some(2)),
     EventDiscard => ("event_discard", Event, 0, Some(2)),
     EventCounterAdded => ("event_counter_added", Event, 0, Some(2)),
-    EventChapter => ("event_chapter", Event, 3, Some(3)),
     EventZoneChange => ("event_zone_change", Event, 0, Some(2)),
     EventTargeted => ("event_targeted", Event, 0, Some(2)),
     Sequence => ("sequence", Effect, 1, None),
@@ -863,7 +862,6 @@ operations! {
     Exile => ("exile", Effect, 1, Some(2)),
     SacrificeEffect => ("sacrifice_effect", Effect, 1, Some(2)),
     MoveZone => ("move_zone", Effect, 2, Some(3)),
-    MoveZoneFrom => ("move_zone_from", Effect, 3, Some(4)),
     ReturnToHand => ("return_to_hand", Effect, 1, Some(1)),
     Draw => ("draw", Effect, 1, Some(2)),
     DiscardCards => ("discard_cards", Effect, 1, Some(3)),
@@ -872,7 +870,6 @@ operations! {
     LoseLife => ("lose_life", Effect, 1, Some(2)),
     SetLife => ("set_life", Effect, 1, Some(2)),
     AddMana => ("add_mana", Effect, 1, Some(3)),
-    AddRestrictedMana => ("add_restricted_mana", Effect, 4, Some(4)),
     CounterSpell => ("counter_spell", Effect, 1, Some(2)),
     Copy => ("copy", Effect, 1, Some(2)),
     CreateToken => ("create_token", Effect, 1, Some(3)),
@@ -902,7 +899,6 @@ operations! {
     Shuffle => ("shuffle", Effect, 0, Some(1)),
     Reveal => ("reveal", Effect, 1, Some(2)),
     LookAt => ("look_at", Effect, 1, Some(2)),
-    LibraryDig => ("library_dig", Effect, 7, Some(7)),
     Remember => ("remember", Effect, 2, Some(2)),
     Forget => ("forget", Effect, 1, Some(1)),
     PreventDamage => ("prevent_damage", Effect, 1, Some(3)),
@@ -912,7 +908,6 @@ operations! {
     ExtraCombat => ("extra_combat", Effect, 0, Some(1)),
     SkipStep => ("skip_step", Effect, 1, Some(2)),
     RegisterDelayedTrigger => ("register_delayed_trigger", Effect, 2, Some(3)),
-    Chapter => ("chapter", Effect, 3, Some(3)),
     LayerEffect => ("layer_effect", Effect, 4, None),
     Continuous => ("continuous", Effect, 2, Some(3)),
     CannotAttack => ("cannot_attack", Effect, 1, Some(2)),
@@ -967,6 +962,11 @@ operations! {
     HistoryCount => ("history_count", Value, 2, Some(2)),
     UnlessPaid => ("unless_paid", Effect, 3, None),
     TimingAll => ("timing_all", Timing, 2, None),
+    EventChapter => ("event_chapter", Event, 3, Some(3)),
+    MoveZoneFrom => ("move_zone_from", Effect, 3, Some(4)),
+    AddRestrictedMana => ("add_restricted_mana", Effect, 4, Some(4)),
+    LibraryDig => ("library_dig", Effect, 7, Some(7)),
+    Chapter => ("chapter", Effect, 3, Some(3)),
 }
 
 impl Operation {
@@ -1458,6 +1458,22 @@ mod tests {
             Some(ArgumentKind::Timing)
         );
         assert_eq!(Operation::parse("card_specific_magic"), None);
+    }
+
+    #[test]
+    fn operation_serialization_prefix_remains_stable() {
+        assert_eq!(Operation::EventCounterAdded as u32, 53);
+        assert_eq!(Operation::EventZoneChange as u32, 54);
+        assert_eq!(Operation::MoveZone as u32, 64);
+        assert_eq!(Operation::ReturnToHand as u32, 65);
+        assert_eq!(Operation::AddMana as u32, 72);
+        assert_eq!(Operation::CounterSpell as u32, 73);
+        assert_eq!(Operation::LookAt as u32, 101);
+        assert_eq!(Operation::Remember as u32, 102);
+        assert_eq!(Operation::RegisterDelayedTrigger as u32, 110);
+        assert_eq!(Operation::LayerEffect as u32, 111);
+        assert_eq!(Operation::TimingAll as u32, 164);
+        assert_eq!(Operation::EventChapter as u32, 165);
     }
 
     #[test]
