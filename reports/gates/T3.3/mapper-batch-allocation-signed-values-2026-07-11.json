@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-11T21:00:00Z",
+  "task": "T3.3",
+  "batch": "DividedAsYouChoose and signed dynamic values",
+  "technical_result": "pass",
+  "product_binding": {
+    "mapper_commit": "b0c1d3f",
+    "exact_product_commit": "b0c1d3f",
+    "exact_product_tree": "430fe6053ddbc729ee0fd4a2bab1e16b66c56574",
+    "verified_in_detached_worktree": true
+  },
+  "source_binding": {
+    "legacy_forge_commit": "1f0a3e0815822d8f58f798e0304b33d4534248b1",
+    "legacy_source": "existing local pinned submodule checkout",
+    "translation_fingerprint": "683cf1de4fe8f11a825a57d8d9858ffd",
+    "cargo_lock_sha256": "f9fb1cd7230cb19b3277c1f4cb4c6750699e188f197cff4ef4e2965363675268"
+  },
+  "verification_environment": {
+    "local_only": true,
+    "github_actions_used": false,
+    "network_attempted": false,
+    "install_performed": false,
+    "worker_ceiling": 24,
+    "shared_cargo_cache": true
+  },
+  "coverage_delta": {
+    "before": {
+      "complete_scripts": 10412,
+      "mapped_ability_uses": 18194,
+      "owner_priority_complete": 185,
+      "quarantined_scripts": 22878,
+      "quarantined_ability_uses": 25455
+    },
+    "after": {
+      "complete_scripts": 10483,
+      "total_scripts": 33290,
+      "complete_script_percent": 31.48993691799339,
+      "mapped_ability_uses": 18291,
+      "total_ability_uses": 43649,
+      "owner_priority_complete": 186,
+      "owner_priority_requested": 365,
+      "quarantined_scripts": 22807,
+      "quarantined_ability_uses": 25358
+    },
+    "gain": {
+      "complete_scripts": 71,
+      "mapped_ability_uses": 97,
+      "owner_priority_complete": 1
+    }
+  },
+  "semantic_boundaries": {
+    "exactly_lowered": [
+      "divided damage, counter, and prevention totals that exactly match their effect amount",
+      "typed target allocation wrapped around a closed target declaration",
+      "negative dynamic numeric SVars as typed negate expressions"
+    ],
+    "still_quarantined": [
+      "mismatched divided allocation totals",
+      "divided allocation without a typed target declaration",
+      "unsupported APIs and unresolved dynamic values"
+    ],
+    "claim": "structural translation and compiler validity only; runtime and card-specific semantic maturity remain separate T3.5 and T3.6 evidence"
+  },
+  "commands": [
+    {
+      "command": "scripts/t3_parallel_sweep.sh checkpoint",
+      "exit_code": 0,
+      "accelerated_core_phase_seconds": 36,
+      "full_workspace_verification_seconds": 30,
+      "total_seconds": 67
+    }
+  ],
+  "line_coverage": {
+    "covered": 27131,
+    "count": 33611,
+    "percent": 80.72059742346256,
+    "floor_percent": 80
+  },
+  "planner": {
+    "analyzed_scripts": 33290,
+    "scripts_with_confirmed_blockers": 22635,
+    "priority_scripts_with_confirmed_blockers": 173,
+    "confirmed_observations": 53357,
+    "unique_blocker_families": 5290,
+    "linked_root_fanout": 54362
+  },
+  "continuation": {
+    "t3_3_remains_active": true,
+    "next_t3_3_batch_source": "metrics/blocker_plan.json recommended_batches[0]"
+  }
+}
