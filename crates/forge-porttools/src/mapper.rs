@@ -3479,11 +3479,11 @@ fn map_change_zone(
     }
     if parameters
         .get("DefinedPlayer")
-        .is_some_and(|value| value == "Player")
+        .is_some_and(|value| matches!(value.as_str(), "Player" | "Opponent" | "Player.Opponent"))
     {
         return Err(diagnostic(
             "UNSUPPORTED_VALUE",
-            "DefinedPlayer=Player requires per-player selection cardinality",
+            "aggregate DefinedPlayer requires per-player selection cardinality",
         ));
     }
     let source_bound = !parameters.contains_key("Defined")
@@ -6976,6 +6976,15 @@ mod tests {
         .err()
         .unwrap_or_else(|| panic!("per-player cardinality must quarantine"));
         assert_eq!(error.code, "UNSUPPORTED_VALUE");
+
+        for player in ["Opponent", "Player.Opponent"] {
+            let error = map_line(&format!(
+                "A:SP$ ChangeZone | Origin$ Hand | Destination$ Battlefield | DefinedPlayer$ {player} | ChangeType$ Creature | ChangeNum$ 1"
+            ))
+            .err()
+            .unwrap_or_else(|| panic!("aggregate opponent cardinality must quarantine"));
+            assert_eq!(error.code, "UNSUPPORTED_VALUE");
+        }
 
         let battlefield = map_line(
             "A:SP$ ChangeZone | Origin$ Battlefield | Destination$ Hand | ValidTgts$ Opponent | DefinedPlayer$ Targeted | ChangeType$ Creature | ChangeNum$ 1",
