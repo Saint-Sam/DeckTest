@@ -3438,6 +3438,7 @@ fn map_change_zone(
         &[
             "Cost",
             "Defined",
+            "DefinedPlayer",
             "ValidTgts",
             "TgtPrompt",
             "Origin",
@@ -3469,7 +3470,16 @@ fn map_change_zone(
         .get("Defined")
         .is_some_and(|value| matches!(value.as_str(), "Self" | "TriggeredCard" | "ReplacedCard"))
         && !parameters.contains_key("ValidTgts");
-    let source_bound = !parameters.contains_key("Defined") && !parameters.contains_key("ValidTgts");
+    let player_bound = parameters.contains_key("DefinedPlayer");
+    if player_bound && parameters.contains_key("Defined") {
+        return Err(diagnostic(
+            "UNSUPPORTED_PARAMETER",
+            "DefinedPlayer cannot be combined with Defined in a closed zone move",
+        ));
+    }
+    let source_bound = !parameters.contains_key("Defined")
+        && !parameters.contains_key("ValidTgts")
+        && !player_bound;
     if let Some(value) = parameters.get("Hidden") {
         if value != "True" {
             return Err(unsupported_value("Hidden", value));
@@ -3485,11 +3495,21 @@ fn map_change_zone(
     if !(origin == "Battlefield"
         || zone_targeted
         || origin == "All" && replacement_object
-        || closed_origin && (identity_bound || source_bound))
+        || closed_origin && (identity_bound || source_bound || player_bound)
+        || origin == "Battlefield" && player_bound)
     {
         return Err(unsupported_value("Origin", origin));
     }
-    let affected = if zone_targeted {
+    let affected = if player_bound {
+        let cards = card_selector_in_zone(
+            required(parameters, "ChangeType")?,
+            &origin.to_ascii_lowercase(),
+        )?;
+        add_collection_predicate(
+            cards,
+            call(Operation::OwnedBy, vec![zone_owner_selector(parameters)?]),
+        )?
+    } else if zone_targeted {
         call(
             Operation::Target,
             vec![card_selector_in_zone(
@@ -3512,7 +3532,17 @@ fn map_change_zone(
         },
         value => return Err(unsupported_value("Destination", value)),
     };
-    let expression = if closed_origin && !zone_targeted {
+    let expression = if player_bound {
+        let amount = optional_positive_integer(parameters, "ChangeNum")?.unwrap_or(1);
+        call(
+            Operation::MoveZone,
+            vec![
+                affected,
+                Expression::Text(destination.to_string()),
+                Expression::Integer(amount),
+            ],
+        )
+    } else if closed_origin && !zone_targeted {
         call(
             Operation::MoveZoneFrom,
             vec![
@@ -3578,15 +3608,12 @@ fn map_library_search(
         }
     }
     let amount = optional_positive_integer(parameters, "ChangeNum")?.unwrap_or(1);
+    let player = zone_owner_selector(parameters)?;
     let cards = card_selector_in_zone(required(parameters, "ChangeType")?, "library")?;
     let chosen = call(Operation::Chosen, vec![cards.clone()]);
     let mut effects = vec![call(
         Operation::SearchLibrary,
-        vec![
-            cards,
-            call(Operation::You, vec![]),
-            Expression::Integer(amount),
-        ],
+        vec![cards, player.clone(), Expression::Integer(amount)],
     )];
     if parameters.contains_key("Reveal") {
         effects.push(call(Operation::Reveal, vec![chosen.clone()]));
@@ -3618,7 +3645,7 @@ fn map_library_search(
         destination
     };
     if should_shuffle && destination.starts_with("library_") {
-        effects.push(call(Operation::Shuffle, vec![call(Operation::You, vec![])]));
+        effects.push(call(Operation::Shuffle, vec![player.clone()]));
     }
     effects.push(call(
         Operation::MoveZone,
@@ -3632,7 +3659,7 @@ fn map_library_search(
         effects.push(call(Operation::Tap, vec![chosen]));
     }
     if should_shuffle && !destination.starts_with("library_") {
-        effects.push(call(Operation::Shuffle, vec![call(Operation::You, vec![])]));
+        effects.push(call(Operation::Shuffle, vec![player]));
     }
     let expression = combine_effects(effects, "library search requires effects")?;
     mapped_direct(
@@ -3651,6 +3678,18 @@ fn preserve_hidden_information(
         call(Operation::HiddenInformation, vec![expression])
     } else {
         expression
+    }
+}
+
+fn zone_owner_selector(
+    parameters: &BTreeMap<String, String>,
+) -> Result<Expression, MappingDiagnostic> {
+    match parameters.get("DefinedPlayer").map(String::as_str) {
+        Some("Targeted" | "TargetedPlayer") if parameters.contains_key("ValidTgts") => {
+            targeted_player_selector(required(parameters, "ValidTgts")?, "ValidTgts")
+        }
+        Some(value) => defined_player_selector(value),
+        None => Ok(call(Operation::You, vec![])),
     }
 }
 
@@ -5909,7 +5948,9 @@ fn defined_player_selector(value: &str) -> Result<Expression, MappingDiagnostic>
         "You" => Ok(call(Operation::You, vec![])),
         "Opponent" | "Player.Opponent" => Ok(call(Operation::Opponent, vec![])),
         "Player" => Ok(call(Operation::Any, vec![])),
-        "Targeted" => Ok(call(Operation::Target, vec![call(Operation::Any, vec![])])),
+        "Targeted" | "TargetedPlayer" => {
+            Ok(call(Operation::Target, vec![call(Operation::Any, vec![])]))
+        }
         "TargetedController" => Ok(call(
             Operation::ControllerOf,
             vec![call(Operation::Target, vec![call(Operation::Any, vec![])])],
@@ -6872,6 +6913,29 @@ mod tests {
             map_line("A:SP$ Draw | Defined$ You | Optional$ False | SpellDescription$ Draw.")
                 .err()
                 .unwrap_or_else(|| panic!("non-true Optional must fail closed"));
+        assert_eq!(error.code, "UNSUPPORTED_VALUE");
+    }
+
+    #[test]
+    fn scopes_closed_zone_moves_to_the_defined_player() {
+        let mapped = map_line(
+            "A:SP$ ChangeZone | Origin$ Hand | Destination$ Exile | ValidTgts$ Opponent | DefinedPlayer$ Targeted | ChangeType$ Card | ChangeNum$ 1 | Hidden$ True | SpellDescription$ Exile.",
+        )
+        .unwrap_or_else(|error| panic!("defined-player move should map: {}", error.message));
+        for operation in [
+            Operation::HiddenInformation,
+            Operation::MoveZone,
+            Operation::OwnedBy,
+            Operation::Target,
+        ] {
+            assert!(expression_contains_operation(&mapped.expression, operation));
+        }
+
+        let error = map_line(
+            "A:SP$ ChangeZone | Origin$ Hand | Destination$ Exile | DefinedPlayer$ Remembered | ChangeType$ Card | ChangeNum$ 1",
+        )
+        .err()
+        .unwrap_or_else(|| panic!("open DefinedPlayer binding must quarantine"));
         assert_eq!(error.code, "UNSUPPORTED_VALUE");
     }
 
