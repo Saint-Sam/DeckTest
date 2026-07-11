@@ -1,0 +1,123 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-11T19:20:00Z",
+  "task": "T3.3",
+  "batch": "Static-TargetMin-TargetMax",
+  "technical_result": "pass",
+  "product_binding": {
+    "mapper_commit": "aceeac8b6baacb37e8d4764f95d3c7d50b8edcf0",
+    "exact_product_commit": "aceeac8b6baacb37e8d4764f95d3c7d50b8edcf0",
+    "exact_product_tree": "46e3d72499319754ffa4d831db7d7c38c411e811",
+    "verified_in_detached_worktree": true
+  },
+  "source_binding": {
+    "legacy_forge_commit": "1f0a3e0815822d8f58f798e0304b33d4534248b1",
+    "legacy_source": "existing local pinned submodule checkout",
+    "translation_fingerprint": "44df58063692d0a0ea070205e05eff3b",
+    "cargo_lock_sha256": "f9fb1cd7230cb19b3277c1f4cb4c6750699e188f197cff4ef4e2965363675268"
+  },
+  "verification_environment": {
+    "local_only": true,
+    "github_actions_used": false,
+    "network_attempted": false,
+    "network_transfer_used": false,
+    "install_performed": false,
+    "worker_ceiling": 24,
+    "primary_translation_workers": 24,
+    "fingerprint_replay_workers": 12,
+    "planner_workers": 6,
+    "planner_replay_workers": 1
+  },
+  "coverage_delta": {
+    "before": {
+      "complete_scripts": 10012,
+      "mapped_ability_uses": 17513,
+      "owner_priority_complete": 185,
+      "quarantined_scripts": 23278,
+      "quarantined_ability_uses": 26136
+    },
+    "after": {
+      "complete_scripts": 10268,
+      "total_scripts": 33290,
+      "complete_script_percent": 30.844097326524484,
+      "mapped_ability_uses": 17923,
+      "total_ability_uses": 43649,
+      "owner_priority_complete": 185,
+      "owner_priority_requested": 365,
+      "quarantined_scripts": 23022,
+      "quarantined_ability_uses": 25726
+    },
+    "gain": {
+      "complete_scripts": 256,
+      "mapped_ability_uses": 410,
+      "owner_priority_complete": 0,
+      "quarantined_scripts_removed": 256,
+      "quarantined_ability_uses_removed": 410
+    }
+  },
+  "semantic_boundaries": {
+    "exactly_lowered": [
+      "static integer TargetMin and TargetMax ranges",
+      "one-sided bounds with the legacy default of one",
+      "one typed target-range declaration with repeated references preserved"
+    ],
+    "still_quarantined": [
+      "dynamic target bounds",
+      "ranges without a same-ability ValidTgts restriction",
+      "invalid ranges, divided allocation, and cross-target constraints"
+    ],
+    "claim": "structural translation and compiler validity only; runtime and card-specific semantic maturity remain separate T3.5 and T3.6 evidence"
+  },
+  "compatibility": {
+    "operation_ordinal": 173,
+    "append_only": true,
+    "bounds_argument_kind": "integer",
+    "prior_hidden_information_bincode_bytes_pinned": true,
+    "prior_hidden_information_bytes_decode": true
+  },
+  "review_history": [
+    {
+      "reviewer": "independent strong-reasoning subagent",
+      "verdict": "FAIL_P2",
+      "findings": [
+        "bounds initially accepted calculated Number values despite static-only mapper scope",
+        "every repeated target reference initially became a separate range declaration",
+        "malformed target arity was not rejected"
+      ]
+    },
+    {
+      "scope": "type, declaration, and compatibility remediation",
+      "verdict": "PASS",
+      "result": "literal Integer bounds, one well-formed declaration, repeated references preserved, dynamic ranges quarantined, and production bincode compatibility pinned; no P0, P1, or P2 findings"
+    }
+  ],
+  "commands": [
+    {
+      "command": "FORGE_T3_TOTAL_WORKERS=24 CARGO_BUILD_JOBS=24 scripts/t3_parallel_sweep.sh checkpoint",
+      "exit_code": 0,
+      "result": "format, clippy -D warnings, full workspace tests, deterministic translation and planner replay, compiler/database validation, 235 oracle scenarios, and coverage passed",
+      "accelerated_core_phase_seconds": 37,
+      "full_workspace_verification_seconds": 50,
+      "total_seconds": 94
+    }
+  ],
+  "line_coverage": {
+    "covered": 26917,
+    "count": 33386,
+    "percent": 80.62361468879172,
+    "floor_percent": 80
+  },
+  "planner": {
+    "analyzed_scripts": 33290,
+    "scripts_with_confirmed_blockers": 22855,
+    "priority_scripts_with_confirmed_blockers": 174,
+    "confirmed_observations": 54344,
+    "unique_blocker_families": 5272,
+    "linked_root_fanout": 55361
+  },
+  "continuation": {
+    "t3_3_remains_active": true,
+    "next_t3_3_batch_source": "metrics/blocker_plan.json recommended_batches[0]",
+    "rule": "T3.5 and T3.6 remain parallel lanes and do not replace or pause measured T3.3 script translation and ability-use mapping"
+  }
+}
