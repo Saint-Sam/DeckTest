@@ -1,6 +1,6 @@
 # DeckTest / Forge 2.0 Status
 
-Generated: 2026-07-11T23:10:31.997201+00:00 by `tools/write_card_maturity.py`
+Generated: 2026-07-11T23:32:54.509625+00:00 by `tools/write_card_maturity.py`
 
 Plan: v1.8
 
@@ -32,19 +32,19 @@ Exclusive highest evidence stage for the 32,792 in-v1 Oracle identities:
 
 | Highest stage | Identities |
 | --- | ---: |
-| Absent identity-bound definition evidence | 22,052 |
+| Absent identity-bound definition evidence | 22,014 |
 | Parsed | 0 |
 | Mapped partial | 0 |
 | Structurally translated | 0 |
-| Compiler valid | 10,740 |
+| Compiler valid | 10,778 |
 | Runtime smoke passed | 0 |
 | Semantic verified | 0 |
 | Pod integration verified | 0 |
 | AI supported | 0 |
 | Product eligible | 0 |
 
-Compiler-valid evidence currently reaches 10,740/32,792
-in-v1 identities (32.7519%). This includes the
+Compiler-valid evidence currently reaches 10,778/32,792
+in-v1 identities (32.8678%). This includes the
 unverified CP-DSL language-stress corpus and therefore is not a playable claim.
 Parsing and mapping remain below in their own units rather than being guessed
 onto identities.
@@ -54,11 +54,21 @@ onto identities.
 | Literal unit | Result |
 | --- | ---: |
 | Legacy scripts parsed | 33,290/33,290 |
-| Compiler-valid translated legacy definitions | 10,678 |
-| Fail-closed quarantined legacy definitions | 22,612 |
-| Structurally tested legacy ability uses | 18,597/43,649 |
-| Quarantined legacy ability uses | 25,052 |
+| Compiler-valid translated legacy definitions | 10,716 |
+| Fail-closed quarantined legacy definitions | 22,574 |
+| Structurally tested legacy ability uses | 18,672/43,649 |
+| Quarantined legacy ability uses | 24,977 |
 | Owner-priority compiler-valid definitions | 189/365 |
+
+The latest exact T3.3 mapper batch (`4480224`) adds closed
+`TriggeredCard$CardPower`, `$CardToughness`, `$CardManaCost`, and
+`$CardCounters.<type>` value-SVar lowering through the typed triggered-object
+selector. It raises complete legacy scripts to 10,716/33,290 (32.1898%) and
+mapped ability uses to 18,672/43,649 (42.7776%). Aggregate, filtered,
+controller, and LKI-dependent forms remain fail-closed. The detached local
+checkpoint passed deterministic translation/planner replay, full workspace
+tests, compiler/database validation, 235 oracles, clippy, and 80.8399% line
+coverage. T3.3 remains active below its 60% exit floor.
 
 ## Evidence Breadth
 
@@ -82,4 +92,4 @@ onto identities.
 
 Per-identity generated detail: `target/card-maturity/identities.json` (untracked,
 38,306 records; SHA-256
-`db8e73d09c267ba21adedc5444370868e8ea94cafd219c3239d9908afef1217e`).
+`31568c841c22c2fed67e04c873adfb6af1575b3b38da790a8002d3e0360269d2`).
