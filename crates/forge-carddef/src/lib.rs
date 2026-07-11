@@ -971,6 +971,7 @@ operations! {
     RegenerateShield => ("regenerate_shield", Effect, 1, Some(1)),
     HiddenInformation => ("hidden_information", Effect, 1, Some(1)),
     TargetRange => ("target_range", Selector, 3, Some(3)),
+    EventPhase => ("event_phase", Event, 2, Some(2)),
 }
 
 impl Operation {
@@ -1090,6 +1091,11 @@ impl Operation {
                 _ => None,
             },
             Self::EventUpkeep => Some(Selector),
+            Self::EventPhase => match index {
+                0 => Some(Selector),
+                1 => Some(Text),
+                _ => None,
+            },
             Self::EventCounterAdded | Self::EventZoneChange => match index {
                 0 => Some(Selector),
                 1 => Some(Text),
@@ -1506,6 +1512,7 @@ mod tests {
         assert_eq!(Operation::RegenerateShield as u32, 171);
         assert_eq!(Operation::HiddenInformation as u32, 172);
         assert_eq!(Operation::TargetRange as u32, 173);
+        assert_eq!(Operation::EventPhase as u32, 174);
 
         let config = bincode::config::standard()
             .with_fixed_int_encoding()

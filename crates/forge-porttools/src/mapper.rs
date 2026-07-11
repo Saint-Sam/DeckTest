@@ -2006,16 +2006,24 @@ fn map_phase_event(parameters: &BTreeMap<String, String>) -> Result<Expression, 
     )?;
     require_battlefield_zone(parameters, "TriggerZones")?;
     let phase = required(parameters, "Phase")?;
-    if phase != "Upkeep" {
-        return Err(unsupported_value("Phase", phase));
-    }
     let player = match parameters.get("ValidPlayer").map(String::as_str) {
         None | Some("Any") | Some("Player") => call(Operation::Any, vec![]),
         Some("You") => call(Operation::You, vec![]),
         Some("Opponent") | Some("Player.Opponent") => call(Operation::Opponent, vec![]),
         Some(value) => return Err(unsupported_value("ValidPlayer", value)),
     };
-    Ok(call(Operation::EventUpkeep, vec![player]))
+    match phase {
+        "Upkeep" => Ok(call(Operation::EventUpkeep, vec![player])),
+        "End of Turn" => Ok(call(
+            Operation::EventPhase,
+            vec![player, Expression::Text("end_step".to_string())],
+        )),
+        "BeginCombat" => Ok(call(
+            Operation::EventPhase,
+            vec![player, Expression::Text("begin_combat".to_string())],
+        )),
+        _ => Err(unsupported_value("Phase", phase)),
+    }
 }
 
 fn map_attacks_event(
@@ -8303,6 +8311,24 @@ mod tests {
             ),
             (
                 concat!(
+                    "Name:Graph End Step\n",
+                    "T:Mode$ Phase | Phase$ End of Turn | ValidPlayer$ You | TriggerZones$ Battlefield | Execute$ TrigDraw | TriggerDescription$ Draw.\n",
+                    "SVar:TrigDraw:DB$ Draw | Defined$ You\n",
+                ),
+                Operation::EventPhase,
+                Operation::Draw,
+            ),
+            (
+                concat!(
+                    "Name:Graph Beginning of Combat\n",
+                    "T:Mode$ Phase | Phase$ BeginCombat | ValidPlayer$ Opponent | TriggerZones$ Battlefield | Execute$ TrigDraw | TriggerDescription$ Draw.\n",
+                    "SVar:TrigDraw:DB$ Draw | Defined$ You\n",
+                ),
+                Operation::EventPhase,
+                Operation::Draw,
+            ),
+            (
+                concat!(
                     "Name:Graph Attacks\n",
                     "T:Mode$ Attacks | ValidCard$ Card.Self | TriggerZones$ Battlefield | Execute$ TrigDraw | TriggerDescription$ Draw.\n",
                     "SVar:TrigDraw:DB$ Draw | Defined$ You\n",
@@ -8470,6 +8496,43 @@ mod tests {
                 mapped.expression,
                 Expression::Call { operation, .. } if operation == expected_effect
             ));
+        }
+    }
+
+    #[test]
+    fn preserves_closed_phase_event_names_and_rejects_open_values() {
+        for (phase, player, expected_player, expected_phase) in [
+            ("End of Turn", "You", Operation::You, "end_step"),
+            (
+                "BeginCombat",
+                "Opponent",
+                Operation::Opponent,
+                "begin_combat",
+            ),
+        ] {
+            let mapped = map_script_root(&format!(
+                "T:Mode$ Phase | Phase$ {phase} | ValidPlayer$ {player} | TriggerZones$ Battlefield | Execute$ TrigDraw\nSVar:TrigDraw:DB$ Draw | Defined$ You\n"
+            ))
+            .unwrap_or_else(|error| panic!("closed phase should map: {}", error.message));
+            assert!(matches!(
+                mapped.event,
+                Some(Expression::Call {
+                    operation: Operation::EventPhase,
+                    arguments,
+                }) if matches!(arguments.as_slice(), [
+                    Expression::Call { operation, arguments: selector_args },
+                    Expression::Text(value),
+                ] if *operation == expected_player && selector_args.is_empty() && value == expected_phase)
+            ));
+        }
+
+        for phase in ["EndOfTurn", "Combat", "Main1"] {
+            let error = map_script_root(&format!(
+                "T:Mode$ Phase | Phase$ {phase} | ValidPlayer$ You | TriggerZones$ Battlefield | Execute$ TrigDraw\nSVar:TrigDraw:DB$ Draw | Defined$ You\n"
+            ))
+            .err()
+            .unwrap_or_else(|| panic!("open phase value must quarantine"));
+            assert_eq!(error.code, "UNSUPPORTED_VALUE");
         }
     }
 
