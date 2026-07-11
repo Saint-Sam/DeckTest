@@ -5990,6 +5990,8 @@ fn normalize_mana(value: &str, amount: i64) -> Result<String, MappingDiagnostic>
         format!("{{{value}}}")
     } else if value == "Any" {
         "any_color".to_string()
+    } else if value == "Combo ColorIdentity" {
+        "command_color_identity".to_string()
     } else if let Some(colors) = value.strip_prefix("Combo ") {
         let choices = colors
             .split_whitespace()
@@ -7110,6 +7112,20 @@ mod tests {
             Operation::AddMana,
             2,
         );
+        let command_identity = map_line(
+            "A:AB$ Mana | Cost$ T | Produced$ Combo ColorIdentity | SpellDescription$ Add commander-identity mana.",
+        )
+        .unwrap_or_else(|error| panic!("commander identity mana should map: {}", error.message));
+        assert!(matches!(
+            command_identity.expression,
+            Expression::Call {
+                operation: Operation::AddMana,
+                ref arguments,
+            } if arguments == &vec![
+                Expression::Text("command_color_identity".to_string()),
+                super::call(Operation::You, vec![]),
+            ]
+        ));
         assert_operation(
             "A:SP$ Draw | NumCards$ 2 | SpellDescription$ Draw two cards.",
             Operation::Draw,
