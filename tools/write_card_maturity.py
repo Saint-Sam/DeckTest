@@ -568,7 +568,8 @@ onto identities.
 
 ## Next Gates
 
-1. Finish the current bounded T3.3 mapper batch.
+1. Continue the measured T3.3 mapper lane at 40% capacity until the corpus floor
+   is met; every batch records before/after coverage and quarantine deltas.
 2. T3.5 capability-specific runtime smoke; unsupported setup is reason-coded.
 3. T3.6 and CP-CARD-SEMANTICS-100 for the frozen 100-card Commander set.
 4. T3.9 and CP-FOUR-PLAYER-POD with four complete decks and 1,000 seeded games.

@@ -761,7 +761,7 @@ mod tests {
                 "K:Ward:2\n",
                 "A:SP$ Dig | DigNum$ 3 | ChangeNum$ 1 | SubAbility$ Extra | SpellDescription$ Dig.\n",
                 "SVar:Extra:DB$ Effect | SubAbility$ Tail\n",
-                "SVar:Tail:DB$ Draw | Defined$ You | CheckSVar$ X\n",
+                "SVar:Tail:DB$ Draw | Defined$ You | ConditionPlayerTurn$ True\n",
                 "SVar:X:Count$Valid Creature.YouCtrl\n",
             ),
         )
@@ -775,7 +775,9 @@ mod tests {
             .collect::<BTreeSet<_>>();
         assert!(families.iter().any(|family| family.contains("A:Dig")));
         assert!(families.iter().any(|family| family.contains("A:Effect")));
-        assert!(families.iter().any(|family| family.contains("CheckSVar")));
+        assert!(families
+            .iter()
+            .any(|family| family.contains("ConditionPlayerTurn")));
         assert!(families.iter().any(|family| family.contains("Ward")));
         assert_eq!(card.priority_tier, Some(0));
     }

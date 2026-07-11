@@ -1223,7 +1223,11 @@ and evidence records.
 4. Finish the in-progress bounded PC-0006 T3.3 mapper batch. After that batch,
    plan concurrent capacity as 40% mapper breadth, 30% runtime smoke, 20%
    semantic gold-set evidence, and 10% complete deck/pod integration. Keep at
-   most one batch active in each lane.
+   most one batch active in each lane. Record all four allocations and the next
+   measured mapper batch in `PLAN_STATE.json`; T3.5/T3.6 work does not pause or
+   replace T3.3. Every T3 integration reports before/after mapped ability uses,
+   complete scripts, priority identities, and quarantine deltas, and T3.3 stays
+   active until the corpus floor and dependent gates are actually satisfied.
 5. Extend blocker planning only with versioned, measured completion units:
    full decks/pods, semantic strata, Trainer scenarios, priority/archetype/global
    gain, and engineering minutes. Cards per hour never outranks semantic defects.
