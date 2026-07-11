@@ -3477,6 +3477,15 @@ fn map_change_zone(
             "DefinedPlayer cannot be combined with Defined in a closed zone move",
         ));
     }
+    if parameters
+        .get("DefinedPlayer")
+        .is_some_and(|value| value == "Player")
+    {
+        return Err(diagnostic(
+            "UNSUPPORTED_VALUE",
+            "DefinedPlayer=Player requires per-player selection cardinality",
+        ));
+    }
     let source_bound = !parameters.contains_key("Defined")
         && !parameters.contains_key("ValidTgts")
         && !player_bound;
@@ -3505,9 +3514,14 @@ fn map_change_zone(
             required(parameters, "ChangeType")?,
             &origin.to_ascii_lowercase(),
         )?;
+        let relation = if origin == "Battlefield" {
+            Operation::ControlledBy
+        } else {
+            Operation::OwnedBy
+        };
         add_collection_predicate(
             cards,
-            call(Operation::OwnedBy, vec![zone_owner_selector(parameters)?]),
+            call(relation, vec![zone_owner_selector(parameters)?]),
         )?
     } else if zone_targeted {
         call(
@@ -3688,6 +3702,10 @@ fn zone_owner_selector(
         Some("Targeted" | "TargetedPlayer") if parameters.contains_key("ValidTgts") => {
             targeted_player_selector(required(parameters, "ValidTgts")?, "ValidTgts")
         }
+        Some("Targeted" | "TargetedPlayer") => Err(diagnostic(
+            "UNSUPPORTED_SELECTOR",
+            "targeted DefinedPlayer requires ValidTgts in the same ability",
+        )),
         Some(value) => defined_player_selector(value),
         None => Ok(call(Operation::You, vec![])),
     }
@@ -6937,6 +6955,40 @@ mod tests {
         .err()
         .unwrap_or_else(|| panic!("open DefinedPlayer binding must quarantine"));
         assert_eq!(error.code, "UNSUPPORTED_VALUE");
+
+        let error = map_line(
+            "A:SP$ ChangeZone | Origin$ Hand | Destination$ Exile | DefinedPlayer$ Targeted | ChangeType$ Card | ChangeNum$ 1",
+        )
+        .err()
+        .unwrap_or_else(|| panic!("unbound targeted player must quarantine"));
+        assert_eq!(error.code, "UNSUPPORTED_SELECTOR");
+
+        let error = map_line(
+            "A:SP$ ChangeZone | Origin$ Library | Destination$ Hand | DefinedPlayer$ Targeted | ChangeType$ Card | ChangeNum$ 1",
+        )
+        .err()
+        .unwrap_or_else(|| panic!("unbound targeted library owner must quarantine"));
+        assert_eq!(error.code, "UNSUPPORTED_SELECTOR");
+
+        let error = map_line(
+            "A:SP$ ChangeZone | Origin$ Hand | Destination$ Exile | DefinedPlayer$ Player | ChangeType$ Card | ChangeNum$ 2",
+        )
+        .err()
+        .unwrap_or_else(|| panic!("per-player cardinality must quarantine"));
+        assert_eq!(error.code, "UNSUPPORTED_VALUE");
+
+        let battlefield = map_line(
+            "A:SP$ ChangeZone | Origin$ Battlefield | Destination$ Hand | ValidTgts$ Opponent | DefinedPlayer$ Targeted | ChangeType$ Creature | ChangeNum$ 1",
+        )
+        .unwrap_or_else(|error| panic!("target-player battlefield move should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &battlefield.expression,
+            Operation::ControlledBy
+        ));
+        assert!(!expression_contains_operation(
+            &battlefield.expression,
+            Operation::OwnedBy
+        ));
     }
 
     #[test]
