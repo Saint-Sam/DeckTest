@@ -1,0 +1,145 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-11T18:43:00Z",
+  "task": "T3.3",
+  "batch": "TargetsValid-Regenerate-Optional-Hidden-DefinedPlayer",
+  "technical_result": "pass",
+  "evidence_model": "product commits followed by exact detached verification and an evidence-only commit",
+  "product_binding": {
+    "targeting_optional_hidden_commit": "5cd7f0a",
+    "defined_player_commit": "cfe685cdb0ed4b2c9429f1d69bfe435da46f7f35",
+    "defined_player_remediation_commit": "4cc1b9f2db5453279d88b4f0d6646660be3e2732",
+    "aggregate_opponent_remediation_commit": "0516d0d3812d7c42df786edb133cb9dbe9d95256",
+    "exact_product_commit": "0516d0d3812d7c42df786edb133cb9dbe9d95256",
+    "exact_product_tree": "eb595efb61daf39a8e3232a26ebf35219e388f8a",
+    "verified_in_detached_worktree": true,
+    "product_source_changed_by_verification": false
+  },
+  "source_binding": {
+    "legacy_forge_commit": "1f0a3e0815822d8f58f798e0304b33d4534248b1",
+    "legacy_source": "existing local pinned submodule checkout",
+    "translation_fingerprint": "04851b10125341250b90c31afced12fa",
+    "cargo_lock_sha256": "de6fd35c5ca22f50f15ca86a334b1d491f8efc9c5a1b05766eb9b0226faa286f"
+  },
+  "verification_environment": {
+    "local_only": true,
+    "github_actions_used": false,
+    "network_attempted": false,
+    "network_transfer_used": false,
+    "install_performed": false,
+    "worker_ceiling": 24,
+    "primary_translation_workers": 24,
+    "fingerprint_replay_workers": 12,
+    "planner_workers": 6,
+    "planner_replay_workers": 1,
+    "cache_strategy": "one shared Cargo target and generated output tree; no duplicate agents or GitHub runners"
+  },
+  "coverage_delta": {
+    "before": {
+      "complete_scripts": 9647,
+      "mapped_ability_uses": 16980,
+      "owner_priority_complete": 180,
+      "quarantined_scripts": 23643,
+      "quarantined_ability_uses": 26669
+    },
+    "after": {
+      "complete_scripts": 9972,
+      "total_scripts": 33290,
+      "complete_script_percent": 29.954941423851007,
+      "mapped_ability_uses": 17454,
+      "total_ability_uses": 43649,
+      "owner_priority_complete": 183,
+      "owner_priority_requested": 365,
+      "quarantined_scripts": 23318,
+      "quarantined_ability_uses": 26195
+    },
+    "gain": {
+      "complete_scripts": 325,
+      "mapped_ability_uses": 474,
+      "owner_priority_complete": 3,
+      "quarantined_scripts_removed": 325,
+      "quarantined_ability_uses_removed": 474
+    }
+  },
+  "semantic_boundaries": {
+    "exactly_lowered": [
+      "TargetsValid on exact targeted cast and cast-or-copy events",
+      "A:Regenerate as a distinct typed regeneration shield",
+      "generic Optional=True effect wrapping without moving subabilities into the choice",
+      "Hidden=True as explicit typed hidden-information metadata",
+      "closed single-player DefinedPlayer scopes for ChangeZone and library search"
+    ],
+    "still_quarantined": [
+      "open or unrepresented player bindings",
+      "aggregate Player scopes requiring per-player selection cardinality",
+      "any effect whose rules-observable distinction cannot be retained in typed IR"
+    ],
+    "claim": "structural translation and compiler validity only; runtime and card-specific semantic maturity remain separate T3.5 and T3.6 evidence"
+  },
+  "review_history": [
+    {
+      "reviewer": "independent strong-reasoning subagent",
+      "scope": "TargetsValid, Regenerate, Optional, Hidden and append-only operation compatibility",
+      "verdict": "PASS",
+      "findings": []
+    },
+    {
+      "scope": "DefinedPlayer closed-scope mapper",
+      "verdict": "FAIL",
+      "findings": [
+        "aggregate Player moves collapsed per-player cardinality into one global selection",
+        "battlefield collections used ownership rather than controller scope",
+        "Targeted without a same-ability target binding failed open"
+      ]
+    },
+    {
+      "scope": "DefinedPlayer remediation",
+      "verdict": "FAIL",
+      "finding": "aggregate Opponent scopes still collapsed per-opponent cardinality in multiplayer"
+    },
+    {
+      "scope": "DefinedPlayer final remediation",
+      "verdict": "PASS_BY_FOCUSED_AND_EXACT_CHECKPOINT",
+      "result": "aggregate Player and Opponent scopes plus unbound Targeted values fail closed; battlefield collections use controller scope; private-zone collections use owner scope"
+    },
+    {
+      "reviewer": "independent strong-reasoning subagent",
+      "scope": "final product and evidence packet",
+      "verdict": "PASS",
+      "result": "all prior findings closed; no P0, P1, or P2 findings; product, metrics, timestamp, and provenance bindings exact"
+    }
+  ],
+  "commands": [
+    {
+      "command": "FORGE_T3_TOTAL_WORKERS=24 CARGO_BUILD_JOBS=24 scripts/t3_parallel_sweep.sh checkpoint",
+      "exit_code": 0,
+      "result": "format, clippy -D warnings, full workspace tests, deterministic translation and planner replay, compiler/database validation, 235 oracle scenarios, and coverage passed",
+      "accelerated_core_phase_seconds": 37,
+      "full_workspace_verification_seconds": 51,
+      "total_seconds": 95
+    }
+  ],
+  "line_coverage": {
+    "covered": 26695,
+    "count": 33146,
+    "percent": 80.53762143245036,
+    "floor_percent": 80
+  },
+  "planner": {
+    "analyzed_scripts": 33290,
+    "scripts_with_confirmed_blockers": 23166,
+    "priority_scripts_with_confirmed_blockers": 176,
+    "confirmed_observations": 57062,
+    "unique_blocker_families": 5268,
+    "linked_root_fanout": 58148
+  },
+  "continuation": {
+    "t3_3_allocation_percent": 40,
+    "t3_5_allocation_percent": 30,
+    "t3_6_allocation_percent": 20,
+    "t3_9_allocation_percent": 10,
+    "t3_3_remains_active": true,
+    "next_t3_3_batch_source": "metrics/blocker_plan.json recommended_batches[0]",
+    "rule": "T3.5 and T3.6 remain parallel lanes and do not replace or pause measured T3.3 script translation and ability-use mapping"
+  }
+}
