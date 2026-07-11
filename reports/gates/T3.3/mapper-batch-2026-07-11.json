@@ -1,0 +1,178 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-11T10:50:14Z",
+  "task": "T3.3",
+  "batch": "ValidBlocker-Condition-ValidTgts-CheckSVar-SVarCompare",
+  "technical_result": "pass",
+  "evidence_model": "exact_product_commit_followed_by_evidence_only_commit",
+  "product_binding": {
+    "commit": "332a0e3fb02bce536345f5b41ae65d0c768ef8eb",
+    "tree": "55463c28f3bbb00f08c45663f1f61b88bd0288aa",
+    "subject": "T3.3: lower safe blocker and condition batch",
+    "verified_in_detached_worktree": true,
+    "product_source_changed_by_verification": false
+  },
+  "source_binding": {
+    "legacy_forge_commit": "1f0a3e0815822d8f58f798e0304b33d4534248b1",
+    "legacy_source": "existing local pinned submodule checkout",
+    "translation_fingerprint": "24777cb027f7f674cb12ddad6db91a3b",
+    "cargo_lock_sha256": "6c04449459faa1f542d25555f8bf6f78209d9df91140c60f243f6fec1d584531"
+  },
+  "verification_environment": {
+    "local_only": true,
+    "github_actions_used": false,
+    "network_attempted": false,
+    "network_transfer_used": false,
+    "install_performed": false,
+    "worker_ceiling": 24,
+    "primary_translation_workers": 24,
+    "fingerprint_replay_workers": 12,
+    "planner_workers": 6,
+    "planner_replay_workers": 1,
+    "shared_cache_strategy": "only target/debug and target/llvm-cov-target were linked to the existing local cache; reports and translated outputs were materialized inside the clean worktree"
+  },
+  "coverage_delta": {
+    "before": {
+      "complete_scripts": 8700,
+      "mapped_ability_uses": 15506,
+      "owner_priority_complete": 173
+    },
+    "after": {
+      "complete_scripts": 9002,
+      "total_scripts": 33290,
+      "complete_script_percent": 27.041153499549413,
+      "mapped_ability_uses": 16020,
+      "total_ability_uses": 43649,
+      "mapped_ability_use_percent": 36.70187174963917,
+      "owner_priority_complete": 177,
+      "owner_priority_requested": 365,
+      "quarantined_scripts": 24288,
+      "quarantined_ability_uses": 27629
+    },
+    "gain": {
+      "complete_scripts": 302,
+      "mapped_ability_uses": 514,
+      "owner_priority_complete": 4
+    }
+  },
+  "semantic_boundaries": {
+    "exactly_lowered": [
+      "PlayerTurn, NotPlayerTurn, and ExtraTurn conditions",
+      "closed CheckSVar and SVarCompare integer or count comparisons",
+      "CantBlockBy and per-creature blocker selectors",
+      "supported player-targeted draw, mana, token, marker, investigate, pump, destroy, damage, zone-change, counter, untap, and animate effects"
+    ],
+    "still_quarantined": [
+      "stateful or event-object-dependent named Condition values",
+      "unresolved or open CheckSVar values and comparison operands",
+      "33 aggregate AttackerBlocked plus ValidBlocker cases whose cardinality cannot be retained by the current IR",
+      "ambiguous target-owner combinations"
+    ],
+    "claim": "structural translation and compiler validity only; runtime and semantic maturity remain T3.5 and T3.6 responsibilities"
+  },
+  "commands": [
+    {
+      "command": "cargo test --offline -p forge-porttools",
+      "exit_code": 0,
+      "result": "43 tests passed"
+    },
+    {
+      "command": "FORGE_T3_TOTAL_WORKERS=24 CARGO_BUILD_JOBS=24 scripts/t3_parallel_sweep.sh checkpoint",
+      "exit_code": 0,
+      "result": "format, clippy -D warnings, workspace tests, deterministic 24/12 translation replay, deterministic 6/1 planner replay, compiler/database validation, 235 oracle scenarios, and coverage passed",
+      "accelerated_core_phase_seconds": 36,
+      "full_workspace_verification_seconds": 28,
+      "total_seconds": 64
+    }
+  ],
+  "line_coverage": {
+    "covered": 25072,
+    "count": 31101,
+    "percent": 80.61477122922093,
+    "floor_percent": 80
+  },
+  "planner": {
+    "analyzed_scripts": 33290,
+    "scripts_with_confirmed_blockers": 24163,
+    "priority_scripts_with_confirmed_blockers": 182,
+    "confirmed_observations": 61756,
+    "unique_blocker_families": 5033,
+    "linked_root_fanout": 62777
+  },
+  "continuation": {
+    "t3_3_allocation_percent": 40,
+    "t3_5_allocation_percent": 30,
+    "t3_6_allocation_percent": 20,
+    "t3_9_allocation_percent": 10,
+    "t3_3_remains_active": true,
+    "next_t3_3_batch_source": "metrics/blocker_plan.json recommended_batches[0]",
+    "next_t3_3_families": [
+      "Hidden",
+      "ActivationZone",
+      "Defined=Targeted",
+      "UnlessCost",
+      "UnlessPayer"
+    ],
+    "rule": "T3.5 and T3.6 run in parallel with T3.3 and do not replace or pause the mapper lane; each mapper batch records measured deltas"
+  },
+  "review_history": [
+    {
+      "verdict": "FAIL",
+      "findings": [
+        "stateful conditions were initially represented as literal flag comparisons",
+        "aggregate AttackerBlocked cardinality was initially erased",
+        "focused selector assertions were incomplete"
+      ],
+      "remediation": "unsafe conditions and aggregate blocker combinations now fail closed; per-creature selectors and target-player scope have focused assertions"
+    },
+    {
+      "verdict": "PASS",
+      "reviewer": "independent strong-reasoning subagent",
+      "result": "no remaining blockers; all 43 forge-porttools tests passed"
+    }
+  ],
+  "setup_diagnostics": [
+    {
+      "result": "expected setup failure",
+      "reason": "the detached worktree did not initialize the already-local legacy submodule"
+    },
+    {
+      "result": "expected setup failure",
+      "reason": "linking the whole target directory made the portable raw coverage path resolve outside the clean worktree"
+    },
+    {
+      "result": "remediated",
+      "reason": "the pinned local submodule and only the reusable compiler caches were linked; all evidence outputs stayed local to the clean worktree"
+    }
+  ],
+  "artifacts": {
+    "FORGE_REBUILD_MASTER_PLAN.md": "f56f54ec3dffcb556695ff3e7048e1a8f909fd7147c6db6fd094c073e3d89cb4",
+    "PLAN_STATE.json": "9b2b6c537fc5672cc49cfb59b5640fb38293b808b96b3da778c3b282ce7ae00f",
+    "STATUS.md": "c071e54929f434dad58959f617b7a615bda4649982471213f3673f1ffba683ff",
+    "crates/forge-porttools/src/mapper.rs": "34748f545c0eb3dd74dab249e3128b780b665d87add1c58786176d955b01adbd",
+    "crates/forge-porttools/src/planner.rs": "02f9776cf58d6ddfa4fa006b3c504d61cacb8f0b994164e897b41b12bb6c866a",
+    "docs/specs/T3.3.md": "6599c1e428b6a61dd8b399cba34589bd5cd7db6927360db965f9dd306c9839a8",
+    "metrics/coverage.json": "cff139f5bfb42cf5bc3446b3841919d65237ad7f34b60e92059ce24d8129d43d",
+    "metrics/t3_parallel_validation.json": "ba77a80a9f3c2f1c0e3c62490e85afd2c2af56ff0242f8a0821d52384373a9f7",
+    "metrics/translation.json": "ca11bd2663ca71c98e0ff32426e17ff9476ec3ac7edad90e277436a615d2a43b",
+    "metrics/translation_quarantine.json": "8a74776040e5f378ecd27d3cd325d7dcb8f2c42f9d4169cf2b0e2b96019cc557",
+    "metrics/priority_coverage.json": "9a169c9b3f9c4ef8f7eaf983db667efafdc01c5a9609d36ca8bf05f4f4c9db07",
+    "metrics/blocker_plan.json": "9aaa1864897abab2844b7a33be6a4df48fd13115d70d8911952347f77a6a5336",
+    "metrics/api_coverage.json": "8d2e4f6d3cf71a25ca7bafc5ae5a883563f1a37869def35626575bf1707a9bc2",
+    "metrics/api_quarantine.json": "48e6366c4b8ba6490e897a8d8d33020e9a089348de28628fd160207046d1725b",
+    "metrics/card_maturity.json": "8a25bfe7b0cd4b3750d72ca7e02d10b75d8040ea3d6165398b6feeb4514324f7",
+    "metrics/project_status.json": "b3e224a9002f4dcccd8b33a20663676f5c6d8988a8ad1882f6b1efd732f5b842"
+  },
+  "untracked_local_evidence": {
+    "raw_coverage_sha256": "dff31232fcfc9be645d78f2b7bce544ca4a0c6f769660d0122e7e9e394bf23a6",
+    "identity_detail_sha256": "67229cc3169cb81231187dfd29056c932fcbeabaedecd0a91c04c1f7e7052aa9",
+    "retention": "local generated detail; the repository records sanitized hashes and reproducible commands"
+  },
+  "privacy_boundary": {
+    "full_grand_plan_in_public_repository": false,
+    "business_strategy_in_public_repository": false,
+    "private_research_package_in_public_repository": false,
+    "github_push_or_pull_request_performed": false,
+    "license": "GPL-3.0-only"
+  }
+}

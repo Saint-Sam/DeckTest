@@ -269,24 +269,31 @@
       "status": "in_progress",
       "branch": "task/T3.3-api-mapper",
       "attempts": 0,
-      "verification": "Fail-closed table-driven mapper packs passed cargo fmt, 40 forge-porttools tests, workspace tests, clippy -D warnings, deterministic full-corpus audit, recurring local verification, and the 80% workspace coverage gate locally. Exact effects, statics, structured costs, SVar-linked triggers/modes/replacements, player targeting, primitive restrictions and utility effects, closed selector comparisons, aggregate damage/combat markers, simple animation and transform, hand visibility, closed library searches and zone transitions, exact legacy defaults, fixed token bundles, Defined damage selectors, presence/count conditions, typed dynamic paid-X/selector/counter/devotion/distinct/history values, destroy-without-regeneration, and activation timing cover 15,506/43,649 top-level legacy ability uses (35.5243%); the remaining 28,143 uses are quarantined with stable global and per-API reason counts. PC-0006's all-confirmed-blocker planner analyzed 33,290 scripts, peeled all unknown parameters per independently evaluable node, and recorded 63,859 observations across 4,877 normalized families with linked-root fan-out 64,887. New operation variants append after the frozen registry and the existing card-database compatibility suite passes. T3.3 remains in progress for recommended multi-family batches under PC-0005 and PC-0006."
+      "allocation_percent": 40,
+      "coverage_exit_floor": "at least 60% complete legacy-script coverage plus the remaining T3 runtime and semantic gates",
+      "next_batch_status": "queued_after_current_exact_evidence",
+      "next_batch_source": "metrics/blocker_plan.json recommended_batches[0]",
+      "next_batch_families": ["Hidden", "ActivationZone", "Defined=Targeted", "UnlessCost", "UnlessPayer"],
+      "verification": "Fail-closed table-driven mapper packs passed cargo fmt and 43 forge-porttools tests before the exact checkpoint. The bounded PC-0006 batch adds exact turn-state condition composition, closed value-SVar comparisons, safe combat blocker selectors, and target-player scoping. Event-dependent named conditions and the 33 aggregate AttackerBlocked blocker filters remain explicitly quarantined after independent review rejected false-positive representations. Exact structural lowering covers 16,020/43,649 top-level legacy ability uses (36.7019%); the remaining 27,629 uses are reason-coded. The planner analyzed 33,290 scripts and recorded 61,756 observations across 5,033 normalized families with linked-root fan-out 62,777. The batch adds 302 complete emitted scripts, moving translation to 9,002/33,290 (27.0412%) and Owner-priority emission to 177/365. Structural mapping is not runtime or semantic evidence. T3.3 remains active as the 40% breadth lane under PC-0007; every subsequent batch must record before/after mapped uses, complete scripts, priority identities, quarantine changes, deterministic replay, and local verification until the exit floor is met."
     },
     "T3.4": {
       "status": "verified_local",
       "branch": "task/T3.4-frs-emitter",
       "attempts": 0,
-      "verification": "PASS local PC-0006/v1.8 checkpoint: 8,700/33,290 complete legacy scripts emitted as canonical .frs (26.1340%), with 24,590 fail-closed file quarantines and 8,700/8,700 compiler roundtrips against 38,306 identities and 113,234 printings. All 365 Owner-priority names resolve; 173/365 emit (47.3973%): 35/58 T0, 84/161 T1, and 54/146 T2. The 24-worker materialized pass and 12-worker hash-only replay matched fingerprint 392822b7a28413cec83d924fc970328e plus byte-identical quarantine and priority reports; the 6-worker and 1-worker blocker plans/details also matched after worker metadata normalization. The latest full local checkpoint completed in 76 seconds with a 37-second accelerated core phase, 41 forge-porttools tests, full workspace tests, clippy -D warnings, compiler/database validation, and workspace line coverage 24,807/30,784 (80.5841%), with no network or GitHub Actions."
+      "verification": "PASS local PC-0006/v1.8 checkpoint after independent-review remediation: 9,002/33,290 complete legacy scripts emitted as canonical .frs (27.0412%), with 24,288 fail-closed file quarantines and compiler roundtrips against 38,306 identities and 113,234 printings. All 365 Owner-priority names resolve and 177/365 emit (48.4932%). The 24-worker materialized pass and 12-worker hash-only replay matched fingerprint 24777cb027f7f674cb12ddad6db91a3b plus byte-identical quarantine and priority reports; the 6-worker and 1-worker blocker plans/details also matched after worker metadata normalization. The full local checkpoint completed in 91 seconds with a 38-second accelerated core phase, 43 forge-porttools tests, full workspace tests, clippy -D warnings, compiler/database validation, and workspace line coverage 25,070/31,098 (80.6161%), with no network or GitHub Actions."
     },
     "T3.5": {
       "status": "pending",
       "branch": "task/T3.5-capability-runtime-smoke",
       "attempts": 0,
+      "allocation_percent": 30,
       "entry_condition": "current bounded T3.3 batch lands and compiler-valid definition path remains stable"
     },
     "T3.6": {
       "status": "pending",
       "branch": "task/T3.6-semantic-gold-100",
       "attempts": 0,
+      "allocation_percent": 20,
       "entry_condition": "freeze the first 100 Commander semantic identities and strata",
       "checkpoint": "CP-CARD-SEMANTICS-100"
     },
@@ -303,6 +310,7 @@
       "status": "pending",
       "branch": "task/T3.9-four-integration-decks",
       "attempts": 0,
+      "allocation_percent": 10,
       "entry_condition": "T3.6 selection overlaps the four complete legal decks",
       "checkpoint": "CP-FOUR-PLAYER-POD"
     }
