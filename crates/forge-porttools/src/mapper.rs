@@ -6021,10 +6021,17 @@ pub(crate) fn card_selector_in_zone(
             ));
             continue;
         }
+        let branch = if zone == "battlefield" {
+            branch.to_string()
+        } else {
+            branch
+                .replace("YouCtrl", "YouOwn")
+                .replace("OppCtrl", "OppOwn")
+        };
         let Expression::Call {
             operation,
             mut arguments,
-        } = affected_selector_branch(branch)?
+        } = affected_selector_branch(&branch)?
         else {
             return Err(unsupported_value("ValidCards", value));
         };
@@ -7190,6 +7197,24 @@ mod tests {
         ] {
             assert_operation(line, operation, costs);
         }
+
+        let no_regen = map_line(
+            "A:SP$ DestroyAll | ValidCards$ Creature | NoRegen$ True | SpellDescription$ Destroy all.",
+        )
+        .unwrap_or_else(|error| panic!("NoRegen destroy should map: {}", error.message));
+        assert!(matches!(
+            no_regen.expression,
+            Expression::Call {
+                operation: Operation::Destroy,
+                ref arguments,
+            } if arguments.get(1) == Some(&Expression::Text("cannot_regenerate".to_string()))
+        ));
+        let error = map_line(
+            "A:SP$ DestroyAll | ValidCards$ Creature | NoRegen$ False | SpellDescription$ Destroy all.",
+        )
+        .err()
+        .unwrap_or_else(|| panic!("non-true NoRegen must quarantine"));
+        assert_eq!(error.code, "UNSUPPORTED_VALUE");
     }
 
     #[test]
@@ -7598,7 +7623,7 @@ mod tests {
         ));
 
         let graveyard = map_line(
-            "S:Mode$ Continuous | Affected$ Card.Self | AddKeyword$ Vigilance | IsPresent$ Lesson.YouOwn | PresentZone$ Graveyard | Description$ Vigilance.",
+            "S:Mode$ Continuous | Affected$ Card.Self | AddKeyword$ Vigilance | IsPresent$ Lesson.YouCtrl | PresentZone$ Graveyard | Description$ Vigilance.",
         )
         .unwrap_or_else(|error| panic!("zone-bound presence should map: {}", error.message));
         assert!(expression_contains_operation(
@@ -7609,6 +7634,19 @@ mod tests {
             &graveyard.expression,
             Operation::OwnedBy
         ));
+        assert!(!expression_contains_operation(
+            &graveyard.expression,
+            Operation::ControlledBy
+        ));
+
+        for zone in ["Command", "Stack", "Graveyard,Hand"] {
+            let error = map_line(&format!(
+                "S:Mode$ Continuous | Affected$ Card.Self | AddKeyword$ Vigilance | IsPresent$ Card.YouCtrl | PresentZone$ {zone} | Description$ Vigilance."
+            ))
+            .err()
+            .unwrap_or_else(|| panic!("unsupported PresentZone must quarantine"));
+            assert_eq!(error.code, "UNSUPPORTED_VALUE");
+        }
 
         for line in [
             "S:Mode$ AlternativeCost | ValidSA$ Spell | ValidCard$ Card.Self | ValidPlayer$ You | Cost$ 0 | EffectZone$ All | IsPresent$ Card.IsCommander+YouCtrl | Description$ Free with commander.",
