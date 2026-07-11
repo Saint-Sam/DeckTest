@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-11T19:30:00Z",
+  "task": "T3.3",
+  "batch": "TokenTapped",
+  "technical_result": "pass",
+  "product_binding": {
+    "mapper_commit": "bba0df88445255d6b20133da31f166d6d42f4d5f",
+    "exact_product_commit": "bba0df88445255d6b20133da31f166d6d42f4d5f",
+    "exact_product_tree": "53a348e7d32465cc525d936c8cb920602f5e1b45",
+    "verified_in_detached_worktree": true
+  },
+  "source_binding": {
+    "legacy_forge_commit": "1f0a3e0815822d8f58f798e0304b33d4534248b1",
+    "legacy_source": "existing local pinned submodule checkout",
+    "translation_fingerprint": "c95991c0bb7a1117e44db7a92819608d",
+    "cargo_lock_sha256": "f9fb1cd7230cb19b3277c1f4cb4c6750699e188f197cff4ef4e2965363675268"
+  },
+  "verification_environment": {
+    "local_only": true,
+    "github_actions_used": false,
+    "network_attempted": false,
+    "install_performed": false,
+    "worker_ceiling": 24
+  },
+  "coverage_delta": {
+    "before": {
+      "complete_scripts": 10268,
+      "mapped_ability_uses": 17923,
+      "owner_priority_complete": 185,
+      "quarantined_scripts": 23022,
+      "quarantined_ability_uses": 25726
+    },
+    "after": {
+      "complete_scripts": 10304,
+      "total_scripts": 33290,
+      "complete_script_percent": 30.952237909282065,
+      "mapped_ability_uses": 17990,
+      "total_ability_uses": 43649,
+      "owner_priority_complete": 185,
+      "owner_priority_requested": 365,
+      "quarantined_scripts": 22986,
+      "quarantined_ability_uses": 25659
+    },
+    "gain": {
+      "complete_scripts": 36,
+      "mapped_ability_uses": 67,
+      "owner_priority_complete": 0
+    }
+  },
+  "semantic_boundaries": {
+    "exactly_lowered": [
+      "TokenTapped=True as explicit typed create-token entry state",
+      "static and dynamic token amounts",
+      "multi-script token creation with one shared entry state"
+    ],
+    "still_quarantined": [
+      "TokenTapped values other than True",
+      "TokenAttacking and other unrepresented token states"
+    ],
+    "claim": "structural translation and compiler validity only; runtime and card-specific semantic maturity remain separate T3.5 and T3.6 evidence"
+  },
+  "review_history": [
+    {
+      "reviewer": "independent strong-reasoning subagent",
+      "verdict": "PASS",
+      "result": "typed state, strict validation, multi-token and dynamic-amount behavior, unsupported attacking-token quarantine, compatibility, and 68 targeted tests reviewed"
+    }
+  ],
+  "commands": [
+    {
+      "command": "FORGE_T3_TOTAL_WORKERS=24 CARGO_BUILD_JOBS=24 scripts/t3_parallel_sweep.sh checkpoint",
+      "exit_code": 0,
+      "accelerated_core_phase_seconds": 36,
+      "full_workspace_verification_seconds": 51,
+      "total_seconds": 94
+    }
+  ],
+  "line_coverage": {
+    "covered": 26939,
+    "count": 33410,
+    "percent": 80.63154744088597,
+    "floor_percent": 80
+  },
+  "planner": {
+    "analyzed_scripts": 33290,
+    "scripts_with_confirmed_blockers": 22819,
+    "priority_scripts_with_confirmed_blockers": 174,
+    "confirmed_observations": 54165,
+    "unique_blocker_families": 5271,
+    "linked_root_fanout": 55173
+  },
+  "continuation": {
+    "t3_3_remains_active": true,
+    "next_t3_3_batch_source": "metrics/blocker_plan.json recommended_batches[0]"
+  }
+}
