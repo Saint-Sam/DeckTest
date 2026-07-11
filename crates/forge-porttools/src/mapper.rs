@@ -895,7 +895,13 @@ fn extract_presence_condition(
             "PresentCompare requires a matching IsPresent selector",
         )
     })?;
-    let selector = presence_selector(present)?;
+    let selector = match parameters.get("PresentZone").map(String::as_str) {
+        None | Some("Battlefield") => presence_selector(present)?,
+        Some(zone @ ("Graveyard" | "Hand" | "Exile" | "Library")) => {
+            card_selector_in_zone(present, &zone.to_ascii_lowercase())?
+        }
+        Some(zone) => return Err(unsupported_value("PresentZone", zone)),
+    };
     let comparison = parameters
         .get("PresentCompare")
         .map(String::as_str)
@@ -906,9 +912,12 @@ fn extract_presence_condition(
         "PresentCompare",
     )?;
     let mut unconditioned = expression.clone();
-    unconditioned
-        .fields
-        .retain(|field| !matches!(field.key.as_deref(), Some("IsPresent" | "PresentCompare")));
+    unconditioned.fields.retain(|field| {
+        !matches!(
+            field.key.as_deref(),
+            Some("IsPresent" | "PresentCompare" | "PresentZone")
+        )
+    });
     Ok((unconditioned, Some(condition)))
 }
 
@@ -3785,6 +3794,7 @@ fn map_destroy_all(
             "Cost",
             "ValidCards",
             "ValidTgts",
+            "NoRegen",
             "SpellDescription",
             "StackDescription",
             "AILogic",
@@ -3795,7 +3805,14 @@ fn map_destroy_all(
         parameters,
         Operation::ControlledBy,
     )?;
-    let expression = call(Operation::Destroy, vec![affected]);
+    let mut arguments = vec![affected];
+    if let Some(value) = parameters.get("NoRegen") {
+        if value != "True" {
+            return Err(unsupported_value("NoRegen", value));
+        }
+        arguments.push(Expression::Text("cannot_regenerate".to_string()));
+    }
+    let expression = call(Operation::Destroy, arguments);
     mapped_direct(prefix, api, parameters, expression)
 }
 
@@ -7121,6 +7138,11 @@ mod tests {
                 0,
             ),
             (
+                "A:SP$ DestroyAll | ValidCards$ Creature | NoRegen$ True | SpellDescription$ Destroy all.",
+                Operation::Destroy,
+                0,
+            ),
+            (
                 "A:SP$ GainLife | Defined$ You | LifeAmount$ 3 | SpellDescription$ Gain life.",
                 Operation::GainLife,
                 0,
@@ -7573,6 +7595,19 @@ mod tests {
                 operation: Operation::TimingCondition,
                 ..
             })
+        ));
+
+        let graveyard = map_line(
+            "S:Mode$ Continuous | Affected$ Card.Self | AddKeyword$ Vigilance | IsPresent$ Lesson.YouOwn | PresentZone$ Graveyard | Description$ Vigilance.",
+        )
+        .unwrap_or_else(|error| panic!("zone-bound presence should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &graveyard.expression,
+            Operation::ZoneIs
+        ));
+        assert!(expression_contains_operation(
+            &graveyard.expression,
+            Operation::OwnedBy
         ));
 
         for line in [
