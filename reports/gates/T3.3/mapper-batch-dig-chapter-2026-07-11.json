@@ -1,0 +1,156 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-11T18:02:10Z",
+  "task": "T3.3",
+  "batch": "RestrictValid-Dig-Chapter-RemoveCreatureTypes-OriginGraveyard",
+  "technical_result": "pass",
+  "evidence_model": "product commits followed by exact detached verification and an evidence-only commit",
+  "product_binding": {
+    "mapper_source_commit": "a470cf18fde0747b2d5b0edcfdb0fd306b9da711",
+    "serialization_remediation_commit": "15741debf16e095f34ef72d612c9e1fd0cfb16a6",
+    "exact_product_commit": "15741debf16e095f34ef72d612c9e1fd0cfb16a6",
+    "exact_product_tree": "9f12d567397be8fdac35d44972086b79d9f3cfea",
+    "verified_in_detached_worktree": true,
+    "product_source_changed_by_verification": false
+  },
+  "source_binding": {
+    "legacy_forge_commit": "1f0a3e0815822d8f58f798e0304b33d4534248b1",
+    "legacy_source": "existing local pinned submodule checkout",
+    "translation_fingerprint": "b4071ac6723aeecacf1a4bd57fc2f7ec",
+    "cargo_lock_sha256": "de6fd35c5ca22f50f15ca86a334b1d491f8efc9c5a1b05766eb9b0226faa286f"
+  },
+  "verification_environment": {
+    "local_only": true,
+    "github_actions_used": false,
+    "network_attempted": true,
+    "network_transfer_used": false,
+    "network_note": "A superseded worktree submodule command attempted its configured HTTPS URL and was blocked before transfer. The passing exact worktree used the existing local pinned checkout as its file-protocol source.",
+    "install_performed": false,
+    "worker_ceiling": 24,
+    "primary_translation_workers": 24,
+    "fingerprint_replay_workers": 12,
+    "planner_workers": 6,
+    "planner_replay_workers": 1,
+    "cache_strategy": "isolated exact-worktree target and output trees; no duplicate agents or GitHub runners"
+  },
+  "coverage_delta": {
+    "before": {
+      "complete_scripts": 9275,
+      "mapped_ability_uses": 16391,
+      "owner_priority_complete": 178,
+      "quarantined_scripts": 24015,
+      "quarantined_ability_uses": 27258
+    },
+    "after": {
+      "complete_scripts": 9647,
+      "total_scripts": 33290,
+      "complete_script_percent": 28.978672273956143,
+      "mapped_ability_uses": 16980,
+      "total_ability_uses": 43649,
+      "mapped_ability_use_percent": 38.90123485074114,
+      "owner_priority_complete": 180,
+      "owner_priority_requested": 365,
+      "quarantined_scripts": 23643,
+      "quarantined_ability_uses": 26669
+    },
+    "gain": {
+      "complete_scripts": 372,
+      "mapped_ability_uses": 589,
+      "owner_priority_complete": 2,
+      "quarantined_scripts_removed": 372,
+      "quarantined_ability_uses_removed": 589
+    }
+  },
+  "semantic_boundaries": {
+    "exactly_lowered": [
+      "reviewed vendored RestrictValid branches with typed recipient and dynamic amount",
+      "closed library Dig shapes with typed counts, filter, destinations, and canonical option metadata",
+      "numbered Chapter events and effects resolving every referenced cost-free DB SVar",
+      "ordered creature-subtype removal before Continuous, Animate, and AnimateAll replacement types",
+      "source-bound closed-zone moves carrying explicit origin and destination guards"
+    ],
+    "still_quarantined": [
+      "new or unreviewed restricted-mana branch vocabulary",
+      "open Dig chooser, imprint, movement, and destination shapes",
+      "unresolved or non-effect Chapter links",
+      "graveyard moves needing LKI, remembered-object, or collection bindings",
+      "all shapes that lose a rules-observable distinction in the current typed IR"
+    ],
+    "claim": "structural translation and compiler validity only; runtime and card-specific semantic maturity remain separate T3.5 and T3.6 evidence"
+  },
+  "review_history": [
+    {
+      "verdict": "FAIL",
+      "findings": [
+        "source-bound closed-zone moves initially lost their origin guard",
+        "restricted-mana validation initially accepted arbitrary suffixes after a known head",
+        "dynamic and type-replacement edge tests were incomplete"
+      ]
+    },
+    {
+      "verdict": "FAIL_P2",
+      "finding": "planner deduplication undercounted distinct Chapter SVars sharing one blocker family"
+    },
+    {
+      "remediation": [
+        "move_zone_from preserves source origin and destination",
+        "RestrictValid accepts only the reviewed vendored branch vocabulary",
+        "dynamic mana and Dig plus Animate and AnimateAll tests were added",
+        "distinct Chapter keyword roots now sum safely within a deduplicated family",
+        "new operations are append-only and prior serialized operation indices are pinned"
+      ],
+      "verdict": "PASS_BY_EXACT_CHECKPOINT"
+    },
+    {
+      "reviewer": "independent strong-reasoning subagent",
+      "verdict": "PASS",
+      "result": "No P0/P1 product or fail-closed findings after exact-checkpoint remediation; one stale narrative metric was corrected to the exact 58,340 observation count.",
+      "residual_boundary": "structural mapping only; runtime and card semantics remain outside this batch"
+    }
+  ],
+  "commands": [
+    {
+      "command": "cargo test --offline --workspace",
+      "exit_code": 0,
+      "result": "full workspace passed after serialization-prefix remediation"
+    },
+    {
+      "command": "FORGE_T3_TOTAL_WORKERS=24 CARGO_BUILD_JOBS=24 scripts/t3_parallel_sweep.sh checkpoint",
+      "exit_code": 0,
+      "result": "format, clippy -D warnings, full workspace tests, deterministic translation and planner replay, compiler/database validation, 235 oracle scenarios, and coverage passed",
+      "accelerated_core_phase_seconds": 36,
+      "full_workspace_verification_seconds": 51,
+      "total_seconds": 94
+    }
+  ],
+  "line_coverage": {
+    "covered": 26477,
+    "count": 32886,
+    "percent": 80.51146384479718,
+    "floor_percent": 80
+  },
+  "planner": {
+    "analyzed_scripts": 33290,
+    "scripts_with_confirmed_blockers": 23496,
+    "priority_scripts_with_confirmed_blockers": 179,
+    "confirmed_observations": 58340,
+    "unique_blocker_families": 5250,
+    "linked_root_fanout": 59463
+  },
+  "continuation": {
+    "t3_3_allocation_percent": 40,
+    "t3_5_allocation_percent": 30,
+    "t3_6_allocation_percent": 20,
+    "t3_9_allocation_percent": 10,
+    "t3_3_remains_active": true,
+    "next_t3_3_batch_source": "metrics/blocker_plan.json recommended_batches[0]",
+    "next_t3_3_families": [
+      "Hidden=True",
+      "TargetsValid",
+      "A:Regenerate",
+      "Optional",
+      "DefinedPlayer"
+    ],
+    "rule": "T3.5 and T3.6 remain parallel lanes and do not replace or pause measured T3.3 script translation and ability-use mapping"
+  }
+}
