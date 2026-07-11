@@ -20,6 +20,7 @@ scripts=(
   scripts/run_nightmare_suite.sh
   scripts/fuzz_nightly.sh
   scripts/fuzz_local_parallel.sh
+  scripts/t3_parallel_sweep.sh
   scripts/card_regression.sh
   scripts/local_workers.sh
   scripts/local_verify.sh
@@ -44,10 +45,12 @@ scripts=(
 )
 
 tools=(
+  tools/check_rayon_boundary.py
   tools/perf_diff.py
   tools/criterion_to_perf.py
   tools/metrics_write.py
   tools/oracle_semantic_metrics.py
+  tools/write_card_maturity.py
 )
 
 for script in "${scripts[@]}"; do

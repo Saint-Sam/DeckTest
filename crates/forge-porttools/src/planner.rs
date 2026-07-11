@@ -168,9 +168,7 @@ struct CardModel {
 pub(crate) fn plan_blocker_batches(
     options: BlockerPlanOptions<'_>,
 ) -> Result<BlockerPlanReport, String> {
-    if options.jobs == 0 {
-        return Err("blocker planner jobs must be positive".to_string());
-    }
+    crate::validate_local_worker_count("blocker planner", options.jobs)?;
     if options.batch_size == 0 || options.batch_count == 0 {
         return Err("blocker planner batch dimensions must be positive".to_string());
     }
@@ -945,16 +943,17 @@ mod tests {
 
         let output = root.join("blocker-plan.json");
         let details = root.join("blocker-details.json");
-        let report = plan_blocker_batches(BlockerPlanOptions {
+        let options = |jobs| BlockerPlanOptions {
             root: &cards,
             priority: &priority,
             output: &output,
             details: &details,
-            jobs: 2,
+            jobs,
             batch_size: 2,
             batch_count: 2,
-        })
-        .unwrap_or_else(|error| panic!("planner fixture should pass: {error}"));
+        };
+        let report = plan_blocker_batches(options(2))
+            .unwrap_or_else(|error| panic!("planner fixture should pass: {error}"));
         assert_eq!(report.analyzed_scripts, 2);
         assert_eq!(report.scripts_with_confirmed_blockers, 1);
         assert_eq!(report.priority_scripts_with_confirmed_blockers, 1);
@@ -965,19 +964,25 @@ mod tests {
 
         let first = fs::read(&output)
             .unwrap_or_else(|error| panic!("could not read first planner output: {error}"));
-        plan_blocker_batches(BlockerPlanOptions {
-            root: &cards,
-            priority: &priority,
-            output: &output,
-            details: &details,
-            jobs: 2,
-            batch_size: 2,
-            batch_count: 2,
-        })
-        .unwrap_or_else(|error| panic!("repeated planner fixture should pass: {error}"));
+        plan_blocker_batches(options(1))
+            .unwrap_or_else(|error| panic!("repeated planner fixture should pass: {error}"));
         let second = fs::read(&output)
             .unwrap_or_else(|error| panic!("could not read second planner output: {error}"));
-        assert_eq!(first, second);
+        let mut first_report: serde_json::Value = serde_json::from_slice(&first)
+            .unwrap_or_else(|error| panic!("could not decode first planner output: {error}"));
+        let mut second_report: serde_json::Value = serde_json::from_slice(&second)
+            .unwrap_or_else(|error| panic!("could not decode second planner output: {error}"));
+        first_report["jobs"] = serde_json::Value::Null;
+        second_report["jobs"] = serde_json::Value::Null;
+        assert_eq!(first_report, second_report);
+
+        let details_at_one = fs::read(&details)
+            .unwrap_or_else(|error| panic!("could not read one-worker details: {error}"));
+        plan_blocker_batches(options(2))
+            .unwrap_or_else(|error| panic!("final planner fixture should pass: {error}"));
+        let details_at_two = fs::read(&details)
+            .unwrap_or_else(|error| panic!("could not read two-worker details: {error}"));
+        assert_eq!(details_at_one, details_at_two);
 
         fs::remove_dir_all(&root)
             .unwrap_or_else(|error| panic!("could not remove planner fixture: {error}"));

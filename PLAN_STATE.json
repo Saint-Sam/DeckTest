@@ -1,4 +1,14 @@
 {
+  "plan_version": "1.8",
+  "plan_authority": {
+    "master_plan": "FORGE_REBUILD_MASTER_PLAN.md",
+    "active_repository": "https://github.com/Saint-Sam/DeckTest",
+    "license": "GPL-3.0-only",
+    "verification_mode": "local_only_no_github_actions",
+    "private_grand_plan": "external_private_authority_not_vendored_in_public_decktest",
+    "public_grand_plan_scope": "sanitized_bridge_intake_decisions_and_evidence_only",
+    "github_egress": "owner_performs_or_explicitly_approves_pushes_and_pull_requests"
+  },
   "tier": 3,
   "tasks": {
     "T0.1": {
@@ -86,17 +96,19 @@
       "verification": "scripts/vl.sh passed locally with dependency-free RON scenario parsing, scenario runner, invariant assertions, hash determinism checks, JUnit-style XML output, CLI lint/oracle commands, and a smoke oracle scenario"
     },
     "T1.10": {
-      "status": "verified_local",
+      "status": "verified_local_with_signed_tier_addendum",
       "branch": "task/T1.10-legacy-oracle-port",
       "attempts": 0,
       "verification": "scripts/vl.sh passed locally with 7 supplemental legacy game-simulation oracle scenarios ported, first-turn draw-skip rule fixed, poison/winner scenario support added, and mapping evidence committed",
-      "scope_decision": "Q-2026-07-07-T1.10 resolved by owner Option 1: use broader local forge-gui-desktop game-simulation tests as the T1.10 source set"
+      "scope_decision": "Q-2026-07-07-T1.10 resolved by owner Option 1: use broader local forge-gui-desktop game-simulation tests as the T1.10 source set",
+      "addendum": "reports/gates/T1/T1.10-LEGACY-SOURCE-ADDENDUM.md: 18 available rows mapped, 8 ported/covered, 8 blocked with explicit capability, 2 not oracle-meaningful, and no nonexistent ranked top-100 claim"
     },
     "T1.11": {
-      "status": "verified_local",
+      "status": "verified_demo_only",
       "branch": "task/T1.11-forge-cli-terminal-client",
       "attempts": 0,
-      "verification": "scripts/vl.sh passed locally; `cargo run -p forge-cli -- play --demo --seed 5 --replay-out target/forge-cli/t1_11_demo.frsreplay` finished a game, and `cargo run -p forge-cli -- roundtrip target/forge-cli/t1_11_demo.frsreplay` preserved the seed/action list and final hash"
+      "verification": "scripts/vl.sh passed locally; `cargo run -p forge-cli -- play --demo --seed 5 --replay-out target/forge-cli/t1_11_demo.frsreplay` finished a scripted game, and `cargo run -p forge-cli -- roundtrip target/forge-cli/t1_11_demo.frsreplay` preserved the seed/action list and final hash",
+      "claim_correction": "The scripted demo/replay harness passed, but it is not a human-finishable terminal client. Human play remains pending T1.R10 and CP-HUMAN-PLAY-CLI per reports/gates/T1/T1.11-DEMO-ONLY-ADDENDUM.md."
     },
     "T1.12": {
       "status": "verified_local",
@@ -163,6 +175,13 @@
       "branch": "remediation/T1.R9-final-tree-remote-ci",
       "attempts": 0,
       "verification": "GitHub Actions ci #18 run 28883217715 passed all required jobs for exact T1 gate evidence commit 2198493284299d9721d59ab3a23e3b2a2ab71f56"
+    },
+    "T1.R10": {
+      "status": "pending",
+      "branch": "task/T1.R10-interactive-human-play-cli",
+      "attempts": 0,
+      "entry_condition": "CP-FOUR-PLAYER-POD passed and production legal-action/deck/replay path is stable",
+      "checkpoint": "CP-HUMAN-PLAY-CLI"
     },
     "T2.1": {
       "status": "verified_remote",
@@ -256,7 +275,27 @@
       "status": "verified_local",
       "branch": "task/T3.4-frs-emitter",
       "attempts": 0,
-      "verification": "PASS local PC-0006 checkpoint: 8,700/33,290 complete legacy scripts emitted as canonical .frs (26.1340%), with 24,590 fail-closed file quarantines and 8,700/8,700 compiler roundtrips against 38,306 identities and 113,234 printings. All 365 Owner-priority names resolve; 173/365 emit (47.3973%): 35/58 T0, 84/161 T1, and 54/146 T2. The 24-worker materialized pass and 12-worker hash-only replay matched fingerprint 392822b7a28413cec83d924fc970328e plus byte-identical quarantine and priority reports. Staged local validation reduced the comparable core phase from 56 to 37 seconds (33.93%) while 40 forge-porttools tests, full workspace tests, clippy -D warnings, compiler/database validation, and workspace line coverage 24,784/30,758 (80.5774%) passed with no network or GitHub Actions."
+      "verification": "PASS local PC-0006/v1.8 checkpoint: 8,700/33,290 complete legacy scripts emitted as canonical .frs (26.1340%), with 24,590 fail-closed file quarantines and 8,700/8,700 compiler roundtrips against 38,306 identities and 113,234 printings. All 365 Owner-priority names resolve; 173/365 emit (47.3973%): 35/58 T0, 84/161 T1, and 54/146 T2. The 24-worker materialized pass and 12-worker hash-only replay matched fingerprint 392822b7a28413cec83d924fc970328e plus byte-identical quarantine and priority reports; the 6-worker and 1-worker blocker plans/details also matched after worker metadata normalization. The latest full local checkpoint completed in 76 seconds with a 37-second accelerated core phase, 41 forge-porttools tests, full workspace tests, clippy -D warnings, compiler/database validation, and workspace line coverage 24,807/30,784 (80.5841%), with no network or GitHub Actions."
+    },
+    "T3.5": {
+      "status": "pending",
+      "branch": "task/T3.5-capability-runtime-smoke",
+      "attempts": 0,
+      "entry_condition": "current bounded T3.3 batch lands and compiler-valid definition path remains stable"
+    },
+    "T3.6": {
+      "status": "pending",
+      "branch": "task/T3.6-semantic-gold-100",
+      "attempts": 0,
+      "entry_condition": "freeze the first 100 Commander semantic identities and strata",
+      "checkpoint": "CP-CARD-SEMANTICS-100"
+    },
+    "T3.9": {
+      "status": "pending",
+      "branch": "task/T3.9-four-integration-decks",
+      "attempts": 0,
+      "entry_condition": "T3.6 selection overlaps the four complete legal decks",
+      "checkpoint": "CP-FOUR-PLAYER-POD"
     }
   },
   "gates_passed": [
@@ -267,6 +306,48 @@
     "T2",
     "CP-DSL"
   ],
+  "checkpoints": {
+    "CP-STATUS-TRUTH": {
+      "status": "in_progress",
+      "task": "T3.7",
+      "evidence": [
+        "STATUS.md",
+        "metrics/card_maturity.json"
+      ]
+    },
+    "CP-CARD-SEMANTICS-100": {
+      "status": "pending",
+      "task": "T3.6"
+    },
+    "CP-FOUR-PLAYER-POD": {
+      "status": "pending",
+      "task": "T3.9"
+    },
+    "CP-HUMAN-PLAY-CLI": {
+      "status": "pending",
+      "task": "T1.R10",
+      "owner_input": "O12"
+    },
+    "CP-HUMAN-TRACE": {
+      "status": "pending",
+      "task": "T4.H1"
+    },
+    "CP-TEACHER-CORPUS-ALPHA": {
+      "status": "pending",
+      "owner_input": "O13"
+    },
+    "CP-HUMAN-LEARNING-PROMOTION": {
+      "status": "pending"
+    },
+    "CP-TRAINER-UI": {
+      "status": "pending",
+      "owner_input": "O14"
+    },
+    "CP-PODBENCH-WORKER": {
+      "status": "pending",
+      "note": "passing the worker contract does not authorize S1 exposure or launch"
+    }
+  },
   "metrics_snapshot": "metrics/project_status.json",
   "gate_reviews": {
     "T0": {
@@ -332,6 +413,23 @@
       "verdict": "PASS: no blocking findings. Both prior P1s are closed; exact evidence and live checks reconcile.",
       "technical_remediation": "Complete. Cargo offline mode is forced, packet validation binds current HEAD/tree, unexpected checkout changes fail closed, and an explicit stale-checkout test was rejected.",
       "owner_decision": "Owner chose Option 2 on 2026-07-10, then approved O4 in the Codex thread: approve CP-DSL freeze and proceed to T3.2. PC-0004 keeps the 100 definitions unverified and defers card-specific semantic promotion to T3.6 and CP-PORT-20."
+    },
+    "ADR-0012": {
+      "status": "accepted",
+      "reviewer": "gpt-5.6-sol xhigh independent Gate Reviewer",
+      "signoff": "reports/gates/ADR-0012/SIGNOFF.md",
+      "evidence": "reports/gates/ADR-0012/EVIDENCE.json",
+      "decision": "Rayon is permitted only for forge-porttools production orchestration with a 24-worker ceiling, translator/planner 1-versus-N determinism, structured boundary guard, and passing offline dependency audit."
+    }
+  },
+  "plan_changes": {
+    "PC-0007": {
+      "status": "accepted_2026-07-10",
+      "approved_substantive_sha256": "8a63ec707562fd50353b028c27152dd215186b014c35af919e7c870f2a02aed6",
+      "linked_grand_plan_pc_sha256": "9972644f84fc2f8f4f501ec450d2ae9df5ed72560556b3fb521b7290a94322b9",
+      "gate_review": "reports/gates/PC-0007/GATE_REVIEW.md",
+      "owner_approval": "reports/gates/PC-0007/OWNER_APPROVAL.md",
+      "implementation_sequence": "docs/transition/PC-0007_IMPLEMENTATION_SEQUENCE.md"
     }
   },
   "owner_input": {
@@ -342,7 +440,11 @@
     "O9-PC-0001-PC-0003": "complete_2026-07-09",
     "O9-PC-0004": "complete_2026-07-10_owner_option_2",
     "O9-PC-0005": "complete_2026-07-10_owner_approved_bounded_dsl_amendment_and_priority_list",
-    "O9-PC-0006": "complete_2026-07-10_owner_approved_t3_all_blocker_batching_and_local_validation_acceleration"
+    "O9-PC-0006": "complete_2026-07-10_owner_approved_t3_all_blocker_batching_and_local_validation_acceleration",
+    "O9-PC-0007": "complete_2026-07-10_owner_approved_exact_dual_track_bridge_and_private_public_repository_split",
+    "O12": "pending_CP-HUMAN-PLAY-CLI_45_to_120_minutes",
+    "O13": "pending_CP-TEACHER-CORPUS-ALPHA_20_to_40_hours_across_sessions",
+    "O14": "pending_CP-TRAINER-UI_60_to_120_minutes"
   },
   "process_improvements": {
     "PI-2026-07-09-local-multiworker-fuzz": {
@@ -358,6 +460,13 @@
       "request": "Owner requested faster local execution using available hardware without wasteful workers, duplicate caches, subagents, or GitHub Actions.",
       "implementation": "PC-0006 implemented one Cargo cache/output tree, a full-corpus all-confirmed-blocker planner, unknown-parameter peeling, weighted co-occurrence batches, a 24-worker materialized sweep, and a hash-only replay overlapped with compiler/planner/audit work. The measured core checkpoint fell from 56 to 37 seconds (33.93%) without weakening full local gates.",
       "constraints": "Cap workers when serial finalization, disk I/O, or tail imbalance dominates; do not push or trigger GitHub Actions."
+    },
+    "PI-2026-07-10-grand-plan-v2-bridge": {
+      "status": "complete",
+      "target": "master plan v1.8 and dual-track product governance",
+      "request": "Owner supplied the DeckTest transition package, approved PC-0007/GP-PC-0001, and selected the recommended private/public repository split.",
+      "implementation": "Preserved standalone GPL Forge, added the focused Local Trainer and report-only PodBench bridge, truthful two-axis card maturity, semantic/pod/human-play checkpoints, governed human-teacher sequence, explicit Owner time, and private Grand Plan placement.",
+      "constraints": "No public Grand Plan business/private research volumes, no GitHub Actions, no unapproved egress/install/training/release, and no API-boundary GPL safe-harbor claim."
     }
   }
 }

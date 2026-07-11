@@ -27,12 +27,16 @@ def main() -> int:
     parser.add_argument("--primary-translation-workers", type=int, required=True)
     parser.add_argument("--replay-translation-workers", type=int, required=True)
     parser.add_argument("--planner-workers", type=int, required=True)
+    parser.add_argument("--planner-replay-workers", type=int, required=True)
     parser.add_argument("--audit-workers", type=int, required=True)
     parser.add_argument("--parallel-phase-seconds", type=int, required=True)
     parser.add_argument("--verification-seconds", type=int, required=True)
     parser.add_argument("--total-seconds", type=int, required=True)
     parser.add_argument("--sequential-baseline-seconds", type=int, default=0)
     parser.add_argument("--deterministic", choices=("true", "false"), required=True)
+    parser.add_argument(
+        "--planner-deterministic", choices=("true", "false"), required=True
+    )
     parser.add_argument("--translation", type=Path, required=True)
     parser.add_argument("--blocker-plan", type=Path, required=True)
     parser.add_argument("--coverage", type=Path)
@@ -49,6 +53,18 @@ def main() -> int:
         parser.error("worker counts must be positive")
     if args.replay_translation_workers < 0:
         parser.error("replay worker count cannot be negative")
+    if args.planner_replay_workers < 0:
+        parser.error("planner replay worker count cannot be negative")
+    all_worker_counts = (
+        args.total_workers,
+        args.primary_translation_workers,
+        args.replay_translation_workers,
+        args.planner_workers,
+        args.planner_replay_workers,
+        args.audit_workers,
+    )
+    if any(value > 24 for value in all_worker_counts):
+        parser.error("worker counts cannot exceed the 24-worker local ceiling")
 
     translation = read_json(args.translation)
     blocker_plan = read_json(args.blocker_plan)
@@ -63,7 +79,7 @@ def main() -> int:
         )
 
     payload = {
-        "schema_version": 2,
+        "schema_version": 3,
         "mode": args.mode,
         "schedule": (
             "materialize_then_parallel_replay_compile_plan_audit"
@@ -78,7 +94,9 @@ def main() -> int:
             "primary_translation": args.primary_translation_workers,
             "fingerprint_replay": args.replay_translation_workers,
             "blocker_planner": args.planner_workers,
+            "blocker_planner_replay": args.planner_replay_workers,
             "map_audit_reserved": args.audit_workers,
+            "ceiling": 24,
         },
         "durations_seconds": {
             "accelerated_core_phase": args.parallel_phase_seconds,
@@ -88,6 +106,7 @@ def main() -> int:
             "core_saved_percent": saved_percent,
         },
         "deterministic_parallel_replay": args.deterministic == "true",
+        "deterministic_blocker_plan_replay": args.planner_deterministic == "true",
         "translation": {
             "total_scripts": translation.get("total_scripts"),
             "emitted_scripts": translation.get("emitted_scripts"),

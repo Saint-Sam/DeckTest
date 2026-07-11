@@ -1,7 +1,9 @@
-# Forge 2.0 / forge-rs
+# DeckTest / Forge 2.0 / forge-rs
 
 Forge 2.0 is a GPL-3.0-only Rust rebuild of Forge, guided by
 `FORGE_REBUILD_MASTER_PLAN.md`.
+
+Current generated readiness and card-maturity counts are in `STATUS.md`.
 
 This repository has completed T0-T2 and is currently in Tier 3. The Orchestrator-owned state
 is `PLAN_STATE.json`; Owner-facing updates live under `reports/owner/`.
@@ -13,8 +15,8 @@ See `INSTALL.md` for the full install request and ZIP fallback.
 Use a recursive clone so the pinned legacy Forge reference is available:
 
 ```bash
-git clone --recurse-submodules https://github.com/Saint-Sam/Forge-2.0.git forge-2.0
-cd forge-2.0
+git clone --recurse-submodules https://github.com/Saint-Sam/DeckTest.git DeckTest
+cd DeckTest
 bash scripts/bootstrap_toolchain.sh --check
 bash scripts/local_verify.sh task
 ```

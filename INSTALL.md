@@ -6,8 +6,8 @@ toolchain used by this repository.
 ## Recommended: Git Clone
 
 ```bash
-git clone --recurse-submodules https://github.com/Saint-Sam/Forge-2.0.git forge-2.0
-cd forge-2.0
+git clone --recurse-submodules https://github.com/Saint-Sam/DeckTest.git DeckTest
+cd DeckTest
 bash scripts/bootstrap_toolchain.sh --check
 bash scripts/local_verify.sh task
 ```
@@ -19,7 +19,7 @@ the pinned legacy-reference manifest, and the baseline build and local task
 verification do not require the legacy source tree.
 
 ```bash
-cd Forge-2.0-main
+cd DeckTest-main
 bash scripts/bootstrap_toolchain.sh --check
 bash scripts/local_verify.sh task
 ```

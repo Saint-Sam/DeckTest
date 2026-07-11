@@ -25,6 +25,20 @@ use std::{
     path::{Path, PathBuf},
 };
 
+pub(crate) const MAX_LOCAL_WORKERS: usize = 24;
+
+pub(crate) fn validate_local_worker_count(label: &str, jobs: usize) -> Result<(), String> {
+    if jobs == 0 {
+        return Err(format!("{label} jobs must be positive"));
+    }
+    if jobs > MAX_LOCAL_WORKERS {
+        return Err(format!(
+            "{label} jobs {jobs} exceed the local worker ceiling {MAX_LOCAL_WORKERS}"
+        ));
+    }
+    Ok(())
+}
+
 /// Paths used by one deterministic Scryfall catalog import.
 #[derive(Clone, Copy, Debug)]
 pub struct CatalogImportOptions<'a> {
@@ -1134,7 +1148,8 @@ fn repository_relative(path: &Path) -> String {
 mod tests {
     use super::{
         optional_bool_flag, optional_usize_flag, parse_named_flags, required_usize_flag,
-        source_classification, stream_cards, CatalogBuilder,
+        source_classification, stream_cards, validate_local_worker_count, CatalogBuilder,
+        MAX_LOCAL_WORKERS,
     };
     use forge_carddef::{CardClassification, CardLayout};
     use std::io::Cursor;
@@ -1207,5 +1222,20 @@ mod tests {
         assert!(parse_named_flags(&duplicate, &["--jobs"]).is_err());
         assert!(parse_named_flags(&args, &["--jobs"]).is_err());
         assert!(parse_named_flags(&args[..1], &["--jobs"]).is_err());
+    }
+
+    #[test]
+    fn enforces_the_local_worker_ceiling() {
+        assert_eq!(validate_local_worker_count("translation", 1), Ok(()));
+        assert_eq!(
+            validate_local_worker_count("translation", MAX_LOCAL_WORKERS),
+            Ok(())
+        );
+        assert!(validate_local_worker_count("translation", 0).is_err());
+        let error = match validate_local_worker_count("translation", MAX_LOCAL_WORKERS + 1) {
+            Ok(()) => panic!("oversubscription must fail closed"),
+            Err(error) => error,
+        };
+        assert!(error.contains("exceed the local worker ceiling 24"));
     }
 }

@@ -21,7 +21,7 @@ resolver = "2"
 [workspace.package]
 edition = "2021"
 license = "GPL-3.0-only"
-repository = "https://github.com/Saint-Sam/Forge-2.0"
+repository = "https://github.com/Saint-Sam/DeckTest"
 rust-version = "1.79"
 
 [workspace.lints.rust]

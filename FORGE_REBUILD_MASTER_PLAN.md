@@ -1,4 +1,4 @@
-# FORGE-RS REBUILD — MASTER EXECUTION PLAN v1.7
+# FORGE-RS REBUILD — MASTER EXECUTION PLAN v1.8
 
 **Status:** Ready for agent orchestration — includes Gate Review & Checkpoint protocol (§15), plan governance (§16), and the Owner Interface (§17: expectation briefs, owner input map, trouble bulletins)
 **This document is the sole authority.** If any agent instruction, prior knowledge, or tool default conflicts with this plan, the plan wins; if the plan is ambiguous, use the Question Queue (§15.5) — do not guess.
@@ -29,6 +29,17 @@ fan-out and Owner-priority cards, and proposes co-occurrence-aware mapper
 batches. Local validation uses one shared cache/output and a measured staged
 schedule: a saturated materializing sweep followed by hash-only deterministic
 replay overlapped with compiler, blocker-planner, and mapping-audit work.
+**v1.8 amendment (2026-07-10):** Owner-approved and Gate-Reviewer-recommended
+PC-0007. Preserve the standalone GPL Forge successor, bring forward a focused
+Local Trainer, and add a separate report-only PodBench bridge. Card status now
+uses separate scope and implementation-maturity axes; T3 gains runtime-smoke,
+100-card semantic, complete-deck, and four-player-pod checkpoints; human play,
+trace capture, teacher data, learning, and Trainer UI are independently gated.
+The full Grand Plan/business/private-research package remains private outside
+public DeckTest. Only sanitized bridge/intake/evidence records may be public,
+GitHub Actions remain disabled, and the Owner controls every push/PR egress.
+See `docs/plan-changes/PC-0007-local-trainer-and-grand-plan-bridge.md` and
+`reports/gates/PC-0007/OWNER_APPROVAL.md`.
 **Prerequisite artifact:** `forge-rs` proof-of-concept (validated: 70 ns state clone, 5,080 playouts/sec, monotonic MCTS difficulty ladder)
 **License constraint:** GPL-3.0-only for any component that derives from Card-Forge/forge content (card scripts, AI profiles, rules-test scenarios)[^1]
 
@@ -166,6 +177,13 @@ Do **not** read the whole repository, the whole plan, or the legacy codebase spe
 
 Rebuild Forge — an unofficial rules engine and AI opponent for Magic: The Gathering with deck editor, constructed/limited/adventure play — as a Rust-core, search-native application whose AI difficulty genuinely scales, and which runs on Windows, macOS, Linux, Android, iOS, and the browser (WASM) from one codebase.
 
+The project has two related but separate outcomes. **Forge Standalone / Local
+Trainer** is the GPL human-playable application, local research environment,
+and trace-export surface. **PodBench** is a separate report-only service that
+may consume only a pinned promoted headless build after its own rights,
+boundary, security, evidence, and launch gates. PodBench customers never
+receive game controls through the service. Neither outcome de-scopes the other.
+
 ### 1.2 Success metrics (measured, not asserted)
 
 | Metric | Target | Measured by |
@@ -173,7 +191,7 @@ Rebuild Forge — an unofficial rules engine and AI opponent for Magic: The Gath
 | Rules correctness | 100% pass on oracle corpus (≥3,000 scenarios by GA) | `scripts/run_oracle.sh` |
 | Catalog coverage | 100% of English printing records in the pinned metadata snapshot imported and indexed | `metrics/card_catalog_coverage.json` |
 | Identity classification | 100% of source Oracle identities classified as verified playable, unverified playable, quarantined, out-of-v1, or catalog-only | `metrics/card_identity_coverage.json` |
-| Playable card coverage | ≥95% of legacy Forge's scripted cards verified playable; quarantined/catalog-only records never count | `metrics/card_coverage.json` |
+| Product-eligible card coverage | ≥95% of in-v1 legacy-scripted Oracle identities reach `product_eligible`; every lower maturity stage remains separately visible and quarantined/catalog-only records never count | `metrics/card_maturity.json` |
 | AI strength ladder | Each tier ≥65% win rate vs tier below over ≥400 mirror games | `cargo run -p forge-arena` |
 | AI latency | Master tier ≤2.0 s/decision desktop, Apprentice ≤150 ms mobile | `metrics/ai_latency.json` |
 | State clone | ≤200 ns at 200-card game scale | `cargo bench -p forge-core` |
@@ -207,6 +225,19 @@ Rebuild Forge — an unofficial rules engine and AI opponent for Magic: The Gath
 - One mechanics `CardDefinition` is compiled per Oracle identity and referenced
   by all printings of that identity. Catalog, identity, playability, and legacy
   parity are separate generated metrics and must never be conflated.
+- **Scope classification** is one of `in_v1_scope`, `out_of_v1`, or
+  `catalog_only`. It answers whether the identity belongs in the v1 mechanics
+  target, not whether implementation works.
+- **Implementation maturity** is the highest identity-bound evidence stage:
+  `absent`, `parsed`, `mapped_partial`, `structurally_translated`,
+  `compiler_valid`, `runtime_smoke_passed`, `semantic_verified`,
+  `pod_integration_verified`, `ai_supported`, or `product_eligible`.
+- Units never mix in one funnel. Catalog identities, printings, legacy scripts,
+  ability uses, scenario commands, semantic combinations, and platform
+  artifacts each report their own literal unit. Structural translation is not
+  semantic verification, and compiler validity is not a playable-product claim.
+- `STATUS.md` and `metrics/card_maturity.json` are the generated Owner-facing
+  scoreboard. No single percentage is the project north star.
 
 ---
 
@@ -592,10 +623,11 @@ flowchart LR
 | T3.2 (`PARALLEL-OK` with T2.5+) | Legacy-format parser: full grammar for `A:`/`T:`/`R:`/`S:`/`K:`/`SVar:` lines into a legacy-AST; must parse ≥99.5% of corpus (parse-only) |
 | T3.3 | API mapper: table-driven translation of each legacy ability API + parameter set into IR. Implementation order combines T0.6 frequency, Owner priority, linked fan-out, and the deterministic all-confirmed-blocker co-occurrence plan. Each mapping family lands with its own test pack. `metrics/api_coverage.json` tracks {api, legacy_uses, mapped, verified}; `metrics/blocker_plan.json` records blocker families and recommended batches. |
 | T3.4 | `.frs` emitter + resource-aware local batch driver: `cargo run -p forge-porttools -- translate --all --jobs <N>` plus deterministic tier-aware reporting for `assets/coverage_priority.txt`, output fingerprints, hash-only replay, and `scripts/t3_parallel_sweep.sh` development/checkpoint modes. |
-| T3.5 | Auto smoke harness: for every translated card, synthesize a sandbox state where it is castable/playable, execute, assert invariants + expected zone destinations. Zero human input per card. |
-| T3.6 | Semantic test packs: for the top 2,000 play-rate cards (list mined from legacy precons + draft data), Rules-Oracle Agent writes behavior scenarios (e.g., "Lightning Bolt to face = 3 less life"). |
-| T3.7 | Coverage dashboard: `tools/coverage_report.py` → `docs/CARD_COVERAGE.md` with separate catalog/identity/playable/legacy metrics, per-set %, quarantine reason histogram, provenance, and API gaps feeding new T2.x keyword tasks. |
+| T3.5 | Capability-specific runtime smoke: for every compiler-valid definition, synthesize a sandbox state where its supported capabilities execute through production actions; assert invariants and expected zone destinations. Unsupported setup synthesis is reason-coded and never passes implicitly. |
+| T3.6 | Semantic test packs: freeze the first 100 Commander-priority identities across explicit strata for CP-CARD-SEMANTICS-100, then expand toward the top 2,000 play-rate cards mined from legacy precons/draft data. Card-specific behavior evidence is required for `semantic_verified`. |
+| T3.7 | Truthful status dashboard: `tools/write_card_maturity.py` generates `STATUS.md`, `metrics/card_maturity.json`, and untracked per-identity detail with separate catalog scope, identity maturity, legacy-script, ability-use, scenario, and platform units; the quarantine histogram and API gaps still feed T2.x tasks. |
 | T3.8 | Hand-port lane: quarantined cards whose reason code is `NEEDS_NEW_PRIMITIVE` generate spec tickets automatically (`tools/quarantine_to_tickets.py`) routed to T2 backlog. |
+| T3.9 | Four complete legal compiled integration decks chosen to overlap the semantic gold set. Produce complete-card blocker units, deterministic deck manifests, and the card-driven setup needed by CP-FOUR-PLAYER-POD. |
 
 **Card-Port Agent operating procedure (spawn N in parallel; each owns one quarantine reason-code batch):**
 
@@ -604,10 +636,12 @@ workers in the single shared output/cache tree. Simultaneous materializing
 translation sweeps are forbidden: measurement showed that their filesystem
 and memory contention lengthens the critical path. The checkpoint schedule
 first gives all 24 workers to one materializing sweep, then overlaps a
-12-worker hash-only replay with a 6-worker blocker plan, mapping audit, and
-translated-card compiler. Reports are normalized only for worker-count
+12-worker hash-only replay with a 6-worker blocker plan, a 1-worker planner
+replay, mapping audit, and translated-card compiler. Reports are normalized only for worker-count
 metadata; output fingerprints, quarantine records, and priority results must
-match byte-for-byte. No GitHub Actions, duplicate Cargo caches, duplicate
+match byte-for-byte, and normalized planner reports plus details must match at
+one versus multiple workers. Rust and shell entry points enforce a 24-worker
+ceiling. No GitHub Actions, duplicate Cargo caches, duplicate
 output trees, or duplicate worktrees are used for routine T3 verification.
 
 The inner development loop runs `scripts/t3_parallel_sweep.sh development`:
@@ -969,9 +1003,18 @@ Sign-off record format: `reports/gates/T<k>/SIGNOFF.md` = checklist table + comm
 | **CP-KERNEL** | after T1.7 (SBAs) merges | Reviewer audits the kernel API surface itself (§3.3 invariants read against real code); cheap to fix now, catastrophic later. |
 | **CP-LAYERS** | after T2.4 merges, **before any dependent task starts** | The project's crown-jewel checkpoint: (a) reviewer authors 15 novel layer-interaction scenarios (dependency ordering per CR 613.8, timestamp ties, characteristic-defining abilities, Humility-class stacking) — ≥14/15 must pass; (b) differential run vs legacy engine on a 100-card layered subset, every divergence adjudicated in writing; (c) memoization-invalidation audit: reviewer inspects the cache-invalidation paths and demands a fuzz target that interleaves mutations with characteristic queries; (d) explicit sign-off sentence: "I believe layer ordering is correct for the following reasons…". Three failed CP-LAYERS attempts triggers §16.3 kill-criteria review of the layer design. |
 | **CP-DSL** | after T3.1 (DSL spec) before mass translation | Freeze review of the card language and identity model using the §8.1 packet: 100 reviewer-authored `unverified_playable` language-stress definitions across the exact 25 mandatory mechanics strata, four per stratum, with catalog-only coverage verified separately; no definition may claim `verified_playable` without card-specific semantic evidence; recursive closed argument signatures; 100/100 lossless round-trips; ≥50 malformed-source diagnostics with file/line/column; compiled card-to-kernel integration scenarios without independent fixture effects; deterministic database hashes across three clean builds; all semantic packs and four cross-target checks executed locally; corpus expressiveness report; and ≥90% curated mutant kill rate with no surviving P0/P1 validation mutant. Review is against an exact commit in a detached worktree. Every awkward language case patches the spec before mass translation; card fidelity promotion remains gated by T3.6 and CP-PORT-20. |
+| **CP-STATUS-TRUTH** | immediately after PC-0007 ratification | Generated `STATUS.md` and `metrics/card_maturity.json` separate scope, identity maturity, legacy scripts, ability uses, scenarios, and platform artifacts. Structural/compiler evidence may not be labeled semantic, playable, or product-eligible. |
 | **CP-PORT-20** | when card coverage crosses 20% | Translation-quality sample: 50 random shipped cards; reviewer diffs oracle text against observed behavior in the sandbox (`forge-cli sandbox --card <name>`). ≥48/50 faithful required; systematic error classes reopen mapper tasks. |
+| **CP-CARD-SEMANTICS-100** | after the frozen T3.6 100-card Commander set | Every selected identity has card-specific expected behavior, production-action execution, deterministic replay, and reason-coded failures; 100/100 must pass before reference-deck or semantic-readiness claims. |
+| **CP-FOUR-PLAYER-POD** | after T3.9's four complete decks are compiler/runtime clean | Run ≥1,000 deterministic four-seat, 40-life, card-driven games through normal casting, priority, triggers, combat, commander zone/tax, elimination, and replay. Require zero invariant or hidden-information-canary violations plus runtime/resource metrics. |
+| **CP-HUMAN-PLAY-CLI** | after T1.R10 | Owner completes a real prompted local game against a random-legal or heuristic bot and replays every human/AI action. Scripted winners and post-start direct mutation do not count. |
 | **CP-AI-LADDER** | after T4.6 calibration | Reviewer personally plays ≥5 games vs Expert and Master; sanity-reads T4.10 decision reports for pathological reasoning; verifies no hidden-information leak by code inspection of the `PlayerView` boundary + a canary test (poisoned hidden card that a peeking AI would exploit — arena must show no exploitation delta). |
 | **CP-NN-GO** | T4.8 decision point | Go/no-go on shipping the NN path per the ≥60%-at-equal-latency bar; a no-go here is a healthy outcome, not a failure. |
+| **CP-HUMAN-TRACE** | after T4.H1 trace contracts | Versioned manifests/decisions/reviews reconstruct the exact actor `PlayerView`, legal actions, replay, and hidden-information canaries; capture is opt-in and private. |
+| **CP-TEACHER-CORPUS-ALPHA** | after validated Owner collection | 20 games, 500 validated choices, 100 reviewed states, and four archetypes pass replay-family split isolation and immutable dataset-manifest checks. |
+| **CP-HUMAN-LEARNING-PROMOTION** | after human-informed experiments | Promotion requires fixed datasets/splits, ablations, and independently green V02 Tracks A, B, and C; demonstrations/preferences are never automatic optimal labels. |
+| **CP-TRAINER-UI** | after the focused desktop Trainer slice | Owner completes one full Trainer game and post-game review using prepared launch/review material; capture controls, prompts, replay, and review state must be comprehensible. |
+| **CP-PODBENCH-WORKER** | before any real report-service worker | A pinned promoted build emits the versioned report artifact only after applicable Forge, V00-V06, CP-BOUNDARY, SBOM/provenance, and conveyance evidence. Passing this checkpoint does not authorize S1 exposure or launch. |
 | **CP-UI-CORE** | after T5.3 | Reviewer completes a full game using only the UI on desktop; every engine prompt reachable (contract test §10.6 green) and comprehensible. |
 | **CP-RELEASE** | before any public artifact | Human-only: license/credits audit, IP posture (§1.4, §10.8), source-offer link, first-run network-consent dialog. |
 
@@ -1090,6 +1133,9 @@ A tier gate is not complete without its Brief: this is check **G11** in §15.3.
 | O9 | Any PLAN-CHANGE / de-scope rung / kill-criteria | Decide (§16) | PC/assessment doc + a Brief-style plain summary with a recommendation | varies |
 | O10 | CP-RELEASE | Final human audit: credits, licenses, first-run consent dialog, store copy | Release audit packet | 60 min |
 | O11 | Weekly | Read the heartbeat (§16.5), especially its "least confident" paragraph | Heartbeat | 5 min |
+| O12 | CP-HUMAN-PLAY-CLI | Complete one real prompted local game and replay | Copy-paste launch command, deck/bot setup, EXPECT/RED-FLAG guide | 45–120 min |
+| O13 | CP-TEACHER-CORPUS-ALPHA | Over multiple sessions, play/review 20 games, 500 choices, and 100 states across four archetypes | Private capture setup, consent/purpose statement, progress report, review queue | 20–40 h total |
+| O14 | CP-TRAINER-UI | Complete one prepared desktop Trainer game and post-game review | Launch command/build, review script, capture-state explanation, EXPECT/RED-FLAG guide | 60–120 min |
 
 Everything not listed here is handled without you; if an agent needs Owner input outside this map, it goes through the Question Queue flagged `OWNER-INPUT`, and the ask itself must follow §17.1 rules.
 
@@ -1100,9 +1146,10 @@ Agents: the tier-gate Brief's "TRY IT YOURSELF" section MUST include at least th
 | Tier | DO (copy-paste) | EXPECT (good) | RED FLAG (bad) |
 | --- | --- | --- | --- |
 | T0 | `scripts/local_verify.sh task` | Every line green, ends `LOCAL VERIFICATION PASSED`; local matrix records macOS plus available target builds | Any red; "command not found" (toolchain drift) |
-| T1 | `cargo run -p forge-cli -- play --demo` | You play a real game of simplified Magic in the terminal: numbered choices each turn, game ends with a winner banner and a saved replay path | Hang with no prompt; being allowed an illegal move (e.g., casting with no mana); crash text |
+| T1 | `cargo run -p forge-cli -- play --demo` | A seeded scripted starter game ends with a winner and saved replay; this checks the demo/replay harness only | Any crash, hang, illegal scripted action, missing replay, or claim that this is already human-play evidence |
+| T1.R10 | Run the prepared `forge-cli` prompted-game command from its Owner Brief | You choose numbered legal actions against a baseline bot, reach a normal result, and replay every human/AI action | Scripted choices, direct post-start state mutation, illegal options, hang, or replay mismatch |
 | T2 | `scripts/run_oracle.sh --all` then `cargo run -p forge-cli -- replay tests/nightmare/showcase.frsreplay --narrate` | `1200+ passed, 0 failed, 0 skipped`; a narrated replay of a complex game where effects like "creatures lose all abilities" visibly behave per the printed narration | Any `skipped` count (tests being dodged); narration contradicting card text |
-| T3 (M3) | Open `docs/CARD_COVERAGE.md`; then `cargo run -p forge-cli -- sandbox --card "Lightning Bolt"` | Catalog is 100% imported, identities are 100% classified, legacy playable coverage is ≥60%, and the sandbox deals 3 damage | Coverage terms conflated, missing/unclassified records, or sandbox behavior unlike printed text |
+| T3 (M3) | `python3 tools/write_card_maturity.py --check` then read `STATUS.md` | All English printings and identities are represented; scope, compiler, runtime, semantic, pod, AI, and product-eligible stages are shown separately with evidence | Units conflated, structural/compiler work called semantic/playable, stale generation, or a card promoted without evidence |
 | T4 (M4) | `cargo run -p forge-arena -- --ladder --games 100` then `cargo run -p forge-cli -- play --ai master` | Ladder table where each tier beats the one below (win% 65–75%); playing Master YOU should lose or sweat — expect it to make plays you didn't see coming | Any rung at ~50% (tiers identical) or 100% (broken opponent); Master making obviously idiotic plays repeatedly (report the replay file) |
 | T5 (M5) | Launch the desktop app; complete one game vs Apprentice using only the mouse | Every prompt the game asks has an obvious on-screen control; you never feel stuck; board stays smooth with many creatures out | Any state where you can't tell what the game is waiting for — that is a P1 by definition, send a screenshot |
 | T6 | In-app: run an 8-seat draft, then a 4-player Commander game vs 3 AIs | AI drafters produce sane 2-color decks; Commander game completes with command-zone rules working | Draft AI with 5-color garbage piles; Commander tax not increasing |
@@ -1150,6 +1197,102 @@ Bulletin triggers (Orchestrator sends within 24 h): any P0; any blocker open >3 
 | UI screenshot diffs | intended restyle vs regression | check theme.rs history; if intended, rebaseline via review; else bisect | Only if user-visible: TB-P2 with before/after images |
 | Agent stuck in fix-fail loop | wrong hypothesis, spec ambiguity | enforce hard stops; convert to QID if spec ambiguity | Visible in weekly heartbeat blocker list |
 | AI plays visibly dumb at high tier | eval bug, search budget mis-set, hidden-info leak fixed a crutch | reproduce from replay; `LastDecisionReport` inspection; re-run CP-AI-LADDER canary | TB-P1 with the replay attached and plain diagnosis |
+
+---
+
+## Section 18 — v1.8 dual-track and human-teacher amendment
+
+This section incorporates accepted PC-0007 and overrides conflicting earlier
+wording. The exact substantive revisions approved by the Owner are recorded in
+`reports/gates/PC-0007/OWNER_APPROVAL.md`; the Gate Review is in the same
+directory. The full Grand Plan, business strategy, and private research
+package are private external authority and must not be copied into public
+DeckTest. Public files are limited to sanitized Forge bridge, intake, decision,
+and evidence records.
+
+### 18.1 Execution order and work allocation
+
+1. Record the immutable T1.10 source clarification and T1.11 demo-only
+   correction. Preserve signed kernel history; human-finishable play remains
+   pending T1.R10 and CP-HUMAN-PLAY-CLI.
+2. Enforce ADR-0012: Rayon is porttools-only production orchestration, worker
+   counts are 1–24, translator and planner outputs replay deterministically,
+   and the structured boundary plus offline dependency audit stay green.
+3. Complete CP-STATUS-TRUTH. Generated status uses the two-axis model and
+   literal units; no readiness claim may bypass it.
+4. Finish the in-progress bounded PC-0006 T3.3 mapper batch. After that batch,
+   plan concurrent capacity as 40% mapper breadth, 30% runtime smoke, 20%
+   semantic gold-set evidence, and 10% complete deck/pod integration. Keep at
+   most one batch active in each lane.
+5. Extend blocker planning only with versioned, measured completion units:
+   full decks/pods, semantic strata, Trainer scenarios, priority/archetype/global
+   gain, and engineering minutes. Cards per hour never outranks semantic defects.
+6. Complete T3.5, T3.6, T3.9, CP-CARD-SEMANTICS-100, and
+   CP-FOUR-PLAYER-POD before serious AI-arena or PodBench-worker claims.
+7. Implement T1.R10 and CP-HUMAN-PLAY-CLI, then the deterministic heuristic/
+   search baseline, focused desktop Trainer, and CP-TRAINER-UI.
+8. Only after the UI/play path and applicable data decision are green may
+   T4.H1, CP-HUMAN-TRACE, CP-TEACHER-CORPUS-ALPHA, human-informed experiments,
+   and CP-HUMAN-LEARNING-PROMOTION proceed in that order.
+
+Broader mobile, quest, draft, collection, and public WASM work remains on the
+standalone roadmap and is not a prerequisite for PodBench feasibility.
+
+### 18.2 Local Trainer and human-teacher contracts
+
+The focused Trainer owns board/hand/zones, stack/priority, targets, modes,
+payments, combat, card text, deck setup, replay timeline, post-game decision
+review, and explicit capture controls. It shares a versioned `PilotIntent`
+interface with research/report consumers but does not share customer controls.
+
+Human research uses versioned `GameManifest`, `DecisionRecord`, and
+`PostGameReview` contracts plus a D0–D6 dataset lifecycle. Capture is opt-in;
+every decision reconstructs the actor's exact `PlayerView` and legal-action
+set; replay-family splits, hidden-information canaries, immutable manifests,
+purpose, provenance, and retention state are mandatory. Full-state debugging
+data cannot become model input or a label.
+
+Human moves are demonstrations or preferences, not automatic optimal labels.
+Human-derived training cannot begin until the applicable V00 dataset row,
+CP-AI-BENCH, CP-HUMAN-TRACE, CP-TEACHER-CORPUS-ALPHA, and fixed replay-family
+splits are green. Promotion separately requires ablations and independent V02
+Track A outcome, Track B decision, and Track C blinded-human evidence.
+Requested inactive AI capabilities fail nonzero or return `NOT_IMPLEMENTED`;
+only an explicit non-gate `--allow-skip` may turn that into a successful skip.
+Metrics distinguish `not_run`, `not_implemented`, `run_failed`, and `passed`.
+
+### 18.3 Evidence, coverage, and maintainability
+
+T3+ gate evidence uses two commits: a product commit, clean detached local
+verification of that exact commit/tree, then an evidence-only commit. Records
+bind product/tree/generator/evidence commits, source and lockfile hashes,
+commands, logs, and generation time; stale-target evidence fails closed.
+
+The 80% workspace line floor remains. Reproducible local reports are required
+before enforcing changed lines ≥90%, forge-porttools ≥85%, blocker-planner
+branches ≥90%, registered mapper families with tests 100%, and curated
+mapper/planner mutation score ≥90%.
+
+Schedule behavior-preserving core/mapper extraction after the current T3
+batch and before T4/Trainer coupling. Split display/runtime/format card
+artifacts only after size, decode, RSS, startup, clone, and legal-action
+baselines plus a separate ADR. No dependency is accepted without its ADR and
+Gate Reviewer disposition.
+
+Prepare task branches, PR descriptions, and sanitized local evidence without
+network. The Owner performs or explicitly approves pushes/PRs to
+`Saint-Sam/DeckTest`; never upload private datasets, model artifacts, Grand
+Plan business files, or unrelated data. GitHub Actions remain prohibited.
+
+### 18.4 PodBench boundary
+
+PodBench is report-only and consumes only a pinned promoted headless build.
+CP-PODBENCH-WORKER requires applicable Forge gates, V00/V01/V02/V03/V04/V06,
+CP-BOUNDARY, SBOM/provenance, and conveyance evidence. Passing it proves only
+the worker/report contract: it does not authorize signup, customers, external
+production data, ads, payments, public shares, training, distribution, or S1
+exposure. Each remains a separate Owner/professional gate. No API boundary is
+treated as a GPL safe harbor.
 
 ---
 
@@ -1303,45 +1446,30 @@ scripts/build_wasm.sh   # wasm-bindgen + static site bundle
 
 ---
 
-## 📎 Appendix C — Minimal CI workflow skeleton (T0.3 starting point)
+## 📎 Appendix C — Local-only review workflow (PC-0001/PC-0007)
 
-```yaml
-name: ci
-on: [push, pull_request]
-jobs:
-  quality:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with: { submodules: true }
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo fmt --all -- --check
-      - run: cargo clippy --workspace --all-targets -- -D warnings
-      - run: cargo test --workspace
-      - run: scripts/run_oracle.sh --all
-      - run: scripts/review/determinism.sh
-      - run: cargo llvm-cov --workspace --fail-under-lines 80
-  cross:
-    strategy:
-      matrix: { os: [windows-latest, macos-latest] }
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo test --workspace
-  wasm:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: rustup target add wasm32-unknown-unknown
-      - run: cargo build -p forge-app-wasm --target wasm32-unknown-unknown --release
-  android:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: cargo install cargo-ndk && rustup target add aarch64-linux-android
-      - run: cargo ndk -t arm64-v8a build -p forge-app-android --release
+Hosted workflows are disabled by Owner decision. `.github/workflows/` contains
+documentation only; historical workflow files remain under
+`.github/workflows-disabled/` and must not be enabled. Routine verification is
+offline and uses the single shared local Cargo cache/target tree.
+
+```bash
+export CARGO_NET_OFFLINE=true
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo test --workspace --quiet
+scripts/run_oracle.sh --all
+scripts/review/determinism.sh
+scripts/check_coverage.sh 80
+python3 tools/check_rayon_boundary.py
 ```
+
+T3 integration additionally runs `scripts/t3_parallel_sweep.sh checkpoint`.
+Gate evidence is generated from an exact product commit in a clean detached
+local worktree and lands in a separate evidence-only commit. Local branches,
+PR text, and sanitized attachments may be prepared without network; the Owner
+performs or explicitly approves every GitHub push/PR action. No GitHub Actions
+run is required or permitted.
 
 ---
 
@@ -1380,7 +1508,7 @@ Scenario(
 5. First ticket batch emitted: T0.1–T0.6, each with `plan_refs` populated (§0.9).
 6. Local campaign checklist from §4.3 registered; no hosted workflow or unapproved background scheduler active.
 7. Owner channel recorded (ADR-0008) and O1/O2 input items from §17.3 completed; the T0 tier-start Owner Brief drafted and sent — the Owner's first artifact arrives before any code does.
-8. This document committed at repo root at v1.3; all agents instructed it supersedes their priors, and that ambiguity routes to the Question Queue, never to guessing.
+8. This document committed at repo root at v1.8; all agents instructed it supersedes their priors, and that ambiguity routes to the Question Queue, never to guessing.
 
 ---
 

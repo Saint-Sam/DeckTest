@@ -1,0 +1,169 @@
+{
+  "caveats": [
+    "All English printings are catalog-represented; printing count is not mechanics maturity.",
+    "Parsing and mapping use script/ability units and are not projected onto Oracle identity maturity.",
+    "Compiler-valid includes the explicitly unverified CP-DSL stress corpus and is not semantic or product eligibility.",
+    "Missing optional stage evidence produces zero promotions and never an implicit pass."
+  ],
+  "detail": {
+    "path": "target/card-maturity/identities.json",
+    "record_count": 38306,
+    "sha256": "3f96e1492d56fc40a657406cb1e9ce108ea5f8bf67618baffffc68f678b93420",
+    "tracked": false
+  },
+  "generated_at": "2026-07-11T01:14:25.927486+00:00",
+  "generator": "tools/write_card_maturity.py",
+  "implementation_maturity": {
+    "compiler_evidence": {
+      "card_database_sha256": "a36c10bee8f6ea719ae981765d8a1f0e2d17a1c251ca47c23014bd31192d6e4f",
+      "cp_dsl_definition_tree_sha256": "a610dc560deadda953b81d7132149cd2881011e4adaafa4360ee29f263282ea9",
+      "cp_dsl_stress_identity_count": 100,
+      "outside_in_v1_scope": 0,
+      "translated_definition_tree_sha256": "a96426a82e052e681cce07d874f805a06991c5b3eeb158228a503ea624f83332",
+      "translated_identity_count": 8700,
+      "translation_fingerprint": "392822b7a28413cec83d924fc970328e",
+      "union_identity_count": 8768
+    },
+    "cumulative_counts": {
+      "absent": 32792,
+      "ai_supported": 0,
+      "compiler_valid": 8768,
+      "mapped_partial": 8768,
+      "parsed": 8768,
+      "pod_integration_verified": 0,
+      "product_eligible": 0,
+      "runtime_smoke_passed": 0,
+      "semantic_verified": 0,
+      "structurally_translated": 8768
+    },
+    "exclusive_counts": {
+      "absent": 24024,
+      "ai_supported": 0,
+      "compiler_valid": 8768,
+      "mapped_partial": 0,
+      "parsed": 0,
+      "pod_integration_verified": 0,
+      "product_eligible": 0,
+      "runtime_smoke_passed": 0,
+      "semantic_verified": 0,
+      "structurally_translated": 0
+    },
+    "optional_stage_evidence": {
+      "ai_supported": {
+        "identity_count": 0,
+        "path": "metrics/ai_card_support.json",
+        "present": false,
+        "sha256": null
+      },
+      "pod_integration_verified": {
+        "identity_count": 0,
+        "path": "metrics/pod_integration.json",
+        "present": false,
+        "sha256": null
+      },
+      "product_eligible": {
+        "identity_count": 0,
+        "path": "metrics/product_eligibility.json",
+        "present": false,
+        "sha256": null
+      },
+      "runtime_smoke_passed": {
+        "identity_count": 0,
+        "path": "metrics/card_runtime_smoke.json",
+        "present": false,
+        "sha256": null
+      },
+      "semantic_verified": {
+        "identity_count": 0,
+        "path": "metrics/card_semantics_100.json",
+        "present": false,
+        "sha256": null
+      }
+    },
+    "population": 32792,
+    "stages_low_to_high": [
+      "absent",
+      "parsed",
+      "mapped_partial",
+      "structurally_translated",
+      "compiler_valid",
+      "runtime_smoke_passed",
+      "semantic_verified",
+      "pod_integration_verified",
+      "ai_supported",
+      "product_eligible"
+    ],
+    "unit": "in_v1_scope_oracle_identity"
+  },
+  "legacy_ability_use_pipeline": {
+    "quarantined_uses": 28143,
+    "structurally_tested_uses": 15506,
+    "total": 43649,
+    "unit": "legacy_ability_use"
+  },
+  "legacy_script_pipeline": {
+    "compiler_valid_translated_definitions": 8700,
+    "parsed": 33290,
+    "quarantined_definitions": 24590,
+    "total": 33290,
+    "unit": "legacy_script"
+  },
+  "local_verification": {
+    "deterministic_blocker_plan_replay": true,
+    "deterministic_translation_replay": true,
+    "github_actions_used": false
+  },
+  "overall_completion_percent": null,
+  "plan_version": "1.8",
+  "platform_evidence": {
+    "cross_compile_artifacts_passed": 4,
+    "targets": [
+      "wasm32-unknown-unknown",
+      "aarch64-linux-android",
+      "aarch64-apple-ios",
+      "x86_64-pc-windows-msvc"
+    ],
+    "unit": "cross_compile_artifact"
+  },
+  "priority_cards": {
+    "catalog_resolved": 365,
+    "compiler_valid_translated_definitions": 173,
+    "requested": 365,
+    "unit": "owner_priority_card_name"
+  },
+  "scenario_evidence": {
+    "distinct_operations": 19,
+    "distinct_scenario_commands": 65,
+    "hand_authored_scenarios": 133,
+    "observed_semantic_atom_combinations": 1839,
+    "scenario_files": 1200,
+    "unit": "scenario_or_observed_combination_as_named"
+  },
+  "schema_version": 1,
+  "scope": {
+    "counts": {
+      "catalog_only": 3614,
+      "in_v1_scope": 32792,
+      "out_of_v1": 1900
+    },
+    "english_printings_represented": 113234,
+    "oracle_identities_classified": 38306,
+    "unit": "oracle_identity"
+  },
+  "source_artifacts": {
+    "FORGE_REBUILD_MASTER_PLAN.md": "2dfe286e9fa24dde0cb5b3a5cd3cae62990d3eb947b712390efe896b748d2637",
+    "PLAN_STATE.json": "84d9ae04477c4e87c3223aff22de7bb275a5a44dfe7b91ff98e2850984ce1b58",
+    "assets/card_catalog.json": "6c7c41ba91b524b8ac59cf7e215fbceaa31c1f9567ae11623dcfa15f6b3f8321",
+    "metrics/api_coverage.json": "33601ba6af0f1b98deb6204f7fb95cea2cd5d871a0190d442e3d1b315a472d95",
+    "metrics/card_catalog.json": "69c4662acbc20750847355bd461f469578aa27bd4c7932b88ac1a47bbc43c05a",
+    "metrics/cp_dsl_corpus.json": "8e66dcf0f81ce9625e969346291239e789d0606c179f800de704e969bec02bd7",
+    "metrics/legacy_parse.json": "b5782a750b8840efebf74859e1359bf95c746a6c594a3ede504f5b197e4b0603",
+    "metrics/local_platforms.json": "2276b8f85a05cec3c798ac4fef11069b5170b85b9d806a8f1eb0ce9daa551cf8",
+    "metrics/oracle_semantics.json": "401def585d647dafb90af2fc2a54ffe7cc95d92e12e45b38aa9942e63bd153d5",
+    "metrics/priority_coverage.json": "f25b3af0efafa2346016dd1b5875439603ca3420d98690443ddf05c7f2cfaeb0",
+    "metrics/t3_parallel_validation.json": "374bc6318d50e2a3fc0c9c32c80d60343fd672d80019128ae09fdfc1501dc7ec",
+    "metrics/translation.json": "f26fbfec51ddfc0e5eba6de2cec9385a740134b298aa76a77f10ad6746fcf188",
+    "tools/write_card_maturity.py": "d517c522e4cc1dcc4d78e455723fb616a6717a70a86594443c7b384d90f62573"
+  },
+  "units_are_separate": true
+}

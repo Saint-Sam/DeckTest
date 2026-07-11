@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-10T23:42:08Z",
+  "decision": "ADR-0012",
+  "status": "pass_pending_gate_reviewer_disposition",
+  "baseline_commit": "2deef788122070ac5b3b1d1efb5d2cb6447b1403",
+  "artifact_binding": "sha256_file_set",
+  "local_only": true,
+  "github_actions_used": false,
+  "network_egress_used": false,
+  "commands": [
+    {
+      "command": "python3 tools/check_rayon_boundary.py",
+      "exit_code": 0,
+      "result": "direct dependency and production references are porttools-only"
+    },
+    {
+      "command": "env FORGE_T3_TOTAL_WORKERS=25 scripts/t3_parallel_sweep.sh development",
+      "exit_code": 1,
+      "expected_failure": true,
+      "result": "explicit oversubscription rejected above the 24-worker ceiling"
+    },
+    {
+      "command": "cargo test -p forge-porttools --offline --locked",
+      "exit_code": 0,
+      "result": "41 passed, 0 failed"
+    },
+    {
+      "command": "cargo clippy -p forge-porttools --all-targets --all-features --offline --locked -- -D warnings",
+      "exit_code": 0,
+      "result": "pass"
+    },
+    {
+      "command": "cargo deny --offline --locked check licenses bans sources",
+      "exit_code": 0,
+      "result": "bans ok, licenses ok, sources ok"
+    },
+    {
+      "command": "scripts/t3_parallel_sweep.sh checkpoint",
+      "exit_code": 0,
+      "result": "24-worker ceiling; translation deterministic; blocker planner deterministic at 1 versus 6 workers; workspace fmt/clippy/tests and coverage passed",
+      "accelerated_core_phase_seconds": 38,
+      "full_workspace_verification_seconds": 43,
+      "total_seconds": 83,
+      "line_coverage_percent": 80.5841
+    }
+  ],
+  "artifacts": {
+    "Cargo.lock": "6c04449459faa1f542d25555f8bf6f78209d9df91140c60f243f6fec1d584531",
+    "crates/forge-porttools/Cargo.toml": "840a12284e3fafe574ef6a8fadb3c04ba3209c503192b9ea8ab6b09a6e0330f6",
+    "crates/forge-porttools/src/lib.rs": "479051d3d32b7b4dd5cd4acea12a9715bdb94ee8d1289e6cfb2b764a91a437e9",
+    "crates/forge-porttools/src/planner.rs": "f47d821073cfcd7ef69f76efa3cb32c9e4e9f26b7fad80fa5ab54a2896268798",
+    "crates/forge-porttools/src/translator.rs": "87f0f4a056ed5a062e4c83f2895672065ac5c81985b4c3837bf5c2a36f304d9d",
+    "scripts/t3_parallel_sweep.sh": "91ca73d1a89898c7aedf92a6dcb54b6c9a7a34f3894278e638bad8cd32cde520",
+    "tools/check_rayon_boundary.py": "f21a500dde69f451d56439ff0f3441493097187ebe56b2c4d7bff864900990e4",
+    "tools/write_t3_parallel_metrics.py": "5b714b406a8200673187a3345895910815bad005bcc90c154e675b0466f87eff",
+    "metrics/t3_parallel_validation.json": "a7c34bc8cebae5ddecf12dcc9af7ef4c1cf9a0a73c988b0e07a9cfa0931a26b5",
+    "metrics/coverage.json": "ad353ecb6049cf1d7468f1179a1787afe5d3534e704068b8649fe72704323cea"
+  },
+  "notes": [
+    "The sandboxed macOS toolchain emitted non-fatal xcrun cache warnings; all commands returned the recorded status.",
+    "Criterion's approved forge-core dev graph may resolve Rayon transitively; no direct forge-core dependency or source import exists."
+  ]
+}

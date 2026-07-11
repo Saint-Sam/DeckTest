@@ -24,7 +24,9 @@ for command in cargo cmp jq python3; do
   fi
 done
 
-total_workers="${FORGE_T3_TOTAL_WORKERS:-}"
+max_workers=24
+configured_workers="${FORGE_T3_TOTAL_WORKERS:-}"
+total_workers="$configured_workers"
 if [[ -z "$total_workers" ]] && command -v sysctl >/dev/null 2>&1; then
   total_workers="$(sysctl -n hw.logicalcpu 2>/dev/null || true)"
 fi
@@ -34,12 +36,24 @@ fi
 if ! [[ "$total_workers" =~ ^[1-9][0-9]*$ ]]; then
   total_workers=8
 fi
+if ((total_workers > max_workers)); then
+  if [[ -n "$configured_workers" ]]; then
+    echo "ERROR: FORGE_T3_TOTAL_WORKERS=$total_workers exceeds the $max_workers-worker ceiling" >&2
+    exit 1
+  fi
+  total_workers=$max_workers
+fi
 if ((total_workers < 6)); then
   echo "ERROR: T3 parallel sweeps require at least 6 workers" >&2
   exit 1
 fi
 
-export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-$total_workers}"
+cargo_build_jobs="${CARGO_BUILD_JOBS:-$total_workers}"
+if ! [[ "$cargo_build_jobs" =~ ^[1-9][0-9]*$ ]] || ((cargo_build_jobs > max_workers)); then
+  echo "ERROR: CARGO_BUILD_JOBS must be between 1 and $max_workers" >&2
+  exit 1
+fi
+export CARGO_BUILD_JOBS="$cargo_build_jobs"
 export CARGO_NET_OFFLINE=true
 
 run_dir="target/t3-parallel"
@@ -85,7 +99,27 @@ compare_translation_reports() {
   fi
 }
 
+compare_planner_reports() {
+  local primary="$1"
+  local replay="$2"
+  local primary_details="$3"
+  local replay_details="$4"
+  local primary_normalized="$run_dir/planner-primary-normalized.json"
+  local replay_normalized="$run_dir/planner-replay-normalized.json"
+  jq -S 'del(.jobs)' "$primary" >"$primary_normalized"
+  jq -S 'del(.jobs)' "$replay" >"$replay_normalized"
+  if ! cmp -s "$primary_normalized" "$replay_normalized"; then
+    echo "ERROR: deterministic blocker planner reports differ" >&2
+    return 1
+  fi
+  if ! cmp -s "$primary_details" "$replay_details"; then
+    echo "ERROR: deterministic blocker planner details differ" >&2
+    return 1
+  fi
+}
+
 total_start="$SECONDS"
+python3 tools/check_rayon_boundary.py
 cargo build --locked --offline --quiet \
   -p forge-porttools -p forge-cardc -p forge-cards
 
@@ -106,12 +140,14 @@ api_quarantine="metrics/api_quarantine.json"
 database="$run_dir/translated-carddb.bin"
 
 deterministic=false
+planner_deterministic=false
 verification_seconds=0
 parallel_start="$SECONDS"
 
 if [[ "$mode" == "development" ]]; then
   primary_translation_workers=$((total_workers * 2 / 3))
   replay_translation_workers=0
+  planner_replay_workers=0
   audit_workers=2
   planner_workers=$((total_workers - primary_translation_workers - audit_workers))
   if ((planner_workers < 1)); then
@@ -152,11 +188,14 @@ else
   primary_translation_workers=$total_workers
   replay_translation_workers=$((total_workers / 2))
   planner_workers=$((total_workers / 4))
+  planner_replay_workers=1
   audit_workers=2
   secondary_output="$run_dir/translated-cards-secondary"
   secondary_metrics="$run_dir/translation-secondary.json"
   secondary_quarantine="$run_dir/quarantine-secondary.json"
   secondary_priority="$run_dir/priority-secondary.json"
+  secondary_blocker_metrics="$run_dir/blocker-plan-secondary.json"
+  secondary_blocker_details="$run_dir/blocker-cards-secondary.json"
 
   "$porttools" translate --all --jobs "$primary_translation_workers" \
     --root "$root" --catalog "$catalog" --output "$primary_output" \
@@ -190,6 +229,13 @@ else
   planner_pid=$!
   active_pids+=("$planner_pid")
 
+  "$porttools" legacy blocker-plan --jobs "$planner_replay_workers" \
+    --root "$root" --priority "$priority" --output "$secondary_blocker_metrics" \
+    --details "$secondary_blocker_details" --batch-size 5 --batch-count 6 \
+    >"$run_dir/blocker-plan-secondary.log" 2>&1 &
+  planner_replay_pid=$!
+  active_pids+=("$planner_replay_pid")
+
   "$porttools" legacy map-audit --root "$root" \
     --metrics "$api_metrics" --quarantine "$api_quarantine" \
     >"$run_dir/map-audit.log" 2>&1 &
@@ -199,11 +245,15 @@ else
   wait_checked "$secondary_pid" "secondary deterministic sweep" "$run_dir/translate-secondary.log"
   wait_checked "$compiler_pid" "translated-card compiler" "$run_dir/compiler.log"
   wait_checked "$planner_pid" "blocker planner" "$run_dir/blocker-plan.log"
+  wait_checked "$planner_replay_pid" "one-worker blocker planner replay" "$run_dir/blocker-plan-secondary.log"
   wait_checked "$audit_pid" "mapping audit" "$run_dir/map-audit.log"
   compare_translation_reports "$primary_metrics" "$secondary_metrics"
   cmp -s "$primary_quarantine" "$secondary_quarantine"
   cmp -s "$primary_priority" "$secondary_priority"
+  compare_planner_reports "$blocker_metrics" "$secondary_blocker_metrics" \
+    "$blocker_details" "$secondary_blocker_details"
   deterministic=true
+  planner_deterministic=true
 fi
 
 if [[ "$mode" == "development" ]]; then
@@ -231,12 +281,14 @@ metrics_args=(
   --primary-translation-workers "$primary_translation_workers" \
   --replay-translation-workers "$replay_translation_workers" \
   --planner-workers "$planner_workers" \
+  --planner-replay-workers "$planner_replay_workers" \
   --audit-workers "$audit_workers" \
   --parallel-phase-seconds "$parallel_seconds" \
   --verification-seconds "$verification_seconds" \
   --total-seconds "$total_seconds" \
   --sequential-baseline-seconds "$baseline_seconds" \
   --deterministic "$deterministic" \
+  --planner-deterministic "$planner_deterministic" \
   --translation "$primary_metrics" \
   --blocker-plan "$blocker_metrics" \
   --output metrics/t3_parallel_validation.json
@@ -245,7 +297,11 @@ if [[ "$mode" == "checkpoint" ]]; then
   metrics_args+=(--coverage metrics/coverage.json)
 fi
 python3 tools/write_t3_parallel_metrics.py "${metrics_args[@]}"
+if [[ "$mode" == "checkpoint" ]]; then
+  python3 tools/write_card_maturity.py
+  python3 tools/write_project_status.py
+fi
 
 active_pids=()
 trap - EXIT INT TERM
-echo "PASS T3 $mode sweep: workers=$total_workers parallel_phase=${parallel_seconds}s total=${total_seconds}s deterministic=$deterministic"
+echo "PASS T3 $mode sweep: workers=$total_workers parallel_phase=${parallel_seconds}s total=${total_seconds}s translation_deterministic=$deterministic planner_deterministic=$planner_deterministic"

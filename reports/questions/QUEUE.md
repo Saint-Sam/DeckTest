@@ -58,3 +58,39 @@ Owner signoff: 2026-07-08, Codex thread:
 owner-approved reviewer scenarios passing, the 100-card true importer legacy
 differential matching 100/100 with 0 mismatches, fuzz/local verification
 passing, and no current blocking divergences.`
+
+## Q-2026-07-10-PC-0007
+
+Priority: P0
+
+Status: resolved 2026-07-10
+
+Question: Should the project ratify the linked dual-track plan changes in
+`docs/plan-changes/PC-0007-local-trainer-and-grand-plan-bridge.md` and Grand
+Plan `GP-PC-0001-dual-track-engine-and-human-teacher.md`? The proposed change
+preserves standalone Forge, keeps PodBench report-only, adds truthful card
+maturity, semantic/four-player/human-play checkpoints, brings forward the
+focused Trainer, and creates a governed human-teacher data bridge while
+retaining no GitHub Actions and all existing GPL/IP/egress gates.
+
+Companion Owner IP/repository-placement decision: should the full Grand Plan
+package remain private/outside public DeckTest (recommended), or should its
+business/research volumes be deliberately published? Intake alone does not
+authorize copying those volumes into the public GPL repository.
+
+Required evidence:
+
+- `docs/transition/GRAND_PLAN_V2_INTAKE.json`
+- `docs/transition/GRAND_PLAN_V2_CONFLICT_MATRIX.md`
+- `docs/transition/PC-0007_IMPLEMENTATION_SEQUENCE.md`
+- `reports/owner/brief-grand-plan-v2-intake.md`
+- `reports/gates/ADR-0012/EVIDENCE.json`
+
+Resolution: Owner approved exact PC-0007 SHA
+`8a63ec707562fd50353b028c27152dd215186b014c35af919e7c870f2a02aed6`
+and GP-PC-0001 SHA
+`9972644f84fc2f8f4f501ec450d2ae9df5ed72560556b3fb521b7290a94322b9`.
+The full Grand Plan/business/private research package remains private outside
+public DeckTest; only sanitized bridge/intake/evidence records may enter the
+public repository. The Owner performs or explicitly approves GitHub egress.
+Master plan v1.8 incorporates the accepted bridge.

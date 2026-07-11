@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-07-10",
+  "active_forge": {
+    "repository": "https://github.com/Saint-Sam/DeckTest.git",
+    "intake_baseline_commit": "2deef788122070ac5b3b1d1efb5d2cb6447b1403",
+    "intake_baseline_tree": "b49de638c48d0dcdfc5195d0d87f020291218933",
+    "ratified_product_commit": null,
+    "ratified_product_tree": null,
+    "master_plan_version": "1.8",
+    "product_master_plan_sha256": "2dfe286e9fa24dde0cb5b3a5cd3cae62990d3eb947b712390efe896b748d2637",
+    "product_plan_state_sha256": "84d9ae04477c4e87c3223aff22de7bb275a5a44dfe7b91ff98e2850984ce1b58",
+    "cargo_lock_sha256": "6c04449459faa1f542d25555f8bf6f78209d9df91140c60f243f6fec1d584531"
+  },
+  "transition_package": {
+    "logical_name": "decktest-agent-transition-package",
+    "transition_memo_sha256": "57655433ebc64ca652dfa3f12e8c5d36f487bbfd203ce592095a24bacaa48241",
+    "grand_plan_version": "2.0",
+    "manifest_sha256": "91e4443b44436a18bb123f3ea5da6ffb80739a156bc2e90737bf69b8273a503b",
+    "state_sha256": "46ad32a98cb4a8030a5e64d50de1c7d1bfb4ff3f2fd3f84f778d9f9c0512fdb3",
+    "blueprint_sha256": "1420e3bd32c63b86c5d2f95b1f691b8e3611c8058b5639f6e9a3f7d5d9cdb4e8",
+    "product_plan_sha256": "caece6ed343c0ac02d591a0cf6ed30290fad7c969f94909d4a89551ec0569dc5",
+    "manifest_check": "all_entries_passed"
+  },
+  "authority_disposition": {
+    "bundled_forge_plan": "historical_context_only",
+    "active_forge_plan": "authoritative_for_standalone_engine_and_application",
+    "grand_plan_volumes": "ratified_private_roadmap_authority_with_each_named_volume_gate_still_required",
+    "rights_and_commercialization": "blocked_pending_V00_professional_decision_and_owner_signoff"
+  },
+  "owner_ratification": {
+    "date": "2026-07-10",
+    "approved_forge_pc_sha256": "8a63ec707562fd50353b028c27152dd215186b014c35af919e7c870f2a02aed6",
+    "approved_grand_plan_pc_sha256": "9972644f84fc2f8f4f501ec450d2ae9df5ed72560556b3fb521b7290a94322b9",
+    "repository_placement": "full_grand_plan_business_strategy_and_private_research_package_remain_private_outside_public_decktest",
+    "public_repository_scope": "sanitized_forge_bridge_intake_and_evidence_only",
+    "github_egress": "owner_performs_or_explicitly_approves_pushes_and_pull_requests",
+    "record": "reports/gates/PC-0007/OWNER_APPROVAL.md"
+  },
+  "integration_records": {
+    "accepted_forge_pc_0007_sha256": "51839d032eb33633bc86cc85f214ce2a590ce6bb6541c526e77085489d72e54f",
+    "accepted_grand_plan_gp_pc_0001_sha256": "616ad99bc31d4326809efb112ecf4ca42d712ff002d06e0844f14d250000ecf8",
+    "gate_review_sha256": "a39ad22ddc133b435caaa6f476cf04f816a61391bf7e1e50d01d5c903497058c",
+    "owner_approval_sha256": "ec969afc96bcc77ceaa2d405ba6434771ef0821faa156f572b61b7718cb41b6f",
+    "conflict_matrix_sha256": "2c24fe7f91021b84de0e3dafa6fc17ee4aabecc01ec7378bee3a86221fe638df",
+    "implementation_sequence_sha256": "893409e02e48f6959db10efb497a07530f703566952c10d53c72b520f5d1121f",
+    "local_parallelism_adr_sha256": "041ff0648384f2f96651b37a09382f2cc47d15cb236f88f6e19a66879396ed08",
+    "local_parallelism_evidence_sha256": "42cb32e3d3968e1c7634c2459d21cdc71d0f1990b5ea3a4c18a56d85380e4267",
+    "local_parallelism_signoff_sha256": "7961d1d8f4830c3a062aff63beac2bf4a61b49539874bd28e17ca27966b26d8d",
+    "t1_10_addendum_sha256": "6432ca16792ac2a796a5cf2d95b674ad4204797115dd1c9279b51baf43042a62",
+    "t1_11_addendum_sha256": "17d52e67d0d09eea74c43e9a0885a7853616c0cc6dd2709b346d66651e7fcef4",
+    "owner_brief_sha256": "d6a0a82237b74bb36926900e829c948bc23975a006cf4cabce33ce2f0bf7dfa2"
+  },
+  "non_destructive": true
+}

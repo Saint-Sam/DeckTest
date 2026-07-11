@@ -164,9 +164,7 @@ struct TranslatedKeywords {
 
 /// Translates every legacy script in parallel and emits only complete validated cards.
 pub fn translate_all(options: TranslateOptions<'_>) -> Result<TranslationReport, String> {
-    if options.jobs == 0 {
-        return Err("translation jobs must be positive".to_string());
-    }
+    crate::validate_local_worker_count("translation", options.jobs)?;
     let catalog_file = fs::File::open(options.catalog)
         .map_err(|error| format!("could not open {}: {error}", options.catalog.display()))?;
     let catalog: CardCatalog = serde_json::from_reader(catalog_file)
