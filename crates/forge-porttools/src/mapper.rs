@@ -210,6 +210,11 @@ const MAPPERS: &[MapperSpec] = &[
     },
     MapperSpec {
         prefix: LegacyAbilityPrefix::Activated,
+        api: "Regenerate",
+        mapper: map_regenerate,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Activated,
         api: "Destroy",
         mapper: map_destroy,
     },
@@ -478,6 +483,28 @@ pub fn map_legacy_ability(
     if api.is_empty() {
         return Err(diagnostic("MALFORMED_API", "ability API name is empty"));
     }
+    let optional_effect = if prefix == LegacyAbilityPrefix::Activated && api != "Dig" {
+        match expression
+            .fields
+            .iter()
+            .find(|field| field.key.as_deref() == Some("Optional"))
+            .map(|field| field.value.as_str())
+        {
+            None => false,
+            Some("True") => true,
+            Some(value) => return Err(unsupported_value("Optional", value)),
+        }
+    } else {
+        false
+    };
+    let stripped_expression = optional_effect.then(|| {
+        let mut stripped = expression.clone();
+        stripped
+            .fields
+            .retain(|field| field.key.as_deref() != Some("Optional"));
+        stripped
+    });
+    let expression = stripped_expression.as_ref().unwrap_or(expression);
     let mut parameters = parameters(expression)?;
     normalize_legacy_defaults(&mut parameters);
     let timing = extract_legacy_timing(&mut parameters)?;
@@ -492,6 +519,12 @@ pub fn map_legacy_ability(
     };
     let mut mapped = (spec.mapper)(prefix, api, selector_key, &parameters)?;
     mapped.timing = timing;
+    if optional_effect {
+        mapped.expression = call(
+            Operation::ChooseUpTo,
+            vec![Expression::Integer(1), mapped.expression],
+        );
+    }
     if let Some(unless_clause) = unless_clause {
         mapped.expression = apply_unless_clause(mapped.expression, unless_clause);
     }
@@ -789,16 +822,32 @@ fn map_with_context_unconditioned(
 
     let parameter_map = parameters(expression)?;
     let sub_ability = parameter_map.get("SubAbility").cloned();
+    let optional_effect = if prefix == LegacyAbilityPrefix::Activated && api != "Dig" {
+        match parameter_map.get("Optional").map(String::as_str) {
+            None => false,
+            Some("True") => true,
+            Some(value) => return Err(unsupported_value("Optional", value)),
+        }
+    } else {
+        false
+    };
     let mut base_expression = expression.clone();
-    if sub_ability.is_some() {
-        base_expression
-            .fields
-            .retain(|field| field.key.as_deref() != Some("SubAbility"));
+    if sub_ability.is_some() || optional_effect {
+        base_expression.fields.retain(|field| {
+            field.key.as_deref() != Some("SubAbility")
+                && (!optional_effect || field.key.as_deref() != Some("Optional"))
+        });
     }
     let mut mapped = match map_dynamic_ability(prefix, &base_expression, context)? {
         Some(mapped) => mapped,
         None => map_legacy_ability(prefix, &base_expression)?,
     };
+    if optional_effect {
+        mapped.expression = call(
+            Operation::ChooseUpTo,
+            vec![Expression::Integer(1), mapped.expression],
+        );
+    }
     mapped = apply_optional_legacy_condition(prefix, selector_key, mapped, condition)?;
     if let Some(name) = sub_ability {
         let linked = resolve_svar(&name, context, stack)?;
@@ -1973,6 +2022,7 @@ fn map_spell_cast_event(
             "Execute",
             "ValidCard",
             "ValidActivatingPlayer",
+            "TargetsValid",
             "TriggerZones",
             "TriggerDescription",
         ],
@@ -1983,14 +2033,21 @@ fn map_spell_cast_event(
         .map(|value| spell_selector(value))
         .transpose()?
         .unwrap_or_else(|| call(Operation::Spells, vec![]));
+    let actor = spell_event_actor(parameters)?;
+    if let Some(targets) = parameters.get("TargetsValid") {
+        return Ok(call(
+            Operation::EventCastTargeting,
+            vec![
+                spells,
+                affected_selector(targets)?,
+                actor,
+                Expression::Text("cast".to_string()),
+            ],
+        ));
+    }
     let mut arguments = vec![spells];
-    if let Some(value) = parameters.get("ValidActivatingPlayer") {
-        arguments.push(match value.as_str() {
-            "Any" | "Player" => call(Operation::Any, vec![]),
-            "You" => call(Operation::You, vec![]),
-            "Opponent" | "Player.Opponent" => call(Operation::Opponent, vec![]),
-            _ => return Err(unsupported_value("ValidActivatingPlayer", value)),
-        });
+    if parameters.contains_key("ValidActivatingPlayer") {
+        arguments.push(actor);
     }
     Ok(call(Operation::EventCast, arguments))
 }
@@ -2004,6 +2061,7 @@ fn map_spell_cast_or_copy_event(
             "Execute",
             "ValidCard",
             "ValidActivatingPlayer",
+            "TargetsValid",
             "TriggerZones",
             "TriggerDescription",
         ],
@@ -2014,6 +2072,18 @@ fn map_spell_cast_or_copy_event(
         .map(|value| spell_selector(value))
         .transpose()?
         .unwrap_or_else(|| call(Operation::Spells, vec![]));
+    let actor = spell_event_actor(parameters)?;
+    if let Some(targets) = parameters.get("TargetsValid") {
+        return Ok(call(
+            Operation::EventCastTargeting,
+            vec![
+                spells,
+                affected_selector(targets)?,
+                actor,
+                Expression::Text("cast_or_copy".to_string()),
+            ],
+        ));
+    }
     let actor = match parameters.get("ValidActivatingPlayer").map(String::as_str) {
         None | Some("Any") | Some("Player") => "any",
         Some("You") => "you",
@@ -2024,6 +2094,17 @@ fn map_spell_cast_or_copy_event(
         Operation::EventCast,
         vec![spells, Expression::Text(format!("cast_or_copy:{actor}"))],
     ))
+}
+
+fn spell_event_actor(
+    parameters: &BTreeMap<String, String>,
+) -> Result<Expression, MappingDiagnostic> {
+    match parameters.get("ValidActivatingPlayer").map(String::as_str) {
+        None | Some("Any") | Some("Player") => Ok(call(Operation::Any, vec![])),
+        Some("You") => Ok(call(Operation::You, vec![])),
+        Some("Opponent") | Some("Player.Opponent") => Ok(call(Operation::Opponent, vec![])),
+        Some(value) => Err(unsupported_value("ValidActivatingPlayer", value)),
+    }
 }
 
 fn map_damage_done_event(
@@ -3073,6 +3154,30 @@ fn map_untap(
     map_object_effect(prefix, api, selector, parameters, Operation::Untap)
 }
 
+fn map_regenerate(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["AB", "SP", "DB"])?;
+    reject_unknown(
+        parameters,
+        &["Cost", "Defined", "ValidTgts", "SpellDescription"],
+    )?;
+    Ok(MappedLegacyAbility {
+        prefix,
+        api: api.to_string(),
+        costs: parse_simple_cost(parameters.get("Cost"))?,
+        event: None,
+        timing: None,
+        expression: call(
+            Operation::RegenerateShield,
+            vec![object_selector(parameters, DefaultSelector::Source)?],
+        ),
+    })
+}
+
 fn map_destroy(
     prefix: LegacyAbilityPrefix,
     api: &str,
@@ -3369,9 +3474,6 @@ fn map_change_zone(
         if value != "True" {
             return Err(unsupported_value("Hidden", value));
         }
-        if !matches!(origin, "Library" | "Hand") {
-            return Err(unsupported_value("Hidden", value));
-        }
     }
     if origin == "Library" {
         return map_library_search(prefix, api, parameters);
@@ -3429,7 +3531,12 @@ fn map_change_zone(
             ),
         }
     };
-    mapped_direct(prefix, api, parameters, expression)
+    mapped_direct(
+        prefix,
+        api,
+        parameters,
+        preserve_hidden_information(parameters, expression),
+    )
 }
 
 fn map_library_search(
@@ -3527,12 +3634,24 @@ fn map_library_search(
     if should_shuffle && !destination.starts_with("library_") {
         effects.push(call(Operation::Shuffle, vec![call(Operation::You, vec![])]));
     }
+    let expression = combine_effects(effects, "library search requires effects")?;
     mapped_direct(
         prefix,
         api,
         parameters,
-        combine_effects(effects, "library search requires effects")?,
+        preserve_hidden_information(parameters, expression),
     )
+}
+
+fn preserve_hidden_information(
+    parameters: &BTreeMap<String, String>,
+    expression: Expression,
+) -> Expression {
+    if parameters.contains_key("Hidden") {
+        call(Operation::HiddenInformation, vec![expression])
+    } else {
+        expression
+    }
 }
 
 fn map_token(
@@ -6456,7 +6575,7 @@ fn reject_unknown(
 }
 
 fn is_nonsemantic_metadata(key: &str) -> bool {
-    // Legacy observes Hidden only in ChangeZoneEffect; that mapper validates it separately.
+    // Legacy observes Hidden only in ChangeZoneEffect; that mapper preserves it explicitly.
     matches!(
         key,
         "AILogic"
@@ -6681,6 +6800,79 @@ mod tests {
                 Expression::Text("exile".to_string()),
             ]
         ));
+    }
+
+    #[test]
+    fn lowers_regeneration_targeted_casts_and_generic_optional_effects() {
+        assert_operation(
+            "A:AB$ Regenerate | Cost$ G | SpellDescription$ Regenerate this permanent.",
+            Operation::RegenerateShield,
+            1,
+        );
+
+        let targeted = map_script_root(concat!(
+            "Name:Heroic\n",
+            "T:Mode$ SpellCast | ValidCard$ Instant,Sorcery | ValidActivatingPlayer$ You | TargetsValid$ Card.Self | TriggerZones$ Battlefield | Execute$ TrigDraw | TriggerDescription$ Draw.\n",
+            "SVar:TrigDraw:DB$ Draw | Defined$ You\n",
+        ))
+        .unwrap_or_else(|error| panic!("targeted cast trigger should map: {}", error.message));
+        assert!(matches!(
+            targeted.event,
+            Some(Expression::Call {
+                operation: Operation::EventCastTargeting,
+                ref arguments,
+            }) if arguments.len() == 4
+                && arguments[3] == Expression::Text("cast".to_string())
+        ));
+
+        let optional = map_script_root(concat!(
+            "Name:Optional Move\n",
+            "A:SP$ ChangeZone | Origin$ Battlefield | Destination$ Hand | ValidTgts$ Creature | Optional$ True | SubAbility$ DBDraw | SpellDescription$ Return.\n",
+            "SVar:DBDraw:DB$ Draw | Defined$ You\n",
+        ))
+        .unwrap_or_else(|error| panic!("optional move should map: {}", error.message));
+        assert!(matches!(
+            optional.expression,
+            Expression::Call {
+                operation: Operation::Sequence,
+                ref arguments,
+            } if matches!(
+                arguments.first(),
+                Some(Expression::Call {
+                    operation: Operation::ChooseUpTo,
+                    ..
+                })
+            ) && matches!(
+                arguments.get(1),
+                Some(Expression::Call {
+                    operation: Operation::Draw,
+                    ..
+                })
+            )
+        ));
+
+        let dig = map_line(
+            "A:SP$ Dig | DigNum$ 2 | ChangeNum$ 1 | Optional$ True | SpellDescription$ Dig.",
+        )
+        .unwrap_or_else(|error| {
+            panic!(
+                "optional Dig should retain Dig semantics: {}",
+                error.message
+            )
+        });
+        assert!(matches!(
+            dig.expression,
+            Expression::Call {
+                operation: Operation::LibraryDig,
+                ..
+            }
+        ));
+
+        let error =
+            map_line("A:SP$ Draw | Defined$ You | Optional$ False | SpellDescription$ Draw.")
+                .err()
+                .unwrap_or_else(|| panic!("non-true Optional must fail closed"));
+        assert_eq!(error.code, "UNSUPPORTED_VALUE");
     }
 
     #[test]
@@ -7472,18 +7664,30 @@ mod tests {
             Operation::Target
         ));
 
-        map_line(
+        let hidden_hand = map_line(
             "A:SP$ ChangeZone | Hidden$ True | Origin$ Hand | Destination$ Exile | ValidTgts$ Card | SpellDescription$ Exile.",
         )
         .unwrap_or_else(|error| {
             panic!("intrinsically hidden-zone move should map: {}", error.message)
         });
-        let unsafe_hidden = map_line(
+        assert!(expression_contains_operation(
+            &hidden_hand.expression,
+            Operation::HiddenInformation
+        ));
+        let replacement_hidden = map_line(
             "A:DB$ ChangeZone | Hidden$ True | Origin$ All | Destination$ Exile | Defined$ ReplacedCard",
         )
-        .err()
-        .unwrap_or_else(|| panic!("public-zone identity-bound Hidden must quarantine"));
-        assert_eq!(unsafe_hidden.code, "UNSUPPORTED_VALUE");
+        .unwrap_or_else(|error| {
+            panic!("public-zone Hidden must retain metadata: {}", error.message)
+        });
+        assert!(expression_contains_operation(
+            &replacement_hidden.expression,
+            Operation::HiddenInformation
+        ));
+        assert!(expression_contains_operation(
+            &replacement_hidden.expression,
+            Operation::Exile
+        ));
 
         let unless = map_script_root(concat!(
             "Name:Unless Chain\n",
@@ -8032,17 +8236,16 @@ mod tests {
         let report = audit_legacy_mappings(&cards, &metrics, &quarantine)
             .unwrap_or_else(|error| panic!("mapping audit should complete: {error}"));
         assert_eq!(report.legacy_uses, 5);
-        assert_eq!(report.mapped_uses, 3);
-        assert_eq!(report.verified_uses, 3);
-        assert_eq!(report.quarantined_uses, 2);
+        assert_eq!(report.mapped_uses, 4);
+        assert_eq!(report.verified_uses, 4);
+        assert_eq!(report.quarantined_uses, 1);
         assert_eq!(
             report.quarantine_reason_counts.get("MISSING_SVAR"),
             Some(&1)
         );
-        assert_eq!(
-            report.quarantine_reason_counts.get("UNSUPPORTED_PARAMETER"),
-            Some(&1)
-        );
+        assert!(!report
+            .quarantine_reason_counts
+            .contains_key("UNSUPPORTED_PARAMETER"));
         assert!(metrics.is_file());
         assert!(quarantine.is_file());
 

@@ -967,6 +967,9 @@ operations! {
     AddRestrictedMana => ("add_restricted_mana", Effect, 4, Some(4)),
     LibraryDig => ("library_dig", Effect, 7, Some(7)),
     Chapter => ("chapter", Effect, 3, Some(3)),
+    EventCastTargeting => ("event_cast_targeting", Event, 4, Some(4)),
+    RegenerateShield => ("regenerate_shield", Effect, 1, Some(1)),
+    HiddenInformation => ("hidden_information", Effect, 1, Some(1)),
 }
 
 impl Operation {
@@ -1070,6 +1073,11 @@ impl Operation {
                 1 => Some(SelectorOrText),
                 _ => None,
             },
+            Self::EventCastTargeting => match index {
+                0..=2 => Some(Selector),
+                3 => Some(Text),
+                _ => None,
+            },
             Self::EventDamage => match index {
                 0 | 1 => Some(Selector),
                 2 => Some(Text),
@@ -1116,7 +1124,7 @@ impl Operation {
                 1 => Some(SelectorTextOrNumber),
                 _ => None,
             },
-            Self::SacrificeEffect => Some(Selector),
+            Self::SacrificeEffect | Self::RegenerateShield => Some(Selector),
             Self::MoveZone => match index {
                 0 => Some(Selector),
                 1 => Some(Text),
@@ -1264,6 +1272,7 @@ impl Operation {
                 2 => Some(Effect),
                 _ => None,
             },
+            Self::HiddenInformation => Some(Effect),
             Self::AtTiming => match index {
                 0 => Some(Timing),
                 1 => Some(Effect),
@@ -1474,6 +1483,9 @@ mod tests {
         assert_eq!(Operation::LayerEffect as u32, 111);
         assert_eq!(Operation::TimingAll as u32, 164);
         assert_eq!(Operation::EventChapter as u32, 165);
+        assert_eq!(Operation::EventCastTargeting as u32, 170);
+        assert_eq!(Operation::RegenerateShield as u32, 171);
+        assert_eq!(Operation::HiddenInformation as u32, 172);
     }
 
     #[test]
