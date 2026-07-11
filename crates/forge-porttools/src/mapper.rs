@@ -3464,7 +3464,7 @@ fn map_continuous(
         ],
     )?;
     require_battlefield_zone(parameters, "AffectedZone")?;
-    require_battlefield_zone(parameters, "EffectZone")?;
+    require_static_effect_zone(parameters, "EffectZone")?;
     let affected = affected_selector(required(parameters, "Affected")?)?;
     let affected_player = required(parameters, "Affected")? == "You";
     let mut effects = Vec::new();
@@ -4201,7 +4201,7 @@ fn map_reduce_cost(
     if required(parameters, "Type")? != "Spell" {
         return Err(unsupported_value("Type", required(parameters, "Type")?));
     }
-    require_battlefield_zone(parameters, "EffectZone")?;
+    require_static_effect_zone(parameters, "EffectZone")?;
     let amount = positive_integer(required(parameters, "Amount")?, "Amount")?;
     let mut spells = parameters
         .get("ValidCard")
@@ -4253,7 +4253,7 @@ fn map_cant_block_by(
             "EffectZone",
         ],
     )?;
-    require_battlefield_zone(parameters, "EffectZone")?;
+    require_static_effect_zone(parameters, "EffectZone")?;
     if parameters
         .get("Secondary")
         .is_some_and(|value| value != "True")
@@ -4974,7 +4974,7 @@ fn map_cant_attack_or_block(
         parameters,
         &["ValidCard", "EffectZone", "Description", "Secondary"],
     )?;
-    require_battlefield_zone(parameters, "EffectZone")?;
+    require_static_effect_zone(parameters, "EffectZone")?;
     if parameters
         .get("Secondary")
         .is_some_and(|value| value != "True")
@@ -5019,7 +5019,7 @@ fn map_cant_be_cast(
         parameters,
         &["ValidCard", "Caster", "EffectZone", "Description"],
     )?;
-    require_battlefield_zone(parameters, "EffectZone")?;
+    require_static_effect_zone(parameters, "EffectZone")?;
     let mut spells = parameters
         .get("ValidCard")
         .map(|value| spell_selector(value))
@@ -6868,6 +6868,20 @@ fn require_battlefield_zone(
     }
 }
 
+fn require_static_effect_zone(
+    parameters: &BTreeMap<String, String>,
+    key: &str,
+) -> Result<(), MappingDiagnostic> {
+    if parameters
+        .get(key)
+        .map_or(true, |zone| matches!(zone.as_str(), "Battlefield" | "All"))
+    {
+        Ok(())
+    } else {
+        Err(unsupported_value(key, required(parameters, key)?))
+    }
+}
+
 fn require_end_of_turn_duration(
     parameters: &BTreeMap<String, String>,
 ) -> Result<(), MappingDiagnostic> {
@@ -7468,14 +7482,24 @@ mod tests {
             "S:Mode$ Continuous | Affected$ Creature.EquippedBy | AddKeyword$ First Strike | Description$ Equipped creature has first strike.",
             "S:Mode$ Continuous | Affected$ Spirit.YouCtrl | AddPower$ 1 | AddKeyword$ Flying & Vigilance | Description$ Spirits get +1/+0 and keywords.",
             "S:Mode$ ReduceCost | ValidCard$ Instant,Sorcery | Type$ Spell | Activator$ You | Amount$ 1 | Description$ Reduce costs.",
+            "S:Mode$ ReduceCost | ValidCard$ Card.Self | Type$ Spell | Amount$ 1 | EffectZone$ All | Description$ Reduce this spell.",
             "S:Mode$ CantBlockBy | ValidAttacker$ Creature.Self | Description$ This creature can't be blocked.",
+            "S:Mode$ CantBeCast | ValidCard$ Spell | Caster$ Opponent | EffectZone$ All | Description$ Opponents can't cast spells.",
             "S:Mode$ Continuous | Affected$ Card.Self | SetPower$ 4 | SetToughness$ 5 | AddType$ Creature | SetColor$ Blue | Description$ Becomes a creature.",
             "S:Mode$ Continuous | Affected$ Creature.YouCtrl | RemoveAllAbilities$ True | Description$ Remove abilities.",
             "S:Mode$ Continuous | Affected$ Creature.EnchantedBy | GainControl$ You | Description$ Gain control.",
             "S:Mode$ Continuous | Affected$ You | SetMaxHandSize$ Unlimited | Description$ No maximum hand size.",
+            "S:Mode$ Continuous | Affected$ Card.Self | AddKeyword$ Flying | EffectZone$ All | Description$ Flying.",
         ] {
             assert_operation(line, Operation::Continuous, 0);
         }
+
+        let error = map_line(
+            "S:Mode$ ReduceCost | ValidCard$ Card.Self | Type$ Spell | Amount$ 1 | EffectZone$ Command | Description$ Reduce this spell.",
+        )
+        .err()
+        .unwrap_or_else(|| panic!("non-closed static EffectZone must quarantine"));
+        assert_eq!(error.code, "UNSUPPORTED_VALUE");
     }
 
     #[test]
