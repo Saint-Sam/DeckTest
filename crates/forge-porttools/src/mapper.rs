@@ -1632,6 +1632,14 @@ fn resolve_value_svar(
         Some("Triggered") => {
             map_characteristic_value(name, call(Operation::Triggered, vec![]), &field.value)
         }
+        Some("Sacrificed") => map_characteristic_value(
+            name,
+            call(
+                Operation::Remembered,
+                vec![Expression::Text("sacrificed".to_string())],
+            ),
+            &field.value,
+        ),
         _ => Err(diagnostic(
             "UNSUPPORTED_VALUE_SVAR",
             &format!(
@@ -8453,6 +8461,30 @@ mod tests {
                 ),
                 Operation::OpponentCount,
             ),
+            (
+                concat!(
+                    "Name:Sacrificed Power\n",
+                    "A:AB$ DealDamage | Cost$ Sac<1/Creature> | ValidTgts$ Any | NumDmg$ X | SpellDescription$ Damage.\n",
+                    "SVar:X:Sacrificed$CardPower\n",
+                ),
+                Operation::Remembered,
+            ),
+            (
+                concat!(
+                    "Name:Sacrificed Toughness\n",
+                    "A:AB$ GainLife | Cost$ Sac<1/Creature> | Defined$ You | LifeAmount$ X | SpellDescription$ Life.\n",
+                    "SVar:X:Sacrificed$CardToughness\n",
+                ),
+                Operation::Remembered,
+            ),
+            (
+                concat!(
+                    "Name:Sacrificed Mana Value\n",
+                    "A:AB$ Mill | Cost$ Sac<1/Creature> | NumCards$ X | ValidTgts$ Player | SpellDescription$ Mill.\n",
+                    "SVar:X:Sacrificed$CardManaCost\n",
+                ),
+                Operation::Remembered,
+            ),
         ] {
             let script = parse_legacy_script("dynamic-value.txt", script_text)
                 .unwrap_or_else(|error| panic!("dynamic fixture should parse: {error}"));
@@ -8512,20 +8544,20 @@ mod tests {
         assert_eq!(error.code, "UNSUPPORTED_VALUE_SVAR");
 
         let script = parse_legacy_script(
-            "unbound-sacrifice.txt",
+            "open-sacrifice-value.txt",
             concat!(
                 "A:AB$ Mill | Cost$ Sac<1/Creature> | NumCards$ X | ValidTgts$ Player | SpellDescription$ Mill.\n",
-                "SVar:X:Sacrificed$CardPower\n",
+                "SVar:X:Sacrificed$Valid Card.IsSuspected\n",
             ),
         )
-        .unwrap_or_else(|error| panic!("unbound sacrifice fixture should parse: {error}"));
+        .unwrap_or_else(|error| panic!("open sacrificed fixture should parse: {error}"));
         let context = MappingContext::from_script(&script);
         let LegacyLineKind::Ability { prefix, expression } = &script.lines[0].kind else {
-            panic!("unbound sacrifice fixture has no ability");
+            panic!("open sacrificed fixture has no ability");
         };
         let error = map_legacy_ability_in_context(*prefix, expression, &context)
             .err()
-            .unwrap_or_else(|| panic!("unbound sacrifice value must quarantine"));
+            .unwrap_or_else(|| panic!("open sacrificed characteristic must quarantine"));
         assert_eq!(error.code, "UNSUPPORTED_VALUE_SVAR");
     }
 
