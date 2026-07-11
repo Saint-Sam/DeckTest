@@ -998,6 +998,15 @@ fn extract_legacy_conditions(
         }
         (None, None) => {}
     }
+    if let Some(value) = parameters.get("ActivatorThisTurnCast") {
+        conditions.push(activator_this_turn_cast_condition(expression, value)?);
+    }
+    if let Some(value) = parameters.get("OpponentTurn") {
+        match value.as_str() {
+            "True" => conditions.push(legacy_named_condition("NotPlayerTurn")?),
+            _ => return Err(unsupported_value("OpponentTurn", value)),
+        }
+    }
     if conditions.is_empty() {
         return Ok((expression.clone(), None));
     }
@@ -1005,7 +1014,13 @@ fn extract_legacy_conditions(
     unconditioned.fields.retain(|field| {
         !matches!(
             field.key.as_deref(),
-            Some("Condition" | "CheckSVar" | "SVarCompare")
+            Some(
+                "Condition"
+                    | "CheckSVar"
+                    | "SVarCompare"
+                    | "ActivatorThisTurnCast"
+                    | "OpponentTurn"
+            )
         )
     });
     Ok((unconditioned, combine_conditions(conditions)))
@@ -1116,6 +1131,34 @@ fn legacy_named_condition(value: &str) -> Result<Expression, MappingDiagnostic> 
         )),
         _ => Err(unsupported_value("Condition", value)),
     }
+}
+
+fn activator_this_turn_cast_condition(
+    expression: &LegacyExpression,
+    comparison: &str,
+) -> Result<Expression, MappingDiagnostic> {
+    let api = expression
+        .fields
+        .first()
+        .map(|field| field.value.trim())
+        .unwrap_or_default();
+    if !matches!(api, "SpellCast" | "SpellCastOrCopy") {
+        return Err(unsupported_value("ActivatorThisTurnCast", comparison));
+    }
+    let parameters = parameters(expression)?;
+    let spells = parameters
+        .get("ValidCard")
+        .map(|value| spell_selector(value))
+        .transpose()?
+        .unwrap_or_else(|| call(Operation::Spells, vec![]));
+    closed_count_comparison(
+        call(
+            Operation::HistoryCount,
+            vec![spells, Expression::Text("cast_this_turn".to_string())],
+        ),
+        comparison,
+        "ActivatorThisTurnCast",
+    )
 }
 
 fn resolve_comparison_value(
@@ -6394,6 +6437,17 @@ fn spell_predicate(value: &str) -> Result<Expression, MappingDiagnostic> {
                     call(Operation::Source, vec![]),
                 ],
             )
+        } else if modifier == "YouCtrl" {
+            call(Operation::ControlledBy, vec![call(Operation::You, vec![])])
+        } else if modifier == "YouOwn" {
+            call(Operation::OwnedBy, vec![call(Operation::You, vec![])])
+        } else if modifier == "OppCtrl" {
+            call(
+                Operation::ControlledBy,
+                vec![call(Operation::Opponent, vec![])],
+            )
+        } else if modifier == "OppOwn" {
+            call(Operation::OwnedBy, vec![call(Operation::Opponent, vec![])])
         } else if modifier
             .chars()
             .all(|character| character.is_ascii_alphanumeric())
@@ -8190,6 +8244,60 @@ mod tests {
             Operation::TimingCondition
         ));
         assert!(expression_contains_operation(timing, Operation::Not));
+
+        let cast_count = map_script_root(concat!(
+            "Name:Second Spell Trigger\n",
+            "T:Mode$ SpellCast | ValidCard$ Card.YouCtrl | ValidActivatingPlayer$ You | ActivatorThisTurnCast$ EQ2 | Execute$ TrigCounter | TriggerZones$ Battlefield | TriggerDescription$ Second spell.\n",
+            "SVar:TrigCounter:DB$ PutCounter | Defined$ Self | CounterType$ P1P1 | CounterNum$ 1\n",
+        ))
+        .unwrap_or_else(|error| {
+            panic!(
+                "ActivatorThisTurnCast trigger condition should map: {}",
+                error.message
+            )
+        });
+        let event = cast_count
+            .event
+            .as_ref()
+            .unwrap_or_else(|| panic!("cast-count trigger should retain an event"));
+        assert!(expression_contains_operation(event, Operation::EventWhen));
+        assert!(expression_contains_operation(
+            event,
+            Operation::HistoryCount
+        ));
+        assert!(expression_contains_operation(event, Operation::Equals));
+        assert!(expression_contains_operation(
+            event,
+            Operation::ControlledBy
+        ));
+
+        let opponent_turn = map_script_root(concat!(
+            "Name:Opponent Turn Trigger\n",
+            "T:Mode$ SpellCast | ValidCard$ Card | ValidActivatingPlayer$ You | ActivatorThisTurnCast$ EQ1 | OpponentTurn$ True | Execute$ TrigToken | TriggerZones$ Battlefield | TriggerDescription$ First spell on opponent turn.\n",
+            "SVar:TrigToken:DB$ Token | TokenScript$ b_1_1_faerie_rogue_flying | TokenOwner$ You\n",
+        ))
+        .unwrap_or_else(|error| {
+            panic!(
+                "OpponentTurn trigger condition should map: {}",
+                error.message
+            )
+        });
+        let event = opponent_turn
+            .event
+            .as_ref()
+            .unwrap_or_else(|| panic!("opponent-turn trigger should retain an event"));
+        assert!(expression_contains_operation(event, Operation::And));
+        assert!(expression_contains_operation(event, Operation::During));
+        assert!(expression_contains_operation(event, Operation::Not));
+
+        let bad_opponent_turn = map_script_root(concat!(
+            "Name:Bad Opponent Turn Trigger\n",
+            "T:Mode$ SpellCast | ValidCard$ Card | ValidActivatingPlayer$ You | OpponentTurn$ False | Execute$ TrigDraw | TriggerZones$ Battlefield | TriggerDescription$ Bad.\n",
+            "SVar:TrigDraw:DB$ Draw | Defined$ You\n",
+        ))
+        .err()
+        .unwrap_or_else(|| panic!("non-true OpponentTurn must quarantine"));
+        assert_eq!(bad_opponent_turn.code, "UNSUPPORTED_VALUE");
     }
 
     #[test]
