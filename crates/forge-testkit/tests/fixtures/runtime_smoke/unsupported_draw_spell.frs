@@ -1,0 +1,14 @@
+card "T3.5 Unsupported Draw" {
+  id: "forge:t3.5:runtime:draw"
+  layout: normal
+  status: unverified_playable
+  face "T3.5 Unsupported Draw" {
+    cost: "{U}"
+    types: "Instant"
+    oracle: "Draw a card."
+    keywords: []
+    ability spell {
+      effect: draw(1, you())
+    }
+  }
+}

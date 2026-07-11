@@ -1,0 +1,14 @@
+card "T3.5 Vital Exchange" {
+  id: "forge:t3.5:runtime:life"
+  layout: normal
+  status: unverified_playable
+  face "T3.5 Vital Exchange" {
+    cost: "{1}{W}"
+    types: "Sorcery"
+    oracle: "You gain 4 life. Each opponent loses 2 life."
+    keywords: []
+    ability spell {
+      effect: sequence(gain_life(4, you()), lose_life(2, opponent()))
+    }
+  }
+}

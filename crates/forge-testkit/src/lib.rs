@@ -7,6 +7,8 @@
 //! The runner intentionally executes through [`forge_core::apply`] so scenario
 //! tests exercise the same public mutation boundary as application code.
 
+pub mod runtime_smoke;
+
 use forge_core::{
     apply, auto_payment_plan, AbilityPlayer, Action, ActivatedAbilityDefinition,
     ActivatedAbilityEffect, ActivatedAbilityId, ActivationCost, ActivationTiming,

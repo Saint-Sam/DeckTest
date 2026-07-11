@@ -3,6 +3,7 @@
 
 //! Command-line runner for Forge scenario and oracle tests.
 
+use forge_testkit::runtime_smoke::{run_translated_card_runtime_smoke, RuntimeSmokeResult};
 use forge_testkit::{failed_report, parse_scenario_ron, reports_to_junit_xml, run_scenario_file};
 use std::{
     env, fs,
@@ -25,11 +26,101 @@ fn run(args: Vec<String>) -> Result<(), String> {
     match command {
         "lint" => lint_command(&args[1..]),
         "oracle" => oracle_command(&args[1..]),
+        "runtime-smoke" => runtime_smoke_command(&args[1..]),
         "--help" | "-h" | "help" => {
             print_usage();
             Ok(())
         }
         other => Err(format!("unknown forge-testkit command `{other}`")),
+    }
+}
+
+fn runtime_smoke_command(args: &[String]) -> Result<(), String> {
+    let [raw_path] = args else {
+        return Err("runtime-smoke requires exactly one .frs file or directory".to_owned());
+    };
+    let files = translated_card_files(Path::new(raw_path))?;
+    if files.is_empty() {
+        return Err(format!("no .frs files found under {raw_path}"));
+    }
+
+    let mut passed = 0_usize;
+    let mut unsupported = 0_usize;
+    let mut failed = 0_usize;
+    for file in files {
+        let source = match fs::read_to_string(&file) {
+            Ok(source) => source,
+            Err(error) => {
+                failed = failed.saturating_add(1);
+                println!(
+                    "FAIL runtime-smoke {} code=read_error detail={error}",
+                    file.display()
+                );
+                continue;
+            }
+        };
+        let definition = match forge_cardc::parse_card_named(&file.display().to_string(), &source) {
+            Ok(definition) => definition,
+            Err(error) => {
+                failed = failed.saturating_add(1);
+                println!(
+                    "FAIL runtime-smoke {} code=compiler_invalid detail={error}",
+                    file.display()
+                );
+                continue;
+            }
+        };
+        let report = run_translated_card_runtime_smoke(&definition);
+        match report.result() {
+            RuntimeSmokeResult::Passed(pass) => {
+                passed = passed.saturating_add(1);
+                let capabilities = pass
+                    .capabilities()
+                    .iter()
+                    .map(|capability| capability.as_str())
+                    .collect::<Vec<_>>()
+                    .join(",");
+                println!(
+                    "PASS runtime-smoke {} card={} capabilities={} effect_actions={} production_actions={} destination={} final_hash={}",
+                    file.display(),
+                    report.oracle_id(),
+                    capabilities,
+                    pass.effect_actions(),
+                    pass.production_actions(),
+                    pass.destination(),
+                    pass.final_hash()
+                );
+            }
+            RuntimeSmokeResult::UnsupportedSetup(result) => {
+                unsupported = unsupported.saturating_add(1);
+                println!(
+                    "UNSUPPORTED runtime-smoke {} card={} code={} detail={}",
+                    file.display(),
+                    report.oracle_id(),
+                    result.code().as_str(),
+                    result.detail()
+                );
+            }
+            RuntimeSmokeResult::Failed(result) => {
+                failed = failed.saturating_add(1);
+                println!(
+                    "FAIL runtime-smoke {} card={} code={} phase={} detail={}",
+                    file.display(),
+                    report.oracle_id(),
+                    result.code().as_str(),
+                    result.phase(),
+                    result.detail()
+                );
+            }
+        }
+    }
+    println!("runtime smoke: {passed} passed, {unsupported} unsupported, {failed} failed");
+    if unsupported == 0 && failed == 0 {
+        Ok(())
+    } else {
+        Err(format!(
+            "runtime smoke did not pass: {unsupported} unsupported setup(s), {failed} failure(s)"
+        ))
     }
 }
 
@@ -167,6 +258,33 @@ fn scenario_files(path: &Path) -> Result<Vec<PathBuf>, String> {
     Ok(files)
 }
 
+fn translated_card_files(path: &Path) -> Result<Vec<PathBuf>, String> {
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    let mut files = Vec::new();
+    collect_translated_card_files(path, &mut files)?;
+    files.sort();
+    Ok(files)
+}
+
+fn collect_translated_card_files(path: &Path, files: &mut Vec<PathBuf>) -> Result<(), String> {
+    if path.is_file() {
+        if path.extension().is_some_and(|extension| extension == "frs") {
+            files.push(path.to_path_buf());
+        }
+        return Ok(());
+    }
+    for entry in fs::read_dir(path)
+        .map_err(|error| format!("failed to read directory {}: {error}", path.display()))?
+    {
+        let entry = entry
+            .map_err(|error| format!("failed to read entry in {}: {error}", path.display()))?;
+        collect_translated_card_files(&entry.path(), files)?;
+    }
+    Ok(())
+}
+
 fn collect_scenario_files(path: &Path, files: &mut Vec<PathBuf>) -> Result<(), String> {
     if path.is_file() {
         if path.extension().is_some_and(|extension| extension == "ron") {
@@ -186,7 +304,7 @@ fn collect_scenario_files(path: &Path, files: &mut Vec<PathBuf>) -> Result<(), S
 
 fn print_usage() {
     println!(
-        "forge-testkit commands:\n  lint [path]\n  oracle [--all|--changed] [--path PATH] [--filter TEXT] [--junit PATH|--no-junit]"
+        "forge-testkit commands:\n  lint [path]\n  oracle [--all|--changed] [--path PATH] [--filter TEXT] [--junit PATH|--no-junit]\n  runtime-smoke <FILE-OR-DIRECTORY>"
     );
 }
 
@@ -255,6 +373,29 @@ mod tests {
     }
 
     #[test]
+    fn runtime_smoke_supported_fixture_succeeds() {
+        assert!(run(vec![
+            "runtime-smoke".to_owned(),
+            runtime_smoke_fixture("supported_life_spell.frs"),
+        ])
+        .is_ok());
+    }
+
+    #[test]
+    fn runtime_smoke_unsupported_fixture_does_not_pass() {
+        assert!(run(vec![
+            "runtime-smoke".to_owned(),
+            runtime_smoke_fixture("unsupported_draw_spell.frs"),
+        ])
+        .is_err());
+    }
+
+    #[test]
+    fn runtime_smoke_requires_one_path() {
+        assert!(run(vec!["runtime-smoke".to_owned()]).is_err());
+    }
+
+    #[test]
     fn malformed_oracle_option_is_an_error() {
         assert!(run(vec!["oracle".to_owned(), "--filter".to_owned()]).is_err());
         assert!(run(vec!["oracle".to_owned(), "--path".to_owned()]).is_err());
@@ -267,5 +408,13 @@ mod tests {
         let files = scenario_files(Path::new("tests/oracle/absent"))
             .unwrap_or_else(|error| panic!("unexpected scenario file error: {error}"));
         assert!(files.is_empty());
+    }
+
+    fn runtime_smoke_fixture(name: &str) -> String {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/runtime_smoke")
+            .join(name)
+            .to_string_lossy()
+            .into_owned()
     }
 }

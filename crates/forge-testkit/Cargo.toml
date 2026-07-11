@@ -6,6 +6,8 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+forge-cardc = { path = "../forge-cardc" }
+forge-carddef = { path = "../forge-carddef" }
 forge-core = { path = "../forge-core" }
 
 [lints]
