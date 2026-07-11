@@ -1675,6 +1675,7 @@ fn resolve_value_svar(
         Some("Triggered") => {
             map_characteristic_value(name, call(Operation::Triggered, vec![]), &field.value)
         }
+        Some("TriggeredCard") => map_triggered_card_value(name, &field.value),
         Some("Sacrificed") => map_characteristic_value(
             name,
             call(
@@ -1810,6 +1811,22 @@ fn map_characteristic_value(
         }
     };
     Ok(call(operation, vec![selector]))
+}
+
+fn map_triggered_card_value(name: &str, value: &str) -> Result<Expression, MappingDiagnostic> {
+    if let Some(counter_type) = value.strip_prefix("CardCounters.") {
+        if counter_type.is_empty() {
+            return Err(unsupported_value("SVar", value));
+        }
+        return Ok(call(
+            Operation::CounterCount,
+            vec![
+                call(Operation::Triggered, vec![]),
+                Expression::Text(counter_type.to_ascii_lowercase()),
+            ],
+        ));
+    }
+    map_characteristic_value(name, call(Operation::Triggered, vec![]), value)
 }
 
 fn replace_operation_argument(
@@ -8529,6 +8546,23 @@ mod tests {
             ),
             (
                 concat!(
+                    "Name:Triggered Card Power\n",
+                    "T:Mode$ ChangesZone | Origin$ Battlefield | Destination$ Graveyard | ValidCard$ Card.Self | TriggerZones$ Battlefield | Execute$ TrigDamage | TriggerDescription$ Damage.\n",
+                    "SVar:TrigDamage:DB$ DealDamage | Defined$ You | NumDmg$ X\n",
+                    "SVar:X:TriggeredCard$CardPower\n",
+                ),
+                Operation::Power,
+            ),
+            (
+                concat!(
+                    "Name:Triggered Card Counter\n",
+                    "A:AB$ DealDamage | ValidTgts$ Any | NumDmg$ X | SpellDescription$ Damage.\n",
+                    "SVar:X:TriggeredCard$CardCounters.P1P1\n",
+                ),
+                Operation::CounterCount,
+            ),
+            (
+                concat!(
                     "Name:Dynamic Mana\n",
                     "A:AB$ Mana | Cost$ T | Produced$ G | Amount$ X | SpellDescription$ Mana.\n",
                     "SVar:X:Count$Valid Elf.YouCtrl\n",
@@ -8637,6 +8671,13 @@ mod tests {
                 script_text.lines().next().unwrap_or("dynamic fixture"),
                 expected_value.as_str()
             );
+            if script_text.starts_with("Name:Triggered Card") {
+                assert!(
+                    expression_contains_operation(&mapped.expression, Operation::Triggered),
+                    "{} must retain the triggered-card selector",
+                    script_text.lines().next().unwrap_or("triggered-value fixture")
+                );
+            }
         }
 
         for open_value in [
