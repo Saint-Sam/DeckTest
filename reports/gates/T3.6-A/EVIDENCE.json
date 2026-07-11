@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "task": "T3.6-A",
+  "scope": "deterministic Commander semantic-candidate selection freeze",
+  "status": "verified_local_candidate_freeze",
+  "verification_mode": "local_only",
+  "claim_boundary": "Selection is not semantic verification. No selected identity is semantic_verified by this evidence.",
+  "product_binding": {
+    "source_and_exact_integration_commit": "4e53dc59c9af194deea99a7aa4732381b1726172",
+    "exact_integration_tree": "0b8663b3f3550bbd7a093aeab6dddd18eccbaf73",
+    "verified_in_detached_worktree": true,
+    "product_source_changed_by_verification": false
+  },
+  "checkpoint": {
+    "id": "CP-CARD-SEMANTICS-100",
+    "status": "not_run",
+    "required_next": "card-specific expected behavior, production-action execution, deterministic replay, and 100/100 passing semantic results"
+  },
+  "artifacts": {
+    "generator": {
+      "path": "tools/freeze_t3_6_commander_semantics.py",
+      "sha256": "fdfb96a022326b5f0febf0fdaacc9773c76a9448016d7067c277b22bc2b636bc"
+    },
+    "manifest": {
+      "path": "assets/t3_6_commander_semantic_candidates.json",
+      "file_sha256": "3daf52abe01e66b48e9193ecbbd897565fc8e7a5534553a2327be1ce742f4a22",
+      "payload_sha256": "901a08efac2e4eaefc3c2adba3fa23515709595efcde30e43032f24112552e0b"
+    },
+    "spec": {
+      "path": "docs/specs/T3.6.md",
+      "sha256": "cb83d3e5f3d637a4108c31954b1224fcf82e381a0b8d563975cb3dd4c64661ad"
+    },
+    "tests": {
+      "path": "tests/t3_6/test_freeze_commander_semantics.py",
+      "sha256": "84bf3048cfa8ba8dcd8ee2def857164ed0d5155913c19ccbe79480686e3ace7b"
+    }
+  },
+  "bound_sources": {
+    "priority_sha256": "a0a9e513f079337c9a1227447045023526675dba2930dcabd4eb47f30539151a",
+    "catalog_sha256": "6c7c41ba91b524b8ac59cf7e215fbceaa31c1f9567ae11623dcfa15f6b3f8321",
+    "catalog_declared_upstream_sha256": "eeddab7b413016530fa8996b7898ab8f2a1f33b47e65f7924147382d49cc3d04",
+    "priority_translation_results_sha256": "79f87682be13470718650f01ccc5ed97721cab5307c1990369be657ddbcceb4e",
+    "translation_summary_sha256": "85d5a1dc63b2d4648e819b5f6eff9ff42b6c236983f2938ab832c7011a218aa9",
+    "translation_source_revision": "1f0a3e0815822d8f58f798e0304b33d4534248b1",
+    "translation_output_fingerprint": "40a49f7caafbbe1f4ce4a99e2e9c2215",
+    "emitted_priority_scripts_aggregate_sha256": "2d2593cc1c3a3b7a87ae79fe267ce8f408b89fad39ff14a3f43d6d5fbb741795"
+  },
+  "measured": {
+    "priority_identities": 365,
+    "compiler_emitted_candidate_pool": 178,
+    "selected_unique_oracle_identities": 100,
+    "excluded_reason_coded": 265,
+    "strata": 9,
+    "strata_filled": 9,
+    "exclusion_reason_counts": {
+      "NO_SEMANTIC_STRATUM_MATCH": 7,
+      "STRATUM_QUOTA_FILLED": 71,
+      "TRANSLATION_NOT_EMITTED": 187
+    }
+  },
+  "verification": [
+    {
+      "command": "python3 tools/freeze_t3_6_commander_semantics.py --self-test",
+      "exit_code": 0,
+      "result": "PASS; selected=100, payload=901a08efac2e4eaefc3c2adba3fa23515709595efcde30e43032f24112552e0b, deterministic repository replay, parser/predicate checks, count invariants, and payload tamper rejection"
+    },
+    {
+      "command": "python3 -m unittest discover -s tests/t3_6 -p 'test_*.py' -v",
+      "exit_code": 0,
+      "result": "4 tests passed"
+    },
+    {
+      "command": "python3 tools/freeze_t3_6_commander_semantics.py --check",
+      "exit_code": 0,
+      "result": "PASS; selected=100 and checked-in bytes equal regenerated exact-product bytes"
+    },
+    {
+      "command": "FORGE_T3_TOTAL_WORKERS=24 CARGO_BUILD_JOBS=24 scripts/t3_parallel_sweep.sh checkpoint",
+      "exit_code": 0,
+      "result": "exact integration product passed locally before the manifest was regenerated and checked"
+    }
+  ],
+  "constraints": {
+    "network_used": false,
+    "installs_performed": false,
+    "github_actions_used": false,
+    "local_source_commit_performed": true,
+    "github_push_performed": false,
+    "private_material_included": false
+  }
+}

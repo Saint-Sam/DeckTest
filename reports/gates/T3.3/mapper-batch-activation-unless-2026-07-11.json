@@ -1,0 +1,169 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-11T11:30:44Z",
+  "task": "T3.3",
+  "batch": "Hidden-ActivationZone-DefinedTargeted-UnlessCost-UnlessPayer",
+  "technical_result": "pass",
+  "evidence_model": "reviewed source commit verified inside one exact multi-lane integration product",
+  "product_binding": {
+    "mapper_source_commit": "f4d7468bdc02e4456aade0086a6e361daef48766",
+    "exact_integration_commit": "4e53dc59c9af194deea99a7aa4732381b1726172",
+    "exact_integration_tree": "0b8663b3f3550bbd7a093aeab6dddd18eccbaf73",
+    "verified_in_detached_worktree": true,
+    "product_source_changed_by_verification": false
+  },
+  "source_binding": {
+    "legacy_forge_commit": "1f0a3e0815822d8f58f798e0304b33d4534248b1",
+    "legacy_source": "existing local pinned submodule checkout",
+    "translation_fingerprint": "40a49f7caafbbe1f4ce4a99e2e9c2215",
+    "cargo_lock_sha256": "de6fd35c5ca22f50f15ca86a334b1d491f8efc9c5a1b05766eb9b0226faa286f"
+  },
+  "verification_environment": {
+    "local_only": true,
+    "github_actions_used": false,
+    "network_attempted": false,
+    "network_transfer_used": false,
+    "install_performed": false,
+    "worker_ceiling": 24,
+    "primary_translation_workers": 24,
+    "fingerprint_replay_workers": 12,
+    "planner_workers": 6,
+    "planner_replay_workers": 1,
+    "shared_cache_strategy": "only target/debug and target/llvm-cov-target reused the existing local cache; exact reports and translated outputs were materialized inside the detached worktree"
+  },
+  "coverage_delta": {
+    "before": {
+      "complete_scripts": 9002,
+      "mapped_ability_uses": 16020,
+      "owner_priority_complete": 177,
+      "quarantined_scripts": 24288,
+      "quarantined_ability_uses": 27629
+    },
+    "after": {
+      "complete_scripts": 9275,
+      "total_scripts": 33290,
+      "complete_script_percent": 27.8612195854611,
+      "mapped_ability_uses": 16391,
+      "total_ability_uses": 43649,
+      "mapped_ability_use_percent": 37.551833948085864,
+      "owner_priority_complete": 178,
+      "owner_priority_requested": 365,
+      "quarantined_scripts": 24015,
+      "quarantined_ability_uses": 27258
+    },
+    "gain": {
+      "complete_scripts": 273,
+      "mapped_ability_uses": 371,
+      "owner_priority_complete": 1,
+      "quarantined_scripts_removed": 273,
+      "quarantined_ability_uses_removed": 371
+    }
+  },
+  "semantic_boundaries": {
+    "exactly_lowered": [
+      "graveyard, hand, command, exile, and stack activation-zone restrictions as typed timing conditions",
+      "closed literal unless-paid costs with explicit payer selectors and payer-relative sacrifice eligibility",
+      "Defined=Targeted as an explicit target binding",
+      "ability conditions composed with existing timing before default subability sequencing",
+      "Hidden only where the legacy source proves it redundant for intrinsically hidden ChangeZone origins"
+    ],
+    "still_quarantined": [
+      "dynamic Y or Z unless costs and other unresolved dynamic costs",
+      "event-specific or unsupported payer selectors",
+      "non-You sacrifice of CARDNAME",
+      "every public-zone ChangeZone Hidden form, including identity-bound ReplacedCard",
+      "all values that cannot be represented without losing a rules-observable distinction"
+    ],
+    "claim": "structural translation and compiler validity only; runtime and card-specific semantic maturity remain separate T3.5 and T3.6 evidence"
+  },
+  "review_history": [
+    {
+      "verdict": "FAIL",
+      "findings": [
+        "SP and DB conditions initially suppressed default subabilities",
+        "payer-relative sacrifice costs were initially bound to You",
+        "dynamic Y and Z unless costs initially failed open",
+        "public-zone identity-bound Hidden handling lacked proof"
+      ]
+    },
+    {
+      "remediation": [
+        "conditions now wrap the main effect before default subability sequencing",
+        "sacrifice eligibility binds to the resolved payer",
+        "dynamic Y and Z costs fail closed",
+        "all public-zone ChangeZone Hidden values fail closed"
+      ],
+      "verdict": "PASS",
+      "reviewer": "independent strong-reasoning subagent"
+    }
+  ],
+  "commands": [
+    {
+      "command": "cargo test --offline -p forge-carddef -p forge-porttools",
+      "exit_code": 0,
+      "result": "4 forge-carddef and 44 forge-porttools tests passed"
+    },
+    {
+      "command": "cargo clippy --offline -p forge-carddef -p forge-porttools --all-targets -- -D warnings",
+      "exit_code": 0,
+      "result": "passed"
+    },
+    {
+      "command": "FORGE_T3_TOTAL_WORKERS=24 CARGO_BUILD_JOBS=24 scripts/t3_parallel_sweep.sh checkpoint",
+      "exit_code": 0,
+      "result": "format, clippy -D warnings, workspace tests, deterministic translation and planner replay, compiler/database validation, 235 oracle scenarios, and coverage passed",
+      "accelerated_core_phase_seconds": 36,
+      "full_workspace_verification_seconds": 59,
+      "total_seconds": 100
+    }
+  ],
+  "line_coverage": {
+    "covered": 25868,
+    "count": 32214,
+    "percent": 80.300490469982,
+    "floor_percent": 80
+  },
+  "planner": {
+    "analyzed_scripts": 33290,
+    "scripts_with_confirmed_blockers": 23877,
+    "priority_scripts_with_confirmed_blockers": 181,
+    "confirmed_observations": 59581,
+    "unique_blocker_families": 5134,
+    "linked_root_fanout": 60561
+  },
+  "continuation": {
+    "t3_3_allocation_percent": 40,
+    "t3_3_remains_active": true,
+    "next_batch_source": "metrics/blocker_plan.json recommended_batches[0]",
+    "next_batch_families": [
+      "RestrictValid",
+      "A:Dig",
+      "Chapter",
+      "RemoveCreatureTypes",
+      "Origin=Graveyard"
+    ],
+    "planner_estimated_new_complete_scripts": 654,
+    "planner_estimated_new_priority_complete": 4,
+    "rule": "T3.5 and T3.6 advance in parallel but cannot replace, pause, or complete T3.3; every mapper batch must produce measured script and ability-use deltas"
+  },
+  "artifacts": {
+    "crates/forge-carddef/src/lib.rs": "6b23b4be49af8ce2ccd555f82ce8323ef5031aaca3c6ce2040d7efde07f29d1c",
+    "crates/forge-porttools/src/mapper.rs": "21b4771fb0d2f5a5da8ef00a2734097f994cdc395f67d6c305da5dda81d907f9",
+    "docs/specs/T3.1.md": "1ad8490baef2b1ff3231e3afcbffe7f0a7684b747089a26824a4c7872a072bbb",
+    "docs/specs/T3.3.md": "ebf448eedb207e9c133e42a44d050e5a7331b498cfd1436202887a69e508e4a9",
+    "metrics/translation.json": "85d5a1dc63b2d4648e819b5f6eff9ff42b6c236983f2938ab832c7011a218aa9",
+    "metrics/translation_quarantine.json": "d28286ad2f271ca85987880c8d099fc44f7f7e5aae323d60e03a4bedcde2b48d",
+    "metrics/priority_coverage.json": "79f87682be13470718650f01ccc5ed97721cab5307c1990369be657ddbcceb4e",
+    "metrics/blocker_plan.json": "b75ee4b4bfd5c3d8da1e0ea695bdfbea21140ac0b6d3b9fec68e02ff628decfc",
+    "metrics/api_coverage.json": "0a3391caa64b25d0155a9431701118893a389cc02f35859e50139436d5761350",
+    "metrics/api_quarantine.json": "0f30788df23f7faac7632620c5215714472d9dc2ecf456092a079f7940a5a9ca",
+    "metrics/t3_parallel_validation.json": "900c8557a80e1b90809813c9044c38730808799b39b7c3631d6cdd149d29a4db",
+    "raw_coverage_local_sha256": "ec73e68bbb76502c123cdfcd65afd43409d6faa231b61db1dbc653d7ebecad05"
+  },
+  "privacy_boundary": {
+    "github_actions_used": false,
+    "github_push_or_pull_request_performed": false,
+    "private_plan_or_research_included": false,
+    "license": "GPL-3.0-only"
+  }
+}

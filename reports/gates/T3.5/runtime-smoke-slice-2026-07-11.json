@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-11T11:30:44Z",
+  "task": "T3.5",
+  "slice": "literal-life-instant-sorcery-runtime-smoke",
+  "status": "pass_bounded_slice",
+  "claim_boundary": "This is the first capability-specific runtime slice. It is not a general card interpreter, all-card runtime pass, or card-semantic verification.",
+  "product_binding": {
+    "source_commit": "0fea82bcfbf6e1fcbacdd8eb56c5912018d3813e",
+    "exact_integration_commit": "4e53dc59c9af194deea99a7aa4732381b1726172",
+    "exact_integration_tree": "0b8663b3f3550bbd7a093aeab6dddd18eccbaf73",
+    "verified_in_detached_worktree": true
+  },
+  "supported_surface": [
+    "ordinary one-face instant or sorcery",
+    "exactly one unconditional spell ability and no keywords",
+    "ordinary colored and generic printed mana",
+    "literal gain_life and lose_life effects, including sequence",
+    "you() and opponent() player bindings"
+  ],
+  "production_path": [
+    "two-player setup and opening hands",
+    "legal cast window and exact payment planning",
+    "Action::CastSpell and production priority passes",
+    "stack-to-owner-graveyard transition",
+    "Action::GainLife and Action::LoseLife",
+    "zone conservation, allocated/streaming hash equality, player views, life and poison sanity, exact totals, and game-outcome assertions"
+  ],
+  "typed_outcomes": ["passed", "unsupported_setup", "failed"],
+  "exact_examples": [
+    {
+      "card": "Nourish",
+      "disposition": "passed",
+      "capability": "gain_life",
+      "production_actions": 31,
+      "destination": "owner_graveyard",
+      "final_hash": 17086081742352476644
+    },
+    {
+      "card": "Heroes' Reunion",
+      "disposition": "unsupported_setup",
+      "reason_code": "unsupported_player_selector",
+      "exit_code": 2,
+      "counted_as_pass": false
+    }
+  ],
+  "commands": [
+    {
+      "command": "cargo test --offline -p forge-testkit",
+      "exit_code": 0,
+      "result": "25 tests passed plus 0 doc-test failures"
+    },
+    {
+      "command": "cargo clippy --offline -p forge-testkit --all-targets -- -D warnings",
+      "exit_code": 0,
+      "result": "passed"
+    },
+    {
+      "command": "FORGE_T3_TOTAL_WORKERS=24 CARGO_BUILD_JOBS=24 scripts/t3_parallel_sweep.sh checkpoint",
+      "exit_code": 0,
+      "result": "exact combined local product passed with 80.3005% line coverage"
+    },
+    {
+      "command": "cargo run --offline -q -p forge-testkit -- runtime-smoke target/translated-cards/n/nourish.frs",
+      "exit_code": 0,
+      "result": "1 passed, 0 unsupported, 0 failed"
+    },
+    {
+      "command": "cargo run --offline -q -p forge-testkit -- runtime-smoke target/translated-cards/h/heroes_reunion.frs",
+      "exit_code": 2,
+      "result": "expected fail-closed result: 0 passed, 1 unsupported, 0 failed"
+    }
+  ],
+  "artifacts": {
+    "crates/forge-testkit/src/runtime_smoke.rs": "ea1216f3d419f954d9b8d080466033116a8142a42acb02650841be1ef763abb3",
+    "crates/forge-testkit/src/main.rs": "de7ae0476f385e3076377a5c3452aa2776270e533f893774f734caf23e54dc1e",
+    "docs/specs/T3.5.md": "17a96a7c31e8ac630fb77fa6e78fbd02e4b08c7608e3557633d5390ee0fe93fb",
+    "metrics/t3_parallel_validation.json": "900c8557a80e1b90809813c9044c38730808799b39b7c3631d6cdd149d29a4db"
+  },
+  "continuation": {
+    "status": "in_progress",
+    "allocation_percent": 30,
+    "next": "widen production-backed effect execution and setup synthesis while preserving reason-coded unsupported results",
+    "parallel_constraint": "T3.5 work does not consume or replace the active T3.3 mapper lane"
+  },
+  "constraints": {
+    "local_only": true,
+    "network_used": false,
+    "installs_performed": false,
+    "github_actions_used": false,
+    "push_performed": false
+  }
+}
