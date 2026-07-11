@@ -1,6 +1,6 @@
 # DeckTest / Forge 2.0 Status
 
-Generated: 2026-07-11T19:28:40.271756+00:00 by `tools/write_card_maturity.py`
+Generated: 2026-07-11T19:57:48.025600+00:00 by `tools/write_card_maturity.py`
 
 Plan: v1.8
 
@@ -32,19 +32,19 @@ Exclusive highest evidence stage for the 32,792 in-v1 Oracle identities:
 
 | Highest stage | Identities |
 | --- | ---: |
-| Absent identity-bound definition evidence | 22,424 |
+| Absent identity-bound definition evidence | 22,316 |
 | Parsed | 0 |
 | Mapped partial | 0 |
 | Structurally translated | 0 |
-| Compiler valid | 10,368 |
+| Compiler valid | 10,476 |
 | Runtime smoke passed | 0 |
 | Semantic verified | 0 |
 | Pod integration verified | 0 |
 | AI supported | 0 |
 | Product eligible | 0 |
 
-Compiler-valid evidence currently reaches 10,368/32,792
-in-v1 identities (31.6175%). This includes the
+Compiler-valid evidence currently reaches 10,476/32,792
+in-v1 identities (31.9468%). This includes the
 unverified CP-DSL language-stress corpus and therefore is not a playable claim.
 Parsing and mapping remain below in their own units rather than being guessed
 onto identities.
@@ -54,10 +54,10 @@ onto identities.
 | Literal unit | Result |
 | --- | ---: |
 | Legacy scripts parsed | 33,290/33,290 |
-| Compiler-valid translated legacy definitions | 10,304 |
-| Fail-closed quarantined legacy definitions | 22,986 |
-| Structurally tested legacy ability uses | 17,990/43,649 |
-| Quarantined legacy ability uses | 25,659 |
+| Compiler-valid translated legacy definitions | 10,412 |
+| Fail-closed quarantined legacy definitions | 22,878 |
+| Structurally tested legacy ability uses | 18,194/43,649 |
+| Quarantined legacy ability uses | 25,455 |
 | Owner-priority compiler-valid definitions | 185/365 |
 
 ## Evidence Breadth
@@ -82,4 +82,4 @@ onto identities.
 
 Per-identity generated detail: `target/card-maturity/identities.json` (untracked,
 38,306 records; SHA-256
-`0e16f443aaf2db988a4bc6532789a2b5173dd219c7c034b3ce3259386ef99e09`).
+`c70e564ea5725bf42bf107efa21cc06d0b62de57883ab9b855792cde8943d5b3`).

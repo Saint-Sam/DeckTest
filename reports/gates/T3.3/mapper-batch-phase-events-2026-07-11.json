@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-11T20:00:00Z",
+  "task": "T3.3",
+  "batch": "Phase=End of Turn, Phase=BeginCombat",
+  "technical_result": "pass",
+  "product_binding": {
+    "mapper_commit": "9021bb2",
+    "exact_product_commit": "9021bb2",
+    "exact_product_tree": "dad938e790fc84c1515b34d9fc200ef01fec6de8",
+    "verified_in_detached_worktree": true
+  },
+  "source_binding": {
+    "legacy_forge_commit": "1f0a3e0815822d8f58f798e0304b33d4534248b1",
+    "legacy_source": "existing local pinned submodule checkout",
+    "translation_fingerprint": "8a9c7e1785da53be109d7a0e5f41feb0",
+    "cargo_lock_sha256": "f9fb1cd7230cb19b3277c1f4cb4c6750699e188f197cff4ef4e2965363675268"
+  },
+  "verification_environment": {
+    "local_only": true,
+    "github_actions_used": false,
+    "network_attempted": false,
+    "install_performed": false,
+    "worker_ceiling": 24
+  },
+  "coverage_delta": {
+    "before": {
+      "complete_scripts": 10304,
+      "mapped_ability_uses": 17990,
+      "owner_priority_complete": 185,
+      "quarantined_scripts": 22986,
+      "quarantined_ability_uses": 25659
+    },
+    "after": {
+      "complete_scripts": 10412,
+      "total_scripts": 33290,
+      "complete_script_percent": 31.27665965755482,
+      "mapped_ability_uses": 18194,
+      "total_ability_uses": 43649,
+      "owner_priority_complete": 185,
+      "owner_priority_requested": 365,
+      "quarantined_scripts": 22878,
+      "quarantined_ability_uses": 25455
+    },
+    "gain": {
+      "complete_scripts": 108,
+      "mapped_ability_uses": 204,
+      "owner_priority_complete": 0
+    }
+  },
+  "semantic_boundaries": {
+    "exactly_lowered": [
+      "Phase=End of Turn as canonical end_step event",
+      "Phase=BeginCombat as canonical begin_combat event",
+      "closed Any, You, and Opponent player scopes"
+    ],
+    "still_quarantined": [
+      "unrecognized or alternate phase spellings",
+      "phase triggers outside the battlefield trigger zone",
+      "unsupported player selectors"
+    ],
+    "claim": "structural translation and compiler validity only; runtime and card-specific semantic maturity remain separate T3.5 and T3.6 evidence"
+  },
+  "commands": [
+    {
+      "command": "scripts/t3_parallel_sweep.sh checkpoint",
+      "exit_code": 0,
+      "accelerated_core_phase_seconds": 36,
+      "full_workspace_verification_seconds": 51,
+      "total_seconds": 88
+    }
+  ],
+  "line_coverage": {
+    "covered": 26999,
+    "count": 33471,
+    "percent": 80.66385826536404,
+    "floor_percent": 80
+  },
+  "planner": {
+    "analyzed_scripts": 33290,
+    "scripts_with_confirmed_blockers": 22707,
+    "priority_scripts_with_confirmed_blockers": 174,
+    "confirmed_observations": 53488,
+    "unique_blocker_families": 5273,
+    "linked_root_fanout": 54496
+  },
+  "continuation": {
+    "t3_3_remains_active": true,
+    "next_t3_3_batch_source": "metrics/blocker_plan.json recommended_batches[0]"
+  }
+}

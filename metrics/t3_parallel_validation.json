@@ -1,16 +1,16 @@
 {
   "blocker_plan": {
     "analyzed_scripts": 33290,
-    "confirmed_observations": 54165,
-    "linked_root_fanout": 55173,
-    "scripts_with_confirmed_blockers": 22819,
-    "unique_blocker_families": 5271
+    "confirmed_observations": 53488,
+    "linked_root_fanout": 54496,
+    "scripts_with_confirmed_blockers": 22707,
+    "unique_blocker_families": 5273
   },
   "coverage": {
-    "count": 33410,
-    "covered": 26939,
-    "not_covered": 6471,
-    "percent": 80.63154744088597
+    "count": 33471,
+    "covered": 26999,
+    "not_covered": 6472,
+    "percent": 80.66385826536404
   },
   "deterministic_blocker_plan_replay": true,
   "deterministic_parallel_replay": true,
@@ -19,7 +19,7 @@
     "comparable_serial_core_baseline": null,
     "core_saved_percent": null,
     "full_workspace_verification": 51,
-    "total": 94
+    "total": 88
   },
   "github_actions_used": false,
   "local_only": true,
@@ -28,9 +28,9 @@
   "schema_version": 3,
   "shared_cargo_target": true,
   "translation": {
-    "emitted_percent": 30.952237909282065,
-    "emitted_scripts": 10304,
-    "output_fingerprint": "c95991c0bb7a1117e44db7a92819608d",
+    "emitted_percent": 31.27665965755482,
+    "emitted_scripts": 10412,
+    "output_fingerprint": "8a9c7e1785da53be109d7a0e5f41feb0",
     "priority_emitted": 185,
     "priority_requested": 365,
     "total_scripts": 33290
