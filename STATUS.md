@@ -1,6 +1,6 @@
 # DeckTest / Forge 2.0 Status
 
-Generated: 2026-07-11T23:01:28.054669+00:00 by `tools/write_card_maturity.py`
+Generated: 2026-07-11T23:10:31.997201+00:00 by `tools/write_card_maturity.py`
 
 Plan: v1.8
 
@@ -32,19 +32,19 @@ Exclusive highest evidence stage for the 32,792 in-v1 Oracle identities:
 
 | Highest stage | Identities |
 | --- | ---: |
-| Absent identity-bound definition evidence | 22,101 |
+| Absent identity-bound definition evidence | 22,052 |
 | Parsed | 0 |
 | Mapped partial | 0 |
 | Structurally translated | 0 |
-| Compiler valid | 10,691 |
+| Compiler valid | 10,740 |
 | Runtime smoke passed | 0 |
 | Semantic verified | 0 |
 | Pod integration verified | 0 |
 | AI supported | 0 |
 | Product eligible | 0 |
 
-Compiler-valid evidence currently reaches 10,691/32,792
-in-v1 identities (32.6025%). This includes the
+Compiler-valid evidence currently reaches 10,740/32,792
+in-v1 identities (32.7519%). This includes the
 unverified CP-DSL language-stress corpus and therefore is not a playable claim.
 Parsing and mapping remain below in their own units rather than being guessed
 onto identities.
@@ -54,10 +54,10 @@ onto identities.
 | Literal unit | Result |
 | --- | ---: |
 | Legacy scripts parsed | 33,290/33,290 |
-| Compiler-valid translated legacy definitions | 10,629 |
-| Fail-closed quarantined legacy definitions | 22,661 |
-| Structurally tested legacy ability uses | 18,527/43,649 |
-| Quarantined legacy ability uses | 25,122 |
+| Compiler-valid translated legacy definitions | 10,678 |
+| Fail-closed quarantined legacy definitions | 22,612 |
+| Structurally tested legacy ability uses | 18,597/43,649 |
+| Quarantined legacy ability uses | 25,052 |
 | Owner-priority compiler-valid definitions | 189/365 |
 
 ## Evidence Breadth
@@ -82,4 +82,4 @@ onto identities.
 
 Per-identity generated detail: `target/card-maturity/identities.json` (untracked,
 38,306 records; SHA-256
-`900b381d374580715b4852949fd3e98245bd5a5910d9d3c7b318b3f10d565cef`).
+`db8e73d09c267ba21adedc5444370868e8ea94cafd219c3239d9908afef1217e`).

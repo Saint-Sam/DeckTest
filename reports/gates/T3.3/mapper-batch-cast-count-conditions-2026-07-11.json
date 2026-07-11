@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-11T23:11:02Z",
+  "task": "T3.3",
+  "batch": "Cast-count trigger conditions",
+  "technical_result": "pass",
+  "product_binding": {
+    "mapper_commit": "2cca4f0",
+    "exact_product_commit": "2cca4f0c8ff1af2684ffa2ef3a2a735b59cc2b3a",
+    "exact_product_tree": "eb4636415759c4cb0f0cf4ab0caca95ef6b8f26d",
+    "verified_in_detached_worktree": true
+  },
+  "source_binding": {
+    "legacy_forge_commit": "1f0a3e0815822d8f58f798e0304b33d4534248b1",
+    "legacy_source": "existing local pinned checkout linked into detached worktree",
+    "translation_fingerprint": "bf6dc7090bb9382e586aa5544c952dbc",
+    "cargo_lock_sha256": "f9fb1cd7230cb19b3277c1f4cb4c6750699e188f197cff4ef4e2965363675268"
+  },
+  "verification_environment": {
+    "local_only": true,
+    "github_actions_used": false,
+    "network_attempted": false,
+    "install_performed": false,
+    "worker_ceiling": 24,
+    "shared_cargo_cache": true,
+    "detached_target_debug_symlinked": true,
+    "detached_target_coverage_local": true
+  },
+  "coverage_delta": {
+    "before": {
+      "complete_scripts": 10629,
+      "mapped_ability_uses": 18527,
+      "owner_priority_complete": 189,
+      "quarantined_scripts": 22661,
+      "quarantined_ability_uses": 25122
+    },
+    "after": {
+      "complete_scripts": 10678,
+      "total_scripts": 33290,
+      "complete_script_percent": 32.07569840793031,
+      "mapped_ability_uses": 18597,
+      "total_ability_uses": 43649,
+      "owner_priority_complete": 189,
+      "owner_priority_requested": 365,
+      "quarantined_scripts": 22612,
+      "quarantined_ability_uses": 25052
+    },
+    "gain": {
+      "complete_scripts": 49,
+      "mapped_ability_uses": 70,
+      "owner_priority_complete": 0
+    }
+  },
+  "semantic_boundaries": {
+    "exactly_lowered": [
+      "ActivatorThisTurnCast on SpellCast triggers",
+      "ActivatorThisTurnCast on SpellCastOrCopy triggers",
+      "OpponentTurn=True as a not-your-turn predicate",
+      "spell ValidCard ownership modifiers YouCtrl, YouOwn, OppCtrl, and OppOwn"
+    ],
+    "still_quarantined": [
+      "non-true OpponentTurn values",
+      "ActivatorThisTurnCast on non-cast events",
+      "unrepresented linked effects reachable from otherwise closed trigger events"
+    ],
+    "claim": "structural translation and compiler validity only; runtime and card-specific semantic maturity remain separate T3.5 and T3.6 evidence"
+  },
+  "commands": [
+    {
+      "command": "cargo fmt --all -- --check",
+      "exit_code": 0
+    },
+    {
+      "command": "cargo test -p forge-porttools mapper::tests::lowers_named_and_svar_conditions_by_ability_kind -- --nocapture",
+      "exit_code": 0
+    },
+    {
+      "command": "FORGE_T3_TOTAL_WORKERS=24 CARGO_BUILD_JOBS=24 scripts/t3_parallel_sweep.sh development",
+      "exit_code": 0
+    },
+    {
+      "command": "cargo clippy --workspace --all-targets --all-features -- -D warnings",
+      "exit_code": 0
+    },
+    {
+      "command": "FORGE_T3_TOTAL_WORKERS=24 CARGO_BUILD_JOBS=24 scripts/t3_parallel_sweep.sh checkpoint",
+      "exit_code": 0,
+      "accelerated_core_phase_seconds": 37,
+      "full_workspace_verification_seconds": 68,
+      "total_seconds": 110
+    }
+  ],
+  "line_coverage": {
+    "covered": 27331,
+    "count": 33824,
+    "percent": 80.80357142857143,
+    "floor_percent": 80
+  },
+  "planner": {
+    "analyzed_scripts": 33290,
+    "scripts_with_confirmed_blockers": 22439,
+    "priority_scripts_with_confirmed_blockers": 170,
+    "confirmed_observations": 52857,
+    "unique_blocker_families": 5346,
+    "linked_root_fanout": 53857
+  },
+  "continuation": {
+    "t3_3_remains_active": true,
+    "exit_floor_reached": false,
+    "next_t3_3_batch_source": "metrics/blocker_plan.json recommended_batches[0]"
+  }
+}
