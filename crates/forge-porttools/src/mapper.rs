@@ -506,6 +506,7 @@ pub fn map_legacy_ability(
     });
     let expression = stripped_expression.as_ref().unwrap_or(expression);
     let mut parameters = parameters(expression)?;
+    let target_range = extract_target_range(&mut parameters)?;
     normalize_legacy_defaults(&mut parameters);
     let timing = extract_legacy_timing(&mut parameters)?;
     let Some(spec) = MAPPERS
@@ -518,6 +519,15 @@ pub fn map_legacy_ability(
         ));
     };
     let mut mapped = (spec.mapper)(prefix, api, selector_key, &parameters)?;
+    if let Some((minimum, maximum)) = target_range {
+        let replaced = apply_target_range(&mut mapped.expression, minimum, maximum)?;
+        if replaced == 0 {
+            return Err(diagnostic(
+                "TARGET_RANGE_MISMATCH",
+                "target cardinality did not produce a typed target selector",
+            ));
+        }
+    }
     mapped.timing = timing;
     if optional_effect {
         mapped.expression = call(
@@ -5398,6 +5408,92 @@ fn normalize_legacy_defaults(parameters: &mut BTreeMap<String, String>) {
     }
 }
 
+fn extract_target_range(
+    parameters: &mut BTreeMap<String, String>,
+) -> Result<Option<(i64, i64)>, MappingDiagnostic> {
+    let minimum = parameters.get("TargetMin").cloned();
+    let maximum = parameters.get("TargetMax").cloned();
+    if minimum.is_none() && maximum.is_none() {
+        return Ok(None);
+    }
+    if !parameters.contains_key("ValidTgts") {
+        return Err(diagnostic(
+            "UNSUPPORTED_SELECTOR",
+            "target cardinality requires ValidTgts in the same ability",
+        ));
+    }
+    let minimum = minimum.as_deref().unwrap_or("1");
+    let maximum = maximum.as_deref().unwrap_or("1");
+    let minimum = minimum
+        .parse::<i64>()
+        .map_err(|_| unsupported_value("TargetMin", minimum))?;
+    let maximum = maximum
+        .parse::<i64>()
+        .map_err(|_| unsupported_value("TargetMax", maximum))?;
+    if minimum < 0 || maximum < 1 || minimum > maximum {
+        return Err(diagnostic(
+            "UNSUPPORTED_VALUE",
+            "target range must satisfy 0 <= TargetMin <= TargetMax and TargetMax >= 1",
+        ));
+    }
+    parameters.remove("TargetMin");
+    parameters.remove("TargetMax");
+    if minimum == 1 && maximum == 1 {
+        Ok(None)
+    } else {
+        Ok(Some((minimum, maximum)))
+    }
+}
+
+fn apply_target_range(
+    expression: &mut Expression,
+    minimum: i64,
+    maximum: i64,
+) -> Result<usize, MappingDiagnostic> {
+    let mut declared = false;
+    apply_target_range_node(expression, minimum, maximum, &mut declared)
+}
+
+fn apply_target_range_node(
+    expression: &mut Expression,
+    minimum: i64,
+    maximum: i64,
+    declared: &mut bool,
+) -> Result<usize, MappingDiagnostic> {
+    let Expression::Call {
+        operation,
+        arguments,
+    } = expression
+    else {
+        return Ok(0);
+    };
+    if *operation == Operation::Target {
+        if arguments.len() != 1 {
+            return Err(diagnostic(
+                "TARGET_RANGE_MISMATCH",
+                "typed target selector must have exactly one restriction argument",
+            ));
+        }
+        if !*declared {
+            let selector = arguments.remove(0);
+            *operation = Operation::TargetRange;
+            *arguments = vec![
+                selector,
+                Expression::Integer(minimum),
+                Expression::Integer(maximum),
+            ];
+            *declared = true;
+            return Ok(1);
+        }
+        return Ok(0);
+    }
+    let mut replaced = 0;
+    for argument in arguments {
+        replaced += apply_target_range_node(argument, minimum, maximum, declared)?;
+    }
+    Ok(replaced)
+}
+
 fn mapped_direct(
     prefix: LegacyAbilityPrefix,
     api: &str,
@@ -7266,6 +7362,80 @@ mod tests {
     }
 
     #[test]
+    fn preserves_static_target_cardinality_and_rejects_open_ranges() {
+        for (minimum, maximum) in [(0, 1), (0, 2), (1, 2), (2, 2)] {
+            let mapped = map_line(&format!(
+                "A:SP$ Destroy | ValidTgts$ Creature | TargetMin$ {minimum} | TargetMax$ {maximum} | SpellDescription$ Destroy."
+            ))
+            .unwrap_or_else(|error| panic!("static target range should map: {}", error.message));
+            assert!(matches!(
+                mapped.expression,
+                Expression::Call {
+                    operation: Operation::Destroy,
+                    ref arguments,
+                } if matches!(
+                    arguments.first(),
+                    Some(Expression::Call {
+                        operation: Operation::TargetRange,
+                        arguments: range,
+                    }) if range.get(1) == Some(&Expression::Integer(minimum))
+                        && range.get(2) == Some(&Expression::Integer(maximum))
+                )
+            ));
+        }
+
+        let default = map_line(
+            "A:SP$ Destroy | ValidTgts$ Creature | TargetMin$ 1 | TargetMax$ 1 | SpellDescription$ Destroy.",
+        )
+        .unwrap_or_else(|error| panic!("default target range should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &default.expression,
+            Operation::Target
+        ));
+        assert!(!expression_contains_operation(
+            &default.expression,
+            Operation::TargetRange
+        ));
+
+        for line in [
+            "A:SP$ Destroy | ValidTgts$ Creature | TargetMax$ 2 | SpellDescription$ Destroy.",
+            "A:SP$ Destroy | ValidTgts$ Creature | TargetMin$ 0 | SpellDescription$ Destroy.",
+            "A:SP$ Destroy | ValidTgts$ Creature | TargetMin$ 0 | TargetMax$ 1 | Optional$ True | SpellDescription$ Destroy.",
+        ] {
+            let mapped = map_line(line).unwrap_or_else(|error| {
+                panic!("one-sided or optional range should map: {}", error.message)
+            });
+            assert_eq!(
+                expression_operation_count(&mapped.expression, Operation::TargetRange),
+                1
+            );
+        }
+
+        let repeated = map_line(
+            "A:SP$ Pump | ValidTgts$ Creature | TargetMin$ 0 | TargetMax$ 2 | NumAtt$ 1 | KW$ Flying | SpellDescription$ Pump.",
+        )
+        .unwrap_or_else(|error| panic!("repeated target references should map: {}", error.message));
+        assert_eq!(
+            expression_operation_count(&repeated.expression, Operation::TargetRange),
+            1
+        );
+        assert_eq!(
+            expression_operation_count(&repeated.expression, Operation::Target),
+            1
+        );
+
+        for line in [
+            "A:SP$ Destroy | ValidTgts$ Creature | TargetMin$ X | TargetMax$ X | SpellDescription$ Destroy.",
+            "A:SP$ Destroy | ValidTgts$ Creature | TargetMin$ X | TargetMax$ 2 | SpellDescription$ Destroy.",
+            "A:SP$ Destroy | ValidTgts$ Creature | TargetMin$ 0 | TargetMax$ X | SpellDescription$ Destroy.",
+            "A:SP$ Destroy | ValidTgts$ Creature | TargetMin$ 2 | TargetMax$ 1 | SpellDescription$ Destroy.",
+            "A:SP$ Destroy | Defined$ Self | TargetMin$ 0 | TargetMax$ 1 | SpellDescription$ Destroy.",
+        ] {
+            assert!(map_line(line).is_err(), "open target range must quarantine");
+        }
+    }
+
+    #[test]
     fn resolves_charm_mode_graph() {
         let script = parse_legacy_script(
             "charm.txt",
@@ -8509,6 +8679,26 @@ mod tests {
                         .any(|argument| expression_contains_operation(argument, expected))
             }
             _ => false,
+        }
+    }
+
+    fn expression_operation_count(expression: &Expression, expected: Operation) -> usize {
+        match expression {
+            Expression::Call {
+                operation,
+                arguments,
+            } => {
+                usize::from(*operation == expected)
+                    + arguments
+                        .iter()
+                        .map(|argument| expression_operation_count(argument, expected))
+                        .sum::<usize>()
+            }
+            Expression::List(values) => values
+                .iter()
+                .map(|value| expression_operation_count(value, expected))
+                .sum(),
+            _ => 0,
         }
     }
 

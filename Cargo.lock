@@ -241,6 +241,7 @@ dependencies = [
 name = "forge-carddef"
 version = "0.0.0"
 dependencies = [
+ "bincode",
  "serde",
 ]
 

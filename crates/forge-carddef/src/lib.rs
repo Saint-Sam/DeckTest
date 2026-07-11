@@ -970,6 +970,7 @@ operations! {
     EventCastTargeting => ("event_cast_targeting", Event, 4, Some(4)),
     RegenerateShield => ("regenerate_shield", Effect, 1, Some(1)),
     HiddenInformation => ("hidden_information", Effect, 1, Some(1)),
+    TargetRange => ("target_range", Selector, 3, Some(3)),
 }
 
 impl Operation {
@@ -999,7 +1000,7 @@ impl Operation {
     #[must_use]
     pub const fn argument_kind(self, index: usize) -> Option<ArgumentKind> {
         use ArgumentKind::{
-            Boolean, Comparable, Effect, Event, Number, Predicate, PredicateOrText,
+            Boolean, Comparable, Effect, Event, Integer, Number, Predicate, PredicateOrText,
             RememberedValue, Scalar, Selector, SelectorOrEvent, SelectorOrNumber,
             SelectorOrPredicate, SelectorOrText, SelectorTextOrNumber, Text, Timing, Value,
         };
@@ -1015,6 +1016,11 @@ impl Operation {
             Self::Any | Self::You | Self::Source => None,
             Self::Opponent => Some(Selector),
             Self::Chosen | Self::Target => Some(SelectorOrPredicate),
+            Self::TargetRange => match index {
+                0 => Some(SelectorOrPredicate),
+                1 | 2 => Some(Integer),
+                _ => None,
+            },
             Self::ControllerOf | Self::OwnerOf => Some(Selector),
             Self::Triggered => Some(Selector),
             Self::Remembered => Some(Text),
@@ -1466,6 +1472,14 @@ mod tests {
             Operation::TimingAll.argument_kind(3),
             Some(ArgumentKind::Timing)
         );
+        assert_eq!(
+            Operation::TargetRange.argument_kind(1),
+            Some(ArgumentKind::Integer)
+        );
+        assert_eq!(
+            Operation::TargetRange.argument_kind(2),
+            Some(ArgumentKind::Integer)
+        );
         assert_eq!(Operation::parse("card_specific_magic"), None);
     }
 
@@ -1486,6 +1500,19 @@ mod tests {
         assert_eq!(Operation::EventCastTargeting as u32, 170);
         assert_eq!(Operation::RegenerateShield as u32, 171);
         assert_eq!(Operation::HiddenInformation as u32, 172);
+        assert_eq!(Operation::TargetRange as u32, 173);
+
+        let config = bincode::config::standard()
+            .with_fixed_int_encoding()
+            .with_little_endian();
+        let hidden_bytes = bincode::serde::encode_to_vec(Operation::HiddenInformation, config)
+            .unwrap_or_else(|error| panic!("operation encoding must succeed: {error}"));
+        assert_eq!(hidden_bytes, 172_u32.to_le_bytes());
+        let (decoded, consumed): (Operation, usize) =
+            bincode::serde::decode_from_slice(&172_u32.to_le_bytes(), config)
+                .unwrap_or_else(|error| panic!("legacy operation bytes must decode: {error}"));
+        assert_eq!(decoded, Operation::HiddenInformation);
+        assert_eq!(consumed, 4);
     }
 
     #[test]
