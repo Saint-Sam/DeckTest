@@ -872,7 +872,7 @@ operations! {
     AddMana => ("add_mana", Effect, 1, Some(3)),
     CounterSpell => ("counter_spell", Effect, 1, Some(2)),
     Copy => ("copy", Effect, 1, Some(2)),
-    CreateToken => ("create_token", Effect, 1, Some(3)),
+    CreateToken => ("create_token", Effect, 1, Some(4)),
     AddCounter => ("add_counter", Effect, 2, Some(3)),
     RemoveCounters => ("remove_counters", Effect, 2, Some(3)),
     ModifyPt => ("modify_pt", Effect, 3, Some(4)),
@@ -1180,6 +1180,7 @@ impl Operation {
                 0 => Some(Text),
                 1 => Some(Number),
                 2 => Some(Selector),
+                3 => Some(Text),
                 _ => None,
             },
             Self::AddCounter | Self::RemoveCounters => match index {
@@ -1479,6 +1480,10 @@ mod tests {
         assert_eq!(
             Operation::TargetRange.argument_kind(2),
             Some(ArgumentKind::Integer)
+        );
+        assert_eq!(
+            Operation::CreateToken.argument_kind(3),
+            Some(ArgumentKind::Text)
         );
         assert_eq!(Operation::parse("card_specific_magic"), None);
     }

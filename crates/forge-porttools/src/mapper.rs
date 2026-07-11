@@ -3745,6 +3745,7 @@ fn map_token(
             "TokenOwner",
             "ValidTgts",
             "TokenAmount",
+            "TokenTapped",
             "SpellDescription",
             "StackDescription",
             "AILogic",
@@ -3761,6 +3762,11 @@ fn map_token(
         ));
     }
     let amount = optional_positive_integer(parameters, "TokenAmount")?.unwrap_or(1);
+    let tapped = match parameters.get("TokenTapped").map(String::as_str) {
+        None => false,
+        Some("True") => true,
+        Some(value) => return Err(unsupported_value("TokenTapped", value)),
+    };
     let owner = match (
         parameters.get("TokenOwner").map(String::as_str),
         parameters.get("ValidTgts"),
@@ -3776,14 +3782,15 @@ fn map_token(
         token_scripts
             .into_iter()
             .map(|token| {
-                call(
-                    Operation::CreateToken,
-                    vec![
-                        Expression::Text(token.to_string()),
-                        Expression::Integer(amount),
-                        owner.clone(),
-                    ],
-                )
+                let mut arguments = vec![
+                    Expression::Text(token.to_string()),
+                    Expression::Integer(amount),
+                    owner.clone(),
+                ];
+                if tapped {
+                    arguments.push(Expression::Text("tapped".to_string()));
+                }
+                call(Operation::CreateToken, arguments)
             })
             .collect(),
         "Token requires at least one TokenScript",
@@ -7576,6 +7583,24 @@ mod tests {
         ] {
             assert_operation(line, operation, 0);
         }
+
+        let tapped = map_line(
+            "A:SP$ Token | TokenScript$ c_a_powerstone | TokenTapped$ True | SpellDescription$ Token.",
+        )
+        .unwrap_or_else(|error| panic!("tapped token should map: {}", error.message));
+        assert!(matches!(
+            tapped.expression,
+            Expression::Call {
+                operation: Operation::CreateToken,
+                ref arguments,
+            } if arguments.get(3) == Some(&Expression::Text("tapped".to_string()))
+        ));
+        let error = map_line(
+            "A:SP$ Token | TokenScript$ c_a_powerstone | TokenTapped$ False | SpellDescription$ Token.",
+        )
+        .err()
+        .unwrap_or_else(|| panic!("non-true TokenTapped must quarantine"));
+        assert_eq!(error.code, "UNSUPPORTED_VALUE");
     }
 
     #[test]
