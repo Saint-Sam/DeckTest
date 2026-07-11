@@ -271,20 +271,20 @@
       "attempts": 0,
       "allocation_percent": 40,
       "coverage_exit_floor": "at least 60% complete legacy-script coverage plus the remaining T3 runtime and semantic gates",
-      "latest_source_commit": "b0c1d3f",
+      "latest_source_commit": "564279c",
       "latest_serialization_remediation_commit": "15741debf16e095f34ef72d612c9e1fd0cfb16a6",
-      "latest_exact_integration_product": "b0c1d3f",
-      "latest_verified_batch_families": ["RestrictValid", "A:Dig", "Chapter", "RemoveCreatureTypes", "Origin=Graveyard", "TargetsValid", "A:Regenerate", "Optional", "Hidden=True", "DefinedPlayer", "NoRegen", "PresentZone", "TargetMin", "TargetMax", "TokenTapped", "Phase=End of Turn", "Phase=BeginCombat", "DividedAsYouChoose", "NumAtt=-X", "NumDef=-X"],
+      "latest_exact_integration_product": "564279c",
+      "latest_verified_batch_families": ["RestrictValid", "A:Dig", "Chapter", "RemoveCreatureTypes", "Origin=Graveyard", "TargetsValid", "A:Regenerate", "Optional", "Hidden=True", "DefinedPlayer", "NoRegen", "PresentZone", "TargetMin", "TargetMax", "TokenTapped", "Phase=End of Turn", "Phase=BeginCombat", "DividedAsYouChoose", "NumAtt=-X", "NumDef=-X", "TriggerCount", "PlayerCountOpponents=Amount"],
       "next_batch_status": "ready_for_implementation",
       "next_batch_source": "metrics/blocker_plan.json recommended_batches[0]",
       "active_batch_families": [],
-      "verification": "Exact local-only product b0c1d3f passed the 24-worker checkpoint with deterministic 24/12 translation replay, deterministic 6/1 planner replay, full workspace tests, clippy -D warnings, compiler/database validation, 235 oracle scenarios, and 80.7206% line coverage. Divided damage, counter, and prevention totals are preserved as typed target allocation, and negative dynamic power/toughness values are typed numeric negation; mismatched or unresolved forms remain fail-closed. This moves complete translations from 10,412 to 10,483 (+71), mapped top-level ability uses from 18,194 to 18,291 (+97), quarantined scripts from 22,878 to 22,807, and quarantined uses from 25,455 to 25,358; Owner-priority emission rises from 185 to 186. Structural mapping is not runtime or semantic evidence. T3.3 remains active as the 40% breadth lane; the next real mapper batch comes from the current all-blocker planner."
+      "verification": "Exact local-only product 564279c passed the 24-worker checkpoint with deterministic 24/12 translation replay, deterministic 6/1 planner replay, full workspace tests, clippy -D warnings, compiler/database validation, 235 oracle scenarios, and 80.7480% line coverage. Simple triggered numeric fields and the plain multiplayer opponent count are typed explicitly; arithmetic, highest/lowest, conditional, and property-filtered forms remain fail-closed. This moves complete translations from 10,483 to 10,541 (+58), mapped top-level ability uses from 18,291 to 18,399 (+108), quarantined scripts from 22,807 to 22,749, and quarantined uses from 25,358 to 25,250; Owner-priority emission remains 186. Structural mapping is not runtime or semantic evidence. T3.3 remains active as the 40% breadth lane; the next real mapper batch comes from the current all-blocker planner."
     },
     "T3.4": {
       "status": "verified_local",
       "branch": "task/T3.4-frs-emitter",
       "attempts": 0,
-      "verification": "PASS local exact integration product b0c1d3f: 10,483/33,290 complete legacy scripts emitted as canonical .frs (31.4899%), with 22,807 fail-closed file quarantines and compiler roundtrips against 38,306 identities and 113,234 printings. All 365 Owner-priority names resolve and 186/365 emit. The 24-worker materialized pass and 12-worker hash-only replay matched fingerprint 683cf1de4fe8f11a825a57d8d9858ffd plus deterministic quarantine and priority reports; the 6-worker and 1-worker blocker plans also matched. The full local checkpoint completed in 67 seconds with a 36-second accelerated core phase, full workspace tests, clippy -D warnings, compiler/database validation, 235 oracle scenarios, and workspace line coverage 27,131/33,611 (80.7206%), with no GitHub Actions."
+      "verification": "PASS local exact integration product 564279c: 10,541/33,290 complete legacy scripts emitted as canonical .frs (31.6642%), with 22,749 fail-closed file quarantines and compiler roundtrips against 38,306 identities and 113,234 printings. All 365 Owner-priority names resolve and 186/365 emit. The 24-worker materialized pass and 12-worker hash-only replay matched fingerprint aa732f6c93626f95a642e50db7a42c7e plus deterministic quarantine and priority reports; the 6-worker and 1-worker blocker plans also matched. The full local checkpoint completed in 112 seconds with a 36-second accelerated core phase, full workspace tests, clippy -D warnings, compiler/database validation, 235 oracle scenarios, and workspace line coverage 27,204/33,690 (80.7480%), with no GitHub Actions."
     },
     "T3.5": {
       "status": "in_progress_first_slice_verified",

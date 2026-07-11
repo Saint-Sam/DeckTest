@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-11T22:00:00Z",
+  "task": "T3.3",
+  "batch": "TriggerCount and PlayerCountOpponents",
+  "technical_result": "pass",
+  "product_binding": {
+    "mapper_commit": "564279c",
+    "exact_product_commit": "564279c",
+    "exact_product_tree": "737a84fd9395a0d65078e5ea6fefc751a518b7fe",
+    "verified_in_detached_worktree": true
+  },
+  "source_binding": {
+    "legacy_forge_commit": "1f0a3e0815822d8f58f798e0304b33d4534248b1",
+    "legacy_source": "existing local pinned submodule checkout",
+    "translation_fingerprint": "aa732f6c93626f95a642e50db7a42c7e",
+    "cargo_lock_sha256": "f9fb1cd7230cb19b3277c1f4cb4c6750699e188f197cff4ef4e2965363675268"
+  },
+  "verification_environment": {
+    "local_only": true,
+    "github_actions_used": false,
+    "network_attempted": false,
+    "install_performed": false,
+    "worker_ceiling": 24,
+    "shared_cargo_cache": true
+  },
+  "coverage_delta": {
+    "before": {
+      "complete_scripts": 10483,
+      "mapped_ability_uses": 18291,
+      "owner_priority_complete": 186,
+      "quarantined_scripts": 22807,
+      "quarantined_ability_uses": 25358
+    },
+    "after": {
+      "complete_scripts": 10541,
+      "total_scripts": 33290,
+      "complete_script_percent": 31.66416341243617,
+      "mapped_ability_uses": 18399,
+      "total_ability_uses": 43649,
+      "owner_priority_complete": 186,
+      "owner_priority_requested": 365,
+      "quarantined_scripts": 22749,
+      "quarantined_ability_uses": 25250
+    },
+    "gain": {
+      "complete_scripts": 58,
+      "mapped_ability_uses": 108,
+      "owner_priority_complete": 0
+    }
+  },
+  "semantic_boundaries": {
+    "exactly_lowered": [
+      "simple triggered damage, life, amount, result, and scry numeric fields",
+      "plain multiplayer opponent count"
+    ],
+    "still_quarantined": [
+      "trigger-count arithmetic suffixes and unsupported event fields",
+      "highest, lowest, conditional, and property-filtered opponent counts"
+    ],
+    "claim": "structural translation and compiler validity only; runtime and card-specific semantic maturity remain separate T3.5 and T3.6 evidence"
+  },
+  "commands": [
+    {
+      "command": "scripts/t3_parallel_sweep.sh checkpoint",
+      "exit_code": 0,
+      "accelerated_core_phase_seconds": 36,
+      "full_workspace_verification_seconds": 71,
+      "total_seconds": 112
+    }
+  ],
+  "line_coverage": {
+    "covered": 27204,
+    "count": 33690,
+    "percent": 80.7479964381122,
+    "floor_percent": 80
+  },
+  "planner": {
+    "analyzed_scripts": 33290,
+    "scripts_with_confirmed_blockers": 22577,
+    "priority_scripts_with_confirmed_blockers": 173,
+    "confirmed_observations": 53190,
+    "unique_blocker_families": 5336,
+    "linked_root_fanout": 54190
+  },
+  "continuation": {
+    "t3_3_remains_active": true,
+    "next_t3_3_batch_source": "metrics/blocker_plan.json recommended_batches[0]"
+  }
+}
