@@ -3671,6 +3671,7 @@ fn map_change_zone(
             "ShuffleNonMandatory",
             "LibraryPosition",
             "Mandatory",
+            "GainControl",
             "NoLooking",
             "Hidden",
             "SelectPrompt",
@@ -3765,6 +3766,18 @@ fn map_change_zone(
         },
         value => return Err(unsupported_value("Destination", value)),
     };
+    let gain_control = match parameters.get("GainControl").map(String::as_str) {
+        None => false,
+        Some("True") if destination == "battlefield" => true,
+        Some("True") => {
+            return Err(unsupported_value(
+                "GainControl",
+                required(parameters, "GainControl")?,
+            ))
+        }
+        Some(value) => return Err(unsupported_value("GainControl", value)),
+    };
+    let control_target = affected.clone();
     let expression = if player_bound {
         let amount = optional_positive_integer(parameters, "ChangeNum")?.unwrap_or(1);
         call(
@@ -3793,6 +3806,20 @@ fn map_change_zone(
                 vec![affected, Expression::Text(destination.to_string())],
             ),
         }
+    };
+    let expression = if gain_control {
+        call(
+            Operation::Sequence,
+            vec![
+                expression,
+                call(
+                    Operation::ChangeControl,
+                    vec![control_target, call(Operation::You, vec![])],
+                ),
+            ],
+        )
+    } else {
+        expression
     };
     mapped_direct(
         prefix,
@@ -4371,6 +4398,7 @@ fn map_change_zone_all(
             "Origin",
             "Destination",
             "ValidTgts",
+            "GainControl",
             "SpellDescription",
             "StackDescription",
             "ValidDescription",
@@ -4395,7 +4423,13 @@ fn map_change_zone_all(
         )?,
         value => return Err(unsupported_value("Origin", value)),
     };
-    let expression = match required(parameters, "Destination")? {
+    let destination = required(parameters, "Destination")?;
+    let control_target = affected.clone();
+    let expression = match destination {
+        "Battlefield" => call(
+            Operation::MoveZone,
+            vec![affected, Expression::Text("battlefield".to_string())],
+        ),
         "Graveyard" => call(
             Operation::MoveZone,
             vec![affected, Expression::Text("graveyard".to_string())],
@@ -4403,6 +4437,31 @@ fn map_change_zone_all(
         "Exile" => call(Operation::Exile, vec![affected]),
         "Hand" => call(Operation::ReturnToHand, vec![affected]),
         value => return Err(unsupported_value("Destination", value)),
+    };
+    let gain_control = match parameters.get("GainControl").map(String::as_str) {
+        None => false,
+        Some("True") if destination == "Battlefield" => true,
+        Some("True") => {
+            return Err(unsupported_value(
+                "GainControl",
+                required(parameters, "GainControl")?,
+            ));
+        }
+        Some(value) => return Err(unsupported_value("GainControl", value)),
+    };
+    let expression = if gain_control {
+        call(
+            Operation::Sequence,
+            vec![
+                expression,
+                call(
+                    Operation::ChangeControl,
+                    vec![control_target, call(Operation::You, vec![])],
+                ),
+            ],
+        )
+    } else {
+        expression
     };
     mapped_direct(prefix, api, parameters, expression)
 }
@@ -7917,6 +7976,58 @@ mod tests {
         )
         .err()
         .unwrap_or_else(|| panic!("non-true TokenTapped must quarantine"));
+        assert_eq!(error.code, "UNSUPPORTED_VALUE");
+
+        let controlled_reanimation = map_line(
+            "A:SP$ ChangeZone | Origin$ Graveyard | Destination$ Battlefield | ValidTgts$ Creature | GainControl$ True | SpellDescription$ Reanimate.",
+        )
+        .unwrap_or_else(|error| panic!("controlled reanimation should map: {}", error.message));
+        assert!(matches!(
+            controlled_reanimation.expression,
+            Expression::Call {
+                operation: Operation::Sequence,
+                ref arguments,
+            } if arguments.iter().any(|argument| matches!(
+                argument,
+                Expression::Call {
+                    operation: Operation::ChangeControl,
+                    ..
+                }
+            ))
+        ));
+
+        let controlled_mass_reanimation = map_line(
+            "A:SP$ ChangeZoneAll | ChangeType$ Creature | Origin$ Graveyard | Destination$ Battlefield | GainControl$ True | SpellDescription$ Reanimate all.",
+        )
+        .unwrap_or_else(|error| {
+            panic!("controlled mass reanimation should map: {}", error.message)
+        });
+        assert!(matches!(
+            controlled_mass_reanimation.expression,
+            Expression::Call {
+                operation: Operation::Sequence,
+                ref arguments,
+            } if arguments.iter().any(|argument| matches!(
+                argument,
+                Expression::Call {
+                    operation: Operation::ChangeControl,
+                    ..
+                }
+            ))
+        ));
+
+        let error = map_line(
+            "A:SP$ ChangeZone | Origin$ Graveyard | Destination$ Battlefield | ValidTgts$ Creature | GainControl$ ChosenPlayer | SpellDescription$ Reanimate.",
+        )
+        .err()
+        .unwrap_or_else(|| panic!("chosen-player control must quarantine"));
+        assert_eq!(error.code, "UNSUPPORTED_VALUE");
+
+        let error = map_line(
+            "A:SP$ ChangeZoneAll | ChangeType$ Creature | Origin$ Graveyard | Destination$ Exile | GainControl$ True | SpellDescription$ Exile all.",
+        )
+        .err()
+        .unwrap_or_else(|| panic!("control transfer outside battlefield must quarantine"));
         assert_eq!(error.code, "UNSUPPORTED_VALUE");
     }
 
