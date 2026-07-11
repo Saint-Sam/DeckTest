@@ -1,0 +1,119 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-11T18:57:00Z",
+  "task": "T3.3",
+  "batch": "NoRegen-PresentZone",
+  "technical_result": "pass",
+  "product_binding": {
+    "mapper_commit": "d5343783076ad0727b6b5cf4b022cfa743a8fc0d",
+    "ownership_remediation_commit": "61a690c46c5c813625681c0058dd0ae2b525ed75",
+    "exact_product_commit": "61a690c46c5c813625681c0058dd0ae2b525ed75",
+    "exact_product_tree": "dec067cb5dfe3e18465834ccab6b64337754ea4d",
+    "verified_in_detached_worktree": true
+  },
+  "source_binding": {
+    "legacy_forge_commit": "1f0a3e0815822d8f58f798e0304b33d4534248b1",
+    "legacy_source": "existing local pinned submodule checkout",
+    "translation_fingerprint": "3d0d5d619aaded43839962b3cbed7a77",
+    "cargo_lock_sha256": "de6fd35c5ca22f50f15ca86a334b1d491f8efc9c5a1b05766eb9b0226faa286f"
+  },
+  "verification_environment": {
+    "local_only": true,
+    "github_actions_used": false,
+    "network_attempted": false,
+    "network_transfer_used": false,
+    "install_performed": false,
+    "worker_ceiling": 24,
+    "primary_translation_workers": 24,
+    "fingerprint_replay_workers": 12,
+    "planner_workers": 6,
+    "planner_replay_workers": 1
+  },
+  "coverage_delta": {
+    "before": {
+      "complete_scripts": 9972,
+      "mapped_ability_uses": 17454,
+      "owner_priority_complete": 183,
+      "quarantined_scripts": 23318,
+      "quarantined_ability_uses": 26195
+    },
+    "after": {
+      "complete_scripts": 10012,
+      "total_scripts": 33290,
+      "complete_script_percent": 30.07509762691499,
+      "mapped_ability_uses": 17513,
+      "total_ability_uses": 43649,
+      "owner_priority_complete": 185,
+      "owner_priority_requested": 365,
+      "quarantined_scripts": 23278,
+      "quarantined_ability_uses": 26136
+    },
+    "gain": {
+      "complete_scripts": 40,
+      "mapped_ability_uses": 59,
+      "owner_priority_complete": 2,
+      "quarantined_scripts_removed": 40,
+      "quarantined_ability_uses_removed": 59
+    }
+  },
+  "semantic_boundaries": {
+    "exactly_lowered": [
+      "NoRegen=True on DestroyAll as the typed cannot-regenerate marker",
+      "PresentZone Battlefield, Graveyard, Hand, Exile, and Library",
+      "private-zone YouCtrl and OppCtrl qualifiers normalized to ownership"
+    ],
+    "still_quarantined": [
+      "NoRegen values other than True",
+      "PresentZone lists and Command or Stack zones",
+      "unrepresented selector vocabulary"
+    ],
+    "claim": "structural translation and compiler validity only; runtime and card-specific semantic maturity remain separate T3.5 and T3.6 evidence"
+  },
+  "review_history": [
+    {
+      "reviewer": "independent strong-reasoning subagent",
+      "verdict": "FAIL",
+      "finding": "private-zone YouCtrl remained controller-scoped instead of owner-scoped; negative zone and NoRegen assertions were incomplete"
+    },
+    {
+      "scope": "ownership and test remediation",
+      "verdict": "PASS_BY_FOCUSED_AND_EXACT_CHECKPOINT",
+      "result": "private-zone controller qualifiers normalize to ownership; unsupported zones and non-true NoRegen fail closed; exact arguments are asserted"
+    },
+    {
+      "reviewer": "independent strong-reasoning subagent",
+      "scope": "final product and evidence",
+      "verdict": "PASS",
+      "result": "no P0, P1, or P2 findings"
+    }
+  ],
+  "commands": [
+    {
+      "command": "FORGE_T3_TOTAL_WORKERS=24 CARGO_BUILD_JOBS=24 scripts/t3_parallel_sweep.sh checkpoint",
+      "exit_code": 0,
+      "result": "format, clippy -D warnings, full workspace tests, deterministic translation and planner replay, compiler/database validation, 235 oracle scenarios, and coverage passed",
+      "accelerated_core_phase_seconds": 36,
+      "full_workspace_verification_seconds": 50,
+      "total_seconds": 93
+    }
+  ],
+  "line_coverage": {
+    "covered": 26751,
+    "count": 33206,
+    "percent": 80.56074203457206,
+    "floor_percent": 80
+  },
+  "planner": {
+    "analyzed_scripts": 33290,
+    "scripts_with_confirmed_blockers": 23126,
+    "priority_scripts_with_confirmed_blockers": 174,
+    "confirmed_observations": 56911,
+    "unique_blocker_families": 5266,
+    "linked_root_fanout": 57996
+  },
+  "continuation": {
+    "t3_3_remains_active": true,
+    "next_t3_3_batch_source": "metrics/blocker_plan.json recommended_batches[0]",
+    "rule": "T3.5 and T3.6 remain parallel lanes and do not replace or pause measured T3.3 script translation and ability-use mapping"
+  }
+}
