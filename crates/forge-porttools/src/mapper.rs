@@ -160,6 +160,11 @@ const MAPPERS: &[MapperSpec] = &[
     },
     MapperSpec {
         prefix: LegacyAbilityPrefix::Activated,
+        api: "Dig",
+        mapper: map_dig,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Activated,
         api: "DealDamage",
         mapper: map_damage,
     },
@@ -502,6 +507,31 @@ fn map_legacy_ability_in_context(
     context: &MappingContext<'_>,
 ) -> Result<MappedLegacyAbility, MappingDiagnostic> {
     map_with_context(prefix, expression, context, &mut Vec::new())
+}
+
+pub(crate) fn map_named_svar_ability(
+    script: &crate::legacy::LegacyScript,
+    name: &str,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    let context = MappingContext::from_script(script);
+    let expression = context.svars.get(name).copied().ok_or_else(|| {
+        diagnostic(
+            "MISSING_SVAR",
+            &format!("referenced SVar `{name}` is not declared"),
+        )
+    })?;
+    if expression
+        .fields
+        .first()
+        .and_then(|field| field.key.as_deref())
+        != Some("DB")
+    {
+        return Err(diagnostic(
+            "UNSUPPORTED_LINK",
+            &format!("SVar `{name}` is not a DB effect"),
+        ));
+    }
+    resolve_svar(name, &context, &mut Vec::new())
 }
 
 pub(crate) fn map_script_abilities(
@@ -1218,6 +1248,20 @@ fn map_dynamic_ability(
             operation: Operation::AddMana,
             argument: 2,
         }],
+        "Dig" => vec![
+            DynamicPatchSpec {
+                key: "DigNum",
+                placeholder: "1",
+                operation: Operation::LibraryDig,
+                argument: 1,
+            },
+            DynamicPatchSpec {
+                key: "ChangeNum",
+                placeholder: "1",
+                operation: Operation::LibraryDig,
+                argument: 2,
+            },
+        ],
         "Token" => vec![DynamicPatchSpec {
             key: "TokenAmount",
             placeholder: "1",
@@ -1350,6 +1394,17 @@ fn map_dynamic_ability(
             spec.argument,
             &replacement,
         );
+        let replaced = if spec.operation == Operation::AddMana && spec.key == "Amount" {
+            replaced
+                + replace_operation_argument(
+                    &mut mapped.expression,
+                    Operation::AddRestrictedMana,
+                    3,
+                    &replacement,
+                )
+        } else {
+            replaced
+        };
         if replaced == 0 {
             return Err(diagnostic(
                 "DYNAMIC_LOWERING_MISMATCH",
@@ -2489,6 +2544,7 @@ fn map_mana(
             "Cost",
             "Produced",
             "Amount",
+            "RestrictValid",
             "Defined",
             "ValidTgts",
             "SpellDescription",
@@ -2496,20 +2552,30 @@ fn map_mana(
     )?;
     let produced = required(parameters, "Produced")?;
     let amount = optional_positive_integer(parameters, "Amount")?.unwrap_or(1);
-    let mana = normalize_mana(produced, amount)?;
+    let player = player_selector(parameters, DefaultSelector::You)?;
+    let expression = if let Some(restriction) = parameters.get("RestrictValid") {
+        call(
+            Operation::AddRestrictedMana,
+            vec![
+                Expression::Text(normalize_mana(produced, 1)?),
+                player,
+                Expression::Text(normalize_mana_restriction(restriction)?),
+                Expression::Integer(amount),
+            ],
+        )
+    } else {
+        call(
+            Operation::AddMana,
+            vec![Expression::Text(normalize_mana(produced, amount)?), player],
+        )
+    };
     Ok(MappedLegacyAbility {
         prefix,
         api: api.to_string(),
         costs: parse_simple_cost(parameters.get("Cost"))?,
         event: None,
         timing: None,
-        expression: call(
-            Operation::AddMana,
-            vec![
-                Expression::Text(mana),
-                player_selector(parameters, DefaultSelector::You)?,
-            ],
-        ),
+        expression,
     })
 }
 
@@ -2543,6 +2609,161 @@ fn map_draw(
             vec![
                 Expression::Integer(amount),
                 player_selector(parameters, DefaultSelector::You)?,
+            ],
+        ),
+    })
+}
+
+fn map_dig(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["AB", "SP", "DB"])?;
+    reject_unknown(
+        parameters,
+        &[
+            "Cost",
+            "Defined",
+            "ValidTgts",
+            "DigNum",
+            "ChangeNum",
+            "ChangeValid",
+            "ChangeValidDesc",
+            "SourceZone",
+            "DestinationZone",
+            "DestinationZone2",
+            "LibraryPosition",
+            "LibraryPosition2",
+            "Reveal",
+            "NoReveal",
+            "Optional",
+            "ForceRevealToController",
+            "RestRandomOrder",
+            "SkipReorder",
+            "RememberChanged",
+            "Tapped",
+            "ExileFaceDown",
+            "WithMayLook",
+            "RandomChange",
+            "NoLooking",
+            "SpellDescription",
+            "StackDescription",
+            "AILogic",
+        ],
+    )?;
+    if parameters
+        .get("SourceZone")
+        .is_some_and(|zone| zone != "Library")
+    {
+        return Err(unsupported_value(
+            "SourceZone",
+            required(parameters, "SourceZone")?,
+        ));
+    }
+    let player = player_selector(parameters, DefaultSelector::You)?;
+    let dig_number = positive_integer(required(parameters, "DigNum")?, "DigNum")?;
+    let change_number = match parameters.get("ChangeNum").map(String::as_str) {
+        None => Expression::Integer(1),
+        Some("All") => Expression::Text("all".to_string()),
+        Some("Any") => Expression::Text("any".to_string()),
+        Some(value) => Expression::Integer(positive_integer(value, "ChangeNum")?),
+    };
+    let change_selector = parameters
+        .get("ChangeValid")
+        .map(|value| card_selector_in_zone(value, "library"))
+        .transpose()?
+        .unwrap_or_else(|| call(Operation::Cards, vec![]));
+    let destination = normalize_dig_zone(
+        parameters
+            .get("DestinationZone")
+            .map(String::as_str)
+            .unwrap_or("Hand"),
+        "DestinationZone",
+    )?;
+    let rest_destination = normalize_dig_zone(
+        parameters
+            .get("DestinationZone2")
+            .map(String::as_str)
+            .unwrap_or("Library"),
+        "DestinationZone2",
+    )?;
+    let position = dig_library_position(parameters, "LibraryPosition")?;
+    let rest_position = dig_library_position(parameters, "LibraryPosition2")?;
+    if destination != "library" && parameters.contains_key("LibraryPosition") {
+        return Err(unsupported_value(
+            "LibraryPosition",
+            required(parameters, "LibraryPosition")?,
+        ));
+    }
+    if rest_destination != "library" && parameters.contains_key("LibraryPosition2") {
+        return Err(unsupported_value(
+            "LibraryPosition2",
+            required(parameters, "LibraryPosition2")?,
+        ));
+    }
+    if parameters.contains_key("Tapped") && destination != "battlefield" {
+        return Err(diagnostic(
+            "UNSUPPORTED_PARAMETER",
+            "Dig Tapped requires DestinationZone$ Battlefield",
+        ));
+    }
+    if (parameters.contains_key("ExileFaceDown") || parameters.contains_key("WithMayLook"))
+        && destination != "exile"
+    {
+        return Err(diagnostic(
+            "UNSUPPORTED_PARAMETER",
+            "face-down or may-look Dig metadata requires DestinationZone$ Exile",
+        ));
+    }
+    if parameters.contains_key("RestRandomOrder") && rest_destination != "library" {
+        return Err(diagnostic(
+            "UNSUPPORTED_PARAMETER",
+            "RestRandomOrder requires DestinationZone2$ Library",
+        ));
+    }
+    let flags = [
+        "Reveal",
+        "NoReveal",
+        "Optional",
+        "ForceRevealToController",
+        "RestRandomOrder",
+        "SkipReorder",
+        "RememberChanged",
+        "Tapped",
+        "ExileFaceDown",
+        "WithMayLook",
+        "RandomChange",
+        "NoLooking",
+    ]
+    .into_iter()
+    .map(|key| closed_true_flag(parameters, key).map(|enabled| (key, enabled)))
+    .collect::<Result<Vec<_>, _>>()?;
+    let options = format!(
+        "source=library;position={position};rest_position={rest_position};{}",
+        flags
+            .into_iter()
+            .map(|(key, enabled)| format!("{}={enabled}", key.to_ascii_lowercase()))
+            .collect::<Vec<_>>()
+            .join(";")
+    );
+    Ok(MappedLegacyAbility {
+        prefix,
+        api: api.to_string(),
+        costs: parse_simple_cost(parameters.get("Cost"))?,
+        event: None,
+        timing: None,
+        expression: call(
+            Operation::LibraryDig,
+            vec![
+                player,
+                Expression::Integer(dig_number),
+                change_number,
+                change_selector,
+                Expression::Text(destination),
+                Expression::Text(rest_destination),
+                Expression::Text(options),
             ],
         ),
     })
@@ -2968,6 +3189,7 @@ fn map_continuous(
             "SetToughness",
             "AddType",
             "RemoveType",
+            "RemoveCreatureTypes",
             "SetColor",
             "RemoveAllAbilities",
             "GainControl",
@@ -3017,6 +3239,18 @@ fn map_continuous(
         effects.push(call(
             Operation::SetPt,
             vec![call(Operation::Any, vec![]), power, toughness],
+        ));
+    }
+    if let Some(value) = parameters.get("RemoveCreatureTypes") {
+        if value != "True" || affected_player {
+            return Err(unsupported_value("RemoveCreatureTypes", value));
+        }
+        effects.push(call(
+            Operation::RemoveType,
+            vec![
+                call(Operation::Any, vec![]),
+                Expression::Text("creature_subtypes".to_string()),
+            ],
         ));
     }
     if let Some(types) = parameters.get("AddType") {
@@ -3130,6 +3364,7 @@ fn map_change_zone(
         .get("Defined")
         .is_some_and(|value| matches!(value.as_str(), "Self" | "TriggeredCard" | "ReplacedCard"))
         && !parameters.contains_key("ValidTgts");
+    let source_bound = !parameters.contains_key("Defined") && !parameters.contains_key("ValidTgts");
     if let Some(value) = parameters.get("Hidden") {
         if value != "True" {
             return Err(unsupported_value("Hidden", value));
@@ -3148,7 +3383,7 @@ fn map_change_zone(
     if !(origin == "Battlefield"
         || zone_targeted
         || origin == "All" && replacement_object
-        || closed_origin && identity_bound)
+        || closed_origin && (identity_bound || source_bound))
     {
         return Err(unsupported_value("Origin", origin));
     }
@@ -3163,29 +3398,36 @@ fn map_change_zone(
     } else {
         object_selector(parameters, DefaultSelector::Source)?
     };
-    let expression = match required(parameters, "Destination")? {
-        "Graveyard" => call(
-            Operation::MoveZone,
-            vec![affected, Expression::Text("graveyard".to_string())],
-        ),
-        "Exile" => call(Operation::Exile, vec![affected]),
-        "Hand" => call(Operation::ReturnToHand, vec![affected]),
-        "Battlefield" => call(
-            Operation::MoveZone,
-            vec![affected, Expression::Text("battlefield".to_string())],
-        ),
-        "Library" => {
-            let destination = match required(parameters, "LibraryPosition")? {
-                "0" => "library_top",
-                "-1" => "library_bottom",
-                value => return Err(unsupported_value("LibraryPosition", value)),
-            };
-            call(
+    let destination = match required(parameters, "Destination")? {
+        "Graveyard" => "graveyard",
+        "Exile" => "exile",
+        "Hand" => "hand",
+        "Battlefield" => "battlefield",
+        "Library" => match required(parameters, "LibraryPosition")? {
+            "0" => "library_top",
+            "-1" => "library_bottom",
+            value => return Err(unsupported_value("LibraryPosition", value)),
+        },
+        value => return Err(unsupported_value("Destination", value)),
+    };
+    let expression = if closed_origin && !zone_targeted {
+        call(
+            Operation::MoveZoneFrom,
+            vec![
+                affected,
+                Expression::Text(origin.to_ascii_lowercase()),
+                Expression::Text(destination.to_string()),
+            ],
+        )
+    } else {
+        match destination {
+            "exile" => call(Operation::Exile, vec![affected]),
+            "hand" => call(Operation::ReturnToHand, vec![affected]),
+            _ => call(
                 Operation::MoveZone,
                 vec![affected, Expression::Text(destination.to_string())],
-            )
+            ),
         }
-        value => return Err(unsupported_value("Destination", value)),
     };
     mapped_direct(prefix, api, parameters, expression)
 }
@@ -3771,6 +4013,7 @@ fn map_animate(
             "Power",
             "Toughness",
             "Types",
+            "RemoveCreatureTypes",
             "Colors",
             "OverwriteColors",
             "Keywords",
@@ -3786,6 +4029,18 @@ fn map_animate(
         effects.push(call(
             Operation::SetPt,
             vec![affected.clone(), power, toughness],
+        ));
+    }
+    if let Some(value) = parameters.get("RemoveCreatureTypes") {
+        if value != "True" {
+            return Err(unsupported_value("RemoveCreatureTypes", value));
+        }
+        effects.push(call(
+            Operation::RemoveType,
+            vec![
+                affected.clone(),
+                Expression::Text("creature_subtypes".to_string()),
+            ],
         ));
     }
     if let Some(types) = parameters.get("Types") {
@@ -4675,6 +4930,7 @@ fn map_animate_all(
             "Power",
             "Toughness",
             "Types",
+            "RemoveCreatureTypes",
             "Colors",
             "OverwriteColors",
             "Keywords",
@@ -4717,6 +4973,18 @@ fn map_animate_all(
                 "AnimateAll requires Power and Toughness together",
             ));
         }
+    }
+    if let Some(value) = parameters.get("RemoveCreatureTypes") {
+        if value != "True" {
+            return Err(unsupported_value("RemoveCreatureTypes", value));
+        }
+        effects.push(call(
+            Operation::RemoveType,
+            vec![
+                affected.clone(),
+                Expression::Text("creature_subtypes".to_string()),
+            ],
+        ));
     }
     if let Some(types) = parameters.get("Types") {
         for card_type in types.split(',').map(str::trim) {
@@ -5244,6 +5512,172 @@ fn normalize_mana(value: &str, amount: i64) -> Result<String, MappingDiagnostic>
     } else {
         format!("{amount} x {normalized}")
     })
+}
+
+fn normalize_mana_restriction(value: &str) -> Result<String, MappingDiagnostic> {
+    const CLOSED_BRANCHES: &[&str] = &[
+        "Activated",
+        "Activated.Alien+inZoneBattlefield",
+        "Activated.Ally",
+        "Activated.Artifact",
+        "Activated.Artifact+inZoneBattlefield",
+        "Activated.Assassin",
+        "Activated.ChosenType",
+        "Activated.ClassLevelUp",
+        "Activated.Cleric+inZoneBattlefield",
+        "Activated.Creature",
+        "Activated.Creature+ChosenType",
+        "Activated.Creature+inZoneBattlefield",
+        "Activated.Dinosaur",
+        "Activated.Dragon+inZoneBattlefield",
+        "Activated.Eldrazi+Colorless+inZoneBattlefield",
+        "Activated.Elemental",
+        "Activated.Elemental+inZoneBattlefield",
+        "Activated.Equip",
+        "Activated.Hero",
+        "Activated.Land",
+        "Activated.Myr+inZoneBattlefield",
+        "Activated.Outlaw",
+        "Activated.Permanent+Colorless+inZoneBattlefield",
+        "Activated.PowerUp",
+        "Activated.Rogue+inZoneBattlefield",
+        "Activated.Time Lord+inZoneBattlefield",
+        "Activated.Villain",
+        "Activated.Warrior+inZoneBattlefield",
+        "Activated.Wizard+inZoneBattlefield",
+        "CantCastNonArtifactSpells",
+        "CantCastSpellFromHand",
+        "CantPayGenericCosts",
+        "CostContainsC",
+        "CostContainsX",
+        "CumulativeUpkeep",
+        "Spell",
+        "Spell.!wasCastFromYourHand",
+        "Spell.Alien",
+        "Spell.Ally",
+        "Spell.Angel",
+        "Spell.Artifact",
+        "Spell.Assassin",
+        "Spell.Aura",
+        "Spell.ChosenColor+MonoColor",
+        "Spell.ChosenType",
+        "Spell.Cleric",
+        "Spell.Colorless",
+        "Spell.Creature",
+        "Spell.Creature+Blue",
+        "Spell.Creature+ChosenType",
+        "Spell.Creature+Dragon",
+        "Spell.Creature+Elf",
+        "Spell.Creature+Legendary",
+        "Spell.Creature+NoAbilities",
+        "Spell.Creature+Phyrexian",
+        "Spell.Creature+cmcGE4",
+        "Spell.Creature+hasXCost",
+        "Spell.Demon",
+        "Spell.Dinosaur",
+        "Spell.Disturb",
+        "Spell.Dragon",
+        "Spell.Eldrazi+Colorless",
+        "Spell.Elemental",
+        "Spell.Enchantment",
+        "Spell.Equipment",
+        "Spell.Hero",
+        "Spell.Instant",
+        "Spell.IsCommander+YouOwn",
+        "Spell.IsRemembered",
+        "Spell.Kicked",
+        "Spell.Knight",
+        "Spell.Legendary",
+        "Spell.Lesson",
+        "Spell.Mount",
+        "Spell.MultiColor",
+        "Spell.Myr",
+        "Spell.Ninja",
+        "Spell.Omen",
+        "Spell.Outlaw",
+        "Spell.Pilot",
+        "Spell.Planeswalker",
+        "Spell.Planeswalker+Chandra",
+        "Spell.Rogue",
+        "Spell.Room",
+        "Spell.Shrine",
+        "Spell.Sliver",
+        "Spell.Sorcery",
+        "Spell.Spirit",
+        "Spell.Time Lord",
+        "Spell.Turtle",
+        "Spell.Vampire",
+        "Spell.Vehicle",
+        "Spell.Villain",
+        "Spell.Warrior",
+        "Spell.Wizard",
+        "Spell.YouDontOwn",
+        "Spell.cmcGE4",
+        "Spell.cmcGE5",
+        "Spell.hasXCost",
+        "Spell.isCastFaceDown",
+        "Spell.isCastFaceDown+Creature",
+        "Spell.nonColorless+!hasXCost",
+        "Spell.nonCreature",
+        "Spell.numColorsEQ3",
+        "Spell.wasCastFromExile",
+        "Spell.wasCastFromGraveyard+withFlashback",
+        "Spell.wasCastFromYourGraveyard",
+        "Spell.withDevoid",
+        "Spell.withForetell",
+        "Spell.withFreerunning",
+        "Static.Foretelling",
+        "Static.ManifestUp+Creature",
+        "Static.MorphUp",
+        "Static.Unlock",
+        "Static.isTurnFaceUp",
+        "Static.isTurnFaceUp+Creature",
+        "nonSpell",
+    ];
+    let mut normalized = Vec::new();
+    for branch in value.split(',').map(str::trim) {
+        if CLOSED_BRANCHES.binary_search(&branch).is_err() {
+            return Err(unsupported_value("RestrictValid", value));
+        }
+        normalized.push(branch);
+    }
+    if normalized.is_empty() {
+        return Err(unsupported_value("RestrictValid", value));
+    }
+    Ok(normalized.join(","))
+}
+
+fn normalize_dig_zone(value: &str, key: &str) -> Result<String, MappingDiagnostic> {
+    if matches!(
+        value,
+        "Hand" | "Library" | "Graveyard" | "Exile" | "Battlefield"
+    ) {
+        Ok(value.to_ascii_lowercase())
+    } else {
+        Err(unsupported_value(key, value))
+    }
+}
+
+fn dig_library_position(
+    parameters: &BTreeMap<String, String>,
+    key: &str,
+) -> Result<i64, MappingDiagnostic> {
+    match parameters.get(key).map(String::as_str) {
+        None | Some("-1") => Ok(-1),
+        Some("0") => Ok(0),
+        Some(value) => Err(unsupported_value(key, value)),
+    }
+}
+
+fn closed_true_flag(
+    parameters: &BTreeMap<String, String>,
+    key: &str,
+) -> Result<bool, MappingDiagnostic> {
+    match parameters.get(key).map(String::as_str) {
+        None => Ok(false),
+        Some("True") => Ok(true),
+        Some(value) => Err(unsupported_value(key, value)),
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -6161,6 +6595,199 @@ mod tests {
             Operation::DealDamage,
             0,
         );
+    }
+
+    #[test]
+    fn lowers_restricted_mana_library_dig_and_graveyard_self_moves() {
+        let restricted = map_line(
+            "A:AB$ Mana | Cost$ T | Produced$ Any | Amount$ 2 | RestrictValid$ Spell.Instant,Spell.Sorcery | SpellDescription$ Add mana.",
+        )
+        .unwrap_or_else(|error| panic!("restricted mana should map: {}", error.message));
+        assert!(matches!(
+            restricted.expression,
+            Expression::Call {
+                operation: Operation::AddRestrictedMana,
+                ref arguments,
+            } if arguments == &vec![
+                Expression::Text("any_color".to_string()),
+                super::call(Operation::You, vec![]),
+                Expression::Text("Spell.Instant,Spell.Sorcery".to_string()),
+                Expression::Integer(2),
+            ]
+        ));
+
+        let dig = map_line(
+            "A:SP$ Dig | DigNum$ 5 | ChangeNum$ 1 | Optional$ True | ForceRevealToController$ True | ChangeValid$ Card.Creature | RestRandomOrder$ True | SpellDescription$ Look.",
+        )
+        .unwrap_or_else(|error| panic!("closed Dig should map: {}", error.message));
+        let Expression::Call {
+            operation: Operation::LibraryDig,
+            arguments,
+        } = dig.expression
+        else {
+            panic!("Dig should lower to library_dig");
+        };
+        assert_eq!(arguments.len(), 7);
+        assert_eq!(arguments[1], Expression::Integer(5));
+        assert_eq!(arguments[2], Expression::Integer(1));
+        assert_eq!(arguments[4], Expression::Text("hand".to_string()));
+        assert_eq!(arguments[5], Expression::Text("library".to_string()));
+        assert!(matches!(
+            &arguments[6],
+            Expression::Text(options)
+                if options.contains("optional=true")
+                    && options.contains("forcerevealtocontroller=true")
+                    && options.contains("restrandomorder=true")
+        ));
+
+        let graveyard = map_line(
+            "A:AB$ ChangeZone | Cost$ 2 B | Origin$ Graveyard | Destination$ Hand | ActivationZone$ Graveyard | SpellDescription$ Return this card.",
+        )
+        .unwrap_or_else(|error| panic!("graveyard self move should map: {}", error.message));
+        assert!(matches!(
+            graveyard.expression,
+            Expression::Call {
+                operation: Operation::MoveZoneFrom,
+                ref arguments,
+            } if arguments == &vec![
+                super::call(Operation::Source, vec![]),
+                Expression::Text("graveyard".to_string()),
+                Expression::Text("hand".to_string()),
+            ]
+        ));
+        assert!(matches!(
+            graveyard.timing,
+            Some(Expression::Call {
+                operation: Operation::TimingCondition,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn source_bound_closed_zone_moves_retain_their_origin_guard() {
+        let mapped = map_line(
+            "A:DB$ ChangeZone | Origin$ Graveyard | Destination$ Exile | SpellDescription$ Exile this card.",
+        )
+        .unwrap_or_else(|error| panic!("closed source move should map: {}", error.message));
+        assert!(matches!(
+            mapped.expression,
+            Expression::Call {
+                operation: Operation::MoveZoneFrom,
+                ref arguments,
+            } if arguments == &vec![
+                super::call(Operation::Source, vec![]),
+                Expression::Text("graveyard".to_string()),
+                Expression::Text("exile".to_string()),
+            ]
+        ));
+    }
+
+    #[test]
+    fn lowers_dynamic_restricted_mana_and_dig_counts() {
+        let mana = map_script_root(concat!(
+            "Name:Restricted Dynamic Mana\n",
+            "A:AB$ Mana | Cost$ T | Produced$ G | Amount$ X | RestrictValid$ Spell.Creature | SpellDescription$ Mana.\n",
+            "SVar:X:Count$Valid Elf.YouCtrl\n",
+        ))
+        .unwrap_or_else(|error| panic!("dynamic restricted mana should map: {}", error.message));
+        assert!(matches!(
+            mana.expression,
+            Expression::Call {
+                operation: Operation::AddRestrictedMana,
+                ref arguments,
+            } if arguments.get(3).is_some_and(|value| {
+                expression_contains_operation(value, Operation::Count)
+            })
+        ));
+
+        let dig = map_script_root(concat!(
+            "Name:Dynamic Dig\n",
+            "A:SP$ Dig | DigNum$ X | ChangeNum$ Y | ChangeValid$ Card.Creature | SpellDescription$ Dig.\n",
+            "SVar:X:Count$Valid Creature.YouCtrl\n",
+            "SVar:Y:Count$Valid Land.YouCtrl\n",
+        ))
+        .unwrap_or_else(|error| panic!("dynamic Dig should map: {}", error.message));
+        assert!(matches!(
+            dig.expression,
+            Expression::Call {
+                operation: Operation::LibraryDig,
+                ref arguments,
+            } if [1_usize, 2].into_iter().all(|index| {
+                arguments.get(index).is_some_and(|value| {
+                    expression_contains_operation(value, Operation::Count)
+                })
+            })
+        ));
+    }
+
+    #[test]
+    fn replaces_creature_subtypes_before_adding_new_types() {
+        let mapped = map_line(
+            "S:Mode$ Continuous | Affected$ Creature.EnchantedBy | AddType$ Demon & Spirit | RemoveCreatureTypes$ True | Description$ Replace creature types.",
+        )
+        .unwrap_or_else(|error| panic!("creature type replacement should map: {}", error.message));
+        let Expression::Call {
+            operation: Operation::Continuous,
+            arguments,
+        } = mapped.expression
+        else {
+            panic!("continuous type replacement should remain continuous");
+        };
+        let Expression::Call {
+            operation: Operation::Sequence,
+            arguments: effects,
+        } = &arguments[1]
+        else {
+            panic!("type replacement should be an ordered sequence");
+        };
+        assert!(matches!(
+            effects.first(),
+            Some(Expression::Call {
+                operation: Operation::RemoveType,
+                arguments,
+            }) if arguments.get(1) == Some(&Expression::Text("creature_subtypes".to_string()))
+        ));
+        assert!(matches!(
+            effects.get(1),
+            Some(Expression::Call {
+                operation: Operation::AddType,
+                ..
+            })
+        ));
+
+        for line in [
+            "A:SP$ Animate | Defined$ Self | Types$ Demon,Spirit | RemoveCreatureTypes$ True | Duration$ Permanent",
+            "A:SP$ AnimateAll | ValidCards$ Creature.YouCtrl | Types$ Demon,Spirit | RemoveCreatureTypes$ True | Duration$ Permanent",
+        ] {
+            let mapped = map_line(line).unwrap_or_else(|error| {
+                panic!("animated type replacement should map: {}", error.message)
+            });
+            assert!(has_ordered_type_replacement(&mapped.expression));
+        }
+    }
+
+    #[test]
+    fn new_batch_values_still_fail_closed() {
+        for (line, key) in [
+            (
+                "A:AB$ Mana | Produced$ G | RestrictValid$ Runtime.Arbitrary",
+                "RestrictValid",
+            ),
+            (
+                "A:SP$ Dig | DigNum$ 3 | Tapped$ True | SpellDescription$ Invalid destination.",
+                "Tapped",
+            ),
+            (
+                "S:Mode$ Continuous | Affected$ Card.Self | AddType$ Elf | RemoveCreatureTypes$ False",
+                "RemoveCreatureTypes",
+            ),
+        ] {
+            let error = map_line(line)
+                .err()
+                .unwrap_or_else(|| panic!("{key} fixture must quarantine"));
+            assert!(error.message.contains(key), "{}", error.message);
+        }
     }
 
     #[test]
@@ -7479,6 +8106,34 @@ mod tests {
                     || arguments
                         .iter()
                         .any(|argument| expression_contains_operation(argument, expected))
+            }
+            _ => false,
+        }
+    }
+
+    fn has_ordered_type_replacement(expression: &Expression) -> bool {
+        match expression {
+            Expression::Call {
+                operation: Operation::Sequence,
+                arguments,
+            } => {
+                matches!(
+                    arguments.first(),
+                    Some(Expression::Call {
+                        operation: Operation::RemoveType,
+                        arguments,
+                    }) if arguments.get(1)
+                        == Some(&Expression::Text("creature_subtypes".to_string()))
+                ) && matches!(
+                    arguments.get(1),
+                    Some(Expression::Call {
+                        operation: Operation::AddType,
+                        ..
+                    })
+                )
+            }
+            Expression::Call { arguments, .. } => {
+                arguments.iter().any(has_ordered_type_replacement)
             }
             _ => false,
         }

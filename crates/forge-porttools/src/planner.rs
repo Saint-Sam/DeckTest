@@ -381,18 +381,22 @@ fn analyze_parsed_card(
             )
         })
         .collect::<Vec<_>>();
-    blockers.extend(
-        collect_script_keyword_blockers(script)
-            .into_iter()
-            .map(|(line, code, message)| observed_blocker(line, "keyword", &code, &message, 1)),
-    );
+    blockers.extend(collect_script_keyword_blockers(script).into_iter().map(
+        |(line, code, message, fanout)| observed_blocker(line, "keyword", &code, &message, fanout),
+    ));
     let mut deduplicated = BTreeMap::<String, ObservedBlocker>::new();
     for blocker in blockers {
         deduplicated
             .entry(blocker.family.clone())
             .and_modify(|current| {
                 current.linked_root_fanout =
-                    current.linked_root_fanout.max(blocker.linked_root_fanout);
+                    if current.source == "keyword" && blocker.source == "keyword" {
+                        current
+                            .linked_root_fanout
+                            .saturating_add(blocker.linked_root_fanout)
+                    } else {
+                        current.linked_root_fanout.max(blocker.linked_root_fanout)
+                    };
                 if blocker.line < current.line {
                     current.line = blocker.line;
                     current.source.clone_from(&blocker.source);
@@ -759,7 +763,7 @@ mod tests {
             concat!(
                 "Name:Planner Fixture\n",
                 "K:Ward:2\n",
-                "A:SP$ Dig | DigNum$ 3 | ChangeNum$ 1 | SubAbility$ Extra | SpellDescription$ Dig.\n",
+                "A:SP$ DigUntil | Valid$ Card | SubAbility$ Extra | SpellDescription$ Dig.\n",
                 "SVar:Extra:DB$ Effect | SubAbility$ Tail\n",
                 "SVar:Tail:DB$ Draw | Defined$ You | ConditionPlayerTurn$ True\n",
                 "SVar:X:Count$Valid Creature.YouCtrl\n",
@@ -773,7 +777,7 @@ mod tests {
             .iter()
             .map(|blocker| blocker.family.clone())
             .collect::<BTreeSet<_>>();
-        assert!(families.iter().any(|family| family.contains("A:Dig")));
+        assert!(families.iter().any(|family| family.contains("A:DigUntil")));
         assert!(families.iter().any(|family| family.contains("A:Effect")));
         assert!(families
             .iter()
@@ -802,6 +806,27 @@ mod tests {
             ),
             "UNSUPPORTED_VALUE:Phase=End of Turn"
         );
+    }
+
+    #[test]
+    fn combines_distinct_chapter_roots_in_the_same_blocker_family() {
+        let script = parse_legacy_script(
+            "fixture.txt",
+            concat!(
+                "Name:Chapter Fanout\n",
+                "K:Chapter:2:BadA,BadB\n",
+                "SVar:BadA:DB$ NotAnEffect\n",
+                "SVar:BadB:DB$ NotAnEffect\n",
+            ),
+        )
+        .unwrap_or_else(|error| panic!("Chapter fanout fixture should parse: {error}"));
+        let card = analyze_parsed_card("fixture.txt".to_string(), &script, &BTreeMap::new());
+        let blocker = card
+            .blockers
+            .iter()
+            .find(|blocker| blocker.family.contains("A:NotAnEffect"))
+            .unwrap_or_else(|| panic!("Chapter API blocker should be present"));
+        assert_eq!(blocker.linked_root_fanout, 2);
     }
 
     #[test]
@@ -921,7 +946,7 @@ mod tests {
             concat!(
                 "Name:Planner Fixture\n",
                 "K:Ward:2\n",
-                "A:SP$ Dig | DigNum$ 3 | ChangeNum$ 1 | SubAbility$ Extra | SpellDescription$ Dig.\n",
+                "A:SP$ DigUntil | Valid$ Card | SubAbility$ Extra | SpellDescription$ Dig.\n",
                 "SVar:Extra:DB$ Effect\n",
             ),
         )

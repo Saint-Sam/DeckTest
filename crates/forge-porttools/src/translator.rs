@@ -6,7 +6,8 @@ use crate::{
         LegacyScript,
     },
     mapper::{
-        card_selector_in_zone, map_script_abilities, parse_simple_cost, valid_target_selector,
+        card_selector_in_zone, map_named_svar_ability, map_script_abilities, parse_simple_cost,
+        valid_target_selector,
     },
 };
 use forge_cardc::{emit_card, is_known_keyword, parse_card_named};
@@ -390,7 +391,7 @@ fn translate_script(
             ),
         ));
     }
-    let mut card = parse_base_card(relative, identity, &face_properties, &faces)?;
+    let mut card = parse_base_card(relative, identity, script, &face_properties, &faces)?;
     let mapped = map_script_abilities(script).map_err(|failure| {
         (
             failure.line,
@@ -451,6 +452,7 @@ fn translate_script(
 fn parse_base_card(
     relative: &str,
     identity: &CatalogIdentity,
+    script: &LegacyScript,
     face_properties: &[BTreeMap<String, String>],
     faces: &[Vec<&LegacyLine>],
 ) -> Result<forge_carddef::CardDefinition, (usize, String, String)> {
@@ -481,7 +483,7 @@ fn parse_base_card(
         if let Some(defense) = properties.get("Defense") {
             fields.push_str(&format!("    defense: {}\n", quote(defense)));
         }
-        let keywords = translate_keywords(lines)?;
+        let keywords = translate_keywords(script, lines)?;
         face_sources.push_str(&format!(
             "  face {} {{\n    cost: {}\n    types: {}\n    oracle: {}\n{}    keywords: [{}]\n  }}\n",
             quote(name),
@@ -506,7 +508,8 @@ fn parse_base_card(
         )
     })?;
     for (face, lines) in card.faces.iter_mut().zip(faces) {
-        face.abilities.extend(translate_keywords(lines)?.abilities);
+        face.abilities
+            .extend(translate_keywords(script, lines)?.abilities);
     }
     card.status = CardClassification::UnverifiedPlayable;
     Ok(card)
@@ -646,20 +649,73 @@ fn legacy_type_line(value: &str) -> Result<String, (usize, String, String)> {
 
 pub(crate) fn collect_script_keyword_blockers(
     script: &LegacyScript,
-) -> Vec<(usize, String, String)> {
+) -> Vec<(usize, String, String, usize)> {
     let mut blockers = Vec::new();
     for line in &script.lines {
-        if !matches!(line.kind, LegacyLineKind::Keyword { .. }) {
+        let LegacyLineKind::Keyword {
+            name, arguments, ..
+        } = &line.kind
+        else {
             continue;
+        };
+        if name.eq_ignore_ascii_case("Chapter") && arguments.len() == 2 {
+            let names = arguments[1]
+                .split(',')
+                .map(str::trim)
+                .filter(|name| !name.is_empty())
+                .collect::<Vec<_>>();
+            let valid_shape = arguments[0]
+                .parse::<usize>()
+                .ok()
+                .is_some_and(|maximum| maximum > 0 && maximum == names.len());
+            if valid_shape {
+                let mut fanout = BTreeMap::<&str, usize>::new();
+                for name in names {
+                    *fanout.entry(name).or_insert(0) += 1;
+                }
+                let mut linked_blocker = false;
+                for (name, references) in fanout {
+                    match map_named_svar_ability(script, name) {
+                        Ok(linked)
+                            if linked.costs.is_empty()
+                                && linked.event.is_none()
+                                && linked.timing.is_none() => {}
+                        Ok(_) => {
+                            linked_blocker = true;
+                            blockers.push((
+                                line.line,
+                                "UNSUPPORTED_LINK".to_string(),
+                                format!(
+                                    "Chapter SVar `{name}` must be a cost-free DB effect without nested event or timing"
+                                ),
+                                references,
+                            ));
+                        }
+                        Err(diagnostic) => {
+                            linked_blocker = true;
+                            blockers.push((
+                                line.line,
+                                diagnostic.code,
+                                diagnostic.message,
+                                references,
+                            ));
+                        }
+                    }
+                }
+                if linked_blocker {
+                    continue;
+                }
+            }
         }
-        if let Err(blocker) = translate_keywords(&[line]) {
-            blockers.push(blocker);
+        if let Err(blocker) = translate_keywords(script, std::slice::from_ref(&line)) {
+            blockers.push((blocker.0, blocker.1, blocker.2, 1));
         }
     }
     blockers
 }
 
 fn translate_keywords(
+    script: &LegacyScript,
     lines: &[&LegacyLine],
 ) -> Result<TranslatedKeywords, (usize, String, String)> {
     let mut translated = TranslatedKeywords::default();
@@ -672,6 +728,71 @@ fn translate_keywords(
         };
         let keyword = name.trim().to_ascii_lowercase().replace(' ', "_");
         let (keyword_id, ability) = match (keyword.as_str(), arguments.as_slice()) {
+            ("chapter", [max, svar_names]) => {
+                let max = max.parse::<i64>().map_err(|_| {
+                    (
+                        line.line,
+                        "UNSUPPORTED_KEYWORD".to_string(),
+                        format!(
+                            "keyword `{name}` chapter maximum `{max}` is not a positive integer"
+                        ),
+                    )
+                })?;
+                let names = svar_names.split(',').map(str::trim).collect::<Vec<_>>();
+                if max <= 0
+                    || names.iter().any(|name| name.is_empty())
+                    || max as usize != names.len()
+                {
+                    return Err((
+                        line.line,
+                        "UNSUPPORTED_KEYWORD".to_string(),
+                        format!(
+                            "keyword `{name}` requires a positive maximum equal to the number of referenced SVars"
+                        ),
+                    ));
+                }
+                let mut abilities = Vec::with_capacity(names.len());
+                for (index, svar_name) in names.into_iter().enumerate() {
+                    let linked = map_named_svar_ability(script, svar_name)
+                        .map_err(|diagnostic| (line.line, diagnostic.code, diagnostic.message))?;
+                    if !linked.costs.is_empty() || linked.event.is_some() || linked.timing.is_some()
+                    {
+                        return Err((
+                            line.line,
+                            "UNSUPPORTED_LINK".to_string(),
+                            format!(
+                                "Chapter SVar `{svar_name}` must be a cost-free effect without nested event or timing"
+                            ),
+                        ));
+                    }
+                    let chapter = (index + 1) as i64;
+                    abilities.push(AbilityDefinition {
+                        kind: AbilityKind::Triggered,
+                        costs: Vec::new(),
+                        event: Some(expression_call(
+                            Operation::EventChapter,
+                            vec![
+                                expression_call(Operation::Source, vec![]),
+                                Expression::Integer(chapter),
+                                Expression::Integer(max),
+                            ],
+                        )),
+                        condition: None,
+                        timing: None,
+                        effect: expression_call(
+                            Operation::Chapter,
+                            vec![
+                                Expression::Integer(chapter),
+                                Expression::Integer(max),
+                                linked.expression,
+                            ],
+                        ),
+                        mana_ability: false,
+                    });
+                }
+                translated.abilities.extend(abilities);
+                (None, None)
+            }
             ("etbcounter", [counter, amount]) => {
                 let amount = amount.parse::<i64>().map_err(|_| {
                     (
@@ -1242,12 +1363,14 @@ fn outcome_aliases(outcome: &TranslationOutcome) -> &[String] {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_priority_report, face_lines, legacy_mana_cost, legacy_type_line, percent,
-        read_priority_tiers, translate_keywords, translate_one_inner, translation_fingerprint,
-        CatalogIdentities, CatalogIdentity, PriorityTier, TranslationFailure, TranslationOutcome,
+        build_priority_report, collect_script_keyword_blockers, expression_call, face_lines,
+        legacy_mana_cost, legacy_type_line, percent, read_priority_tiers, translate_keywords,
+        translate_one_inner, translation_fingerprint, CatalogIdentities, CatalogIdentity,
+        PriorityTier, TranslationFailure, TranslationOutcome,
     };
     use forge_carddef::{
-        CardCatalog, CardClassification, CardLayout, IdentityRecord, OracleId, SourceProvenance,
+        AbilityKind, CardCatalog, CardClassification, CardLayout, Expression, IdentityRecord,
+        Operation, OracleId, SourceProvenance,
     };
     use std::{fs, path::PathBuf};
 
@@ -1648,7 +1771,7 @@ mod tests {
         let script = crate::legacy::parse_legacy_script("fixture.txt", "K:etbCounter:P1P1:2\n")
             .unwrap_or_else(|error| panic!("fixture should parse: {error}"));
         let faces = face_lines(&script);
-        let translated = translate_keywords(&faces[0])
+        let translated = translate_keywords(&script, &faces[0])
             .unwrap_or_else(|error| panic!("keyword should translate: {error:?}"));
         assert!(translated.ids.is_empty());
         assert_eq!(translated.abilities.len(), 1);
@@ -1663,7 +1786,7 @@ mod tests {
         let script = crate::legacy::parse_legacy_script("fixture.txt", "K:Cycling:2\n")
             .unwrap_or_else(|error| panic!("fixture should parse: {error}"));
         let faces = face_lines(&script);
-        let translated = translate_keywords(&faces[0])
+        let translated = translate_keywords(&script, &faces[0])
             .unwrap_or_else(|error| panic!("keyword should translate: {error:?}"));
         assert_eq!(translated.ids, vec!["cycling"]);
         assert_eq!(translated.abilities.len(), 1);
@@ -1679,7 +1802,7 @@ mod tests {
         let script = crate::legacy::parse_legacy_script("fixture.txt", "K:Flashback:2 U\n")
             .unwrap_or_else(|error| panic!("fixture should parse: {error}"));
         let faces = face_lines(&script);
-        let translated = translate_keywords(&faces[0])
+        let translated = translate_keywords(&script, &faces[0])
             .unwrap_or_else(|error| panic!("keyword should translate: {error:?}"));
         assert_eq!(translated.ids, vec!["flashback"]);
         assert_eq!(translated.abilities.len(), 1);
@@ -1694,10 +1817,104 @@ mod tests {
         let script = crate::legacy::parse_legacy_script("fixture.txt", "K:TypeCycling:Forest:2\n")
             .unwrap_or_else(|error| panic!("fixture should parse: {error}"));
         let faces = face_lines(&script);
-        let translated = translate_keywords(&faces[0])
+        let translated = translate_keywords(&script, &faces[0])
             .unwrap_or_else(|error| panic!("keyword should translate: {error:?}"));
         assert_eq!(translated.ids, vec!["typecycling"]);
         assert_eq!(translated.abilities.len(), 1);
         assert_eq!(translated.abilities[0].costs.len(), 2);
+    }
+
+    #[test]
+    fn lowers_three_chapters_with_a_repeated_svar() {
+        let script = crate::legacy::parse_legacy_script(
+            "fixture.txt",
+            concat!(
+                "K:Chapter:3:Draw,Life,Draw\n",
+                "SVar:Draw:DB$ Draw | Defined$ You\n",
+                "SVar:Life:DB$ GainLife | Defined$ You | LifeAmount$ 1\n",
+            ),
+        )
+        .unwrap_or_else(|error| panic!("fixture should parse: {error}"));
+        let faces = face_lines(&script);
+        let translated = translate_keywords(&script, &faces[0])
+            .unwrap_or_else(|error| panic!("Chapter should translate: {error:?}"));
+
+        assert!(translated.ids.is_empty());
+        assert_eq!(translated.abilities.len(), 3);
+        for (index, ability) in translated.abilities.iter().enumerate() {
+            assert_eq!(ability.kind, AbilityKind::Triggered);
+            assert!(matches!(
+                &ability.event,
+                Some(Expression::Call { operation: Operation::EventChapter, arguments })
+                    if arguments == &vec![
+                        expression_call(Operation::Source, vec![]),
+                        Expression::Integer((index + 1) as i64),
+                        Expression::Integer(3),
+                    ]
+            ));
+            assert!(ability.condition.is_none());
+            assert!(matches!(
+                &ability.effect,
+                Expression::Call { operation: Operation::Chapter, arguments }
+                    if arguments.len() == 3
+            ));
+        }
+        let linked_effect = |ability: &forge_carddef::AbilityDefinition| match &ability.effect {
+            Expression::Call { arguments, .. } => arguments[2].clone(),
+            _ => panic!("Chapter effect should be a call"),
+        };
+        assert_eq!(
+            linked_effect(&translated.abilities[0]),
+            linked_effect(&translated.abilities[2])
+        );
+    }
+
+    #[test]
+    fn rejects_malformed_chapter_maximum_or_count() {
+        for keyword in [
+            "K:Chapter:0:Draw\n",
+            "K:Chapter:3:Draw,Life\n",
+            "K:Chapter:nope:Draw\n",
+        ] {
+            let script = crate::legacy::parse_legacy_script("fixture.txt", keyword)
+                .unwrap_or_else(|error| panic!("fixture should parse: {error}"));
+            let faces = face_lines(&script);
+            let error = translate_keywords(&script, &faces[0])
+                .err()
+                .unwrap_or_else(|| panic!("malformed Chapter must fail closed"));
+            assert_eq!(error.1, "UNSUPPORTED_KEYWORD");
+        }
+    }
+
+    #[test]
+    fn rejects_unsupported_chapter_linked_ability() {
+        let script = crate::legacy::parse_legacy_script(
+            "fixture.txt",
+            "K:Chapter:1:Bad\nSVar:Bad:DB$ NotAnEffect | Defined$ You\n",
+        )
+        .unwrap_or_else(|error| panic!("fixture should parse: {error}"));
+        let faces = face_lines(&script);
+        let error = translate_keywords(&script, &faces[0])
+            .err()
+            .unwrap_or_else(|| panic!("unsupported linked ability must fail closed"));
+        assert_eq!(error.1, "UNMAPPED_API");
+    }
+
+    #[test]
+    fn chapter_blockers_preserve_linked_code_and_reference_fanout() {
+        let script = crate::legacy::parse_legacy_script(
+            "fixture.txt",
+            concat!(
+                "K:Chapter:3:Bad,Good,Bad\n",
+                "SVar:Bad:DB$ NotAnEffect\n",
+                "SVar:Good:DB$ Draw | Defined$ You\n",
+            ),
+        )
+        .unwrap_or_else(|error| panic!("fixture should parse: {error}"));
+        let blockers = collect_script_keyword_blockers(&script);
+        assert_eq!(blockers.len(), 1);
+        assert_eq!(blockers[0].1, "UNMAPPED_API");
+        assert!(blockers[0].2.contains("A:NotAnEffect"));
+        assert_eq!(blockers[0].3, 2);
     }
 }

@@ -851,6 +851,7 @@ operations! {
     EventDraw => ("event_draw", Event, 0, Some(2)),
     EventDiscard => ("event_discard", Event, 0, Some(2)),
     EventCounterAdded => ("event_counter_added", Event, 0, Some(2)),
+    EventChapter => ("event_chapter", Event, 3, Some(3)),
     EventZoneChange => ("event_zone_change", Event, 0, Some(2)),
     EventTargeted => ("event_targeted", Event, 0, Some(2)),
     Sequence => ("sequence", Effect, 1, None),
@@ -862,6 +863,7 @@ operations! {
     Exile => ("exile", Effect, 1, Some(2)),
     SacrificeEffect => ("sacrifice_effect", Effect, 1, Some(2)),
     MoveZone => ("move_zone", Effect, 2, Some(3)),
+    MoveZoneFrom => ("move_zone_from", Effect, 3, Some(4)),
     ReturnToHand => ("return_to_hand", Effect, 1, Some(1)),
     Draw => ("draw", Effect, 1, Some(2)),
     DiscardCards => ("discard_cards", Effect, 1, Some(3)),
@@ -870,6 +872,7 @@ operations! {
     LoseLife => ("lose_life", Effect, 1, Some(2)),
     SetLife => ("set_life", Effect, 1, Some(2)),
     AddMana => ("add_mana", Effect, 1, Some(3)),
+    AddRestrictedMana => ("add_restricted_mana", Effect, 4, Some(4)),
     CounterSpell => ("counter_spell", Effect, 1, Some(2)),
     Copy => ("copy", Effect, 1, Some(2)),
     CreateToken => ("create_token", Effect, 1, Some(3)),
@@ -899,6 +902,7 @@ operations! {
     Shuffle => ("shuffle", Effect, 0, Some(1)),
     Reveal => ("reveal", Effect, 1, Some(2)),
     LookAt => ("look_at", Effect, 1, Some(2)),
+    LibraryDig => ("library_dig", Effect, 7, Some(7)),
     Remember => ("remember", Effect, 2, Some(2)),
     Forget => ("forget", Effect, 1, Some(1)),
     PreventDamage => ("prevent_damage", Effect, 1, Some(3)),
@@ -908,6 +912,7 @@ operations! {
     ExtraCombat => ("extra_combat", Effect, 0, Some(1)),
     SkipStep => ("skip_step", Effect, 1, Some(2)),
     RegisterDelayedTrigger => ("register_delayed_trigger", Effect, 2, Some(3)),
+    Chapter => ("chapter", Effect, 3, Some(3)),
     LayerEffect => ("layer_effect", Effect, 4, None),
     Continuous => ("continuous", Effect, 2, Some(3)),
     CannotAttack => ("cannot_attack", Effect, 1, Some(2)),
@@ -1076,6 +1081,11 @@ impl Operation {
                 1 => Some(Text),
                 _ => None,
             },
+            Self::EventChapter => match index {
+                0 => Some(Selector),
+                1 | 2 => Some(Number),
+                _ => None,
+            },
             Self::EventWhen => match index {
                 0 => Some(Event),
                 1 => Some(Predicate),
@@ -1113,6 +1123,12 @@ impl Operation {
                 2 => Some(Comparable),
                 _ => None,
             },
+            Self::MoveZoneFrom => match index {
+                0 => Some(Selector),
+                1 | 2 => Some(Text),
+                3 => Some(Comparable),
+                _ => None,
+            },
             Self::ReturnToHand | Self::SwitchPt | Self::Detach | Self::Tap | Self::Untap => {
                 Some(Selector)
             }
@@ -1137,6 +1153,12 @@ impl Operation {
                 0 => Some(Text),
                 1 => Some(Selector),
                 2 => Some(Number),
+                _ => None,
+            },
+            Self::AddRestrictedMana => match index {
+                0 | 2 => Some(Text),
+                1 => Some(Selector),
+                3 => Some(Number),
                 _ => None,
             },
             Self::CounterSpell | Self::Copy => Some(Selector),
@@ -1196,6 +1218,13 @@ impl Operation {
                 1 => Some(SelectorOrNumber),
                 _ => None,
             },
+            Self::LibraryDig => match index {
+                0 | 3 => Some(Selector),
+                1 => Some(Number),
+                2 => Some(Comparable),
+                4..=6 => Some(Text),
+                _ => None,
+            },
             Self::Remember => match index {
                 0 => Some(Text),
                 1 => Some(RememberedValue),
@@ -1228,6 +1257,11 @@ impl Operation {
                 0 => Some(Event),
                 1 => Some(Effect),
                 2 => Some(Text),
+                _ => None,
+            },
+            Self::Chapter => match index {
+                0 | 1 => Some(Number),
+                2 => Some(Effect),
                 _ => None,
             },
             Self::AtTiming => match index {
