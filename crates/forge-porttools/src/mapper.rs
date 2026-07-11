@@ -1622,6 +1622,8 @@ fn resolve_value_svar(
     let field = &expression.fields[0];
     match field.key.as_deref() {
         Some("Count") => map_count_value(name, &field.value),
+        Some("TriggerCount") => map_trigger_count_value(name, &field.value),
+        Some("PlayerCountOpponents") => map_opponent_count_value(name, &field.value),
         Some("Targeted") => map_characteristic_value(
             name,
             call(Operation::Target, vec![call(Operation::Any, vec![])]),
@@ -1638,6 +1640,36 @@ fn resolve_value_svar(
             ),
         )),
     }
+}
+
+fn map_trigger_count_value(name: &str, value: &str) -> Result<Expression, MappingDiagnostic> {
+    let canonical = match value {
+        "DamageAmount" => "damage",
+        "LifeAmount" => "life",
+        "Amount" => "amount",
+        "Result" => "result",
+        "ScryNum" => "scry",
+        _ => {
+            return Err(diagnostic(
+                "UNSUPPORTED_VALUE_SVAR",
+                &format!("value SVar `{name}` trigger count `{value}` has no exact lowering"),
+            ));
+        }
+    };
+    Ok(call(
+        Operation::TriggeredAmount,
+        vec![Expression::Text(canonical.to_string())],
+    ))
+}
+
+fn map_opponent_count_value(name: &str, value: &str) -> Result<Expression, MappingDiagnostic> {
+    if value == "Amount" {
+        return Ok(call(Operation::OpponentCount, vec![]));
+    }
+    Err(diagnostic(
+        "UNSUPPORTED_VALUE_SVAR",
+        &format!("value SVar `{name}` opponent count `{value}` has no exact lowering"),
+    ))
 }
 
 fn map_count_value(name: &str, value: &str) -> Result<Expression, MappingDiagnostic> {
@@ -8404,6 +8436,23 @@ mod tests {
                 ),
                 Operation::Negate,
             ),
+            (
+                concat!(
+                    "Name:Triggered Damage Amount\n",
+                    "T:Mode$ DamageDone | ValidSource$ Card.Self | ValidTarget$ Player | TriggerZones$ Battlefield | Execute$ TrigLife | TriggerDescription$ Life.\n",
+                    "SVar:TrigLife:DB$ GainLife | Defined$ You | LifeAmount$ X\n",
+                    "SVar:X:TriggerCount$DamageAmount\n",
+                ),
+                Operation::TriggeredAmount,
+            ),
+            (
+                concat!(
+                    "Name:Opponent Count\n",
+                    "A:SP$ Token | TokenAmount$ X | TokenScript$ r_1_1_goblin | TokenOwner$ You | SpellDescription$ Tokens.\n",
+                    "SVar:X:PlayerCountOpponents$Amount\n",
+                ),
+                Operation::OpponentCount,
+            ),
         ] {
             let script = parse_legacy_script("dynamic-value.txt", script_text)
                 .unwrap_or_else(|error| panic!("dynamic fixture should parse: {error}"));
@@ -8425,6 +8474,42 @@ mod tests {
                 expected_value.as_str()
             );
         }
+
+        for open_value in [
+            "LifeAmount/Times.2",
+            "ScryBottom",
+            "DamageAmount/LimitMax.11",
+        ] {
+            let script = parse_legacy_script(
+                "open-trigger-count.txt",
+                &format!(
+                    "A:SP$ GainLife | Defined$ You | LifeAmount$ X\nSVar:X:TriggerCount${open_value}\n"
+                ),
+            )
+            .unwrap_or_else(|error| panic!("open trigger-count fixture should parse: {error}"));
+            let context = MappingContext::from_script(&script);
+            let LegacyLineKind::Ability { prefix, expression } = &script.lines[0].kind else {
+                panic!("open trigger-count fixture has no ability");
+            };
+            let error = map_legacy_ability_in_context(*prefix, expression, &context)
+                .err()
+                .unwrap_or_else(|| panic!("open trigger count must quarantine"));
+            assert_eq!(error.code, "UNSUPPORTED_VALUE_SVAR");
+        }
+
+        let open_opponents = parse_legacy_script(
+            "open-opponent-count.txt",
+            "A:SP$ Token | TokenAmount$ X | TokenScript$ r_1_1_goblin | TokenOwner$ You\nSVar:X:PlayerCountOpponents$HighestCardsInHand\n",
+        )
+        .unwrap_or_else(|error| panic!("open opponent-count fixture should parse: {error}"));
+        let context = MappingContext::from_script(&open_opponents);
+        let LegacyLineKind::Ability { prefix, expression } = &open_opponents.lines[0].kind else {
+            panic!("open opponent-count fixture has no ability");
+        };
+        let error = map_legacy_ability_in_context(*prefix, expression, &context)
+            .err()
+            .unwrap_or_else(|| panic!("open opponent count must quarantine"));
+        assert_eq!(error.code, "UNSUPPORTED_VALUE_SVAR");
 
         let script = parse_legacy_script(
             "unbound-sacrifice.txt",

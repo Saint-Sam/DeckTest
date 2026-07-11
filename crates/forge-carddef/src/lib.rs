@@ -974,6 +974,8 @@ operations! {
     EventPhase => ("event_phase", Event, 2, Some(2)),
     TargetAllocation => ("target_allocation", Selector, 2, Some(2)),
     Negate => ("negate", Value, 1, Some(1)),
+    TriggeredAmount => ("triggered_amount", Value, 1, Some(1)),
+    OpponentCount => ("opponent_count", Value, 0, Some(0)),
 }
 
 impl Operation {
@@ -1382,6 +1384,7 @@ impl Operation {
             Self::Count => Some(SelectorOrText),
             Self::Amount => Some(Comparable),
             Self::PaidX => None,
+            Self::OpponentCount => None,
             Self::CounterCount | Self::Devotion | Self::DistinctCount | Self::HistoryCount => {
                 match index {
                     0 => Some(Selector),
@@ -1391,6 +1394,7 @@ impl Operation {
             }
             Self::ManaValue | Self::Power | Self::Toughness => Some(Selector),
             Self::Negate => Some(Number),
+            Self::TriggeredAmount => Some(Text),
             Self::IfElse => {
                 if index == 0 {
                     Some(Predicate)
@@ -1523,6 +1527,8 @@ mod tests {
         assert_eq!(Operation::EventPhase as u32, 174);
         assert_eq!(Operation::TargetAllocation as u32, 175);
         assert_eq!(Operation::Negate as u32, 176);
+        assert_eq!(Operation::TriggeredAmount as u32, 177);
+        assert_eq!(Operation::OpponentCount as u32, 178);
 
         let config = bincode::config::standard()
             .with_fixed_int_encoding()
