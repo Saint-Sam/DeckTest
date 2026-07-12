@@ -285,6 +285,11 @@ const MAPPERS: &[MapperSpec] = &[
     },
     MapperSpec {
         prefix: LegacyAbilityPrefix::Activated,
+        api: "Effect",
+        mapper: map_effect,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Activated,
         api: "Animate",
         mapper: map_animate,
     },
@@ -417,6 +422,11 @@ const MAPPERS: &[MapperSpec] = &[
         prefix: LegacyAbilityPrefix::Activated,
         api: "AnimateAll",
         mapper: map_animate_all,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Activated,
+        api: "Cleanup",
+        mapper: map_cleanup,
     },
 ];
 
@@ -4696,6 +4706,99 @@ fn map_change_zone_all(
     mapped_direct(prefix, api, parameters, expression)
 }
 
+fn map_effect(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["AB", "SP", "DB"])?;
+    reject_unknown(
+        parameters,
+        &[
+            "Cost",
+            "Defined",
+            "ValidTgts",
+            "StaticAbilities",
+            "RememberObjects",
+            "ExileOnMoved",
+            "ForgetOnMoved",
+            "Duration",
+        ],
+    )?;
+    if required(parameters, "StaticAbilities")? != "Unblockable" {
+        return Err(unsupported_value(
+            "StaticAbilities",
+            required(parameters, "StaticAbilities")?,
+        ));
+    }
+    if let Some(value) = parameters.get("Defined") {
+        if value != "Self" {
+            return Err(unsupported_value("Defined", value));
+        }
+    }
+    if let Some(value) = parameters.get("RememberObjects") {
+        if !matches!(value.as_str(), "Targeted" | "Self" | "Equipped") {
+            return Err(unsupported_value("RememberObjects", value));
+        }
+        if value == "Targeted" && !parameters.contains_key("ValidTgts") {
+            return Err(diagnostic(
+                "MISSING_PARAMETER",
+                "RememberObjects Targeted requires ValidTgts",
+            ));
+        }
+    }
+    for key in ["ExileOnMoved", "ForgetOnMoved"] {
+        if let Some(value) = parameters.get(key) {
+            if value != "Battlefield" {
+                return Err(unsupported_value(key, value));
+            }
+        }
+    }
+    match parameters.get("Duration").map(String::as_str) {
+        None | Some("EndOfTurn") | Some("UntilEndOfTurn") => {}
+        Some(value) => return Err(unsupported_value("Duration", value)),
+    }
+    let affected = if parameters.contains_key("ValidTgts") || parameters.contains_key("Defined") {
+        object_selector(parameters, DefaultSelector::Source)?
+    } else {
+        match parameters.get("RememberObjects").map(String::as_str) {
+            Some("Self") => call(Operation::Source, vec![]),
+            Some("Equipped") => call(
+                Operation::EquippedObject,
+                vec![call(Operation::Source, vec![])],
+            ),
+            _ => {
+                return Err(diagnostic(
+                    "MISSING_PARAMETER",
+                    "Unblockable Effect requires ValidTgts, Defined Self, or RememberObjects Self/Equipped",
+                ));
+            }
+        }
+    };
+    let blockers = call(
+        Operation::Permanents,
+        vec![call(
+            Operation::TypeIs,
+            vec![Expression::Text("creature".to_string())],
+        )],
+    );
+    let expression = call(
+        Operation::UntilEndOfTurn,
+        vec![call(
+            Operation::Continuous,
+            vec![
+                affected,
+                call(
+                    Operation::CannotBeBlockedBy,
+                    vec![call(Operation::Any, vec![]), blockers],
+                ),
+            ],
+        )],
+    );
+    mapped_direct(prefix, api, parameters, expression)
+}
+
 fn map_animate(
     prefix: LegacyAbilityPrefix,
     api: &str,
@@ -5779,6 +5882,29 @@ fn map_animate_all(
         Some(value) => return Err(unsupported_value("Duration", value)),
     }
     mapped_direct(prefix, api, parameters, expression)
+}
+
+fn map_cleanup(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector(selector, "DB")?;
+    reject_unknown(parameters, &["ClearRemembered"])?;
+    match parameters.get("ClearRemembered").map(String::as_str) {
+        Some("True") => mapped_direct(
+            prefix,
+            api,
+            parameters,
+            call(Operation::Forget, vec![Expression::Text("all".to_string())]),
+        ),
+        Some(value) => Err(unsupported_value("ClearRemembered", value)),
+        None => Err(diagnostic(
+            "MISSING_PARAMETER",
+            "Cleanup requires ClearRemembered$ True",
+        )),
+    }
 }
 
 fn parse_animate_colors(value: &str) -> Result<Vec<String>, MappingDiagnostic> {
@@ -8368,6 +8494,60 @@ mod tests {
     }
 
     #[test]
+    fn maps_closed_effect_unblockable_bindings() {
+        let targeted = map_line(
+            "A:AB$ Effect | Cost$ 1 U | ValidTgts$ Creature.powerLE2 | RememberObjects$ Targeted | ExileOnMoved$ Battlefield | StaticAbilities$ Unblockable | SpellDescription$ Target creature can't be blocked this turn.",
+        )
+        .unwrap_or_else(|error| panic!("closed Unblockable Effect should map: {}", error.message));
+        assert_eq!(targeted.costs.len(), 1);
+        assert!(expression_contains_operation(
+            &targeted.expression,
+            Operation::UntilEndOfTurn
+        ));
+        assert!(expression_contains_operation(
+            &targeted.expression,
+            Operation::CannotBeBlockedBy
+        ));
+
+        let source = map_line(
+            "A:AB$ Effect | Defined$ Self | RememberObjects$ Self | StaticAbilities$ Unblockable | SpellDescription$ This creature can't be blocked this turn.",
+        )
+        .unwrap_or_else(|error| panic!("source-bound Unblockable Effect should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &source.expression,
+            Operation::Source
+        ));
+
+        let equipped = map_line(
+            "A:AB$ Effect | RememberObjects$ Equipped | ExileOnMoved$ Battlefield | StaticAbilities$ Unblockable | SpellDescription$ Equipped creature can't be blocked this turn.",
+        )
+        .unwrap_or_else(|error| panic!("equipped Unblockable Effect should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &equipped.expression,
+            Operation::EquippedObject
+        ));
+    }
+
+    #[test]
+    fn rejects_open_effect_unblockable_shapes() {
+        for line in [
+            "A:AB$ Effect | ValidTgts$ Creature | StaticAbilities$ KWPump",
+            "A:AB$ Effect | ValidTgts$ Creature | StaticAbilities$ Unblockable | Duration$ Permanent",
+            "A:AB$ Effect | ValidTgts$ Creature | StaticAbilities$ Unblockable | Duration$ UntilYourNextTurn",
+            "A:AB$ Effect | StaticAbilities$ Unblockable",
+            "A:AB$ Effect | ValidTgts$ Creature | StaticAbilities$ Unblockable | RememberObjects$ Targeted & TargetedController",
+        ] {
+            let error = map_line(line)
+                .err()
+                .unwrap_or_else(|| panic!("open Unblockable Effect must quarantine: {line}"));
+            assert!(matches!(
+                error.code.as_str(),
+                "MISSING_PARAMETER" | "UNSUPPORTED_PARAMETER" | "UNSUPPORTED_VALUE"
+            ));
+        }
+    }
+
+    #[test]
     fn maps_additional_closed_primitive_apis() {
         for (line, operation) in [
             (
@@ -9885,6 +10065,35 @@ mod tests {
             .err()
             .unwrap_or_else(|| panic!("player-bound sacrifice must require SacValid"));
         assert_eq!(error.code, "MISSING_PARAMETER");
+    }
+
+    #[test]
+    fn maps_closed_cleanup_clear_remembered() {
+        let mapped = map_script_root(concat!(
+            "Name:Cleanup Remembered\n",
+            "A:SP$ Draw | Defined$ You | NumCards$ 1 | SubAbility$ DBCleanup\n",
+            "SVar:DBCleanup:DB$ Cleanup | ClearRemembered$ True\n",
+        ))
+        .unwrap_or_else(|error| panic!("clear remembered cleanup should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &mapped.expression,
+            Operation::Draw
+        ));
+        assert!(expression_contains_operation(
+            &mapped.expression,
+            Operation::Forget
+        ));
+
+        for line in [
+            "A:DB$ Cleanup | ClearRemembered$ False",
+            "A:DB$ Cleanup | ClearChosenCard$ True",
+            "A:DB$ Cleanup | ClearRemembered$ True | ClearImprinted$ True",
+        ] {
+            assert!(
+                map_line(line).is_err(),
+                "open cleanup form must remain quarantined: {line}"
+            );
+        }
     }
 
     fn assert_operation(line: &str, operation: Operation, expected_costs: usize) {

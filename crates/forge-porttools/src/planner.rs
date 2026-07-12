@@ -764,7 +764,7 @@ mod tests {
                 "Name:Planner Fixture\n",
                 "K:Ward:2\n",
                 "A:SP$ DigUntil | Valid$ Card | SubAbility$ Extra | SpellDescription$ Dig.\n",
-                "SVar:Extra:DB$ Effect | SubAbility$ Tail\n",
+                "SVar:Extra:DB$ Effect | StaticAbilities$ KWPump | SubAbility$ Tail\n",
                 "SVar:Tail:DB$ Draw | Defined$ You | ConditionPlayerTurn$ True\n",
                 "SVar:X:Count$Valid Creature.YouCtrl\n",
             ),
@@ -778,7 +778,9 @@ mod tests {
             .map(|blocker| blocker.family.clone())
             .collect::<BTreeSet<_>>();
         assert!(families.iter().any(|family| family.contains("A:DigUntil")));
-        assert!(families.iter().any(|family| family.contains("A:Effect")));
+        assert!(families
+            .iter()
+            .any(|family| family.contains("StaticAbilities")));
         assert!(families
             .iter()
             .any(|family| family.contains("ConditionPlayerTurn")));
