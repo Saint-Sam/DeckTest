@@ -1,6 +1,6 @@
 # DeckTest / Forge 2.0 Status
 
-Generated: 2026-07-12T01:11:45.942811+00:00 by `tools/write_card_maturity.py`
+Generated: 2026-07-12T01:22:42.688347+00:00 by `tools/write_card_maturity.py`
 
 Plan: v1.8
 
@@ -32,19 +32,19 @@ Exclusive highest evidence stage for the 32,792 in-v1 Oracle identities:
 
 | Highest stage | Identities |
 | --- | ---: |
-| Absent identity-bound definition evidence | 21,623 |
+| Absent identity-bound definition evidence | 21,525 |
 | Parsed | 0 |
 | Mapped partial | 0 |
 | Structurally translated | 0 |
-| Compiler valid | 11,169 |
+| Compiler valid | 11,267 |
 | Runtime smoke passed | 0 |
 | Semantic verified | 0 |
 | Pod integration verified | 0 |
 | AI supported | 0 |
 | Product eligible | 0 |
 
-Compiler-valid evidence currently reaches 11,169/32,792
-in-v1 identities (34.0601%). This includes the
+Compiler-valid evidence currently reaches 11,267/32,792
+in-v1 identities (34.3590%). This includes the
 unverified CP-DSL language-stress corpus and therefore is not a playable claim.
 Parsing and mapping remain below in their own units rather than being guessed
 onto identities.
@@ -54,10 +54,10 @@ onto identities.
 | Literal unit | Result |
 | --- | ---: |
 | Legacy scripts parsed | 33,290/33,290 |
-| Compiler-valid translated legacy definitions | 11,110 |
-| Fail-closed quarantined legacy definitions | 22,180 |
-| Structurally tested legacy ability uses | 19,029/43,649 |
-| Quarantined legacy ability uses | 24,620 |
+| Compiler-valid translated legacy definitions | 11,208 |
+| Fail-closed quarantined legacy definitions | 22,082 |
+| Structurally tested legacy ability uses | 19,188/43,649 |
+| Quarantined legacy ability uses | 24,461 |
 | Owner-priority compiler-valid definitions | 193/365 |
 
 ## Evidence Breadth
@@ -73,18 +73,17 @@ onto identities.
 
 ## T3.3 Mapper Progress
 
-The latest exact `Pump` batch lowers closed hidden combat-restriction prose:
-`HIDDEN CARDNAME can't attack.`, `HIDDEN CARDNAME can't block.`, and
-`HIDDEN CARDNAME can't attack or block.` become typed temporary
-`CannotAttack`/`CannotBlock` effects. Other hidden prose, open restrictions,
-and non-end-of-turn durations remain quarantined. Exact product `ff3ca61`
-emits 11,110 of 33,290 complete scripts (33.3734%) and maps 19,029 of
-43,649 ability uses (43.5955%), up 60 scripts and 71 uses from `fdd798c`;
-Owner-priority emission remains 193 of 365. Deterministic 24/12 translation
-and 6/1 planner replay, full workspace tests, clippy, compiler/database
-validation, 235 oracle scenarios plus gated subsets, nightmare/smoke checks,
-and 80.9202% line coverage pass locally without GitHub Actions. T3.3 remains
-active; the 60% complete-script exit floor is not reached.
+The latest exact `Sacrifice` batch maps source-bound sacrifice effects without
+`SacValid` to a typed permanent collection matching `Source`; explicit
+`SacValid$ Self` forms use the same collection shape, while ambiguous
+player-bound forms remain quarantined. Exact product `d21b5b0` emits 11,208 of
+33,290 complete scripts (33.6678%) and maps 19,188 of 43,649 ability uses
+(43.9598%), up 98 scripts and 159 uses from `ff3ca61`; Owner-priority emission
+remains 193 of 365. Deterministic 24/12 translation and 6/1 planner replay,
+full workspace tests, clippy, compiler/database validation, 235 oracle
+scenarios plus gated subsets, nightmare/smoke checks, and 80.9518% line
+coverage pass locally without GitHub Actions. T3.3 remains active; the 60%
+complete-script exit floor is not reached.
 
 ## Next Gates
 
@@ -97,4 +96,4 @@ active; the 60% complete-script exit floor is not reached.
 
 Per-identity generated detail: `target/card-maturity/identities.json` (untracked,
 38,306 records; SHA-256
-`bac6239608e512d668bf15ef63d4e7c2e4846bab1c1a5eaa2cb7f62a90860db9`).
+`681373687c47cb6f70045ab6a4957facbafd5e867f2af443b925993c4d80ded3`).
