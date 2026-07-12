@@ -8449,6 +8449,8 @@ fn spell_predicate(value: &str) -> Result<Expression, MappingDiagnostic> {
             )
         } else if modifier == "OppOwn" {
             call(Operation::OwnedBy, vec![call(Operation::Opponent, vec![])])
+        } else if let Some(predicate) = kicked_predicate(modifier) {
+            predicate
         } else if modifier
             .chars()
             .all(|character| character.is_ascii_alphanumeric())
@@ -8659,6 +8661,8 @@ fn affected_selector_branch(value: &str) -> Result<Expression, MappingDiagnostic
                     Operation::DesignationIs,
                     vec![Expression::Text(modifier.to_string())],
                 ),
+                "kicked" | "kicked 1" | "kicked 2" => kicked_predicate(modifier)
+                    .unwrap_or_else(|| unreachable!("closed kicked value must lower")),
                 literal_subtype
                     if literal_subtype
                         .chars()
@@ -8701,6 +8705,19 @@ fn affected_selector_branch(value: &str) -> Result<Expression, MappingDiagnostic
         Operation::Permanents
     };
     Ok(call(operation, predicate.into_iter().collect()))
+}
+
+fn kicked_predicate(value: &str) -> Option<Expression> {
+    let designation = match value {
+        "kicked" => "kicked",
+        "kicked 1" => "kicked_1",
+        "kicked 2" => "kicked_2",
+        _ => return None,
+    };
+    Some(call(
+        Operation::DesignationIs,
+        vec![Expression::Text(designation.to_string())],
+    ))
 }
 
 fn closed_numeric_predicate(value: &str) -> Option<Result<Expression, MappingDiagnostic>> {
@@ -9802,11 +9819,26 @@ mod tests {
             "A:AB$ Pump | ValidTgts$ Card.IsRemembered | NumAtt$ 1 | NumDef$ 1 | SpellDescription$ Remembered target pump.",
             "A:AB$ Pump | ValidTgts$ Creature.IsCommander+YouCtrl | NumAtt$ 1 | NumDef$ 1 | SpellDescription$ Commander pump.",
             "A:AB$ Pump | ValidTgts$ Creature.attacking | NumAtt$ 1 | NumDef$ 1 | SpellDescription$ Pump.",
+            "S:Mode$ Continuous | Affected$ Card.Self+kicked | AddKeyword$ Flying | Description$ Kicked flying.",
+            "S:Mode$ Continuous | Affected$ Card.Self+kicked 1 | AddKeyword$ Flying | Description$ First kicker flying.",
         ] {
             map_line(line).unwrap_or_else(|error| {
                 panic!("closed selector should map: {}", error.message);
             });
         }
+        let kicked_trigger = map_script_root(concat!(
+            "Name:Kicked Trigger\n",
+            "T:Mode$ ChangesZone | ValidCard$ Card.Self+kicked | Origin$ Any | Destination$ Battlefield | Execute$ TrigLife | TriggerDescription$ Kicked.\n",
+            "SVar:TrigLife:DB$ GainLife | Defined$ You | LifeAmount$ 1\n",
+        ))
+        .unwrap_or_else(|error| panic!("kicked trigger should map: {}", error.message));
+        assert!(expression_contains_operation(
+            kicked_trigger
+                .event
+                .as_ref()
+                .unwrap_or(&kicked_trigger.expression),
+            Operation::DesignationIs
+        ));
         let error = map_line(
             "A:AB$ Pump | Defined$ RememberedLKI | NumAtt$ 1 | SpellDescription$ LKI pump.",
         )
