@@ -1,0 +1,126 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-12T00:48:37Z",
+  "task": "T3.3",
+  "batch": "closed etbCounter description metadata and LastStateBattlefield counts",
+  "technical_result": "pass",
+  "product_binding": {
+    "mapper_commit": "1c89ea6",
+    "exact_product_commit": "1c89ea6ae348ea93f924529b62d100b710dde9bb",
+    "exact_product_tree": "35b280d4ef2a44777a1f168eeadde04f7b8e151a",
+    "verified_in_detached_worktree": true,
+    "detached_root": "/private/tmp/forge-t3-3-etbcounter-metadata-1c89ea6"
+  },
+  "source_binding": {
+    "legacy_forge_commit": "1f0a3e0815822d8f58f798e0304b33d4534248b1",
+    "legacy_source": "existing local pinned checkout linked into detached worktree",
+    "translation_fingerprint": "b12d9ff4e86b74a0134f1afc8e92a3f1",
+    "cargo_lock_sha256": "f9fb1cd7230cb19b3277c1f4cb4c6750699e188f197cff4ef4e2965363675268"
+  },
+  "verification_environment": {
+    "local_only": true,
+    "github_actions_used": false,
+    "network_attempted": false,
+    "install_performed": false,
+    "worker_ceiling": 24,
+    "shared_cargo_cache": true,
+    "detached_target_debug_symlinked": true,
+    "detached_target_llvm_cov_symlinked": true,
+    "detached_target_coverage_local": true
+  },
+  "coverage_delta": {
+    "before": {
+      "complete_scripts": 11022,
+      "mapped_ability_uses": 18943,
+      "owner_priority_complete": 193,
+      "quarantined_scripts": 22268,
+      "quarantined_ability_uses": 24706
+    },
+    "after": {
+      "complete_scripts": 11038,
+      "total_scripts": 33290,
+      "complete_script_percent": 33.15710423550616,
+      "mapped_ability_uses": 18943,
+      "total_ability_uses": 43649,
+      "mapped_ability_percent": 43.398474191848614,
+      "owner_priority_complete": 193,
+      "owner_priority_requested": 365,
+      "quarantined_scripts": 22252,
+      "quarantined_ability_uses": 24706
+    },
+    "gain": {
+      "complete_scripts": 16,
+      "mapped_ability_uses": 0,
+      "owner_priority_complete": 0
+    }
+  },
+  "semantic_boundaries": {
+    "exactly_lowered": [
+      "closed etbCounter forms with a fourth nonsemantic description field after no Condition",
+      "Count$LastStateBattlefield <selector> through typed Count",
+      "pre-entry battlefield count selectors for ETB counter replacement effects"
+    ],
+    "still_quarantined": [
+      "conditional kicker, raid, revolt, adamant, and cast-origin clauses",
+      "cast-history, convoke, times-kicked, and unsupported dynamic SVars",
+      "runtime and semantic card behavior beyond structural compilation"
+    ],
+    "claim": "structural translation and compiler validity only; runtime and card-specific semantic maturity remain separate T3.5 and T3.6 evidence"
+  },
+  "commands": [
+    {
+      "command": "cargo test -p forge-porttools desugars_closed_dynamic_etb_counter_and_landwalk_keywords -- --nocapture",
+      "exit_code": 0
+    },
+    {
+      "command": "FORGE_T3_TOTAL_WORKERS=24 CARGO_BUILD_JOBS=24 scripts/t3_parallel_sweep.sh development",
+      "exit_code": 0
+    },
+    {
+      "command": "cargo fmt --all -- --check",
+      "exit_code": 0
+    },
+    {
+      "command": "cargo clippy --workspace --all-targets --all-features -- -D warnings",
+      "exit_code": 0
+    },
+    {
+      "command": "FORGE_T3_TOTAL_WORKERS=24 CARGO_BUILD_JOBS=24 scripts/t3_parallel_sweep.sh checkpoint",
+      "exit_code": 0,
+      "accelerated_core_phase_seconds": 37,
+      "full_workspace_verification_seconds": 78,
+      "total_seconds": 121
+    }
+  ],
+  "line_coverage": {
+    "covered": 27553,
+    "count": 34064,
+    "percent": 80.8859793330202,
+    "floor_percent": 80,
+    "raw_report_sha256": "cbd11de5da0fd7085488944b3f853f0a3fa1de8561f61d1ede83cab7e7c1f69c"
+  },
+  "planner": {
+    "analyzed_scripts": 33290,
+    "scripts_with_confirmed_blockers": 22076,
+    "priority_scripts_with_confirmed_blockers": 166,
+    "confirmed_observations": 51864,
+    "unique_blocker_families": 5361,
+    "linked_root_fanout": 52853
+  },
+  "checkpoint_gates": {
+    "full_workspace_tests": true,
+    "compiler_roundtrips": true,
+    "database_validation": true,
+    "oracle_scenarios": 235,
+    "oracle_subsets_passed": true,
+    "nightmare_suite_passed": true,
+    "arena_smoke_passed": true,
+    "deterministic_parallel_replay": true,
+    "deterministic_blocker_plan_replay": true
+  },
+  "continuation": {
+    "t3_3_remains_active": true,
+    "exit_floor_reached": false,
+    "next_t3_3_batch_source": "metrics/blocker_plan.json recommended_batches[0]"
+  }
+}

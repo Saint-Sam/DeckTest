@@ -1,6 +1,6 @@
 # DeckTest / Forge 2.0 Status
 
-Generated: 2026-07-12T00:37:11.153864+00:00 by `tools/write_card_maturity.py`
+Generated: 2026-07-12T00:48:06.395574+00:00 by `tools/write_card_maturity.py`
 
 Plan: v1.8
 
@@ -32,19 +32,19 @@ Exclusive highest evidence stage for the 32,792 in-v1 Oracle identities:
 
 | Highest stage | Identities |
 | --- | ---: |
-| Absent identity-bound definition evidence | 21,711 |
+| Absent identity-bound definition evidence | 21,695 |
 | Parsed | 0 |
 | Mapped partial | 0 |
 | Structurally translated | 0 |
-| Compiler valid | 11,081 |
+| Compiler valid | 11,097 |
 | Runtime smoke passed | 0 |
 | Semantic verified | 0 |
 | Pod integration verified | 0 |
 | AI supported | 0 |
 | Product eligible | 0 |
 
-Compiler-valid evidence currently reaches 11,081/32,792
-in-v1 identities (33.7918%). This includes the
+Compiler-valid evidence currently reaches 11,097/32,792
+in-v1 identities (33.8406%). This includes the
 unverified CP-DSL language-stress corpus and therefore is not a playable claim.
 Parsing and mapping remain below in their own units rather than being guessed
 onto identities.
@@ -54,20 +54,19 @@ onto identities.
 | Literal unit | Result |
 | --- | ---: |
 | Legacy scripts parsed | 33,290/33,290 |
-| Compiler-valid translated legacy definitions | 11,022 |
-| Fail-closed quarantined legacy definitions | 22,268 |
+| Compiler-valid translated legacy definitions | 11,038 |
+| Fail-closed quarantined legacy definitions | 22,252 |
 | Structurally tested legacy ability uses | 18,943/43,649 |
 | Quarantined legacy ability uses | 24,706 |
 | Owner-priority compiler-valid definitions | 193/365 |
 
-The exact local T3.3 product `72a424c` adds closed
-`TriggeredCardLKICopy`/`TriggeredNewCardLKICopy` identity selectors. It emits
-11,022/33,290 complete scripts and maps 18,943/43,649 ability uses; open
-remembered and aggregate bindings remain quarantined. Deterministic 24/12
-translation and 6/1 planner replay, full workspace tests, clippy,
-compiler/database validation, 235 oracle scenarios plus gated subsets,
-nightmare/smoke checks, and 80.8971% workspace line coverage passed locally.
-T3.3 remains active and below its 60% complete-script exit floor.
+The exact local T3.3 product `1c89ea6` accepts closed `etbCounter`
+description metadata and lowers closed `Count$LastStateBattlefield` values.
+It emits 11,038/33,290 complete scripts and maps 18,943/43,649 ability uses;
+conditional and unsupported dynamic counter forms remain quarantined. The
+detached 24-worker checkpoint passed deterministic replay, full workspace
+tests, clippy, compiler/database validation, 235 oracle scenarios plus gated
+subsets, nightmare/smoke checks, and 80.8860% workspace line coverage.
 
 ## Evidence Breadth
 
@@ -91,4 +90,4 @@ T3.3 remains active and below its 60% complete-script exit floor.
 
 Per-identity generated detail: `target/card-maturity/identities.json` (untracked,
 38,306 records; SHA-256
-`358c32ebb299b9c24a80f21d3283ae28776768028a9a53c29e56245c59144a6a`).
+`e6d6bd6b637666727b95c67a9cb41c0d8c8ac17ba88bf455f7da25d789750cd9`).
