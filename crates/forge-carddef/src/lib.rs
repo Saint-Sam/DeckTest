@@ -1073,6 +1073,8 @@ operations! {
     ConjureCard => ("conjure_card", Effect, 3, Some(3)),
     AlterAttribute => ("alter_attribute", Effect, 3, Some(3)),
     PlayerAggregate => ("player_aggregate", Value, 1, Some(1)),
+    Amass => ("amass", Effect, 3, Some(3)),
+    ChosenTypeIs => ("chosen_type_is", Predicate, 0, Some(0)),
 }
 
 impl Operation {
@@ -1484,6 +1486,12 @@ impl Operation {
                 2 => Some(Boolean),
                 _ => None,
             },
+            Self::Amass => match index {
+                0 => Some(Text),
+                1 => Some(Number),
+                2 => Some(Selector),
+                _ => None,
+            },
             Self::AddRestrictedMana => match index {
                 0 | 2 => Some(Text),
                 1 => Some(Selector),
@@ -1689,7 +1697,7 @@ impl Operation {
             Self::TimingCondition => Some(Predicate),
             Self::Count => Some(SelectorOrText),
             Self::Amount => Some(Comparable),
-            Self::PaidX | Self::TimesKicked => None,
+            Self::PaidX | Self::TimesKicked | Self::ChosenTypeIs => None,
             Self::OpponentCount | Self::PlayerCount => None,
             Self::PlayerAggregate => Some(Text),
             Self::CounterCount | Self::Devotion | Self::DistinctCount | Self::HistoryCount => {
@@ -1934,6 +1942,8 @@ mod tests {
         assert_eq!(Operation::ConjureCard as u32, 273);
         assert_eq!(Operation::AlterAttribute as u32, 274);
         assert_eq!(Operation::PlayerAggregate as u32, 275);
+        assert_eq!(Operation::Amass as u32, 276);
+        assert_eq!(Operation::ChosenTypeIs as u32, 277);
 
         let config = bincode::config::standard()
             .with_fixed_int_encoding()

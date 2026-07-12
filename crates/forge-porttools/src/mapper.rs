@@ -175,6 +175,11 @@ const MAPPERS: &[MapperSpec] = &[
     },
     MapperSpec {
         prefix: LegacyAbilityPrefix::Activated,
+        api: "Amass",
+        mapper: map_amass,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Activated,
         api: "Draw",
         mapper: map_draw,
     },
@@ -1466,6 +1471,10 @@ fn legacy_named_condition(value: &str) -> Result<Expression, MappingDiagnostic> 
         "Threshold" | "Delirium" | "Metalcraft" | "Hellbent" | "Blessing" | "Solved" => {
             closed_activation_condition(value)
         }
+        "Kicked" => Ok(call(
+            Operation::GreaterThan,
+            vec![call(Operation::TimesKicked, vec![]), Expression::Integer(0)],
+        )),
         _ => Err(unsupported_value("Condition", value)),
     }
 }
@@ -1960,6 +1969,12 @@ fn map_dynamic_ability(
             operation: Operation::ReorderLibraryTop,
             argument: 1,
         }],
+        "Amass" => vec![DynamicPatchSpec {
+            key: "Num",
+            placeholder: "1",
+            operation: Operation::Amass,
+            argument: 1,
+        }],
         _ => Vec::new(),
     };
     specs.extend([
@@ -2129,6 +2144,7 @@ pub(crate) fn resolve_value_svar(
         Some("TriggerCount") => map_trigger_count_value(name, &field.value),
         Some("PlayerCountOpponents") => map_opponent_count_value(name, &field.value),
         Some("PlayerCountPlayers") => map_player_count_value(name, &field.value),
+        Some("PlayerCountPropertyYou") => map_player_property_value(name, &field.value),
         Some("Targeted") => map_characteristic_value(
             name,
             call(Operation::Target, vec![call(Operation::Any, vec![])]),
@@ -2138,6 +2154,7 @@ pub(crate) fn resolve_value_svar(
             map_characteristic_value(name, call(Operation::Triggered, vec![]), &field.value)
         }
         Some("TriggeredCard") => map_triggered_card_value(name, &field.value),
+        Some("TargetedPlayer") => map_targeted_player_value(name, &field.value),
         Some("Sacrificed") => map_characteristic_value(
             name,
             call(
@@ -2207,6 +2224,38 @@ fn map_trigger_count_value(name: &str, value: &str) -> Result<Expression, Mappin
     ))
 }
 
+fn map_targeted_player_value(name: &str, value: &str) -> Result<Expression, MappingDiagnostic> {
+    let target = call(Operation::Target, vec![call(Operation::Any, vec![])]);
+    match value {
+        "CardsInHand" => Ok(call(
+            Operation::Count,
+            vec![card_selector_in_zone("Card.TargetedPlayerOwn", "hand")?],
+        )),
+        "CardsInLibrary" => Ok(call(
+            Operation::Count,
+            vec![card_selector_in_zone("Card.TargetedPlayerOwn", "library")?],
+        )),
+        "CardsInGraveyard" => Ok(call(
+            Operation::Count,
+            vec![card_selector_in_zone(
+                "Card.TargetedPlayerOwn",
+                "graveyard",
+            )?],
+        )),
+        "DamageThisTurn" => Ok(call(
+            Operation::HistoryCount,
+            vec![
+                target,
+                Expression::Text("damage_received_this_turn".to_string()),
+            ],
+        )),
+        value => Err(diagnostic(
+            "UNSUPPORTED_VALUE_SVAR",
+            &format!("value SVar `{name}` targeted-player value `{value}` has no exact lowering"),
+        )),
+    }
+}
+
 fn map_opponent_count_value(name: &str, value: &str) -> Result<Expression, MappingDiagnostic> {
     if value == "Amount" {
         return Ok(call(Operation::OpponentCount, vec![]));
@@ -2245,6 +2294,34 @@ fn map_player_count_value(name: &str, value: &str) -> Result<Expression, Mapping
     ))
 }
 
+fn map_player_property_value(name: &str, value: &str) -> Result<Expression, MappingDiagnostic> {
+    let history = match value {
+        "CardsDiscardedThisTurn" => "cards_discarded_this_turn",
+        "LifeLostThisTurn" => "life_lost_this_turn",
+        "LifeLostLastTurn" => "life_lost_last_turn",
+        "DamageThisTurn" => "damage_received_this_turn",
+        "DamageToOppsThisTurn" => "damage_to_opponents_this_turn",
+        "OpponentsAttackedThisCombat" => "opponents_attacked_this_combat",
+        "OpponentsAttackedThisTurn" => "opponents_attacked_this_turn",
+        "HasPropertyBeenAttackedThisCombat" => "was_attacked_this_combat",
+        "LandsPlayed" => "lands_played_this_turn",
+        "RingTemptedYou" => "ring_tempted_you",
+        value => {
+            return Err(diagnostic(
+                "UNSUPPORTED_VALUE_SVAR",
+                &format!("value SVar `{name}` player property `{value}` has no exact lowering"),
+            ));
+        }
+    };
+    Ok(call(
+        Operation::HistoryCount,
+        vec![
+            call(Operation::You, vec![]),
+            Expression::Text(history.to_string()),
+        ],
+    ))
+}
+
 fn map_count_value(name: &str, value: &str) -> Result<Expression, MappingDiagnostic> {
     if value == "xPaid" {
         return Ok(call(Operation::PaidX, vec![]));
@@ -2273,6 +2350,15 @@ fn map_count_value(name: &str, value: &str) -> Result<Expression, MappingDiagnos
             vec![
                 call(Operation::You, vec![]),
                 Expression::Text("attackers_declared_this_turn".to_string()),
+            ],
+        ));
+    }
+    if value == "Domain" {
+        return Ok(call(
+            Operation::DistinctCount,
+            vec![
+                affected_selector("Land.YouCtrl")?,
+                Expression::Text("basic_land_types".to_string()),
             ],
         ));
     }
@@ -2310,6 +2396,15 @@ fn map_count_value(name: &str, value: &str) -> Result<Expression, MappingDiagnos
         ));
     }
     if let Some(valid) = value.strip_prefix("Valid ") {
+        if let Some(selector) = valid.strip_suffix("$GreatestCardPower") {
+            return Ok(call(
+                Operation::Aggregate,
+                vec![
+                    affected_selector(selector)?,
+                    Expression::Text("max_power".to_string()),
+                ],
+            ));
+        }
         if let Some(selector) = valid.strip_suffix("$Colors") {
             return Ok(call(
                 Operation::DistinctCount,
@@ -2322,9 +2417,24 @@ fn map_count_value(name: &str, value: &str) -> Result<Expression, MappingDiagnos
         return Ok(call(Operation::Count, vec![affected_selector(valid)?]));
     }
     if let Some(valid) = value.strip_prefix("ValidGraveyard ") {
+        if let Some(selector) = valid.strip_suffix("$GreatestCardPower") {
+            return Ok(call(
+                Operation::Aggregate,
+                vec![
+                    card_selector_in_zone(selector, "graveyard")?,
+                    Expression::Text("max_power".to_string()),
+                ],
+            ));
+        }
         return Ok(call(
             Operation::Count,
             vec![card_selector_in_zone(valid, "graveyard")?],
+        ));
+    }
+    if let Some(valid) = value.strip_prefix("ValidHand ") {
+        return Ok(call(
+            Operation::Count,
+            vec![card_selector_in_zone(valid, "hand")?],
         ));
     }
     if let Some(valid) = value.strip_prefix("LastStateBattlefield ") {
@@ -2336,6 +2446,24 @@ fn map_count_value(name: &str, value: &str) -> Result<Expression, MappingDiagnos
             vec![
                 affected_selector(valid)?,
                 Expression::Text("cast_this_turn".to_string()),
+            ],
+        ));
+    }
+    if let Some(modifiers) =
+        value.strip_prefix("ThisTurnEntered_Graveyard_from_Battlefield_Creature")
+    {
+        let valid = if modifiers.is_empty() {
+            "Creature".to_string()
+        } else if modifiers.starts_with('.') {
+            format!("Creature{modifiers}")
+        } else {
+            return Err(unsupported_value("SVar", value));
+        };
+        return Ok(call(
+            Operation::HistoryCount,
+            vec![
+                affected_selector(&valid)?,
+                Expression::Text("died_this_turn".to_string()),
             ],
         ));
     }
@@ -4197,6 +4325,46 @@ fn map_alter_attribute(
     mapped_direct(prefix, api, parameters, expression)
 }
 
+fn map_amass(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["AB", "SP", "DB"])?;
+    reject_unknown(
+        parameters,
+        &[
+            "Cost",
+            "Type",
+            "Num",
+            "RememberAmass",
+            "SpellDescription",
+            "StackDescription",
+        ],
+    )?;
+    let army_type = match required(parameters, "Type")? {
+        "Zombie" => "zombie",
+        "Orc" => "orc",
+        value => return Err(unsupported_value("Type", value)),
+    };
+    let amount = positive_integer(required(parameters, "Num")?, "Num")?;
+    let expression = apply_remembered_result(
+        call(
+            Operation::Amass,
+            vec![
+                Expression::Text(army_type.to_string()),
+                Expression::Integer(amount),
+                call(Operation::You, vec![]),
+            ],
+        ),
+        parameters,
+        "RememberAmass",
+        "amassed",
+    )?;
+    mapped_direct(prefix, api, parameters, expression)
+}
+
 fn map_draw(
     prefix: LegacyAbilityPrefix,
     api: &str,
@@ -5361,7 +5529,9 @@ fn map_library_search(
             ));
         }
         if parameters.get("Mandatory").map(String::as_str) != Some("True")
-            || parameters.get("Shuffle").map(String::as_str) != Some("False")
+            || parameters
+                .get("Shuffle")
+                .is_some_and(|value| value != "False")
         {
             return Err(diagnostic(
                 "UNSUPPORTED_PARAMETER",
@@ -5374,6 +5544,8 @@ fn map_library_search(
         let destination = match required(parameters, "Destination")? {
             "Battlefield" => "battlefield",
             "Hand" => "hand",
+            "Graveyard" => "graveyard",
+            "Exile" => "exile",
             value => return Err(unsupported_value("Destination", value)),
         };
         let choose = call(
@@ -6823,6 +6995,9 @@ fn map_gain_control(
             "ValidTgts",
             "TgtPrompt",
             "NewController",
+            "LoseControl",
+            "Untap",
+            "AddKWs",
             "SpellDescription",
             "StackDescription",
         ],
@@ -6837,15 +7012,52 @@ fn map_gain_control(
         ));
     }
     let affected = object_selector(parameters, DefaultSelector::Source)?;
-    mapped_direct(
-        prefix,
-        api,
-        parameters,
+    let temporary = match parameters.get("LoseControl").map(String::as_str) {
+        None => false,
+        Some("EOT") => true,
+        Some(value) => return Err(unsupported_value("LoseControl", value)),
+    };
+    let untap = match parameters.get("Untap").map(String::as_str) {
+        None => false,
+        Some("True") => true,
+        Some(value) => return Err(unsupported_value("Untap", value)),
+    };
+    let mut lasting = vec![call(
+        Operation::ChangeControl,
+        vec![affected.clone(), call(Operation::You, vec![])],
+    )];
+    if let Some(keywords) = parameters.get("AddKWs") {
+        for keyword in keywords.split(" & ").map(str::trim) {
+            lasting.push(call(
+                Operation::GrantKeyword,
+                vec![
+                    affected.clone(),
+                    Expression::Text(normalize_simple_keyword(keyword)?),
+                    Expression::Text("until_end_of_turn".to_string()),
+                ],
+            ));
+        }
+    }
+    let lasting = combine_effects(lasting, "GainControl requires an effect")?;
+    let lasting = if temporary {
+        call(Operation::UntilEndOfTurn, vec![lasting])
+    } else if parameters.contains_key("AddKWs") {
+        return Err(diagnostic(
+            "UNSUPPORTED_PARAMETER",
+            "GainControl AddKWs requires LoseControl EOT",
+        ));
+    } else {
+        lasting
+    };
+    let expression = if untap {
         call(
-            Operation::ChangeControl,
-            vec![affected, call(Operation::You, vec![])],
-        ),
-    )
+            Operation::Sequence,
+            vec![call(Operation::Untap, vec![affected]), lasting],
+        )
+    } else {
+        lasting
+    };
+    mapped_direct(prefix, api, parameters, expression)
 }
 
 fn map_prevent_damage(
@@ -9826,6 +10038,7 @@ fn affected_selector_branch(value: &str) -> Result<Expression, MappingDiagnostic
                 ),
                 "kicked" | "kicked 1" | "kicked 2" => kicked_predicate(modifier)
                     .unwrap_or_else(|| unreachable!("closed kicked value must lower")),
+                "ChosenType" => call(Operation::ChosenTypeIs, vec![]),
                 "token" | "!token" | "IsRemembered" => object_marker_predicate(modifier)
                     .unwrap_or_else(|| unreachable!("closed object marker must lower")),
                 literal_subtype
@@ -10766,12 +10979,49 @@ mod tests {
     }
 
     #[test]
+    fn maps_kicked_legacy_condition() {
+        let mapped = map_line(
+            "A:DB$ GainLife | Defined$ You | LifeAmount$ 2 | Condition$ Kicked | SpellDescription$ Gain life.",
+        )
+        .unwrap_or_else(|error| panic!("kicked condition should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &mapped.expression,
+            Operation::TimesKicked
+        ));
+    }
+
+    #[test]
+    fn maps_closed_amass_effects() {
+        let mapped = map_line("A:DB$ Amass | Type$ Zombie | Num$ 2 | RememberAmass$ True")
+            .unwrap_or_else(|error| panic!("amass should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &mapped.expression,
+            Operation::Amass
+        ));
+        assert!(expression_contains_operation(
+            &mapped.expression,
+            Operation::Remember
+        ));
+
+        let dynamic = map_script_root(concat!(
+            "Name:Dynamic Amass\n",
+            "A:SP$ Amass | Type$ Orc | Num$ X | SpellDescription$ Amass.\n",
+            "SVar:X:Count$xPaid\n",
+        ))
+        .unwrap_or_else(|error| panic!("dynamic amass should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &dynamic.expression,
+            Operation::PaidX
+        ));
+    }
+
+    #[test]
     fn maps_remembered_library_partition_without_researching() {
         let mapped = map_script_root(concat!(
             "Name:Remembered Search Partition\n",
             "A:SP$ ChangeZone | Origin$ Library | Destination$ Library | ChangeType$ Land.Basic | ChangeNum$ 2 | RememberChanged$ True | Reveal$ True | Shuffle$ False | SubAbility$ DBOne | SpellDescription$ Search.\n",
             "SVar:DBOne:DB$ ChangeZone | Origin$ Library | Destination$ Battlefield | ChangeType$ Land.IsRemembered | ChangeNum$ 1 | Mandatory$ True | NoLooking$ True | Tapped$ True | Shuffle$ False | SubAbility$ DBTwo\n",
-            "SVar:DBTwo:DB$ ChangeZone | Origin$ Library | Destination$ Hand | ChangeType$ Land.IsRemembered | Mandatory$ True | NoLooking$ True | Shuffle$ False\n",
+            "SVar:DBTwo:DB$ ChangeZone | Origin$ Library | Destination$ Graveyard | ChangeType$ Land.IsRemembered | Mandatory$ True | NoLooking$ True\n",
         ))
         .unwrap_or_else(|error| panic!("remembered partition should map: {}", error.message));
         assert!(expression_contains_operation(
@@ -11030,6 +11280,7 @@ mod tests {
             "S:Mode$ CantBeCast | ValidCard$ Spell | Caster$ Opponent | EffectZone$ All | Description$ Opponents can't cast spells.",
             "S:Mode$ Continuous | Affected$ Card.Self | SetPower$ 4 | SetToughness$ 5 | AddType$ Creature | SetColor$ Blue | Description$ Becomes a creature.",
             "S:Mode$ Continuous | Affected$ Creature.YouCtrl | RemoveAllAbilities$ True | Description$ Remove abilities.",
+            "S:Mode$ Continuous | Affected$ Creature.ChosenType+YouCtrl | AddPower$ 1 | Description$ Chosen type gets +1/+0.",
             "S:Mode$ Continuous | Affected$ Creature.EnchantedBy | GainControl$ You | Description$ Gain control.",
             "S:Mode$ Continuous | Affected$ You | SetMaxHandSize$ Unlimited | Description$ No maximum hand size.",
             "S:Mode$ Continuous | Affected$ Card.Self | AddKeyword$ Flying | EffectZone$ All | Description$ Flying.",
@@ -11848,6 +12099,19 @@ mod tests {
         ] {
             assert_operation(line, operation, 0);
         }
+
+        let temporary = map_line(
+            "A:SP$ GainControl | ValidTgts$ Creature | LoseControl$ EOT | Untap$ True | AddKWs$ Haste | SpellDescription$ Borrow.",
+        )
+        .unwrap_or_else(|error| panic!("temporary control should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &temporary.expression,
+            Operation::UntilEndOfTurn
+        ));
+        assert!(expression_contains_operation(
+            &temporary.expression,
+            Operation::Untap
+        ));
     }
 
     #[test]
@@ -13050,6 +13314,46 @@ mod tests {
             ),
             (
                 concat!(
+                    "Name:Greatest Power\n",
+                    "A:SP$ GainLife | Defined$ You | LifeAmount$ X | SpellDescription$ Gain life.\n",
+                    "SVar:X:Count$Valid Creature.YouCtrl$GreatestCardPower\n",
+                ),
+                Operation::Aggregate,
+            ),
+            (
+                concat!(
+                    "Name:Discard History\n",
+                    "A:SP$ GainLife | Defined$ You | LifeAmount$ X | SpellDescription$ Gain life.\n",
+                    "SVar:X:PlayerCountPropertyYou$CardsDiscardedThisTurn\n",
+                ),
+                Operation::HistoryCount,
+            ),
+            (
+                concat!(
+                    "Name:Target Graveyard Count\n",
+                    "A:SP$ Mill | ValidTgts$ Player | NumCards$ X | SpellDescription$ Mill.\n",
+                    "SVar:X:TargetedPlayer$CardsInGraveyard\n",
+                ),
+                Operation::Count,
+            ),
+            (
+                concat!(
+                    "Name:Domain Count\n",
+                    "A:SP$ GainLife | Defined$ You | LifeAmount$ X | SpellDescription$ Gain life.\n",
+                    "SVar:X:Count$Domain\n",
+                ),
+                Operation::DistinctCount,
+            ),
+            (
+                concat!(
+                    "Name:Creatures Died\n",
+                    "A:SP$ GainLife | Defined$ You | LifeAmount$ X | SpellDescription$ Gain life.\n",
+                    "SVar:X:Count$ThisTurnEntered_Graveyard_from_Battlefield_Creature.YouCtrl\n",
+                ),
+                Operation::HistoryCount,
+            ),
+            (
+                concat!(
                     "Name:Paid X Tokens\n",
                     "A:SP$ Token | TokenAmount$ X | TokenScript$ w_1_1_warrior | TokenOwner$ You | SpellDescription$ Tokens.\n",
                     "SVar:X:Count$xPaid\n",
@@ -13122,6 +13426,14 @@ mod tests {
                     "SVar:X:Count$ThisTurnCast_Card.YouCtrl\n",
                 ),
                 Operation::HistoryCount,
+            ),
+            (
+                concat!(
+                    "Name:Hand Count\n",
+                    "A:SP$ GainLife | Defined$ You | LifeAmount$ X | SpellDescription$ Gain life.\n",
+                    "SVar:X:Count$ValidHand Card.YouOwn\n",
+                ),
+                Operation::Count,
             ),
             (
                 concat!(
