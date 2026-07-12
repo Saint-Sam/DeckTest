@@ -3692,10 +3692,16 @@ fn map_change_zone(
     let replacement_object = parameters
         .get("Defined")
         .is_some_and(|value| value == "ReplacedCard");
-    let identity_bound = parameters
-        .get("Defined")
-        .is_some_and(|value| matches!(value.as_str(), "Self" | "TriggeredCard" | "ReplacedCard"))
-        && !parameters.contains_key("ValidTgts");
+    let identity_bound = parameters.get("Defined").is_some_and(|value| {
+        matches!(
+            value.as_str(),
+            "Self"
+                | "TriggeredCard"
+                | "TriggeredCardLKICopy"
+                | "TriggeredNewCardLKICopy"
+                | "ReplacedCard"
+        )
+    }) && !parameters.contains_key("ValidTgts");
     let player_bound = parameters.contains_key("DefinedPlayer");
     if player_bound && parameters.contains_key("Defined") {
         return Err(diagnostic(
@@ -6339,6 +6345,9 @@ fn defined_selector(value: &str) -> Result<Expression, MappingDiagnostic> {
             vec![call(Operation::Source, vec![])],
         )),
         "TriggeredCard" => Ok(call(Operation::Triggered, vec![])),
+        "TriggeredCardLKICopy" | "TriggeredNewCardLKICopy" => {
+            Ok(call(Operation::Triggered, vec![]))
+        }
         "TriggeredCardController" => Ok(call(
             Operation::ControllerOf,
             vec![call(Operation::Triggered, vec![])],
@@ -7670,6 +7679,8 @@ mod tests {
             "A:SP$ Discard | ValidTgts$ Player | NumCards$ 1 | Mode$ TgtChoose | SpellDescription$ Discard.",
             "A:SP$ Destroy | ValidTgts$ Creature | TargetMin$ 1 | TargetMax$ 1 | NoRegen$ True | SpellDescription$ Destroy.",
             "A:AB$ Tap | ValidTgts$ Permanent | ActivationZone$ Battlefield | TgtZone$ Battlefield | SpellDescription$ Tap.",
+            "A:DB$ ChangeZone | Defined$ TriggeredNewCardLKICopy | Origin$ Graveyard | Destination$ Battlefield | SpellDescription$ Return.",
+            "A:DB$ ChangeZone | Defined$ TriggeredCardLKICopy | Origin$ Graveyard | Destination$ Hand | SpellDescription$ Return.",
         ] {
             map_line(line).unwrap_or_else(|error| {
                 panic!("closed selector should map: {}", error.message);
