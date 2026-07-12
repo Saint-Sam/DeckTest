@@ -3147,23 +3147,29 @@ fn map_pump(
             "AILogic",
         ],
     )?;
-    require_end_of_turn_duration(parameters)?;
+    let duration = pump_duration(parameters)?;
+    if duration.is_none() && parameters.contains_key("AtEOT") {
+        return Err(diagnostic(
+            "UNSUPPORTED_PARAMETER",
+            "permanent Pump cannot also carry AtEOT cleanup",
+        ));
+    }
     let affected = object_selector(parameters, DefaultSelector::Source)?;
     let mut effects = Vec::new();
     if parameters.contains_key("NumAtt") || parameters.contains_key("NumDef") {
         let power = optional_signed_integer(parameters, "NumAtt")?.unwrap_or(0);
         let toughness = optional_signed_integer(parameters, "NumDef")?.unwrap_or(0);
-        effects.push(call(
-            Operation::ModifyPt,
-            vec![
-                affected.clone(),
-                Expression::Integer(power),
-                Expression::Integer(toughness),
-                Expression::Text("until_end_of_turn".to_string()),
-            ],
-        ));
+        let mut arguments = vec![
+            affected.clone(),
+            Expression::Integer(power),
+            Expression::Integer(toughness),
+        ];
+        if let Some(duration) = duration {
+            arguments.push(Expression::Text(duration.to_string()));
+        }
+        effects.push(call(Operation::ModifyPt, arguments));
     }
-    append_keyword_grants(&mut effects, &affected, parameters.get("KW"))?;
+    append_keyword_grants(&mut effects, &affected, parameters.get("KW"), duration)?;
     if let Some(value) = parameters.get("AtEOT") {
         effects.push(map_at_eot_cleanup(value, &affected)?);
     }
@@ -3227,7 +3233,7 @@ fn map_pump_all(
             "AILogic",
         ],
     )?;
-    require_end_of_turn_duration(parameters)?;
+    let duration = pump_duration(parameters)?;
     let affected = scope_collection_to_target_player(
         affected_selector(required(parameters, "ValidCards")?)?,
         parameters,
@@ -3237,17 +3243,17 @@ fn map_pump_all(
     if parameters.contains_key("NumAtt") || parameters.contains_key("NumDef") {
         let power = optional_signed_integer(parameters, "NumAtt")?.unwrap_or(0);
         let toughness = optional_signed_integer(parameters, "NumDef")?.unwrap_or(0);
-        effects.push(call(
-            Operation::ModifyPt,
-            vec![
-                affected.clone(),
-                Expression::Integer(power),
-                Expression::Integer(toughness),
-                Expression::Text("until_end_of_turn".to_string()),
-            ],
-        ));
+        let mut arguments = vec![
+            affected.clone(),
+            Expression::Integer(power),
+            Expression::Integer(toughness),
+        ];
+        if let Some(duration) = duration {
+            arguments.push(Expression::Text(duration.to_string()));
+        }
+        effects.push(call(Operation::ModifyPt, arguments));
     }
-    append_keyword_grants(&mut effects, &affected, parameters.get("KW"))?;
+    append_keyword_grants(&mut effects, &affected, parameters.get("KW"), duration)?;
     let expression = combine_effects(effects, "simple PumpAll requires a PT or keyword modifier")?;
     Ok(MappedLegacyAbility {
         prefix,
@@ -6972,10 +6978,21 @@ fn normalize_simple_keyword(value: &str) -> Result<String, MappingDiagnostic> {
     }
 }
 
+fn pump_duration(
+    parameters: &BTreeMap<String, String>,
+) -> Result<Option<&'static str>, MappingDiagnostic> {
+    match parameters.get("Duration").map(String::as_str) {
+        None | Some("UntilEndOfTurn") => Ok(Some("until_end_of_turn")),
+        Some("Permanent") => Ok(None),
+        Some(value) => Err(unsupported_value("Duration", value)),
+    }
+}
+
 fn append_keyword_grants(
     effects: &mut Vec<Expression>,
     affected: &Expression,
     keywords: Option<&String>,
+    duration: Option<&str>,
 ) -> Result<(), MappingDiagnostic> {
     let Some(keywords) = keywords else {
         return Ok(());
@@ -6996,14 +7013,14 @@ fn append_keyword_grants(
                     .map(|operation| call(*operation, vec![affected.clone()])),
             );
         } else {
-            effects.push(call(
-                Operation::GrantKeyword,
-                vec![
-                    affected.clone(),
-                    Expression::Text(normalize_simple_keyword(keyword)?),
-                    Expression::Text("until_end_of_turn".to_string()),
-                ],
-            ));
+            let mut arguments = vec![
+                affected.clone(),
+                Expression::Text(normalize_simple_keyword(keyword)?),
+            ];
+            if let Some(duration) = duration {
+                arguments.push(Expression::Text(duration.to_string()));
+            }
+            effects.push(call(Operation::GrantKeyword, arguments));
         }
     }
     Ok(())
@@ -7106,22 +7123,6 @@ fn require_static_effect_zone(
         Ok(())
     } else {
         Err(unsupported_value(key, required(parameters, key)?))
-    }
-}
-
-fn require_end_of_turn_duration(
-    parameters: &BTreeMap<String, String>,
-) -> Result<(), MappingDiagnostic> {
-    if parameters
-        .get("Duration")
-        .map_or(true, |duration| duration == "UntilEndOfTurn")
-    {
-        Ok(())
-    } else {
-        Err(unsupported_value(
-            "Duration",
-            required(parameters, "Duration")?,
-        ))
     }
 }
 
@@ -9428,6 +9429,48 @@ mod tests {
                 .unwrap_or_else(|| panic!("open AtEOT value must quarantine: {value}"));
             assert_eq!(error.code, "UNSUPPORTED_VALUE");
         }
+    }
+
+    #[test]
+    fn maps_permanent_pump_pt_and_keyword_effects() {
+        let pt = map_line("A:AB$ Pump | Defined$ Self | NumAtt$ +2 | Duration$ Permanent")
+            .unwrap_or_else(|error| panic!("permanent PT Pump should map: {}", error.message));
+        assert!(matches!(
+            pt.expression,
+            Expression::Call {
+                operation: Operation::ModifyPt,
+                arguments,
+            } if arguments.len() == 3
+        ));
+
+        let keyword = map_line(
+            "A:SP$ PumpAll | ValidCards$ Creature.YouCtrl | KW$ Indestructible | Duration$ Permanent",
+        )
+        .unwrap_or_else(|error| panic!("permanent keyword PumpAll should map: {}", error.message));
+        assert!(matches!(
+            keyword.expression,
+            Expression::Call {
+                operation: Operation::GrantKeyword,
+                arguments,
+            } if arguments.len() == 2
+        ));
+    }
+
+    #[test]
+    fn rejects_open_permanent_pump_duration_forms() {
+        let error = map_line(
+            "A:AB$ Pump | Defined$ Self | KW$ HIDDEN This card doesn't untap during your next untap step. | Duration$ Permanent",
+        )
+        .err()
+        .unwrap_or_else(|| panic!("hidden untap prose must remain quarantined"));
+        assert_eq!(error.code, "UNSUPPORTED_VALUE");
+
+        let error = map_line(
+            "A:AB$ Pump | Defined$ Self | NumAtt$ +1 | AtEOT$ Sacrifice | Duration$ Permanent",
+        )
+        .err()
+        .unwrap_or_else(|| panic!("mixed permanent cleanup must remain quarantined"));
+        assert_eq!(error.code, "UNSUPPORTED_PARAMETER");
     }
 
     #[test]
