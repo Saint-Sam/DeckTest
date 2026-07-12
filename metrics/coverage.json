@@ -1,16 +1,16 @@
 {
   "schema_version": 2,
   "passed": true,
-  "reviewed_commit": "1c89ea6ae348ea93f924529b62d100b710dde9bb",
-  "reviewed_tree": "35b280d4ef2a44777a1f168eeadde04f7b8e151a",
-  "source_sha256": "a20f67e72072b8ccc5c790d897c9d40cfb0b83d88cc68dd3ca1937a531bdaec6",
-  "raw_report_sha256": "cbd11de5da0fd7085488944b3f853f0a3fa1de8561f61d1ede83cab7e7c1f69c",
+  "reviewed_commit": "fdd798cdf06a7dfbfc389ed15096ec3f4fb2baee",
+  "reviewed_tree": "385b34286e0c11c5420843eea2a1b5f0c1d15af1",
+  "source_sha256": "958c3174bfbabad6ff86f3ff3b22555ab36522be689d7d027493c4ded125e1fa",
+  "raw_report_sha256": "aba1153eb62fe922e2074243a80fdae747b34ac401aa355e703303250ae02415",
   "raw_report_path": "target/coverage/coverage.raw.json",
   "floor_percent": 80,
   "lines": {
-    "count": 34064,
-    "covered": 27553,
-    "not_covered": 6511,
-    "percent": 80.8859793330202
+    "count": 34122,
+    "covered": 27607,
+    "not_covered": 6515,
+    "percent": 80.9067463806342
   }
 }
