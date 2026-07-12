@@ -469,7 +469,7 @@ pub fn map_legacy_ability(
         svars: BTreeMap::new(),
         duplicate_svars: BTreeSet::new(),
     };
-    let (unconditioned, legacy_condition) =
+    let (unconditioned, legacy_condition, check_on_resolution) =
         extract_legacy_conditions(&unconditioned, &empty_context)?;
     let (unconditioned, unless_clause) = extract_unless_clause(&unconditioned)?;
     let condition = combine_conditions(
@@ -478,6 +478,12 @@ pub fn map_legacy_ability(
             .flatten()
             .collect(),
     );
+    if !check_on_resolution && condition.is_none() {
+        return Err(diagnostic(
+            "MISSING_PARAMETER",
+            "NoResolvingCheck requires a closed trigger condition",
+        ));
+    }
     let expression = &unconditioned;
     let Some(selector) = expression.fields.first() else {
         return Err(diagnostic("MALFORMED_API", "ability has no API selector"));
@@ -554,7 +560,8 @@ pub fn map_legacy_ability(
         mapped.expression = apply_unless_clause(mapped.expression, unless_clause);
     }
     if let Some(condition) = condition {
-        mapped = apply_legacy_condition(prefix, selector_key, mapped, condition)?;
+        mapped =
+            apply_legacy_condition(prefix, selector_key, mapped, condition, check_on_resolution)?;
     }
     Ok(mapped)
 }
@@ -806,14 +813,28 @@ fn map_with_context(
     stack: &mut Vec<String>,
 ) -> Result<MappedLegacyAbility, MappingDiagnostic> {
     let (unconditioned, presence_condition) = extract_presence_condition(expression)?;
-    let (unconditioned, legacy_condition) = extract_legacy_conditions(&unconditioned, context)?;
+    let (unconditioned, legacy_condition, check_on_resolution) =
+        extract_legacy_conditions(&unconditioned, context)?;
     let condition = combine_conditions(
         [presence_condition, legacy_condition]
             .into_iter()
             .flatten()
             .collect(),
     );
-    map_with_context_unconditioned(prefix, &unconditioned, context, stack, condition)
+    if !check_on_resolution && condition.is_none() {
+        return Err(diagnostic(
+            "MISSING_PARAMETER",
+            "NoResolvingCheck requires a closed trigger condition",
+        ));
+    }
+    map_with_context_unconditioned(
+        prefix,
+        &unconditioned,
+        context,
+        stack,
+        condition,
+        check_on_resolution,
+    )
 }
 
 fn map_with_context_unconditioned(
@@ -822,6 +843,7 @@ fn map_with_context_unconditioned(
     context: &MappingContext<'_>,
     stack: &mut Vec<String>,
     condition: Option<Expression>,
+    check_on_resolution: bool,
 ) -> Result<MappedLegacyAbility, MappingDiagnostic> {
     let selector = expression
         .fields
@@ -834,15 +856,43 @@ fn map_with_context_unconditioned(
     let api = selector.value.trim();
     if prefix == LegacyAbilityPrefix::Activated && api == "Charm" {
         let mapped = map_charm_ability(prefix, selector_key, expression, context, stack)?;
-        return apply_optional_legacy_condition(prefix, selector_key, mapped, condition);
+        return apply_optional_legacy_condition(
+            prefix,
+            selector_key,
+            mapped,
+            condition,
+            check_on_resolution,
+        );
     }
     if prefix == LegacyAbilityPrefix::Replacement && api == "Moved" {
         let mapped = map_moved_replacement(prefix, selector_key, expression, context, stack)?;
-        return apply_optional_legacy_condition(prefix, selector_key, mapped, condition);
+        return apply_optional_legacy_condition(
+            prefix,
+            selector_key,
+            mapped,
+            condition,
+            check_on_resolution,
+        );
+    }
+    if prefix == LegacyAbilityPrefix::Replacement && api == "Untap" {
+        let mapped = map_untap_replacement(prefix, selector_key, expression)?;
+        return apply_optional_legacy_condition(
+            prefix,
+            selector_key,
+            mapped,
+            condition,
+            check_on_resolution,
+        );
     }
     if prefix == LegacyAbilityPrefix::Triggered {
         let mapped = map_triggered_ability(prefix, api, selector_key, expression, context, stack)?;
-        return apply_optional_legacy_condition(prefix, selector_key, mapped, condition);
+        return apply_optional_legacy_condition(
+            prefix,
+            selector_key,
+            mapped,
+            condition,
+            check_on_resolution,
+        );
     }
 
     let parameter_map = parameters(expression)?;
@@ -913,7 +963,13 @@ fn map_with_context_unconditioned(
             ));
         }
     }
-    mapped = apply_optional_legacy_condition(prefix, selector_key, mapped, condition)?;
+    mapped = apply_optional_legacy_condition(
+        prefix,
+        selector_key,
+        mapped,
+        condition,
+        check_on_resolution,
+    )?;
     if let Some(name) = sub_ability {
         let linked = resolve_svar(&name, context, stack)?;
         if linked.event.is_some() || !linked.costs.is_empty() {
@@ -932,9 +988,12 @@ fn apply_optional_legacy_condition(
     selector_key: &str,
     mapped: MappedLegacyAbility,
     condition: Option<Expression>,
+    check_on_resolution: bool,
 ) -> Result<MappedLegacyAbility, MappingDiagnostic> {
     match condition {
-        Some(condition) => apply_legacy_condition(prefix, selector_key, mapped, condition),
+        Some(condition) => {
+            apply_legacy_condition(prefix, selector_key, mapped, condition, check_on_resolution)
+        }
         None => Ok(mapped),
     }
 }
@@ -1034,8 +1093,13 @@ fn extract_presence_condition(
 fn extract_legacy_conditions(
     expression: &LegacyExpression,
     context: &MappingContext<'_>,
-) -> Result<(LegacyExpression, Option<Expression>), MappingDiagnostic> {
+) -> Result<(LegacyExpression, Option<Expression>, bool), MappingDiagnostic> {
     let parameters = parameters(expression)?;
+    let check_on_resolution = match parameters.get("NoResolvingCheck").map(String::as_str) {
+        None => true,
+        Some("True") => false,
+        Some(value) => return Err(unsupported_value("NoResolvingCheck", value)),
+    };
     let mut conditions = Vec::new();
     if let Some(value) = parameters.get("Condition") {
         conditions.push(legacy_named_condition(value)?);
@@ -1079,7 +1143,14 @@ fn extract_legacy_conditions(
         }
     }
     if conditions.is_empty() {
-        return Ok((expression.clone(), None));
+        if !check_on_resolution {
+            let mut unconditioned = expression.clone();
+            unconditioned
+                .fields
+                .retain(|field| field.key.as_deref() != Some("NoResolvingCheck"));
+            return Ok((unconditioned, None, false));
+        }
+        return Ok((expression.clone(), None, true));
     }
     let mut unconditioned = expression.clone();
     unconditioned.fields.retain(|field| {
@@ -1093,10 +1164,15 @@ fn extract_legacy_conditions(
                     | "ConditionSVarCompare"
                     | "ActivatorThisTurnCast"
                     | "OpponentTurn"
+                    | "NoResolvingCheck"
             )
         )
     });
-    Ok((unconditioned, combine_conditions(conditions)))
+    Ok((
+        unconditioned,
+        combine_conditions(conditions),
+        check_on_resolution,
+    ))
 }
 
 fn combine_conditions(mut conditions: Vec<Expression>) -> Option<Expression> {
@@ -1202,6 +1278,9 @@ fn legacy_named_condition(value: &str) -> Result<Expression, MappingDiagnostic> 
             Operation::During,
             vec![Expression::Text("extra_turn".to_string())],
         )),
+        "Threshold" | "Delirium" | "Metalcraft" | "Hellbent" | "Blessing" | "Solved" => {
+            closed_activation_condition(value)
+        }
         _ => Err(unsupported_value("Condition", value)),
     }
 }
@@ -1288,7 +1367,14 @@ fn apply_legacy_condition(
     selector_key: &str,
     mut mapped: MappedLegacyAbility,
     condition: Expression,
+    check_on_resolution: bool,
 ) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    if !check_on_resolution && prefix != LegacyAbilityPrefix::Triggered {
+        return Err(diagnostic(
+            "UNSUPPORTED_PARAMETER",
+            "NoResolvingCheck is only exact for triggered abilities",
+        ));
+    }
     match prefix {
         LegacyAbilityPrefix::Triggered => {
             let event = mapped.event.take().ok_or_else(|| {
@@ -1298,10 +1384,12 @@ fn apply_legacy_condition(
                 )
             })?;
             mapped.event = Some(call(Operation::EventWhen, vec![event, condition.clone()]));
-            mapped.expression = call(
-                Operation::WhileCondition,
-                vec![condition, mapped.expression],
-            );
+            if check_on_resolution {
+                mapped.expression = call(
+                    Operation::WhileCondition,
+                    vec![condition, mapped.expression],
+                );
+            }
         }
         LegacyAbilityPrefix::Replacement => {
             if let Some(event) = mapped.event.take() {
@@ -1536,7 +1624,7 @@ fn map_dynamic_ability(
         .first()
         .ok_or_else(|| diagnostic("MALFORMED_API", "ability has no API selector"))?;
     let api = selector.value.trim();
-    let specs = match api {
+    let mut specs = match api {
         "Mana" => vec![DynamicPatchSpec {
             key: "Amount",
             placeholder: "1",
@@ -1659,6 +1747,20 @@ fn map_dynamic_ability(
         }],
         _ => Vec::new(),
     };
+    specs.extend([
+        DynamicPatchSpec {
+            key: "TargetMin",
+            placeholder: "0",
+            operation: Operation::TargetRange,
+            argument: 1,
+        },
+        DynamicPatchSpec {
+            key: "TargetMax",
+            placeholder: "2",
+            operation: Operation::TargetRange,
+            argument: 2,
+        },
+    ]);
     if specs.is_empty() {
         return Ok(None);
     }
@@ -1876,6 +1978,15 @@ fn map_count_value(name: &str, value: &str) -> Result<Expression, MappingDiagnos
         return Ok(call(
             Operation::Power,
             vec![call(Operation::Source, vec![])],
+        ));
+    }
+    if value == "LifeYouGainedThisTurn" {
+        return Ok(call(
+            Operation::HistoryCount,
+            vec![
+                call(Operation::You, vec![]),
+                Expression::Text("life_gained_this_turn".to_string()),
+            ],
         ));
     }
     if let Some(counter_type) = value.strip_prefix("CardCounters.") {
@@ -2180,6 +2291,57 @@ fn map_moved_replacement(
         event: Some(event),
         timing: None,
         expression: linked.expression,
+    })
+}
+
+fn map_untap_replacement(
+    prefix: LegacyAbilityPrefix,
+    selector: &str,
+    expression: &LegacyExpression,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector(selector, "Event")?;
+    let parameters = parameters(expression)?;
+    reject_unknown(
+        &parameters,
+        &[
+            "ValidCard",
+            "ValidStepTurnToController",
+            "Layer",
+            "ActiveZones",
+            "Description",
+        ],
+    )?;
+    require_battlefield_zone(&parameters, "ActiveZones")?;
+    if required(&parameters, "Layer")? != "CantHappen" {
+        return Err(unsupported_value("Layer", required(&parameters, "Layer")?));
+    }
+    match parameters
+        .get("ValidStepTurnToController")
+        .map(String::as_str)
+    {
+        None | Some("You") => {}
+        Some(value) => return Err(unsupported_value("ValidStepTurnToController", value)),
+    }
+    let affected = affected_selector(required(&parameters, "ValidCard")?)?;
+    Ok(MappedLegacyAbility {
+        prefix,
+        api: "Untap".to_string(),
+        costs: Vec::new(),
+        event: None,
+        timing: None,
+        expression: call(
+            Operation::Continuous,
+            vec![
+                affected,
+                call(
+                    Operation::CannotUntap,
+                    vec![
+                        call(Operation::Any, vec![]),
+                        Expression::Text("controller_untap_step".to_string()),
+                    ],
+                ),
+            ],
+        ),
     })
 }
 
@@ -3241,6 +3403,7 @@ fn map_damage(
             "Defined",
             "ValidTgts",
             "NumDmg",
+            "DamageSource",
             "SpellDescription",
             "TgtPrompt",
         ],
@@ -3259,10 +3422,13 @@ fn map_damage(
         costs: parse_simple_cost(parameters.get("Cost"))?,
         event: None,
         timing: None,
-        expression: call(
-            Operation::DealDamage,
-            vec![target, Expression::Integer(amount)],
-        ),
+        expression: {
+            let mut arguments = vec![target, Expression::Integer(amount)];
+            if let Some(source) = parameters.get("DamageSource") {
+                arguments.push(damage_source_selector(source)?);
+            }
+            call(Operation::DealDamage, arguments)
+        },
     })
 }
 
@@ -3797,13 +3963,23 @@ fn map_continuous(
     }
     if let Some(keywords) = parameters.get("AddKeyword") {
         for keyword in keywords.split(" & ") {
-            effects.push(call(
-                Operation::GrantKeyword,
-                vec![
-                    call(Operation::Any, vec![]),
-                    Expression::Text(normalize_simple_keyword(keyword)?),
-                ],
-            ));
+            if is_next_untap_restriction(keyword) {
+                effects.push(call(
+                    Operation::CannotUntap,
+                    vec![
+                        call(Operation::Any, vec![]),
+                        Expression::Text("next_untap_step".to_string()),
+                    ],
+                ));
+            } else {
+                effects.push(call(
+                    Operation::GrantKeyword,
+                    vec![
+                        call(Operation::Any, vec![]),
+                        Expression::Text(normalize_simple_keyword(keyword)?),
+                    ],
+                ));
+            }
         }
     }
     if parameters.contains_key("SetPower") || parameters.contains_key("SetToughness") {
@@ -3927,9 +4103,12 @@ fn map_change_zone(
             "NoLooking",
             "Hidden",
             "SelectPrompt",
+            "Chooser",
             "RememberChanged",
             "Duration",
             "AtEOT",
+            "WithCountersType",
+            "WithCountersAmount",
             "SpellDescription",
             "StackDescription",
             "IsCurse",
@@ -3937,6 +4116,11 @@ fn map_change_zone(
         ],
     )?;
     let origin = required(parameters, "Origin")?;
+    if let Some(chooser) = parameters.get("Chooser") {
+        if chooser != "You" {
+            return Err(unsupported_value("Chooser", chooser));
+        }
+    }
     let replacement_object = parameters
         .get("Defined")
         .is_some_and(|value| value == "ReplacedCard");
@@ -4088,6 +4272,7 @@ fn map_change_zone(
     } else {
         expression
     };
+    let expression = apply_entry_counters(expression, parameters)?;
     let expression = apply_zone_move_lifetime(expression, parameters, origin, destination)?;
     mapped_direct(
         prefix,
@@ -4243,6 +4428,8 @@ fn map_token(
             "TokenTapped",
             "RememberTokens",
             "AtEOT",
+            "WithCountersType",
+            "WithCountersAmount",
             "SpellDescription",
             "StackDescription",
             "AILogic",
@@ -4287,12 +4474,45 @@ fn map_token(
                 if tapped {
                     arguments.push(Expression::Text("tapped".to_string()));
                 }
-                apply_created_object_metadata(call(Operation::CreateToken, arguments), parameters)
+                let created =
+                    apply_entry_counters(call(Operation::CreateToken, arguments), parameters)?;
+                apply_created_object_metadata(created, parameters)
             })
             .collect::<Result<Vec<_>, _>>()?,
         "Token requires at least one TokenScript",
     )?;
     mapped_direct(prefix, api, parameters, expression)
+}
+
+fn apply_entry_counters(
+    create_or_move: Expression,
+    parameters: &BTreeMap<String, String>,
+) -> Result<Expression, MappingDiagnostic> {
+    let Some(counter_types) = parameters.get("WithCountersType") else {
+        if parameters.contains_key("WithCountersAmount") {
+            return Err(diagnostic(
+                "MISSING_PARAMETER",
+                "WithCountersAmount requires WithCountersType",
+            ));
+        }
+        return Ok(create_or_move);
+    };
+    let amount = optional_positive_integer(parameters, "WithCountersAmount")?.unwrap_or(1);
+    let mut effects = vec![create_or_move];
+    for counter_type in counter_types.split(',').map(str::trim) {
+        if counter_type.is_empty() {
+            return Err(unsupported_value("WithCountersType", counter_types));
+        }
+        effects.push(call(
+            Operation::AddCounter,
+            vec![
+                call(Operation::EffectResult, vec![]),
+                Expression::Text(counter_type.to_ascii_lowercase()),
+                Expression::Integer(amount),
+            ],
+        ));
+    }
+    combine_effects(effects, "entry counters require a move or creation")
 }
 
 fn apply_created_object_metadata(
@@ -4390,6 +4610,7 @@ fn map_damage_all(
             "ValidTgts",
             "ValidDescription",
             "NumDmg",
+            "DamageSource",
             "SpellDescription",
             "StackDescription",
             "AILogic",
@@ -4427,11 +4648,38 @@ fn map_damage_all(
         _ => call(Operation::All, affected),
     };
     let amount = positive_integer(required(parameters, "NumDmg")?, "NumDmg")?;
-    let expression = call(
-        Operation::DealDamage,
-        vec![target, Expression::Integer(amount)],
-    );
+    let mut arguments = vec![target, Expression::Integer(amount)];
+    if let Some(source) = parameters.get("DamageSource") {
+        arguments.push(damage_source_selector(source)?);
+    }
+    let expression = call(Operation::DealDamage, arguments);
     mapped_direct(prefix, api, parameters, expression)
+}
+
+fn damage_source_selector(value: &str) -> Result<Expression, MappingDiagnostic> {
+    match value {
+        "Targeted" | "ParentTarget" | "ThisTargetedCard" => {
+            Ok(call(Operation::Target, vec![call(Operation::Any, vec![])]))
+        }
+        "Self" | "EffectSource" | "OriginalHost" => Ok(call(Operation::Source, vec![])),
+        "TriggeredCard"
+        | "TriggeredCardLKICopy"
+        | "TriggeredSource"
+        | "TriggeredAttacker"
+        | "TriggeredAttackerLKICopy"
+        | "TriggeredTarget"
+        | "TriggeredTargetLKICopy" => Ok(call(Operation::Triggered, vec![])),
+        "Remembered" => Ok(call(
+            Operation::Remembered,
+            vec![call(Operation::Any, vec![])],
+        )),
+        "Enchanted" => Ok(call(
+            Operation::EnchantedObject,
+            vec![call(Operation::Source, vec![])],
+        )),
+        "Any" => Ok(call(Operation::Any, vec![])),
+        _ => Err(unsupported_value("DamageSource", value)),
+    }
 }
 
 fn map_discard(
@@ -5712,7 +5960,13 @@ fn map_cant_attack_or_block(
     require_selector(selector, "Mode")?;
     reject_unknown(
         parameters,
-        &["ValidCard", "EffectZone", "Description", "Secondary"],
+        &[
+            "ValidCard",
+            "EffectZone",
+            "Description",
+            "Secondary",
+            "UnlessDefender",
+        ],
     )?;
     require_static_effect_zone(parameters, "EffectZone")?;
     if parameters
@@ -5731,10 +5985,20 @@ fn map_cant_attack_or_block(
         "CantAttack,CantBlock" => vec![Operation::CannotAttack, Operation::CannotBlock],
         _ => return Err(diagnostic("UNMAPPED_API", "unknown combat restriction")),
     };
+    let unless_defender = parameters
+        .get("UnlessDefender")
+        .map(|value| unless_defender_predicate(value))
+        .transpose()?;
     let restriction = combine_effects(
         restrictions
             .into_iter()
-            .map(|operation| call(operation, vec![call(Operation::Any, vec![])]))
+            .map(|operation| {
+                let mut arguments = vec![call(Operation::Any, vec![])];
+                if let Some(predicate) = &unless_defender {
+                    arguments.push(predicate.clone());
+                }
+                call(operation, arguments)
+            })
             .collect(),
         "combat restriction requires an effect",
     )?;
@@ -5745,6 +6009,31 @@ fn map_cant_attack_or_block(
         event: None,
         timing: None,
         expression: call(Operation::Continuous, vec![affected, restriction]),
+    })
+}
+
+fn unless_defender_predicate(value: &str) -> Result<Expression, MappingDiagnostic> {
+    let (negated, value) = value
+        .strip_prefix('!')
+        .map_or((false, value), |value| (true, value));
+    let validity = value
+        .strip_prefix("controls")
+        .ok_or_else(|| unsupported_value("UnlessDefender", value))?;
+    let controlled = add_collection_predicate(
+        affected_selector(validity)?,
+        call(
+            Operation::ControlledBy,
+            vec![call(Operation::Opponent, vec![])],
+        ),
+    )?;
+    let predicate = call(
+        Operation::Nonzero,
+        vec![call(Operation::Count, vec![controlled])],
+    );
+    Ok(if negated {
+        call(Operation::Not, vec![predicate])
+    } else {
+        predicate
     })
 }
 
@@ -7762,6 +8051,16 @@ fn append_keyword_grants(
             }
             _ => None,
         };
+        if is_next_untap_restriction(keyword) {
+            effects.push(call(
+                Operation::CannotUntap,
+                vec![
+                    affected.clone(),
+                    Expression::Text("next_untap_step".to_string()),
+                ],
+            ));
+            continue;
+        }
         if let Some(restrictions) = restrictions {
             effects.extend(
                 restrictions
@@ -7780,6 +8079,14 @@ fn append_keyword_grants(
         }
     }
     Ok(())
+}
+
+fn is_next_untap_restriction(value: &str) -> bool {
+    matches!(
+        value,
+        "HIDDEN This card doesn't untap during your next untap step."
+            | "HIDDEN CARDNAME doesn't untap during your next untap step."
+    )
 }
 
 fn optional_number_or_value(
@@ -9381,6 +9688,98 @@ mod tests {
     }
 
     #[test]
+    fn maps_closed_threshold_conditions_without_resolution_rechecks() {
+        let static_ability = map_line(
+            "S:Mode$ Continuous | Affected$ Creature.EnchantedBy | AddKeyword$ Shroud | Condition$ Threshold | Description$ Threshold.",
+        )
+        .unwrap_or_else(|error| panic!("threshold condition should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &static_ability.expression,
+            Operation::WhileCondition
+        ));
+
+        let trigger = map_script_root(
+            "T:Mode$ Attacks | ValidCard$ Card.Self | IsPresent$ Creature.attacking+Other | PresentCompare$ GE2 | NoResolvingCheck$ True | Execute$ Pump\nSVar:Pump:DB$ Pump | Defined$ Self | NumAtt$ +2 | NumDef$ +2\n",
+        )
+        .unwrap_or_else(|error| panic!("trigger-only check should map: {}", error.message));
+        assert!(expression_contains_operation(
+            trigger
+                .event
+                .as_ref()
+                .unwrap_or_else(|| panic!("trigger event")),
+            Operation::EventWhen
+        ));
+        assert!(!expression_contains_operation(
+            &trigger.expression,
+            Operation::WhileCondition
+        ));
+    }
+
+    #[test]
+    fn maps_closed_entry_counters_and_life_gained_values() {
+        let moved = map_line(
+            "A:SP$ ChangeZone | Origin$ Graveyard | Destination$ Battlefield | ValidTgts$ Creature | WithCountersType$ M1M1 | WithCountersAmount$ 2",
+        )
+        .unwrap_or_else(|error| panic!("entry counters should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &moved.expression,
+            Operation::AddCounter
+        ));
+        assert!(expression_contains_operation(
+            &moved.expression,
+            Operation::EffectResult
+        ));
+
+        let mana = map_script_root(
+            "A:AB$ Mana | Cost$ T | Produced$ Any | Amount$ X\nSVar:X:Count$LifeYouGainedThisTurn\n",
+        )
+        .unwrap_or_else(|error| panic!("life-gained value should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &mana.expression,
+            Operation::HistoryCount
+        ));
+    }
+
+    #[test]
+    fn maps_closed_untap_prevention_replacements() {
+        let mapped = map_script_root(
+            "R:Event$ Untap | ActiveZones$ Battlefield | ValidCard$ Creature.EnchantedBy | ValidStepTurnToController$ You | Layer$ CantHappen | Description$ Does not untap.\n",
+        )
+        .unwrap_or_else(|error| panic!("untap prevention should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &mapped.expression,
+            Operation::Continuous
+        ));
+        assert!(expression_contains_operation(
+            &mapped.expression,
+            Operation::CannotUntap
+        ));
+
+        for line in [
+            "R:Event$ Untap | ValidCard$ Card.Self | Layer$ Replace | Description$ Bad.",
+            "R:Event$ Untap | ValidCard$ Card.Self | Layer$ CantHappen | ValidStepTurnToController$ Opponent | Description$ Bad.",
+        ] {
+            assert!(map_script_root(line).is_err());
+        }
+    }
+
+    #[test]
+    fn maps_dynamic_target_range_bounds() {
+        let mapped = map_script_root(
+            "A:SP$ Destroy | ValidTgts$ Creature | TargetMin$ X | TargetMax$ X\nSVar:X:Count$CardPower\n",
+        )
+        .unwrap_or_else(|error| panic!("dynamic target range should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &mapped.expression,
+            Operation::TargetRange
+        ));
+        assert!(expression_contains_operation(
+            &mapped.expression,
+            Operation::Power
+        ));
+    }
+
+    #[test]
     fn lowers_closed_presence_conditions_by_ability_kind() {
         let mana = map_line(
             "A:AB$ Mana | Cost$ T | Produced$ C | Amount$ 2 | IsPresent$ Land.YouCtrl | PresentCompare$ GE5 | SpellDescription$ Add mana.",
@@ -10584,13 +10983,15 @@ mod tests {
     }
 
     #[test]
-    fn rejects_open_permanent_pump_duration_forms() {
-        let error = map_line(
+    fn maps_closed_next_untap_and_rejects_mixed_permanent_cleanup() {
+        let mapped = map_line(
             "A:AB$ Pump | Defined$ Self | KW$ HIDDEN This card doesn't untap during your next untap step. | Duration$ Permanent",
         )
-        .err()
-        .unwrap_or_else(|| panic!("hidden untap prose must remain quarantined"));
-        assert_eq!(error.code, "UNSUPPORTED_VALUE");
+        .unwrap_or_else(|error| panic!("closed untap restriction should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &mapped.expression,
+            Operation::CannotUntap
+        ));
 
         let error = map_line(
             "A:AB$ Pump | Defined$ Self | NumAtt$ +1 | AtEOT$ Sacrifice | Duration$ Permanent",

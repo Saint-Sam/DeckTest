@@ -979,6 +979,7 @@ operations! {
     Crew => ("crew", Effect, 2, Some(2)),
     EffectResult => ("effect_result", Selector, 0, Some(0)),
     Targets => ("targets", Predicate, 1, Some(1)),
+    CannotUntap => ("cannot_untap", Effect, 1, Some(2)),
 }
 
 impl Operation {
@@ -1008,7 +1009,7 @@ impl Operation {
     #[must_use]
     pub const fn argument_kind(self, index: usize) -> Option<ArgumentKind> {
         use ArgumentKind::{
-            Boolean, Comparable, Effect, Event, Integer, Number, Predicate, PredicateOrText,
+            Boolean, Comparable, Effect, Event, Number, Predicate, PredicateOrText,
             RememberedValue, Scalar, Selector, SelectorOrEvent, SelectorOrNumber,
             SelectorOrPredicate, SelectorOrText, SelectorTextOrNumber, Text, Timing, Value,
         };
@@ -1026,7 +1027,7 @@ impl Operation {
             Self::Chosen | Self::Target => Some(SelectorOrPredicate),
             Self::TargetRange => match index {
                 0 => Some(SelectorOrPredicate),
-                1 | 2 => Some(Integer),
+                1 | 2 => Some(Number),
                 _ => None,
             },
             Self::TargetAllocation => match index {
@@ -1323,6 +1324,11 @@ impl Operation {
                 1 => Some(Predicate),
                 _ => None,
             },
+            Self::CannotUntap => match index {
+                0 => Some(Selector),
+                1 => Some(Text),
+                _ => None,
+            },
             Self::CanBlockOnly => match index {
                 0 => Some(Selector),
                 1 => Some(Predicate),
@@ -1505,11 +1511,11 @@ mod tests {
         );
         assert_eq!(
             Operation::TargetRange.argument_kind(1),
-            Some(ArgumentKind::Integer)
+            Some(ArgumentKind::Number)
         );
         assert_eq!(
             Operation::TargetRange.argument_kind(2),
-            Some(ArgumentKind::Integer)
+            Some(ArgumentKind::Number)
         );
         assert_eq!(
             Operation::CreateToken.argument_kind(3),
