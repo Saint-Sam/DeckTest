@@ -1,6 +1,6 @@
 # DeckTest / Forge 2.0 Status
 
-Generated: 2026-07-12T02:41:18.821248+00:00 by `tools/write_card_maturity.py`
+Generated: 2026-07-12T02:52:25.206650+00:00 by `tools/write_card_maturity.py`
 
 Plan: v1.8
 
@@ -56,8 +56,8 @@ onto identities.
 | Legacy scripts parsed | 33,290/33,290 |
 | Compiler-valid translated legacy definitions | 11,440 |
 | Fail-closed quarantined legacy definitions | 21,850 |
-| Structurally tested legacy ability uses | 19,517/43,649 |
-| Quarantined legacy ability uses | 24,132 |
+| Structurally tested legacy ability uses | 19,518/43,649 |
+| Quarantined legacy ability uses | 24,131 |
 | Owner-priority compiler-valid definitions | 195/365 |
 
 ## Evidence Breadth
@@ -73,17 +73,16 @@ onto identities.
 
 ## T3.3 Mapper Progress
 
-The exact local-only detached `ConditionDefined` product `58036b7` passed the
+The exact local-only detached remembered-selector product `dfed76f` passed the
 24-worker checkpoint with deterministic translation and blocker-plan replay,
 full workspace tests, clippy, compiler/database validation, 235 oracle
-scenarios plus gated subsets, nightmare/smoke checks, and 80.9840% line
-coverage. Closed bindings scope closed `ConditionPresent` collections to
-`Self`, `Targeted`, `Remembered`, `ChosenCard`, or `TriggeredCard`; unsupported
-bindings, private-zone variants, dynamic predicates, and open remembered
-semantics remain quarantined. The product emits 11,440/33,290 complete
-scripts (34.3647%), maps 19,517/43,649 ability uses (44.7135%), and keeps
-Owner-priority emission at 195/365. T3.3 remains active and the 60%
-complete-script exit floor is not reached.
+scenarios plus gated subsets, nightmare/smoke checks, and 80.9940% line
+coverage. Exact `Defined$ Remembered` and `Affected$ Card.IsRemembered`
+selectors lower through typed `Remembered(Any)`; LKI, dynamic remembered
+bindings, and runtime semantic behavior remain quarantined. The product emits
+11,440/33,290 complete scripts (34.3647%), maps 19,518/43,649 ability uses
+(44.7158%), and keeps Owner-priority emission at 195/365. T3.3 remains active
+and the 60% complete-script exit floor is not reached.
 
 ## Next Gates
 
@@ -96,4 +95,4 @@ complete-script exit floor is not reached.
 
 Per-identity generated detail: `target/card-maturity/identities.json` (untracked,
 38,306 records; SHA-256
-`7d23a7445844f83c297429f8f9f48578c8a32eeea62ee3987cf0bea667444ff7`).
+`7ac99f5f9ec06cdeeebb101d869af482543aad599819d43c926cce21bd03cd61`).
