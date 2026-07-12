@@ -94,19 +94,10 @@ def committed_points() -> list[Point]:
                 )
             )
             seen.add(path)
-    # Generated timestamps are the checkpoint clock. Sort by them and remove stale
-    # evidence whose after-count moves backward relative to a later committed checkpoint.
+    # Generated timestamps are the checkpoint clock. Keep reviewed downward
+    # corrections visible; removing them would bias throughput upward.
     rows.sort(key=lambda row: (row.timestamp, row.evidence_commit))
-    monotonic: list[Point] = []
-    max_scripts = -1
-    max_uses = -1
-    for row in rows:
-        if row.complete_scripts < max_scripts or row.mapped_uses < max_uses:
-            continue
-        monotonic.append(row)
-        max_scripts = row.complete_scripts
-        max_uses = row.mapped_uses
-    return [Point(index=i + 1, **{k: v for k, v in row.__dict__.items() if k != "index"}) for i, row in enumerate(monotonic)]
+    return [Point(index=i + 1, **{k: v for k, v in row.__dict__.items() if k != "index"}) for i, row in enumerate(rows)]
 
 
 def hours(delta_seconds: float) -> float:
@@ -129,16 +120,16 @@ def projections(points: list[Point]) -> dict[str, float]:
     first, latest = points[0], points[-1]
     elapsed = max(hours((latest.timestamp - first.timestamp).total_seconds()), 0.01)
     historical_rate = (latest.complete_scripts - first.complete_scripts) / elapsed
-    recent = points[-5:]
-    interval_rates = []
-    for left, right in zip(recent, recent[1:]):
-        dt = hours((right.timestamp - left.timestamp).total_seconds())
-        gain = right.complete_scripts - left.complete_scripts
-        if dt > 0 and gain > 0:
-            interval_rates.append(gain / dt)
-    recent_rate = statistics.median(interval_rates) if interval_rates else historical_rate
+    recent = points[-6:]
+    recent_elapsed = max(hours((recent[-1].timestamp - recent[0].timestamp).total_seconds()), 0.01)
+    recent_rate = (recent[-1].complete_scripts - recent[0].complete_scripts) / recent_elapsed
+    interval_rates = [
+        (right.complete_scripts - left.complete_scripts)
+        / max(hours((right.timestamp - left.timestamp).total_seconds()), 0.01)
+        for left, right in zip(recent, recent[1:])
+    ]
     low_rate = max(historical_rate, 1.0)
-    high_rate = max(recent_rate, low_rate)
+    high_rate = max(recent_rate, low_rate, 1.0)
     return {
         "historical_rate": historical_rate,
         "recent_rate": recent_rate,
@@ -215,14 +206,14 @@ def plot_projection(points: list[Point], projection: dict[str, float]) -> None:
     x = range(len(targets))
     fig, ax = plt.subplots(figsize=(9, 6))
     width = 0.35
-    ax.bar([i - width / 2 for i in x], fast, width, label="Recent campaign rate", color="#2a9d8f")
+    ax.bar([i - width / 2 for i in x], fast, width, label="Faster observed checkpoint cadence", color="#2a9d8f")
     ax.bar([i + width / 2 for i in x], slow, width, label="Whole-history wall-clock rate", color="#6c757d")
     for i, value in enumerate(fast):
         ax.text(i - width / 2, value, f"{value:.1f}h", ha="center", va="bottom")
     for i, value in enumerate(slow):
         ax.text(i + width / 2, value, f"{value:.1f}h", ha="center", va="bottom")
     ax.set_xticks(list(x), targets)
-    style_axis(ax, "Linear projection from the latest committed checkpoint", "Estimated active/wall-clock hours")
+    style_axis(ax, "Linear projection from the latest committed checkpoint", "Estimated elapsed hours")
     ax.legend(frameon=False)
     ax.text(
         0.01,
@@ -241,6 +232,10 @@ def write_report(points: list[Point], projection: dict[str, float]) -> None:
     first, latest = points[0], points[-1]
     gained_scripts = latest.complete_scripts - first.complete_scripts
     gained_uses = latest.mapped_uses - first.mapped_uses
+    corrections = sum(
+        right.complete_scripts < left.complete_scripts or right.mapped_uses < left.mapped_uses
+        for left, right in zip(points, points[1:])
+    )
     text = f"""# Forge 2.0 T3.3 Script Coverage Progress
 
 Generated from committed local `reports/gates/T3.3` evidence and local git history only. No live metrics, network access, installs, GitHub Actions, or pushes were used.
@@ -250,20 +245,26 @@ Generated from committed local `reports/gates/T3.3` evidence and local git histo
 - Latest committed checkpoint: **{latest.complete_scripts:,}/{latest.total_scripts:,} complete scripts ({latest.complete_percent:.2f}%)**.
 - Mapped ability uses: **{latest.mapped_uses:,}/{latest.total_uses:,} ({latest.mapped_percent:.2f}%)**.
 - Owner-priority scripts complete: **{latest.priority_complete:,}/365**.
-- Across this evidence series: **+{gained_scripts:,} complete scripts** and **+{gained_uses:,} mapped uses** over {len(points)} monotonic committed checkpoints.
+- Across this evidence series: **+{gained_scripts:,} complete scripts** and **+{gained_uses:,} mapped uses** over {len(points)} committed checkpoints, including **{corrections} reviewed downward correction(s)**.
 - T3.3 60% floor remaining: **{max(0, math.ceil(0.60 * latest.total_scripts) - latest.complete_scripts):,} scripts**.
 - Mechanical 100% remaining: **{latest.total_scripts - latest.complete_scripts:,} scripts**.
 
 ## Projection
 
-The recent campaign median is **{projection['recent_rate']:.0f} complete scripts/hour** across the latest campaign intervals; the whole-series wall-clock rate is **{projection['historical_rate']:.0f}/hour**. Linear projection gives:
+The recent six-checkpoint net cadence is **{projection['recent_rate']:.0f} complete scripts/hour**; the whole-series wall-clock rate is **{projection['historical_rate']:.0f}/hour**. These rates use elapsed time between evidence timestamps, not measured hands-on work time. Linear projection gives:
 
-| Target | Recent campaign rate | Whole-history wall-clock rate |
+| Target | Faster observed checkpoint cadence | Whole-history wall-clock rate |
 |---|---:|---:|
 | 60% T3.3 floor | {projection['to_60_fast_hours']:.1f} h | {projection['to_60_slow_hours']:.1f} h |
 | 100% mechanical coverage | {projection['to_100_fast_hours']:.1f} h | {projection['to_100_slow_hours']:.1f} h |
 
-These are trend scenarios, not delivery promises. The recent rate assumes compatible high-yield families remain available and work continues in dense batches. The historical rate includes inactive gaps and small experimental batches. The 100% estimate is especially optimistic because the tail shifts toward linked abilities, open selectors, unsupported values, replacement effects, and rules requiring new semantic design; actual time can be several times the linear estimate, and some items may appropriately remain quarantined until later runtime work.
+These are trend scenarios, not delivery promises. Neither rate measures active engineering time. The faster rate assumes compatible high-yield families remain available and work continues in dense batches. The historical rate includes inactive gaps and small experimental batches. The 100% estimate is especially optimistic because the tail shifts toward linked abilities, open selectors, unsupported values, replacement effects, and rules requiring new semantic design; actual time can be several times the linear estimate, and some items may appropriately remain quarantined until later runtime work.
+
+## Independent Review Corrections
+
+Ampere's review found two P1 fail-open paths and one P2 test gap in an earlier mapper batch. The source-zone issue now lowers closed source moves through `MoveZoneFrom(source, origin, destination)`, retaining the legacy no-op guard when the source is not in the declared origin. `RestrictValid` now checks each complete branch against an exact closed vocabulary, rejecting approved-prefix extensions such as `Spell.Runtime.Arbitrary`. Focused regressions now cover dynamic restricted-mana amounts, both dynamic Dig counts, and subtype removal across Continuous, Animate, and AnimateAll. These findings temporarily invalidated the older false-positive checkpoint; the current exact checkpoint was regenerated after remediation.
+
+Downward corrections are retained in the CSV and plots. Projections use net changes rather than deleting regressions or ignoring nonpositive intervals.
 
 ## How Coverage Is Being Built
 
@@ -279,7 +280,7 @@ These are trend scenarios, not delivery promises. The recent rate assumes compat
 
 - `coverage_over_time.png` shows complete-script and mapped-use percentages at committed checkpoints.
 - `checkpoint_throughput.png` shows the gain associated with each evidence checkpoint; the sequence maps to `checkpoint_series.csv`.
-- `coverage_projection.png` compares recent-campaign and whole-history linear scenarios.
+- `coverage_projection.png` compares faster observed-checkpoint and whole-history linear scenarios.
 - `checkpoint_series.csv` is the machine-readable series, including evidence and mapper commits.
 
 ## Important Boundary

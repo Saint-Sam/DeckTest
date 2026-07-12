@@ -4,23 +4,29 @@ Generated from committed local `reports/gates/T3.3` evidence and local git histo
 
 ## Snapshot
 
-- Latest committed checkpoint: **13,787/33,290 complete scripts (41.41%)**.
-- Mapped ability uses: **22,247/43,649 (50.97%)**.
+- Latest committed checkpoint: **14,179/33,290 complete scripts (42.59%)**.
+- Mapped ability uses: **22,322/43,649 (51.14%)**.
 - Owner-priority scripts complete: **200/365**.
-- Across this evidence series: **+4,785 complete scripts** and **+6,227 mapped uses** over 42 monotonic committed checkpoints.
-- T3.3 60% floor remaining: **6,187 scripts**.
-- Mechanical 100% remaining: **19,503 scripts**.
+- Across this evidence series: **+5,177 complete scripts** and **+6,302 mapped uses** over 44 committed checkpoints, including **1 reviewed downward correction(s)**.
+- T3.3 60% floor remaining: **5,795 scripts**.
+- Mechanical 100% remaining: **19,111 scripts**.
 
 ## Projection
 
-The recent campaign median is **878 complete scripts/hour** across the latest campaign intervals; the whole-series wall-clock rate is **171/hour**. Linear projection gives:
+The recent six-checkpoint net cadence is **842 complete scripts/hour**; the whole-series wall-clock rate is **181/hour**. These rates use elapsed time between evidence timestamps, not measured hands-on work time. Linear projection gives:
 
-| Target | Recent campaign rate | Whole-history wall-clock rate |
+| Target | Faster observed checkpoint cadence | Whole-history wall-clock rate |
 |---|---:|---:|
-| 60% T3.3 floor | 7.0 h | 36.2 h |
-| 100% mechanical coverage | 22.2 h | 114.1 h |
+| 60% T3.3 floor | 6.9 h | 32.0 h |
+| 100% mechanical coverage | 22.7 h | 105.5 h |
 
-These are trend scenarios, not delivery promises. The recent rate assumes compatible high-yield families remain available and work continues in dense batches. The historical rate includes inactive gaps and small experimental batches. The 100% estimate is especially optimistic because the tail shifts toward linked abilities, open selectors, unsupported values, replacement effects, and rules requiring new semantic design; actual time can be several times the linear estimate, and some items may appropriately remain quarantined until later runtime work.
+These are trend scenarios, not delivery promises. Neither rate measures active engineering time. The faster rate assumes compatible high-yield families remain available and work continues in dense batches. The historical rate includes inactive gaps and small experimental batches. The 100% estimate is especially optimistic because the tail shifts toward linked abilities, open selectors, unsupported values, replacement effects, and rules requiring new semantic design; actual time can be several times the linear estimate, and some items may appropriately remain quarantined until later runtime work.
+
+## Independent Review Corrections
+
+Ampere's review found two P1 fail-open paths and one P2 test gap in an earlier mapper batch. The source-zone issue now lowers closed source moves through `MoveZoneFrom(source, origin, destination)`, retaining the legacy no-op guard when the source is not in the declared origin. `RestrictValid` now checks each complete branch against an exact closed vocabulary, rejecting approved-prefix extensions such as `Spell.Runtime.Arbitrary`. Focused regressions now cover dynamic restricted-mana amounts, both dynamic Dig counts, and subtype removal across Continuous, Animate, and AnimateAll. These findings temporarily invalidated the older false-positive checkpoint; the current exact checkpoint was regenerated after remediation.
+
+Downward corrections are retained in the CSV and plots. Projections use net changes rather than deleting regressions or ignoring nonpositive intervals.
 
 ## How Coverage Is Being Built
 
@@ -36,7 +42,7 @@ These are trend scenarios, not delivery promises. The recent rate assumes compat
 
 - `coverage_over_time.png` shows complete-script and mapped-use percentages at committed checkpoints.
 - `checkpoint_throughput.png` shows the gain associated with each evidence checkpoint; the sequence maps to `checkpoint_series.csv`.
-- `coverage_projection.png` compares recent-campaign and whole-history linear scenarios.
+- `coverage_projection.png` compares faster observed-checkpoint and whole-history linear scenarios.
 - `checkpoint_series.csv` is the machine-readable series, including evidence and mapper commits.
 
 ## Important Boundary
