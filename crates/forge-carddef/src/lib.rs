@@ -1062,6 +1062,13 @@ operations! {
     TriggeredDefendingPlayer => ("triggered_defending_player", Selector, 0, Some(0)),
     EventLimit => ("event_limit", Event, 3, Some(3)),
     ChooseObjects => ("choose_objects", Effect, 3, Some(4)),
+    Aggregate => ("aggregate", Value, 2, Some(2)),
+    CannotBeCountered => ("cannot_be_countered", Effect, 1, Some(1)),
+    EventCounterAttempt => ("event_counter_attempt", Event, 1, Some(1)),
+    CostIncrease => ("cost_increase", Effect, 2, Some(2)),
+    TimesKicked => ("times_kicked", Value, 0, Some(0)),
+    AddReflectedMana => ("add_reflected_mana", Effect, 5, Some(5)),
+    PlayerCount => ("player_count", Value, 0, Some(0)),
 }
 
 impl Operation {
@@ -1269,6 +1276,12 @@ impl Operation {
                 3 => Some(Text),
                 _ => None,
             },
+            Self::Aggregate => match index {
+                0 => Some(Selector),
+                1 => Some(Text),
+                _ => None,
+            },
+            Self::CannotBeCountered | Self::EventCounterAttempt => Some(Selector),
 
             Self::Sequence | Self::ChooseOne => Some(Effect),
             Self::ChooseExactly | Self::ChooseUpTo => {
@@ -1444,6 +1457,12 @@ impl Operation {
                 2 => Some(Number),
                 _ => None,
             },
+            Self::AddReflectedMana => match index {
+                0 | 3 => Some(Selector),
+                1 | 2 => Some(Text),
+                4 => Some(Number),
+                _ => None,
+            },
             Self::AddRestrictedMana => match index {
                 0 | 2 => Some(Text),
                 1 => Some(Selector),
@@ -1594,7 +1613,7 @@ impl Operation {
                 _ => None,
             },
             Self::SpendManaAsAnyColor | Self::NoMaximumHandSize | Self::DelveCost => Some(Selector),
-            Self::AdditionalLandPlays | Self::CostReduction => match index {
+            Self::AdditionalLandPlays | Self::CostReduction | Self::CostIncrease => match index {
                 0 => Some(Selector),
                 1 => Some(Number),
                 _ => None,
@@ -1649,8 +1668,8 @@ impl Operation {
             Self::TimingCondition => Some(Predicate),
             Self::Count => Some(SelectorOrText),
             Self::Amount => Some(Comparable),
-            Self::PaidX => None,
-            Self::OpponentCount => None,
+            Self::PaidX | Self::TimesKicked => None,
+            Self::OpponentCount | Self::PlayerCount => None,
             Self::CounterCount | Self::Devotion | Self::DistinctCount | Self::HistoryCount => {
                 match index {
                     0 => Some(Selector),
@@ -1882,6 +1901,13 @@ mod tests {
         assert_eq!(Operation::TriggeredDefendingPlayer as u32, 262);
         assert_eq!(Operation::EventLimit as u32, 263);
         assert_eq!(Operation::ChooseObjects as u32, 264);
+        assert_eq!(Operation::Aggregate as u32, 265);
+        assert_eq!(Operation::CannotBeCountered as u32, 266);
+        assert_eq!(Operation::EventCounterAttempt as u32, 267);
+        assert_eq!(Operation::CostIncrease as u32, 268);
+        assert_eq!(Operation::TimesKicked as u32, 269);
+        assert_eq!(Operation::AddReflectedMana as u32, 270);
+        assert_eq!(Operation::PlayerCount as u32, 271);
 
         let config = bincode::config::standard()
             .with_fixed_int_encoding()

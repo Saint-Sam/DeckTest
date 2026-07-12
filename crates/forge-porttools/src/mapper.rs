@@ -155,6 +155,11 @@ const MAPPERS: &[MapperSpec] = &[
     },
     MapperSpec {
         prefix: LegacyAbilityPrefix::Activated,
+        api: "ManaReflected",
+        mapper: map_mana_reflected,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Activated,
         api: "Draw",
         mapper: map_draw,
     },
@@ -275,6 +280,11 @@ const MAPPERS: &[MapperSpec] = &[
     },
     MapperSpec {
         prefix: LegacyAbilityPrefix::Static,
+        api: "RaiseCost",
+        mapper: map_raise_cost,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Static,
         api: "CantBlockBy",
         mapper: map_cant_block_by,
     },
@@ -327,6 +337,11 @@ const MAPPERS: &[MapperSpec] = &[
         prefix: LegacyAbilityPrefix::Activated,
         api: "ChooseType",
         mapper: map_choose_type,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Activated,
+        api: "ChooseColor",
+        mapper: map_choose_color,
     },
     MapperSpec {
         prefix: LegacyAbilityPrefix::Activated,
@@ -992,6 +1007,16 @@ fn map_with_context_unconditioned(
     }
     if prefix == LegacyAbilityPrefix::Replacement && api == "Untap" {
         let mapped = map_untap_replacement(prefix, selector_key, expression)?;
+        return apply_optional_legacy_condition(
+            prefix,
+            selector_key,
+            mapped,
+            condition,
+            check_on_resolution,
+        );
+    }
+    if prefix == LegacyAbilityPrefix::Replacement && api == "Counter" {
+        let mapped = map_counter_replacement(prefix, selector_key, expression)?;
         return apply_optional_legacy_condition(
             prefix,
             selector_key,
@@ -1852,6 +1877,18 @@ fn map_dynamic_ability(
                 operation: Operation::ModifyPt,
                 argument: 2,
             },
+            DynamicPatchSpec {
+                key: "SetPower",
+                placeholder: "1",
+                operation: Operation::SetPt,
+                argument: 1,
+            },
+            DynamicPatchSpec {
+                key: "SetToughness",
+                placeholder: "1",
+                operation: Operation::SetPt,
+                argument: 2,
+            },
         ],
         "ReduceCost" => vec![DynamicPatchSpec {
             key: "Amount",
@@ -2069,6 +2106,7 @@ pub(crate) fn resolve_value_svar(
         Some("Count") => map_count_value(name, &field.value),
         Some("TriggerCount") => map_trigger_count_value(name, &field.value),
         Some("PlayerCountOpponents") => map_opponent_count_value(name, &field.value),
+        Some("PlayerCountPlayers") => map_player_count_value(name, &field.value),
         Some("Targeted") => map_characteristic_value(
             name,
             call(Operation::Target, vec![call(Operation::Any, vec![])]),
@@ -2086,12 +2124,43 @@ pub(crate) fn resolve_value_svar(
             ),
             &field.value,
         ),
+        Some("Remembered") => map_remembered_value(name, &field.value),
         _ => Err(diagnostic(
             "UNSUPPORTED_VALUE_SVAR",
             &format!(
                 "value SVar `{name}` expression `{}` has no exact lowering",
                 expression.raw
             ),
+        )),
+    }
+}
+
+fn map_remembered_value(name: &str, value: &str) -> Result<Expression, MappingDiagnostic> {
+    let remembered = call(Operation::Remembered, vec![call(Operation::Any, vec![])]);
+    match value {
+        "Amount" => Ok(call(Operation::Count, vec![remembered])),
+        "CardPower" => Ok(call(
+            Operation::Aggregate,
+            vec![remembered, Expression::Text("sum_power".to_string())],
+        )),
+        "CardToughness" => Ok(call(
+            Operation::Aggregate,
+            vec![remembered, Expression::Text("sum_toughness".to_string())],
+        )),
+        "CardManaCost" => Ok(call(
+            Operation::Aggregate,
+            vec![remembered, Expression::Text("sum_mana_value".to_string())],
+        )),
+        "DifferentCardManaCost" => Ok(call(
+            Operation::Aggregate,
+            vec![
+                remembered,
+                Expression::Text("distinct_mana_value".to_string()),
+            ],
+        )),
+        _ => Err(diagnostic(
+            "UNSUPPORTED_VALUE_SVAR",
+            &format!("value SVar `{name}` remembered value `{value}` has no exact lowering"),
         )),
     }
 }
@@ -2126,9 +2195,22 @@ fn map_opponent_count_value(name: &str, value: &str) -> Result<Expression, Mappi
     ))
 }
 
+fn map_player_count_value(name: &str, value: &str) -> Result<Expression, MappingDiagnostic> {
+    if value == "Amount" {
+        return Ok(call(Operation::PlayerCount, vec![]));
+    }
+    Err(diagnostic(
+        "UNSUPPORTED_VALUE_SVAR",
+        &format!("value SVar `{name}` player count `{value}` has no exact lowering"),
+    ))
+}
+
 fn map_count_value(name: &str, value: &str) -> Result<Expression, MappingDiagnostic> {
     if value == "xPaid" {
         return Ok(call(Operation::PaidX, vec![]));
+    }
+    if value == "Kicked.1.0" {
+        return Ok(call(Operation::TimesKicked, vec![]));
     }
     if value == "CardPower" {
         return Ok(call(
@@ -2751,6 +2833,61 @@ fn map_untap_replacement(
                 ),
             ],
         ),
+    })
+}
+
+fn map_counter_replacement(
+    prefix: LegacyAbilityPrefix,
+    selector: &str,
+    expression: &LegacyExpression,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector(selector, "Event")?;
+    let parameters = parameters(expression)?;
+    reject_unknown(
+        &parameters,
+        &[
+            "ValidCard",
+            "ValidSA",
+            "Layer",
+            "ActiveZones",
+            "Description",
+        ],
+    )?;
+    if required(&parameters, "Layer")? != "CantHappen" {
+        return Err(unsupported_value("Layer", required(&parameters, "Layer")?));
+    }
+    let affected = match parameters.get("ValidCard").map(String::as_str) {
+        Some("Card.Self") => {
+            if parameters
+                .get("ValidSA")
+                .is_some_and(|value| value != "Spell")
+            {
+                return Err(unsupported_value(
+                    "ValidSA",
+                    required(&parameters, "ValidSA")?,
+                ));
+            }
+            if parameters.contains_key("ActiveZones") {
+                return Err(diagnostic(
+                    "UNSUPPORTED_PARAMETER",
+                    "self spell counter replacement cannot have ActiveZones",
+                ));
+            }
+            call(Operation::Source, vec![])
+        }
+        Some(value) => return Err(unsupported_value("ValidCard", value)),
+        None => {
+            require_battlefield_zone(&parameters, "ActiveZones")?;
+            spell_selector(required(&parameters, "ValidSA")?)?
+        }
+    };
+    Ok(MappedLegacyAbility {
+        prefix,
+        api: "Counter".to_string(),
+        costs: Vec::new(),
+        event: Some(call(Operation::EventCounterAttempt, vec![affected.clone()])),
+        timing: None,
+        expression: call(Operation::CannotBeCountered, vec![affected]),
     })
 }
 
@@ -3811,6 +3948,54 @@ fn map_mana(
     })
 }
 
+fn map_mana_reflected(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector(selector, "AB")?;
+    reject_unknown(
+        parameters,
+        &[
+            "Cost",
+            "ColorOrType",
+            "Valid",
+            "ReflectProperty",
+            "SpellDescription",
+        ],
+    )?;
+    let mode = match required(parameters, "ColorOrType")? {
+        "Color" => "color",
+        "Type" => "type",
+        value => return Err(unsupported_value("ColorOrType", value)),
+    };
+    if required(parameters, "ReflectProperty")? != "Produce" {
+        return Err(unsupported_value(
+            "ReflectProperty",
+            required(parameters, "ReflectProperty")?,
+        ));
+    }
+    let sources = affected_selector(required(parameters, "Valid")?)?;
+    Ok(MappedLegacyAbility {
+        prefix,
+        api: api.to_string(),
+        costs: parse_simple_cost(parameters.get("Cost"))?,
+        event: None,
+        timing: None,
+        expression: call(
+            Operation::AddReflectedMana,
+            vec![
+                sources,
+                Expression::Text(mode.to_string()),
+                Expression::Text("produce".to_string()),
+                call(Operation::You, vec![]),
+                Expression::Integer(1),
+            ],
+        ),
+    })
+}
+
 fn map_draw(
     prefix: LegacyAbilityPrefix,
     api: &str,
@@ -4515,6 +4700,7 @@ fn map_continuous(
             "AffectedZone",
             "EffectZone",
             "MayPlay",
+            "CharacteristicDefining",
             "Description",
         ],
     )?;
@@ -4555,10 +4741,44 @@ fn map_continuous(
             ),
         });
     }
-    require_battlefield_zone(parameters, "AffectedZone")?;
-    require_static_effect_zone(parameters, "EffectZone")?;
-    let affected = affected_selector(required(parameters, "Affected")?)?;
-    let affected_player = required(parameters, "Affected")? == "You";
+    let characteristic_defining = match parameters.get("CharacteristicDefining").map(String::as_str)
+    {
+        None => false,
+        Some("True") => true,
+        Some(value) => return Err(unsupported_value("CharacteristicDefining", value)),
+    };
+    let affected_value = match parameters.get("Affected") {
+        Some(value) if characteristic_defining => {
+            return Err(unsupported_value("Affected", value));
+        }
+        Some(value) => value.as_str(),
+        None if characteristic_defining => "Card.Self",
+        None => {
+            return Err(diagnostic(
+                "MISSING_PARAMETER",
+                "required parameter `Affected` is absent",
+            ));
+        }
+    };
+    if characteristic_defining {
+        if let Some(zone) = parameters.get("AffectedZone") {
+            return Err(unsupported_value("AffectedZone", zone));
+        }
+        if let Some(zone) = parameters.get("EffectZone") {
+            return Err(unsupported_value("EffectZone", zone));
+        }
+        if !parameters.contains_key("SetPower") && !parameters.contains_key("SetToughness") {
+            return Err(diagnostic(
+                "MISSING_PARAMETER",
+                "CharacteristicDefining requires SetPower or SetToughness",
+            ));
+        }
+    } else {
+        require_battlefield_zone(parameters, "AffectedZone")?;
+        require_static_effect_zone(parameters, "EffectZone")?;
+    }
+    let affected = affected_selector(affected_value)?;
+    let affected_player = affected_value == "You";
     let mut effects = Vec::new();
     if let Some(value) = parameters.get("RemoveCardTypes") {
         if value != "True" || affected_player {
@@ -4924,13 +5144,64 @@ fn map_library_search(
     api: &str,
     parameters: &BTreeMap<String, String>,
 ) -> Result<MappedLegacyAbility, MappingDiagnostic> {
-    for unsupported in ["NoLooking"] {
-        if parameters.contains_key(unsupported) {
+    if let Some(no_looking) = parameters.get("NoLooking") {
+        if no_looking != "True" {
+            return Err(unsupported_value("NoLooking", no_looking));
+        }
+        let change_type = required(parameters, "ChangeType")?;
+        if !change_type.contains(".IsRemembered")
+            || parameters.contains_key("Defined")
+            || parameters.contains_key("DefinedPlayer")
+            || parameters.contains_key("ValidTgts")
+        {
             return Err(diagnostic(
                 "UNSUPPORTED_PARAMETER",
-                &format!("parameter `{unsupported}` requires remembered search binding"),
+                "NoLooking requires a closed remembered library selector",
             ));
         }
+        if parameters.get("Mandatory").map(String::as_str) != Some("True")
+            || parameters.get("Shuffle").map(String::as_str) != Some("False")
+        {
+            return Err(diagnostic(
+                "UNSUPPORTED_PARAMETER",
+                "NoLooking remembered selection requires Mandatory True and Shuffle False",
+            ));
+        }
+        let amount = optional_positive_integer(parameters, "ChangeNum")?.unwrap_or(1);
+        let candidates = card_selector_in_zone(change_type, "library")?;
+        let chosen = call(Operation::EffectResult, vec![]);
+        let destination = match required(parameters, "Destination")? {
+            "Battlefield" => "battlefield",
+            "Hand" => "hand",
+            value => return Err(unsupported_value("Destination", value)),
+        };
+        let choose = call(
+            Operation::ChooseObjects,
+            vec![
+                candidates,
+                Expression::Integer(amount),
+                call(Operation::You, vec![]),
+                Expression::Text("exact".to_string()),
+            ],
+        );
+        let mut move_effect = call(
+            Operation::MoveZone,
+            vec![chosen.clone(), Expression::Text(destination.to_string())],
+        );
+        if parameters.get("Tapped").map(String::as_str) == Some("True") {
+            move_effect = call(
+                Operation::Sequence,
+                vec![move_effect, call(Operation::Tap, vec![chosen])],
+            );
+        } else if let Some(value) = parameters.get("Tapped") {
+            return Err(unsupported_value("Tapped", value));
+        }
+        return mapped_direct(
+            prefix,
+            api,
+            parameters,
+            call(Operation::Sequence, vec![choose, move_effect]),
+        );
     }
     if let Some(value) = parameters.get("Tapped") {
         if value != "True" {
@@ -5595,6 +5866,66 @@ fn map_reduce_cost(
         event: None,
         timing: None,
         expression,
+    })
+}
+
+fn map_raise_cost(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector(selector, "Mode")?;
+    reject_unknown(
+        parameters,
+        &[
+            "Type",
+            "ValidCard",
+            "ValidSpell",
+            "ValidTarget",
+            "Activator",
+            "Amount",
+            "EffectZone",
+            "Description",
+        ],
+    )?;
+    if required(parameters, "Type")? != "Spell" {
+        return Err(unsupported_value("Type", required(parameters, "Type")?));
+    }
+    require_static_effect_zone(parameters, "EffectZone")?;
+    let amount = positive_integer(required(parameters, "Amount")?, "Amount")?;
+    let mut spells = reduce_cost_spell_selector(parameters)?;
+    if let Some(target) = parameters.get("ValidTarget") {
+        spells = add_collection_predicate(
+            spells,
+            call(Operation::Targets, vec![affected_selector(target)?]),
+        )?;
+    }
+    if let Some(activator) = parameters.get("Activator") {
+        let player = match activator.as_str() {
+            "You" => call(Operation::You, vec![]),
+            "Opponent" | "Player.Opponent" => call(Operation::Opponent, vec![]),
+            "Player" | "Any" => call(Operation::Any, vec![]),
+            value => return Err(unsupported_value("Activator", value)),
+        };
+        spells = add_collection_predicate(spells, call(Operation::ControlledBy, vec![player]))?;
+    }
+    Ok(MappedLegacyAbility {
+        prefix,
+        api: api.to_string(),
+        costs: Vec::new(),
+        event: None,
+        timing: None,
+        expression: call(
+            Operation::Continuous,
+            vec![
+                spells,
+                call(
+                    Operation::CostIncrease,
+                    vec![call(Operation::Any, vec![]), Expression::Integer(amount)],
+                ),
+            ],
+        ),
     })
 }
 
@@ -6481,6 +6812,49 @@ fn map_choose_type(
     }
     if let Some(value) = invalid_types {
         arguments.push(Expression::Text(format!("invalid={value}")));
+    }
+    mapped_direct(
+        prefix,
+        api,
+        parameters,
+        call(Operation::ChooseType, arguments),
+    )
+}
+
+fn map_choose_color(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["AB", "SP", "DB"])?;
+    reject_unknown(
+        parameters,
+        &[
+            "Cost",
+            "Defined",
+            "ValidTgts",
+            "Exclude",
+            "SpellDescription",
+            "StackDescription",
+            "AILogic",
+        ],
+    )?;
+    if let Some(excluded) = parameters.get("Exclude") {
+        if !matches!(
+            excluded.as_str(),
+            "white" | "blue" | "black" | "red" | "green"
+        ) {
+            return Err(unsupported_value("Exclude", excluded));
+        }
+    }
+    let mut arguments = vec![
+        player_selector(parameters, DefaultSelector::You)?,
+        Expression::Text("domain=color".to_string()),
+        Expression::Text("storage=chosen_color".to_string()),
+    ];
+    if let Some(excluded) = parameters.get("Exclude") {
+        arguments.push(Expression::Text(format!("exclude={excluded}")));
     }
     mapped_direct(
         prefix,
@@ -8954,12 +9328,15 @@ fn spell_selector(value: &str) -> Result<Expression, MappingDiagnostic> {
 fn spell_predicate(value: &str) -> Result<Expression, MappingDiagnostic> {
     let mut pieces = value.split('.');
     let base = pieces.next().unwrap_or_default();
-    let modifiers = pieces.collect::<Vec<_>>();
-    if base.is_empty() || modifiers.iter().any(|part| part.contains('+')) {
+    let modifiers = pieces
+        .flat_map(|part| part.split('+'))
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>();
+    if base.is_empty() {
         return Err(unsupported_value("ValidCard", value));
     }
     let mut predicates = Vec::new();
-    if base == "Card" {
+    if matches!(base, "Card" | "Spell") {
         if modifiers.is_empty() {
             return Ok(Expression::Boolean(true));
         }
@@ -10110,6 +10487,40 @@ mod tests {
     }
 
     #[test]
+    fn maps_closed_reflected_mana() {
+        let mapped = map_line(
+            "A:AB$ ManaReflected | Cost$ T | ColorOrType$ Color | Valid$ Land.OppCtrl | ReflectProperty$ Produce | SpellDescription$ Add reflected mana.",
+        )
+        .unwrap_or_else(|error| panic!("reflected mana should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &mapped.expression,
+            Operation::AddReflectedMana
+        ));
+
+        let error = map_line(
+            "A:AB$ ManaReflected | Cost$ T | ColorOrType$ Color | Valid$ Land.OppCtrl | ReflectProperty$ Is | SpellDescription$ Add reflected mana.",
+        )
+        .err()
+        .unwrap_or_else(|| panic!("open reflected property must quarantine"));
+        assert_eq!(error.code, "UNSUPPORTED_VALUE");
+    }
+
+    #[test]
+    fn maps_remembered_library_partition_without_researching() {
+        let mapped = map_script_root(concat!(
+            "Name:Remembered Search Partition\n",
+            "A:SP$ ChangeZone | Origin$ Library | Destination$ Library | ChangeType$ Land.Basic | ChangeNum$ 2 | RememberChanged$ True | Reveal$ True | Shuffle$ False | SubAbility$ DBOne | SpellDescription$ Search.\n",
+            "SVar:DBOne:DB$ ChangeZone | Origin$ Library | Destination$ Battlefield | ChangeType$ Land.IsRemembered | ChangeNum$ 1 | Mandatory$ True | NoLooking$ True | Tapped$ True | Shuffle$ False | SubAbility$ DBTwo\n",
+            "SVar:DBTwo:DB$ ChangeZone | Origin$ Library | Destination$ Hand | ChangeType$ Land.IsRemembered | Mandatory$ True | NoLooking$ True | Shuffle$ False\n",
+        ))
+        .unwrap_or_else(|error| panic!("remembered partition should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &mapped.expression,
+            Operation::ChooseObjects
+        ));
+    }
+
+    #[test]
     fn replaces_creature_subtypes_before_adding_new_types() {
         let mapped = map_line(
             "S:Mode$ Continuous | Affected$ Creature.EnchantedBy | AddType$ Demon & Spirit | RemoveCreatureTypes$ True | Description$ Replace creature types.",
@@ -10148,7 +10559,7 @@ mod tests {
             "A:SP$ Animate | Defined$ Self | Types$ Demon,Spirit | RemoveCreatureTypes$ True | Duration$ Permanent",
             "A:SP$ AnimateAll | ValidCards$ Creature.YouCtrl | Types$ Demon,Spirit | RemoveCreatureTypes$ True | Duration$ Permanent",
         ] {
-            let mapped = map_line(line).unwrap_or_else(|error| {
+            let mapped = map_script_root(line).unwrap_or_else(|error| {
                 panic!("animated type replacement should map: {}", error.message)
             });
             assert!(has_ordered_type_replacement(&mapped.expression));
@@ -10234,6 +10645,8 @@ mod tests {
             "A:AB$ ChooseType | Cost$ 1 | Defined$ You | Type$ Card",
             "A:DB$ ChooseType | Defined$ You | Type$ Card | ValidTypes$ Artifact,Enchantment,Instant,Sorcery,Planeswalker",
             "A:DB$ ChooseType | Defined$ You | Type$ Card | InvalidTypes$ Creature,Land",
+            "A:DB$ ChooseColor | Defined$ You",
+            "A:DB$ ChooseColor | Defined$ You | Exclude$ green",
         ] {
             let mapped = map_line(line)
                 .unwrap_or_else(|error| panic!("closed type choice should map: {}", error.message));
@@ -10250,6 +10663,7 @@ mod tests {
             "A:DB$ ChooseType | Defined$ You | Type$ Shared",
             "A:DB$ ChooseType | Defined$ You | Type$ Creature | ValidTypes$ Elf,RuntimeArbitrary",
             "A:DB$ ChooseType | Defined$ You | Type$ Creature | ChooseType2$ True",
+            "A:DB$ ChooseColor | Defined$ You | Exclude$ colorless",
         ] {
             assert!(map_line(line).is_err(), "open type choice must quarantine");
         }
@@ -10350,6 +10764,8 @@ mod tests {
             "S:Mode$ Continuous | Affected$ Spirit.YouCtrl | AddPower$ 1 | AddKeyword$ Flying & Vigilance | Description$ Spirits get +1/+0 and keywords.",
             "S:Mode$ ReduceCost | ValidCard$ Instant,Sorcery | Type$ Spell | Activator$ You | Amount$ 1 | Description$ Reduce costs.",
             "S:Mode$ ReduceCost | ValidCard$ Card.Self | Type$ Spell | Amount$ 1 | EffectZone$ All | Description$ Reduce this spell.",
+            "S:Mode$ RaiseCost | ValidCard$ Card.nonCreature | Type$ Spell | Amount$ 1 | Description$ Noncreature spells cost more.",
+            "S:Mode$ RaiseCost | ValidTarget$ Card.Self | Activator$ Opponent | Type$ Spell | Amount$ 2 | Description$ Opposing spells targeting this cost more.",
             "S:Mode$ CantBlockBy | ValidAttacker$ Creature.Self | Description$ This creature can't be blocked.",
             "S:Mode$ CantBeCast | ValidCard$ Spell | Caster$ Opponent | EffectZone$ All | Description$ Opponents can't cast spells.",
             "S:Mode$ Continuous | Affected$ Card.Self | SetPower$ 4 | SetToughness$ 5 | AddType$ Creature | SetColor$ Blue | Description$ Becomes a creature.",
@@ -10357,8 +10773,23 @@ mod tests {
             "S:Mode$ Continuous | Affected$ Creature.EnchantedBy | GainControl$ You | Description$ Gain control.",
             "S:Mode$ Continuous | Affected$ You | SetMaxHandSize$ Unlimited | Description$ No maximum hand size.",
             "S:Mode$ Continuous | Affected$ Card.Self | AddKeyword$ Flying | EffectZone$ All | Description$ Flying.",
+            "S:Mode$ Continuous | CharacteristicDefining$ True | SetPower$ 4 | SetToughness$ 4 | Description$ Characteristic power and toughness.",
         ] {
             assert_operation(line, Operation::Continuous, 0);
+        }
+
+        for line in [
+            "S:Mode$ Continuous | CharacteristicDefining$ False | SetPower$ 1 | Description$ Invalid CDA.",
+            "S:Mode$ Continuous | CharacteristicDefining$ True | Affected$ Card.Self | SetPower$ 1 | Description$ Ambiguous CDA.",
+            "S:Mode$ Continuous | CharacteristicDefining$ True | AddKeyword$ Flying | Description$ Invalid CDA.",
+        ] {
+            let error = map_line(line)
+                .err()
+                .unwrap_or_else(|| panic!("open characteristic-defining form must quarantine"));
+            assert!(matches!(
+                error.code.as_str(),
+                "UNSUPPORTED_VALUE" | "MISSING_PARAMETER"
+            ));
         }
 
         let play_exiled = map_line(
@@ -10392,6 +10823,24 @@ mod tests {
         .err()
         .unwrap_or_else(|| panic!("non-closed static EffectZone must quarantine"));
         assert_eq!(error.code, "UNSUPPORTED_VALUE");
+    }
+
+    #[test]
+    fn lowers_dynamic_characteristic_defining_power_and_toughness() {
+        let mapped = map_script_root(concat!(
+            "Name:Dynamic Characteristic\n",
+            "S:Mode$ Continuous | CharacteristicDefining$ True | SetPower$ X | SetToughness$ X | Description$ Dynamic characteristic.\n",
+            "SVar:X:Count$Valid Creature.YouCtrl\n",
+        ))
+        .unwrap_or_else(|error| panic!("dynamic characteristic should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &mapped.expression,
+            Operation::SetPt
+        ));
+        assert!(expression_contains_operation(
+            &mapped.expression,
+            Operation::Count
+        ));
     }
 
     #[test]
@@ -10554,7 +11003,7 @@ mod tests {
             "A:SP$ Destroy | ValidTgts$ Creature | TargetMin$ 0 | SpellDescription$ Destroy.",
             "A:SP$ Destroy | ValidTgts$ Creature | TargetMin$ 0 | TargetMax$ 1 | Optional$ True | SpellDescription$ Destroy.",
         ] {
-            let mapped = map_line(line).unwrap_or_else(|error| {
+            let mapped = map_script_root(line).unwrap_or_else(|error| {
                 panic!("one-sided or optional range should map: {}", error.message)
             });
             assert_eq!(
@@ -11278,6 +11727,40 @@ mod tests {
                 "A:SP$ RepeatEach | RepeatPlayers$ {repeat_players} | RepeatSubAbility$ Missing"
             );
             assert!(map_line(&line).is_err());
+        }
+    }
+
+    #[test]
+    fn maps_closed_cannot_be_countered_replacements() {
+        for line in [
+            "R:Event$ Counter | ValidCard$ Card.Self | ValidSA$ Spell | Layer$ CantHappen | Description$ This spell can't be countered.",
+            "R:Event$ Counter | ValidSA$ Spell.Creature+YouCtrl | Layer$ CantHappen | ActiveZones$ Battlefield | Description$ Creature spells you control can't be countered.",
+        ] {
+            let mapped = map_script_root(line).unwrap_or_else(|error| {
+                panic!("closed counter replacement should map: {}", error.message)
+            });
+            assert!(matches!(
+                mapped.event,
+                Some(Expression::Call {
+                    operation: Operation::EventCounterAttempt,
+                    ..
+                })
+            ));
+            assert!(expression_contains_operation(
+                &mapped.expression,
+                Operation::CannotBeCountered
+            ));
+        }
+
+        for line in [
+            "R:Event$ Counter | ValidSA$ Spell | Layer$ Replace | ActiveZones$ Battlefield",
+            "R:Event$ Counter | ValidCard$ Card.Self | ValidSA$ Spell | Layer$ CantHappen | ActiveZones$ Battlefield",
+            "R:Event$ Counter | ValidSA$ Spell | ValidCause$ SpellAbility.YouCtrl | ReplaceWith$ DBRemove",
+        ] {
+            assert!(
+                map_script_root(line).is_err(),
+                "open replacement must quarantine: {line}"
+            );
         }
     }
 
@@ -12407,6 +12890,14 @@ mod tests {
             ),
             (
                 concat!(
+                    "Name:Player Count\n",
+                    "A:SP$ Token | TokenAmount$ X | TokenScript$ r_1_1_goblin | TokenOwner$ You | SpellDescription$ Tokens.\n",
+                    "SVar:X:PlayerCountPlayers$Amount\n",
+                ),
+                Operation::PlayerCount,
+            ),
+            (
+                concat!(
                     "Name:Sacrificed Power\n",
                     "A:AB$ DealDamage | Cost$ Sac<1/Creature> | ValidTgts$ Any | NumDmg$ X | SpellDescription$ Damage.\n",
                     "SVar:X:Sacrificed$CardPower\n",
@@ -12428,6 +12919,22 @@ mod tests {
                     "SVar:X:Sacrificed$CardManaCost\n",
                 ),
                 Operation::Remembered,
+            ),
+            (
+                concat!(
+                    "Name:Remembered Amount\n",
+                    "A:SP$ Draw | Defined$ You | NumCards$ X | SpellDescription$ Draw.\n",
+                    "SVar:X:Remembered$Amount\n",
+                ),
+                Operation::Count,
+            ),
+            (
+                concat!(
+                    "Name:Remembered Mana Value\n",
+                    "A:SP$ GainLife | Defined$ You | LifeAmount$ X | SpellDescription$ Gain.\n",
+                    "SVar:X:Remembered$CardManaCost\n",
+                ),
+                Operation::Aggregate,
             ),
         ] {
             let script = parse_legacy_script("dynamic-value.txt", script_text)

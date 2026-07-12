@@ -796,7 +796,7 @@ fn translate_keywords(
             ("etbcounter", [counter, amount]) => (
                 None,
                 Some(translate_etb_counter(
-                    script, line.line, name, counter, amount,
+                    script, line.line, name, counter, amount, None,
                 )?),
             ),
             ("etbcounter", [counter, amount, condition])
@@ -805,7 +805,7 @@ fn translate_keywords(
                 (
                     None,
                     Some(translate_etb_counter(
-                        script, line.line, name, counter, amount,
+                        script, line.line, name, counter, amount, None,
                     )?),
                 )
             }
@@ -815,7 +815,22 @@ fn translate_keywords(
                 (
                     None,
                     Some(translate_etb_counter(
-                        script, line.line, name, counter, amount,
+                        script, line.line, name, counter, amount, None,
+                    )?),
+                )
+            }
+            ("etbcounter", [counter, amount, condition, _description])
+                if condition.starts_with("CheckSVar$ ") =>
+            {
+                (
+                    None,
+                    Some(translate_etb_counter(
+                        script,
+                        line.line,
+                        name,
+                        counter,
+                        amount,
+                        condition.strip_prefix("CheckSVar$ "),
                     )?),
                 )
             }
@@ -829,6 +844,32 @@ fn translate_keywords(
                     None,
                     Some(translate_etb_extra_counter(line.line, affected)?),
                 )
+            }
+            ("etbreplacement", [scope, replacement]) if scope == "Other" => {
+                let linked = map_named_svar_ability(script, replacement)
+                    .map_err(|diagnostic| (line.line, diagnostic.code, diagnostic.message))?;
+                if !linked.costs.is_empty() || linked.event.is_some() || linked.timing.is_some() {
+                    return Err((
+                        line.line,
+                        "UNSUPPORTED_LINK".to_string(),
+                        format!(
+                            "ETBReplacement SVar `{replacement}` must be a cost-free DB effect without nested event or timing"
+                        ),
+                    ));
+                }
+                translated.abilities.push(AbilityDefinition {
+                    kind: AbilityKind::Replacement,
+                    costs: Vec::new(),
+                    event: Some(expression_call(
+                        Operation::EventEnters,
+                        vec![expression_call(Operation::Source, vec![])],
+                    )),
+                    condition: None,
+                    timing: None,
+                    effect: linked.expression,
+                    mana_ability: false,
+                });
+                (None, None)
             }
             ("landwalk", [land]) => {
                 let keyword = match land.as_str() {
@@ -2011,6 +2052,7 @@ fn translate_etb_counter(
     name: &str,
     counter: &str,
     amount: &str,
+    condition_svar: Option<&str>,
 ) -> Result<AbilityDefinition, (usize, String, String)> {
     if counter.trim().is_empty() {
         return Err((
@@ -2034,6 +2076,16 @@ fn translate_etb_counter(
                 .map_err(|diagnostic| (line, diagnostic.code.to_string(), diagnostic.message))?
         }
     };
+    let condition = condition_svar
+        .map(|reference| {
+            let context = MappingContext::from_script(script);
+            resolve_value_svar(reference, &context)
+                .map(|value| {
+                    expression_call(Operation::GreaterThan, vec![value, Expression::Integer(0)])
+                })
+                .map_err(|diagnostic| (line, diagnostic.code, diagnostic.message))
+        })
+        .transpose()?;
     Ok(AbilityDefinition {
         kind: AbilityKind::Replacement,
         costs: Vec::new(),
@@ -2041,7 +2093,7 @@ fn translate_etb_counter(
             Operation::EventEnters,
             vec![expression_call(Operation::Source, vec![])],
         )),
-        condition: None,
+        condition,
         timing: None,
         effect: expression_call(
             Operation::AddCounter,
@@ -2950,6 +3002,28 @@ mod tests {
     }
 
     #[test]
+    fn desugars_closed_conditional_etb_counter_keyword() {
+        let script = crate::legacy::parse_legacy_script(
+            "fixture.txt",
+            concat!(
+                "K:etbCounter:P1P1:2:CheckSVar$ WasKicked:If kicked, this enters with counters.\n",
+                "SVar:WasKicked:Count$Kicked.1.0\n",
+            ),
+        )
+        .unwrap_or_else(|error| panic!("fixture should parse: {error}"));
+        let faces = face_lines(&script);
+        let translated = translate_keywords(&script, &faces[0])
+            .unwrap_or_else(|error| panic!("conditional keyword should translate: {error:?}"));
+        assert!(matches!(
+            translated.abilities[0].condition,
+            Some(Expression::Call {
+                operation: Operation::GreaterThan,
+                ..
+            })
+        ));
+    }
+
+    #[test]
     fn rejects_open_etb_counter_and_landwalk_forms() {
         for keyword in [
             "K:etbCounter:P1P1:X:CheckSVar$ WasKicked",
@@ -3328,6 +3402,41 @@ mod tests {
                 "UNSUPPORTED_KEYWORD" | "UNSUPPORTED_VALUE"
             ));
         }
+    }
+
+    #[test]
+    fn desugars_closed_linked_etb_choice_replacement() {
+        let script = crate::legacy::parse_legacy_script(
+            "fixture.txt",
+            concat!(
+                "K:ETBReplacement:Other:ChooseColor\n",
+                "SVar:ChooseColor:DB$ ChooseColor | Defined$ You | Exclude$ green\n",
+            ),
+        )
+        .unwrap_or_else(|error| panic!("fixture should parse: {error}"));
+        let faces = face_lines(&script);
+        let translated = translate_keywords(&script, &faces[0])
+            .unwrap_or_else(|error| panic!("linked ETB choice should translate: {error:?}"));
+        assert_eq!(translated.abilities.len(), 1);
+        assert_eq!(translated.abilities[0].kind, AbilityKind::Replacement);
+        assert!(matches!(
+            translated.abilities[0].effect,
+            Expression::Call {
+                operation: Operation::ChooseType,
+                ..
+            }
+        ));
+
+        let open = crate::legacy::parse_legacy_script(
+            "fixture.txt",
+            concat!(
+                "K:ETBReplacement:Copy:DBCopy\n",
+                "SVar:DBCopy:DB$ ChooseColor | Defined$ You\n",
+            ),
+        )
+        .unwrap_or_else(|error| panic!("open fixture should parse: {error}"));
+        let open_faces = face_lines(&open);
+        assert!(translate_keywords(&open, &open_faces[0]).is_err());
     }
 
     #[test]
