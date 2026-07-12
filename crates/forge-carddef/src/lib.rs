@@ -1294,7 +1294,12 @@ impl Operation {
                 1 => Some(SelectorTextOrNumber),
                 _ => None,
             },
-            Self::SacrificeEffect | Self::RegenerateShield | Self::MustAttack => Some(Selector),
+            Self::SacrificeEffect | Self::RegenerateShield => Some(Selector),
+            Self::MustAttack => match index {
+                0 => Some(Selector),
+                1 => Some(Text),
+                _ => None,
+            },
             Self::Fight => Some(Selector),
             Self::Explore | Self::Connive => match index {
                 0 => Some(Selector),

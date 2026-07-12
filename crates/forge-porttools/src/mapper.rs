@@ -5692,11 +5692,9 @@ fn map_effect(
             "Duration",
         ],
     )?;
-    if required(parameters, "StaticAbilities")? != "Unblockable" {
-        return Err(unsupported_value(
-            "StaticAbilities",
-            required(parameters, "StaticAbilities")?,
-        ));
+    let static_ability = required(parameters, "StaticAbilities")?;
+    if !matches!(static_ability, "Unblockable" | "MustAttack") {
+        return Err(unsupported_value("StaticAbilities", static_ability));
     }
     if let Some(value) = parameters.get("Defined") {
         if value != "Self" {
@@ -5704,7 +5702,10 @@ fn map_effect(
         }
     }
     if let Some(value) = parameters.get("RememberObjects") {
-        if !matches!(value.as_str(), "Targeted" | "Self" | "Equipped") {
+        if !matches!(
+            value.as_str(),
+            "Targeted" | "Self" | "Equipped" | "Enchanted" | "Remembered"
+        ) {
             return Err(unsupported_value("RememberObjects", value));
         }
         if value == "Targeted" && !parameters.contains_key("ValidTgts") {
@@ -5721,10 +5722,6 @@ fn map_effect(
             }
         }
     }
-    match parameters.get("Duration").map(String::as_str) {
-        None | Some("EndOfTurn") | Some("UntilEndOfTurn") => {}
-        Some(value) => return Err(unsupported_value("Duration", value)),
-    }
     let affected = if parameters.contains_key("ValidTgts") || parameters.contains_key("Defined") {
         object_selector(parameters, DefaultSelector::Source)?
     } else {
@@ -5734,14 +5731,40 @@ fn map_effect(
                 Operation::EquippedObject,
                 vec![call(Operation::Source, vec![])],
             ),
+            Some("Enchanted") => call(
+                Operation::EnchantedObject,
+                vec![call(Operation::Source, vec![])],
+            ),
+            Some("Remembered") => call(Operation::Remembered, vec![call(Operation::Any, vec![])]),
             _ => {
                 return Err(diagnostic(
                     "MISSING_PARAMETER",
-                    "Unblockable Effect requires ValidTgts, Defined Self, or RememberObjects Self/Equipped",
+                    "Effect requires an explicit target, source, attached object, or remembered binding",
                 ));
             }
         }
     };
+    if static_ability == "MustAttack" {
+        let duration = match parameters.get("Duration").map(String::as_str) {
+            None | Some("EndOfTurn") | Some("UntilEndOfTurn") => "until_end_of_turn",
+            Some("UntilEndOfCombat") => "until_end_of_combat",
+            Some("UntilYourNextTurn") => "until_your_next_turn",
+            Some(value) => return Err(unsupported_value("Duration", value)),
+        };
+        return mapped_direct(
+            prefix,
+            api,
+            parameters,
+            call(
+                Operation::MustAttack,
+                vec![affected, Expression::Text(duration.to_string())],
+            ),
+        );
+    }
+    match parameters.get("Duration").map(String::as_str) {
+        None | Some("EndOfTurn") | Some("UntilEndOfTurn") => {}
+        Some(value) => return Err(unsupported_value("Duration", value)),
+    }
     let blockers = call(
         Operation::Permanents,
         vec![call(
@@ -6522,6 +6545,8 @@ fn map_copy_permanent(
             "Defined",
             "ValidTgts",
             "Populate",
+            "NumCopies",
+            "TokenTapped",
             "RememberTokens",
             "AtEOT",
             "TgtPrompt",
@@ -6532,7 +6557,10 @@ fn map_copy_permanent(
     )?;
     let expression = match parameters.get("Populate").map(String::as_str) {
         Some("True") => {
-            if parameters.contains_key("Defined") || parameters.contains_key("ValidTgts") {
+            if parameters.contains_key("Defined")
+                || parameters.contains_key("ValidTgts")
+                || parameters.contains_key("NumCopies")
+            {
                 return Err(diagnostic(
                     "UNSUPPORTED_SELECTOR",
                     "Populate CopyPermanent cannot also define an explicit copy selector",
@@ -6558,10 +6586,40 @@ fn map_copy_permanent(
                     "CopyPermanent requires Defined, ValidTgts, or Populate$ True",
                 ));
             };
-            call(Operation::Copy, vec![source])
+            let copy = call(Operation::Copy, vec![source]);
+            match optional_positive_integer(parameters, "NumCopies")? {
+                None | Some(1) => copy,
+                Some(count @ 2..=10) => call(
+                    Operation::Sequence,
+                    (0..count).map(|_| copy.clone()).collect(),
+                ),
+                Some(count) => return Err(unsupported_value("NumCopies", &count.to_string())),
+            }
         }
     };
+    if parameters.contains_key("TokenTapped")
+        && (parameters.contains_key("RememberTokens") || parameters.contains_key("AtEOT"))
+    {
+        return Err(diagnostic(
+            "UNSUPPORTED_PARAMETER",
+            "TokenTapped copy metadata cannot yet be combined with RememberTokens or AtEOT",
+        ));
+    }
     let expression = apply_created_object_metadata(expression, parameters)?;
+    let expression = if let Some(value) = parameters.get("TokenTapped") {
+        if value != "True" {
+            return Err(unsupported_value("TokenTapped", value));
+        }
+        combine_effects(
+            vec![
+                expression,
+                call(Operation::Tap, vec![call(Operation::EffectResult, vec![])]),
+            ],
+            "tapped copy requires a copy effect",
+        )?
+    } else {
+        expression
+    };
     mapped_direct(prefix, api, parameters, expression)
 }
 
@@ -8640,6 +8698,8 @@ fn spell_predicate(value: &str) -> Result<Expression, MappingDiagnostic> {
             )
         } else if let Some(predicate) = kicked_predicate(modifier) {
             predicate
+        } else if let Some(predicate) = object_marker_predicate(modifier) {
+            predicate
         } else if modifier
             .chars()
             .all(|character| character.is_ascii_alphanumeric())
@@ -8860,6 +8920,8 @@ fn affected_selector_branch(value: &str) -> Result<Expression, MappingDiagnostic
                 ),
                 "kicked" | "kicked 1" | "kicked 2" => kicked_predicate(modifier)
                     .unwrap_or_else(|| unreachable!("closed kicked value must lower")),
+                "token" | "!token" | "IsRemembered" => object_marker_predicate(modifier)
+                    .unwrap_or_else(|| unreachable!("closed object marker must lower")),
                 literal_subtype
                     if literal_subtype
                         .chars()
@@ -8915,6 +8977,27 @@ fn kicked_predicate(value: &str) -> Option<Expression> {
         Operation::DesignationIs,
         vec![Expression::Text(designation.to_string())],
     ))
+}
+
+fn object_marker_predicate(value: &str) -> Option<Expression> {
+    let token = || {
+        call(
+            Operation::DesignationIs,
+            vec![Expression::Text("token".to_string())],
+        )
+    };
+    match value {
+        "token" => Some(token()),
+        "!token" => Some(call(Operation::Not, vec![token()])),
+        "IsRemembered" => Some(call(
+            Operation::Equals,
+            vec![
+                call(Operation::Any, vec![]),
+                call(Operation::Remembered, vec![call(Operation::Any, vec![])]),
+            ],
+        )),
+        _ => None,
+    }
 }
 
 fn closed_numeric_predicate(value: &str) -> Option<Result<Expression, MappingDiagnostic>> {
@@ -10033,6 +10116,9 @@ mod tests {
             "A:AB$ Pump | ValidTgts$ Creature.attacking | NumAtt$ 1 | NumDef$ 1 | SpellDescription$ Pump.",
             "A:AB$ Pump | ValidTgts$ Creature.ControlledBy TriggeredDefendingPlayer | NumAtt$ 1 | NumDef$ 1 | SpellDescription$ Pump.",
             "S:Mode$ Continuous | Affected$ Land.OwnedBy TriggeredDefendingPlayer | AddType$ Creature | Description$ Animate defending player's land.",
+            "S:Mode$ Continuous | Affected$ Creature.token+YouCtrl | AddPower$ 1 | Description$ Tokens get +1/+0.",
+            "S:Mode$ Continuous | Affected$ Creature.!token+YouCtrl | AddPower$ 1 | Description$ Nontokens get +1/+0.",
+            "S:Mode$ Continuous | Affected$ Card.IsRemembered+nonLand | AddKeyword$ Flying | Description$ Remembered cards have flying.",
             "S:Mode$ Continuous | Affected$ Card.Self+kicked | AddKeyword$ Flying | Description$ Kicked flying.",
             "S:Mode$ Continuous | Affected$ Card.Self+kicked 1 | AddKeyword$ Flying | Description$ First kicker flying.",
         ] {
@@ -10511,6 +10597,56 @@ mod tests {
     }
 
     #[test]
+    fn maps_closed_effect_must_attack_bindings() {
+        let targeted = map_line(
+            "A:SP$ Effect | ValidTgts$ Creature | StaticAbilities$ MustAttack | RememberObjects$ Targeted | ExileOnMoved$ Battlefield | SpellDescription$ Target creature attacks this turn if able.",
+        )
+        .unwrap_or_else(|error| panic!("targeted MustAttack should map: {}", error.message));
+        assert!(matches!(
+            targeted.expression,
+            Expression::Call {
+                operation: Operation::MustAttack,
+                ..
+            }
+        ));
+
+        let remembered = map_line(
+            "A:DB$ Effect | RememberObjects$ Remembered | StaticAbilities$ MustAttack | Duration$ UntilEndOfCombat | SpellDescription$ That creature attacks this combat if able.",
+        )
+        .unwrap_or_else(|error| panic!("remembered MustAttack should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &remembered.expression,
+            Operation::Remembered
+        ));
+        assert!(matches!(
+            remembered.expression,
+            Expression::Call {
+                operation: Operation::MustAttack,
+                ref arguments,
+            } if arguments.get(1)
+                == Some(&Expression::Text("until_end_of_combat".to_string()))
+        ));
+    }
+
+    #[test]
+    fn rejects_open_effect_must_attack_shapes() {
+        for line in [
+            "A:SP$ Effect | StaticAbilities$ MustAttack",
+            "A:SP$ Effect | ValidTgts$ Creature | StaticAbilities$ MustAttack,MustBlock | RememberObjects$ Targeted",
+            "A:SP$ Effect | ValidTgts$ Creature | StaticAbilities$ MustAttack | Duration$ Permanent",
+            "A:SP$ Effect | StaticAbilities$ MustAttack | RememberObjects$ ThisTargetedCard | ValidTgts$ Creature",
+        ] {
+            let error = map_line(line)
+                .err()
+                .unwrap_or_else(|| panic!("open MustAttack Effect must quarantine: {line}"));
+            assert!(matches!(
+                error.code.as_str(),
+                "MISSING_PARAMETER" | "UNSUPPORTED_PARAMETER" | "UNSUPPORTED_VALUE"
+            ));
+        }
+    }
+
+    #[test]
     fn maps_additional_closed_primitive_apis() {
         for (line, operation) in [
             (
@@ -10638,11 +10774,13 @@ mod tests {
     fn rejects_open_copy_permanent_shapes() {
         for line in [
             "A:SP$ CopyPermanent | ValidTgts$ Creature | AddTypes$ Nightmare",
-            "A:SP$ CopyPermanent | ValidTgts$ Creature | NumCopies$ 2",
-            "A:SP$ CopyPermanent | Defined$ Self | TokenTapped$ True",
+            "A:SP$ CopyPermanent | ValidTgts$ Creature | NumCopies$ X",
+            "A:SP$ CopyPermanent | ValidTgts$ Creature | NumCopies$ 11",
+            "A:SP$ CopyPermanent | Defined$ Self | TokenTapped$ False",
             "A:SP$ CopyPermanent | Defined$ Self | ValidTgts$ Creature",
             "A:SP$ CopyPermanent | Populate$ False",
             "A:SP$ CopyPermanent | Populate$ True | ValidTgts$ Creature",
+            "A:SP$ CopyPermanent | Populate$ True | NumCopies$ 2",
             "A:SP$ CopyPermanent",
         ] {
             assert!(
@@ -10650,6 +10788,27 @@ mod tests {
                 "open CopyPermanent form must quarantine: {line}"
             );
         }
+    }
+
+    #[test]
+    fn maps_literal_copy_counts_and_tapped_results() {
+        let counted = map_line(
+            "A:SP$ CopyPermanent | ValidTgts$ Creature | NumCopies$ 3 | SpellDescription$ Create three copies.",
+        )
+        .unwrap_or_else(|error| panic!("literal copy count should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &counted.expression,
+            Operation::Sequence
+        ));
+
+        let tapped = map_line(
+            "A:DB$ CopyPermanent | Defined$ Self | TokenTapped$ True | SpellDescription$ Create a tapped copy.",
+        )
+        .unwrap_or_else(|error| panic!("tapped copy should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &tapped.expression,
+            Operation::Tap
+        ));
     }
 
     #[test]
