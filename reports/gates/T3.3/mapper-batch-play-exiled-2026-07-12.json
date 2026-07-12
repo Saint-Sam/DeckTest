@@ -1,0 +1,130 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-12T03:03:56Z",
+  "task": "T3.3",
+  "batch": "MayPlay true closed exile permissions",
+  "technical_result": "pass",
+  "product_binding": {
+    "mapper_commit": "497d780",
+    "exact_product_commit": "497d780a355c979e932fb9c3599cdc94f14768c6",
+    "exact_product_tree": "445c63a12cd2aa3d3d4d6814ed96d82bdc758745",
+    "verified_in_detached_worktree": true,
+    "detached_root": "/private/tmp/forge-t3-3-play-exiled-497d780"
+  },
+  "source_binding": {
+    "legacy_forge_commit": "1f0a3e0815822d8f58f798e0304b33d4534248b1",
+    "legacy_source": "existing local pinned checkout linked into detached worktree",
+    "translation_fingerprint": "59f2c811cff30faaceb34279a3e52fac",
+    "cargo_lock_sha256": "f9fb1cd7230cb19b3277c1f4cb4c6750699e188f197cff4ef4e2965363675268"
+  },
+  "verification_environment": {
+    "local_only": true,
+    "github_actions_used": false,
+    "network_attempted": false,
+    "install_performed": false,
+    "worker_ceiling": 24,
+    "shared_cargo_cache": true,
+    "detached_target_debug_symlinked": true,
+    "detached_target_llvm_cov_symlinked": true,
+    "detached_target_coverage_local": true
+  },
+  "coverage_delta": {
+    "before": {
+      "complete_scripts": 11440,
+      "mapped_ability_uses": 19518,
+      "owner_priority_complete": 195,
+      "quarantined_scripts": 21850,
+      "quarantined_ability_uses": 24131
+    },
+    "after": {
+      "complete_scripts": 11440,
+      "total_scripts": 33290,
+      "complete_script_percent": 34.36467407629919,
+      "mapped_ability_uses": 19519,
+      "total_ability_uses": 43649,
+      "mapped_ability_percent": 44.718092052509796,
+      "owner_priority_complete": 195,
+      "owner_priority_requested": 365,
+      "quarantined_scripts": 21850,
+      "quarantined_ability_uses": 24130
+    },
+    "gain": {
+      "complete_scripts": 0,
+      "mapped_ability_uses": 1,
+      "owner_priority_complete": 0
+    }
+  },
+  "semantic_boundaries": {
+    "exactly_lowered": [
+      "MayPlay$ True with AffectedZone$ Exile",
+      "Affected$ Card.IsRemembered and Card.Self through typed PlayExiled permissions"
+    ],
+    "still_quarantined": [
+      "alternate costs and MayPlayIgnoreType/Color/WithoutManaCost variants",
+      "MayPlay player, condition, and dynamic-value forms",
+      "non-exile zones and open selectors",
+      "runtime and semantic card behavior beyond structural compilation"
+    ],
+    "claim": "structural translation and compiler validity only; runtime and card-specific semantic maturity remain separate T3.5 and T3.6 evidence"
+  },
+  "commands": [
+    {
+      "command": "cargo test --locked --offline -p forge-porttools maps_simple_continuous_effects",
+      "exit_code": 0
+    },
+    {
+      "command": "cargo test --locked --offline -p forge-porttools",
+      "exit_code": 0
+    },
+    {
+      "command": "FORGE_T3_TOTAL_WORKERS=24 CARGO_BUILD_JOBS=24 scripts/t3_parallel_sweep.sh development",
+      "exit_code": 0
+    },
+    {
+      "command": "cargo fmt --all -- --check",
+      "exit_code": 0
+    },
+    {
+      "command": "CARGO_BUILD_JOBS=24 cargo clippy --workspace --all-targets --all-features -- -D warnings",
+      "exit_code": 0
+    },
+    {
+      "command": "FORGE_T3_TOTAL_WORKERS=24 CARGO_BUILD_JOBS=24 scripts/t3_parallel_sweep.sh checkpoint",
+      "exit_code": 0,
+      "accelerated_core_phase_seconds": 37,
+      "full_workspace_verification_seconds": 93,
+      "total_seconds": 137
+    }
+  ],
+  "line_coverage": {
+    "covered": 27972,
+    "count": 34527,
+    "percent": 81.01485793726648,
+    "floor_percent": 80,
+    "raw_report_sha256": "0782c673dc2549f222ce3b990e3a8d721f0915b26ab95c938c73ceff78abf269"
+  },
+  "planner": {
+    "analyzed_scripts": 33290,
+    "scripts_with_confirmed_blockers": 21665,
+    "priority_scripts_with_confirmed_blockers": 164,
+    "confirmed_observations": 47294,
+    "unique_blocker_families": 5736,
+    "linked_root_fanout": 48198
+  },
+  "checkpoint_gates": {
+    "full_workspace_tests": true,
+    "compiler_roundtrips": true,
+    "database_validation": true,
+    "oracle_scenarios": 235,
+    "oracle_subsets_passed": true,
+    "nightmare_suite_passed": true,
+    "arena_smoke_passed": true,
+    "deterministic_parallel_replay": true,
+    "deterministic_blocker_plan_replay": true
+  },
+  "continuation": {
+    "t3_3_remains_active": true,
+    "exit_floor_reached": false,
+    "next_t3_3_batch_source": "metrics/blocker_plan.json recommended_batches[0]"
+  }
+}

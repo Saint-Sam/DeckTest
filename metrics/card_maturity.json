@@ -8,10 +8,10 @@
   "detail": {
     "path": "target/card-maturity/identities.json",
     "record_count": 38306,
-    "sha256": "7ac99f5f9ec06cdeeebb101d869af482543aad599819d43c926cce21bd03cd61",
+    "sha256": "b14dd46f78b47263bee3bc6b6f42b099fcc0bc2d239d7dbd1cefc29e1b1a5290",
     "tracked": false
   },
-  "generated_at": "2026-07-12T02:52:25.206650+00:00",
+  "generated_at": "2026-07-12T03:01:38.701356+00:00",
   "generator": "tools/write_card_maturity.py",
   "implementation_maturity": {
     "compiler_evidence": {
@@ -96,8 +96,8 @@
     "unit": "in_v1_scope_oracle_identity"
   },
   "legacy_ability_use_pipeline": {
-    "quarantined_uses": 24131,
-    "structurally_tested_uses": 19518,
+    "quarantined_uses": 24130,
+    "structurally_tested_uses": 19519,
     "total": 43649,
     "unit": "legacy_ability_use"
   },
@@ -132,9 +132,9 @@
     "unit": "owner_priority_card_name"
   },
   "product_binding": {
-    "commit": "dfed76fbdaac070ba3ef51acedbf725a036fea69",
+    "commit": "497d780a355c979e932fb9c3599cdc94f14768c6",
     "source": "metrics/coverage.json",
-    "tree": "d5826ecfab6cd0dfe5bf24766b75a0dab8529b74"
+    "tree": "445c63a12cd2aa3d3d4d6814ed96d82bdc758745"
   },
   "scenario_evidence": {
     "distinct_operations": 19,
@@ -157,18 +157,18 @@
   },
   "source_artifacts": {
     "FORGE_REBUILD_MASTER_PLAN.md": "f56f54ec3dffcb556695ff3e7048e1a8f909fd7147c6db6fd094c073e3d89cb4",
-    "PLAN_STATE.json": "0d680e711a770bb7dd3cf89a8122ecdd7d96e8143f5ca4641def79ad9757b346",
+    "PLAN_STATE.json": "563ce44b5a071cb304a05ce7ebf57af45ac76e2a743c81f632f0f029c8afe045",
     "assets/card_catalog.json": "6c7c41ba91b524b8ac59cf7e215fbceaa31c1f9567ae11623dcfa15f6b3f8321",
-    "metrics/api_coverage.json": "a3c946b1b5c00487b3e651aec5cab1c68a7d9f37d6f155a0130cf519991d687f",
+    "metrics/api_coverage.json": "4c1042e17c017e744c72407a615a85515a6e5a7dc042eefead590ff3d629cbae",
     "metrics/card_catalog.json": "69c4662acbc20750847355bd461f469578aa27bd4c7932b88ac1a47bbc43c05a",
-    "metrics/coverage.json": "f3a599d8e786b2b7f0e055a0d6bde8b9884ebbc7846aa566eb9b494aef7681d0",
+    "metrics/coverage.json": "d3b80f38b15043aa51535678725cf8e29020a13a1fd03ba653f1274d1b49a329",
     "metrics/cp_dsl_corpus.json": "8e66dcf0f81ce9625e969346291239e789d0606c179f800de704e969bec02bd7",
     "metrics/legacy_parse.json": "b5782a750b8840efebf74859e1359bf95c746a6c594a3ede504f5b197e4b0603",
     "metrics/local_platforms.json": "2276b8f85a05cec3c798ac4fef11069b5170b85b9d806a8f1eb0ce9daa551cf8",
     "metrics/oracle_semantics.json": "401def585d647dafb90af2fc2a54ffe7cc95d92e12e45b38aa9942e63bd153d5",
-    "metrics/priority_coverage.json": "70a6dc36b25b403550d49f0db33d8592a704c39cccd88d0224283d0e114190a9",
-    "metrics/t3_parallel_validation.json": "77df2f98792cfa2ffe11c5dfb7d7e84955793c7bbf8012a21b4e8363eb89175d",
-    "metrics/translation.json": "c17e791d318f83635455250d88999f6179e547a06c06e28fcb48f2156bf8ac50",
+    "metrics/priority_coverage.json": "dd3af909356e5f5892923b7997f586728cfb0df95fa95e43771678d581ef645c",
+    "metrics/t3_parallel_validation.json": "2f207a79512cb7fcaeaabe0e6c6197b1fae1b1d7cf1b5cc3e29808a69a3550df",
+    "metrics/translation.json": "88a9fdd9d9645060058e61e78edc41831aa7b6790cd6beeccf68b0b7c29cc4d7",
     "tools/write_card_maturity.py": "7e8c8f21ed724729f2d608a6ab7bc2dfec8a82a3179d38a288524391c3647a50"
   },
   "units_are_separate": true

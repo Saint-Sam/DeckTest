@@ -1,6 +1,6 @@
 # DeckTest / Forge 2.0 Status
 
-Generated: 2026-07-12T02:52:25.206650+00:00 by `tools/write_card_maturity.py`
+Generated: 2026-07-12T03:01:38.701356+00:00 by `tools/write_card_maturity.py`
 
 Plan: v1.8
 
@@ -56,8 +56,8 @@ onto identities.
 | Legacy scripts parsed | 33,290/33,290 |
 | Compiler-valid translated legacy definitions | 11,440 |
 | Fail-closed quarantined legacy definitions | 21,850 |
-| Structurally tested legacy ability uses | 19,518/43,649 |
-| Quarantined legacy ability uses | 24,131 |
+| Structurally tested legacy ability uses | 19,519/43,649 |
+| Quarantined legacy ability uses | 24,130 |
 | Owner-priority compiler-valid definitions | 195/365 |
 
 ## Evidence Breadth
@@ -71,18 +71,17 @@ onto identities.
 | Hand-authored scenarios | 133 |
 | Cross-compile artifacts passed | 4 |
 
-## T3.3 Mapper Progress
-
-The exact local-only detached remembered-selector product `dfed76f` passed the
-24-worker checkpoint with deterministic translation and blocker-plan replay,
-full workspace tests, clippy, compiler/database validation, 235 oracle
-scenarios plus gated subsets, nightmare/smoke checks, and 80.9940% line
-coverage. Exact `Defined$ Remembered` and `Affected$ Card.IsRemembered`
-selectors lower through typed `Remembered(Any)`; LKI, dynamic remembered
-bindings, and runtime semantic behavior remain quarantined. The product emits
-11,440/33,290 complete scripts (34.3647%), maps 19,518/43,649 ability uses
-(44.7158%), and keeps Owner-priority emission at 195/365. T3.3 remains active
-and the 60% complete-script exit floor is not reached.
+The latest exact T3.3 mapper checkpoint is product `497d780`. It lowers the
+closed `MayPlay$ True` plus `AffectedZone$ Exile` permission with exact
+`Card.IsRemembered` or `Card.Self` selectors to typed `PlayExiled` structure;
+alternate costs, richer player/condition forms, dynamic values, non-exile
+zones, and runtime semantics remain fail-closed. The product emits 11,440 of
+33,290 scripts (34.3647%) and maps 19,519 of 43,649 ability uses (44.7181%),
+with 195 of 365 Owner-priority definitions. The detached 24-worker checkpoint
+passed deterministic translation/planner replay, full tests, clippy,
+compiler/database validation, oracles, nightmare/smoke checks, and 81.0149%
+line coverage. T3.3 remains active and its 60% complete-script floor is not
+reached.
 
 ## Next Gates
 
@@ -95,4 +94,4 @@ and the 60% complete-script exit floor is not reached.
 
 Per-identity generated detail: `target/card-maturity/identities.json` (untracked,
 38,306 records; SHA-256
-`7ac99f5f9ec06cdeeebb101d869af482543aad599819d43c926cce21bd03cd61`).
+`b14dd46f78b47263bee3bc6b6f42b099fcc0bc2d239d7dbd1cefc29e1b1a5290`).
