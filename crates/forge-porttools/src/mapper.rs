@@ -4759,7 +4759,13 @@ fn map_sacrifice_effect(
     } else {
         call(Operation::You, vec![])
     };
-    let permanents = affected_selector(required(parameters, "SacValid")?)?;
+    let permanents = match parameters.get("SacValid") {
+        Some(value) => sacrifice_selector(value)?,
+        None if !parameters.contains_key("Defined") && !parameters.contains_key("ValidTgts") => {
+            source_permanent_collection()
+        }
+        None => sacrifice_selector(required(parameters, "SacValid")?)?,
+    };
     let permanents =
         add_collection_predicate(permanents, call(Operation::ControlledBy, vec![player]))?;
     mapped_direct(
@@ -4767,6 +4773,26 @@ fn map_sacrifice_effect(
         api,
         parameters,
         call(Operation::SacrificeEffect, vec![permanents]),
+    )
+}
+
+fn sacrifice_selector(value: &str) -> Result<Expression, MappingDiagnostic> {
+    if matches!(value, "Self" | "Card.Self" | "Creature.Self") {
+        return Ok(source_permanent_collection());
+    }
+    affected_selector(value)
+}
+
+fn source_permanent_collection() -> Expression {
+    call(
+        Operation::Permanents,
+        vec![call(
+            Operation::Equals,
+            vec![
+                call(Operation::Any, vec![]),
+                call(Operation::Source, vec![]),
+            ],
+        )],
     )
 }
 
@@ -9441,6 +9467,33 @@ mod tests {
         .err()
         .unwrap_or_else(|| panic!("open combat restriction must quarantine"));
         assert_eq!(error.code, "UNSUPPORTED_VALUE");
+    }
+
+    #[test]
+    fn maps_source_bound_sacrifice_without_sac_valid() {
+        let mapped = map_line("A:AB$ Sacrifice | Cost$ 1")
+            .unwrap_or_else(|error| panic!("source sacrifice should map: {}", error.message));
+        assert_eq!(mapped.costs.len(), 1);
+        assert!(expression_contains_operation(
+            &mapped.expression,
+            Operation::SacrificeEffect
+        ));
+        assert!(expression_contains_operation(
+            &mapped.expression,
+            Operation::Permanents
+        ));
+        assert!(expression_contains_operation(
+            &mapped.expression,
+            Operation::Source
+        ));
+    }
+
+    #[test]
+    fn rejects_ambiguous_sacrifice_without_sac_valid() {
+        let error = map_line("A:AB$ Sacrifice | Defined$ You")
+            .err()
+            .unwrap_or_else(|| panic!("player-bound sacrifice must require SacValid"));
+        assert_eq!(error.code, "MISSING_PARAMETER");
     }
 
     fn assert_operation(line: &str, operation: Operation, expected_costs: usize) {
