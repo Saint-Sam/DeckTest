@@ -1,0 +1,130 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-12T04:15:00Z",
+  "task": "T3.3",
+  "batch": "closed A:CopyPermanent target defined and populate forms",
+  "technical_result": "pass",
+  "product_binding": {
+    "mapper_commit": "30a7898",
+    "exact_product_commit": "30a78984dd9318617548d90dfda4b76efd13ccf7",
+    "exact_product_tree": "1a01cb4c327d38cd92ed8371e00ca2b45ad5da73",
+    "verified_in_detached_worktree": true,
+    "detached_root": "/private/tmp/forge-t3-3-copy-permanent-30a7898"
+  },
+  "source_binding": {
+    "legacy_forge_commit": "1f0a3e0815822d8f58f798e0304b33d4534248b1",
+    "legacy_source": "existing local pinned checkout linked into detached worktree",
+    "translation_fingerprint": "621eb4081db72877a68b79f62f03d4bc",
+    "cargo_lock_sha256": "f9fb1cd7230cb19b3277c1f4cb4c6750699e188f197cff4ef4e2965363675268"
+  },
+  "verification_environment": {
+    "local_only": true,
+    "github_actions_used": false,
+    "network_attempted": false,
+    "install_performed": false,
+    "worker_ceiling": 24,
+    "shared_cargo_cache": true,
+    "detached_target_debug_symlinked": true,
+    "detached_target_llvm_cov_symlinked": true,
+    "detached_target_coverage_local": true
+  },
+  "coverage_delta": {
+    "before": {
+      "complete_scripts": 11520,
+      "mapped_ability_uses": 19654,
+      "owner_priority_complete": 196,
+      "quarantined_scripts": 21770,
+      "quarantined_ability_uses": 23995
+    },
+    "after": {
+      "complete_scripts": 11553,
+      "total_scripts": 33290,
+      "complete_script_percent": 34.70411534995494,
+      "mapped_ability_uses": 19703,
+      "total_ability_uses": 43649,
+      "mapped_ability_percent": 45.13963664688767,
+      "owner_priority_complete": 197,
+      "owner_priority_requested": 365,
+      "quarantined_scripts": 21737,
+      "quarantined_ability_uses": 23946
+    },
+    "gain": {
+      "complete_scripts": 33,
+      "mapped_ability_uses": 49,
+      "owner_priority_complete": 1
+    }
+  },
+  "semantic_boundaries": {
+    "exactly_lowered": [
+      "A:CopyPermanent with ValidTgts as typed target-selected copy source",
+      "A:CopyPermanent with Defined as typed defined copy source",
+      "A:CopyPermanent with Populate=True as typed populate operation"
+    ],
+    "still_quarantined": [
+      "modified copies with AddTypes, AddKeywords, SetPower, SetToughness, SetColor, or SetCreatureTypes",
+      "multi-copy forms with NumCopies",
+      "token state forms with TokenTapped, TokenAttacking, or AtEOT cleanup",
+      "copied trigger and copied SVar injection forms",
+      "controller override and remembered-token follow-up chains"
+    ],
+    "claim": "structural translation and compiler validity only; runtime and card-specific semantic maturity remain separate T3.5 and T3.6 evidence"
+  },
+  "commands": [
+    {
+      "command": "cargo fmt --all -- --check",
+      "exit_code": 0
+    },
+    {
+      "command": "cargo test -p forge-porttools --quiet",
+      "exit_code": 0
+    },
+    {
+      "command": "cargo clippy --workspace --all-targets --all-features -- -D warnings",
+      "exit_code": 0
+    },
+    {
+      "command": "scripts/t3_parallel_sweep.sh development",
+      "exit_code": 0,
+      "workers": 24
+    },
+    {
+      "command": "scripts/t3_parallel_sweep.sh checkpoint",
+      "exit_code": 0,
+      "workers": 24,
+      "accelerated_core_phase_seconds": 36,
+      "full_workspace_verification_seconds": 101,
+      "total_seconds": 144
+    }
+  ],
+  "line_coverage": {
+    "covered": 28353,
+    "count": 34959,
+    "percent": 81.10357847764524,
+    "floor_percent": 80,
+    "raw_report_sha256": "0eda042e67ab9be89c86b4264f4715b5961a16c6d33bb9772dcadc40b75db2c6"
+  },
+  "planner": {
+    "analyzed_scripts": 33290,
+    "scripts_with_confirmed_blockers": 21435,
+    "priority_scripts_with_confirmed_blockers": 162,
+    "confirmed_observations": 46600,
+    "unique_blocker_families": 6088,
+    "linked_root_fanout": 47442
+  },
+  "checkpoint_gates": {
+    "full_workspace_tests": true,
+    "compiler_roundtrips": true,
+    "database_validation": true,
+    "oracle_scenarios": 235,
+    "oracle_subsets_passed": true,
+    "nightmare_suite_passed": true,
+    "arena_smoke_passed": true,
+    "deterministic_parallel_replay": true,
+    "deterministic_blocker_plan_replay": true
+  },
+  "notes": [
+    "Detached target/coverage remained local to the checkpoint root; only target/debug and target/llvm-cov-target were symlinked to the shared cache.",
+    "The pinned local vendor/legacy-forge checkout was symlinked; no network, download, install, GitHub Actions, push, or PR was used.",
+    "The git status command inside the detached root is incompatible with the intentional symlinked submodule placeholder, but the checkpoint sweep completed all required local gates."
+  ]
+}
