@@ -2634,6 +2634,7 @@ fn map_triggered_ability(
         "Cycled" => map_cycled_event(&parameters)?,
         "Sacrificed" => map_sacrificed_event(&parameters)?,
         "ChangesZoneAll" => map_changes_zone_all_event(&parameters)?,
+        "TurnFaceUp" => map_turn_face_up_event(&parameters)?,
         _ => {
             return Err(diagnostic(
                 "UNMAPPED_API",
@@ -2726,6 +2727,16 @@ fn map_taps_event(parameters: &BTreeMap<String, String>) -> Result<Expression, M
     )?;
     Ok(call(
         Operation::EventTapped,
+        vec![affected_selector(required(parameters, "ValidCard")?)?],
+    ))
+}
+
+fn map_turn_face_up_event(
+    parameters: &BTreeMap<String, String>,
+) -> Result<Expression, MappingDiagnostic> {
+    reject_unknown(parameters, &["Execute", "ValidCard", "TriggerDescription"])?;
+    Ok(call(
+        Operation::EventTurnedFaceUp,
         vec![affected_selector(required(parameters, "ValidCard")?)?],
     ))
 }
@@ -11526,6 +11537,15 @@ mod tests {
                     "SVar:TrigDraw:DB$ Draw | Defined$ You\n",
                 ),
                 Operation::EventAttacks,
+                Operation::Draw,
+            ),
+            (
+                concat!(
+                    "Name:Graph Turn Face Up\n",
+                    "T:Mode$ TurnFaceUp | ValidCard$ Card.Self | TriggerZones$ Battlefield | Execute$ TrigDraw | TriggerDescription$ Draw.\n",
+                    "SVar:TrigDraw:DB$ Draw | Defined$ You\n",
+                ),
+                Operation::EventTurnedFaceUp,
                 Operation::Draw,
             ),
             (

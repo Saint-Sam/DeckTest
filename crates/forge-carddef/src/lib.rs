@@ -1006,6 +1006,22 @@ operations! {
     Morph => ("morph", Effect, 1, Some(1)),
     WardCost => ("ward_cost", Effect, 2, None),
     EchoCost => ("echo_cost", Effect, 2, None),
+    CumulativeUpkeepCost => ("cumulative_upkeep_cost", Effect, 2, None),
+    Suspend => ("suspend", Effect, 3, None),
+    CostBundle => ("cost_bundle", Cost, 1, None),
+    KickerCost => ("kicker_cost", Effect, 2, None),
+    MultikickerCost => ("multikicker_cost", Effect, 2, None),
+    BuybackCost => ("buyback_cost", Effect, 2, None),
+    AlternateAdditionalCost => ("alternate_additional_cost", Effect, 2, None),
+    EventTurnedFaceUp => ("event_turned_face_up", Event, 1, Some(1)),
+    ProtectionFrom => ("protection_from", Effect, 2, Some(2)),
+    Disguise => ("disguise", Effect, 2, None),
+    Megamorph => ("megamorph", Effect, 2, None),
+    EntwineCost => ("entwine_cost", Effect, 2, None),
+    Toxic => ("toxic", Effect, 2, Some(2)),
+    Bushido => ("bushido", Effect, 2, Some(2)),
+    Soulshift => ("soulshift", Effect, 2, Some(2)),
+    Ninjutsu => ("ninjutsu", Effect, 1, Some(1)),
 }
 
 impl Operation {
@@ -1028,6 +1044,16 @@ impl Operation {
             Self::AlternateCost => Some((1, Cost)),
             Self::UnlessPaid => Some((2, Cost)),
             Self::WardCost | Self::EchoCost => Some((1, Cost)),
+            Self::CumulativeUpkeepCost => Some((1, Cost)),
+            Self::Suspend => Some((2, Cost)),
+            Self::CostBundle => Some((0, Cost)),
+            Self::KickerCost
+            | Self::MultikickerCost
+            | Self::BuybackCost
+            | Self::AlternateAdditionalCost
+            | Self::Disguise
+            | Self::Megamorph
+            | Self::EntwineCost => Some((1, Cost)),
             Self::TimingAll => Some((0, Timing)),
             _ => None,
         }
@@ -1136,6 +1162,7 @@ impl Operation {
             },
             Self::EventTapped | Self::EventLifeGained => Some(Selector),
             Self::EventCycled | Self::EventSacrificed => Some(Selector),
+            Self::EventTurnedFaceUp => Some(Selector),
             Self::EventCastTargeting => match index {
                 0..=2 => Some(Selector),
                 3 => Some(Text),
@@ -1218,10 +1245,33 @@ impl Operation {
             },
             Self::MinimumBlockers | Self::MaximumBlockers => Some(Number),
             Self::CastWithFlash => Some(Selector),
+            Self::ProtectionFrom => match index {
+                0 => Some(Selector),
+                1 => Some(SelectorOrText),
+                _ => None,
+            },
+            Self::Disguise | Self::Megamorph | Self::EntwineCost => Some(Selector),
+            Self::Toxic | Self::Bushido | Self::Soulshift => match index {
+                0 => Some(Selector),
+                1 => Some(Number),
+                _ => None,
+            },
+            Self::Ninjutsu => Some(Selector),
             Self::AffinityCostReduction => Some(Selector),
             Self::Unearth => Some(Selector),
             Self::Morph => Some(Selector),
             Self::WardCost | Self::EchoCost => Some(Selector),
+            Self::CumulativeUpkeepCost => Some(Selector),
+            Self::Suspend => match index {
+                0 => Some(Selector),
+                1 => Some(Number),
+                _ => None,
+            },
+            Self::CostBundle => None,
+            Self::KickerCost
+            | Self::MultikickerCost
+            | Self::BuybackCost
+            | Self::AlternateAdditionalCost => Some(Selector),
             Self::MoveZone => match index {
                 0 => Some(Selector),
                 1 => Some(Text),
@@ -1642,6 +1692,22 @@ mod tests {
         assert_eq!(Operation::Morph as u32, 206);
         assert_eq!(Operation::WardCost as u32, 207);
         assert_eq!(Operation::EchoCost as u32, 208);
+        assert_eq!(Operation::CumulativeUpkeepCost as u32, 209);
+        assert_eq!(Operation::Suspend as u32, 210);
+        assert_eq!(Operation::CostBundle as u32, 211);
+        assert_eq!(Operation::KickerCost as u32, 212);
+        assert_eq!(Operation::MultikickerCost as u32, 213);
+        assert_eq!(Operation::BuybackCost as u32, 214);
+        assert_eq!(Operation::AlternateAdditionalCost as u32, 215);
+        assert_eq!(Operation::EventTurnedFaceUp as u32, 216);
+        assert_eq!(Operation::ProtectionFrom as u32, 217);
+        assert_eq!(Operation::Disguise as u32, 218);
+        assert_eq!(Operation::Megamorph as u32, 219);
+        assert_eq!(Operation::EntwineCost as u32, 220);
+        assert_eq!(Operation::Toxic as u32, 221);
+        assert_eq!(Operation::Bushido as u32, 222);
+        assert_eq!(Operation::Soulshift as u32, 223);
+        assert_eq!(Operation::Ninjutsu as u32, 224);
 
         let config = bincode::config::standard()
             .with_fixed_int_encoding()

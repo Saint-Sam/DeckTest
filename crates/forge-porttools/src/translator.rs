@@ -916,6 +916,157 @@ fn translate_keywords(
                     Operation::EchoCost,
                 )?),
             ),
+            ("cumulative_upkeep", [cost]) | ("cumulative_upkeep", [cost, _]) => (
+                Some(keyword.clone()),
+                Some(translate_costed_keyword_rule(
+                    line.line,
+                    cost,
+                    Operation::CumulativeUpkeepCost,
+                )?),
+            ),
+            ("suspend", [time, cost]) => (
+                Some(keyword.clone()),
+                Some(translate_suspend_keyword(line.line, time, cost)?),
+            ),
+            ("kicker", costs @ [_, ..]) => (
+                None,
+                Some(translate_keyword_cost_options(
+                    line.line,
+                    costs,
+                    Operation::KickerCost,
+                )?),
+            ),
+            ("multikicker", costs @ [_, ..]) => (
+                None,
+                Some(translate_keyword_cost_options(
+                    line.line,
+                    costs,
+                    Operation::MultikickerCost,
+                )?),
+            ),
+            ("buyback", costs @ [_, ..]) => (
+                None,
+                Some(translate_keyword_cost_options(
+                    line.line,
+                    costs,
+                    Operation::BuybackCost,
+                )?),
+            ),
+            ("alternateadditionalcost", costs @ [_, ..]) => (
+                None,
+                Some(translate_keyword_cost_options(
+                    line.line,
+                    costs,
+                    Operation::AlternateAdditionalCost,
+                )?),
+            ),
+            (
+                protection @ ("protection_from_black"
+                | "protection_from_blue"
+                | "protection_from_green"
+                | "protection_from_red"
+                | "protection_from_white"
+                | "protection_from_each_color"
+                | "protection_from_everything"),
+                [],
+            ) => (
+                None,
+                Some(AbilityDefinition {
+                    kind: AbilityKind::Static,
+                    costs: Vec::new(),
+                    event: None,
+                    condition: None,
+                    timing: None,
+                    effect: expression_call(
+                        Operation::ProtectionFrom,
+                        vec![
+                            expression_call(Operation::Source, vec![]),
+                            Expression::Text(
+                                protection
+                                    .strip_prefix("protection_from_")
+                                    .unwrap_or(protection)
+                                    .to_string(),
+                            ),
+                        ],
+                    ),
+                    mana_ability: false,
+                }),
+            ),
+            ("protection", [protected_from]) | ("protection", [protected_from, _]) => (
+                None,
+                Some(AbilityDefinition {
+                    kind: AbilityKind::Static,
+                    costs: Vec::new(),
+                    event: None,
+                    condition: None,
+                    timing: None,
+                    effect: expression_call(
+                        Operation::ProtectionFrom,
+                        vec![
+                            expression_call(Operation::Source, vec![]),
+                            Expression::Text(protected_from.to_string()),
+                        ],
+                    ),
+                    mana_ability: false,
+                }),
+            ),
+            ("disguise", [cost]) => (
+                None,
+                Some(translate_costed_keyword_rule(
+                    line.line,
+                    cost,
+                    Operation::Disguise,
+                )?),
+            ),
+            ("megamorph", [cost]) => (
+                None,
+                Some(translate_costed_keyword_rule(
+                    line.line,
+                    cost,
+                    Operation::Megamorph,
+                )?),
+            ),
+            ("entwine", [cost]) => (
+                None,
+                Some(translate_costed_keyword_rule(
+                    line.line,
+                    cost,
+                    Operation::EntwineCost,
+                )?),
+            ),
+            ("toxic", [amount]) => (
+                None,
+                Some(translate_numeric_keyword_rule(
+                    line.line,
+                    amount,
+                    Operation::Toxic,
+                )?),
+            ),
+            ("bushido", [amount]) => (
+                None,
+                Some(translate_numeric_keyword_rule(
+                    line.line,
+                    amount,
+                    Operation::Bushido,
+                )?),
+            ),
+            ("soulshift", [amount]) => (
+                None,
+                Some(translate_numeric_keyword_rule(
+                    line.line,
+                    amount,
+                    Operation::Soulshift,
+                )?),
+            ),
+            ("ninjutsu", [cost]) => (
+                None,
+                Some(translate_activated_keyword_rule(
+                    line.line,
+                    cost,
+                    Operation::Ninjutsu,
+                    None,
+                )?),
+            ),
             (_, []) => (Some(keyword.clone()), None),
             ("cycling", [cost]) => {
                 let full_cost = format!("{cost} Discard<1/CARDNAME>");
@@ -1122,6 +1273,43 @@ fn translate_etb_extra_counter(
     })
 }
 
+fn translate_suspend_keyword(
+    line: usize,
+    time: &str,
+    cost: &String,
+) -> Result<AbilityDefinition, (usize, String, String)> {
+    let time = time.parse::<i64>().map_err(|_| {
+        (
+            line,
+            "UNSUPPORTED_VALUE".to_string(),
+            format!("suspend time `{time}` is not a positive integer"),
+        )
+    })?;
+    if time <= 0 {
+        return Err((
+            line,
+            "UNSUPPORTED_VALUE".to_string(),
+            "suspend time must be positive".to_string(),
+        ));
+    }
+    let costs = parse_simple_cost(Some(cost))
+        .map_err(|diagnostic| (line, diagnostic.code, diagnostic.message))?;
+    let mut arguments = vec![
+        expression_call(Operation::Source, vec![]),
+        Expression::Integer(time),
+    ];
+    arguments.extend(costs);
+    Ok(AbilityDefinition {
+        kind: AbilityKind::Static,
+        costs: Vec::new(),
+        event: None,
+        condition: None,
+        timing: None,
+        effect: expression_call(Operation::Suspend, arguments),
+        mana_ability: false,
+    })
+}
+
 fn translate_costed_keyword_rule(
     line: usize,
     cost: &String,
@@ -1145,6 +1333,100 @@ fn translate_costed_keyword_rule(
         condition: None,
         timing: None,
         effect: expression_call(operation, arguments),
+        mana_ability: false,
+    })
+}
+
+fn translate_keyword_cost_options(
+    line: usize,
+    cost_options: &[String],
+    operation: Operation,
+) -> Result<AbilityDefinition, (usize, String, String)> {
+    let mut arguments = vec![expression_call(Operation::Source, vec![])];
+    for cost in cost_options {
+        let costs = parse_simple_cost(Some(cost))
+            .map_err(|diagnostic| (line, diagnostic.code, diagnostic.message))?;
+        if costs.is_empty() {
+            return Err((
+                line,
+                "MISSING_COST".to_string(),
+                format!("{} requires non-empty cost options", operation.as_str()),
+            ));
+        }
+        arguments.push(expression_call(Operation::CostBundle, costs));
+    }
+    Ok(AbilityDefinition {
+        kind: AbilityKind::Static,
+        costs: Vec::new(),
+        event: None,
+        condition: None,
+        timing: None,
+        effect: expression_call(operation, arguments),
+        mana_ability: false,
+    })
+}
+
+fn translate_numeric_keyword_rule(
+    line: usize,
+    amount: &str,
+    operation: Operation,
+) -> Result<AbilityDefinition, (usize, String, String)> {
+    let amount = amount.parse::<i64>().map_err(|_| {
+        (
+            line,
+            "UNSUPPORTED_VALUE".to_string(),
+            format!(
+                "{} amount `{amount}` is not a positive integer",
+                operation.as_str()
+            ),
+        )
+    })?;
+    if amount <= 0 {
+        return Err((
+            line,
+            "UNSUPPORTED_VALUE".to_string(),
+            format!("{} amount must be positive", operation.as_str()),
+        ));
+    }
+    Ok(AbilityDefinition {
+        kind: AbilityKind::Static,
+        costs: Vec::new(),
+        event: None,
+        condition: None,
+        timing: None,
+        effect: expression_call(
+            operation,
+            vec![
+                expression_call(Operation::Source, vec![]),
+                Expression::Integer(amount),
+            ],
+        ),
+        mana_ability: false,
+    })
+}
+
+fn translate_activated_keyword_rule(
+    line: usize,
+    cost: &String,
+    operation: Operation,
+    timing: Option<Expression>,
+) -> Result<AbilityDefinition, (usize, String, String)> {
+    let costs = parse_simple_cost(Some(cost))
+        .map_err(|diagnostic| (line, diagnostic.code, diagnostic.message))?;
+    if costs.is_empty() {
+        return Err((
+            line,
+            "MISSING_COST".to_string(),
+            format!("{} requires a cost", operation.as_str()),
+        ));
+    }
+    Ok(AbilityDefinition {
+        kind: AbilityKind::Activated,
+        costs,
+        event: None,
+        condition: None,
+        timing,
+        effect: expression_call(operation, vec![expression_call(Operation::Source, vec![])]),
         mana_ability: false,
     })
 }
@@ -2272,6 +2554,117 @@ mod tests {
             let faces = face_lines(&script);
             let translated = translate_keywords(&script, &faces[0])
                 .unwrap_or_else(|error| panic!("costed keyword should translate: {error:?}"));
+            assert!(matches!(
+                translated.abilities[0].effect,
+                Expression::Call {
+                    operation: actual,
+                    ..
+                } if actual == operation
+            ));
+        }
+    }
+
+    #[test]
+    fn desugars_cumulative_upkeep_and_suspend() {
+        for (keyword, operation) in [
+            (
+                "K:Cumulative upkeep:PayLife<1>:Pay 1 life.",
+                Operation::CumulativeUpkeepCost,
+            ),
+            ("K:Suspend:4:1 R", Operation::Suspend),
+        ] {
+            let script = crate::legacy::parse_legacy_script("fixture.txt", keyword)
+                .unwrap_or_else(|error| panic!("fixture should parse: {error}"));
+            let faces = face_lines(&script);
+            let translated = translate_keywords(&script, &faces[0])
+                .unwrap_or_else(|error| panic!("timed keyword should translate: {error:?}"));
+            assert!(matches!(
+                translated.abilities[0].effect,
+                Expression::Call {
+                    operation: actual,
+                    ..
+                } if actual == operation
+            ));
+        }
+    }
+
+    #[test]
+    fn desugars_repeatable_and_alternative_keyword_costs() {
+        for (keyword, operation, option_count) in [
+            ("K:Kicker:2 U:1 G", Operation::KickerCost, 2),
+            ("K:Multikicker:1 G", Operation::MultikickerCost, 1),
+            ("K:Buyback:Sac<1/Land>", Operation::BuybackCost, 1),
+            (
+                "K:AlternateAdditionalCost:Sac<1/Creature>:Discard<1/Card>",
+                Operation::AlternateAdditionalCost,
+                2,
+            ),
+        ] {
+            let script = crate::legacy::parse_legacy_script("fixture.txt", keyword)
+                .unwrap_or_else(|error| panic!("fixture should parse: {error}"));
+            let faces = face_lines(&script);
+            let translated = translate_keywords(&script, &faces[0])
+                .unwrap_or_else(|error| panic!("cost keyword should translate: {error:?}"));
+            let Expression::Call {
+                operation: actual,
+                arguments,
+            } = &translated.abilities[0].effect
+            else {
+                panic!("cost keyword should emit an operation call");
+            };
+            assert_eq!(*actual, operation);
+            assert_eq!(arguments.len(), option_count + 1);
+            assert!(arguments[1..].iter().all(|argument| matches!(
+                argument,
+                Expression::Call {
+                    operation: Operation::CostBundle,
+                    ..
+                }
+            )));
+        }
+    }
+
+    #[test]
+    fn desugars_fixed_protection_keywords() {
+        for (keyword, protected_from) in [
+            ("K:Protection from black", "black"),
+            ("K:Protection from each color", "each_color"),
+            ("K:Protection from everything", "everything"),
+        ] {
+            let script = crate::legacy::parse_legacy_script("fixture.txt", keyword)
+                .unwrap_or_else(|error| panic!("fixture should parse: {error}"));
+            let faces = face_lines(&script);
+            let translated = translate_keywords(&script, &faces[0])
+                .unwrap_or_else(|error| panic!("protection should translate: {error:?}"));
+            assert_eq!(
+                translated.abilities[0].effect,
+                expression_call(
+                    Operation::ProtectionFrom,
+                    vec![
+                        expression_call(Operation::Source, vec![]),
+                        Expression::Text(protected_from.to_string()),
+                    ],
+                )
+            );
+        }
+    }
+
+    #[test]
+    fn desugars_closed_parameterized_keywords() {
+        for (keyword, operation) in [
+            ("K:Disguise:2 W", Operation::Disguise),
+            ("K:Megamorph:3 G", Operation::Megamorph),
+            ("K:Entwine:Sac<2/Land>", Operation::EntwineCost),
+            ("K:Toxic:2", Operation::Toxic),
+            ("K:Bushido:1", Operation::Bushido),
+            ("K:Soulshift:4", Operation::Soulshift),
+            ("K:Ninjutsu:1 U", Operation::Ninjutsu),
+        ] {
+            let script = crate::legacy::parse_legacy_script("fixture.txt", keyword)
+                .unwrap_or_else(|error| panic!("fixture should parse: {error}"));
+            let faces = face_lines(&script);
+            let translated = translate_keywords(&script, &faces[0])
+                .unwrap_or_else(|error| panic!("keyword should translate: {error:?}"));
             assert!(matches!(
                 translated.abilities[0].effect,
                 Expression::Call {
