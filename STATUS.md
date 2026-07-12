@@ -1,6 +1,6 @@
 # DeckTest / Forge 2.0 Status
 
-Generated: 2026-07-12T02:19:48.468651+00:00 by `tools/write_card_maturity.py`
+Generated: 2026-07-12T02:30:12.667046+00:00 by `tools/write_card_maturity.py`
 
 Plan: v1.8
 
@@ -32,19 +32,19 @@ Exclusive highest evidence stage for the 32,792 in-v1 Oracle identities:
 
 | Highest stage | Identities |
 | --- | ---: |
-| Absent identity-bound definition evidence | 21,351 |
+| Absent identity-bound definition evidence | 21,332 |
 | Parsed | 0 |
 | Mapped partial | 0 |
 | Structurally translated | 0 |
-| Compiler valid | 11,441 |
+| Compiler valid | 11,460 |
 | Runtime smoke passed | 0 |
 | Semantic verified | 0 |
 | Pod integration verified | 0 |
 | AI supported | 0 |
 | Product eligible | 0 |
 
-Compiler-valid evidence currently reaches 11,441/32,792
-in-v1 identities (34.8896%). This includes the
+Compiler-valid evidence currently reaches 11,460/32,792
+in-v1 identities (34.9475%). This includes the
 unverified CP-DSL language-stress corpus and therefore is not a playable claim.
 Parsing and mapping remain below in their own units rather than being guessed
 onto identities.
@@ -54,10 +54,10 @@ onto identities.
 | Literal unit | Result |
 | --- | ---: |
 | Legacy scripts parsed | 33,290/33,290 |
-| Compiler-valid translated legacy definitions | 11,382 |
-| Fail-closed quarantined legacy definitions | 21,908 |
-| Structurally tested legacy ability uses | 19,432/43,649 |
-| Quarantined legacy ability uses | 24,217 |
+| Compiler-valid translated legacy definitions | 11,401 |
+| Fail-closed quarantined legacy definitions | 21,889 |
+| Structurally tested legacy ability uses | 19,463/43,649 |
+| Quarantined legacy ability uses | 24,186 |
 | Owner-priority compiler-valid definitions | 195/365 |
 
 ## Evidence Breadth
@@ -73,15 +73,16 @@ onto identities.
 
 ## T3.3 Mapper Progress
 
-The exact local-only `5ea7d39` product emits 11,382/33,290 complete legacy
-scripts (34.1904%) and maps 19,432/43,649 top-level ability uses (44.5188%).
-The latest batch maps `ConditionCheckSVar` and `ConditionSVarCompare` only for
-closed scalar, value-SVar, and `Count$` subjects; open and event-dependent forms
-remain fail-closed. Owner-priority emission is 195/365; the 24-worker
-deterministic checkpoint, full workspace tests, clippy, compiler/database
-validation, oracle gates, planner replay, and 81.0009% line coverage passed
-locally. T3.3 remains active and the 60% complete-script exit floor is not
-reached.
+The exact local-only detached commander-designation product `3526228` passed the
+24-worker checkpoint with deterministic translation and blocker-plan replay,
+full workspace tests, clippy, compiler/database validation, 235 oracle
+scenarios plus gated subsets, nightmare/smoke checks, and 81.0031% line
+coverage. Positive `IsCommander` selectors in affected, target, and presence
+forms lower through typed `DesignationIs(commander)`; negated, dynamic, and
+stateful commander forms remain quarantined. The product emits 11,401/33,290
+complete scripts (34.2475%), maps 19,463/43,649 ability uses (44.5898%), and
+keeps Owner-priority emission at 195/365. T3.3 remains active and the 60%
+complete-script exit floor is not reached.
 
 ## Next Gates
 
@@ -94,4 +95,4 @@ reached.
 
 Per-identity generated detail: `target/card-maturity/identities.json` (untracked,
 38,306 records; SHA-256
-`f03b51c5972742b3731dd9bdc88ded8bff93002b25024146457da7e3a6872a49`).
+`21994f3b9845efa1aff002ba0f39dc9eb3b2392fb0bfba22f50ca6fac24249f6`).
