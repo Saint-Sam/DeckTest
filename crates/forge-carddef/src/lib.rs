@@ -1076,6 +1076,10 @@ operations! {
     Amass => ("amass", Effect, 3, Some(3)),
     ChosenTypeIs => ("chosen_type_is", Predicate, 0, Some(0)),
     LifeTotal => ("life_total", Value, 1, Some(1)),
+    PayToApply => ("pay_to_apply", Effect, 3, None),
+    PlayPermission => ("play_permission", Effect, 5, Some(5)),
+    GrantActivatedAbility => ("grant_activated_ability", Effect, 3, None),
+    GrantTriggeredAbility => ("grant_triggered_ability", Effect, 3, Some(3)),
 }
 
 impl Operation {
@@ -1097,6 +1101,8 @@ impl Operation {
             Self::LayerEffect => Some((3, Integer)),
             Self::AlternateCost => Some((1, Cost)),
             Self::UnlessPaid => Some((2, Cost)),
+            Self::PayToApply => Some((2, Cost)),
+            Self::GrantActivatedAbility => Some((3, Cost)),
             Self::WardCost | Self::EchoCost => Some((1, Cost)),
             Self::CumulativeUpkeepCost => Some((1, Cost)),
             Self::Suspend => Some((2, Cost)),
@@ -1736,6 +1742,28 @@ impl Operation {
                 1 => Some(Selector),
                 _ => None,
             },
+            Self::PayToApply => match index {
+                0 => Some(Selector),
+                1 => Some(Effect),
+                _ => None,
+            },
+            Self::PlayPermission => match index {
+                0 | 2 => Some(Selector),
+                1 | 3 | 4 => Some(Text),
+                _ => None,
+            },
+            Self::GrantActivatedAbility => match index {
+                0 => Some(Selector),
+                1 => Some(Effect),
+                2 => Some(Timing),
+                _ => None,
+            },
+            Self::GrantTriggeredAbility => match index {
+                0 => Some(Selector),
+                1 => Some(Event),
+                2 => Some(Effect),
+                _ => None,
+            },
             Self::TimingAll => None,
         }
     }
@@ -1947,6 +1975,10 @@ mod tests {
         assert_eq!(Operation::Amass as u32, 276);
         assert_eq!(Operation::ChosenTypeIs as u32, 277);
         assert_eq!(Operation::LifeTotal as u32, 278);
+        assert_eq!(Operation::PayToApply as u32, 279);
+        assert_eq!(Operation::PlayPermission as u32, 280);
+        assert_eq!(Operation::GrantActivatedAbility as u32, 281);
+        assert_eq!(Operation::GrantTriggeredAbility as u32, 282);
 
         let config = bincode::config::standard()
             .with_fixed_int_encoding()
