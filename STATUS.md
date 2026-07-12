@@ -1,6 +1,6 @@
 # DeckTest / Forge 2.0 Status
 
-Generated: 2026-07-12T00:10:14.239853+00:00 by `tools/write_card_maturity.py`
+Generated: 2026-07-12T00:22:57.315392+00:00 by `tools/write_card_maturity.py`
 
 Plan: v1.8
 
@@ -60,14 +60,14 @@ onto identities.
 | Quarantined legacy ability uses | 24,803 |
 | Owner-priority compiler-valid definitions | 193/365 |
 
-T3.3 remains active after exact local product `5e98207`: basic `Landwalk`
-values now lower to typed land-specific keyword ids, and `etbCounter` accepts
-fixed plus closed dynamic value-SVar amounts. Special-land, conditional, and
-other open forms remain fail-closed. The detached 24-worker checkpoint passed
-deterministic 24/12 translation and 6/1 planner replay, full workspace tests,
-clippy, compiler/database validation, 235 oracle scenarios plus gated subsets,
-nightmare/smoke checks, and 80.8876% line coverage. The 60% complete-script
-exit floor is not reached.
+T3.3 remains active after exact local product `2ea36fc`: special `Landwalk`
+values now lower to typed ids for desert, legendary-land, nonbasic-land, and
+snow-land variants. The complete-script and ability-use totals are unchanged
+because those cards retain unrelated blockers; open forms remain fail-closed.
+The detached 24-worker checkpoint passed deterministic replay, full workspace
+tests, clippy, compiler/database validation, 235 oracle scenarios plus gated
+subsets, nightmare/smoke checks, and 80.8915% line coverage. The 60%
+complete-script exit floor is not reached.
 
 ## Evidence Breadth
 
@@ -91,4 +91,4 @@ exit floor is not reached.
 
 Per-identity generated detail: `target/card-maturity/identities.json` (untracked,
 38,306 records; SHA-256
-`e7246e4017ba96d951034bce59aede9bcfaed890c9724f8e678e6391853c71c4`).
+`bbb3e01e2bf9512d84c020d7f4f2153d9919e3792c2e275cdeb06ffcbc9cf948`).

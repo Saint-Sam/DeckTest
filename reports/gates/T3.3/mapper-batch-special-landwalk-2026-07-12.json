@@ -1,0 +1,125 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-12T00:24:05Z",
+  "task": "T3.3",
+  "batch": "special Landwalk predicates",
+  "technical_result": "pass",
+  "product_binding": {
+    "mapper_commit": "2ea36fc",
+    "exact_product_commit": "2ea36fcd89461b4807dc22883e8c9a832ecb2a6b",
+    "exact_product_tree": "a73d8243e9b8571d8075a48bfc4e4d0de0fb014c",
+    "verified_in_detached_worktree": true
+  },
+  "source_binding": {
+    "legacy_forge_commit": "1f0a3e0815822d8f58f798e0304b33d4534248b1",
+    "legacy_source": "existing local pinned checkout linked into detached worktree",
+    "translation_fingerprint": "a89aa9156dec94fe0e473139379908d3",
+    "cargo_lock_sha256": "f9fb1cd7230cb19b3277c1f4cb4c6750699e188f197cff4ef4e2965363675268"
+  },
+  "verification_environment": {
+    "local_only": true,
+    "github_actions_used": false,
+    "network_attempted": false,
+    "install_performed": false,
+    "worker_ceiling": 24,
+    "shared_cargo_cache": true,
+    "detached_target_debug_symlinked": true,
+    "detached_target_llvm_cov_symlinked": true,
+    "detached_target_coverage_local": true
+  },
+  "coverage_delta": {
+    "before": {
+      "complete_scripts": 10955,
+      "mapped_ability_uses": 18846,
+      "owner_priority_complete": 193,
+      "quarantined_scripts": 22335,
+      "quarantined_ability_uses": 24803
+    },
+    "after": {
+      "complete_scripts": 10955,
+      "total_scripts": 33290,
+      "complete_script_percent": 32.907780114148395,
+      "mapped_ability_uses": 18846,
+      "total_ability_uses": 43649,
+      "owner_priority_complete": 193,
+      "owner_priority_requested": 365,
+      "quarantined_scripts": 22335,
+      "quarantined_ability_uses": 24803
+    },
+    "gain": {
+      "complete_scripts": 0,
+      "mapped_ability_uses": 0,
+      "owner_priority_complete": 0
+    }
+  },
+  "semantic_boundaries": {
+    "exactly_lowered": [
+      "Landwalk Desert to desertwalk",
+      "Landwalk Land.Legendary to legendarylandwalk",
+      "Landwalk Land.nonBasic to nonbasiclandwalk",
+      "Landwalk Land.Snow and basic-land snow variants to typed keyword ids"
+    ],
+    "still_quarantined": [
+      "cards with a special Landwalk value plus unrelated blockers",
+      "unsupported or malformed Landwalk predicates",
+      "runtime and semantic card behavior beyond structural keyword compilation"
+    ],
+    "claim": "structural translation and compiler validity only; runtime and card-specific semantic maturity remain separate T3.5 and T3.6 evidence"
+  },
+  "commands": [
+    {
+      "command": "cargo fmt --all -- --check",
+      "exit_code": 0
+    },
+    {
+      "command": "cargo test -p forge-porttools desugars_closed_dynamic_etb_counter_and_landwalk_keywords -- --nocapture",
+      "exit_code": 0
+    },
+    {
+      "command": "FORGE_T3_TOTAL_WORKERS=24 CARGO_BUILD_JOBS=24 scripts/t3_parallel_sweep.sh development",
+      "exit_code": 0
+    },
+    {
+      "command": "cargo clippy --workspace --all-targets --all-features -- -D warnings",
+      "exit_code": 0
+    },
+    {
+      "command": "FORGE_T3_TOTAL_WORKERS=24 CARGO_BUILD_JOBS=24 scripts/t3_parallel_sweep.sh checkpoint",
+      "exit_code": 0,
+      "accelerated_core_phase_seconds": 37,
+      "full_workspace_verification_seconds": 78,
+      "total_seconds": 121
+    }
+  ],
+  "line_coverage": {
+    "covered": 27529,
+    "count": 34032,
+    "percent": 80.89151386929949,
+    "floor_percent": 80,
+    "raw_report_sha256": "07bf5456932fccfd53e33259f4f54a36e6597ea33dfdf0a39d07d23acd6595f7"
+  },
+  "planner": {
+    "analyzed_scripts": 33290,
+    "scripts_with_confirmed_blockers": 22159,
+    "priority_scripts_with_confirmed_blockers": 166,
+    "confirmed_observations": 52156,
+    "unique_blocker_families": 5334,
+    "linked_root_fanout": 53149
+  },
+  "checkpoint_gates": {
+    "full_workspace_tests": true,
+    "compiler_roundtrips": true,
+    "database_validation": true,
+    "oracle_scenarios": 235,
+    "oracle_subsets_passed": true,
+    "nightmare_suite_passed": true,
+    "arena_smoke_passed": true,
+    "deterministic_parallel_replay": true,
+    "deterministic_blocker_plan_replay": true
+  },
+  "continuation": {
+    "t3_3_remains_active": true,
+    "exit_floor_reached": false,
+    "next_t3_3_batch_source": "metrics/blocker_plan.json recommended_batches[0]"
+  }
+}
