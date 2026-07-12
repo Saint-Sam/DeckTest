@@ -550,15 +550,27 @@ pub fn map_legacy_ability(
         return Err(diagnostic("MALFORMED_API", "ability API name is empty"));
     }
     let optional_effect = if prefix == LegacyAbilityPrefix::Activated && api != "Dig" {
-        match expression
+        let optional = expression
             .fields
             .iter()
             .find(|field| field.key.as_deref() == Some("Optional"))
-            .map(|field| field.value.as_str())
-        {
-            None => false,
-            Some("True") => true,
-            Some(value) => return Err(unsupported_value("Optional", value)),
+            .map(|field| field.value.as_str());
+        let decider = expression
+            .fields
+            .iter()
+            .find(|field| field.key.as_deref() == Some("OptionalDecider"))
+            .map(|field| field.value.as_str());
+        match (optional, decider) {
+            (None, None) => false,
+            (Some("True"), None) | (None, Some("You")) => true,
+            (Some(value), None) => return Err(unsupported_value("Optional", value)),
+            (None, Some(value)) => return Err(unsupported_value("OptionalDecider", value)),
+            (Some(_), Some(_)) => {
+                return Err(diagnostic(
+                    "UNSUPPORTED_PARAMETER",
+                    "Optional and OptionalDecider cannot be combined",
+                ));
+            }
         }
     } else {
         false
@@ -567,7 +579,7 @@ pub fn map_legacy_ability(
         let mut stripped = expression.clone();
         stripped
             .fields
-            .retain(|field| field.key.as_deref() != Some("Optional"));
+            .retain(|field| !matches!(field.key.as_deref(), Some("Optional" | "OptionalDecider")));
         stripped
     });
     let expression = stripped_expression.as_ref().unwrap_or(expression);
@@ -987,10 +999,20 @@ fn map_with_context_unconditioned(
         })
         .transpose()?;
     let optional_effect = if prefix == LegacyAbilityPrefix::Activated && api != "Dig" {
-        match parameter_map.get("Optional").map(String::as_str) {
-            None => false,
-            Some("True") => true,
-            Some(value) => return Err(unsupported_value("Optional", value)),
+        match (
+            parameter_map.get("Optional").map(String::as_str),
+            parameter_map.get("OptionalDecider").map(String::as_str),
+        ) {
+            (None, None) => false,
+            (Some("True"), None) | (None, Some("You")) => true,
+            (Some(value), None) => return Err(unsupported_value("Optional", value)),
+            (None, Some(value)) => return Err(unsupported_value("OptionalDecider", value)),
+            (Some(_), Some(_)) => {
+                return Err(diagnostic(
+                    "UNSUPPORTED_PARAMETER",
+                    "Optional and OptionalDecider cannot be combined",
+                ));
+            }
         }
     } else {
         false
@@ -1000,6 +1022,7 @@ fn map_with_context_unconditioned(
         base_expression.fields.retain(|field| {
             field.key.as_deref() != Some("SubAbility")
                 && (!optional_effect || field.key.as_deref() != Some("Optional"))
+                && (!optional_effect || field.key.as_deref() != Some("OptionalDecider"))
                 && (divided_allocation.is_none()
                     || field.key.as_deref() != Some("DividedAsYouChoose"))
         });
@@ -2417,9 +2440,25 @@ fn map_delayed_trigger(
     };
     let event = match required(&parameters, "Phase")? {
         "Upkeep" => call(Operation::EventUpkeep, vec![player]),
-        "End of Turn" => call(
+        "End of Turn" | "End Of Turn" => call(
             Operation::EventPhase,
             vec![player, Expression::Text("end_step".to_string())],
+        ),
+        "Main1" => call(
+            Operation::EventPhase,
+            vec![player, Expression::Text("precombat_main".to_string())],
+        ),
+        "Main2" => call(
+            Operation::EventPhase,
+            vec![player, Expression::Text("postcombat_main".to_string())],
+        ),
+        "Draw" => call(
+            Operation::EventPhase,
+            vec![player, Expression::Text("draw_step".to_string())],
+        ),
+        "Cleanup" => call(
+            Operation::EventPhase,
+            vec![player, Expression::Text("cleanup_step".to_string())],
         ),
         "EndCombat" => call(
             Operation::EventPhase,
@@ -2609,6 +2648,16 @@ fn map_triggered_ability(
         })
         .transpose()?
         .flatten();
+    let activation_limit = parameters
+        .remove("ActivationLimit")
+        .map(|value| {
+            value
+                .parse::<i64>()
+                .ok()
+                .filter(|limit| (1..=3).contains(limit))
+                .ok_or_else(|| unsupported_value("ActivationLimit", &value))
+        })
+        .transpose()?;
     let optional = parameters.remove("OptionalDecider");
     if optional.as_deref().is_some_and(|decider| decider != "You") {
         return Err(unsupported_value(
@@ -2656,6 +2705,16 @@ fn map_triggered_ability(
         call(
             Operation::EventActiveZone,
             vec![event, Expression::Text(zone)],
+        )
+    });
+    let event = activation_limit.map_or(event.clone(), |limit| {
+        call(
+            Operation::EventLimit,
+            vec![
+                event,
+                call(Operation::Source, vec![]),
+                Expression::Integer(limit),
+            ],
         )
     });
     let linked = resolve_svar(execute, context, stack)?;
@@ -2920,6 +2979,42 @@ fn map_phase_event(parameters: &BTreeMap<String, String>) -> Result<Expression, 
         "BeginCombat" => Ok(call(
             Operation::EventPhase,
             vec![player, Expression::Text("begin_combat".to_string())],
+        )),
+        "Main1" => Ok(call(
+            Operation::EventPhase,
+            vec![player, Expression::Text("precombat_main".to_string())],
+        )),
+        "Main2" => Ok(call(
+            Operation::EventPhase,
+            vec![player, Expression::Text("postcombat_main".to_string())],
+        )),
+        "Main" => Ok(call(
+            Operation::EventPhase,
+            vec![player, Expression::Text("main_phase".to_string())],
+        )),
+        "Draw" => Ok(call(
+            Operation::EventPhase,
+            vec![player, Expression::Text("draw_step".to_string())],
+        )),
+        "Cleanup" => Ok(call(
+            Operation::EventPhase,
+            vec![player, Expression::Text("cleanup_step".to_string())],
+        )),
+        "EndCombat" => Ok(call(
+            Operation::EventPhase,
+            vec![player, Expression::Text("end_combat".to_string())],
+        )),
+        "Declare Attackers" => Ok(call(
+            Operation::EventPhase,
+            vec![player, Expression::Text("declare_attackers".to_string())],
+        )),
+        "Untap" => Ok(call(
+            Operation::EventPhase,
+            vec![player, Expression::Text("untap_step".to_string())],
+        )),
+        "End Of Turn" => Ok(call(
+            Operation::EventPhase,
+            vec![player, Expression::Text("end_step".to_string())],
         )),
         _ => Err(unsupported_value("Phase", phase)),
     }
@@ -4179,6 +4274,7 @@ fn map_object_effect(
             "AILogic",
             "ETB",
             "NoRegen",
+            "RememberDestroyed",
         ],
     )?;
     if let Some(etb) = parameters.get("ETB") {
@@ -4193,13 +4289,24 @@ fn map_object_effect(
         }
         arguments.push(Expression::Text("cannot_regenerate".to_string()));
     }
+    let expression = call(operation, arguments);
+    let expression = if operation == Operation::Destroy {
+        apply_remembered_result(expression, parameters, "RememberDestroyed", "destroyed")?
+    } else if parameters.contains_key("RememberDestroyed") {
+        return Err(diagnostic(
+            "UNSUPPORTED_PARAMETER",
+            "RememberDestroyed is only valid for Destroy",
+        ));
+    } else {
+        expression
+    };
     Ok(MappedLegacyAbility {
         prefix,
         api: api.to_string(),
         costs: parse_simple_cost(parameters.get("Cost"))?,
         event: None,
         timing: None,
-        expression: call(operation, arguments),
+        expression,
     })
 }
 
@@ -4665,6 +4772,7 @@ fn map_change_zone(
         expression
     };
     let expression = apply_entry_counters(expression, parameters)?;
+    let expression = apply_changed_object_metadata(expression, parameters)?;
     let expression = apply_zone_move_lifetime(expression, parameters, origin, destination)?;
     mapped_direct(
         prefix,
@@ -4679,7 +4787,7 @@ fn map_library_search(
     api: &str,
     parameters: &BTreeMap<String, String>,
 ) -> Result<MappedLegacyAbility, MappingDiagnostic> {
-    for unsupported in ["RememberChanged", "NoLooking"] {
+    for unsupported in ["NoLooking"] {
         if parameters.contains_key(unsupported) {
             return Err(diagnostic(
                 "UNSUPPORTED_PARAMETER",
@@ -4760,6 +4868,15 @@ fn map_library_search(
             Expression::Integer(amount),
         ],
     ));
+    if let Some(value) = parameters.get("RememberChanged") {
+        if value != "True" {
+            return Err(unsupported_value("RememberChanged", value));
+        }
+        effects.push(call(
+            Operation::Remember,
+            vec![Expression::Text("changed".to_string()), chosen.clone()],
+        ));
+    }
     if parameters.contains_key("Tapped") {
         effects.push(call(Operation::Tap, vec![chosen]));
     }
@@ -4773,6 +4890,31 @@ fn map_library_search(
         parameters,
         preserve_hidden_information(parameters, expression),
     )
+}
+
+fn apply_changed_object_metadata(
+    move_effect: Expression,
+    parameters: &BTreeMap<String, String>,
+) -> Result<Expression, MappingDiagnostic> {
+    let Some(value) = parameters.get("RememberChanged") else {
+        return Ok(move_effect);
+    };
+    if value != "True" {
+        return Err(unsupported_value("RememberChanged", value));
+    }
+    Ok(call(
+        Operation::Sequence,
+        vec![
+            move_effect,
+            call(
+                Operation::Remember,
+                vec![
+                    Expression::Text("changed".to_string()),
+                    call(Operation::EffectResult, vec![]),
+                ],
+            ),
+        ],
+    ))
 }
 
 fn preserve_hidden_information(
@@ -5093,6 +5235,7 @@ fn map_discard(
             "SpellDescription",
             "StackDescription",
             "AILogic",
+            "RememberDiscarded",
         ],
     )?;
     let mode = match required(parameters, "Mode")? {
@@ -5111,6 +5254,8 @@ fn map_discard(
             Expression::Text(mode.to_string()),
         ],
     );
+    let expression =
+        apply_remembered_result(expression, parameters, "RememberDiscarded", "discarded")?;
     mapped_direct(prefix, api, parameters, expression)
 }
 
@@ -5420,6 +5565,7 @@ fn map_change_zone_all(
             "IsCurse",
             "Duration",
             "AtEOT",
+            "RememberChanged",
         ],
     )?;
     let origin = required(parameters, "Origin")?;
@@ -5479,6 +5625,7 @@ fn map_change_zone_all(
     } else {
         expression
     };
+    let expression = apply_changed_object_metadata(expression, parameters)?;
     let expression = apply_zone_move_lifetime(expression, parameters, origin, destination)?;
     mapped_direct(prefix, api, parameters, expression)
 }
@@ -5871,6 +6018,7 @@ fn map_sacrifice_effect(
             "Amount",
             "SpellDescription",
             "StackDescription",
+            "RememberSacrificed",
         ],
     )?;
     if optional_positive_integer(parameters, "Amount")?.unwrap_or(1) != 1 {
@@ -5901,12 +6049,40 @@ fn map_sacrifice_effect(
     };
     let permanents =
         add_collection_predicate(permanents, call(Operation::ControlledBy, vec![player]))?;
-    mapped_direct(
-        prefix,
-        api,
-        parameters,
+    let expression = apply_remembered_result(
         call(Operation::SacrificeEffect, vec![permanents]),
-    )
+        parameters,
+        "RememberSacrificed",
+        "sacrificed",
+    )?;
+    mapped_direct(prefix, api, parameters, expression)
+}
+
+fn apply_remembered_result(
+    effect: Expression,
+    parameters: &BTreeMap<String, String>,
+    key: &str,
+    domain: &str,
+) -> Result<Expression, MappingDiagnostic> {
+    let Some(value) = parameters.get(key) else {
+        return Ok(effect);
+    };
+    if value != "True" {
+        return Err(unsupported_value(key, value));
+    }
+    Ok(call(
+        Operation::Sequence,
+        vec![
+            effect,
+            call(
+                Operation::Remember,
+                vec![
+                    Expression::Text(domain.to_string()),
+                    call(Operation::EffectResult, vec![]),
+                ],
+            ),
+        ],
+    ))
 }
 
 fn sacrifice_selector(value: &str) -> Result<Expression, MappingDiagnostic> {
@@ -8250,6 +8426,7 @@ fn defined_selector(value: &str) -> Result<Expression, MappingDiagnostic> {
             Ok(call(Operation::TriggeredTarget, vec![]))
         }
         "TriggeredActivator" => Ok(call(Operation::TriggeredActivator, vec![])),
+        "TriggeredDefendingPlayer" => Ok(call(Operation::TriggeredDefendingPlayer, vec![])),
         "TargetedController" => Ok(call(
             Operation::ControllerOf,
             vec![call(Operation::Target, vec![call(Operation::Any, vec![])])],
@@ -8280,6 +8457,7 @@ fn defined_player_selector(value: &str) -> Result<Expression, MappingDiagnostic>
             Ok(call(Operation::TriggeredTarget, vec![]))
         }
         "TriggeredActivator" => Ok(call(Operation::TriggeredActivator, vec![])),
+        "TriggeredDefendingPlayer" => Ok(call(Operation::TriggeredDefendingPlayer, vec![])),
         "ParentTarget" => Ok(call(Operation::ParentTarget, vec![])),
         _ => Err(unsupported_value("Defined", value)),
     }
@@ -8449,6 +8627,16 @@ fn spell_predicate(value: &str) -> Result<Expression, MappingDiagnostic> {
             )
         } else if modifier == "OppOwn" {
             call(Operation::OwnedBy, vec![call(Operation::Opponent, vec![])])
+        } else if modifier == "ControlledBy TriggeredDefendingPlayer" {
+            call(
+                Operation::ControlledBy,
+                vec![call(Operation::TriggeredDefendingPlayer, vec![])],
+            )
+        } else if modifier == "OwnedBy TriggeredDefendingPlayer" {
+            call(
+                Operation::OwnedBy,
+                vec![call(Operation::TriggeredDefendingPlayer, vec![])],
+            )
         } else if let Some(predicate) = kicked_predicate(modifier) {
             predicate
         } else if modifier
@@ -8580,6 +8768,14 @@ fn affected_selector_branch(value: &str) -> Result<Expression, MappingDiagnostic
                     vec![call(Operation::Opponent, vec![])],
                 ),
                 "OppOwn" => call(Operation::OwnedBy, vec![call(Operation::Opponent, vec![])]),
+                "ControlledBy TriggeredDefendingPlayer" => call(
+                    Operation::ControlledBy,
+                    vec![call(Operation::TriggeredDefendingPlayer, vec![])],
+                ),
+                "OwnedBy TriggeredDefendingPlayer" => call(
+                    Operation::OwnedBy,
+                    vec![call(Operation::TriggeredDefendingPlayer, vec![])],
+                ),
                 "YouDontCtrl" => call(
                     Operation::Not,
                     vec![call(
@@ -9327,6 +9523,20 @@ mod tests {
             )
         ));
 
+        let optional_decider =
+            map_line("A:DB$ GainLife | Defined$ You | LifeAmount$ 2 | OptionalDecider$ You")
+                .unwrap_or_else(|error| {
+                    panic!("owner optional effect should map: {}", error.message)
+                });
+        assert!(expression_contains_operation(
+            &optional_decider.expression,
+            Operation::ChooseUpTo
+        ));
+        assert!(map_line(
+            "A:DB$ GainLife | Defined$ You | LifeAmount$ 2 | OptionalDecider$ Opponent"
+        )
+        .is_err());
+
         let dig = map_line(
             "A:SP$ Dig | DigNum$ 2 | ChangeNum$ 1 | Optional$ True | SpellDescription$ Dig.",
         )
@@ -9819,6 +10029,8 @@ mod tests {
             "A:AB$ Pump | ValidTgts$ Card.IsRemembered | NumAtt$ 1 | NumDef$ 1 | SpellDescription$ Remembered target pump.",
             "A:AB$ Pump | ValidTgts$ Creature.IsCommander+YouCtrl | NumAtt$ 1 | NumDef$ 1 | SpellDescription$ Commander pump.",
             "A:AB$ Pump | ValidTgts$ Creature.attacking | NumAtt$ 1 | NumDef$ 1 | SpellDescription$ Pump.",
+            "A:AB$ Pump | ValidTgts$ Creature.ControlledBy TriggeredDefendingPlayer | NumAtt$ 1 | NumDef$ 1 | SpellDescription$ Pump.",
+            "S:Mode$ Continuous | Affected$ Land.OwnedBy TriggeredDefendingPlayer | AddType$ Creature | Description$ Animate defending player's land.",
             "S:Mode$ Continuous | Affected$ Card.Self+kicked | AddKeyword$ Flying | Description$ Kicked flying.",
             "S:Mode$ Continuous | Affected$ Card.Self+kicked 1 | AddKeyword$ Flying | Description$ First kicker flying.",
         ] {
@@ -10135,6 +10347,41 @@ mod tests {
         ] {
             assert_operation(line, operation, 0);
         }
+
+        for line in [
+            "A:SP$ ChangeZone | Origin$ Graveyard | Destination$ Hand | Defined$ Self | RememberChanged$ True",
+            "A:SP$ ChangeZoneAll | ChangeType$ Creature | Origin$ Battlefield | Destination$ Exile | RememberChanged$ True",
+            "A:SP$ ChangeZone | Origin$ Library | Destination$ Hand | ChangeType$ Creature | ChangeNum$ 1 | RememberChanged$ True",
+        ] {
+            let mapped = map_line(line).unwrap_or_else(|error| {
+                panic!("remembered zone move should map: {}", error.message)
+            });
+            assert!(expression_contains_operation(
+                &mapped.expression,
+                Operation::Remember
+            ));
+        }
+        assert!(map_line(
+            "A:SP$ ChangeZone | Origin$ Graveyard | Destination$ Hand | Defined$ Self | RememberChanged$ False"
+        )
+        .is_err());
+
+        for line in [
+            "A:SP$ Destroy | ValidTgts$ Creature | RememberDestroyed$ True",
+            "A:SP$ Discard | Defined$ You | Mode$ TgtChoose | NumCards$ 1 | RememberDiscarded$ True",
+            "A:SP$ Sacrifice | Defined$ You | SacValid$ Creature | RememberSacrificed$ True",
+        ] {
+            let mapped = map_line(line).unwrap_or_else(|error| {
+                panic!("remembered result should map: {}", error.message)
+            });
+            assert!(expression_contains_operation(
+                &mapped.expression,
+                Operation::Remember
+            ));
+        }
+        assert!(
+            map_line("A:SP$ Destroy | ValidTgts$ Creature | RememberDestroyed$ False").is_err()
+        );
 
         let tapped = map_line(
             "A:SP$ Token | TokenScript$ c_a_powerstone | TokenTapped$ True | SpellDescription$ Token.",
@@ -10722,6 +10969,10 @@ mod tests {
                 Operation::TriggeredActivator,
             ),
             (
+                "A:DB$ LoseLife | Defined$ TriggeredDefendingPlayer | LifeAmount$ 1",
+                Operation::TriggeredDefendingPlayer,
+            ),
+            (
                 "A:DB$ LoseLife | Defined$ TargetedController | LifeAmount$ 1",
                 Operation::ControllerOf,
             ),
@@ -10798,7 +11049,16 @@ mod tests {
             Operation::GainLife
         ));
 
-        for phase in ["Upkeep", "End of Turn", "EndCombat"] {
+        for phase in [
+            "Upkeep",
+            "End of Turn",
+            "End Of Turn",
+            "EndCombat",
+            "Main1",
+            "Main2",
+            "Draw",
+            "Cleanup",
+        ] {
             let delayed = map_script_root(&format!(
                 "A:DB$ DelayedTrigger | Mode$ Phase | Phase$ {phase} | ValidPlayer$ You | NextTurn$ True | Execute$ DBDraw\nSVar:DBDraw:DB$ Draw | Defined$ You\n"
             ))
@@ -11915,6 +12175,20 @@ mod tests {
                 Operation::Opponent,
                 "begin_combat",
             ),
+            ("Main1", "You", Operation::You, "precombat_main"),
+            ("Main2", "You", Operation::You, "postcombat_main"),
+            ("Main", "You", Operation::You, "main_phase"),
+            ("Draw", "You", Operation::You, "draw_step"),
+            ("Cleanup", "You", Operation::You, "cleanup_step"),
+            ("EndCombat", "You", Operation::You, "end_combat"),
+            (
+                "Declare Attackers",
+                "You",
+                Operation::You,
+                "declare_attackers",
+            ),
+            ("Untap", "You", Operation::You, "untap_step"),
+            ("End Of Turn", "You", Operation::You, "end_step"),
         ] {
             let mapped = map_script_root(&format!(
                 "T:Mode$ Phase | Phase$ {phase} | ValidPlayer$ {player} | TriggerZones$ Battlefield | Execute$ TrigDraw\nSVar:TrigDraw:DB$ Draw | Defined$ You\n"
@@ -11932,7 +12206,22 @@ mod tests {
             ));
         }
 
-        for phase in ["EndOfTurn", "Combat", "Main1"] {
+        let limited = map_script_root(concat!(
+            "T:Mode$ Phase | Phase$ Upkeep | ValidPlayer$ You | TriggerZones$ Battlefield | ActivationLimit$ 1 | Execute$ TrigDraw\n",
+            "SVar:TrigDraw:DB$ Draw | Defined$ You\n",
+        ))
+        .unwrap_or_else(|error| panic!("limited trigger should map: {}", error.message));
+        assert!(expression_contains_operation(
+            limited.event.as_ref().unwrap_or(&limited.expression),
+            Operation::EventLimit
+        ));
+        assert!(map_script_root(concat!(
+            "T:Mode$ Phase | Phase$ Upkeep | ValidPlayer$ You | TriggerZones$ Battlefield | ActivationLimit$ 4 | Execute$ TrigDraw\n",
+            "SVar:TrigDraw:DB$ Draw | Defined$ You\n",
+        ))
+        .is_err());
+
+        for phase in ["EndOfTurn", "Combat", "Main1,Main2"] {
             let error = map_script_root(&format!(
                 "T:Mode$ Phase | Phase$ {phase} | ValidPlayer$ You | TriggerZones$ Battlefield | Execute$ TrigDraw\nSVar:TrigDraw:DB$ Draw | Defined$ You\n"
             ))

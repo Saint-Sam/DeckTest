@@ -1059,6 +1059,8 @@ operations! {
     PartnerGroup => ("partner_group", Effect, 2, Some(2)),
     GrantProtection => ("grant_protection", Effect, 2, None),
     ChooseType => ("choose_type", Effect, 2, None),
+    TriggeredDefendingPlayer => ("triggered_defending_player", Selector, 0, Some(0)),
+    EventLimit => ("event_limit", Event, 3, Some(3)),
 }
 
 impl Operation {
@@ -1133,6 +1135,7 @@ impl Operation {
             | Self::TriggeredPlayer
             | Self::TriggeredTarget
             | Self::TriggeredActivator
+            | Self::TriggeredDefendingPlayer
             | Self::TriggeredStackAbility
             | Self::ParentStackAbility => None,
             Self::Opponent => Some(Selector),
@@ -1251,6 +1254,12 @@ impl Operation {
             Self::EventActiveZone => match index {
                 0 => Some(Event),
                 1 => Some(Text),
+                _ => None,
+            },
+            Self::EventLimit => match index {
+                0 => Some(Event),
+                1 => Some(Selector),
+                2 => Some(Number),
                 _ => None,
             },
 
@@ -1858,6 +1867,8 @@ mod tests {
         assert_eq!(Operation::PartnerGroup as u32, 259);
         assert_eq!(Operation::GrantProtection as u32, 260);
         assert_eq!(Operation::ChooseType as u32, 261);
+        assert_eq!(Operation::TriggeredDefendingPlayer as u32, 262);
+        assert_eq!(Operation::EventLimit as u32, 263);
 
         let config = bincode::config::standard()
             .with_fixed_int_encoding()
