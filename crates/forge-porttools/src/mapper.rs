@@ -3707,7 +3707,9 @@ fn map_continuous(
             "SetToughness",
             "AddType",
             "RemoveType",
+            "RemoveCardTypes",
             "RemoveCreatureTypes",
+            "RemoveLandTypes",
             "SetColor",
             "RemoveAllAbilities",
             "GainControl",
@@ -3760,6 +3762,24 @@ fn map_continuous(
     let affected = affected_selector(required(parameters, "Affected")?)?;
     let affected_player = required(parameters, "Affected")? == "You";
     let mut effects = Vec::new();
+    if let Some(value) = parameters.get("RemoveCardTypes") {
+        if value != "True" || affected_player {
+            return Err(unsupported_value("RemoveCardTypes", value));
+        }
+        effects.push(remove_all_card_types(call(Operation::Any, vec![])));
+    }
+    if let Some(value) = parameters.get("RemoveLandTypes") {
+        if value != "True" || affected_player {
+            return Err(unsupported_value("RemoveLandTypes", value));
+        }
+        effects.push(call(
+            Operation::RemoveType,
+            vec![
+                call(Operation::Any, vec![]),
+                Expression::Text("land_subtypes".to_string()),
+            ],
+        ));
+    }
     if parameters.contains_key("AddPower") || parameters.contains_key("AddToughness") {
         if affected_player {
             return Err(unsupported_value("Affected", "You"));
@@ -3908,6 +3928,8 @@ fn map_change_zone(
             "Hidden",
             "SelectPrompt",
             "RememberChanged",
+            "Duration",
+            "AtEOT",
             "SpellDescription",
             "StackDescription",
             "IsCurse",
@@ -4066,6 +4088,7 @@ fn map_change_zone(
     } else {
         expression
     };
+    let expression = apply_zone_move_lifetime(expression, parameters, origin, destination)?;
     mapped_direct(
         prefix,
         api,
@@ -4218,6 +4241,8 @@ fn map_token(
             "ValidTgts",
             "TokenAmount",
             "TokenTapped",
+            "RememberTokens",
+            "AtEOT",
             "SpellDescription",
             "StackDescription",
             "AILogic",
@@ -4262,12 +4287,56 @@ fn map_token(
                 if tapped {
                     arguments.push(Expression::Text("tapped".to_string()));
                 }
-                call(Operation::CreateToken, arguments)
+                apply_created_object_metadata(call(Operation::CreateToken, arguments), parameters)
             })
-            .collect(),
+            .collect::<Result<Vec<_>, _>>()?,
         "Token requires at least one TokenScript",
     )?;
     mapped_direct(prefix, api, parameters, expression)
+}
+
+fn apply_created_object_metadata(
+    create_effect: Expression,
+    parameters: &BTreeMap<String, String>,
+) -> Result<Expression, MappingDiagnostic> {
+    let result = call(Operation::EffectResult, vec![]);
+    let mut effects = vec![create_effect];
+    if let Some(value) = parameters.get("RememberTokens") {
+        if value != "True" {
+            return Err(unsupported_value("RememberTokens", value));
+        }
+        effects.push(call(
+            Operation::Remember,
+            vec![Expression::Text("tokens".to_string()), result.clone()],
+        ));
+    }
+    if let Some(value) = parameters.get("AtEOT") {
+        effects.push(map_at_eot_cleanup(value, &result)?);
+    }
+    combine_effects(effects, "created-object effect requires creation")
+}
+
+fn remove_all_card_types(affected: Expression) -> Expression {
+    call(
+        Operation::Sequence,
+        [
+            "artifact",
+            "creature",
+            "enchantment",
+            "instant",
+            "land",
+            "planeswalker",
+            "sorcery",
+        ]
+        .into_iter()
+        .map(|card_type| {
+            call(
+                Operation::RemoveType,
+                vec![affected.clone(), Expression::Text(card_type.to_string())],
+            )
+        })
+        .collect(),
+    )
 }
 
 fn map_destroy_all(
@@ -4525,6 +4594,7 @@ fn map_reduce_cost(
             "Type",
             "ValidCard",
             "ValidSpell",
+            "ValidTarget",
             "Activator",
             "Amount",
             "OnlyFirstSpell",
@@ -4538,6 +4608,12 @@ fn map_reduce_cost(
     require_static_effect_zone(parameters, "EffectZone")?;
     let amount = positive_integer(required(parameters, "Amount")?, "Amount")?;
     let mut spells = reduce_cost_spell_selector(parameters)?;
+    if let Some(target) = parameters.get("ValidTarget") {
+        spells = add_collection_predicate(
+            spells,
+            call(Operation::Targets, vec![affected_selector(target)?]),
+        )?;
+    }
     if let Some(activator) = parameters.get("Activator") {
         let player = match activator.as_str() {
             "You" => call(Operation::You, vec![]),
@@ -4702,6 +4778,8 @@ fn map_change_zone_all(
             "ValidDescription",
             "AILogic",
             "IsCurse",
+            "Duration",
+            "AtEOT",
         ],
     )?;
     let origin = required(parameters, "Origin")?;
@@ -4761,7 +4839,49 @@ fn map_change_zone_all(
     } else {
         expression
     };
+    let expression = apply_zone_move_lifetime(expression, parameters, origin, destination)?;
     mapped_direct(prefix, api, parameters, expression)
+}
+
+fn apply_zone_move_lifetime(
+    move_effect: Expression,
+    parameters: &BTreeMap<String, String>,
+    origin: &str,
+    destination: &str,
+) -> Result<Expression, MappingDiagnostic> {
+    let mut effects = vec![move_effect];
+    match parameters.get("Duration").map(String::as_str) {
+        None => {}
+        Some("UntilHostLeavesPlay")
+            if origin == "Battlefield" && destination.eq_ignore_ascii_case("exile") =>
+        {
+            effects.push(call(
+                Operation::RegisterDelayedTrigger,
+                vec![
+                    call(
+                        Operation::EventLeaves,
+                        vec![call(Operation::Source, vec![])],
+                    ),
+                    call(
+                        Operation::MoveZoneFrom,
+                        vec![
+                            call(Operation::EffectResult, vec![]),
+                            Expression::Text("exile".to_string()),
+                            Expression::Text("battlefield".to_string()),
+                        ],
+                    ),
+                ],
+            ));
+        }
+        Some(value) => return Err(unsupported_value("Duration", value)),
+    }
+    if let Some(value) = parameters.get("AtEOT") {
+        effects.push(map_at_eot_cleanup(
+            value,
+            &call(Operation::EffectResult, vec![]),
+        )?);
+    }
+    combine_effects(effects, "zone move requires an effect")
 }
 
 fn map_effect(
@@ -4873,16 +4993,37 @@ fn map_animate(
             "Power",
             "Toughness",
             "Types",
+            "RemoveCardTypes",
             "RemoveCreatureTypes",
+            "RemoveLandTypes",
             "Colors",
             "OverwriteColors",
             "Keywords",
             "RemoveAllAbilities",
             "Duration",
+            "AtEOT",
         ],
     )?;
     let affected = object_selector(parameters, DefaultSelector::Source)?;
     let mut effects = Vec::new();
+    if let Some(value) = parameters.get("RemoveCardTypes") {
+        if value != "True" {
+            return Err(unsupported_value("RemoveCardTypes", value));
+        }
+        effects.push(remove_all_card_types(affected.clone()));
+    }
+    if let Some(value) = parameters.get("RemoveLandTypes") {
+        if value != "True" {
+            return Err(unsupported_value("RemoveLandTypes", value));
+        }
+        effects.push(call(
+            Operation::RemoveType,
+            vec![
+                affected.clone(),
+                Expression::Text("land_subtypes".to_string()),
+            ],
+        ));
+    }
     if parameters.contains_key("Power") || parameters.contains_key("Toughness") {
         let power = optional_number_or_value(parameters, "Power", Operation::Power)?;
         let toughness = optional_number_or_value(parameters, "Toughness", Operation::Toughness)?;
@@ -4950,11 +5091,17 @@ fn map_animate(
     }
     let mut expression = combine_effects(effects, "simple Animate has no typed changes")?;
     match parameters.get("Duration").map(String::as_str) {
-        None | Some("EndOfTurn") => {
+        None | Some("EOT") | Some("EndOfTurn") | Some("UntilEndOfTurn") => {
             expression = call(Operation::UntilEndOfTurn, vec![expression]);
         }
         Some("Permanent") => {}
         Some(value) => return Err(unsupported_value("Duration", value)),
+    }
+    if let Some(value) = parameters.get("AtEOT") {
+        expression = call(
+            Operation::Sequence,
+            vec![expression, map_at_eot_cleanup(value, &affected)?],
+        );
     }
     mapped_direct(prefix, api, parameters, expression)
 }
@@ -5318,6 +5465,8 @@ fn map_copy_permanent(
             "Defined",
             "ValidTgts",
             "Populate",
+            "RememberTokens",
+            "AtEOT",
             "TgtPrompt",
             "SpellDescription",
             "StackDescription",
@@ -5355,6 +5504,7 @@ fn map_copy_permanent(
             call(Operation::Copy, vec![source])
         }
     };
+    let expression = apply_created_object_metadata(expression, parameters)?;
     mapped_direct(prefix, api, parameters, expression)
 }
 
@@ -5870,7 +6020,9 @@ fn map_animate_all(
             "Power",
             "Toughness",
             "Types",
+            "RemoveCardTypes",
             "RemoveCreatureTypes",
+            "RemoveLandTypes",
             "Colors",
             "OverwriteColors",
             "Keywords",
@@ -5881,6 +6033,7 @@ fn map_animate_all(
             "StackDescription",
             "IsCurse",
             "AILogic",
+            "AtEOT",
         ],
     )?;
     let affected = scope_collection_to_target_player(
@@ -5889,6 +6042,24 @@ fn map_animate_all(
         Operation::ControlledBy,
     )?;
     let mut effects = Vec::new();
+    if let Some(value) = parameters.get("RemoveCardTypes") {
+        if value != "True" {
+            return Err(unsupported_value("RemoveCardTypes", value));
+        }
+        effects.push(remove_all_card_types(affected.clone()));
+    }
+    if let Some(value) = parameters.get("RemoveLandTypes") {
+        if value != "True" {
+            return Err(unsupported_value("RemoveLandTypes", value));
+        }
+        effects.push(call(
+            Operation::RemoveType,
+            vec![
+                affected.clone(),
+                Expression::Text("land_subtypes".to_string()),
+            ],
+        ));
+    }
     match (parameters.get("Power"), parameters.get("Toughness")) {
         (Some(power), Some(toughness)) => effects.push(call(
             Operation::SetPt,
@@ -5983,15 +6154,21 @@ fn map_animate_all(
         if value != "True" {
             return Err(unsupported_value("RemoveAllAbilities", value));
         }
-        effects.push(call(Operation::RemoveAllAbilities, vec![affected]));
+        effects.push(call(Operation::RemoveAllAbilities, vec![affected.clone()]));
     }
     let mut expression = combine_effects(effects, "simple AnimateAll has no typed changes")?;
     match parameters.get("Duration").map(String::as_str) {
-        None | Some("EndOfTurn") | Some("UntilEndOfTurn") => {
+        None | Some("EOT") | Some("EndOfTurn") | Some("UntilEndOfTurn") => {
             expression = call(Operation::UntilEndOfTurn, vec![expression]);
         }
         Some("Permanent") => {}
         Some(value) => return Err(unsupported_value("Duration", value)),
+    }
+    if let Some(value) = parameters.get("AtEOT") {
+        expression = call(
+            Operation::Sequence,
+            vec![expression, map_at_eot_cleanup(value, &affected)?],
+        );
     }
     mapped_direct(prefix, api, parameters, expression)
 }
@@ -6127,6 +6304,27 @@ fn extract_legacy_timing(
         })
         .transpose()?
         .is_some();
+    let activation = parameters
+        .remove("Activation")
+        .map(|value| closed_activation_condition(&value))
+        .transpose()?;
+    let phases = parameters
+        .remove("ActivationPhases")
+        .map(|value| closed_activation_phases(&value))
+        .transpose()?;
+    let first_combat = parameters
+        .remove("ActivationFirstCombat")
+        .map(|value| match value.as_str() {
+            "True" => Ok(call(
+                Operation::TimingCondition,
+                vec![call(
+                    Operation::During,
+                    vec![Expression::Text("first_combat".to_string())],
+                )],
+            )),
+            _ => Err(unsupported_value("ActivationFirstCombat", &value)),
+        })
+        .transpose()?;
     let mut timings = Vec::new();
     if let Some(source_zone) = source_zone {
         timings.push(source_zone);
@@ -6140,7 +6338,128 @@ fn extract_legacy_timing(
     if once {
         timings.push(call(Operation::TimingOnceEachTurn, vec![]));
     }
+    if let Some(activation) = activation {
+        timings.push(call(Operation::TimingCondition, vec![activation]));
+    }
+    if let Some(phases) = phases {
+        timings.push(phases);
+    }
+    if let Some(first_combat) = first_combat {
+        timings.push(first_combat);
+    }
     Ok(combine_timings(timings))
+}
+
+fn closed_activation_condition(value: &str) -> Result<Expression, MappingDiagnostic> {
+    let you = call(Operation::You, vec![]);
+    let controlled = |kind: &str| {
+        call(
+            Operation::Permanents,
+            vec![call(
+                Operation::And,
+                vec![
+                    call(Operation::TypeIs, vec![Expression::Text(kind.to_string())]),
+                    call(Operation::ControlledBy, vec![you.clone()]),
+                ],
+            )],
+        )
+    };
+    let owned_in = |zone: &str| {
+        call(
+            Operation::Cards,
+            vec![call(
+                Operation::And,
+                vec![
+                    call(Operation::ZoneIs, vec![Expression::Text(zone.to_string())]),
+                    call(Operation::OwnedBy, vec![you.clone()]),
+                ],
+            )],
+        )
+    };
+    match value {
+        "Threshold" => Ok(call(
+            Operation::AtLeast,
+            vec![
+                call(Operation::Count, vec![owned_in("graveyard")]),
+                Expression::Integer(7),
+            ],
+        )),
+        "Metalcraft" => Ok(call(
+            Operation::AtLeast,
+            vec![
+                call(Operation::Count, vec![controlled("artifact")]),
+                Expression::Integer(3),
+            ],
+        )),
+        "Hellbent" => Ok(call(
+            Operation::Equals,
+            vec![
+                call(Operation::Count, vec![owned_in("hand")]),
+                Expression::Integer(0),
+            ],
+        )),
+        "Delirium" => Ok(call(
+            Operation::AtLeast,
+            vec![
+                call(
+                    Operation::DistinctCount,
+                    vec![
+                        owned_in("graveyard"),
+                        Expression::Text("card_types".to_string()),
+                    ],
+                ),
+                Expression::Integer(4),
+            ],
+        )),
+        "Blessing" => Ok(call(
+            Operation::DesignationIs,
+            vec![Expression::Text("citys_blessing".to_string())],
+        )),
+        "Solved" => Ok(call(
+            Operation::DesignationIs,
+            vec![Expression::Text("solved".to_string())],
+        )),
+        _ => Err(unsupported_value("Activation", value)),
+    }
+}
+
+fn closed_activation_phases(value: &str) -> Result<Expression, MappingDiagnostic> {
+    const PHASES: &[&str] = &[
+        "Upkeep",
+        "Draw",
+        "Main1",
+        "BeginCombat",
+        "Declare Attackers",
+        "Declare Blockers",
+        "Combat Damage",
+        "EndCombat",
+        "Main2",
+        "End of Turn",
+        "Cleanup",
+    ];
+    let valid_part = |part: &str| PHASES.contains(&part.trim());
+    for range in value.split(',') {
+        let mut bounds = range.split("->");
+        let Some(start) = bounds.next() else {
+            return Err(unsupported_value("ActivationPhases", value));
+        };
+        if !valid_part(start)
+            || bounds.next().is_some_and(|end| !valid_part(end))
+            || bounds.next().is_some()
+        {
+            return Err(unsupported_value("ActivationPhases", value));
+        }
+    }
+    Ok(call(
+        Operation::TimingCondition,
+        vec![call(
+            Operation::During,
+            vec![Expression::Text(format!(
+                "phase_window:{}",
+                value.to_ascii_lowercase().replace(' ', "_")
+            ))],
+        )],
+    ))
 }
 
 fn combine_timings(mut timings: Vec<Expression>) -> Option<Expression> {
@@ -7233,6 +7552,10 @@ fn affected_selector_branch(value: &str) -> Result<Expression, MappingDiagnostic
                         vec![Expression::Text("flying".to_string())],
                     )],
                 ),
+                "attacking" | "blocking" | "tapped" => call(
+                    Operation::DesignationIs,
+                    vec![Expression::Text(modifier.to_string())],
+                ),
                 literal_subtype
                     if literal_subtype
                         .chars()
@@ -8280,19 +8603,12 @@ mod tests {
             "A:AB$ Pump | Defined$ Remembered | NumAtt$ 1 | NumDef$ 1 | SpellDescription$ Remembered pump.",
             "A:AB$ Pump | ValidTgts$ Card.IsRemembered | NumAtt$ 1 | NumDef$ 1 | SpellDescription$ Remembered target pump.",
             "A:AB$ Pump | ValidTgts$ Creature.IsCommander+YouCtrl | NumAtt$ 1 | NumDef$ 1 | SpellDescription$ Commander pump.",
+            "A:AB$ Pump | ValidTgts$ Creature.attacking | NumAtt$ 1 | NumDef$ 1 | SpellDescription$ Pump.",
         ] {
             map_line(line).unwrap_or_else(|error| {
                 panic!("closed selector should map: {}", error.message);
             });
         }
-        let error = match map_line(
-            "A:AB$ Pump | ValidTgts$ Creature.attacking | NumAtt$ 1 | NumDef$ 1 | SpellDescription$ Pump.",
-        ) {
-            Ok(_) => panic!("combat-state selector must remain quarantined"),
-            Err(error) => error,
-        };
-        assert_eq!(error.code, "UNSUPPORTED_VALUE");
-
         let error = map_line(
             "A:AB$ Pump | Defined$ RememberedLKI | NumAtt$ 1 | SpellDescription$ LKI pump.",
         )
@@ -8943,6 +9259,125 @@ mod tests {
                 Some(Expression::Call { operation, .. }) if operation == expected
             ));
         }
+    }
+
+    #[test]
+    fn lifts_closed_legacy_activation_conditions_and_phase_windows() {
+        for activation in [
+            "Threshold",
+            "Delirium",
+            "Metalcraft",
+            "Hellbent",
+            "Solved",
+            "Blessing",
+        ] {
+            let mapped = map_line(&format!(
+                "A:AB$ Draw | Defined$ You | Activation$ {activation} | SpellDescription$ Draw."
+            ))
+            .unwrap_or_else(|error| panic!("closed activation should map: {}", error.message));
+            assert!(matches!(
+                mapped.timing.as_ref(),
+                Some(timing)
+                    if expression_contains_operation(timing, Operation::TimingCondition)
+            ));
+        }
+
+        let mapped = map_line(
+            "A:AB$ Pump | Defined$ Self | NumAtt$ +1 | ActivationPhases$ Upkeep->BeginCombat | ActivationFirstCombat$ True",
+        )
+        .unwrap_or_else(|error| panic!("phase window should map: {}", error.message));
+        let Some(timing) = mapped.timing.as_ref() else {
+            panic!("phase timing must be present");
+        };
+        assert!(expression_contains_operation(timing, Operation::TimingAll));
+        assert!(expression_contains_operation(timing, Operation::During));
+
+        for line in [
+            "A:AB$ Draw | Defined$ You | Activation$ Unknown",
+            "A:AB$ Draw | Defined$ You | ActivationPhases$ Upkeep->Unknown",
+            "A:AB$ Draw | Defined$ You | ActivationFirstCombat$ False",
+        ] {
+            assert!(
+                map_line(line).is_err(),
+                "open timing must quarantine: {line}"
+            );
+        }
+    }
+
+    #[test]
+    fn maps_closed_created_object_lifetimes_and_memory() {
+        let token = map_line(
+            "A:AB$ Token | TokenScript$ r_3_1_elemental | RememberTokens$ True | AtEOT$ Exile",
+        )
+        .unwrap_or_else(|error| panic!("token metadata should map: {}", error.message));
+        for operation in [
+            Operation::CreateToken,
+            Operation::Remember,
+            Operation::EffectResult,
+            Operation::RegisterDelayedTrigger,
+            Operation::Exile,
+        ] {
+            assert!(expression_contains_operation(&token.expression, operation));
+        }
+
+        let copy = map_line(
+            "A:DB$ CopyPermanent | Defined$ Self | RememberTokens$ True | AtEOT$ Sacrifice",
+        )
+        .unwrap_or_else(|error| panic!("copy metadata should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &copy.expression,
+            Operation::Copy
+        ));
+        assert!(expression_contains_operation(
+            &copy.expression,
+            Operation::SacrificeEffect
+        ));
+    }
+
+    #[test]
+    fn maps_closed_type_removal_and_linked_exile_lifetimes() {
+        let continuous = map_line(
+            "S:Mode$ Continuous | Affected$ Creature.EnchantedBy | AddType$ Creature & Frog | RemoveCardTypes$ True | RemoveLandTypes$ True | Description$ Frog.",
+        )
+        .unwrap_or_else(|error| panic!("type removal should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &continuous.expression,
+            Operation::RemoveType
+        ));
+
+        let exile = map_line(
+            "A:DB$ ChangeZone | Origin$ Battlefield | Destination$ Exile | ValidTgts$ Permanent.nonLand | Duration$ UntilHostLeavesPlay",
+        )
+        .unwrap_or_else(|error| panic!("linked exile should map: {}", error.message));
+        for operation in [
+            Operation::Exile,
+            Operation::EventLeaves,
+            Operation::EffectResult,
+            Operation::MoveZoneFrom,
+        ] {
+            assert!(expression_contains_operation(&exile.expression, operation));
+        }
+    }
+
+    #[test]
+    fn maps_targeted_reducers_and_combat_state_unions() {
+        let reducer = map_line(
+            "S:Mode$ ReduceCost | ValidCard$ Card.Self | ValidTarget$ Creature.tapped | Type$ Spell | Amount$ 1 | EffectZone$ All | Description$ Reduce.",
+        )
+        .unwrap_or_else(|error| panic!("target reducer should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &reducer.expression,
+            Operation::Targets
+        ));
+
+        let damage = map_line(
+            "A:SP$ DealDamage | ValidTgts$ Creature.attacking,Creature.blocking | NumDmg$ 1",
+        )
+        .unwrap_or_else(|error| panic!("combat union should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &damage.expression,
+            Operation::DesignationIs
+        ));
     }
 
     #[test]

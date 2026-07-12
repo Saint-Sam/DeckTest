@@ -977,6 +977,8 @@ operations! {
     TriggeredAmount => ("triggered_amount", Value, 1, Some(1)),
     OpponentCount => ("opponent_count", Value, 0, Some(0)),
     Crew => ("crew", Effect, 2, Some(2)),
+    EffectResult => ("effect_result", Selector, 0, Some(0)),
+    Targets => ("targets", Predicate, 1, Some(1)),
 }
 
 impl Operation {
@@ -1019,7 +1021,7 @@ impl Operation {
 
         match self {
             Self::All => Some(Selector),
-            Self::Any | Self::You | Self::Source => None,
+            Self::Any | Self::You | Self::Source | Self::EffectResult => None,
             Self::Opponent => Some(Selector),
             Self::Chosen | Self::Target => Some(SelectorOrPredicate),
             Self::TargetRange => match index {
@@ -1048,7 +1050,7 @@ impl Operation {
             | Self::ZoneIs
             | Self::During
             | Self::DesignationIs => Some(Text),
-            Self::ControlledBy | Self::OwnedBy | Self::AttachedTo => Some(Selector),
+            Self::ControlledBy | Self::OwnedBy | Self::AttachedTo | Self::Targets => Some(Selector),
             Self::WithCounter => match index {
                 0 => Some(Text),
                 1 => Some(Number),
