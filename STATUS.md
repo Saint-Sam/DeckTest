@@ -1,6 +1,6 @@
 # DeckTest / Forge 2.0 Status
 
-Generated: 2026-07-12T21:31:14.719552+00:00 by `tools/write_card_maturity.py`
+Generated: 2026-07-12T22:08:56.363129+00:00 by `tools/write_card_maturity.py`
 
 Plan: v1.8
 
@@ -32,19 +32,19 @@ Exclusive highest evidence stage for the 32,792 in-v1 Oracle identities:
 
 | Highest stage | Identities |
 | --- | ---: |
-| Absent identity-bound definition evidence | 17,767 |
+| Absent identity-bound definition evidence | 17,363 |
 | Parsed | 0 |
 | Mapped partial | 0 |
 | Structurally translated | 0 |
-| Compiler valid | 15,025 |
+| Compiler valid | 15,429 |
 | Runtime smoke passed | 0 |
 | Semantic verified | 0 |
 | Pod integration verified | 0 |
 | AI supported | 0 |
 | Product eligible | 0 |
 
-Compiler-valid evidence currently reaches 15,025/32,792
-in-v1 identities (45.8191%). This includes the
+Compiler-valid evidence currently reaches 15,429/32,792
+in-v1 identities (47.0511%). This includes the
 unverified CP-DSL language-stress corpus and therefore is not a playable claim.
 Parsing and mapping remain below in their own units rather than being guessed
 onto identities.
@@ -54,11 +54,11 @@ onto identities.
 | Literal unit | Result |
 | --- | ---: |
 | Legacy scripts parsed | 33,290/33,290 |
-| Compiler-valid translated legacy definitions | 14,971 |
-| Fail-closed quarantined legacy definitions | 18,319 |
-| Structurally tested legacy ability uses | 23,618/43,649 |
-| Quarantined legacy ability uses | 20,031 |
-| Owner-priority compiler-valid definitions | 217/365 |
+| Compiler-valid translated legacy definitions | 15,375 |
+| Fail-closed quarantined legacy definitions | 17,915 |
+| Structurally tested legacy ability uses | 24,130/43,649 |
+| Quarantined legacy ability uses | 19,519 |
+| Owner-priority compiler-valid definitions | 225/365 |
 
 ## Evidence Breadth
 
@@ -82,4 +82,4 @@ onto identities.
 
 Per-identity generated detail: `target/card-maturity/identities.json` (untracked,
 38,306 records; SHA-256
-`163febb748669bd4ca73230e3a5dcecea52fc135e1f46e7f9cc68802e43187e4`).
+`81b87a2918be5f8127d08ee845d035a2b5d891bad86d8d697231f04e1b6d05c9`).

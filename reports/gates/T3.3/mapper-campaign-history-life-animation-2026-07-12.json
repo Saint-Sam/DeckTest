@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-12T22:10:00Z",
+  "task": "T3.3",
+  "batch": "history values, temporary control, chosen types, life totals, morbid, library positions, and dynamic animation",
+  "technical_result": "pass",
+  "product_binding": {"exact_product_commit": "95c932fd285526a301fa87cbb6929b2c01a82aad", "exact_product_tree": "cab4e9091b3fc5857215fddcd276d54e0cf49baf"},
+  "source_binding": {"legacy_forge_commit": "1f0a3e0815822d8f58f798e0304b33d4534248b1", "translation_fingerprint": "6a8e8b9b9b4f0d3f4bbb375c9b8c300a"},
+  "verification_environment": {"local_only": true, "github_actions_used": false, "network_attempted": false, "install_performed": false, "worker_ceiling": 24, "shared_cargo_cache": true},
+  "coverage_delta": {
+    "before": {"complete_scripts": 14971, "mapped_ability_uses": 23618, "owner_priority_complete": 217},
+    "after": {"complete_scripts": 15375, "total_scripts": 33290, "complete_script_percent": 46.18504055271853, "mapped_ability_uses": 24130, "total_ability_uses": 43649, "mapped_ability_percent": 55.281907947490204, "owner_priority_complete": 225, "owner_priority_requested": 365, "quarantined_scripts": 17915, "quarantined_ability_uses": 19519},
+    "gain": {"complete_scripts": 404, "mapped_ability_uses": 512, "owner_priority_complete": 8}
+  },
+  "line_coverage": {"covered": 32633, "count": 39952, "percent": 81.68051661994393, "floor_percent": 80, "raw_report_sha256": "0111c54a8fed9b8100d2cf2f8d4bbfe489de6baa8a205e00f4aee476d18439d0"},
+  "planner": {"analyzed_scripts": 33290, "scripts_with_confirmed_blockers": 17260, "confirmed_observations": 35586, "unique_blocker_families": 6106, "linked_root_fanout": 36297},
+  "checkpoint_gates": {"full_workspace_tests": true, "clippy_warnings_denied": true, "compiler_roundtrips": true, "database_validation": true, "oracle_subsets_passed": true, "nightmare_suite_passed": true, "arena_smoke_passed": true, "deterministic_parallel_replay": true, "deterministic_blocker_plan_replay": true},
+  "notes": ["The exact checkpoint ran locally without GitHub Actions.", "All new mappings remain typed and fail closed.", "T3.3 remains active because the 60% complete-script floor is not reached."]
+}
