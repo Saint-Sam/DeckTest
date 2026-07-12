@@ -4,21 +4,21 @@ Generated from committed local `reports/gates/T3.3` evidence and local git histo
 
 ## Snapshot
 
-- Latest committed checkpoint: **13,368/33,290 complete scripts (40.16%)**.
-- Mapped ability uses: **22,164/43,649 (50.78%)**.
+- Latest committed checkpoint: **13,787/33,290 complete scripts (41.41%)**.
+- Mapped ability uses: **22,247/43,649 (50.97%)**.
 - Owner-priority scripts complete: **200/365**.
-- Across this evidence series: **+4,366 complete scripts** and **+6,144 mapped uses** over 41 monotonic committed checkpoints.
-- T3.3 60% floor remaining: **6,606 scripts**.
-- Mechanical 100% remaining: **19,922 scripts**.
+- Across this evidence series: **+4,785 complete scripts** and **+6,227 mapped uses** over 42 monotonic committed checkpoints.
+- T3.3 60% floor remaining: **6,187 scripts**.
+- Mechanical 100% remaining: **19,503 scripts**.
 
 ## Projection
 
-The recent campaign median is **836 complete scripts/hour** across the latest campaign intervals; the whole-series wall-clock rate is **159/hour**. Linear projection gives:
+The recent campaign median is **878 complete scripts/hour** across the latest campaign intervals; the whole-series wall-clock rate is **171/hour**. Linear projection gives:
 
 | Target | Recent campaign rate | Whole-history wall-clock rate |
 |---|---:|---:|
-| 60% T3.3 floor | 7.9 h | 41.6 h |
-| 100% mechanical coverage | 23.8 h | 125.6 h |
+| 60% T3.3 floor | 7.0 h | 36.2 h |
+| 100% mechanical coverage | 22.2 h | 114.1 h |
 
 These are trend scenarios, not delivery promises. The recent rate assumes compatible high-yield families remain available and work continues in dense batches. The historical rate includes inactive gaps and small experimental batches. The 100% estimate is especially optimistic because the tail shifts toward linked abilities, open selectors, unsupported values, replacement effects, and rules requiring new semantic design; actual time can be several times the linear estimate, and some items may appropriately remain quarantined until later runtime work.
 
