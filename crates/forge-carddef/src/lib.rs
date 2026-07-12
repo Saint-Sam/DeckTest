@@ -985,6 +985,16 @@ operations! {
     TriggeredPlayer => ("triggered_player", Selector, 0, Some(0)),
     TriggeredTarget => ("triggered_target", Selector, 0, Some(0)),
     TriggeredActivator => ("triggered_activator", Selector, 0, Some(0)),
+    TriggeredStackAbility => ("triggered_stack_ability", Selector, 0, Some(0)),
+    ParentStackAbility => ("parent_stack_ability", Selector, 0, Some(0)),
+    ChooseBetween => ("choose_between", Effect, 4, None),
+    EventTapped => ("event_tapped", Event, 1, Some(1)),
+    EventLifeGained => ("event_life_gained", Event, 1, Some(1)),
+    EventCycled => ("event_cycled", Event, 1, Some(2)),
+    EventSacrificed => ("event_sacrificed", Event, 1, Some(2)),
+    EventZoneChangeAll => ("event_zone_change_all", Event, 3, Some(3)),
+    PreventAllCombatDamage => ("prevent_all_combat_damage", Effect, 0, Some(0)),
+    Fight => ("fight", Effect, 2, Some(2)),
 }
 
 impl Operation {
@@ -1001,6 +1011,7 @@ impl Operation {
             Self::And | Self::Or => Some((0, Predicate)),
             Self::Sequence | Self::ChooseOne => Some((0, Effect)),
             Self::ChooseExactly | Self::ChooseUpTo => Some((1, Effect)),
+            Self::ChooseBetween => Some((2, Effect)),
             Self::SearchLibrary => Some((2, Scalar)),
             Self::LayerEffect => Some((3, Integer)),
             Self::AlternateCost => Some((1, Cost)),
@@ -1034,7 +1045,9 @@ impl Operation {
             | Self::ParentTarget
             | Self::TriggeredPlayer
             | Self::TriggeredTarget
-            | Self::TriggeredActivator => None,
+            | Self::TriggeredActivator
+            | Self::TriggeredStackAbility
+            | Self::ParentStackAbility => None,
             Self::Opponent => Some(Selector),
             Self::Chosen | Self::Target => Some(SelectorOrPredicate),
             Self::TargetRange => match index {
@@ -1109,6 +1122,8 @@ impl Operation {
                 1 => Some(SelectorTextOrNumber),
                 _ => None,
             },
+            Self::EventTapped | Self::EventLifeGained => Some(Selector),
+            Self::EventCycled | Self::EventSacrificed => Some(Selector),
             Self::EventCastTargeting => match index {
                 0..=2 => Some(Selector),
                 3 => Some(Text),
@@ -1128,6 +1143,11 @@ impl Operation {
             Self::EventCounterAdded | Self::EventZoneChange => match index {
                 0 => Some(Selector),
                 1 => Some(Text),
+                _ => None,
+            },
+            Self::EventZoneChangeAll => match index {
+                0 => Some(Selector),
+                1 | 2 => Some(Text),
                 _ => None,
             },
             Self::EventChapter => match index {
@@ -1154,6 +1174,13 @@ impl Operation {
                     Some(Effect)
                 }
             }
+            Self::ChooseBetween => {
+                if index < 2 {
+                    Some(Number)
+                } else {
+                    Some(Effect)
+                }
+            }
             Self::DealDamage => match index {
                 0 => Some(Selector),
                 1 => Some(Number),
@@ -1171,6 +1198,7 @@ impl Operation {
                 _ => None,
             },
             Self::SacrificeEffect | Self::RegenerateShield => Some(Selector),
+            Self::Fight => Some(Selector),
             Self::MoveZone => match index {
                 0 => Some(Selector),
                 1 => Some(Text),
@@ -1320,6 +1348,7 @@ impl Operation {
                 _ => None,
             },
             Self::HiddenInformation => Some(Effect),
+            Self::PreventAllCombatDamage => None,
             Self::AtTiming => match index {
                 0 => Some(Timing),
                 1 => Some(Effect),
@@ -1569,6 +1598,16 @@ mod tests {
         assert_eq!(Operation::TriggeredPlayer as u32, 185);
         assert_eq!(Operation::TriggeredTarget as u32, 186);
         assert_eq!(Operation::TriggeredActivator as u32, 187);
+        assert_eq!(Operation::TriggeredStackAbility as u32, 188);
+        assert_eq!(Operation::ParentStackAbility as u32, 189);
+        assert_eq!(Operation::ChooseBetween as u32, 190);
+        assert_eq!(Operation::EventTapped as u32, 191);
+        assert_eq!(Operation::EventLifeGained as u32, 192);
+        assert_eq!(Operation::EventCycled as u32, 193);
+        assert_eq!(Operation::EventSacrificed as u32, 194);
+        assert_eq!(Operation::EventZoneChangeAll as u32, 195);
+        assert_eq!(Operation::PreventAllCombatDamage as u32, 196);
+        assert_eq!(Operation::Fight as u32, 197);
 
         let config = bincode::config::standard()
             .with_fixed_int_encoding()

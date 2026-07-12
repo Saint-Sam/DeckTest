@@ -320,6 +320,16 @@ const MAPPERS: &[MapperSpec] = &[
     },
     MapperSpec {
         prefix: LegacyAbilityPrefix::Activated,
+        api: "Fog",
+        mapper: map_fog,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Activated,
+        api: "Fight",
+        mapper: map_fight,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Activated,
         api: "PutCounterAll",
         mapper: map_put_counter_all,
     },
@@ -856,6 +866,26 @@ fn map_with_context_unconditioned(
     let api = selector.value.trim();
     if prefix == LegacyAbilityPrefix::Activated && api == "Charm" {
         let mapped = map_charm_ability(prefix, selector_key, expression, context, stack)?;
+        return apply_optional_legacy_condition(
+            prefix,
+            selector_key,
+            mapped,
+            condition,
+            check_on_resolution,
+        );
+    }
+    if prefix == LegacyAbilityPrefix::Activated && api == "ImmediateTrigger" {
+        let mapped = map_immediate_trigger(prefix, selector_key, expression, context, stack)?;
+        return apply_optional_legacy_condition(
+            prefix,
+            selector_key,
+            mapped,
+            condition,
+            check_on_resolution,
+        );
+    }
+    if prefix == LegacyAbilityPrefix::Activated && api == "DelayedTrigger" {
+        let mapped = map_delayed_trigger(prefix, selector_key, expression, context, stack)?;
         return apply_optional_legacy_condition(
             prefix,
             selector_key,
@@ -2181,12 +2211,22 @@ fn map_charm_ability(
         &[
             "Cost",
             "Choices",
+            "Defined",
             "CharmNum",
             "MinCharmNum",
             "AdditionalDescription",
             "PrecostDesc",
         ],
     )?;
+    if parameters
+        .get("Defined")
+        .is_some_and(|defined| defined != "You")
+    {
+        return Err(unsupported_value(
+            "Defined",
+            required(&parameters, "Defined")?,
+        ));
+    }
     let choice_names = required(&parameters, "Choices")?
         .split(',')
         .map(str::trim)
@@ -2210,20 +2250,178 @@ fn map_charm_ability(
         effects.push(linked.expression);
     }
     let maximum = optional_positive_integer(&parameters, "CharmNum")?.unwrap_or(1);
-    let minimum = optional_positive_integer(&parameters, "MinCharmNum")?.unwrap_or(maximum);
+    let minimum = parameters
+        .get("MinCharmNum")
+        .map(|value| {
+            value
+                .parse::<i64>()
+                .map_err(|_| unsupported_value("MinCharmNum", value))
+                .and_then(|minimum| {
+                    if minimum >= 0 {
+                        Ok(minimum)
+                    } else {
+                        Err(unsupported_value("MinCharmNum", value))
+                    }
+                })
+        })
+        .transpose()?
+        .unwrap_or(maximum);
+    if minimum > maximum {
+        return Err(unsupported_value(
+            "MinCharmNum",
+            required(&parameters, "MinCharmNum")?,
+        ));
+    }
     let expression = if minimum == 1 && maximum == 1 {
         call(Operation::ChooseOne, effects)
     } else if minimum == maximum {
         let mut arguments = vec![Expression::Integer(maximum)];
         arguments.extend(effects);
         call(Operation::ChooseExactly, arguments)
+    } else if minimum == 0 {
+        let mut arguments = vec![Expression::Integer(maximum)];
+        arguments.extend(effects);
+        call(Operation::ChooseUpTo, arguments)
     } else {
-        return Err(diagnostic(
-            "UNSUPPORTED_VALUE",
-            &format!("Charm range {minimum}..={maximum} has no exact lowering"),
-        ));
+        let mut arguments = vec![Expression::Integer(minimum), Expression::Integer(maximum)];
+        arguments.extend(effects);
+        call(Operation::ChooseBetween, arguments)
     };
     mapped_direct(prefix, "Charm", &parameters, expression)
+}
+
+fn map_immediate_trigger(
+    prefix: LegacyAbilityPrefix,
+    selector: &str,
+    expression: &LegacyExpression,
+    context: &MappingContext<'_>,
+    stack: &mut Vec<String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["AB", "SP", "DB"])?;
+    let parameters = parameters(expression)?;
+    reject_unknown(
+        &parameters,
+        &[
+            "Cost",
+            "Execute",
+            "OptionalDecider",
+            "TriggerDescription",
+            "SpellDescription",
+            "StackDescription",
+        ],
+    )?;
+    let optional = match parameters.get("OptionalDecider").map(String::as_str) {
+        None => false,
+        Some("You") => true,
+        Some(value) => return Err(unsupported_value("OptionalDecider", value)),
+    };
+    let execute = required(&parameters, "Execute")?;
+    let linked = resolve_svar(execute, context, stack)?;
+    if linked.event.is_some() || !linked.costs.is_empty() {
+        return Err(diagnostic(
+            "UNSUPPORTED_LINK",
+            &format!("Execute `{execute}` is not a cost-free immediate effect chain"),
+        ));
+    }
+    let effect = if optional {
+        call(
+            Operation::ChooseUpTo,
+            vec![Expression::Integer(1), linked.expression],
+        )
+    } else {
+        linked.expression
+    };
+    mapped_direct(prefix, "ImmediateTrigger", &parameters, effect)
+}
+
+fn map_delayed_trigger(
+    prefix: LegacyAbilityPrefix,
+    selector: &str,
+    expression: &LegacyExpression,
+    context: &MappingContext<'_>,
+    stack: &mut Vec<String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["AB", "SP", "DB"])?;
+    let parameters = parameters(expression)?;
+    reject_unknown(
+        &parameters,
+        &[
+            "Cost",
+            "Mode",
+            "Phase",
+            "ValidPlayer",
+            "Execute",
+            "NextTurn",
+            "ThisTurn",
+            "OptionalDecider",
+            "TriggerDescription",
+            "SpellDescription",
+            "StackDescription",
+        ],
+    )?;
+    if required(&parameters, "Mode")? != "Phase" {
+        return Err(unsupported_value("Mode", required(&parameters, "Mode")?));
+    }
+    let player = match parameters.get("ValidPlayer").map(String::as_str) {
+        None | Some("Any") | Some("Player") => call(Operation::Any, vec![]),
+        Some("You") => call(Operation::You, vec![]),
+        Some("Opponent" | "Player.Opponent") => call(Operation::Opponent, vec![]),
+        Some(value) => return Err(unsupported_value("ValidPlayer", value)),
+    };
+    let event = match required(&parameters, "Phase")? {
+        "Upkeep" => call(Operation::EventUpkeep, vec![player]),
+        "End of Turn" => call(
+            Operation::EventPhase,
+            vec![player, Expression::Text("end_step".to_string())],
+        ),
+        "EndCombat" => call(
+            Operation::EventPhase,
+            vec![player, Expression::Text("end_combat".to_string())],
+        ),
+        value => return Err(unsupported_value("Phase", value)),
+    };
+    let lifetime = match (
+        parameters.get("NextTurn").map(String::as_str),
+        parameters.get("ThisTurn").map(String::as_str),
+    ) {
+        (None, None) => None,
+        (Some("True"), None) => Some("next_turn"),
+        (None, Some("True")) => Some("this_turn"),
+        (Some(value), None) => return Err(unsupported_value("NextTurn", value)),
+        (None, Some(value)) => return Err(unsupported_value("ThisTurn", value)),
+        (Some(_), Some(_)) => {
+            return Err(diagnostic(
+                "UNSUPPORTED_PARAMETER",
+                "DelayedTrigger cannot combine NextTurn and ThisTurn",
+            ));
+        }
+    };
+    let execute = required(&parameters, "Execute")?;
+    let linked = resolve_svar(execute, context, stack)?;
+    if linked.event.is_some() || !linked.costs.is_empty() {
+        return Err(diagnostic(
+            "UNSUPPORTED_LINK",
+            &format!("Execute `{execute}` is not a cost-free delayed effect chain"),
+        ));
+    }
+    let effect = match parameters.get("OptionalDecider").map(String::as_str) {
+        None => linked.expression,
+        Some("You") => call(
+            Operation::ChooseUpTo,
+            vec![Expression::Integer(1), linked.expression],
+        ),
+        Some(value) => return Err(unsupported_value("OptionalDecider", value)),
+    };
+    let mut arguments = vec![event, effect];
+    if let Some(lifetime) = lifetime {
+        arguments.push(Expression::Text(lifetime.to_string()));
+    }
+    mapped_direct(
+        prefix,
+        "DelayedTrigger",
+        &parameters,
+        call(Operation::RegisterDelayedTrigger, arguments),
+    )
 }
 
 fn map_moved_replacement(
@@ -2394,6 +2592,11 @@ fn map_triggered_ability(
         "BecomesTarget" => map_becomes_target_event(&parameters)?,
         "Discarded" => map_discarded_event(&parameters)?,
         "CounterAddedOnce" => map_counter_added_event(&parameters)?,
+        "Taps" => map_taps_event(&parameters)?,
+        "LifeGained" => map_life_gained_event(&parameters)?,
+        "Cycled" => map_cycled_event(&parameters)?,
+        "Sacrificed" => map_sacrificed_event(&parameters)?,
+        "ChangesZoneAll" => map_changes_zone_all_event(&parameters)?,
         _ => {
             return Err(diagnostic(
                 "UNMAPPED_API",
@@ -2452,7 +2655,8 @@ fn map_changes_zone_event(
         .map(String::as_str)
         .unwrap_or("Any");
     let destination = required(parameters, "Destination")?;
-    if !closed_zone(origin) || !closed_zone(destination) || destination == "Any" {
+    if !closed_zone(origin) || !closed_zone(destination) || origin == "Any" && destination == "Any"
+    {
         return Err(diagnostic(
             "UNSUPPORTED_EVENT",
             &format!("ChangesZone transition `{origin}` -> `{destination}` is not a closed zone"),
@@ -2461,6 +2665,8 @@ fn map_changes_zone_event(
     let affected = zone_event_selector(required(parameters, "ValidCard")?, origin)?;
     Ok(if origin == "Any" && destination == "Battlefield" {
         call(Operation::EventEnters, vec![affected])
+    } else if origin == "Battlefield" && destination == "Any" {
+        call(Operation::EventLeaves, vec![affected])
     } else {
         call(
             Operation::EventZoneChange,
@@ -2474,6 +2680,119 @@ fn closed_zone(value: &str) -> bool {
         value,
         "Any" | "Battlefield" | "Graveyard" | "Hand" | "Library" | "Exile" | "Stack" | "Command"
     )
+}
+
+fn map_taps_event(parameters: &BTreeMap<String, String>) -> Result<Expression, MappingDiagnostic> {
+    reject_unknown(
+        parameters,
+        &["Execute", "ValidCard", "TriggerZones", "TriggerDescription"],
+    )?;
+    Ok(call(
+        Operation::EventTapped,
+        vec![affected_selector(required(parameters, "ValidCard")?)?],
+    ))
+}
+
+fn map_life_gained_event(
+    parameters: &BTreeMap<String, String>,
+) -> Result<Expression, MappingDiagnostic> {
+    reject_unknown(
+        parameters,
+        &[
+            "Execute",
+            "ValidPlayer",
+            "TriggerZones",
+            "TriggerDescription",
+        ],
+    )?;
+    Ok(call(
+        Operation::EventLifeGained,
+        vec![draw_player_selector(
+            required(parameters, "ValidPlayer")?,
+            "ValidPlayer",
+        )?],
+    ))
+}
+
+fn map_cycled_event(
+    parameters: &BTreeMap<String, String>,
+) -> Result<Expression, MappingDiagnostic> {
+    reject_unknown(
+        parameters,
+        &[
+            "Execute",
+            "ValidCard",
+            "ValidPlayer",
+            "TriggerZones",
+            "TriggerDescription",
+        ],
+    )?;
+    let mut arguments = vec![affected_selector(required(parameters, "ValidCard")?)?];
+    if let Some(player) = parameters.get("ValidPlayer") {
+        arguments.push(draw_player_selector(player, "ValidPlayer")?);
+    }
+    Ok(call(Operation::EventCycled, arguments))
+}
+
+fn map_sacrificed_event(
+    parameters: &BTreeMap<String, String>,
+) -> Result<Expression, MappingDiagnostic> {
+    reject_unknown(
+        parameters,
+        &[
+            "Execute",
+            "ValidCard",
+            "ValidPlayer",
+            "TriggerZones",
+            "TriggerDescription",
+        ],
+    )?;
+    let mut arguments = vec![affected_selector(required(parameters, "ValidCard")?)?];
+    if let Some(player) = parameters.get("ValidPlayer") {
+        arguments.push(draw_player_selector(player, "ValidPlayer")?);
+    }
+    Ok(call(Operation::EventSacrificed, arguments))
+}
+
+fn map_changes_zone_all_event(
+    parameters: &BTreeMap<String, String>,
+) -> Result<Expression, MappingDiagnostic> {
+    reject_unknown(
+        parameters,
+        &[
+            "Execute",
+            "Origin",
+            "Destination",
+            "ValidCards",
+            "TriggerZones",
+            "TriggerDescription",
+        ],
+    )?;
+    let origin = parameters
+        .get("Origin")
+        .map(String::as_str)
+        .unwrap_or("Any");
+    let destination = parameters
+        .get("Destination")
+        .map(String::as_str)
+        .unwrap_or("Any");
+    if !closed_zone(origin) || !closed_zone(destination) || origin == "Any" && destination == "Any"
+    {
+        return Err(diagnostic(
+            "UNSUPPORTED_EVENT",
+            &format!(
+                "ChangesZoneAll transition `{origin}` -> `{destination}` is not a closed zone"
+            ),
+        ));
+    }
+    Ok(call(
+        Operation::EventZoneChangeAll,
+        vec![
+            affected_selector(required(parameters, "ValidCards")?)?,
+            Expression::Text(origin.to_ascii_lowercase()),
+            Expression::Text(destination.to_ascii_lowercase()),
+        ],
+    ))
 }
 
 fn zone_event_selector(value: &str, origin: &str) -> Result<Expression, MappingDiagnostic> {
@@ -5628,6 +5947,55 @@ fn map_prevent_damage(
     )
 }
 
+fn map_fog(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["AB", "SP", "DB"])?;
+    reject_unknown(
+        parameters,
+        &["Cost", "SpellDescription", "StackDescription", "AILogic"],
+    )?;
+    mapped_direct(
+        prefix,
+        api,
+        parameters,
+        call(Operation::PreventAllCombatDamage, vec![]),
+    )
+}
+
+fn map_fight(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["AB", "SP", "DB"])?;
+    reject_unknown(
+        parameters,
+        &[
+            "Cost",
+            "Defined",
+            "ValidTgts",
+            "TgtPrompt",
+            "ValidTgtsDesc",
+            "SpellDescription",
+            "StackDescription",
+            "AILogic",
+        ],
+    )?;
+    let first = defined_selector(required(parameters, "Defined")?)?;
+    let second = valid_target_selector(required(parameters, "ValidTgts")?)?;
+    mapped_direct(
+        prefix,
+        api,
+        parameters,
+        call(Operation::Fight, vec![first, second]),
+    )
+}
+
 fn map_put_counter_all(
     prefix: LegacyAbilityPrefix,
     api: &str,
@@ -5680,6 +6048,7 @@ fn map_copy_spell_ability(
         parameters,
         &[
             "Cost",
+            "Defined",
             "ValidTgts",
             "TargetType",
             "TgtPrompt",
@@ -5707,10 +6076,26 @@ fn map_copy_spell_ability(
             required(parameters, "MayChooseTarget")?,
         ));
     }
-    let target = call(
-        Operation::Target,
-        vec![spell_selector(required(parameters, "ValidTgts")?)?],
-    );
+    if parameters.contains_key("Defined") && parameters.contains_key("ValidTgts") {
+        return Err(diagnostic(
+            "UNSUPPORTED_SELECTOR",
+            "CopySpellAbility cannot combine Defined and ValidTgts",
+        ));
+    }
+    let target = if let Some(defined) = parameters.get("Defined") {
+        match defined.as_str() {
+            "TriggeredSpellAbility" => call(Operation::TriggeredStackAbility, vec![]),
+            "Parent" => call(Operation::ParentStackAbility, vec![]),
+            "Targeted" => call(Operation::Target, vec![call(Operation::Any, vec![])]),
+            "Remembered" => call(Operation::Remembered, vec![call(Operation::Any, vec![])]),
+            value => return Err(unsupported_value("Defined", value)),
+        }
+    } else {
+        call(
+            Operation::Target,
+            vec![spell_selector(required(parameters, "ValidTgts")?)?],
+        )
+    };
     mapped_direct(prefix, api, parameters, call(Operation::Copy, vec![target]))
 }
 
@@ -6484,19 +6869,44 @@ fn map_cleanup(
     parameters: &BTreeMap<String, String>,
 ) -> Result<MappedLegacyAbility, MappingDiagnostic> {
     require_selector(selector, "DB")?;
-    reject_unknown(parameters, &["ClearRemembered"])?;
-    match parameters.get("ClearRemembered").map(String::as_str) {
-        Some("True") => mapped_direct(
+    const DOMAINS: &[(&str, &str)] = &[
+        ("ClearRemembered", "remembered"),
+        ("ClearImprinted", "imprinted"),
+        ("ClearChosenCard", "chosen_card"),
+        ("ClearChosenPlayer", "chosen_player"),
+        ("ClearNamedCard", "named_card"),
+        ("ClearChosenColor", "chosen_color"),
+        ("ClearChosenType", "chosen_type"),
+        ("ClearCoinFlips", "coin_flips"),
+        ("ClearTriggered", "triggered"),
+    ];
+    reject_unknown(
+        parameters,
+        &DOMAINS.iter().map(|(key, _)| *key).collect::<Vec<_>>(),
+    )?;
+    let mut effects = Vec::new();
+    for (key, domain) in DOMAINS {
+        match parameters.get(*key).map(String::as_str) {
+            Some("True") => effects.push(call(
+                Operation::Forget,
+                vec![Expression::Text((*domain).to_string())],
+            )),
+            Some(value) => return Err(unsupported_value(key, value)),
+            None => {}
+        }
+    }
+    if effects.is_empty() {
+        Err(diagnostic(
+            "MISSING_PARAMETER",
+            "Cleanup requires at least one closed clear flag",
+        ))
+    } else {
+        mapped_direct(
             prefix,
             api,
             parameters,
-            call(Operation::Forget, vec![Expression::Text("all".to_string())]),
-        ),
-        Some(value) => Err(unsupported_value("ClearRemembered", value)),
-        None => Err(diagnostic(
-            "MISSING_PARAMETER",
-            "Cleanup requires ClearRemembered$ True",
-        )),
+            combine_effects(effects, "Cleanup requires a clear effect")?,
+        )
     }
 }
 
@@ -9842,6 +10252,109 @@ mod tests {
     }
 
     #[test]
+    fn maps_closed_modal_owner_and_stack_ability_copy_selectors() {
+        let charm = map_script_root(
+            "A:SP$ Charm | Choices$ DBLife,DBDraw | Defined$ You\nSVar:DBLife:DB$ GainLife | LifeAmount$ 2\nSVar:DBDraw:DB$ Draw | NumCards$ 1\n",
+        )
+        .unwrap_or_else(|error| panic!("owner-selected charm should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &charm.expression,
+            Operation::ChooseOne
+        ));
+        let ranged_charm = map_script_root(
+            "A:SP$ Charm | Choices$ DBLife,DBDraw,DBMill | Defined$ You | MinCharmNum$ 1 | CharmNum$ 2\nSVar:DBLife:DB$ GainLife | LifeAmount$ 2\nSVar:DBDraw:DB$ Draw | NumCards$ 1\nSVar:DBMill:DB$ Mill | NumCards$ 1\n",
+        )
+        .unwrap_or_else(|error| panic!("ranged charm should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &ranged_charm.expression,
+            Operation::ChooseBetween
+        ));
+
+        let optional_charm = map_script_root(
+            "A:SP$ Charm | Choices$ DBLife,DBDraw | MinCharmNum$ 0 | CharmNum$ 1\nSVar:DBLife:DB$ GainLife | LifeAmount$ 2\nSVar:DBDraw:DB$ Draw | NumCards$ 1\n",
+        )
+        .unwrap_or_else(|error| panic!("optional charm should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &optional_charm.expression,
+            Operation::ChooseUpTo
+        ));
+
+        let triggered = map_line(
+            "A:DB$ CopySpellAbility | Defined$ TriggeredSpellAbility | MayChooseTarget$ True",
+        )
+        .unwrap_or_else(|error| panic!("triggered copy should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &triggered.expression,
+            Operation::TriggeredStackAbility
+        ));
+
+        let parent = map_line("A:DB$ CopySpellAbility | Defined$ Parent")
+            .unwrap_or_else(|error| panic!("parent copy should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &parent.expression,
+            Operation::ParentStackAbility
+        ));
+
+        for line in [
+            "A:SP$ Charm | Choices$ A,B | Defined$ Opponent",
+            "A:DB$ CopySpellAbility | Defined$ Self",
+            "A:DB$ CopySpellAbility | Defined$ TriggeredSpellAbility | ValidTgts$ Instant",
+        ] {
+            assert!(map_line(line).is_err());
+        }
+    }
+
+    #[test]
+    fn maps_closed_immediate_and_phase_delayed_effects() {
+        let immediate = map_script_root(
+            "A:AB$ ImmediateTrigger | Cost$ 1 | Execute$ DBLife\nSVar:DBLife:DB$ GainLife | Defined$ You | LifeAmount$ 2\n",
+        )
+        .unwrap_or_else(|error| panic!("immediate trigger should map: {}", error.message));
+        assert_eq!(immediate.costs.len(), 1);
+        assert!(expression_contains_operation(
+            &immediate.expression,
+            Operation::GainLife
+        ));
+
+        for phase in ["Upkeep", "End of Turn", "EndCombat"] {
+            let delayed = map_script_root(&format!(
+                "A:DB$ DelayedTrigger | Mode$ Phase | Phase$ {phase} | ValidPlayer$ You | NextTurn$ True | Execute$ DBDraw\nSVar:DBDraw:DB$ Draw | Defined$ You\n"
+            ))
+            .unwrap_or_else(|error| panic!("delayed trigger should map: {}", error.message));
+            assert!(expression_contains_operation(
+                &delayed.expression,
+                Operation::RegisterDelayedTrigger
+            ));
+        }
+
+        for script in [
+            "A:DB$ DelayedTrigger | Mode$ SpellCast | Phase$ Upkeep | Execute$ DBDraw\nSVar:DBDraw:DB$ Draw | Defined$ You\n",
+            "A:DB$ DelayedTrigger | Mode$ Phase | Phase$ Upkeep | NextTurn$ True | ThisTurn$ True | Execute$ DBDraw\nSVar:DBDraw:DB$ Draw | Defined$ You\n",
+        ] {
+            assert!(map_script_root(script).is_err());
+        }
+    }
+
+    #[test]
+    fn maps_closed_fog_and_defined_fight_effects() {
+        let fog = map_line("A:SP$ Fog | SpellDescription$ Prevent all combat damage.")
+            .unwrap_or_else(|error| panic!("fog should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &fog.expression,
+            Operation::PreventAllCombatDamage
+        ));
+
+        let fight =
+            map_line("A:DB$ Fight | Defined$ ParentTarget | ValidTgts$ Creature.YouDontCtrl")
+                .unwrap_or_else(|error| panic!("defined fight should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &fight.expression,
+            Operation::Fight
+        ));
+        assert!(map_line("A:SP$ Fight | ValidTgts$ Creature").is_err());
+    }
+
+    #[test]
     fn lowers_closed_presence_conditions_by_ability_kind() {
         let mana = map_line(
             "A:AB$ Mana | Cost$ T | Produced$ C | Amount$ 2 | IsPresent$ Land.YouCtrl | PresentCompare$ GE5 | SpellDescription$ Add mana.",
@@ -10570,6 +11083,69 @@ mod tests {
             ),
             (
                 concat!(
+                    "Name:Graph Leaves\n",
+                    "T:Mode$ ChangesZone | Origin$ Battlefield | Destination$ Any | ValidCard$ Card.Self | Execute$ TrigDraw | TriggerDescription$ Draw.\n",
+                    "SVar:TrigDraw:DB$ Draw | Defined$ You\n",
+                ),
+                Operation::EventLeaves,
+                Operation::Draw,
+            ),
+            (
+                concat!(
+                    "Name:Graph Leaves Exile\n",
+                    "T:Mode$ ChangesZone | Origin$ Exile | Destination$ Any | ValidCard$ Card.Self | Execute$ TrigDraw | TriggerDescription$ Draw.\n",
+                    "SVar:TrigDraw:DB$ Draw | Defined$ You\n",
+                ),
+                Operation::EventZoneChange,
+                Operation::Draw,
+            ),
+            (
+                concat!(
+                    "Name:Graph Tapped\n",
+                    "T:Mode$ Taps | ValidCard$ Card.Self | Execute$ TrigDraw | TriggerDescription$ Draw.\n",
+                    "SVar:TrigDraw:DB$ Draw | Defined$ You\n",
+                ),
+                Operation::EventTapped,
+                Operation::Draw,
+            ),
+            (
+                concat!(
+                    "Name:Graph Life Gained\n",
+                    "T:Mode$ LifeGained | ValidPlayer$ You | Execute$ TrigDraw | TriggerDescription$ Draw.\n",
+                    "SVar:TrigDraw:DB$ Draw | Defined$ You\n",
+                ),
+                Operation::EventLifeGained,
+                Operation::Draw,
+            ),
+            (
+                concat!(
+                    "Name:Graph Cycled\n",
+                    "T:Mode$ Cycled | ValidCard$ Card.Self | Execute$ TrigDraw | TriggerDescription$ Draw.\n",
+                    "SVar:TrigDraw:DB$ Draw | Defined$ You\n",
+                ),
+                Operation::EventCycled,
+                Operation::Draw,
+            ),
+            (
+                concat!(
+                    "Name:Graph Sacrificed\n",
+                    "T:Mode$ Sacrificed | ValidCard$ Artifact.YouCtrl | ValidPlayer$ You | Execute$ TrigDraw | TriggerDescription$ Draw.\n",
+                    "SVar:TrigDraw:DB$ Draw | Defined$ You\n",
+                ),
+                Operation::EventSacrificed,
+                Operation::Draw,
+            ),
+            (
+                concat!(
+                    "Name:Graph Batch Zone Change\n",
+                    "T:Mode$ ChangesZoneAll | ValidCards$ Creature.YouCtrl | Origin$ Battlefield | Destination$ Graveyard | Execute$ TrigDraw | TriggerDescription$ Draw.\n",
+                    "SVar:TrigDraw:DB$ Draw | Defined$ You\n",
+                ),
+                Operation::EventZoneChangeAll,
+                Operation::Draw,
+            ),
+            (
+                concat!(
                     "Name:Graph Upkeep\n",
                     "T:Mode$ Phase | Phase$ Upkeep | ValidPlayer$ You | TriggerZones$ Battlefield | Execute$ TrigLife | TriggerDescription$ Gain life.\n",
                     "SVar:TrigLife:DB$ GainLife | Defined$ You | LifeAmount$ 1 | SubAbility$ TrigDraw\n",
@@ -11164,7 +11740,7 @@ mod tests {
     }
 
     #[test]
-    fn maps_closed_cleanup_clear_remembered() {
+    fn maps_closed_cleanup_domains() {
         let mapped = map_script_root(concat!(
             "Name:Cleanup Remembered\n",
             "A:SP$ Draw | Defined$ You | NumCards$ 1 | SubAbility$ DBCleanup\n",
@@ -11181,10 +11757,20 @@ mod tests {
         ));
 
         for line in [
-            "A:DB$ Cleanup | ClearRemembered$ False",
             "A:DB$ Cleanup | ClearChosenCard$ True",
             "A:DB$ Cleanup | ClearRemembered$ True | ClearImprinted$ True",
+            "A:DB$ Cleanup | ClearChosenPlayer$ True | ClearChosenColor$ True | ClearChosenType$ True",
+            "A:DB$ Cleanup | ClearNamedCard$ True | ClearCoinFlips$ True | ClearTriggered$ True",
         ] {
+            let mapped = map_line(line)
+                .unwrap_or_else(|error| panic!("closed cleanup should map: {}", error.message));
+            assert!(expression_contains_operation(
+                &mapped.expression,
+                Operation::Forget
+            ));
+        }
+
+        for line in ["A:DB$ Cleanup", "A:DB$ Cleanup | ClearRemembered$ False"] {
             assert!(
                 map_line(line).is_err(),
                 "open cleanup form must remain quarantined: {line}"
