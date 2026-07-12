@@ -2419,6 +2419,7 @@ fn map_drawn_event(parameters: &BTreeMap<String, String>) -> Result<Expression, 
             "Execute",
             "ValidCard",
             "ValidPlayer",
+            "Number",
             "TriggerZones",
             "TriggerDescription",
         ],
@@ -2435,7 +2436,11 @@ fn map_drawn_event(parameters: &BTreeMap<String, String>) -> Result<Expression, 
     } else {
         draw_card_owner_selector(required(parameters, "ValidCard")?)?
     };
-    Ok(call(Operation::EventDraw, vec![drawer]))
+    let mut arguments = vec![drawer];
+    if let Some(number) = parameters.get("Number") {
+        arguments.push(Expression::Integer(positive_integer(number, "Number")?));
+    }
+    Ok(call(Operation::EventDraw, arguments))
 }
 
 fn map_attackers_declared_event(
@@ -9467,6 +9472,35 @@ mod tests {
         .err()
         .unwrap_or_else(|| panic!("open combat restriction must quarantine"));
         assert_eq!(error.code, "UNSUPPORTED_VALUE");
+    }
+
+    #[test]
+    fn maps_closed_drawn_event_number() {
+        let mapped = map_script_root(concat!(
+            "T:Mode$ Drawn | ValidCard$ Card.YouCtrl | Number$ 2 | ",
+            "TriggerZones$ Battlefield | Execute$ TrigDraw | TriggerDescription$ Draw.\n",
+            "SVar:TrigDraw:DB$ Draw | Defined$ You\n",
+        ))
+        .unwrap_or_else(|error| panic!("drawn-number trigger should map: {}", error.message));
+        assert!(matches!(
+            mapped.event,
+            Some(Expression::Call {
+                operation: Operation::EventDraw,
+                arguments,
+            }) if matches!(arguments.as_slice(), [_, Expression::Integer(2)])
+        ));
+    }
+
+    #[test]
+    fn rejects_non_positive_drawn_event_number() {
+        for number in ["0", "-1", "X"] {
+            let error = map_script_root(&format!(
+                "T:Mode$ Drawn | ValidCard$ Card.YouCtrl | Number$ {number} | TriggerZones$ Battlefield | Execute$ TrigDraw\nSVar:TrigDraw:DB$ Draw | Defined$ You\n"
+            ))
+            .err()
+            .unwrap_or_else(|| panic!("invalid drawn number must fail closed: {number}"));
+            assert_eq!(error.code, "UNSUPPORTED_VALUE");
+        }
     }
 
     #[test]

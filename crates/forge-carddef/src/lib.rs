@@ -1082,11 +1082,15 @@ impl Operation {
             | Self::EventDies
             | Self::EventAttacks
             | Self::EventBlocks
-            | Self::EventDraw
             | Self::EventDiscard
             | Self::EventTargeted => match index {
                 0 => Some(Selector),
                 1 => Some(SelectorOrText),
+                _ => None,
+            },
+            Self::EventDraw => match index {
+                0 => Some(Selector),
+                1 => Some(SelectorTextOrNumber),
                 _ => None,
             },
             Self::EventCastTargeting => match index {
