@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-12T22:34:55Z",
+  "task": "T3.3",
+  "batch": "trigger payments, exile play permissions, parent-target values, linked activated and triggered grants, and stack-zone continuous effects",
+  "technical_result": "pass",
+  "product_binding": {"exact_product_commit": "54ea5f9280faaafe2d3ddd9760d556f6b37fe752", "exact_product_tree": "9d7e69b650a63444b9fe3040f39490518784616f"},
+  "source_binding": {"legacy_forge_commit": "1f0a3e0815822d8f58f798e0304b33d4534248b1", "translation_fingerprint": "8f9cf63b467e1ad1e59eb73b5cd91cae"},
+  "verification_environment": {"local_only": true, "github_actions_used": false, "network_attempted": false, "install_performed": false, "worker_ceiling": 24, "shared_cargo_cache": true},
+  "coverage_delta": {
+    "before": {"complete_scripts": 15375, "mapped_ability_uses": 24130, "owner_priority_complete": 225},
+    "after": {"complete_scripts": 15768, "total_scripts": 33290, "complete_script_percent": 47.36557524782217, "mapped_ability_uses": 24974, "total_ability_uses": 43649, "mapped_ability_percent": 57.21551467387569, "owner_priority_complete": 228, "owner_priority_requested": 365, "quarantined_scripts": 17522, "quarantined_ability_uses": 18675},
+    "gain": {"complete_scripts": 393, "mapped_ability_uses": 844, "owner_priority_complete": 3}
+  },
+  "line_coverage": {"covered": 32914, "count": 40316, "percent": 81.64004365512451, "floor_percent": 80, "raw_report_sha256": "42039b8c3fba532724905c8f67183bcaca215b4e31bd9ab87676bc689c19ae8e"},
+  "planner": {"analyzed_scripts": 33290, "scripts_with_confirmed_blockers": 16679, "confirmed_observations": 33832, "unique_blocker_families": 5945, "linked_root_fanout": 34536},
+  "checkpoint_gates": {"full_workspace_tests": true, "clippy_warnings_denied": true, "compiler_roundtrips": true, "database_validation": true, "oracle_subsets_passed": true, "nightmare_suite_passed": true, "arena_smoke_passed": true, "deterministic_parallel_replay": true, "deterministic_blocker_plan_replay": true},
+  "notes": ["The exact checkpoint ran locally without GitHub Actions.", "Linked grants resolve typed effect, event, timing, and cost semantics and remain fail closed.", "T3.3 remains active because the 60% complete-script floor is not reached."]
+}
