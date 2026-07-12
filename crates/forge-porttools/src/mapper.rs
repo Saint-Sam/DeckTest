@@ -160,6 +160,21 @@ const MAPPERS: &[MapperSpec] = &[
     },
     MapperSpec {
         prefix: LegacyAbilityPrefix::Activated,
+        api: "RearrangeTopOfLibrary",
+        mapper: map_rearrange_top_of_library,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Activated,
+        api: "MakeCard",
+        mapper: map_make_card,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Activated,
+        api: "AlterAttribute",
+        mapper: map_alter_attribute,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Activated,
         api: "Draw",
         mapper: map_draw,
     },
@@ -614,15 +629,16 @@ pub fn map_legacy_ability(
     let has_ability_name = expression
         .fields
         .iter()
-        .any(|field| field.key.as_deref() == Some("Name"));
+        .any(|field| field.key.as_deref() == Some("Name"))
+        && api != "MakeCard";
     let stripped_expression =
         (optional_effect || secondary.is_some() || has_ability_name).then(|| {
             let mut stripped = expression.clone();
             stripped.fields.retain(|field| {
                 !matches!(
                     field.key.as_deref(),
-                    Some("Optional" | "OptionalDecider" | "Secondary" | "Name")
-                )
+                    Some("Optional" | "OptionalDecider" | "Secondary")
+                ) && (!has_ability_name || field.key.as_deref() != Some("Name"))
             });
             stripped
         });
@@ -1088,7 +1104,7 @@ fn map_with_context_unconditioned(
             secondary.unwrap_or_default(),
         ));
     }
-    let has_ability_name = parameter_map.contains_key("Name");
+    let has_ability_name = parameter_map.contains_key("Name") && api != "MakeCard";
     let mut base_expression = expression.clone();
     if sub_ability.is_some()
         || optional_effect
@@ -1103,7 +1119,7 @@ fn map_with_context_unconditioned(
                 && (divided_allocation.is_none()
                     || field.key.as_deref() != Some("DividedAsYouChoose"))
                 && field.key.as_deref() != Some("Secondary")
-                && field.key.as_deref() != Some("Name")
+                && (!has_ability_name || field.key.as_deref() != Some("Name"))
         });
     }
     let mut mapped = match map_dynamic_ability(prefix, &base_expression, context)? {
@@ -1938,6 +1954,12 @@ fn map_dynamic_ability(
             operation: Operation::Surveil,
             argument: 0,
         }],
+        "RearrangeTopOfLibrary" => vec![DynamicPatchSpec {
+            key: "NumCards",
+            placeholder: "1",
+            operation: Operation::ReorderLibraryTop,
+            argument: 1,
+        }],
         _ => Vec::new(),
     };
     specs.extend([
@@ -2199,9 +2221,27 @@ fn map_player_count_value(name: &str, value: &str) -> Result<Expression, Mapping
     if value == "Amount" {
         return Ok(call(Operation::PlayerCount, vec![]));
     }
-    Err(diagnostic(
-        "UNSUPPORTED_VALUE_SVAR",
-        &format!("value SVar `{name}` player count `{value}` has no exact lowering"),
+    let aggregate = match value {
+        "LowestLifeTotal" => "min_life_total",
+        "HighestLifeTotal" => "max_life_total",
+        "AttackersDeclared" => "sum_attackers_declared_this_turn",
+        "CardsDiscardedThisTurn" => "sum_cards_discarded_this_turn",
+        "HasPropertyisMonarch" => "count_monarch",
+        "HasPropertyLostLifeThisTurn" => "count_lost_life_this_turn",
+        "HasPropertywasDealtCombatDamageThisTurn" => "count_dealt_combat_damage_this_turn",
+        "HasPropertyDefending" => "count_defending_players",
+        "Counters.RAD" => "sum_rad_counters",
+        "Counters.ALL" => "sum_all_player_counters",
+        value => {
+            return Err(diagnostic(
+                "UNSUPPORTED_VALUE_SVAR",
+                &format!("value SVar `{name}` player count `{value}` has no exact lowering"),
+            ));
+        }
+    };
+    Ok(call(
+        Operation::PlayerAggregate,
+        vec![Expression::Text(aggregate.to_string())],
     ))
 }
 
@@ -2224,6 +2264,15 @@ fn map_count_value(name: &str, value: &str) -> Result<Expression, MappingDiagnos
             vec![
                 call(Operation::You, vec![]),
                 Expression::Text("life_gained_this_turn".to_string()),
+            ],
+        ));
+    }
+    if value == "AttackersDeclared" {
+        return Ok(call(
+            Operation::HistoryCount,
+            vec![
+                call(Operation::You, vec![]),
+                Expression::Text("attackers_declared_this_turn".to_string()),
             ],
         ));
     }
@@ -3994,6 +4043,158 @@ fn map_mana_reflected(
             ],
         ),
     })
+}
+
+fn map_rearrange_top_of_library(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["AB", "SP", "DB"])?;
+    reject_unknown(
+        parameters,
+        &[
+            "Cost",
+            "Defined",
+            "ValidTgts",
+            "NumCards",
+            "MayShuffle",
+            "SpellDescription",
+            "StackDescription",
+        ],
+    )?;
+    let amount = positive_integer(required(parameters, "NumCards")?, "NumCards")?;
+    let may_shuffle = match parameters.get("MayShuffle").map(String::as_str) {
+        None => false,
+        Some("True") => true,
+        Some(value) => return Err(unsupported_value("MayShuffle", value)),
+    };
+    Ok(MappedLegacyAbility {
+        prefix,
+        api: api.to_string(),
+        costs: parse_simple_cost(parameters.get("Cost"))?,
+        event: None,
+        timing: None,
+        expression: call(
+            Operation::ReorderLibraryTop,
+            vec![
+                player_selector(parameters, DefaultSelector::You)?,
+                Expression::Integer(amount),
+                Expression::Boolean(may_shuffle),
+            ],
+        ),
+    })
+}
+
+fn map_make_card(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["AB", "SP", "DB"])?;
+    reject_unknown(
+        parameters,
+        &[
+            "Cost",
+            "Conjure",
+            "Name",
+            "Zone",
+            "RememberMade",
+            "SpellDescription",
+            "StackDescription",
+        ],
+    )?;
+    if required(parameters, "Conjure")? != "True" {
+        return Err(unsupported_value(
+            "Conjure",
+            required(parameters, "Conjure")?,
+        ));
+    }
+    let name = required(parameters, "Name")?.trim();
+    if name.is_empty()
+        || matches!(
+            name,
+            "ChosenName" | "NamedCard" | "Targeted" | "TriggeredSource" | "ChosenCard"
+        )
+    {
+        return Err(unsupported_value("Name", name));
+    }
+    let zone = match required(parameters, "Zone")? {
+        "Hand" => "hand",
+        "Battlefield" => "battlefield",
+        "Library" => "library",
+        "Exile" => "exile",
+        value => return Err(unsupported_value("Zone", value)),
+    };
+    let expression = apply_remembered_result(
+        call(
+            Operation::ConjureCard,
+            vec![
+                Expression::Text(name.to_string()),
+                Expression::Text(zone.to_string()),
+                call(Operation::You, vec![]),
+            ],
+        ),
+        parameters,
+        "RememberMade",
+        "made",
+    )?;
+    mapped_direct(prefix, api, parameters, expression)
+}
+
+fn map_alter_attribute(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["AB", "SP", "DB"])?;
+    reject_unknown(
+        parameters,
+        &[
+            "Cost",
+            "Defined",
+            "ValidTgts",
+            "TgtPrompt",
+            "Attributes",
+            "Activate",
+            "SpellDescription",
+            "StackDescription",
+        ],
+    )?;
+    let activate = match parameters.get("Activate").map(String::as_str) {
+        None | Some("True") => true,
+        Some("False") => false,
+        Some(value) => return Err(unsupported_value("Activate", value)),
+    };
+    let target = object_selector(parameters, DefaultSelector::Source)?;
+    let mut effects = Vec::new();
+    for attribute in required(parameters, "Attributes")?
+        .split(',')
+        .map(str::trim)
+    {
+        let normalized = match attribute {
+            "Harnessed" => "harnessed",
+            "Plotted" => "plotted",
+            "Prepared" => "prepared",
+            "Solve" | "Solved" => "solved",
+            "Suspect" | "Suspected" => "suspected",
+            "Saddle" | "Saddled" => "saddled",
+            value => return Err(unsupported_value("Attributes", value)),
+        };
+        effects.push(call(
+            Operation::AlterAttribute,
+            vec![
+                target.clone(),
+                Expression::Text(normalized.to_string()),
+                Expression::Boolean(activate),
+            ],
+        ));
+    }
+    let expression = combine_effects(effects, "AlterAttribute requires an attribute")?;
+    mapped_direct(prefix, api, parameters, expression)
 }
 
 fn map_draw(
@@ -10506,6 +10707,65 @@ mod tests {
     }
 
     #[test]
+    fn maps_closed_library_reordering() {
+        let mapped = map_line(
+            "A:SP$ RearrangeTopOfLibrary | Defined$ You | NumCards$ 5 | MayShuffle$ True | SpellDescription$ Reorder.",
+        )
+        .unwrap_or_else(|error| panic!("library reorder should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &mapped.expression,
+            Operation::ReorderLibraryTop
+        ));
+
+        let dynamic = map_script_root(concat!(
+            "Name:Dynamic Reorder\n",
+            "A:AB$ RearrangeTopOfLibrary | Cost$ T | Defined$ You | NumCards$ X | SpellDescription$ Reorder.\n",
+            "SVar:X:Count$Valid Wizard\n",
+        ))
+        .unwrap_or_else(|error| panic!("dynamic reorder should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &dynamic.expression,
+            Operation::Count
+        ));
+    }
+
+    #[test]
+    fn maps_literal_card_conjuring() {
+        let mapped = map_line(
+            "A:DB$ MakeCard | Conjure$ True | Name$ Mox Ruby | Zone$ Hand | RememberMade$ True",
+        )
+        .unwrap_or_else(|error| panic!("literal conjure should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &mapped.expression,
+            Operation::ConjureCard
+        ));
+        assert!(expression_contains_operation(
+            &mapped.expression,
+            Operation::Remember
+        ));
+
+        let error = map_line("A:DB$ MakeCard | Conjure$ True | Name$ ChosenName | Zone$ Hand")
+            .err()
+            .unwrap_or_else(|| panic!("dynamic conjure name must quarantine"));
+        assert_eq!(error.code, "UNSUPPORTED_VALUE");
+    }
+
+    #[test]
+    fn maps_closed_card_attributes() {
+        for line in [
+            "A:DB$ AlterAttribute | Attributes$ Suspected",
+            "A:DB$ AlterAttribute | Defined$ Remembered | Attributes$ Plotted",
+            "A:DB$ AlterAttribute | Defined$ Enchanted | Attributes$ Suspected | Activate$ False",
+        ] {
+            assert_operation(line, Operation::AlterAttribute, 0);
+        }
+        let error = map_line("A:DB$ AlterAttribute | Attributes$ Unknown")
+            .err()
+            .unwrap_or_else(|| panic!("unknown attribute must quarantine"));
+        assert_eq!(error.code, "UNSUPPORTED_VALUE");
+    }
+
+    #[test]
     fn maps_remembered_library_partition_without_researching() {
         let mapped = map_script_root(concat!(
             "Name:Remembered Search Partition\n",
@@ -12865,6 +13125,14 @@ mod tests {
             ),
             (
                 concat!(
+                    "Name:Raid Count\n",
+                    "A:SP$ GainLife | Defined$ You | LifeAmount$ X | SpellDescription$ Gain life.\n",
+                    "SVar:X:Count$AttackersDeclared\n",
+                ),
+                Operation::HistoryCount,
+            ),
+            (
+                concat!(
                     "Name:Negative Dynamic Power\n",
                     "A:SP$ Pump | ValidTgts$ Creature | NumAtt$ -X | NumDef$ -X | SpellDescription$ Shrink.\n",
                     "SVar:X:Count$CardPower\n",
@@ -12895,6 +13163,14 @@ mod tests {
                     "SVar:X:PlayerCountPlayers$Amount\n",
                 ),
                 Operation::PlayerCount,
+            ),
+            (
+                concat!(
+                    "Name:Lowest Player Life\n",
+                    "A:SP$ GainLife | Defined$ You | LifeAmount$ X | SpellDescription$ Gain life.\n",
+                    "SVar:X:PlayerCountPlayers$LowestLifeTotal\n",
+                ),
+                Operation::PlayerAggregate,
             ),
             (
                 concat!(

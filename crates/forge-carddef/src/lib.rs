@@ -1069,6 +1069,10 @@ operations! {
     TimesKicked => ("times_kicked", Value, 0, Some(0)),
     AddReflectedMana => ("add_reflected_mana", Effect, 5, Some(5)),
     PlayerCount => ("player_count", Value, 0, Some(0)),
+    ReorderLibraryTop => ("reorder_library_top", Effect, 3, Some(3)),
+    ConjureCard => ("conjure_card", Effect, 3, Some(3)),
+    AlterAttribute => ("alter_attribute", Effect, 3, Some(3)),
+    PlayerAggregate => ("player_aggregate", Value, 1, Some(1)),
 }
 
 impl Operation {
@@ -1463,6 +1467,23 @@ impl Operation {
                 4 => Some(Number),
                 _ => None,
             },
+            Self::ReorderLibraryTop => match index {
+                0 => Some(Selector),
+                1 => Some(Number),
+                2 => Some(Boolean),
+                _ => None,
+            },
+            Self::ConjureCard => match index {
+                0 | 1 => Some(Text),
+                2 => Some(Selector),
+                _ => None,
+            },
+            Self::AlterAttribute => match index {
+                0 => Some(Selector),
+                1 => Some(Text),
+                2 => Some(Boolean),
+                _ => None,
+            },
             Self::AddRestrictedMana => match index {
                 0 | 2 => Some(Text),
                 1 => Some(Selector),
@@ -1670,6 +1691,7 @@ impl Operation {
             Self::Amount => Some(Comparable),
             Self::PaidX | Self::TimesKicked => None,
             Self::OpponentCount | Self::PlayerCount => None,
+            Self::PlayerAggregate => Some(Text),
             Self::CounterCount | Self::Devotion | Self::DistinctCount | Self::HistoryCount => {
                 match index {
                     0 => Some(Selector),
@@ -1908,6 +1930,10 @@ mod tests {
         assert_eq!(Operation::TimesKicked as u32, 269);
         assert_eq!(Operation::AddReflectedMana as u32, 270);
         assert_eq!(Operation::PlayerCount as u32, 271);
+        assert_eq!(Operation::ReorderLibraryTop as u32, 272);
+        assert_eq!(Operation::ConjureCard as u32, 273);
+        assert_eq!(Operation::AlterAttribute as u32, 274);
+        assert_eq!(Operation::PlayerAggregate as u32, 275);
 
         let config = bincode::config::standard()
             .with_fixed_int_encoding()
