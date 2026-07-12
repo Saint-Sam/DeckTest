@@ -3699,9 +3699,47 @@ fn map_continuous(
             "SetMaxHandSize",
             "AffectedZone",
             "EffectZone",
+            "MayPlay",
             "Description",
         ],
     )?;
+    if let Some(may_play) = parameters.get("MayPlay") {
+        if may_play != "True" {
+            return Err(unsupported_value("MayPlay", may_play));
+        }
+        if let Some(effect_zone) = parameters.get("EffectZone") {
+            return Err(unsupported_value("EffectZone", effect_zone));
+        }
+        let affected_value = required(parameters, "Affected")?;
+        if !matches!(affected_value, "Card.IsRemembered" | "Card.Self") {
+            return Err(unsupported_value("Affected", affected_value));
+        }
+        if required(parameters, "AffectedZone")? != "Exile" {
+            return Err(unsupported_value(
+                "AffectedZone",
+                required(parameters, "AffectedZone")?,
+            ));
+        }
+        let affected = affected_selector(affected_value)?;
+        return Ok(MappedLegacyAbility {
+            prefix,
+            api: api.to_string(),
+            costs: Vec::new(),
+            event: None,
+            timing: None,
+            expression: call(
+                Operation::Continuous,
+                vec![
+                    affected.clone(),
+                    call(
+                        Operation::PlayExiled,
+                        vec![affected, call(Operation::You, vec![])],
+                    ),
+                    Expression::Text("exile".to_string()),
+                ],
+            ),
+        });
+    }
     require_battlefield_zone(parameters, "AffectedZone")?;
     require_static_effect_zone(parameters, "EffectZone")?;
     let affected = affected_selector(required(parameters, "Affected")?)?;
@@ -7884,6 +7922,31 @@ mod tests {
             "S:Mode$ Continuous | Affected$ Card.Self | AddKeyword$ Flying | EffectZone$ All | Description$ Flying.",
         ] {
             assert_operation(line, Operation::Continuous, 0);
+        }
+
+        let play_exiled = map_line(
+            "S:Mode$ Continuous | Affected$ Card.IsRemembered | AffectedZone$ Exile | MayPlay$ True | Description$ Play remembered exile.",
+        )
+        .unwrap_or_else(|error| panic!("closed PlayExiled continuous should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &play_exiled.expression,
+            Operation::PlayExiled
+        ));
+
+        for (line, code) in [
+            (
+                "S:Mode$ Continuous | Affected$ Card.IsRemembered | AffectedZone$ Graveyard | MayPlay$ True | Description$ Open play zone.",
+                "UNSUPPORTED_VALUE",
+            ),
+            (
+                "S:Mode$ Continuous | Affected$ Card.IsRemembered | AffectedZone$ Exile | MayPlay$ True | MayPlayIgnoreType$ True | Description$ Open play permission.",
+                "UNSUPPORTED_PARAMETER",
+            ),
+        ] {
+            let error = map_line(line)
+                .err()
+                .unwrap_or_else(|| panic!("open PlayExiled form must quarantine"));
+            assert_eq!(error.code, code);
         }
 
         let error = map_line(
