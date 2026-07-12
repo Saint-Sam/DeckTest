@@ -892,44 +892,19 @@ fn translate_keywords(
                     }),
                 )
             }
-            ("crew", [amount]) => {
-                let amount = amount.parse::<i64>().map_err(|_| {
-                    (
-                        line.line,
-                        "UNSUPPORTED_VALUE".to_string(),
-                        format!(
-                            "keyword `{name}` crew amount `{amount}` is not a positive integer"
-                        ),
-                    )
-                })?;
-                if amount <= 0 {
-                    return Err((
-                        line.line,
-                        "UNSUPPORTED_VALUE".to_string(),
-                        format!(
-                            "keyword `{name}` crew amount `{amount}` is not a positive integer"
-                        ),
-                    ));
-                }
-                (
-                    Some(keyword.clone()),
-                    Some(AbilityDefinition {
-                        kind: AbilityKind::Activated,
-                        costs: Vec::new(),
-                        event: None,
-                        condition: None,
-                        timing: None,
-                        effect: expression_call(
-                            Operation::Crew,
-                            vec![
-                                expression_call(Operation::Source, vec![]),
-                                Expression::Integer(amount),
-                            ],
-                        ),
-                        mana_ability: false,
-                    }),
-                )
-            }
+            ("crew", [amount]) => (
+                Some(keyword.clone()),
+                Some(translate_crew_keyword(line.line, name, amount, None)?),
+            ),
+            ("crew", [amount, activation]) if activation == "ActivationLimit$ 1" => (
+                Some(keyword.clone()),
+                Some(translate_crew_keyword(
+                    line.line,
+                    name,
+                    amount,
+                    Some(expression_call(Operation::TimingOnceEachTurn, vec![])),
+                )?),
+            ),
             (
                 "flashback" | "madness" | "foretell" | "dash" | "spectacle" | "overload" | "escape"
                 | "blitz" | "disturb" | "evoke" | "bestow",
@@ -1005,6 +980,43 @@ fn translate_keywords(
     translated.ids.sort();
     translated.ids.dedup();
     Ok(translated)
+}
+
+fn translate_crew_keyword(
+    line: usize,
+    name: &str,
+    amount: &str,
+    timing: Option<Expression>,
+) -> Result<AbilityDefinition, (usize, String, String)> {
+    let amount = amount.parse::<i64>().map_err(|_| {
+        (
+            line,
+            "UNSUPPORTED_VALUE".to_string(),
+            format!("keyword `{name}` crew amount `{amount}` is not a positive integer"),
+        )
+    })?;
+    if amount <= 0 {
+        return Err((
+            line,
+            "UNSUPPORTED_VALUE".to_string(),
+            format!("keyword `{name}` crew amount `{amount}` is not a positive integer"),
+        ));
+    }
+    Ok(AbilityDefinition {
+        kind: AbilityKind::Activated,
+        costs: Vec::new(),
+        event: None,
+        condition: None,
+        timing,
+        effect: expression_call(
+            Operation::Crew,
+            vec![
+                expression_call(Operation::Source, vec![]),
+                Expression::Integer(amount),
+            ],
+        ),
+        mana_ability: false,
+    })
 }
 
 fn translate_etb_counter(
@@ -2019,11 +2031,19 @@ mod tests {
                 Expression::Integer(3)
             ]
         ));
+
+        let limited =
+            crate::legacy::parse_legacy_script("fixture.txt", "K:Crew:3:ActivationLimit$ 1\n")
+                .unwrap_or_else(|error| panic!("limited crew fixture should parse: {error}"));
+        let limited_faces = face_lines(&limited);
+        let limited = translate_keywords(&limited, &limited_faces[0])
+            .unwrap_or_else(|error| panic!("limited crew should translate: {error:?}"));
+        assert!(limited.abilities[0].timing.is_some());
     }
 
     #[test]
     fn rejects_open_crew_keyword_shapes() {
-        for source in ["K:Crew:0\n", "K:Crew:X\n", "K:Crew:3:ActivationLimit$ 1\n"] {
+        for source in ["K:Crew:0\n", "K:Crew:X\n", "K:Crew:3:ActivationLimit$ 2\n"] {
             let script = crate::legacy::parse_legacy_script("fixture.txt", source)
                 .unwrap_or_else(|error| panic!("fixture should parse: {error}"));
             let faces = face_lines(&script);
