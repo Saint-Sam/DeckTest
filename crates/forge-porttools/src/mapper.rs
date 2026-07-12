@@ -575,11 +575,25 @@ pub fn map_legacy_ability(
     } else {
         false
     };
-    let stripped_expression = optional_effect.then(|| {
+    let secondary = expression
+        .fields
+        .iter()
+        .find(|field| field.key.as_deref() == Some("Secondary"))
+        .map(|field| field.value.as_str());
+    if secondary.is_some_and(|value| value != "True") {
+        return Err(unsupported_value(
+            "Secondary",
+            secondary.unwrap_or_default(),
+        ));
+    }
+    let stripped_expression = (optional_effect || secondary.is_some()).then(|| {
         let mut stripped = expression.clone();
-        stripped
-            .fields
-            .retain(|field| !matches!(field.key.as_deref(), Some("Optional" | "OptionalDecider")));
+        stripped.fields.retain(|field| {
+            !matches!(
+                field.key.as_deref(),
+                Some("Optional" | "OptionalDecider" | "Secondary")
+            )
+        });
         stripped
     });
     let expression = stripped_expression.as_ref().unwrap_or(expression);
@@ -1017,14 +1031,26 @@ fn map_with_context_unconditioned(
     } else {
         false
     };
+    let secondary = parameter_map.get("Secondary").map(String::as_str);
+    if secondary.is_some_and(|value| value != "True") {
+        return Err(unsupported_value(
+            "Secondary",
+            secondary.unwrap_or_default(),
+        ));
+    }
     let mut base_expression = expression.clone();
-    if sub_ability.is_some() || optional_effect || divided_allocation.is_some() {
+    if sub_ability.is_some()
+        || optional_effect
+        || divided_allocation.is_some()
+        || secondary.is_some()
+    {
         base_expression.fields.retain(|field| {
             field.key.as_deref() != Some("SubAbility")
                 && (!optional_effect || field.key.as_deref() != Some("Optional"))
                 && (!optional_effect || field.key.as_deref() != Some("OptionalDecider"))
                 && (divided_allocation.is_none()
                     || field.key.as_deref() != Some("DividedAsYouChoose"))
+                && field.key.as_deref() != Some("Secondary")
         });
     }
     let mut mapped = match map_dynamic_ability(prefix, &base_expression, context)? {
@@ -1172,6 +1198,7 @@ fn extract_presence_condition(
                     | "ConditionPresentCompare"
                     | "ConditionCompare"
                     | "ConditionZone"
+                    | "ConditionDescription"
             )
         )
     });
@@ -1253,6 +1280,7 @@ fn extract_legacy_conditions(
                     | "ActivatorThisTurnCast"
                     | "OpponentTurn"
                     | "NoResolvingCheck"
+                    | "ConditionDescription"
             )
         )
     });
@@ -5117,6 +5145,7 @@ fn map_destroy_all(
             "ValidCards",
             "ValidTgts",
             "NoRegen",
+            "RememberDestroyed",
             "SpellDescription",
             "StackDescription",
             "AILogic",
@@ -5134,7 +5163,12 @@ fn map_destroy_all(
         }
         arguments.push(Expression::Text("cannot_regenerate".to_string()));
     }
-    let expression = call(Operation::Destroy, arguments);
+    let expression = apply_remembered_result(
+        call(Operation::Destroy, arguments),
+        parameters,
+        "RememberDestroyed",
+        "destroyed",
+    )?;
     mapped_direct(prefix, api, parameters, expression)
 }
 
@@ -9661,6 +9695,21 @@ mod tests {
                 .err()
                 .unwrap_or_else(|| panic!("non-true Optional must fail closed"));
         assert_eq!(error.code, "UNSUPPORTED_VALUE");
+
+        let secondary = map_line(
+            "A:SP$ Draw | Defined$ You | NumCards$ 1 | Secondary$ True | SpellDescription$ Draw.",
+        )
+        .unwrap_or_else(|error| {
+            panic!("secondary composition marker should map: {}", error.message)
+        });
+        assert!(expression_contains_operation(
+            &secondary.expression,
+            Operation::Draw
+        ));
+        assert!(map_line(
+            "A:SP$ Draw | Defined$ You | NumCards$ 1 | Secondary$ False | SpellDescription$ Draw."
+        )
+        .is_err());
     }
 
     #[test]
@@ -10477,6 +10526,7 @@ mod tests {
 
         for line in [
             "A:SP$ Destroy | ValidTgts$ Creature | RememberDestroyed$ True",
+            "A:SP$ DestroyAll | ValidCards$ Creature | RememberDestroyed$ True",
             "A:SP$ Discard | Defined$ You | Mode$ TgtChoose | NumCards$ 1 | RememberDiscarded$ True",
             "A:SP$ Sacrifice | Defined$ You | SacValid$ Creature | RememberSacrificed$ True",
         ] {
@@ -10490,6 +10540,9 @@ mod tests {
         }
         assert!(
             map_line("A:SP$ Destroy | ValidTgts$ Creature | RememberDestroyed$ False").is_err()
+        );
+        assert!(
+            map_line("A:SP$ DestroyAll | ValidCards$ Creature | RememberDestroyed$ False").is_err()
         );
 
         let tapped = map_line(
@@ -11516,6 +11569,15 @@ mod tests {
         assert!(expression_contains_operation(
             &static_ability.expression,
             Operation::During
+        ));
+
+        let described = map_line(
+            "A:SP$ Draw | Defined$ You | NumCards$ 1 | Condition$ Blessing | ConditionDescription$ If you have the city's blessing, | SpellDescription$ draw a card.",
+        )
+        .unwrap_or_else(|error| panic!("condition description metadata should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &described.expression,
+            Operation::WhileCondition
         ));
 
         let event_dependent = map_script_root(concat!(
