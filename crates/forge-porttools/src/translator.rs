@@ -1079,7 +1079,10 @@ fn closed_etb_extra_counter_selector(
             | "Vampire.YouCtrl+Other"
             | "Creature.Wolf+YouCtrl"
             | "Creature.Werewolf+YouCtrl"
+            | "Creature.Wolf+YouCtrl,Creature.Werewolf+YouCtrl"
             | "Creature.Colorless+YouCtrl"
+            | "Creature.YouCtrl+Other+nonHuman"
+            | "Creature.YouCtrl+Other,Vehicle.YouCtrl+Other"
             | "Planeswalker.YouCtrl"
     ) {
         return Err((

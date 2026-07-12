@@ -6970,6 +6970,13 @@ fn affected_selector_branch(value: &str) -> Result<Expression, MappingDiagnostic
                         vec![Expression::Text("creature".to_string())],
                     )],
                 ),
+                "nonHuman" => call(
+                    Operation::Not,
+                    vec![call(
+                        Operation::SubtypeIs,
+                        vec![Expression::Text("human".to_string())],
+                    )],
+                ),
                 "nonArtifact" => call(
                     Operation::Not,
                     vec![call(
