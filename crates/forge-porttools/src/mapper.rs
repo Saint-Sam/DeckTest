@@ -931,41 +931,74 @@ fn extract_presence_condition(
         .fields
         .iter()
         .any(|field| field.key.as_deref() == Some("IsPresent"));
-    let has_comparison = expression
+    let has_condition_present = expression
         .fields
         .iter()
-        .any(|field| field.key.as_deref() == Some("PresentCompare"));
-    if !has_presence && !has_comparison {
+        .any(|field| field.key.as_deref() == Some("ConditionPresent"));
+    let has_comparison = expression.fields.iter().any(|field| {
+        matches!(
+            field.key.as_deref(),
+            Some("PresentCompare" | "ConditionPresentCompare" | "ConditionCompare")
+        )
+    });
+    if !has_presence && !has_condition_present && !has_comparison {
         return Ok((expression.clone(), None));
     }
     let parameters = parameters(expression)?;
-    let present = parameters.get("IsPresent").ok_or_else(|| {
+    if has_condition_present && parameters.contains_key("ConditionDefined") {
+        return Ok((expression.clone(), None));
+    }
+    let present_key = if has_presence {
+        "IsPresent"
+    } else {
+        "ConditionPresent"
+    };
+    let present = parameters.get(present_key).ok_or_else(|| {
         diagnostic(
             "MISSING_PARAMETER",
-            "PresentCompare requires a matching IsPresent selector",
+            "presence comparison requires a matching presence selector",
         )
     })?;
-    let selector = match parameters.get("PresentZone").map(String::as_str) {
+    let zone_key = if has_presence {
+        "PresentZone"
+    } else {
+        "ConditionZone"
+    };
+    let selector = match parameters.get(zone_key).map(String::as_str) {
         None | Some("Battlefield") => presence_selector(present)?,
         Some(zone @ ("Graveyard" | "Hand" | "Exile" | "Library")) => {
             card_selector_in_zone(present, &zone.to_ascii_lowercase())?
         }
-        Some(zone) => return Err(unsupported_value("PresentZone", zone)),
+        Some(zone) => return Err(unsupported_value(zone_key, zone)),
     };
     let comparison = parameters
         .get("PresentCompare")
+        .or_else(|| parameters.get("ConditionPresentCompare"))
+        .or_else(|| parameters.get("ConditionCompare"))
         .map(String::as_str)
         .unwrap_or("GE1");
     let condition = closed_count_comparison(
         call(Operation::Count, vec![selector]),
         comparison,
-        "PresentCompare",
+        if has_presence {
+            "PresentCompare"
+        } else {
+            "ConditionCompare"
+        },
     )?;
     let mut unconditioned = expression.clone();
     unconditioned.fields.retain(|field| {
         !matches!(
             field.key.as_deref(),
-            Some("IsPresent" | "PresentCompare" | "PresentZone")
+            Some(
+                "IsPresent"
+                    | "PresentCompare"
+                    | "PresentZone"
+                    | "ConditionPresent"
+                    | "ConditionPresentCompare"
+                    | "ConditionCompare"
+                    | "ConditionZone"
+            )
         )
     });
     Ok((unconditioned, Some(condition)))
@@ -8427,6 +8460,38 @@ mod tests {
         .err()
         .unwrap_or_else(|| panic!("dynamic presence comparison must quarantine"));
         assert_eq!(unsupported.code, "UNSUPPORTED_VALUE");
+    }
+
+    #[test]
+    fn lowers_standalone_condition_present_and_rejects_remembered_binding() {
+        let mapped = map_line(
+            "A:AB$ Pump | Defined$ Self | NumAtt$ +1 | ConditionPresent$ Creature.YouCtrl | ConditionCompare$ GE2 | SpellDescription$ Pump.",
+        )
+        .unwrap_or_else(|error| panic!("standalone ConditionPresent should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &mapped.timing.unwrap_or_else(|| {
+                panic!("standalone ConditionPresent should become an activation condition")
+            }),
+            Operation::AtLeast
+        ));
+
+        let graveyard = map_line(
+            "A:AB$ Draw | NumCards$ 1 | ConditionZone$ Graveyard | ConditionPresent$ Card.YouOwn | ConditionCompare$ GE2 | SpellDescription$ Draw.",
+        )
+        .unwrap_or_else(|error| panic!("private-zone ConditionPresent should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &graveyard.timing.unwrap_or_else(|| {
+                panic!("graveyard ConditionPresent should become an activation condition")
+            }),
+            Operation::TimingCondition
+        ));
+
+        let error = map_line(
+            "A:AB$ Draw | NumCards$ 1 | ConditionDefined$ Remembered | ConditionPresent$ Card | ConditionCompare$ GE1 | SpellDescription$ Draw.",
+        )
+        .err()
+        .unwrap_or_else(|| panic!("remembered ConditionPresent must quarantine"));
+        assert_eq!(error.code, "UNSUPPORTED_PARAMETER");
     }
 
     #[test]
