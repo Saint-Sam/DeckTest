@@ -1,6 +1,6 @@
 # DeckTest / Forge 2.0 Status
 
-Generated: 2026-07-12T01:58:05.413100+00:00 by `tools/write_card_maturity.py`
+Generated: 2026-07-12T02:11:55.983582+00:00 by `tools/write_card_maturity.py`
 
 Plan: v1.8
 
@@ -32,19 +32,19 @@ Exclusive highest evidence stage for the 32,792 in-v1 Oracle identities:
 
 | Highest stage | Identities |
 | --- | ---: |
-| Absent identity-bound definition evidence | 21,379 |
+| Absent identity-bound definition evidence | 21,377 |
 | Parsed | 0 |
 | Mapped partial | 0 |
 | Structurally translated | 0 |
-| Compiler valid | 11,413 |
+| Compiler valid | 11,415 |
 | Runtime smoke passed | 0 |
 | Semantic verified | 0 |
 | Pod integration verified | 0 |
 | AI supported | 0 |
 | Product eligible | 0 |
 
-Compiler-valid evidence currently reaches 11,413/32,792
-in-v1 identities (34.8042%). This includes the
+Compiler-valid evidence currently reaches 11,415/32,792
+in-v1 identities (34.8103%). This includes the
 unverified CP-DSL language-stress corpus and therefore is not a playable claim.
 Parsing and mapping remain below in their own units rather than being guessed
 onto identities.
@@ -54,10 +54,10 @@ onto identities.
 | Literal unit | Result |
 | --- | ---: |
 | Legacy scripts parsed | 33,290/33,290 |
-| Compiler-valid translated legacy definitions | 11,354 |
-| Fail-closed quarantined legacy definitions | 21,936 |
-| Structurally tested legacy ability uses | 19,398/43,649 |
-| Quarantined legacy ability uses | 24,251 |
+| Compiler-valid translated legacy definitions | 11,356 |
+| Fail-closed quarantined legacy definitions | 21,934 |
+| Structurally tested legacy ability uses | 19,401/43,649 |
+| Quarantined legacy ability uses | 24,248 |
 | Owner-priority compiler-valid definitions | 194/365 |
 
 ## Evidence Breadth
@@ -73,15 +73,15 @@ onto identities.
 
 ## T3.3 Mapper Progress
 
-The exact local-only `c673ae5` product emits 11,354/33,290 complete legacy
-scripts (34.1063%) and maps 19,398/43,649 top-level ability uses (44.4409%).
-The latest batch lowers standalone `ConditionPresent` only for closed presence
-selectors, optional closed comparisons, and closed battlefield or private-zone
-scopes without remembered-object binding. Open and ambiguous forms remain
-fail-closed. Owner-priority emission is 194/365; the 24-worker deterministic
-checkpoint, full workspace tests, clippy, compiler/database validation, oracle
-gates, planner replay, and 80.9882% line coverage passed locally. T3.3 remains
-active and the 60% complete-script exit floor is not reached.
+The exact local-only `506bb90` product emits 11,356/33,290 complete legacy
+scripts (34.1123%) and maps 19,401/43,649 top-level ability uses (44.4478%).
+The latest batch lowers source-bound and `Defined$ Self` command-zone
+`ChangeZone` effects through typed `MoveZoneFrom`; remembered, aggregate, and
+other open command-zone selectors remain fail-closed. Owner-priority emission
+is 194/365; the 24-worker deterministic checkpoint, full workspace tests,
+clippy, compiler/database validation, oracle gates, planner replay, and
+80.9930% line coverage passed locally. T3.3 remains active and the 60%
+complete-script exit floor is not reached.
 
 ## Next Gates
 
@@ -94,4 +94,4 @@ active and the 60% complete-script exit floor is not reached.
 
 Per-identity generated detail: `target/card-maturity/identities.json` (untracked,
 38,306 records; SHA-256
-`3a31e68f4d74073ac4d32383c9e0a79a4aaee202b9c2d096c89c77edc4927258`).
+`dcce06d2ae9cd7a310862f787a520fae807c185b60935fbeb653addb5078ab86`).
