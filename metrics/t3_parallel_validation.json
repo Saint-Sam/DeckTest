@@ -1,16 +1,16 @@
 {
   "blocker_plan": {
     "analyzed_scripts": 33290,
-    "confirmed_observations": 47294,
-    "linked_root_fanout": 48198,
-    "scripts_with_confirmed_blockers": 21665,
-    "unique_blocker_families": 5736
+    "confirmed_observations": 47104,
+    "linked_root_fanout": 48008,
+    "scripts_with_confirmed_blockers": 21584,
+    "unique_blocker_families": 5735
   },
   "coverage": {
-    "count": 34527,
-    "covered": 27972,
-    "not_covered": 6555,
-    "percent": 81.01485793726648
+    "count": 34619,
+    "covered": 28056,
+    "not_covered": 6563,
+    "percent": 81.04220225887518
   },
   "deterministic_blocker_plan_replay": true,
   "deterministic_parallel_replay": true,
@@ -18,8 +18,8 @@
     "accelerated_core_phase": 37,
     "comparable_serial_core_baseline": null,
     "core_saved_percent": null,
-    "full_workspace_verification": 93,
-    "total": 137
+    "full_workspace_verification": 95,
+    "total": 139
   },
   "github_actions_used": false,
   "local_only": true,

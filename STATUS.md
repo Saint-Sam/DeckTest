@@ -1,6 +1,6 @@
 # DeckTest / Forge 2.0 Status
 
-Generated: 2026-07-12T03:01:38.701356+00:00 by `tools/write_card_maturity.py`
+Generated: 2026-07-12T03:20:21.563151+00:00 by `tools/write_card_maturity.py`
 
 Plan: v1.8
 
@@ -71,17 +71,17 @@ onto identities.
 | Hand-authored scenarios | 133 |
 | Cross-compile artifacts passed | 4 |
 
-The latest exact T3.3 mapper checkpoint is product `497d780`. It lowers the
-closed `MayPlay$ True` plus `AffectedZone$ Exile` permission with exact
-`Card.IsRemembered` or `Card.Self` selectors to typed `PlayExiled` structure;
-alternate costs, richer player/condition forms, dynamic values, non-exile
-zones, and runtime semantics remain fail-closed. The product emits 11,440 of
-33,290 scripts (34.3647%) and maps 19,519 of 43,649 ability uses (44.7181%),
-with 195 of 365 Owner-priority definitions. The detached 24-worker checkpoint
-passed deterministic translation/planner replay, full tests, clippy,
-compiler/database validation, oracles, nightmare/smoke checks, and 81.0149%
-line coverage. T3.3 remains active and its 60% complete-script floor is not
-reached.
+The latest exact T3.3 mapper checkpoint is product `b207175`. It lowers
+positive integer `K:Crew` amounts to typed `crew(source(), amount)` effects
+and preserves exact `ActivationLimit$ 1` as `TimingOnceEachTurn`; richer Crew
+and Crewed/Saddled forms remain fail-closed. The product remains at 11,440 of
+33,290 scripts (34.3647%) and 19,519 of 43,649 ability uses (44.7181%), with
+195 of 365 Owner-priority definitions. Confirmed blockers are 21,584 scripts,
+5,735 families, 47,104 observations, and 48,008 linked-root fanout. The
+detached 24-worker checkpoint passed deterministic translation/planner replay,
+full tests, clippy, compiler/database validation, oracles, nightmare/smoke
+checks, and 81.0422% line coverage. T3.3 remains active and its 60% complete-
+script floor is not reached.
 
 ## Next Gates
 
@@ -94,4 +94,4 @@ reached.
 
 Per-identity generated detail: `target/card-maturity/identities.json` (untracked,
 38,306 records; SHA-256
-`b14dd46f78b47263bee3bc6b6f42b099fcc0bc2d239d7dbd1cefc29e1b1a5290`).
+`66caaad0096d23dda946d757f9ec9e5938470965e44e1405963de09b00521cbd`).

@@ -8,10 +8,10 @@
   "detail": {
     "path": "target/card-maturity/identities.json",
     "record_count": 38306,
-    "sha256": "b14dd46f78b47263bee3bc6b6f42b099fcc0bc2d239d7dbd1cefc29e1b1a5290",
+    "sha256": "66caaad0096d23dda946d757f9ec9e5938470965e44e1405963de09b00521cbd",
     "tracked": false
   },
-  "generated_at": "2026-07-12T03:01:38.701356+00:00",
+  "generated_at": "2026-07-12T03:20:21.563151+00:00",
   "generator": "tools/write_card_maturity.py",
   "implementation_maturity": {
     "compiler_evidence": {
@@ -132,9 +132,9 @@
     "unit": "owner_priority_card_name"
   },
   "product_binding": {
-    "commit": "497d780a355c979e932fb9c3599cdc94f14768c6",
+    "commit": "b207175475c6d96dcca188d8432d6d304655a632",
     "source": "metrics/coverage.json",
-    "tree": "445c63a12cd2aa3d3d4d6814ed96d82bdc758745"
+    "tree": "b882182a5b25df6aecb53c29b5af21a797adcb33"
   },
   "scenario_evidence": {
     "distinct_operations": 19,
@@ -157,18 +157,18 @@
   },
   "source_artifacts": {
     "FORGE_REBUILD_MASTER_PLAN.md": "f56f54ec3dffcb556695ff3e7048e1a8f909fd7147c6db6fd094c073e3d89cb4",
-    "PLAN_STATE.json": "563ce44b5a071cb304a05ce7ebf57af45ac76e2a743c81f632f0f029c8afe045",
+    "PLAN_STATE.json": "b5b6b8eb79ebfd113496397c0b66132a182b6656679b7c8beab861830fb67681",
     "assets/card_catalog.json": "6c7c41ba91b524b8ac59cf7e215fbceaa31c1f9567ae11623dcfa15f6b3f8321",
     "metrics/api_coverage.json": "4c1042e17c017e744c72407a615a85515a6e5a7dc042eefead590ff3d629cbae",
     "metrics/card_catalog.json": "69c4662acbc20750847355bd461f469578aa27bd4c7932b88ac1a47bbc43c05a",
-    "metrics/coverage.json": "d3b80f38b15043aa51535678725cf8e29020a13a1fd03ba653f1274d1b49a329",
+    "metrics/coverage.json": "af0c091a3c0140ad1f30fd36e98c6c21397a7a7080f8939a57fce8529e5f3f30",
     "metrics/cp_dsl_corpus.json": "8e66dcf0f81ce9625e969346291239e789d0606c179f800de704e969bec02bd7",
     "metrics/legacy_parse.json": "b5782a750b8840efebf74859e1359bf95c746a6c594a3ede504f5b197e4b0603",
     "metrics/local_platforms.json": "2276b8f85a05cec3c798ac4fef11069b5170b85b9d806a8f1eb0ce9daa551cf8",
     "metrics/oracle_semantics.json": "401def585d647dafb90af2fc2a54ffe7cc95d92e12e45b38aa9942e63bd153d5",
     "metrics/priority_coverage.json": "dd3af909356e5f5892923b7997f586728cfb0df95fa95e43771678d581ef645c",
-    "metrics/t3_parallel_validation.json": "2f207a79512cb7fcaeaabe0e6c6197b1fae1b1d7cf1b5cc3e29808a69a3550df",
-    "metrics/translation.json": "88a9fdd9d9645060058e61e78edc41831aa7b6790cd6beeccf68b0b7c29cc4d7",
+    "metrics/t3_parallel_validation.json": "1112e6ab680719c727309aab05eb0f186f290dd7cb8b6269759ebd1ed3579ecf",
+    "metrics/translation.json": "b3551f534bbc2c91c3a50d64a5ff65cdd3ab9a4ade5599e22f84468a1945cffc",
     "tools/write_card_maturity.py": "7e8c8f21ed724729f2d608a6ab7bc2dfec8a82a3179d38a288524391c3647a50"
   },
   "units_are_separate": true

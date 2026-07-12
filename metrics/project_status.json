@@ -1,7 +1,7 @@
 {
   "ai_supported_oracle_identities": 0,
-  "blocker_families_confirmed": 5736,
-  "blocker_observations_confirmed": 47294,
+  "blocker_families_confirmed": 5735,
+  "blocker_observations_confirmed": 47104,
   "catalog_classified_identities": 38306,
   "catalog_dangling_references": 0,
   "catalog_english_printings": 113234,
@@ -50,7 +50,7 @@
     "CP-DSL",
     "CP-STATUS-TRUTH"
   ],
-  "generated_at": "2026-07-12T03:01:41.821047+00:00",
+  "generated_at": "2026-07-12T03:20:24.801721+00:00",
   "generator": "tools/write_project_status.py",
   "hand_authored_scenario_count": 133,
   "hosted_workflow_count": 0,
