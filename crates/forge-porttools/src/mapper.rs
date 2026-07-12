@@ -6539,6 +6539,10 @@ fn default_selector(default: DefaultSelector) -> Expression {
 fn defined_selector(value: &str) -> Result<Expression, MappingDiagnostic> {
     match value {
         "Self" => Ok(call(Operation::Source, vec![])),
+        "Remembered" => Ok(call(
+            Operation::Remembered,
+            vec![call(Operation::Any, vec![])],
+        )),
         "Targeted" => Ok(call(Operation::Target, vec![call(Operation::Any, vec![])])),
         "You" => Ok(call(Operation::You, vec![])),
         "Opponent" | "Player.Opponent" => Ok(call(Operation::Opponent, vec![])),
@@ -6819,6 +6823,12 @@ fn affected_selector_branch(value: &str) -> Result<Expression, MappingDiagnostic
     }
     if matches!(value, "Any" | "Player") {
         return Ok(call(Operation::Any, vec![]));
+    }
+    if value == "Card.IsRemembered" {
+        return Ok(call(
+            Operation::Remembered,
+            vec![call(Operation::Any, vec![])],
+        ));
     }
     if matches!(value, "Card.Self" | "Creature.Self" | "Self") {
         return Ok(call(Operation::Source, vec![]));
@@ -7903,6 +7913,8 @@ mod tests {
             "A:DB$ ChangeZone | Defined$ TriggeredNewCardLKICopy | Origin$ Graveyard | Destination$ Battlefield | SpellDescription$ Return.",
             "A:DB$ ChangeZone | Defined$ TriggeredCardLKICopy | Origin$ Graveyard | Destination$ Hand | SpellDescription$ Return.",
             "A:DB$ ChangeZone | Defined$ Self | Origin$ Command | Destination$ Exile | SpellDescription$ Exile self from the command zone.",
+            "A:AB$ Pump | Defined$ Remembered | NumAtt$ 1 | NumDef$ 1 | SpellDescription$ Remembered pump.",
+            "A:AB$ Pump | ValidTgts$ Card.IsRemembered | NumAtt$ 1 | NumDef$ 1 | SpellDescription$ Remembered target pump.",
             "A:AB$ Pump | ValidTgts$ Creature.IsCommander+YouCtrl | NumAtt$ 1 | NumDef$ 1 | SpellDescription$ Commander pump.",
         ] {
             map_line(line).unwrap_or_else(|error| {
@@ -7915,6 +7927,13 @@ mod tests {
             Ok(_) => panic!("combat-state selector must remain quarantined"),
             Err(error) => error,
         };
+        assert_eq!(error.code, "UNSUPPORTED_VALUE");
+
+        let error = map_line(
+            "A:AB$ Pump | Defined$ RememberedLKI | NumAtt$ 1 | SpellDescription$ LKI pump.",
+        )
+        .err()
+        .unwrap_or_else(|| panic!("remembered LKI binding must remain quarantined"));
         assert_eq!(error.code, "UNSUPPORTED_VALUE");
 
         let error = map_line(
