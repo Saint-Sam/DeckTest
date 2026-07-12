@@ -1,6 +1,6 @@
 # DeckTest / Forge 2.0 Status
 
-Generated: 2026-07-12T14:49:22.047256+00:00 by `tools/write_card_maturity.py`
+Generated: 2026-07-12T15:24:21.433470+00:00 by `tools/write_card_maturity.py`
 
 Plan: v1.8
 
@@ -32,19 +32,19 @@ Exclusive highest evidence stage for the 32,792 in-v1 Oracle identities:
 
 | Highest stage | Identities |
 | --- | ---: |
-| Absent identity-bound definition evidence | 18,949 |
+| Absent identity-bound definition evidence | 18,558 |
 | Parsed | 0 |
 | Mapped partial | 0 |
 | Structurally translated | 0 |
-| Compiler valid | 13,843 |
+| Compiler valid | 14,234 |
 | Runtime smoke passed | 0 |
 | Semantic verified | 0 |
 | Pod integration verified | 0 |
 | AI supported | 0 |
 | Product eligible | 0 |
 
-Compiler-valid evidence currently reaches 13,843/32,792
-in-v1 identities (42.2146%). This includes the
+Compiler-valid evidence currently reaches 14,234/32,792
+in-v1 identities (43.4069%). This includes the
 unverified CP-DSL language-stress corpus and therefore is not a playable claim.
 Parsing and mapping remain below in their own units rather than being guessed
 onto identities.
@@ -54,10 +54,10 @@ onto identities.
 | Literal unit | Result |
 | --- | ---: |
 | Legacy scripts parsed | 33,290/33,290 |
-| Compiler-valid translated legacy definitions | 13,787 |
-| Fail-closed quarantined legacy definitions | 19,503 |
-| Structurally tested legacy ability uses | 22,247/43,649 |
-| Quarantined legacy ability uses | 21,402 |
+| Compiler-valid translated legacy definitions | 14,179 |
+| Fail-closed quarantined legacy definitions | 19,111 |
+| Structurally tested legacy ability uses | 22,322/43,649 |
+| Quarantined legacy ability uses | 21,327 |
 | Owner-priority compiler-valid definitions | 200/365 |
 
 ## Evidence Breadth
@@ -73,7 +73,7 @@ onto identities.
 
 ## Next Gates
 
-1. Continue the measured T3.3 mapper lane at 40% capacity until the corpus floor
+1. Continue the measured T3.3 mapper lane at its current measured capacity until the corpus floor
    is met; every batch records before/after coverage and quarantine deltas.
 2. T3.5 capability-specific runtime smoke; unsupported setup is reason-coded.
 3. T3.6 and CP-CARD-SEMANTICS-100 for the frozen 100-card Commander set.
@@ -82,4 +82,4 @@ onto identities.
 
 Per-identity generated detail: `target/card-maturity/identities.json` (untracked,
 38,306 records; SHA-256
-`856dd89d17504bb2dbd32fe67a528f2453137071ecb16f7edeb162ae374725af`).
+`beeaf7d05b65bbcf0b5ce1f3a8cd1ad5853bbf17fd50397720d0e720508d2e1e`).

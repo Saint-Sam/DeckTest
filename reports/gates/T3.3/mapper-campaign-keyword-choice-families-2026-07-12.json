@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-12T15:24:46Z",
+  "task": "T3.3",
+  "batch": "typed keyword, protection, and type-choice families",
+  "technical_result": "pass",
+  "product_binding": {
+    "mapper_commit": "f883b40",
+    "exact_product_commit": "f883b404f999e913598ef90e0a95d611bb5992ab",
+    "exact_product_tree": "54b168c68a9cd4514edd408bff466266f88ed3b7"
+  },
+  "source_binding": {
+    "legacy_forge_commit": "1f0a3e0815822d8f58f798e0304b33d4534248b1",
+    "legacy_source": "existing local pinned checkout",
+    "translation_fingerprint": "3697abad44b5b3dbc683e925bace83a7",
+    "cargo_lock_sha256": "f9fb1cd7230cb19b3277c1f4cb4c6750699e188f197cff4ef4e2965363675268"
+  },
+  "verification_environment": {
+    "local_only": true,
+    "github_actions_used": false,
+    "network_attempted": false,
+    "install_performed": false,
+    "worker_ceiling": 24,
+    "shared_cargo_cache": true
+  },
+  "coverage_delta": {
+    "before": {
+      "complete_scripts": 13787,
+      "mapped_ability_uses": 22247,
+      "owner_priority_complete": 200
+    },
+    "after": {
+      "complete_scripts": 14179,
+      "total_scripts": 33290,
+      "complete_script_percent": 42.592370081105436,
+      "mapped_ability_uses": 22322,
+      "total_ability_uses": 43649,
+      "mapped_ability_percent": 51.13977410708149,
+      "owner_priority_complete": 200,
+      "owner_priority_requested": 365,
+      "quarantined_scripts": 19111,
+      "quarantined_ability_uses": 21327
+    },
+    "gain": {
+      "complete_scripts": 392,
+      "mapped_ability_uses": 75,
+      "owner_priority_complete": 0
+    }
+  },
+  "independent_review_remediation": {
+    "result": "pass",
+    "closed_zone_source_move": "source-bound closed-zone ChangeZone uses MoveZoneFrom and retains the legacy origin no-op guard",
+    "mana_restriction_grammar": "RestrictValid validates every complete comma-delimited branch against an exact closed allowlist",
+    "focused_regressions": [
+      "closed-zone source mismatch",
+      "approved-prefix RestrictValid tail bypasses",
+      "dynamic restricted-mana amount",
+      "both dynamic Dig counts",
+      "RemoveCreatureTypes across Continuous, Animate, and AnimateAll"
+    ]
+  },
+  "line_coverage": {
+    "covered": 30933,
+    "count": 38001,
+    "percent": 81.40048946080364,
+    "floor_percent": 80,
+    "raw_report_sha256": "3955e0fa7144aa0671903af60896d787d2aa29e21a8137fcb6f742f24e09cf8d"
+  },
+  "planner": {
+    "analyzed_scripts": 33290,
+    "scripts_with_confirmed_blockers": 18639,
+    "confirmed_observations": 39500,
+    "unique_blocker_families": 6085,
+    "linked_root_fanout": 40261
+  },
+  "checkpoint_gates": {
+    "full_workspace_tests": true,
+    "clippy_warnings_denied": true,
+    "compiler_roundtrips": true,
+    "database_validation": true,
+    "oracle_subsets_passed": true,
+    "nightmare_suite_passed": true,
+    "arena_smoke_passed": true,
+    "deterministic_parallel_replay": true,
+    "deterministic_blocker_plan_replay": true
+  },
+  "notes": [
+    "The exact 24-worker checkpoint completed locally in 162 seconds without GitHub Actions.",
+    "Structural mapping is not runtime or card-specific semantic maturity evidence.",
+    "T3.3 remains active because the 60% complete-script floor is not reached."
+  ]
+}
