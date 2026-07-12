@@ -3135,6 +3135,7 @@ fn map_pump(
             "NumDef",
             "KW",
             "Duration",
+            "AtEOT",
             "SpellDescription",
             "StackDescription",
             "IsCurse",
@@ -3158,7 +3159,13 @@ fn map_pump(
         ));
     }
     append_keyword_grants(&mut effects, &affected, parameters.get("KW"))?;
-    let expression = combine_effects(effects, "simple Pump requires a PT or keyword modifier")?;
+    if let Some(value) = parameters.get("AtEOT") {
+        effects.push(map_at_eot_cleanup(value, &affected)?);
+    }
+    let expression = combine_effects(
+        effects,
+        "simple Pump requires a PT, keyword modifier, or closed AtEOT cleanup",
+    )?;
     Ok(MappedLegacyAbility {
         prefix,
         api: api.to_string(),
@@ -3167,6 +3174,29 @@ fn map_pump(
         timing: None,
         expression,
     })
+}
+
+fn map_at_eot_cleanup(value: &str, affected: &Expression) -> Result<Expression, MappingDiagnostic> {
+    let cleanup = match value {
+        "Sacrifice" => call(Operation::SacrificeEffect, vec![affected.clone()]),
+        "Destroy" => call(Operation::Destroy, vec![affected.clone()]),
+        "Exile" => call(Operation::Exile, vec![affected.clone()]),
+        "Hand" => call(Operation::ReturnToHand, vec![affected.clone()]),
+        _ => return Err(unsupported_value("AtEOT", value)),
+    };
+    Ok(call(
+        Operation::RegisterDelayedTrigger,
+        vec![
+            call(
+                Operation::EventPhase,
+                vec![
+                    call(Operation::Any, vec![]),
+                    Expression::Text("end_step".to_string()),
+                ],
+            ),
+            cleanup,
+        ],
+    ))
 }
 
 fn map_pump_all(
@@ -9311,6 +9341,46 @@ mod tests {
         fs::remove_dir_all(&root).unwrap_or_else(|error| {
             panic!("could not remove mapper fixture: {error}");
         });
+    }
+
+    #[test]
+    fn maps_closed_pump_at_eot_cleanup_values() {
+        for (value, cleanup) in [
+            ("Sacrifice", Operation::SacrificeEffect),
+            ("Destroy", Operation::Destroy),
+            ("Exile", Operation::Exile),
+            ("Hand", Operation::ReturnToHand),
+        ] {
+            let mapped = map_line(&format!(
+                "A:AB$ Pump | Defined$ Self | NumAtt$ +1 | AtEOT$ {value}"
+            ))
+            .unwrap_or_else(|error| panic!("closed AtEOT should map: {}", error.message));
+            assert!(expression_contains_operation(
+                &mapped.expression,
+                Operation::RegisterDelayedTrigger
+            ));
+            assert!(expression_contains_operation(&mapped.expression, cleanup));
+        }
+
+        let cleanup_only = map_line("A:AB$ Pump | Defined$ Self | AtEOT$ Sacrifice")
+            .unwrap_or_else(|error| panic!("cleanup-only AtEOT should map: {}", error.message));
+        assert!(matches!(
+            cleanup_only.expression,
+            Expression::Call {
+                operation: Operation::RegisterDelayedTrigger,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn rejects_open_pump_at_eot_cleanup_values() {
+        for value in ["SacrificeCombat", "YourExile", "Library"] {
+            let error = map_line(&format!("A:AB$ Pump | Defined$ Self | AtEOT$ {value}"))
+                .err()
+                .unwrap_or_else(|| panic!("open AtEOT value must quarantine: {value}"));
+            assert_eq!(error.code, "UNSUPPORTED_VALUE");
+        }
     }
 
     fn assert_operation(line: &str, operation: Operation, expected_costs: usize) {
