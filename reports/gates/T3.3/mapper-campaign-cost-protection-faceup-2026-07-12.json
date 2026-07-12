@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-12T14:50:05Z",
+  "task": "T3.3",
+  "batch": "timed and additional costs, protection, face-up events, and closed keyword families",
+  "technical_result": "pass",
+  "product_binding": {
+    "mapper_commit": "7920714",
+    "exact_product_commit": "7920714ee46ab9d09f8f3056922dea28c2783375",
+    "exact_product_tree": "0bed72273368b69206f6ae7f7a3ad48bdeca3758"
+  },
+  "source_binding": {
+    "legacy_forge_commit": "1f0a3e0815822d8f58f798e0304b33d4534248b1",
+    "legacy_source": "existing local pinned checkout",
+    "translation_fingerprint": "5cf1fbc1558b04db4e57ea39f3823c9c",
+    "cargo_lock_sha256": "f9fb1cd7230cb19b3277c1f4cb4c6750699e188f197cff4ef4e2965363675268"
+  },
+  "verification_environment": {
+    "local_only": true,
+    "github_actions_used": false,
+    "network_attempted": false,
+    "install_performed": false,
+    "worker_ceiling": 24,
+    "shared_cargo_cache": true
+  },
+  "coverage_delta": {
+    "before": {
+      "complete_scripts": 13368,
+      "mapped_ability_uses": 22164,
+      "owner_priority_complete": 200
+    },
+    "after": {
+      "complete_scripts": 13787,
+      "total_scripts": 33290,
+      "complete_script_percent": 41.4148392910784,
+      "mapped_ability_uses": 22247,
+      "total_ability_uses": 43649,
+      "mapped_ability_percent": 50.9679488648079,
+      "owner_priority_complete": 200,
+      "owner_priority_requested": 365,
+      "quarantined_scripts": 19503,
+      "quarantined_ability_uses": 21402
+    },
+    "gain": {
+      "complete_scripts": 419,
+      "mapped_ability_uses": 83,
+      "owner_priority_complete": 0
+    }
+  },
+  "exactly_lowered": [
+    "cumulative upkeep and suspend with typed costs and time counts",
+    "separate typed cost bundles for kicker, multikicker, buyback, and alternate additional costs",
+    "turn-face-up trigger events over closed affected selectors",
+    "fixed and bounded parameterized protection descriptors",
+    "disguise, megamorph, and entwine costs",
+    "toxic, bushido, and soulshift numeric keyword values",
+    "ninjutsu activated costs"
+  ],
+  "line_coverage": {
+    "covered": 30270,
+    "count": 37220,
+    "percent": 81.32724341751747,
+    "floor_percent": 80,
+    "raw_report_sha256": "f475189571f81402d3e338a77a94e1701a99e6185436eb6ec7453654578119a5"
+  },
+  "planner": {
+    "analyzed_scripts": 33290,
+    "scripts_with_confirmed_blockers": 19038,
+    "priority_scripts_with_confirmed_blockers": 156,
+    "confirmed_observations": 40472,
+    "unique_blocker_families": 6099,
+    "linked_root_fanout": 41233
+  },
+  "checkpoint_gates": {
+    "full_workspace_tests": true,
+    "clippy_warnings_denied": true,
+    "compiler_roundtrips": true,
+    "database_validation": true,
+    "oracle_subsets_passed": true,
+    "nightmare_suite_passed": true,
+    "arena_smoke_passed": true,
+    "deterministic_parallel_replay": true,
+    "deterministic_blocker_plan_replay": true
+  },
+  "notes": [
+    "The exact 24-worker checkpoint completed locally in 156 seconds without GitHub Actions.",
+    "Structural mapping is not runtime or card-specific semantic maturity evidence.",
+    "T3.3 remains active because the 60% complete-script floor is not reached."
+  ]
+}

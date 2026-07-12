@@ -1,6 +1,6 @@
 # DeckTest / Forge 2.0 Status
 
-Generated: 2026-07-12T14:21:30.638713+00:00 by `tools/write_card_maturity.py`
+Generated: 2026-07-12T14:49:22.047256+00:00 by `tools/write_card_maturity.py`
 
 Plan: v1.8
 
@@ -32,19 +32,19 @@ Exclusive highest evidence stage for the 32,792 in-v1 Oracle identities:
 
 | Highest stage | Identities |
 | --- | ---: |
-| Absent identity-bound definition evidence | 19,367 |
+| Absent identity-bound definition evidence | 18,949 |
 | Parsed | 0 |
 | Mapped partial | 0 |
 | Structurally translated | 0 |
-| Compiler valid | 13,425 |
+| Compiler valid | 13,843 |
 | Runtime smoke passed | 0 |
 | Semantic verified | 0 |
 | Pod integration verified | 0 |
 | AI supported | 0 |
 | Product eligible | 0 |
 
-Compiler-valid evidence currently reaches 13,425/32,792
-in-v1 identities (40.9399%). This includes the
+Compiler-valid evidence currently reaches 13,843/32,792
+in-v1 identities (42.2146%). This includes the
 unverified CP-DSL language-stress corpus and therefore is not a playable claim.
 Parsing and mapping remain below in their own units rather than being guessed
 onto identities.
@@ -54,10 +54,10 @@ onto identities.
 | Literal unit | Result |
 | --- | ---: |
 | Legacy scripts parsed | 33,290/33,290 |
-| Compiler-valid translated legacy definitions | 13,368 |
-| Fail-closed quarantined legacy definitions | 19,922 |
-| Structurally tested legacy ability uses | 22,164/43,649 |
-| Quarantined legacy ability uses | 21,485 |
+| Compiler-valid translated legacy definitions | 13,787 |
+| Fail-closed quarantined legacy definitions | 19,503 |
+| Structurally tested legacy ability uses | 22,247/43,649 |
+| Quarantined legacy ability uses | 21,402 |
 | Owner-priority compiler-valid definitions | 200/365 |
 
 ## Evidence Breadth
@@ -82,4 +82,4 @@ onto identities.
 
 Per-identity generated detail: `target/card-maturity/identities.json` (untracked,
 38,306 records; SHA-256
-`a7919616a418ad8e53d4678814079c66ff51ca8499d22aedaf64f5350b07238d`).
+`856dd89d17504bb2dbd32fe67a528f2453137071ecb16f7edeb162ae374725af`).
