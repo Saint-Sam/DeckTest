@@ -1915,6 +1915,20 @@ fn map_dynamic_ability(
                 argument: 2,
             },
         ],
+        "Animate" | "AnimateAll" => vec![
+            DynamicPatchSpec {
+                key: "Power",
+                placeholder: "1",
+                operation: Operation::SetPt,
+                argument: 1,
+            },
+            DynamicPatchSpec {
+                key: "Toughness",
+                placeholder: "1",
+                operation: Operation::SetPt,
+                argument: 2,
+            },
+        ],
         "ReduceCost" => vec![DynamicPatchSpec {
             key: "Amount",
             placeholder: "1",
@@ -2359,6 +2373,21 @@ fn map_count_value(name: &str, value: &str) -> Result<Expression, MappingDiagnos
             vec![
                 affected_selector("Land.YouCtrl")?,
                 Expression::Text("basic_land_types".to_string()),
+            ],
+        ));
+    }
+    if value == "YourLifeTotal" {
+        return Ok(call(
+            Operation::LifeTotal,
+            vec![call(Operation::You, vec![])],
+        ));
+    }
+    if value == "Morbid.1.0" {
+        return Ok(call(
+            Operation::HistoryCount,
+            vec![
+                affected_selector("Creature")?,
+                Expression::Text("died_this_turn".to_string()),
             ],
         ));
     }
@@ -4477,13 +4506,16 @@ fn map_dig(
     )?;
     let position = dig_library_position(parameters, "LibraryPosition")?;
     let rest_position = dig_library_position(parameters, "LibraryPosition2")?;
-    if destination != "library" && parameters.contains_key("LibraryPosition") {
+    if destination != "library" && parameters.contains_key("LibraryPosition") && position != -1 {
         return Err(unsupported_value(
             "LibraryPosition",
             required(parameters, "LibraryPosition")?,
         ));
     }
-    if rest_destination != "library" && parameters.contains_key("LibraryPosition2") {
+    if rest_destination != "library"
+        && parameters.contains_key("LibraryPosition2")
+        && rest_position != -1
+    {
         return Err(unsupported_value(
             "LibraryPosition2",
             required(parameters, "LibraryPosition2")?,
@@ -10627,6 +10659,11 @@ mod tests {
         assert_eq!(arguments[2], Expression::Integer(1));
         assert_eq!(arguments[4], Expression::Text("hand".to_string()));
         assert_eq!(arguments[5], Expression::Text("library".to_string()));
+
+        map_line(
+            "A:SP$ Dig | DigNum$ 5 | ChangeNum$ 1 | ChangeValid$ Creature | DestinationZone$ Battlefield | DestinationZone2$ Library | LibraryPosition$ -1 | RestRandomOrder$ True | SpellDescription$ Look.",
+        )
+        .unwrap_or_else(|error| panic!("default ignored Dig position should map: {}", error.message));
         assert!(matches!(
             &arguments[6],
             Expression::Text(options)
@@ -13319,6 +13356,30 @@ mod tests {
                     "SVar:X:Count$Valid Creature.YouCtrl$GreatestCardPower\n",
                 ),
                 Operation::Aggregate,
+            ),
+            (
+                concat!(
+                    "Name:Life Total\n",
+                    "A:SP$ GainLife | Defined$ You | LifeAmount$ X | SpellDescription$ Gain life.\n",
+                    "SVar:X:Count$YourLifeTotal\n",
+                ),
+                Operation::LifeTotal,
+            ),
+            (
+                concat!(
+                    "Name:Dynamic Animation\n",
+                    "A:SP$ Animate | Defined$ Self | Types$ Creature | Power$ X | Toughness$ X | Duration$ Permanent | SpellDescription$ Animate.\n",
+                    "SVar:X:Count$Valid Creature.YouCtrl\n",
+                ),
+                Operation::Count,
+            ),
+            (
+                concat!(
+                    "Name:Morbid Count\n",
+                    "A:SP$ GainLife | Defined$ You | LifeAmount$ X | SpellDescription$ Gain life.\n",
+                    "SVar:X:Count$Morbid.1.0\n",
+                ),
+                Operation::HistoryCount,
             ),
             (
                 concat!(

@@ -1075,6 +1075,7 @@ operations! {
     PlayerAggregate => ("player_aggregate", Value, 1, Some(1)),
     Amass => ("amass", Effect, 3, Some(3)),
     ChosenTypeIs => ("chosen_type_is", Predicate, 0, Some(0)),
+    LifeTotal => ("life_total", Value, 1, Some(1)),
 }
 
 impl Operation {
@@ -1708,6 +1709,7 @@ impl Operation {
                 }
             }
             Self::ManaValue | Self::Power | Self::Toughness => Some(Selector),
+            Self::LifeTotal => Some(Selector),
             Self::Negate => Some(Number),
             Self::TriggeredAmount => Some(Text),
             Self::IfElse => {
@@ -1944,6 +1946,7 @@ mod tests {
         assert_eq!(Operation::PlayerAggregate as u32, 275);
         assert_eq!(Operation::Amass as u32, 276);
         assert_eq!(Operation::ChosenTypeIs as u32, 277);
+        assert_eq!(Operation::LifeTotal as u32, 278);
 
         let config = bincode::config::standard()
             .with_fixed_int_encoding()
