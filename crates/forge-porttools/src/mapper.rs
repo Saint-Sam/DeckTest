@@ -6950,14 +6950,30 @@ fn append_keyword_grants(
         return Ok(());
     };
     for keyword in keywords.split(" & ") {
-        effects.push(call(
-            Operation::GrantKeyword,
-            vec![
-                affected.clone(),
-                Expression::Text(normalize_simple_keyword(keyword)?),
-                Expression::Text("until_end_of_turn".to_string()),
-            ],
-        ));
+        let restrictions = match keyword {
+            "HIDDEN CARDNAME can't attack." => Some([Operation::CannotAttack].as_slice()),
+            "HIDDEN CARDNAME can't block." => Some([Operation::CannotBlock].as_slice()),
+            "HIDDEN CARDNAME can't attack or block." => {
+                Some([Operation::CannotAttack, Operation::CannotBlock].as_slice())
+            }
+            _ => None,
+        };
+        if let Some(restrictions) = restrictions {
+            effects.extend(
+                restrictions
+                    .iter()
+                    .map(|operation| call(*operation, vec![affected.clone()])),
+            );
+        } else {
+            effects.push(call(
+                Operation::GrantKeyword,
+                vec![
+                    affected.clone(),
+                    Expression::Text(normalize_simple_keyword(keyword)?),
+                    Expression::Text("until_end_of_turn".to_string()),
+                ],
+            ));
+        }
     }
     Ok(())
 }
@@ -9381,6 +9397,50 @@ mod tests {
                 .unwrap_or_else(|| panic!("open AtEOT value must quarantine: {value}"));
             assert_eq!(error.code, "UNSUPPORTED_VALUE");
         }
+    }
+
+    #[test]
+    fn maps_closed_hidden_combat_restriction_keywords() {
+        for (keyword, operation) in [
+            ("HIDDEN CARDNAME can't attack.", Operation::CannotAttack),
+            ("HIDDEN CARDNAME can't block.", Operation::CannotBlock),
+        ] {
+            let mapped = map_line(&format!("A:AB$ Pump | Defined$ Self | KW$ {keyword}"))
+                .unwrap_or_else(|error| {
+                    panic!("closed combat restriction should map: {}", error.message)
+                });
+            assert!(matches!(
+                mapped.expression,
+                Expression::Call {
+                    operation: actual,
+                    ..
+                } if actual == operation
+            ));
+        }
+
+        let mapped =
+            map_line("A:AB$ Pump | Defined$ Self | KW$ HIDDEN CARDNAME can't attack or block.")
+                .unwrap_or_else(|error| {
+                    panic!("combined combat restriction should map: {}", error.message)
+                });
+        assert!(expression_contains_operation(
+            &mapped.expression,
+            Operation::CannotAttack
+        ));
+        assert!(expression_contains_operation(
+            &mapped.expression,
+            Operation::CannotBlock
+        ));
+    }
+
+    #[test]
+    fn rejects_open_hidden_combat_restriction_keywords() {
+        let error = map_line(
+            "A:AB$ Pump | Defined$ Self | KW$ HIDDEN All creatures able to block CARDNAME do so.",
+        )
+        .err()
+        .unwrap_or_else(|| panic!("open combat restriction must quarantine"));
+        assert_eq!(error.code, "UNSUPPORTED_VALUE");
     }
 
     fn assert_operation(line: &str, operation: Operation, expected_costs: usize) {
