@@ -762,7 +762,7 @@ mod tests {
             "fixture.txt",
             concat!(
                 "Name:Planner Fixture\n",
-                "K:Ward:2\n",
+                "K:Ward:2:Open\n",
                 "A:SP$ DigUntil | Valid$ Card | SubAbility$ Extra | SpellDescription$ Dig.\n",
                 "SVar:Extra:DB$ Effect | StaticAbilities$ KWPump | SubAbility$ Tail\n",
                 "SVar:Tail:DB$ Draw | Defined$ You | ConditionPlayerTurn$ True\n",
@@ -947,7 +947,7 @@ mod tests {
             cards.join("blocked.txt"),
             concat!(
                 "Name:Planner Fixture\n",
-                "K:Ward:2\n",
+                "K:Ward:2:Open\n",
                 "A:SP$ DigUntil | Valid$ Card | SubAbility$ Extra | SpellDescription$ Dig.\n",
                 "SVar:Extra:DB$ Effect\n",
             ),

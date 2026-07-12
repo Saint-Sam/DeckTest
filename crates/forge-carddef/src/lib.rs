@@ -995,6 +995,17 @@ operations! {
     EventZoneChangeAll => ("event_zone_change_all", Event, 3, Some(3)),
     PreventAllCombatDamage => ("prevent_all_combat_damage", Effect, 0, Some(0)),
     Fight => ("fight", Effect, 2, Some(2)),
+    MustAttack => ("must_attack", Effect, 1, Some(2)),
+    Explore => ("explore", Effect, 1, Some(2)),
+    Connive => ("connive", Effect, 1, Some(2)),
+    MinimumBlockers => ("minimum_blockers", Effect, 1, Some(1)),
+    MaximumBlockers => ("maximum_blockers", Effect, 1, Some(1)),
+    CastWithFlash => ("cast_with_flash", Effect, 1, Some(1)),
+    AffinityCostReduction => ("affinity_cost_reduction", Effect, 1, Some(1)),
+    Unearth => ("unearth", Effect, 1, Some(1)),
+    Morph => ("morph", Effect, 1, Some(1)),
+    WardCost => ("ward_cost", Effect, 2, None),
+    EchoCost => ("echo_cost", Effect, 2, None),
 }
 
 impl Operation {
@@ -1016,6 +1027,7 @@ impl Operation {
             Self::LayerEffect => Some((3, Integer)),
             Self::AlternateCost => Some((1, Cost)),
             Self::UnlessPaid => Some((2, Cost)),
+            Self::WardCost | Self::EchoCost => Some((1, Cost)),
             Self::TimingAll => Some((0, Timing)),
             _ => None,
         }
@@ -1197,8 +1209,19 @@ impl Operation {
                 1 => Some(SelectorTextOrNumber),
                 _ => None,
             },
-            Self::SacrificeEffect | Self::RegenerateShield => Some(Selector),
+            Self::SacrificeEffect | Self::RegenerateShield | Self::MustAttack => Some(Selector),
             Self::Fight => Some(Selector),
+            Self::Explore | Self::Connive => match index {
+                0 => Some(Selector),
+                1 => Some(Number),
+                _ => None,
+            },
+            Self::MinimumBlockers | Self::MaximumBlockers => Some(Number),
+            Self::CastWithFlash => Some(Selector),
+            Self::AffinityCostReduction => Some(Selector),
+            Self::Unearth => Some(Selector),
+            Self::Morph => Some(Selector),
+            Self::WardCost | Self::EchoCost => Some(Selector),
             Self::MoveZone => match index {
                 0 => Some(Selector),
                 1 => Some(Text),
@@ -1608,6 +1631,17 @@ mod tests {
         assert_eq!(Operation::EventZoneChangeAll as u32, 195);
         assert_eq!(Operation::PreventAllCombatDamage as u32, 196);
         assert_eq!(Operation::Fight as u32, 197);
+        assert_eq!(Operation::MustAttack as u32, 198);
+        assert_eq!(Operation::Explore as u32, 199);
+        assert_eq!(Operation::Connive as u32, 200);
+        assert_eq!(Operation::MinimumBlockers as u32, 201);
+        assert_eq!(Operation::MaximumBlockers as u32, 202);
+        assert_eq!(Operation::CastWithFlash as u32, 203);
+        assert_eq!(Operation::AffinityCostReduction as u32, 204);
+        assert_eq!(Operation::Unearth as u32, 205);
+        assert_eq!(Operation::Morph as u32, 206);
+        assert_eq!(Operation::WardCost as u32, 207);
+        assert_eq!(Operation::EchoCost as u32, 208);
 
         let config = bincode::config::standard()
             .with_fixed_int_encoding()

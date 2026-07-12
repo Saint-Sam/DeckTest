@@ -854,6 +854,68 @@ fn translate_keywords(
                 };
                 (Some(keyword.to_string()), None)
             }
+            ("affinity", [validity]) => (
+                Some(keyword.clone()),
+                Some(translate_affinity_keyword(line.line, validity)?),
+            ),
+            ("affinity", [validity, _description]) => (
+                Some(keyword.clone()),
+                Some(translate_affinity_keyword(line.line, validity)?),
+            ),
+            ("unearth", [cost]) => {
+                let costs = parse_simple_cost(Some(cost))
+                    .map_err(|diagnostic| (line.line, diagnostic.code, diagnostic.message))?;
+                (
+                    Some(keyword.clone()),
+                    Some(AbilityDefinition {
+                        kind: AbilityKind::Activated,
+                        costs,
+                        event: None,
+                        condition: None,
+                        timing: Some(expression_call(Operation::TimingSorcery, vec![])),
+                        effect: expression_call(
+                            Operation::Unearth,
+                            vec![expression_call(Operation::Source, vec![])],
+                        ),
+                        mana_ability: false,
+                    }),
+                )
+            }
+            ("morph", [cost]) => {
+                let costs = parse_simple_cost(Some(cost))
+                    .map_err(|diagnostic| (line.line, diagnostic.code, diagnostic.message))?;
+                (
+                    Some(keyword.clone()),
+                    Some(AbilityDefinition {
+                        kind: AbilityKind::Activated,
+                        costs,
+                        event: None,
+                        condition: None,
+                        timing: None,
+                        effect: expression_call(
+                            Operation::Morph,
+                            vec![expression_call(Operation::Source, vec![])],
+                        ),
+                        mana_ability: false,
+                    }),
+                )
+            }
+            ("ward", [cost]) => (
+                Some(keyword.clone()),
+                Some(translate_costed_keyword_rule(
+                    line.line,
+                    cost,
+                    Operation::WardCost,
+                )?),
+            ),
+            ("echo", [cost]) => (
+                Some(keyword.clone()),
+                Some(translate_costed_keyword_rule(
+                    line.line,
+                    cost,
+                    Operation::EchoCost,
+                )?),
+            ),
             (_, []) => (Some(keyword.clone()), None),
             ("cycling", [cost]) => {
                 let full_cost = format!("{cost} Discard<1/CARDNAME>");
@@ -1056,6 +1118,67 @@ fn translate_etb_extra_counter(
                 ),
             ],
         ),
+        mana_ability: false,
+    })
+}
+
+fn translate_costed_keyword_rule(
+    line: usize,
+    cost: &String,
+    operation: Operation,
+) -> Result<AbilityDefinition, (usize, String, String)> {
+    let costs = parse_simple_cost(Some(cost))
+        .map_err(|diagnostic| (line, diagnostic.code, diagnostic.message))?;
+    if costs.is_empty() {
+        return Err((
+            line,
+            "MISSING_COST".to_string(),
+            format!("{} requires a cost", operation.as_str()),
+        ));
+    }
+    let mut arguments = vec![expression_call(Operation::Source, vec![])];
+    arguments.extend(costs);
+    Ok(AbilityDefinition {
+        kind: AbilityKind::Static,
+        costs: Vec::new(),
+        event: None,
+        condition: None,
+        timing: None,
+        effect: expression_call(operation, arguments),
+        mana_ability: false,
+    })
+}
+
+fn translate_affinity_keyword(
+    line: usize,
+    validity: &str,
+) -> Result<AbilityDefinition, (usize, String, String)> {
+    if validity == "Historic"
+        || validity.is_empty()
+        || !validity
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || character == '.')
+    {
+        return Err((
+            line,
+            "UNSUPPORTED_VALUE".to_string(),
+            format!("affinity validity `{validity}` has no closed selector"),
+        ));
+    }
+    let controlled = if validity.contains('.') {
+        format!("{validity}+YouCtrl")
+    } else {
+        format!("{validity}.YouCtrl")
+    };
+    let counted = affected_selector(&controlled)
+        .map_err(|diagnostic| (line, diagnostic.code, diagnostic.message))?;
+    Ok(AbilityDefinition {
+        kind: AbilityKind::Static,
+        costs: Vec::new(),
+        event: None,
+        condition: None,
+        timing: None,
+        effect: expression_call(Operation::AffinityCostReduction, vec![counted]),
         mana_ability: false,
     })
 }
@@ -2071,6 +2194,92 @@ mod tests {
             translated.abilities[0].kind,
             forge_carddef::AbilityKind::Activated
         );
+    }
+
+    #[test]
+    fn desugars_closed_affinity_selectors() {
+        for keyword in [
+            "K:Affinity:Artifact",
+            "K:Affinity:Creature.Artifact:artifact creature",
+        ] {
+            let script = crate::legacy::parse_legacy_script("fixture.txt", keyword)
+                .unwrap_or_else(|error| panic!("fixture should parse: {error}"));
+            let faces = face_lines(&script);
+            let translated = translate_keywords(&script, &faces[0])
+                .unwrap_or_else(|error| panic!("affinity should translate: {error:?}"));
+            assert_eq!(translated.ids, vec!["affinity"]);
+            assert!(matches!(
+                translated.abilities[0].effect,
+                Expression::Call {
+                    operation: Operation::AffinityCostReduction,
+                    ..
+                }
+            ));
+        }
+    }
+
+    #[test]
+    fn desugars_fixed_cost_unearth() {
+        let script = crate::legacy::parse_legacy_script("fixture.txt", "K:Unearth:2 B\n")
+            .unwrap_or_else(|error| panic!("fixture should parse: {error}"));
+        let faces = face_lines(&script);
+        let translated = translate_keywords(&script, &faces[0])
+            .unwrap_or_else(|error| panic!("unearth should translate: {error:?}"));
+        assert_eq!(translated.ids, vec!["unearth"]);
+        assert_eq!(translated.abilities[0].costs.len(), 1);
+        assert!(matches!(
+            translated.abilities[0].effect,
+            Expression::Call {
+                operation: Operation::Unearth,
+                ..
+            }
+        ));
+        assert!(matches!(
+            translated.abilities[0].timing,
+            Some(Expression::Call {
+                operation: Operation::TimingSorcery,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn desugars_fixed_cost_morph() {
+        let script = crate::legacy::parse_legacy_script("fixture.txt", "K:Morph:2 U\n")
+            .unwrap_or_else(|error| panic!("fixture should parse: {error}"));
+        let faces = face_lines(&script);
+        let translated = translate_keywords(&script, &faces[0])
+            .unwrap_or_else(|error| panic!("morph should translate: {error:?}"));
+        assert_eq!(translated.ids, vec!["morph"]);
+        assert_eq!(translated.abilities[0].costs.len(), 1);
+        assert!(matches!(
+            translated.abilities[0].effect,
+            Expression::Call {
+                operation: Operation::Morph,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn desugars_closed_ward_and_echo_costs() {
+        for (keyword, operation) in [
+            ("K:Ward:Discard<1/Card>", Operation::WardCost),
+            ("K:Echo:2 B", Operation::EchoCost),
+        ] {
+            let script = crate::legacy::parse_legacy_script("fixture.txt", keyword)
+                .unwrap_or_else(|error| panic!("fixture should parse: {error}"));
+            let faces = face_lines(&script);
+            let translated = translate_keywords(&script, &faces[0])
+                .unwrap_or_else(|error| panic!("costed keyword should translate: {error:?}"));
+            assert!(matches!(
+                translated.abilities[0].effect,
+                Expression::Call {
+                    operation: actual,
+                    ..
+                } if actual == operation
+            ));
+        }
     }
 
     #[test]

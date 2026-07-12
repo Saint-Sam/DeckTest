@@ -330,6 +330,16 @@ const MAPPERS: &[MapperSpec] = &[
     },
     MapperSpec {
         prefix: LegacyAbilityPrefix::Activated,
+        api: "Explore",
+        mapper: map_explore_or_connive,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Activated,
+        api: "Connive",
+        mapper: map_explore_or_connive,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Activated,
         api: "PutCounterAll",
         mapper: map_put_counter_all,
     },
@@ -387,6 +397,21 @@ const MAPPERS: &[MapperSpec] = &[
         prefix: LegacyAbilityPrefix::Static,
         api: "CantAttack,CantBlock",
         mapper: map_cant_attack_or_block,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Static,
+        api: "MustAttack",
+        mapper: map_must_attack,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Static,
+        api: "MinMaxBlocker",
+        mapper: map_min_max_blocker,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Static,
+        api: "CastWithFlash",
+        mapper: map_cast_with_flash,
     },
     MapperSpec {
         prefix: LegacyAbilityPrefix::Static,
@@ -1768,6 +1793,18 @@ fn map_dynamic_ability(
             placeholder: "1",
             operation: Operation::Scry,
             argument: 0,
+        }],
+        "Explore" => vec![DynamicPatchSpec {
+            key: "Num",
+            placeholder: "1",
+            operation: Operation::Explore,
+            argument: 1,
+        }],
+        "Connive" => vec![DynamicPatchSpec {
+            key: "ConniveNum",
+            placeholder: "1",
+            operation: Operation::Connive,
+            argument: 1,
         }],
         "Surveil" => vec![DynamicPatchSpec {
             key: "Amount",
@@ -5996,6 +6033,42 @@ fn map_fight(
     )
 }
 
+fn map_explore_or_connive(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["AB", "SP", "DB"])?;
+    let (operation, amount_key) = match api {
+        "Explore" => (Operation::Explore, "Num"),
+        "Connive" => (Operation::Connive, "ConniveNum"),
+        _ => return Err(diagnostic("UNMAPPED_API", "unknown explore-like effect")),
+    };
+    reject_unknown(
+        parameters,
+        &[
+            "Cost",
+            "Defined",
+            "ValidTgts",
+            "TgtPrompt",
+            "ValidTgtsDesc",
+            amount_key,
+            "SpellDescription",
+            "StackDescription",
+            "AILogic",
+        ],
+    )?;
+    let affected = object_selector(parameters, DefaultSelector::Source)?;
+    let amount = optional_positive_integer(parameters, amount_key)?.unwrap_or(1);
+    mapped_direct(
+        prefix,
+        api,
+        parameters,
+        call(operation, vec![affected, Expression::Integer(amount)]),
+    )
+}
+
 fn map_put_counter_all(
     prefix: LegacyAbilityPrefix,
     api: &str,
@@ -6409,6 +6482,147 @@ fn map_cant_attack_or_block(
         event: None,
         timing: None,
         expression: call(Operation::Continuous, vec![affected, restriction]),
+    })
+}
+
+fn map_must_attack(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector(selector, "Mode")?;
+    reject_unknown(
+        parameters,
+        &["ValidCreature", "EffectZone", "Description", "Secondary"],
+    )?;
+    require_static_effect_zone(parameters, "EffectZone")?;
+    if parameters
+        .get("Secondary")
+        .is_some_and(|value| value != "True")
+    {
+        return Err(unsupported_value(
+            "Secondary",
+            required(parameters, "Secondary")?,
+        ));
+    }
+    let affected = affected_selector(required(parameters, "ValidCreature")?)?;
+    Ok(MappedLegacyAbility {
+        prefix,
+        api: api.to_string(),
+        costs: Vec::new(),
+        event: None,
+        timing: None,
+        expression: call(
+            Operation::Continuous,
+            vec![
+                affected,
+                call(Operation::MustAttack, vec![call(Operation::Any, vec![])]),
+            ],
+        ),
+    })
+}
+
+fn map_min_max_blocker(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector(selector, "Mode")?;
+    reject_unknown(
+        parameters,
+        &[
+            "ValidCard",
+            "Min",
+            "Max",
+            "EffectZone",
+            "Description",
+            "Secondary",
+        ],
+    )?;
+    require_static_effect_zone(parameters, "EffectZone")?;
+    if parameters
+        .get("Secondary")
+        .is_some_and(|value| value != "True")
+    {
+        return Err(unsupported_value(
+            "Secondary",
+            required(parameters, "Secondary")?,
+        ));
+    }
+    let mut effects = Vec::new();
+    if let Some(minimum) = optional_positive_integer(parameters, "Min")? {
+        effects.push(call(
+            Operation::MinimumBlockers,
+            vec![Expression::Integer(minimum)],
+        ));
+    }
+    if let Some(maximum) = optional_positive_integer(parameters, "Max")? {
+        effects.push(call(
+            Operation::MaximumBlockers,
+            vec![Expression::Integer(maximum)],
+        ));
+    }
+    let restriction = combine_effects(effects, "MinMaxBlocker requires Min or Max")?;
+    Ok(MappedLegacyAbility {
+        prefix,
+        api: api.to_string(),
+        costs: Vec::new(),
+        event: None,
+        timing: None,
+        expression: call(
+            Operation::Continuous,
+            vec![
+                affected_selector(required(parameters, "ValidCard")?)?,
+                restriction,
+            ],
+        ),
+    })
+}
+
+fn map_cast_with_flash(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector(selector, "Mode")?;
+    reject_unknown(
+        parameters,
+        &[
+            "ValidCard",
+            "ValidSA",
+            "Caster",
+            "EffectZone",
+            "Description",
+        ],
+    )?;
+    require_static_effect_zone(parameters, "EffectZone")?;
+    if required(parameters, "ValidSA")? != "Spell" {
+        return Err(unsupported_value(
+            "ValidSA",
+            required(parameters, "ValidSA")?,
+        ));
+    }
+    let caster = match required(parameters, "Caster")? {
+        "You" => call(Operation::You, vec![]),
+        "Player" => call(Operation::Any, vec![]),
+        value => return Err(unsupported_value("Caster", value)),
+    };
+    Ok(MappedLegacyAbility {
+        prefix,
+        api: api.to_string(),
+        costs: Vec::new(),
+        event: None,
+        timing: None,
+        expression: call(
+            Operation::Continuous,
+            vec![
+                affected_selector(required(parameters, "ValidCard")?)?,
+                call(Operation::CastWithFlash, vec![caster]),
+            ],
+        ),
     })
 }
 
@@ -10352,6 +10566,76 @@ mod tests {
             Operation::Fight
         ));
         assert!(map_line("A:SP$ Fight | ValidTgts$ Creature").is_err());
+    }
+
+    #[test]
+    fn maps_closed_must_attack_continuous_effects() {
+        let mapped =
+            map_line("S:Mode$ MustAttack | ValidCreature$ Creature.YouCtrl | Description$ Attack.")
+                .unwrap_or_else(|error| panic!("must-attack effect should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &mapped.expression,
+            Operation::Continuous
+        ));
+        assert!(expression_contains_operation(
+            &mapped.expression,
+            Operation::MustAttack
+        ));
+        assert!(map_line(
+            "S:Mode$ MustAttack | ValidCreature$ Creature | MustAttack$ EnchantedController"
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn maps_closed_explore_and_connive_effects() {
+        for (line, operation) in [
+            ("A:DB$ Explore", Operation::Explore),
+            (
+                "A:AB$ Connive | Cost$ 3 | ValidTgts$ Creature.YouCtrl",
+                Operation::Connive,
+            ),
+        ] {
+            let mapped = map_line(line).unwrap_or_else(|error| {
+                panic!("explore-like effect should map: {}", error.message)
+            });
+            assert!(expression_contains_operation(&mapped.expression, operation));
+        }
+
+        let dynamic = map_script_root(
+            "A:DB$ Connive | Defined$ Self | ConniveNum$ X\nSVar:X:Count$CardPower\n",
+        )
+        .unwrap_or_else(|error| panic!("dynamic connive should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &dynamic.expression,
+            Operation::Power
+        ));
+    }
+
+    #[test]
+    fn maps_closed_blocker_ranges_and_flash_permissions() {
+        for (line, operation) in [
+            (
+                "S:Mode$ MinMaxBlocker | ValidCard$ Card.Self | Max$ 1",
+                Operation::MaximumBlockers,
+            ),
+            (
+                "S:Mode$ MinMaxBlocker | ValidCard$ Creature.Self | Min$ 3",
+                Operation::MinimumBlockers,
+            ),
+            (
+                "S:Mode$ CastWithFlash | ValidCard$ Sorcery | ValidSA$ Spell | Caster$ You",
+                Operation::CastWithFlash,
+            ),
+        ] {
+            let mapped = map_line(line)
+                .unwrap_or_else(|error| panic!("static permission should map: {}", error.message));
+            assert!(expression_contains_operation(&mapped.expression, operation));
+        }
+        assert!(map_line(
+            "S:Mode$ CastWithFlash | ValidCard$ Card | ValidSA$ Activated.Equip | Caster$ You"
+        )
+        .is_err());
     }
 
     #[test]
