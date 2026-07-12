@@ -1,6 +1,6 @@
 # DeckTest / Forge 2.0 Status
 
-Generated: 2026-07-12T00:00:27.102973+00:00 by `tools/write_card_maturity.py`
+Generated: 2026-07-12T00:10:14.239853+00:00 by `tools/write_card_maturity.py`
 
 Plan: v1.8
 
@@ -32,19 +32,19 @@ Exclusive highest evidence stage for the 32,792 in-v1 Oracle identities:
 
 | Highest stage | Identities |
 | --- | ---: |
-| Absent identity-bound definition evidence | 21,972 |
+| Absent identity-bound definition evidence | 21,777 |
 | Parsed | 0 |
 | Mapped partial | 0 |
 | Structurally translated | 0 |
-| Compiler valid | 10,820 |
+| Compiler valid | 11,015 |
 | Runtime smoke passed | 0 |
 | Semantic verified | 0 |
 | Pod integration verified | 0 |
 | AI supported | 0 |
 | Product eligible | 0 |
 
-Compiler-valid evidence currently reaches 10,820/32,792
-in-v1 identities (32.9959%). This includes the
+Compiler-valid evidence currently reaches 11,015/32,792
+in-v1 identities (33.5905%). This includes the
 unverified CP-DSL language-stress corpus and therefore is not a playable claim.
 Parsing and mapping remain below in their own units rather than being guessed
 onto identities.
@@ -54,20 +54,20 @@ onto identities.
 | Literal unit | Result |
 | --- | ---: |
 | Legacy scripts parsed | 33,290/33,290 |
-| Compiler-valid translated legacy definitions | 10,759 |
-| Fail-closed quarantined legacy definitions | 22,531 |
-| Structurally tested legacy ability uses | 18,735/43,649 |
-| Quarantined legacy ability uses | 24,914 |
+| Compiler-valid translated legacy definitions | 10,955 |
+| Fail-closed quarantined legacy definitions | 22,335 |
+| Structurally tested legacy ability uses | 18,846/43,649 |
+| Quarantined legacy ability uses | 24,803 |
 | Owner-priority compiler-valid definitions | 193/365 |
 
-T3.3 remains active after exact local product `1d760f6`: closed
-`GainControl=True` battlefield `ChangeZone` and `ChangeZoneAll` moves now
-lower as typed move-then-control sequences. Chosen-player, delayed, and
-non-battlefield variants remain fail-closed. The detached 24-worker checkpoint
-passed deterministic 24/12 translation and 6/1 planner replay, full workspace
-tests, clippy, compiler/database validation, 235 oracle scenarios plus gated
-subsets, nightmare/smoke checks, and 80.8678% line coverage. The 60%
-complete-script exit floor is not reached.
+T3.3 remains active after exact local product `5e98207`: basic `Landwalk`
+values now lower to typed land-specific keyword ids, and `etbCounter` accepts
+fixed plus closed dynamic value-SVar amounts. Special-land, conditional, and
+other open forms remain fail-closed. The detached 24-worker checkpoint passed
+deterministic 24/12 translation and 6/1 planner replay, full workspace tests,
+clippy, compiler/database validation, 235 oracle scenarios plus gated subsets,
+nightmare/smoke checks, and 80.8876% line coverage. The 60% complete-script
+exit floor is not reached.
 
 ## Evidence Breadth
 
@@ -91,4 +91,4 @@ complete-script exit floor is not reached.
 
 Per-identity generated detail: `target/card-maturity/identities.json` (untracked,
 38,306 records; SHA-256
-`073c9b88439697fa30f4eb11a5c2b8e4e140f3eb244957c29a9eb2861e175378`).
+`e7246e4017ba96d951034bce59aede9bcfaed890c9724f8e678e6391853c71c4`).
