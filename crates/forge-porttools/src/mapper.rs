@@ -365,6 +365,16 @@ const MAPPERS: &[MapperSpec] = &[
     },
     MapperSpec {
         prefix: LegacyAbilityPrefix::Activated,
+        api: "ChooseCard",
+        mapper: map_choose_card,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Activated,
+        api: "Play",
+        mapper: map_play,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Activated,
         api: "AddTurn",
         mapper: map_add_turn,
     },
@@ -586,16 +596,21 @@ pub fn map_legacy_ability(
             secondary.unwrap_or_default(),
         ));
     }
-    let stripped_expression = (optional_effect || secondary.is_some()).then(|| {
-        let mut stripped = expression.clone();
-        stripped.fields.retain(|field| {
-            !matches!(
-                field.key.as_deref(),
-                Some("Optional" | "OptionalDecider" | "Secondary")
-            )
+    let has_ability_name = expression
+        .fields
+        .iter()
+        .any(|field| field.key.as_deref() == Some("Name"));
+    let stripped_expression =
+        (optional_effect || secondary.is_some() || has_ability_name).then(|| {
+            let mut stripped = expression.clone();
+            stripped.fields.retain(|field| {
+                !matches!(
+                    field.key.as_deref(),
+                    Some("Optional" | "OptionalDecider" | "Secondary" | "Name")
+                )
+            });
+            stripped
         });
-        stripped
-    });
     let expression = stripped_expression.as_ref().unwrap_or(expression);
     let mut parameters = parameters(expression)?;
     let target_range = extract_target_range(&mut parameters)?;
@@ -955,6 +970,16 @@ fn map_with_context_unconditioned(
             check_on_resolution,
         );
     }
+    if prefix == LegacyAbilityPrefix::Activated && api == "RepeatEach" {
+        let mapped = map_repeat_each(prefix, selector_key, expression, context, stack)?;
+        return apply_optional_legacy_condition(
+            prefix,
+            selector_key,
+            mapped,
+            condition,
+            check_on_resolution,
+        );
+    }
     if prefix == LegacyAbilityPrefix::Replacement && api == "Moved" {
         let mapped = map_moved_replacement(prefix, selector_key, expression, context, stack)?;
         return apply_optional_legacy_condition(
@@ -1038,11 +1063,13 @@ fn map_with_context_unconditioned(
             secondary.unwrap_or_default(),
         ));
     }
+    let has_ability_name = parameter_map.contains_key("Name");
     let mut base_expression = expression.clone();
     if sub_ability.is_some()
         || optional_effect
         || divided_allocation.is_some()
         || secondary.is_some()
+        || has_ability_name
     {
         base_expression.fields.retain(|field| {
             field.key.as_deref() != Some("SubAbility")
@@ -1051,6 +1078,7 @@ fn map_with_context_unconditioned(
                 && (divided_allocation.is_none()
                     || field.key.as_deref() != Some("DividedAsYouChoose"))
                 && field.key.as_deref() != Some("Secondary")
+                && field.key.as_deref() != Some("Name")
         });
     }
     let mut mapped = match map_dynamic_ability(prefix, &base_expression, context)? {
@@ -2386,6 +2414,75 @@ fn map_charm_ability(
         call(Operation::ChooseBetween, arguments)
     };
     mapped_direct(prefix, "Charm", &parameters, expression)
+}
+
+fn map_repeat_each(
+    prefix: LegacyAbilityPrefix,
+    selector: &str,
+    expression: &LegacyExpression,
+    context: &MappingContext<'_>,
+    stack: &mut Vec<String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["AB", "SP", "DB"])?;
+    let parameters = parameters(expression)?;
+    reject_unknown(
+        &parameters,
+        &[
+            "Cost",
+            "RepeatPlayers",
+            "RepeatSubAbility",
+            "SubAbility",
+            "ChangeZoneTable",
+            "SpellDescription",
+            "StackDescription",
+            "AILogic",
+        ],
+    )?;
+    if let Some(value) = parameters.get("ChangeZoneTable") {
+        if value != "True" {
+            return Err(unsupported_value("ChangeZoneTable", value));
+        }
+    }
+    let players = match required(&parameters, "RepeatPlayers")? {
+        "Player" => call(
+            Operation::All,
+            vec![
+                call(Operation::You, vec![]),
+                call(Operation::Opponent, vec![]),
+            ],
+        ),
+        "Player.Opponent" | "Opponent" => call(Operation::Opponent, vec![]),
+        "Remembered" => call(Operation::Remembered, vec![call(Operation::Any, vec![])]),
+        "Targeted" => call(Operation::Target, vec![call(Operation::Any, vec![])]),
+        value => return Err(unsupported_value("RepeatPlayers", value)),
+    };
+    let repeated_name = required(&parameters, "RepeatSubAbility")?;
+    let repeated = resolve_svar(repeated_name, context, stack)?;
+    if repeated.event.is_some() || !repeated.costs.is_empty() {
+        return Err(diagnostic(
+            "UNSUPPORTED_LINK",
+            &format!("RepeatSubAbility `{repeated_name}` is not a cost-free effect chain"),
+        ));
+    }
+    let mut effects = vec![call(Operation::ForEach, vec![players, repeated.expression])];
+    if let Some(tail_name) = parameters.get("SubAbility") {
+        let tail = resolve_svar(tail_name, context, stack)?;
+        if tail.event.is_some() || !tail.costs.is_empty() {
+            return Err(diagnostic(
+                "UNSUPPORTED_LINK",
+                &format!("SubAbility `{tail_name}` is not a cost-free effect chain"),
+            ));
+        }
+        effects.push(tail.expression);
+    }
+    Ok(MappedLegacyAbility {
+        prefix,
+        api: "RepeatEach".to_string(),
+        costs: parse_simple_cost(parameters.get("Cost"))?,
+        event: None,
+        timing: None,
+        expression: combine_effects(effects, "RepeatEach requires a linked effect")?,
+    })
 }
 
 fn map_immediate_trigger(
@@ -6673,6 +6770,180 @@ fn map_copy_permanent(
     mapped_direct(prefix, api, parameters, expression)
 }
 
+fn map_choose_card(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["AB", "SP", "DB"])?;
+    reject_unknown(
+        parameters,
+        &[
+            "Cost",
+            "Defined",
+            "ValidTgts",
+            "Choices",
+            "ChoiceZone",
+            "Amount",
+            "MinAmount",
+            "Mandatory",
+            "AtRandom",
+            "RememberChosen",
+            "Reveal",
+            "ChoiceTitle",
+            "ChoiceDesc",
+            "SpellDescription",
+            "StackDescription",
+            "AILogic",
+        ],
+    )?;
+    let amount = optional_positive_integer(parameters, "Amount")?.unwrap_or(1);
+    let minimum = match parameters.get("MinAmount").map(String::as_str) {
+        None => None,
+        Some(value) => Some(
+            value
+                .parse::<i64>()
+                .ok()
+                .filter(|minimum| *minimum >= 0 && *minimum <= amount)
+                .ok_or_else(|| unsupported_value("MinAmount", value))?,
+        ),
+    };
+    let mandatory = closed_true_flag(parameters, "Mandatory")?;
+    if mandatory && minimum.is_some_and(|minimum| minimum != amount) {
+        return Err(diagnostic(
+            "UNSUPPORTED_PARAMETER",
+            "mandatory ChooseCard requires MinAmount to equal Amount",
+        ));
+    }
+    let random = closed_true_flag(parameters, "AtRandom")?;
+    if random && parameters.contains_key("MinAmount") {
+        return Err(diagnostic(
+            "UNSUPPORTED_PARAMETER",
+            "random ChooseCard does not support a separate minimum",
+        ));
+    }
+    let zone = parameters
+        .get("ChoiceZone")
+        .map(String::as_str)
+        .unwrap_or("Battlefield");
+    let candidates = match zone {
+        "Battlefield" => affected_selector(required(parameters, "Choices")?)?,
+        "Graveyard" | "Hand" | "Exile" | "Library" => {
+            card_selector_in_zone(required(parameters, "Choices")?, &zone.to_ascii_lowercase())?
+        }
+        value => return Err(unsupported_value("ChoiceZone", value)),
+    };
+    let chooser = player_selector(parameters, DefaultSelector::You)?;
+    if let Some(value) = parameters.get("Reveal") {
+        if value != "True" {
+            return Err(unsupported_value("Reveal", value));
+        }
+    }
+    let mode = if random {
+        "random"
+    } else if mandatory || minimum == Some(amount) {
+        "exact"
+    } else {
+        "up_to"
+    };
+    let expression = apply_remembered_result(
+        call(
+            Operation::ChooseObjects,
+            vec![
+                candidates,
+                Expression::Integer(amount),
+                chooser,
+                Expression::Text(mode.to_string()),
+            ],
+        ),
+        parameters,
+        "RememberChosen",
+        "chosen",
+    )?;
+    mapped_direct(prefix, api, parameters, expression)
+}
+
+fn map_play(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["AB", "SP", "DB"])?;
+    reject_unknown(
+        parameters,
+        &[
+            "Cost",
+            "Defined",
+            "Valid",
+            "ValidZone",
+            "ValidSA",
+            "Amount",
+            "Controller",
+            "WithoutManaCost",
+            "RememberPlayed",
+            "SpellDescription",
+            "StackDescription",
+            "AILogic",
+        ],
+    )?;
+    if parameters.contains_key("Defined") && parameters.contains_key("Valid") {
+        return Err(diagnostic(
+            "UNSUPPORTED_SELECTOR",
+            "Play cannot combine Defined and Valid selectors",
+        ));
+    }
+    let cards = if let Some(defined) = parameters.get("Defined") {
+        defined_selector(defined)?
+    } else {
+        let zone = parameters
+            .get("ValidZone")
+            .map(String::as_str)
+            .unwrap_or("Hand");
+        if !matches!(zone, "Hand" | "Exile" | "Graveyard" | "Library") {
+            return Err(unsupported_value("ValidZone", zone));
+        }
+        card_selector_in_zone(required(parameters, "Valid")?, &zone.to_ascii_lowercase())?
+    };
+    if let Some(controller) = parameters.get("Controller") {
+        if controller != "You" {
+            return Err(unsupported_value("Controller", controller));
+        }
+    }
+    let amount = parameters.get("Amount").map(String::as_str).unwrap_or("1");
+    if !matches!(amount, "1" | "All") {
+        return Err(unsupported_value("Amount", amount));
+    }
+    let without_mana = closed_true_flag(parameters, "WithoutManaCost")?;
+    let valid_sa = parameters
+        .get("ValidSA")
+        .map(String::as_str)
+        .unwrap_or("Spell");
+    if !matches!(
+        valid_sa,
+        "Spell" | "SpellAbility.Land" | "Spell,SpellAbility.Land"
+    ) && !valid_sa
+        .strip_prefix("Spell.cmcLE")
+        .is_some_and(|value| value.parse::<i64>().is_ok_and(|amount| amount >= 0))
+    {
+        return Err(unsupported_value("ValidSA", valid_sa));
+    }
+    let mode = format!(
+        "amount={};without_mana_cost={};valid_sa={}",
+        amount.to_ascii_lowercase(),
+        without_mana,
+        valid_sa.to_ascii_lowercase()
+    );
+    let expression = apply_remembered_result(
+        call(Operation::Play, vec![cards, Expression::Text(mode)]),
+        parameters,
+        "RememberPlayed",
+        "played",
+    )?;
+    mapped_direct(prefix, api, parameters, expression)
+}
+
 fn map_add_turn(
     prefix: LegacyAbilityPrefix,
     api: &str,
@@ -8595,6 +8866,13 @@ pub(crate) fn card_selector_in_zone(
             ));
             continue;
         }
+        if branch == "Card.IsRemembered" {
+            predicates.push(
+                object_marker_predicate("IsRemembered")
+                    .unwrap_or_else(|| unreachable!("closed remembered marker must lower")),
+            );
+            continue;
+        }
         let branch = if zone == "battlefield" {
             branch.to_string()
         } else {
@@ -9717,6 +9995,14 @@ mod tests {
             "A:SP$ Draw | Defined$ You | NumCards$ 1 | Secondary$ False | SpellDescription$ Draw."
         )
         .is_err());
+        let named = map_line(
+            "A:SP$ Draw | Name$ Display-only ability label | Defined$ You | NumCards$ 1 | SpellDescription$ Draw.",
+        )
+        .unwrap_or_else(|error| panic!("ability display name should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &named.expression,
+            Operation::Draw
+        ));
     }
 
     #[test]
@@ -10894,6 +11180,105 @@ mod tests {
             &tapped.expression,
             Operation::Tap
         ));
+    }
+
+    #[test]
+    fn maps_closed_card_choices_and_rejects_open_shapes() {
+        let remembered = map_line(
+            "A:DB$ ChooseCard | Defined$ You | Amount$ 1 | Choices$ Card.IsRemembered | ChoiceZone$ Exile | Mandatory$ True | RememberChosen$ True | ChoiceTitle$ Choose a card.",
+        )
+        .unwrap_or_else(|error| panic!("closed remembered choice should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &remembered.expression,
+            Operation::ChooseObjects
+        ));
+        assert!(expression_contains_operation(
+            &remembered.expression,
+            Operation::Remember
+        ));
+
+        let random = map_line(
+            "A:DB$ ChooseCard | Choices$ Artifact,Enchantment | AtRandom$ True | SpellDescription$ Choose at random.",
+        )
+        .unwrap_or_else(|error| panic!("closed random choice should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &random.expression,
+            Operation::ChooseObjects
+        ));
+
+        for line in [
+            "A:DB$ ChooseCard | Choices$ Card | ChoiceZone$ Sideboard",
+            "A:DB$ ChooseCard | Choices$ Card | Amount$ X",
+            "A:DB$ ChooseCard | Choices$ Card | Amount$ 2 | Mandatory$ True | MinAmount$ 0",
+            "A:DB$ ChooseCard | Choices$ Card | AtRandom$ False",
+            "A:DB$ ChooseCard | Choices$ Card | DefinedCards$ Remembered",
+        ] {
+            assert!(
+                map_line(line).is_err(),
+                "open choice must quarantine: {line}"
+            );
+        }
+    }
+
+    #[test]
+    fn maps_closed_play_permissions_and_rejects_open_shapes() {
+        let free = map_line(
+            "A:DB$ Play | Valid$ Card.nonLand+YouOwn | ValidZone$ Hand | ValidSA$ Spell.cmcLE5 | WithoutManaCost$ True | Amount$ 1 | Controller$ You | RememberPlayed$ True",
+        )
+        .unwrap_or_else(|error| panic!("closed free play should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &free.expression,
+            Operation::Play
+        ));
+        assert!(expression_contains_operation(
+            &free.expression,
+            Operation::Remember
+        ));
+
+        let defined = map_line(
+            "A:DB$ Play | Defined$ Remembered | ValidSA$ Spell | Amount$ All | Controller$ You",
+        )
+        .unwrap_or_else(|error| panic!("defined play should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &defined.expression,
+            Operation::Remembered
+        ));
+
+        for line in [
+            "A:DB$ Play | Valid$ Card | ValidZone$ Battlefield",
+            "A:DB$ Play | Valid$ Card | Amount$ X",
+            "A:DB$ Play | Valid$ Card | ValidSA$ Spell.cmcLEX",
+            "A:DB$ Play | Defined$ Remembered | Valid$ Card",
+            "A:DB$ Play | Defined$ Remembered | CopyCard$ True",
+        ] {
+            assert!(map_line(line).is_err(), "open Play must quarantine: {line}");
+        }
+    }
+
+    #[test]
+    fn maps_closed_player_repeat_chains() {
+        let repeated = map_script_root(concat!(
+            "Name:Repeat Players\n",
+            "A:SP$ RepeatEach | RepeatPlayers$ Player | RepeatSubAbility$ DBGain | ChangeZoneTable$ True | SubAbility$ DBDraw | SpellDescription$ Each player gains life, then draw.\n",
+            "SVar:DBGain:DB$ GainLife | Defined$ Player | LifeAmount$ 1\n",
+            "SVar:DBDraw:DB$ Draw | Defined$ You | NumCards$ 1\n",
+        ))
+        .unwrap_or_else(|error| panic!("closed player repeat should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &repeated.expression,
+            Operation::ForEach
+        ));
+        assert!(expression_contains_operation(
+            &repeated.expression,
+            Operation::Draw
+        ));
+
+        for repeat_players in ["ActivePlayer", "TargetedController"] {
+            let line = format!(
+                "A:SP$ RepeatEach | RepeatPlayers$ {repeat_players} | RepeatSubAbility$ Missing"
+            );
+            assert!(map_line(&line).is_err());
+        }
     }
 
     #[test]

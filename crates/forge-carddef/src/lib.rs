@@ -1061,6 +1061,7 @@ operations! {
     ChooseType => ("choose_type", Effect, 2, None),
     TriggeredDefendingPlayer => ("triggered_defending_player", Selector, 0, Some(0)),
     EventLimit => ("event_limit", Event, 3, Some(3)),
+    ChooseObjects => ("choose_objects", Effect, 3, Some(4)),
 }
 
 impl Operation {
@@ -1260,6 +1261,12 @@ impl Operation {
                 0 => Some(Event),
                 1 => Some(Selector),
                 2 => Some(Number),
+                _ => None,
+            },
+            Self::ChooseObjects => match index {
+                0 | 2 => Some(Selector),
+                1 => Some(Number),
+                3 => Some(Text),
                 _ => None,
             },
 
@@ -1874,6 +1881,7 @@ mod tests {
         assert_eq!(Operation::ChooseType as u32, 261);
         assert_eq!(Operation::TriggeredDefendingPlayer as u32, 262);
         assert_eq!(Operation::EventLimit as u32, 263);
+        assert_eq!(Operation::ChooseObjects as u32, 264);
 
         let config = bincode::config::standard()
             .with_fixed_int_encoding()
