@@ -4087,6 +4087,7 @@ fn map_debuff(
     let affected = object_selector(parameters, DefaultSelector::Source)?;
     let duration = match parameters.get("Duration").map(String::as_str) {
         None | Some("UntilEndOfTurn") => Some("until_end_of_turn"),
+        Some("UntilYourNextTurn") => Some("until_your_next_turn"),
         Some("Permanent") => None,
         Some(value) => return Err(unsupported_value("Duration", value)),
     };
@@ -9055,6 +9056,7 @@ fn pump_duration(
 ) -> Result<Option<&'static str>, MappingDiagnostic> {
     match parameters.get("Duration").map(String::as_str) {
         None | Some("UntilEndOfTurn") => Ok(Some("until_end_of_turn")),
+        Some("UntilYourNextTurn") => Ok(Some("until_your_next_turn")),
         Some("Permanent") => Ok(None),
         Some(value) => Err(unsupported_value("Duration", value)),
     }
@@ -12447,6 +12449,15 @@ mod tests {
 
     #[test]
     fn maps_permanent_pump_pt_and_keyword_effects() {
+        for line in [
+            "A:AB$ Pump | Defined$ Self | NumAtt$ +2 | Duration$ UntilYourNextTurn",
+            "A:SP$ PumpAll | ValidCards$ Creature.YouCtrl | KW$ Indestructible | Duration$ UntilYourNextTurn",
+            "A:DB$ Debuff | ValidTgts$ Creature | Keywords$ Flying | Duration$ UntilYourNextTurn",
+        ] {
+            map_line(line).unwrap_or_else(|error| {
+                panic!("next-turn duration should map: {}", error.message)
+            });
+        }
         let pt = map_line("A:AB$ Pump | Defined$ Self | NumAtt$ +2 | Duration$ Permanent")
             .unwrap_or_else(|error| panic!("permanent PT Pump should map: {}", error.message));
         assert!(matches!(
