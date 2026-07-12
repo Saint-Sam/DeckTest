@@ -1,0 +1,132 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-12T01:12:18Z",
+  "task": "T3.3",
+  "batch": "closed hidden Pump combat restrictions",
+  "technical_result": "pass",
+  "product_binding": {
+    "mapper_commit": "ff3ca61",
+    "exact_product_commit": "ff3ca6136e9a5a2198420a0cd2574399f8c0c659",
+    "exact_product_tree": "ffd8650f3b5cdeb8020776ec3f31d96a36d42a10",
+    "verified_in_detached_worktree": true,
+    "detached_root": "/private/tmp/forge-t3-3-hidden-combat-ff3ca61"
+  },
+  "source_binding": {
+    "legacy_forge_commit": "1f0a3e0815822d8f58f798e0304b33d4534248b1",
+    "legacy_source": "existing local pinned checkout linked into detached worktree",
+    "translation_fingerprint": "92c5d3b707727551c39177ef56e4bce0",
+    "cargo_lock_sha256": "f9fb1cd7230cb19b3277c1f4cb4c6750699e188f197cff4ef4e2965363675268"
+  },
+  "verification_environment": {
+    "local_only": true,
+    "github_actions_used": false,
+    "network_attempted": false,
+    "install_performed": false,
+    "worker_ceiling": 24,
+    "shared_cargo_cache": true,
+    "detached_target_debug_symlinked": true,
+    "detached_target_llvm_cov_symlinked": true,
+    "detached_target_coverage_local": true
+  },
+  "coverage_delta": {
+    "before": {
+      "complete_scripts": 11050,
+      "mapped_ability_uses": 18958,
+      "owner_priority_complete": 193,
+      "quarantined_scripts": 22240,
+      "quarantined_ability_uses": 24691
+    },
+    "after": {
+      "complete_scripts": 11110,
+      "total_scripts": 33290,
+      "complete_script_percent": 33.37338540102133,
+      "mapped_ability_uses": 19029,
+      "total_ability_uses": 43649,
+      "mapped_ability_percent": 43.59550046965566,
+      "owner_priority_complete": 193,
+      "owner_priority_requested": 365,
+      "quarantined_scripts": 22180,
+      "quarantined_ability_uses": 24620
+    },
+    "gain": {
+      "complete_scripts": 60,
+      "mapped_ability_uses": 71,
+      "owner_priority_complete": 0
+    }
+  },
+  "semantic_boundaries": {
+    "exactly_lowered": [
+      "KW=HIDDEN CARDNAME can't attack.",
+      "KW=HIDDEN CARDNAME can't block.",
+      "KW=HIDDEN CARDNAME can't attack or block.",
+      "typed temporary CannotAttack and CannotBlock effects on the Pump affected selector"
+    ],
+    "still_quarantined": [
+      "HIDDEN CARDNAME must be blocked if able and other coercive combat prose",
+      "power/toughness switch and other hidden characteristics prose",
+      "open, conditional, controller-bound, and non-end-of-turn combat restriction forms",
+      "runtime and semantic card behavior beyond structural compilation"
+    ],
+    "claim": "structural translation and compiler validity only; runtime and card-specific semantic maturity remain separate T3.5 and T3.6 evidence"
+  },
+  "commands": [
+    {
+      "command": "cargo test --locked --offline -p forge-porttools mapper::tests::maps_closed_hidden_combat_restriction_keywords -- --exact",
+      "exit_code": 0
+    },
+    {
+      "command": "cargo test --locked --offline -p forge-porttools mapper::tests::rejects_open_hidden_combat_restriction_keywords -- --exact",
+      "exit_code": 0
+    },
+    {
+      "command": "FORGE_T3_TOTAL_WORKERS=24 CARGO_BUILD_JOBS=24 scripts/t3_parallel_sweep.sh development",
+      "exit_code": 0
+    },
+    {
+      "command": "cargo fmt --all -- --check",
+      "exit_code": 0
+    },
+    {
+      "command": "cargo clippy --workspace --all-targets --all-features -- -D warnings",
+      "exit_code": 0
+    },
+    {
+      "command": "FORGE_T3_TOTAL_WORKERS=24 CARGO_BUILD_JOBS=24 scripts/t3_parallel_sweep.sh checkpoint",
+      "exit_code": 0,
+      "accelerated_core_phase_seconds": 36,
+      "full_workspace_verification_seconds": 81,
+      "total_seconds": 123
+    }
+  ],
+  "line_coverage": {
+    "covered": 27648,
+    "count": 34167,
+    "percent": 80.92018614452543,
+    "floor_percent": 80,
+    "raw_report_sha256": "7c33baf316925321a88656c27dc51a9fe8954d9bb2485793b32daa46b096cc5a"
+  },
+  "planner": {
+    "analyzed_scripts": 33290,
+    "scripts_with_confirmed_blockers": 22004,
+    "priority_scripts_with_confirmed_blockers": 166,
+    "confirmed_observations": 51721,
+    "unique_blocker_families": 5361,
+    "linked_root_fanout": 52708
+  },
+  "checkpoint_gates": {
+    "full_workspace_tests": true,
+    "compiler_roundtrips": true,
+    "database_validation": true,
+    "oracle_scenarios": 235,
+    "oracle_subsets_passed": true,
+    "nightmare_suite_passed": true,
+    "arena_smoke_passed": true,
+    "deterministic_parallel_replay": true,
+    "deterministic_blocker_plan_replay": true
+  },
+  "continuation": {
+    "t3_3_remains_active": true,
+    "exit_floor_reached": false,
+    "next_t3_3_batch_source": "metrics/blocker_plan.json recommended_batches[0]"
+  }
+}
