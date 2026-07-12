@@ -562,7 +562,7 @@ pub fn map_legacy_ability(
             .map(|field| field.value.as_str());
         match (optional, decider) {
             (None, None) => false,
-            (Some("True"), None) | (None, Some("You")) => true,
+            (Some("True" | "You"), None) | (None, Some("You")) => true,
             (Some(value), None) => return Err(unsupported_value("Optional", value)),
             (None, Some(value)) => return Err(unsupported_value("OptionalDecider", value)),
             (Some(_), Some(_)) => {
@@ -1004,7 +1004,7 @@ fn map_with_context_unconditioned(
             parameter_map.get("OptionalDecider").map(String::as_str),
         ) {
             (None, None) => false,
-            (Some("True"), None) | (None, Some("You")) => true,
+            (Some("True" | "You"), None) | (None, Some("You")) => true,
             (Some(value), None) => return Err(unsupported_value("Optional", value)),
             (None, Some(value)) => return Err(unsupported_value("OptionalDecider", value)),
             (Some(_), Some(_)) => {
@@ -4710,7 +4710,11 @@ fn map_change_zone(
         "Exile" => "exile",
         "Hand" => "hand",
         "Battlefield" => "battlefield",
-        "Library" => match required(parameters, "LibraryPosition")? {
+        "Library" => match parameters
+            .get("LibraryPosition")
+            .map(String::as_str)
+            .unwrap_or("0")
+        {
             "0" => "library_top",
             "-1" => "library_bottom",
             value => return Err(unsupported_value("LibraryPosition", value)),
@@ -4844,7 +4848,11 @@ fn map_library_search(
     }
     let should_shuffle = parameters.get("Shuffle").map(String::as_str) != Some("False");
     let destination = if destination == "library" {
-        match required(parameters, "LibraryPosition")? {
+        match parameters
+            .get("LibraryPosition")
+            .map(String::as_str)
+            .unwrap_or("0")
+        {
             "0" => "library_top".to_string(),
             "-1" => "library_bottom".to_string(),
             value => return Err(unsupported_value("LibraryPosition", value)),
@@ -4990,6 +4998,7 @@ fn map_token(
         parameters.get("TokenOwner").map(String::as_str),
         parameters.get("ValidTgts"),
     ) {
+        (Some("You"), _) => call(Operation::You, vec![]),
         (None | Some("Targeted" | "TargetedPlayer"), Some(value)) => {
             targeted_player_selector(value, "ValidTgts")?
         }
@@ -9617,6 +9626,14 @@ mod tests {
             &optional_decider.expression,
             Operation::ChooseUpTo
         ));
+        let optional_you = map_line(
+            "A:AB$ ChangeZone | Cost$ T | Origin$ Hand | Destination$ Battlefield | ChangeType$ Land | ChangeNum$ 1 | Optional$ You | SpellDescription$ You may put a land onto the battlefield.",
+        )
+        .unwrap_or_else(|error| panic!("Optional You should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &optional_you.expression,
+            Operation::ChooseUpTo
+        ));
         assert!(map_line(
             "A:DB$ GainLife | Defined$ You | LifeAmount$ 2 | OptionalDecider$ Opponent"
         )
@@ -10381,7 +10398,7 @@ mod tests {
                 Operation::Sequence,
             ),
             (
-                "A:SP$ ChangeZone | Origin$ Library | Destination$ Library | LibraryPosition$ 0 | ChangeType$ Instant,Sorcery | SpellDescription$ Tutor.",
+                "A:SP$ ChangeZone | Origin$ Library | Destination$ Library | ChangeType$ Instant,Sorcery | SpellDescription$ Put it on top.",
                 Operation::Sequence,
             ),
             (
@@ -10390,6 +10407,10 @@ mod tests {
             ),
             (
                 "A:SP$ Token | TokenScript$ g_1_1_saproling | TokenOwner$ You | TokenAmount$ 2 | SpellDescription$ Tokens.",
+                Operation::CreateToken,
+            ),
+            (
+                "A:SP$ Token | ValidTgts$ Opponent | TokenScript$ g_2_2_beast | TokenOwner$ You | SpellDescription$ Create a token for yourself.",
                 Operation::CreateToken,
             ),
             (
