@@ -420,13 +420,13 @@ const MAPPERS: &[MapperSpec] = &[
     },
 ];
 
-struct MappingContext<'a> {
+pub(crate) struct MappingContext<'a> {
     svars: BTreeMap<String, &'a LegacyExpression>,
     duplicate_svars: BTreeSet<String>,
 }
 
 impl<'a> MappingContext<'a> {
-    fn from_script(script: &'a crate::legacy::LegacyScript) -> Self {
+    pub(crate) fn from_script(script: &'a crate::legacy::LegacyScript) -> Self {
         let mut svars = BTreeMap::new();
         let mut duplicate_svars = BTreeSet::new();
         for line in &script.lines {
@@ -1640,7 +1640,7 @@ fn apply_target_allocation(
     Ok(applied)
 }
 
-fn resolve_value_svar(
+pub(crate) fn resolve_value_svar(
     name: &str,
     context: &MappingContext<'_>,
 ) -> Result<Expression, MappingDiagnostic> {
@@ -1778,6 +1778,12 @@ fn map_count_value(name: &str, value: &str) -> Result<Expression, MappingDiagnos
             ));
         }
         return Ok(call(Operation::Count, vec![affected_selector(valid)?]));
+    }
+    if let Some(valid) = value.strip_prefix("ValidGraveyard ") {
+        return Ok(call(
+            Operation::Count,
+            vec![card_selector_in_zone(valid, "graveyard")?],
+        ));
     }
     if let Some(valid) = value.strip_prefix("ThisTurnCast_") {
         return Ok(call(

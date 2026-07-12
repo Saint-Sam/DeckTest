@@ -7,7 +7,7 @@ use crate::{
     },
     mapper::{
         card_selector_in_zone, map_named_svar_ability, map_script_abilities, parse_simple_cost,
-        valid_target_selector,
+        resolve_value_svar, valid_target_selector, MappingContext,
     },
 };
 use forge_cardc::{emit_card, is_known_keyword, parse_card_named};
@@ -793,43 +793,38 @@ fn translate_keywords(
                 translated.abilities.extend(abilities);
                 (None, None)
             }
-            ("etbcounter", [counter, amount]) => {
-                let amount = amount.parse::<i64>().map_err(|_| {
-                    (
-                        line.line,
-                        "UNSUPPORTED_KEYWORD".to_string(),
-                        format!("keyword `{name}` counter amount `{amount}` is not fixed"),
-                    )
-                })?;
-                if amount <= 0 || counter.trim().is_empty() {
-                    return Err((
-                        line.line,
-                        "UNSUPPORTED_KEYWORD".to_string(),
-                        format!("keyword `{name}` has invalid counter parameters"),
-                    ));
-                }
+            ("etbcounter", [counter, amount]) => (
+                None,
+                Some(translate_etb_counter(
+                    script, line.line, name, counter, amount,
+                )?),
+            ),
+            ("etbcounter", [counter, amount, condition])
+                if condition.eq_ignore_ascii_case("no Condition") =>
+            {
                 (
                     None,
-                    Some(AbilityDefinition {
-                        kind: AbilityKind::Replacement,
-                        costs: Vec::new(),
-                        event: Some(expression_call(
-                            Operation::EventEnters,
-                            vec![expression_call(Operation::Source, vec![])],
-                        )),
-                        condition: None,
-                        timing: None,
-                        effect: expression_call(
-                            Operation::AddCounter,
-                            vec![
-                                expression_call(Operation::Source, vec![]),
-                                Expression::Text(counter.to_ascii_lowercase()),
-                                Expression::Integer(amount),
-                            ],
-                        ),
-                        mana_ability: false,
-                    }),
+                    Some(translate_etb_counter(
+                        script, line.line, name, counter, amount,
+                    )?),
                 )
+            }
+            ("landwalk", [land]) => {
+                let keyword = match land.as_str() {
+                    "Forest" => "forestwalk",
+                    "Island" => "islandwalk",
+                    "Mountain" => "mountainwalk",
+                    "Plains" => "plainswalk",
+                    "Swamp" => "swampwalk",
+                    value => {
+                        return Err((
+                            line.line,
+                            "UNSUPPORTED_VALUE".to_string(),
+                            format!("keyword `{name}` land type `{value}` has no closed lowering"),
+                        ));
+                    }
+                };
+                (Some(keyword.to_string()), None)
             }
             (_, []) => (Some(keyword.clone()), None),
             ("cycling", [cost]) => {
@@ -955,6 +950,56 @@ fn translate_keywords(
     translated.ids.sort();
     translated.ids.dedup();
     Ok(translated)
+}
+
+fn translate_etb_counter(
+    script: &LegacyScript,
+    line: usize,
+    name: &str,
+    counter: &str,
+    amount: &str,
+) -> Result<AbilityDefinition, (usize, String, String)> {
+    if counter.trim().is_empty() {
+        return Err((
+            line,
+            "UNSUPPORTED_KEYWORD".to_string(),
+            format!("keyword `{name}` has an empty counter type"),
+        ));
+    }
+    let amount = match amount.parse::<i64>() {
+        Ok(value) if value > 0 => Expression::Integer(value),
+        Ok(_) => {
+            return Err((
+                line,
+                "UNSUPPORTED_KEYWORD".to_string(),
+                format!("keyword `{name}` counter amount `{amount}` is not positive"),
+            ));
+        }
+        Err(_) => {
+            let context = MappingContext::from_script(script);
+            resolve_value_svar(amount, &context)
+                .map_err(|diagnostic| (line, diagnostic.code.to_string(), diagnostic.message))?
+        }
+    };
+    Ok(AbilityDefinition {
+        kind: AbilityKind::Replacement,
+        costs: Vec::new(),
+        event: Some(expression_call(
+            Operation::EventEnters,
+            vec![expression_call(Operation::Source, vec![])],
+        )),
+        condition: None,
+        timing: None,
+        effect: expression_call(
+            Operation::AddCounter,
+            vec![
+                expression_call(Operation::Source, vec![]),
+                Expression::Text(counter.to_ascii_lowercase()),
+                amount,
+            ],
+        ),
+        mana_ability: false,
+    })
 }
 
 fn expression_call(operation: Operation, arguments: Vec<Expression>) -> Expression {
@@ -1779,6 +1824,68 @@ mod tests {
             translated.abilities[0].kind,
             forge_carddef::AbilityKind::Replacement
         );
+    }
+
+    #[test]
+    fn desugars_closed_dynamic_etb_counter_and_landwalk_keywords() {
+        let script = crate::legacy::parse_legacy_script(
+            "fixture.txt",
+            concat!(
+                "K:etbCounter:P1P1:X\n",
+                "SVar:X:Count$xPaid\n",
+                "K:Landwalk:Swamp\n",
+            ),
+        )
+        .unwrap_or_else(|error| panic!("fixture should parse: {error}"));
+        let faces = face_lines(&script);
+        let translated = translate_keywords(&script, &faces[0])
+            .unwrap_or_else(|error| panic!("closed keyword fixture should translate: {error:?}"));
+        assert_eq!(translated.ids, vec!["swampwalk"]);
+        assert!(matches!(
+            &translated.abilities[0].effect,
+            Expression::Call {
+                operation: Operation::AddCounter,
+                arguments,
+            } if matches!(
+                arguments.get(2),
+                Some(Expression::Call {
+                    operation: Operation::PaidX,
+                    ..
+                })
+            )
+        ));
+
+        let script = crate::legacy::parse_legacy_script(
+            "fixture.txt",
+            concat!(
+                "K:etbCounter:P1P1:X:no Condition\n",
+                "SVar:X:Count$ValidGraveyard Instant,Sorcery\n",
+            ),
+        )
+        .unwrap_or_else(|error| panic!("graveyard counter fixture should parse: {error}"));
+        let faces = face_lines(&script);
+        translate_keywords(&script, &faces[0]).unwrap_or_else(|error| {
+            panic!("graveyard counter fixture should translate: {error:?}")
+        });
+    }
+
+    #[test]
+    fn rejects_open_etb_counter_and_landwalk_forms() {
+        for keyword in [
+            "K:etbCounter:P1P1:X:CheckSVar$ WasKicked",
+            "K:Landwalk:Desert",
+        ] {
+            let script = crate::legacy::parse_legacy_script("fixture.txt", keyword)
+                .unwrap_or_else(|error| panic!("fixture should parse: {error}"));
+            let faces = face_lines(&script);
+            let error = translate_keywords(&script, &faces[0])
+                .err()
+                .unwrap_or_else(|| panic!("open keyword must fail closed: {keyword}"));
+            assert!(matches!(
+                error.1.as_str(),
+                "UNSUPPORTED_KEYWORD" | "UNSUPPORTED_VALUE"
+            ));
+        }
     }
 
     #[test]
