@@ -1,6 +1,6 @@
 # DeckTest / Forge 2.0 Status
 
-Generated: 2026-07-12T04:12:21.621149+00:00 by `tools/write_card_maturity.py`
+Generated: 2026-07-12T08:55:04.681342+00:00 by `tools/write_card_maturity.py`
 
 Plan: v1.8
 
@@ -32,19 +32,19 @@ Exclusive highest evidence stage for the 32,792 in-v1 Oracle identities:
 
 | Highest stage | Identities |
 | --- | ---: |
-| Absent identity-bound definition evidence | 21,180 |
+| Absent identity-bound definition evidence | 21,178 |
 | Parsed | 0 |
 | Mapped partial | 0 |
 | Structurally translated | 0 |
-| Compiler valid | 11,612 |
+| Compiler valid | 11,614 |
 | Runtime smoke passed | 0 |
 | Semantic verified | 0 |
 | Pod integration verified | 0 |
 | AI supported | 0 |
 | Product eligible | 0 |
 
-Compiler-valid evidence currently reaches 11,612/32,792
-in-v1 identities (35.4111%). This includes the
+Compiler-valid evidence currently reaches 11,614/32,792
+in-v1 identities (35.4172%). This includes the
 unverified CP-DSL language-stress corpus and therefore is not a playable claim.
 Parsing and mapping remain below in their own units rather than being guessed
 onto identities.
@@ -54,10 +54,10 @@ onto identities.
 | Literal unit | Result |
 | --- | ---: |
 | Legacy scripts parsed | 33,290/33,290 |
-| Compiler-valid translated legacy definitions | 11,553 |
-| Fail-closed quarantined legacy definitions | 21,737 |
-| Structurally tested legacy ability uses | 19,703/43,649 |
-| Quarantined legacy ability uses | 23,946 |
+| Compiler-valid translated legacy definitions | 11,555 |
+| Fail-closed quarantined legacy definitions | 21,735 |
+| Structurally tested legacy ability uses | 19,710/43,649 |
+| Quarantined legacy ability uses | 23,939 |
 | Owner-priority compiler-valid definitions | 197/365 |
 
 ## Evidence Breadth
@@ -82,4 +82,4 @@ onto identities.
 
 Per-identity generated detail: `target/card-maturity/identities.json` (untracked,
 38,306 records; SHA-256
-`3d127400a404641ef5785243c1f9230325090fe2c85e5f370d154e48314ac8d4`).
+`360af24c7021397870cfcff15788f4af7bc24c80e66960da5bc7593778ed87d9`).

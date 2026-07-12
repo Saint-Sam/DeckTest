@@ -1,0 +1,132 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-12T08:57:13Z",
+  "task": "T3.3",
+  "batch": "closed first-spell ReduceCost forms",
+  "technical_result": "pass",
+  "product_binding": {
+    "mapper_commit": "54c1d11",
+    "exact_product_commit": "54c1d1198039e3815baeb3f8255f878d23185b10",
+    "exact_product_tree": "9a65f5ef952b5ff3c1fbdd6dc23bbf6c098b13fa",
+    "verified_in_detached_worktree": true,
+    "detached_root": "/private/tmp/forge-t3-3-first-spell-reducers-54c1d11"
+  },
+  "source_binding": {
+    "legacy_forge_commit": "1f0a3e0815822d8f58f798e0304b33d4534248b1",
+    "legacy_source": "existing local pinned checkout linked into detached worktree",
+    "translation_fingerprint": "be80c8d8e5439d490e03479b3661075a",
+    "cargo_lock_sha256": "f9fb1cd7230cb19b3277c1f4cb4c6750699e188f197cff4ef4e2965363675268"
+  },
+  "verification_environment": {
+    "local_only": true,
+    "github_actions_used": false,
+    "network_attempted": false,
+    "install_performed": false,
+    "worker_ceiling": 24,
+    "shared_cargo_cache": true,
+    "detached_target_debug_symlinked": true,
+    "detached_target_llvm_cov_symlinked": true,
+    "detached_target_coverage_local": true
+  },
+  "coverage_delta": {
+    "before": {
+      "complete_scripts": 11553,
+      "mapped_ability_uses": 19703,
+      "owner_priority_complete": 197,
+      "quarantined_scripts": 21737,
+      "quarantined_ability_uses": 23946
+    },
+    "after": {
+      "complete_scripts": 11555,
+      "total_scripts": 33290,
+      "complete_script_percent": 34.71012316010814,
+      "mapped_ability_uses": 19710,
+      "total_ability_uses": 43649,
+      "mapped_ability_percent": 45.155673669499876,
+      "owner_priority_complete": 197,
+      "owner_priority_requested": 365,
+      "quarantined_scripts": 21735,
+      "quarantined_ability_uses": 23939
+    },
+    "gain": {
+      "complete_scripts": 2,
+      "mapped_ability_uses": 7,
+      "owner_priority_complete": 0
+    }
+  },
+  "semantic_boundaries": {
+    "exactly_lowered": [
+      "S:ReduceCost with OnlyFirstSpell=True over closed spell selectors",
+      "ValidSpell$ Spell.Instant and Spell.Sorcery selectors",
+      "first-spell predicate history_count(selector, \"cast_this_turn\") == 0 wrapping the typed cost reduction"
+    ],
+    "still_quarantined": [
+      "command-zone static cost reducers",
+      "colored or dynamic reduction amounts",
+      "target-dependent reducers",
+      "kicked spell reducers",
+      "ability-cost and equip-cost reducers",
+      "non-true OnlyFirstSpell flags",
+      "ValidSpell forms with targeting, kicked, or other open predicates"
+    ],
+    "claim": "structural translation and compiler validity only; runtime and card-specific semantic maturity remain separate T3.5 and T3.6 evidence"
+  },
+  "commands": [
+    {
+      "command": "cargo fmt --all -- --check",
+      "exit_code": 0
+    },
+    {
+      "command": "cargo test -p forge-porttools --quiet",
+      "exit_code": 0
+    },
+    {
+      "command": "scripts/t3_parallel_sweep.sh development",
+      "exit_code": 0,
+      "workers": 24
+    },
+    {
+      "command": "cargo clippy --workspace --all-targets --all-features -- -D warnings",
+      "exit_code": 0
+    },
+    {
+      "command": "scripts/t3_parallel_sweep.sh checkpoint",
+      "exit_code": 0,
+      "workers": 24,
+      "accelerated_core_phase_seconds": 36,
+      "full_workspace_verification_seconds": 107,
+      "total_seconds": 153
+    }
+  ],
+  "line_coverage": {
+    "covered": 28433,
+    "count": 35045,
+    "percent": 81.13282921957483,
+    "floor_percent": 80,
+    "raw_report_sha256": "7cbf3d4fae4c1fd6f78f9f898bf1db729d7310b4545468e71fe698eddb25ee7d"
+  },
+  "planner": {
+    "analyzed_scripts": 33290,
+    "scripts_with_confirmed_blockers": 21433,
+    "priority_scripts_with_confirmed_blockers": 162,
+    "confirmed_observations": 46558,
+    "unique_blocker_families": 6089,
+    "linked_root_fanout": 47400
+  },
+  "checkpoint_gates": {
+    "full_workspace_tests": true,
+    "compiler_roundtrips": true,
+    "database_validation": true,
+    "oracle_scenarios": 235,
+    "oracle_subsets_passed": true,
+    "nightmare_suite_passed": true,
+    "arena_smoke_passed": true,
+    "deterministic_parallel_replay": true,
+    "deterministic_blocker_plan_replay": true
+  },
+  "notes": [
+    "Detached target/coverage remained local to the checkpoint root; only target/debug and target/llvm-cov-target were symlinked to the shared cache.",
+    "The pinned local vendor/legacy-forge checkout was symlinked; no network, download, install, GitHub Actions, push, or PR was used.",
+    "The batch intentionally remains narrow because command-zone, dynamic, targeting, kicked, ability, and equip reducer semantics are still open."
+  ]
+}
