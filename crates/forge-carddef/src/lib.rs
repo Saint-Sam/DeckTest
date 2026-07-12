@@ -976,6 +976,7 @@ operations! {
     Negate => ("negate", Value, 1, Some(1)),
     TriggeredAmount => ("triggered_amount", Value, 1, Some(1)),
     OpponentCount => ("opponent_count", Value, 0, Some(0)),
+    Crew => ("crew", Effect, 2, Some(2)),
 }
 
 impl Operation {
@@ -1413,6 +1414,11 @@ impl Operation {
                     Some(Effect)
                 }
             }
+            Self::Crew => match index {
+                0 => Some(Selector),
+                1 => Some(Number),
+                _ => None,
+            },
             Self::UnlessPaid => match index {
                 0 => Some(Effect),
                 1 => Some(Selector),

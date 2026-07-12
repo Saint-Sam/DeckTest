@@ -892,6 +892,44 @@ fn translate_keywords(
                     }),
                 )
             }
+            ("crew", [amount]) => {
+                let amount = amount.parse::<i64>().map_err(|_| {
+                    (
+                        line.line,
+                        "UNSUPPORTED_VALUE".to_string(),
+                        format!(
+                            "keyword `{name}` crew amount `{amount}` is not a positive integer"
+                        ),
+                    )
+                })?;
+                if amount <= 0 {
+                    return Err((
+                        line.line,
+                        "UNSUPPORTED_VALUE".to_string(),
+                        format!(
+                            "keyword `{name}` crew amount `{amount}` is not a positive integer"
+                        ),
+                    ));
+                }
+                (
+                    Some(keyword.clone()),
+                    Some(AbilityDefinition {
+                        kind: AbilityKind::Activated,
+                        costs: Vec::new(),
+                        event: None,
+                        condition: None,
+                        timing: None,
+                        effect: expression_call(
+                            Operation::Crew,
+                            vec![
+                                expression_call(Operation::Source, vec![]),
+                                Expression::Integer(amount),
+                            ],
+                        ),
+                        mana_ability: false,
+                    }),
+                )
+            }
             (
                 "flashback" | "madness" | "foretell" | "dash" | "spectacle" | "overload" | "escape"
                 | "blitz" | "disturb" | "evoke" | "bestow",
@@ -1961,6 +1999,43 @@ mod tests {
             translated.abilities[0].kind,
             forge_carddef::AbilityKind::Static
         );
+    }
+
+    #[test]
+    fn desugars_closed_crew_keyword() {
+        let script = crate::legacy::parse_legacy_script("fixture.txt", "K:Crew:3\n")
+            .unwrap_or_else(|error| panic!("fixture should parse: {error}"));
+        let faces = face_lines(&script);
+        let translated = translate_keywords(&script, &faces[0])
+            .unwrap_or_else(|error| panic!("crew should translate: {error:?}"));
+        assert_eq!(translated.ids, vec!["crew"]);
+        assert!(matches!(
+            &translated.abilities[0].effect,
+            Expression::Call {
+                operation: Operation::Crew,
+                arguments
+            } if *arguments == vec![
+                expression_call(Operation::Source, vec![]),
+                Expression::Integer(3)
+            ]
+        ));
+    }
+
+    #[test]
+    fn rejects_open_crew_keyword_shapes() {
+        for source in ["K:Crew:0\n", "K:Crew:X\n", "K:Crew:3:ActivationLimit$ 1\n"] {
+            let script = crate::legacy::parse_legacy_script("fixture.txt", source)
+                .unwrap_or_else(|error| panic!("fixture should parse: {error}"));
+            let faces = face_lines(&script);
+            let error = match translate_keywords(&script, &faces[0]) {
+                Ok(_) => panic!("open crew shape must fail closed"),
+                Err(error) => error,
+            };
+            assert!(matches!(
+                error.1.as_str(),
+                "UNSUPPORTED_VALUE" | "UNSUPPORTED_KEYWORD"
+            ));
+        }
     }
 
     #[test]
