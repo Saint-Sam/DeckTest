@@ -4205,6 +4205,7 @@ fn map_mill(
             "TgtPrompt",
             "NumCards",
             "Destination",
+            "RememberMilled",
             "SpellDescription",
             "StackDescription",
             "AILogic",
@@ -4221,13 +4222,19 @@ fn map_mill(
     }
     let amount = optional_positive_integer(parameters, "NumCards")?.unwrap_or(1);
     let affected = player_selector(parameters, DefaultSelector::You)?;
+    let expression = apply_remembered_result(
+        call(Operation::Mill, vec![Expression::Integer(amount), affected]),
+        parameters,
+        "RememberMilled",
+        "milled",
+    )?;
     Ok(MappedLegacyAbility {
         prefix,
         api: api.to_string(),
         costs: parse_simple_cost(parameters.get("Cost"))?,
         event: None,
         timing: None,
-        expression: call(Operation::Mill, vec![Expression::Integer(amount), affected]),
+        expression,
     })
 }
 
@@ -10529,6 +10536,7 @@ mod tests {
             "A:SP$ DestroyAll | ValidCards$ Creature | RememberDestroyed$ True",
             "A:SP$ Discard | Defined$ You | Mode$ TgtChoose | NumCards$ 1 | RememberDiscarded$ True",
             "A:SP$ Sacrifice | Defined$ You | SacValid$ Creature | RememberSacrificed$ True",
+            "A:SP$ Mill | Defined$ You | NumCards$ 3 | RememberMilled$ True",
         ] {
             let mapped = map_line(line).unwrap_or_else(|error| {
                 panic!("remembered result should map: {}", error.message)
@@ -10543,6 +10551,9 @@ mod tests {
         );
         assert!(
             map_line("A:SP$ DestroyAll | ValidCards$ Creature | RememberDestroyed$ False").is_err()
+        );
+        assert!(
+            map_line("A:SP$ Mill | Defined$ You | NumCards$ 3 | RememberMilled$ False").is_err()
         );
 
         let tapped = map_line(
