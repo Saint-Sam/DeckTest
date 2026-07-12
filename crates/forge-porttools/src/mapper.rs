@@ -1013,20 +1013,31 @@ fn extract_legacy_conditions(
     if let Some(value) = parameters.get("Condition") {
         conditions.push(legacy_named_condition(value)?);
     }
-    match (parameters.get("CheckSVar"), parameters.get("SVarCompare")) {
-        (Some(value), comparison) => {
-            let subject = resolve_comparison_value(value, "CheckSVar", context)?;
+    let check_svar = parameters
+        .get("CheckSVar")
+        .map(|value| ("CheckSVar", "SVarCompare", value))
+        .or_else(|| {
+            parameters
+                .get("ConditionCheckSVar")
+                .map(|value| ("ConditionCheckSVar", "ConditionSVarCompare", value))
+        });
+    let comparison = parameters
+        .get("SVarCompare")
+        .or_else(|| parameters.get("ConditionSVarCompare"));
+    match (check_svar, comparison) {
+        (Some((check_key, compare_key, value)), comparison) => {
+            let subject = resolve_comparison_value(value, check_key, context)?;
             conditions.push(closed_value_comparison(
                 subject,
                 comparison.map(String::as_str).unwrap_or("GE1"),
-                "SVarCompare",
+                compare_key,
                 context,
             )?);
         }
         (None, Some(_)) => {
             return Err(diagnostic(
                 "MISSING_PARAMETER",
-                "SVarCompare requires a matching CheckSVar",
+                "SVarCompare or ConditionSVarCompare requires a matching SVar check",
             ));
         }
         (None, None) => {}
@@ -1051,6 +1062,8 @@ fn extract_legacy_conditions(
                 "Condition"
                     | "CheckSVar"
                     | "SVarCompare"
+                    | "ConditionCheckSVar"
+                    | "ConditionSVarCompare"
                     | "ActivatorThisTurnCast"
                     | "OpponentTurn"
             )
@@ -8566,6 +8579,27 @@ mod tests {
             Operation::TimingCondition
         ));
         assert!(expression_contains_operation(timing, Operation::Not));
+
+        let condition_check = map_script_root(concat!(
+            "Name:Condition SVar Activation\n",
+            "A:AB$ Draw | Defined$ You | ConditionCheckSVar$ X | ConditionSVarCompare$ GE2 | SpellDescription$ Draw.\n",
+            "SVar:X:Count$Valid Artifact.YouCtrl\n",
+        ))
+        .unwrap_or_else(|error| {
+            panic!(
+                "ConditionCheckSVar activation condition should map: {}",
+                error.message
+            )
+        });
+        let timing = condition_check
+            .timing
+            .as_ref()
+            .unwrap_or_else(|| panic!("ConditionCheckSVar should create typed timing"));
+        assert!(expression_contains_operation(
+            timing,
+            Operation::TimingCondition
+        ));
+        assert!(expression_contains_operation(timing, Operation::AtLeast));
 
         let cast_count = map_script_root(concat!(
             "Name:Second Spell Trigger\n",
