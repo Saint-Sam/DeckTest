@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-12T12:54:23Z",
+  "task": "T3.3",
+  "batch": "bulk closed lifetimes, timing, type removal, target reducers, and combat selectors",
+  "technical_result": "pass",
+  "product_binding": {
+    "mapper_commit": "8c2eadc",
+    "exact_product_commit": "8c2eadccc499933073b2d8ea5901b5f02d4abcea",
+    "exact_product_tree": "300bcd008291d6599972e7bcf35e194b08d16732"
+  },
+  "source_binding": {
+    "legacy_forge_commit": "1f0a3e0815822d8f58f798e0304b33d4534248b1",
+    "legacy_source": "existing local pinned checkout",
+    "translation_fingerprint": "881175b6f29029de549d92a6b6d40b35",
+    "cargo_lock_sha256": "f9fb1cd7230cb19b3277c1f4cb4c6750699e188f197cff4ef4e2965363675268"
+  },
+  "verification_environment": {
+    "local_only": true,
+    "github_actions_used": false,
+    "network_attempted": false,
+    "install_performed": false,
+    "worker_ceiling": 24,
+    "shared_cargo_cache": true
+  },
+  "coverage_delta": {
+    "before": {
+      "complete_scripts": 11555,
+      "mapped_ability_uses": 19710,
+      "owner_priority_complete": 197
+    },
+    "after": {
+      "complete_scripts": 12069,
+      "total_scripts": 33290,
+      "complete_script_percent": 36.25413036948032,
+      "mapped_ability_uses": 20467,
+      "total_ability_uses": 43649,
+      "mapped_ability_percent": 46.889963114847994,
+      "owner_priority_complete": 197,
+      "owner_priority_requested": 365,
+      "quarantined_scripts": 21221,
+      "quarantined_ability_uses": 23182
+    },
+    "gain": {
+      "complete_scripts": 514,
+      "mapped_ability_uses": 757,
+      "owner_priority_complete": 0
+    }
+  },
+  "exactly_lowered": [
+    "closed Activation Threshold, Delirium, Metalcraft, Hellbent, Solved, and Blessing conditions",
+    "closed ActivationPhases windows and ActivationFirstCombat",
+    "RememberTokens and AtEOT cleanup for created tokens and permanent copies",
+    "UntilHostLeavesPlay exile lifetimes",
+    "RemoveCardTypes and RemoveLandTypes in closed continuous and animate forms",
+    "target-dependent ReduceCost selectors",
+    "attacking, blocking, and tapped selector predicates"
+  ],
+  "line_coverage": {
+    "covered": 28764,
+    "count": 35424,
+    "percent": 81.19918699186992,
+    "floor_percent": 80,
+    "raw_report_sha256": "d6bf2e871fd8f1b76104e5a6825a81a6b326ed0f51e09e4d01f2598765779ffa"
+  },
+  "planner": {
+    "analyzed_scripts": 33290,
+    "scripts_with_confirmed_blockers": 20881,
+    "priority_scripts_with_confirmed_blockers": 161,
+    "confirmed_observations": 45308,
+    "unique_blocker_families": 5949,
+    "linked_root_fanout": 46141
+  },
+  "checkpoint_gates": {
+    "full_workspace_tests": true,
+    "clippy_warnings_denied": true,
+    "compiler_roundtrips": true,
+    "database_validation": true,
+    "oracle_scenarios": 235,
+    "oracle_subsets_passed": true,
+    "nightmare_suite_passed": true,
+    "arena_smoke_passed": true,
+    "deterministic_parallel_replay": true,
+    "deterministic_blocker_plan_replay": true
+  },
+  "notes": [
+    "The exact 24-worker checkpoint completed locally in 131 seconds without GitHub Actions.",
+    "Structural mapping is not runtime or card-specific semantic maturity evidence.",
+    "T3.3 remains active because the 60% complete-script floor is not reached."
+  ]
+}
