@@ -1,0 +1,134 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-12T01:40:46Z",
+  "task": "T3.3",
+  "batch": "Drawn trigger Number positive integer",
+  "technical_result": "pass",
+  "product_binding": {
+    "mapper_commit": "ad9a9f3",
+    "exact_product_commit": "ad9a9f35217bc2241fe38dbaa1d68fc03468333d",
+    "exact_product_tree": "f8186f729682ce167ec41ed1e12e919e066ad1e7",
+    "verified_in_detached_worktree": true,
+    "detached_root": "/private/tmp/forge-t3-3-drawn-number-ad9a9f3"
+  },
+  "source_binding": {
+    "legacy_forge_commit": "1f0a3e0815822d8f58f798e0304b33d4534248b1",
+    "legacy_source": "existing local pinned checkout linked into detached worktree",
+    "translation_fingerprint": "6e17434ba1b6efe831058f6851d18964",
+    "cargo_lock_sha256": "f9fb1cd7230cb19b3277c1f4cb4c6750699e188f197cff4ef4e2965363675268"
+  },
+  "verification_environment": {
+    "local_only": true,
+    "github_actions_used": false,
+    "network_attempted": false,
+    "install_performed": false,
+    "worker_ceiling": 24,
+    "shared_cargo_cache": true,
+    "detached_target_debug_symlinked": true,
+    "detached_target_llvm_cov_symlinked": true,
+    "detached_target_coverage_local": true
+  },
+  "coverage_delta": {
+    "before": {
+      "complete_scripts": 11208,
+      "mapped_ability_uses": 19188,
+      "owner_priority_complete": 193,
+      "quarantined_scripts": 22082,
+      "quarantined_ability_uses": 24461
+    },
+    "after": {
+      "complete_scripts": 11237,
+      "total_scripts": 33290,
+      "complete_script_percent": 33.754881345749475,
+      "mapped_ability_uses": 19241,
+      "total_ability_uses": 43649,
+      "mapped_ability_percent": 44.08119315448235,
+      "owner_priority_complete": 193,
+      "owner_priority_requested": 365,
+      "quarantined_scripts": 22053,
+      "quarantined_ability_uses": 24408
+    },
+    "gain": {
+      "complete_scripts": 29,
+      "mapped_ability_uses": 53,
+      "owner_priority_complete": 0
+    }
+  },
+  "semantic_boundaries": {
+    "exactly_lowered": [
+      "Drawn triggers accept Number only as a positive integer",
+      "The validated ordinal is retained in EventDraw's typed second argument",
+      "EventDraw uses SelectorTextOrNumber without changing other event argument kinds"
+    ],
+    "still_quarantined": [
+      "zero, negative, dynamic, malformed, and mixed open Number values",
+      "open draw-event selectors and unsupported trigger zones",
+      "runtime and semantic card behavior beyond structural compilation"
+    ],
+    "claim": "structural translation and compiler validity only; runtime and card-specific semantic maturity remain separate T3.5 and T3.6 evidence"
+  },
+  "commands": [
+    {
+      "command": "cargo test -p forge-porttools maps_closed_drawn_event_number",
+      "exit_code": 0
+    },
+    {
+      "command": "cargo test -p forge-porttools rejects_non_positive_drawn_event_number",
+      "exit_code": 0
+    },
+    {
+      "command": "cargo test -p forge-cardc --test malformed_corpus",
+      "exit_code": 0
+    },
+    {
+      "command": "FORGE_T3_TOTAL_WORKERS=24 CARGO_BUILD_JOBS=24 scripts/t3_parallel_sweep.sh development",
+      "exit_code": 0
+    },
+    {
+      "command": "cargo fmt --all -- --check",
+      "exit_code": 0
+    },
+    {
+      "command": "CARGO_BUILD_JOBS=24 cargo clippy --workspace --all-targets -- -D warnings",
+      "exit_code": 0
+    },
+    {
+      "command": "FORGE_T3_TOTAL_WORKERS=24 CARGO_BUILD_JOBS=24 scripts/t3_parallel_sweep.sh checkpoint",
+      "exit_code": 0,
+      "accelerated_core_phase_seconds": 38,
+      "full_workspace_verification_seconds": 86,
+      "total_seconds": 130
+    }
+  ],
+  "line_coverage": {
+    "covered": 27717,
+    "count": 34236,
+    "percent": 80.95864002804066,
+    "floor_percent": 80,
+    "raw_report_sha256": "a6cf1ec1078b2f9bcfdafb8eacf169a62c3bbb5d12e05d85191c7c50f5704179"
+  },
+  "planner": {
+    "analyzed_scripts": 33290,
+    "scripts_with_confirmed_blockers": 21877,
+    "priority_scripts_with_confirmed_blockers": 166,
+    "confirmed_observations": 51324,
+    "unique_blocker_families": 5360,
+    "linked_root_fanout": 52304
+  },
+  "checkpoint_gates": {
+    "full_workspace_tests": true,
+    "compiler_roundtrips": true,
+    "database_validation": true,
+    "oracle_scenarios": 235,
+    "oracle_subsets_passed": true,
+    "nightmare_suite_passed": true,
+    "arena_smoke_passed": true,
+    "deterministic_parallel_replay": true,
+    "deterministic_blocker_plan_replay": true
+  },
+  "continuation": {
+    "t3_3_remains_active": true,
+    "exit_floor_reached": false,
+    "next_t3_3_batch_source": "metrics/blocker_plan.json recommended_batches[0]"
+  }
+}
