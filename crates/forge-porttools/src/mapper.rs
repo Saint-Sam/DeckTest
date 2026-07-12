@@ -6821,6 +6821,10 @@ fn affected_selector_branch(value: &str) -> Result<Expression, MappingDiagnostic
                     Operation::SupertypeIs,
                     vec![Expression::Text(modifier.to_ascii_lowercase())],
                 ),
+                "IsCommander" => call(
+                    Operation::DesignationIs,
+                    vec![Expression::Text("commander".to_string())],
+                ),
                 "nonLand" => call(
                     Operation::Not,
                     vec![call(
@@ -7816,6 +7820,7 @@ mod tests {
             "A:DB$ ChangeZone | Defined$ TriggeredNewCardLKICopy | Origin$ Graveyard | Destination$ Battlefield | SpellDescription$ Return.",
             "A:DB$ ChangeZone | Defined$ TriggeredCardLKICopy | Origin$ Graveyard | Destination$ Hand | SpellDescription$ Return.",
             "A:DB$ ChangeZone | Defined$ Self | Origin$ Command | Destination$ Exile | SpellDescription$ Exile self from the command zone.",
+            "A:AB$ Pump | ValidTgts$ Creature.IsCommander+YouCtrl | NumAtt$ 1 | NumDef$ 1 | SpellDescription$ Commander pump.",
         ] {
             map_line(line).unwrap_or_else(|error| {
                 panic!("closed selector should map: {}", error.message);
