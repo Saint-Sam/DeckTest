@@ -4524,8 +4524,10 @@ fn map_reduce_cost(
         &[
             "Type",
             "ValidCard",
+            "ValidSpell",
             "Activator",
             "Amount",
+            "OnlyFirstSpell",
             "EffectZone",
             "Description",
         ],
@@ -4535,11 +4537,7 @@ fn map_reduce_cost(
     }
     require_static_effect_zone(parameters, "EffectZone")?;
     let amount = positive_integer(required(parameters, "Amount")?, "Amount")?;
-    let mut spells = parameters
-        .get("ValidCard")
-        .map(|value| spell_selector(value))
-        .transpose()?
-        .unwrap_or_else(|| call(Operation::Spells, vec![]));
+    let mut spells = reduce_cost_spell_selector(parameters)?;
     if let Some(activator) = parameters.get("Activator") {
         let player = match activator.as_str() {
             "You" => call(Operation::You, vec![]),
@@ -4549,22 +4547,77 @@ fn map_reduce_cost(
         };
         spells = add_collection_predicate(spells, call(Operation::ControlledBy, vec![player]))?;
     }
+    let first_spell_condition = match parameters.get("OnlyFirstSpell").map(String::as_str) {
+        None => None,
+        Some("True") => Some(call(
+            Operation::Equals,
+            vec![
+                call(
+                    Operation::HistoryCount,
+                    vec![
+                        spells.clone(),
+                        Expression::Text("cast_this_turn".to_string()),
+                    ],
+                ),
+                Expression::Integer(0),
+            ],
+        )),
+        Some(value) => return Err(unsupported_value("OnlyFirstSpell", value)),
+    };
+    let expression = call(
+        Operation::Continuous,
+        vec![
+            spells,
+            call(
+                Operation::CostReduction,
+                vec![call(Operation::Any, vec![]), Expression::Integer(amount)],
+            ),
+        ],
+    );
+    let expression = if let Some(condition) = first_spell_condition {
+        call(Operation::WhileCondition, vec![condition, expression])
+    } else {
+        expression
+    };
     Ok(MappedLegacyAbility {
         prefix,
         api: api.to_string(),
         costs: Vec::new(),
         event: None,
         timing: None,
-        expression: call(
-            Operation::Continuous,
-            vec![
-                spells,
-                call(
-                    Operation::CostReduction,
-                    vec![call(Operation::Any, vec![]), Expression::Integer(amount)],
-                ),
-            ],
-        ),
+        expression,
+    })
+}
+
+fn reduce_cost_spell_selector(
+    parameters: &BTreeMap<String, String>,
+) -> Result<Expression, MappingDiagnostic> {
+    match (parameters.get("ValidCard"), parameters.get("ValidSpell")) {
+        (Some(value), None) => spell_selector(value),
+        (None, Some(value)) => closed_valid_spell_selector(value),
+        (Some(_), Some(value)) => Err(unsupported_value("ValidSpell", value)),
+        (None, None) => Ok(call(Operation::Spells, vec![])),
+    }
+}
+
+fn closed_valid_spell_selector(value: &str) -> Result<Expression, MappingDiagnostic> {
+    let mut branches = Vec::new();
+    for branch in value.split(',') {
+        let branch = branch.trim();
+        let Some(kind) = branch.strip_prefix("Spell.") else {
+            return Err(unsupported_value("ValidSpell", value));
+        };
+        match kind {
+            "Instant" | "Sorcery" => branches.push(kind),
+            _ => return Err(unsupported_value("ValidSpell", value)),
+        }
+    }
+    if branches.is_empty() {
+        return Err(unsupported_value("ValidSpell", value));
+    }
+    spell_selector(&branches.join(",")).map_err(|mut error| {
+        error.message = error.message.replace("`ValidCard`", "`ValidSpell`");
+        error
     })
 }
 
@@ -8147,6 +8200,62 @@ mod tests {
         .err()
         .unwrap_or_else(|| panic!("non-closed static EffectZone must quarantine"));
         assert_eq!(error.code, "UNSUPPORTED_VALUE");
+    }
+
+    #[test]
+    fn maps_closed_first_spell_reduce_cost() {
+        let mapped = map_line(
+            "S:Mode$ ReduceCost | EffectZone$ Battlefield | ValidCard$ Card.Creature | Activator$ You | Type$ Spell | OnlyFirstSpell$ True | Amount$ 2 | Description$ First creature spell.",
+        )
+        .unwrap_or_else(|error| panic!("first-spell reducer should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &mapped.expression,
+            Operation::WhileCondition
+        ));
+        assert!(expression_contains_operation(
+            &mapped.expression,
+            Operation::HistoryCount
+        ));
+        assert!(expression_contains_operation(
+            &mapped.expression,
+            Operation::CostReduction
+        ));
+
+        let valid_spell = map_line(
+            "S:Mode$ ReduceCost | OnlyFirstSpell$ True | Type$ Spell | ValidSpell$ Spell.Instant,Spell.Sorcery | Activator$ You | Amount$ 3 | Description$ First instant or sorcery.",
+        )
+        .unwrap_or_else(|error| panic!("closed ValidSpell reducer should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &valid_spell.expression,
+            Operation::Or
+        ));
+        assert!(expression_contains_operation(
+            &valid_spell.expression,
+            Operation::HistoryCount
+        ));
+    }
+
+    #[test]
+    fn rejects_open_first_spell_reduce_cost_forms() {
+        for (line, code) in [
+            (
+                "S:Mode$ ReduceCost | ValidCard$ Card | Type$ Spell | ValidSpell$ Spell.IsTargeting Valid Creature | Activator$ You | OnlyFirstSpell$ True | Amount$ 1 | Description$ Targeting reducer.",
+                "UNSUPPORTED_VALUE",
+            ),
+            (
+                "S:Mode$ ReduceCost | OnlyFirstSpell$ False | Type$ Spell | ValidCard$ Creature | Activator$ You | Amount$ 1 | Description$ Bad flag.",
+                "UNSUPPORTED_VALUE",
+            ),
+            (
+                "S:Mode$ ReduceCost | OnlyFirstSpell$ True | Type$ Spell | ValidSpell$ Spell.Kicked | Activator$ You | Amount$ 1 | Description$ Kicked spell.",
+                "UNSUPPORTED_VALUE",
+            ),
+        ] {
+            let error = map_line(line)
+                .err()
+                .unwrap_or_else(|| panic!("open first-spell reducer must quarantine"));
+            assert_eq!(error.code, code);
+        }
     }
 
     #[test]
