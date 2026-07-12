@@ -6840,7 +6840,7 @@ fn type_or_subtype_predicate(
     ))
 }
 
-fn affected_selector(value: &str) -> Result<Expression, MappingDiagnostic> {
+pub(crate) fn affected_selector(value: &str) -> Result<Expression, MappingDiagnostic> {
     let mut selectors = Vec::new();
     for branch in value.split(',') {
         selectors.push(affected_selector_branch(branch)?);

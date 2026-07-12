@@ -6,8 +6,8 @@ use crate::{
         LegacyScript,
     },
     mapper::{
-        card_selector_in_zone, map_named_svar_ability, map_script_abilities, parse_simple_cost,
-        resolve_value_svar, valid_target_selector, MappingContext,
+        affected_selector, card_selector_in_zone, map_named_svar_ability, map_script_abilities,
+        parse_simple_cost, resolve_value_svar, valid_target_selector, MappingContext,
     },
 };
 use forge_cardc::{emit_card, is_known_keyword, parse_card_named};
@@ -819,6 +819,17 @@ fn translate_keywords(
                     )?),
                 )
             }
+            ("etbreplacement", [scope, replacement, mandatory, zone, affected])
+                if scope == "Other"
+                    && replacement == "AddExtraCounter"
+                    && mandatory == "Mandatory"
+                    && zone == "Battlefield" =>
+            {
+                (
+                    None,
+                    Some(translate_etb_extra_counter(line.line, affected)?),
+                )
+            }
             ("landwalk", [land]) => {
                 let keyword = match land.as_str() {
                     "Desert" => "desertwalk",
@@ -1017,6 +1028,67 @@ fn translate_crew_keyword(
         ),
         mana_ability: false,
     })
+}
+
+fn translate_etb_extra_counter(
+    line: usize,
+    affected: &str,
+) -> Result<AbilityDefinition, (usize, String, String)> {
+    let affected = closed_etb_extra_counter_selector(line, affected)?;
+    let triggered = expression_call(Operation::Triggered, vec![]);
+    Ok(AbilityDefinition {
+        kind: AbilityKind::Replacement,
+        costs: Vec::new(),
+        event: Some(expression_call(Operation::EventEnters, vec![affected])),
+        condition: None,
+        timing: None,
+        effect: expression_call(
+            Operation::ReplaceEvent,
+            vec![
+                triggered.clone(),
+                expression_call(
+                    Operation::AddCounter,
+                    vec![
+                        triggered,
+                        Expression::Text("plus1_plus1".to_string()),
+                        Expression::Integer(1),
+                    ],
+                ),
+            ],
+        ),
+        mana_ability: false,
+    })
+}
+
+fn closed_etb_extra_counter_selector(
+    line: usize,
+    value: &str,
+) -> Result<Expression, (usize, String, String)> {
+    if !matches!(
+        value,
+        "Creature.Other+YouCtrl"
+            | "Creature.YouCtrl+Other"
+            | "Creature.YouCtrl"
+            | "Creature.Angel+YouCtrl+Other"
+            | "Creature.Wizard+Other+YouCtrl"
+            | "Creature.Beast+YouCtrl+Other"
+            | "Creature.Legendary+YouCtrl+Other"
+            | "Creature.Warrior+YouCtrl+Other"
+            | "Creature.Dragon+YouCtrl"
+            | "Creature.Rogue+Other+YouCtrl"
+            | "Vampire.YouCtrl+Other"
+            | "Creature.Wolf+YouCtrl"
+            | "Creature.Werewolf+YouCtrl"
+            | "Creature.Colorless+YouCtrl"
+            | "Planeswalker.YouCtrl"
+    ) {
+        return Err((
+            line,
+            "UNSUPPORTED_VALUE".to_string(),
+            format!("ETB extra-counter selector `{value}` has no closed lowering"),
+        ));
+    }
+    affected_selector(value).map_err(|diagnostic| (line, diagnostic.code, diagnostic.message))
 }
 
 fn translate_etb_counter(
@@ -2054,6 +2126,56 @@ mod tests {
             assert!(matches!(
                 error.1.as_str(),
                 "UNSUPPORTED_VALUE" | "UNSUPPORTED_KEYWORD"
+            ));
+        }
+    }
+
+    #[test]
+    fn desugars_closed_etb_extra_counter_replacement() {
+        let script = crate::legacy::parse_legacy_script(
+            "fixture.txt",
+            "K:ETBReplacement:Other:AddExtraCounter:Mandatory:Battlefield:Creature.Other+YouCtrl\n",
+        )
+        .unwrap_or_else(|error| panic!("fixture should parse: {error}"));
+        let faces = face_lines(&script);
+        let translated = translate_keywords(&script, &faces[0])
+            .unwrap_or_else(|error| panic!("ETB replacement should translate: {error:?}"));
+        assert!(translated.ids.is_empty());
+        assert_eq!(translated.abilities.len(), 1);
+        assert_eq!(translated.abilities[0].kind, AbilityKind::Replacement);
+        assert!(matches!(
+            &translated.abilities[0].event,
+            Some(Expression::Call {
+                operation: Operation::EventEnters,
+                ..
+            })
+        ));
+        assert!(matches!(
+            &translated.abilities[0].effect,
+            Expression::Call {
+                operation: Operation::ReplaceEvent,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn rejects_open_etb_extra_counter_replacement_shapes() {
+        for source in [
+            "K:ETBReplacement:Other:AddExtraCounter:Optional:Battlefield:Creature.YouCtrl\n",
+            "K:ETBReplacement:Other:AddExtraCounter:Mandatory:Graveyard:Creature.YouCtrl\n",
+            "K:ETBReplacement:Other:AddExtraCounter:Mandatory:Battlefield:Creature.CrewedThisTurn\n",
+        ] {
+            let script = crate::legacy::parse_legacy_script("fixture.txt", source)
+                .unwrap_or_else(|error| panic!("fixture should parse: {error}"));
+            let faces = face_lines(&script);
+            let error = match translate_keywords(&script, &faces[0]) {
+                Ok(_) => panic!("open ETB replacement shape must fail closed"),
+                Err(error) => error,
+            };
+            assert!(matches!(
+                error.1.as_str(),
+                "UNSUPPORTED_KEYWORD" | "UNSUPPORTED_VALUE"
             ));
         }
     }
