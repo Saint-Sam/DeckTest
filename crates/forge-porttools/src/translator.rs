@@ -1067,6 +1067,295 @@ fn translate_keywords(
                     None,
                 )?),
             ),
+            ("saddle", [amount]) => (
+                None,
+                Some(translate_numeric_activated_keyword_rule(
+                    line.line,
+                    amount,
+                    Operation::Saddle,
+                    None,
+                )?),
+            ),
+            ("level_up", [cost]) => (
+                None,
+                Some(translate_activated_keyword_rule(
+                    line.line,
+                    cost,
+                    Operation::LevelUp,
+                    Some(expression_call(Operation::TimingSorcery, vec![])),
+                )?),
+            ),
+            ("encore", [cost]) => (
+                None,
+                Some(translate_activated_keyword_rule(
+                    line.line,
+                    cost,
+                    Operation::Encore,
+                    Some(expression_call(Operation::TimingSorcery, vec![])),
+                )?),
+            ),
+            ("embalm", [cost]) => (
+                None,
+                Some(translate_activated_keyword_rule(
+                    line.line,
+                    cost,
+                    Operation::Embalm,
+                    Some(expression_call(Operation::TimingSorcery, vec![])),
+                )?),
+            ),
+            ("eternalize", [cost]) => (
+                None,
+                Some(translate_activated_keyword_rule(
+                    line.line,
+                    cost,
+                    Operation::Eternalize,
+                    Some(expression_call(Operation::TimingSorcery, vec![])),
+                )?),
+            ),
+            ("plot", [cost]) => (
+                None,
+                Some(translate_activated_keyword_rule(
+                    line.line,
+                    cost,
+                    Operation::Plot,
+                    Some(expression_call(Operation::TimingSorcery, vec![])),
+                )?),
+            ),
+            ("warp", [cost]) => (
+                None,
+                Some(translate_costed_keyword_rule(
+                    line.line,
+                    cost,
+                    Operation::WarpCost,
+                )?),
+            ),
+            ("sneak", [cost]) => (
+                None,
+                Some(translate_costed_keyword_rule(
+                    line.line,
+                    cost,
+                    Operation::SneakCost,
+                )?),
+            ),
+            ("strive", [cost]) => (
+                None,
+                Some(translate_costed_keyword_rule(
+                    line.line,
+                    cost,
+                    Operation::StriveCost,
+                )?),
+            ),
+            ("replicate", [cost]) => (
+                None,
+                Some(translate_costed_keyword_rule(
+                    line.line,
+                    cost,
+                    Operation::ReplicateCost,
+                )?),
+            ),
+            ("miracle", [cost]) => (
+                None,
+                Some(translate_costed_keyword_rule(
+                    line.line,
+                    cost,
+                    Operation::MiracleCost,
+                )?),
+            ),
+            ("offspring", [cost]) => (
+                None,
+                Some(translate_costed_keyword_rule(
+                    line.line,
+                    cost,
+                    Operation::OffspringCost,
+                )?),
+            ),
+            ("firebending", [amount]) => (
+                None,
+                Some(translate_numeric_keyword_rule(
+                    line.line,
+                    amount,
+                    Operation::Firebending,
+                )?),
+            ),
+            ("vanishing", [amount]) => (
+                None,
+                Some(translate_numeric_keyword_rule(
+                    line.line,
+                    amount,
+                    Operation::Vanishing,
+                )?),
+            ),
+            ("fading", [amount]) => (
+                None,
+                Some(translate_numeric_keyword_rule(
+                    line.line,
+                    amount,
+                    Operation::Fading,
+                )?),
+            ),
+            ("prototype", [cost, power, toughness]) => (
+                None,
+                Some(translate_prototype_keyword(
+                    line.line, cost, power, toughness,
+                )?),
+            ),
+            ("station", [amount]) => (
+                None,
+                Some(translate_numeric_activated_keyword_rule(
+                    line.line,
+                    amount,
+                    Operation::Station,
+                    None,
+                )?),
+            ),
+            ("renown", [amount]) => (
+                None,
+                Some(translate_numeric_keyword_rule(
+                    line.line,
+                    amount,
+                    Operation::Renown,
+                )?),
+            ),
+            ("bloodthirst", [amount]) => (
+                None,
+                Some(translate_numeric_keyword_rule(
+                    line.line,
+                    amount,
+                    Operation::Bloodthirst,
+                )?),
+            ),
+            ("fabricate", [amount]) => (
+                None,
+                Some(translate_numeric_keyword_rule(
+                    line.line,
+                    amount,
+                    Operation::Fabricate,
+                )?),
+            ),
+            ("modular", [amount]) => (
+                None,
+                Some(translate_numeric_keyword_rule(
+                    line.line,
+                    amount,
+                    Operation::Modular,
+                )?),
+            ),
+            ("devour", [amount]) => (
+                None,
+                Some(translate_numeric_keyword_rule(
+                    line.line,
+                    amount,
+                    Operation::Devour,
+                )?),
+            ),
+            ("teamwork", [amount]) => (
+                None,
+                Some(translate_numeric_keyword_rule(
+                    line.line,
+                    amount,
+                    Operation::Teamwork,
+                )?),
+            ),
+            ("starting_intensity", [amount]) => (
+                None,
+                Some(translate_nonnegative_numeric_keyword_rule(
+                    line.line,
+                    amount,
+                    Operation::StartingIntensity,
+                )?),
+            ),
+            ("casualty", [amount]) => (
+                None,
+                Some(translate_numeric_keyword_rule(
+                    line.line,
+                    amount,
+                    Operation::Casualty,
+                )?),
+            ),
+            ("reconfigure", [cost]) => (
+                None,
+                Some(translate_activated_keyword_rule(
+                    line.line,
+                    cost,
+                    Operation::Reconfigure,
+                    Some(expression_call(Operation::TimingSorcery, vec![])),
+                )?),
+            ),
+            ("mutate", [cost]) => (
+                None,
+                Some(translate_costed_keyword_rule(
+                    line.line,
+                    cost,
+                    Operation::MutateCost,
+                )?),
+            ),
+            ("emerge", [cost]) => (
+                None,
+                Some(translate_costed_keyword_rule(
+                    line.line,
+                    cost,
+                    Operation::EmergeCost,
+                )?),
+            ),
+            ("splice", [validity, cost]) => (
+                None,
+                Some(translate_splice_keyword(line.line, validity, cost)?),
+            ),
+            ("awaken", [amount, cost]) => (
+                None,
+                Some(translate_awaken_keyword(line.line, amount, cost)?),
+            ),
+            ("start_your_engines", []) => (
+                None,
+                Some(translate_marker_keyword(Operation::StartYourEngines)),
+            ),
+            ("choose_a_background", []) => (
+                None,
+                Some(translate_marker_keyword(Operation::ChooseBackground)),
+            ),
+            ("doctor's_companion", []) => (
+                None,
+                Some(translate_marker_keyword(Operation::DoctorsCompanion)),
+            ),
+            ("bargain", []) => (None, Some(translate_marker_keyword(Operation::Bargain))),
+            ("partner_with", partners @ [_, ..]) => {
+                let mut arguments = vec![expression_call(Operation::Source, vec![])];
+                arguments.extend(
+                    partners
+                        .iter()
+                        .map(|partner| Expression::Text(partner.clone())),
+                );
+                (
+                    None,
+                    Some(AbilityDefinition {
+                        kind: AbilityKind::Static,
+                        costs: Vec::new(),
+                        event: None,
+                        condition: None,
+                        timing: None,
+                        effect: expression_call(Operation::PartnerWith, arguments),
+                        mana_ability: false,
+                    }),
+                )
+            }
+            ("partner", [group]) => (
+                None,
+                Some(AbilityDefinition {
+                    kind: AbilityKind::Static,
+                    costs: Vec::new(),
+                    event: None,
+                    condition: None,
+                    timing: None,
+                    effect: expression_call(
+                        Operation::PartnerGroup,
+                        vec![
+                            expression_call(Operation::Source, vec![]),
+                            Expression::Text(group.clone()),
+                        ],
+                    ),
+                    mana_ability: false,
+                }),
+            ),
             (_, []) => (Some(keyword.clone()), None),
             ("cycling", [cost]) => {
                 let full_cost = format!("{cost} Discard<1/CARDNAME>");
@@ -1337,6 +1626,18 @@ fn translate_costed_keyword_rule(
     })
 }
 
+fn translate_marker_keyword(operation: Operation) -> AbilityDefinition {
+    AbilityDefinition {
+        kind: AbilityKind::Static,
+        costs: Vec::new(),
+        event: None,
+        condition: None,
+        timing: None,
+        effect: expression_call(operation, vec![expression_call(Operation::Source, vec![])]),
+        mana_ability: false,
+    }
+}
+
 fn translate_keyword_cost_options(
     line: usize,
     cost_options: &[String],
@@ -1405,6 +1706,45 @@ fn translate_numeric_keyword_rule(
     })
 }
 
+fn translate_nonnegative_numeric_keyword_rule(
+    line: usize,
+    amount: &str,
+    operation: Operation,
+) -> Result<AbilityDefinition, (usize, String, String)> {
+    let amount = amount.parse::<i64>().map_err(|_| {
+        (
+            line,
+            "UNSUPPORTED_VALUE".to_string(),
+            format!(
+                "{} amount `{amount}` is not a nonnegative integer",
+                operation.as_str()
+            ),
+        )
+    })?;
+    if amount < 0 {
+        return Err((
+            line,
+            "UNSUPPORTED_VALUE".to_string(),
+            format!("{} amount must be nonnegative", operation.as_str()),
+        ));
+    }
+    Ok(AbilityDefinition {
+        kind: AbilityKind::Static,
+        costs: Vec::new(),
+        event: None,
+        condition: None,
+        timing: None,
+        effect: expression_call(
+            operation,
+            vec![
+                expression_call(Operation::Source, vec![]),
+                Expression::Integer(amount),
+            ],
+        ),
+        mana_ability: false,
+    })
+}
+
 fn translate_activated_keyword_rule(
     line: usize,
     cost: &String,
@@ -1427,6 +1767,172 @@ fn translate_activated_keyword_rule(
         condition: None,
         timing,
         effect: expression_call(operation, vec![expression_call(Operation::Source, vec![])]),
+        mana_ability: false,
+    })
+}
+
+fn translate_numeric_activated_keyword_rule(
+    line: usize,
+    amount: &str,
+    operation: Operation,
+    timing: Option<Expression>,
+) -> Result<AbilityDefinition, (usize, String, String)> {
+    let amount = amount.parse::<i64>().map_err(|_| {
+        (
+            line,
+            "UNSUPPORTED_VALUE".to_string(),
+            format!(
+                "{} amount `{amount}` is not a positive integer",
+                operation.as_str()
+            ),
+        )
+    })?;
+    if amount <= 0 {
+        return Err((
+            line,
+            "UNSUPPORTED_VALUE".to_string(),
+            format!("{} amount must be positive", operation.as_str()),
+        ));
+    }
+    Ok(AbilityDefinition {
+        kind: AbilityKind::Activated,
+        costs: Vec::new(),
+        event: None,
+        condition: None,
+        timing,
+        effect: expression_call(
+            operation,
+            vec![
+                expression_call(Operation::Source, vec![]),
+                Expression::Integer(amount),
+            ],
+        ),
+        mana_ability: false,
+    })
+}
+
+fn translate_prototype_keyword(
+    line: usize,
+    cost: &String,
+    power: &str,
+    toughness: &str,
+) -> Result<AbilityDefinition, (usize, String, String)> {
+    let costs = parse_simple_cost(Some(cost))
+        .map_err(|diagnostic| (line, diagnostic.code, diagnostic.message))?;
+    if costs.is_empty() {
+        return Err((
+            line,
+            "MISSING_COST".to_string(),
+            "prototype requires a cost".to_string(),
+        ));
+    }
+    let parse_stat = |value: &str, field: &str| {
+        value.parse::<i64>().map_err(|_| {
+            (
+                line,
+                "UNSUPPORTED_VALUE".to_string(),
+                format!("prototype {field} `{value}` is not a nonnegative integer"),
+            )
+        })
+    };
+    let power = parse_stat(power, "power")?;
+    let toughness = parse_stat(toughness, "toughness")?;
+    if power < 0 || toughness < 0 {
+        return Err((
+            line,
+            "UNSUPPORTED_VALUE".to_string(),
+            "prototype power and toughness must be nonnegative".to_string(),
+        ));
+    }
+    Ok(AbilityDefinition {
+        kind: AbilityKind::Static,
+        costs: Vec::new(),
+        event: None,
+        condition: None,
+        timing: None,
+        effect: expression_call(
+            Operation::Prototype,
+            vec![
+                expression_call(Operation::Source, vec![]),
+                expression_call(Operation::CostBundle, costs),
+                Expression::Integer(power),
+                Expression::Integer(toughness),
+            ],
+        ),
+        mana_ability: false,
+    })
+}
+
+fn translate_splice_keyword(
+    line: usize,
+    validity: &str,
+    cost: &String,
+) -> Result<AbilityDefinition, (usize, String, String)> {
+    let costs = parse_simple_cost(Some(cost))
+        .map_err(|diagnostic| (line, diagnostic.code, diagnostic.message))?;
+    if costs.is_empty() || validity.trim().is_empty() {
+        return Err((
+            line,
+            "MISSING_PARAMETER".to_string(),
+            "splice requires a validity and cost".to_string(),
+        ));
+    }
+    let mut arguments = vec![
+        expression_call(Operation::Source, vec![]),
+        Expression::Text(validity.to_string()),
+    ];
+    arguments.extend(costs);
+    Ok(AbilityDefinition {
+        kind: AbilityKind::Static,
+        costs: Vec::new(),
+        event: None,
+        condition: None,
+        timing: None,
+        effect: expression_call(Operation::SpliceCost, arguments),
+        mana_ability: false,
+    })
+}
+
+fn translate_awaken_keyword(
+    line: usize,
+    amount: &str,
+    cost: &String,
+) -> Result<AbilityDefinition, (usize, String, String)> {
+    let amount = amount.parse::<i64>().map_err(|_| {
+        (
+            line,
+            "UNSUPPORTED_VALUE".to_string(),
+            format!("awaken amount `{amount}` is not a positive integer"),
+        )
+    })?;
+    if amount <= 0 {
+        return Err((
+            line,
+            "UNSUPPORTED_VALUE".to_string(),
+            "awaken amount must be positive".to_string(),
+        ));
+    }
+    let costs = parse_simple_cost(Some(cost))
+        .map_err(|diagnostic| (line, diagnostic.code, diagnostic.message))?;
+    if costs.is_empty() {
+        return Err((
+            line,
+            "MISSING_COST".to_string(),
+            "awaken requires a cost".to_string(),
+        ));
+    }
+    let mut arguments = vec![
+        expression_call(Operation::Source, vec![]),
+        Expression::Integer(amount),
+    ];
+    arguments.extend(costs);
+    Ok(AbilityDefinition {
+        kind: AbilityKind::Static,
+        costs: Vec::new(),
+        event: None,
+        condition: None,
+        timing: None,
+        effect: expression_call(Operation::AwakenCost, arguments),
         mana_ability: false,
     })
 }
@@ -2659,6 +3165,45 @@ mod tests {
             ("K:Bushido:1", Operation::Bushido),
             ("K:Soulshift:4", Operation::Soulshift),
             ("K:Ninjutsu:1 U", Operation::Ninjutsu),
+            ("K:Saddle:3", Operation::Saddle),
+            ("K:Level up:2 W", Operation::LevelUp),
+            ("K:Encore:3 B", Operation::Encore),
+            ("K:Embalm:3 U", Operation::Embalm),
+            ("K:Eternalize:4 W W", Operation::Eternalize),
+            ("K:Plot:1 R", Operation::Plot),
+            ("K:Warp:1 U", Operation::WarpCost),
+            ("K:Sneak:1 B", Operation::SneakCost),
+            ("K:Strive:2 R", Operation::StriveCost),
+            ("K:Replicate:U", Operation::ReplicateCost),
+            ("K:Miracle:1 W", Operation::MiracleCost),
+            ("K:Offspring:2", Operation::OffspringCost),
+            ("K:Firebending:2", Operation::Firebending),
+            ("K:Vanishing:3", Operation::Vanishing),
+            ("K:Fading:4", Operation::Fading),
+            ("K:Prototype:2 W:1:1", Operation::Prototype),
+            ("K:Station:8", Operation::Station),
+            ("K:Renown:2", Operation::Renown),
+            ("K:Bloodthirst:3", Operation::Bloodthirst),
+            ("K:Fabricate:2", Operation::Fabricate),
+            ("K:Modular:4", Operation::Modular),
+            ("K:Devour:2", Operation::Devour),
+            ("K:Teamwork:3", Operation::Teamwork),
+            ("K:Starting intensity:0", Operation::StartingIntensity),
+            ("K:Casualty:2", Operation::Casualty),
+            ("K:Reconfigure:2", Operation::Reconfigure),
+            ("K:Mutate:3 U", Operation::MutateCost),
+            ("K:Emerge:6 G", Operation::EmergeCost),
+            ("K:Splice:Arcane:1 U", Operation::SpliceCost),
+            ("K:Awaken:3:4 U", Operation::AwakenCost),
+            ("K:Start your engines", Operation::StartYourEngines),
+            ("K:Choose a Background", Operation::ChooseBackground),
+            ("K:Doctor's companion", Operation::DoctorsCompanion),
+            ("K:Bargain", Operation::Bargain),
+            (
+                "K:Partner with:Pir, Imaginative Rascal:Pir",
+                Operation::PartnerWith,
+            ),
+            ("K:Partner:Friends forever", Operation::PartnerGroup),
         ] {
             let script = crate::legacy::parse_legacy_script("fixture.txt", keyword)
                 .unwrap_or_else(|error| panic!("fixture should parse: {error}"));

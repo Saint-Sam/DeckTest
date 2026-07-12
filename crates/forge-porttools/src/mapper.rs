@@ -320,6 +320,16 @@ const MAPPERS: &[MapperSpec] = &[
     },
     MapperSpec {
         prefix: LegacyAbilityPrefix::Activated,
+        api: "Protection",
+        mapper: map_protection,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Activated,
+        api: "ChooseType",
+        mapper: map_choose_type,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Activated,
         api: "Fog",
         mapper: map_fog,
     },
@@ -5995,6 +6005,144 @@ fn map_prevent_damage(
     )
 }
 
+fn map_protection(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["AB", "SP", "DB"])?;
+    reject_unknown(
+        parameters,
+        &[
+            "Cost",
+            "Defined",
+            "ValidTgts",
+            "TgtPrompt",
+            "Gains",
+            "Choices",
+            "Duration",
+            "SpellDescription",
+            "StackDescription",
+            "AILogic",
+        ],
+    )?;
+    let gains = required(parameters, "Gains")?;
+    let choices = parameters.get("Choices");
+    if gains == "Choice" && choices.is_none() {
+        return Err(diagnostic(
+            "MISSING_PARAMETER",
+            "Gains Choice requires closed protection Choices",
+        ));
+    }
+    if gains != "Choice" && choices.is_some() {
+        return Err(diagnostic(
+            "UNSUPPORTED_PARAMETER",
+            "Choices is only valid when Gains is Choice",
+        ));
+    }
+    let duration = match parameters.get("Duration").map(String::as_str) {
+        None | Some("UntilEndOfTurn") => "until_end_of_turn",
+        Some("Permanent") => "permanent",
+        Some(value) => return Err(unsupported_value("Duration", value)),
+    };
+    let mut arguments = vec![object_selector(parameters, DefaultSelector::Source)?];
+    arguments.push(Expression::Text(format!("gains={gains}")));
+    if let Some(choices) = choices {
+        arguments.push(Expression::Text(format!("choices={choices}")));
+    }
+    arguments.push(Expression::Text(format!("duration={duration}")));
+    mapped_direct(
+        prefix,
+        api,
+        parameters,
+        call(Operation::GrantProtection, arguments),
+    )
+}
+
+fn map_choose_type(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["AB", "SP", "DB"])?;
+    reject_unknown(
+        parameters,
+        &[
+            "Cost",
+            "Defined",
+            "ValidTgts",
+            "Type",
+            "ValidTypes",
+            "InvalidTypes",
+            "SpellDescription",
+            "StackDescription",
+            "AILogic",
+        ],
+    )?;
+    let choice_domain = match required(parameters, "Type")? {
+        "Card" => "card",
+        "Creature" => "creature",
+        "Basic Land" => "basic_land",
+        "Nonbasic Land" => "nonbasic_land",
+        "Land" => "land",
+        "Planeswalker" => "planeswalker",
+        value => return Err(unsupported_value("Type", value)),
+    };
+    let valid_types = parameters.get("ValidTypes").map(String::as_str);
+    if valid_types.is_some_and(|value| {
+        !matches!(
+            value,
+            "Land,Nonland"
+                | "Elemental,Elf,Faerie,Giant,Goblin,Kithkin,Merfolk,Treefolk"
+                | "Human,Merfolk,Goblin"
+                | "Creature,Land"
+                | "Artifact,Enchantment,Instant,Sorcery,Planeswalker"
+                | "Artifact,Creature,Land"
+                | "Artifact,Creature,Enchantment,Instant,Sorcery"
+        )
+    }) {
+        return Err(unsupported_value(
+            "ValidTypes",
+            required(parameters, "ValidTypes")?,
+        ));
+    }
+    let invalid_types = parameters.get("InvalidTypes").map(String::as_str);
+    if invalid_types.is_some_and(|value| {
+        !matches!(
+            value,
+            "Wall"
+                | "Mountain,Forest,Plains"
+                | "Instant,Sorcery,Kindred"
+                | "Creature,Land"
+                | "Creature"
+        )
+    }) {
+        return Err(unsupported_value(
+            "InvalidTypes",
+            required(parameters, "InvalidTypes")?,
+        ));
+    }
+    let mut arguments = vec![
+        player_selector(parameters, DefaultSelector::You)?,
+        Expression::Text(format!("domain={choice_domain}")),
+        Expression::Text("storage=chosen_type".to_string()),
+    ];
+    if let Some(value) = valid_types {
+        arguments.push(Expression::Text(format!("valid={value}")));
+    }
+    if let Some(value) = invalid_types {
+        arguments.push(Expression::Text(format!("invalid={value}")));
+    }
+    mapped_direct(
+        prefix,
+        api,
+        parameters,
+        call(Operation::ChooseType, arguments),
+    )
+}
+
 fn map_fog(
     prefix: LegacyAbilityPrefix,
     api: &str,
@@ -9344,6 +9492,14 @@ mod tests {
                 "RestrictValid",
             ),
             (
+                "A:AB$ Mana | Produced$ G | RestrictValid$ Spell.Runtime.Arbitrary",
+                "RestrictValid",
+            ),
+            (
+                "A:AB$ Mana | Produced$ G | RestrictValid$ Activated.Unknown_Property",
+                "RestrictValid",
+            ),
+            (
                 "A:SP$ Dig | DigNum$ 3 | Tapped$ True | SpellDescription$ Invalid destination.",
                 "Tapped",
             ),
@@ -9356,6 +9512,75 @@ mod tests {
                 .err()
                 .unwrap_or_else(|| panic!("{key} fixture must quarantine"));
             assert!(error.message.contains(key), "{}", error.message);
+        }
+    }
+
+    #[test]
+    fn maps_closed_protection_effects_and_rejects_open_forms() {
+        for (line, expected_costs) in [
+            (
+                "A:SP$ Protection | ValidTgts$ Creature.YouCtrl | Gains$ Choice | Choices$ AnyColor",
+                0,
+            ),
+            (
+                "A:AB$ Protection | Cost$ R | Defined$ Self | Gains$ red",
+                1,
+            ),
+            (
+                "A:DB$ Protection | Defined$ Self | Gains$ green,white | Duration$ Permanent",
+                0,
+            ),
+        ] {
+            let mapped = map_line(line)
+                .unwrap_or_else(|error| panic!("closed protection should map: {}", error.message));
+            assert_eq!(mapped.costs.len(), expected_costs);
+            assert!(matches!(
+                mapped.expression,
+                Expression::Call {
+                    operation: Operation::GrantProtection,
+                    ..
+                }
+            ));
+        }
+
+        for line in [
+            "A:SP$ Protection | Defined$ Self | Gains$ Choice",
+            "A:SP$ Protection | Defined$ Self | Gains$ red | Choices$ AnyColor",
+            "A:SP$ Protection | Defined$ Self | Gains$ red | Duration$ UntilYourNextTurn",
+        ] {
+            assert!(
+                map_line(line).is_err(),
+                "open protection form must quarantine"
+            );
+        }
+    }
+
+    #[test]
+    fn maps_closed_type_choices_and_rejects_open_domains() {
+        for line in [
+            "A:DB$ ChooseType | Defined$ You | Type$ Creature",
+            "A:DB$ ChooseType | Type$ Basic Land",
+            "A:AB$ ChooseType | Cost$ 1 | Defined$ You | Type$ Card",
+            "A:DB$ ChooseType | Defined$ You | Type$ Card | ValidTypes$ Artifact,Enchantment,Instant,Sorcery,Planeswalker",
+            "A:DB$ ChooseType | Defined$ You | Type$ Card | InvalidTypes$ Creature,Land",
+        ] {
+            let mapped = map_line(line)
+                .unwrap_or_else(|error| panic!("closed type choice should map: {}", error.message));
+            assert!(matches!(
+                mapped.expression,
+                Expression::Call {
+                    operation: Operation::ChooseType,
+                    ..
+                }
+            ));
+        }
+
+        for line in [
+            "A:DB$ ChooseType | Defined$ You | Type$ Shared",
+            "A:DB$ ChooseType | Defined$ You | Type$ Creature | ValidTypes$ Elf,RuntimeArbitrary",
+            "A:DB$ ChooseType | Defined$ You | Type$ Creature | ChooseType2$ True",
+        ] {
+            assert!(map_line(line).is_err(), "open type choice must quarantine");
         }
     }
 

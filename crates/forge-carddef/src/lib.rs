@@ -1022,6 +1022,43 @@ operations! {
     Bushido => ("bushido", Effect, 2, Some(2)),
     Soulshift => ("soulshift", Effect, 2, Some(2)),
     Ninjutsu => ("ninjutsu", Effect, 1, Some(1)),
+    Saddle => ("saddle", Effect, 2, Some(2)),
+    Encore => ("encore", Effect, 1, Some(1)),
+    Embalm => ("embalm", Effect, 1, Some(1)),
+    Eternalize => ("eternalize", Effect, 1, Some(1)),
+    Plot => ("plot", Effect, 1, Some(1)),
+    WarpCost => ("warp_cost", Effect, 2, None),
+    SneakCost => ("sneak_cost", Effect, 2, None),
+    StriveCost => ("strive_cost", Effect, 2, None),
+    ReplicateCost => ("replicate_cost", Effect, 2, None),
+    MiracleCost => ("miracle_cost", Effect, 2, None),
+    OffspringCost => ("offspring_cost", Effect, 2, None),
+    Firebending => ("firebending", Effect, 2, Some(2)),
+    Vanishing => ("vanishing", Effect, 2, Some(2)),
+    Fading => ("fading", Effect, 2, Some(2)),
+    Prototype => ("prototype", Effect, 4, Some(4)),
+    Station => ("station", Effect, 2, Some(2)),
+    Renown => ("renown", Effect, 2, Some(2)),
+    Bloodthirst => ("bloodthirst", Effect, 2, Some(2)),
+    Fabricate => ("fabricate", Effect, 2, Some(2)),
+    Modular => ("modular", Effect, 2, Some(2)),
+    Devour => ("devour", Effect, 2, Some(2)),
+    Teamwork => ("teamwork", Effect, 2, Some(2)),
+    StartingIntensity => ("starting_intensity", Effect, 2, Some(2)),
+    Casualty => ("casualty", Effect, 2, Some(2)),
+    Reconfigure => ("reconfigure", Effect, 1, Some(1)),
+    MutateCost => ("mutate_cost", Effect, 2, None),
+    EmergeCost => ("emerge_cost", Effect, 2, None),
+    SpliceCost => ("splice_cost", Effect, 3, None),
+    AwakenCost => ("awaken_cost", Effect, 3, None),
+    StartYourEngines => ("start_your_engines", Effect, 1, Some(1)),
+    ChooseBackground => ("choose_background", Effect, 1, Some(1)),
+    DoctorsCompanion => ("doctors_companion", Effect, 1, Some(1)),
+    Bargain => ("bargain", Effect, 1, Some(1)),
+    PartnerWith => ("partner_with", Effect, 2, None),
+    PartnerGroup => ("partner_group", Effect, 2, Some(2)),
+    GrantProtection => ("grant_protection", Effect, 2, None),
+    ChooseType => ("choose_type", Effect, 2, None),
 }
 
 impl Operation {
@@ -1053,7 +1090,19 @@ impl Operation {
             | Self::AlternateAdditionalCost
             | Self::Disguise
             | Self::Megamorph
-            | Self::EntwineCost => Some((1, Cost)),
+            | Self::EntwineCost
+            | Self::WarpCost
+            | Self::SneakCost
+            | Self::StriveCost
+            | Self::ReplicateCost
+            | Self::MiracleCost
+            | Self::OffspringCost
+            | Self::MutateCost
+            | Self::EmergeCost => Some((1, Cost)),
+            Self::SpliceCost | Self::AwakenCost => Some((2, Cost)),
+            Self::PartnerWith | Self::GrantProtection | Self::ChooseType => {
+                Some((1, ArgumentKind::Text))
+            }
             Self::TimingAll => Some((0, Timing)),
             _ => None,
         }
@@ -1257,6 +1306,70 @@ impl Operation {
                 _ => None,
             },
             Self::Ninjutsu => Some(Selector),
+            Self::Saddle => match index {
+                0 => Some(Selector),
+                1 => Some(Number),
+                _ => None,
+            },
+            Self::Encore | Self::Embalm | Self::Eternalize | Self::Plot => Some(Selector),
+            Self::WarpCost
+            | Self::SneakCost
+            | Self::StriveCost
+            | Self::ReplicateCost
+            | Self::MiracleCost
+            | Self::OffspringCost => Some(Selector),
+            Self::Firebending | Self::Vanishing | Self::Fading => match index {
+                0 => Some(Selector),
+                1 => Some(Number),
+                _ => None,
+            },
+            Self::Prototype => match index {
+                0 => Some(Selector),
+                1 => Some(ArgumentKind::Cost),
+                2 | 3 => Some(Number),
+                _ => None,
+            },
+            Self::Station
+            | Self::Renown
+            | Self::Bloodthirst
+            | Self::Fabricate
+            | Self::Modular
+            | Self::Devour
+            | Self::Teamwork
+            | Self::StartingIntensity
+            | Self::Casualty => match index {
+                0 => Some(Selector),
+                1 => Some(Number),
+                _ => None,
+            },
+            Self::Reconfigure => Some(Selector),
+            Self::MutateCost | Self::EmergeCost => Some(Selector),
+            Self::SpliceCost => match index {
+                0 => Some(Selector),
+                1 => Some(Text),
+                _ => None,
+            },
+            Self::AwakenCost => match index {
+                0 => Some(Selector),
+                1 => Some(Number),
+                _ => None,
+            },
+            Self::StartYourEngines
+            | Self::ChooseBackground
+            | Self::DoctorsCompanion
+            | Self::Bargain => Some(Selector),
+            Self::PartnerWith | Self::PartnerGroup => match index {
+                0 => Some(Selector),
+                _ => Some(Text),
+            },
+            Self::GrantProtection => match index {
+                0 => Some(Selector),
+                _ => Some(Text),
+            },
+            Self::ChooseType => match index {
+                0 => Some(Selector),
+                _ => Some(Text),
+            },
             Self::AffinityCostReduction => Some(Selector),
             Self::Unearth => Some(Selector),
             Self::Morph => Some(Selector),
@@ -1708,6 +1821,43 @@ mod tests {
         assert_eq!(Operation::Bushido as u32, 222);
         assert_eq!(Operation::Soulshift as u32, 223);
         assert_eq!(Operation::Ninjutsu as u32, 224);
+        assert_eq!(Operation::Saddle as u32, 225);
+        assert_eq!(Operation::Encore as u32, 226);
+        assert_eq!(Operation::Embalm as u32, 227);
+        assert_eq!(Operation::Eternalize as u32, 228);
+        assert_eq!(Operation::Plot as u32, 229);
+        assert_eq!(Operation::WarpCost as u32, 230);
+        assert_eq!(Operation::SneakCost as u32, 231);
+        assert_eq!(Operation::StriveCost as u32, 232);
+        assert_eq!(Operation::ReplicateCost as u32, 233);
+        assert_eq!(Operation::MiracleCost as u32, 234);
+        assert_eq!(Operation::OffspringCost as u32, 235);
+        assert_eq!(Operation::Firebending as u32, 236);
+        assert_eq!(Operation::Vanishing as u32, 237);
+        assert_eq!(Operation::Fading as u32, 238);
+        assert_eq!(Operation::Prototype as u32, 239);
+        assert_eq!(Operation::Station as u32, 240);
+        assert_eq!(Operation::Renown as u32, 241);
+        assert_eq!(Operation::Bloodthirst as u32, 242);
+        assert_eq!(Operation::Fabricate as u32, 243);
+        assert_eq!(Operation::Modular as u32, 244);
+        assert_eq!(Operation::Devour as u32, 245);
+        assert_eq!(Operation::Teamwork as u32, 246);
+        assert_eq!(Operation::StartingIntensity as u32, 247);
+        assert_eq!(Operation::Casualty as u32, 248);
+        assert_eq!(Operation::Reconfigure as u32, 249);
+        assert_eq!(Operation::MutateCost as u32, 250);
+        assert_eq!(Operation::EmergeCost as u32, 251);
+        assert_eq!(Operation::SpliceCost as u32, 252);
+        assert_eq!(Operation::AwakenCost as u32, 253);
+        assert_eq!(Operation::StartYourEngines as u32, 254);
+        assert_eq!(Operation::ChooseBackground as u32, 255);
+        assert_eq!(Operation::DoctorsCompanion as u32, 256);
+        assert_eq!(Operation::Bargain as u32, 257);
+        assert_eq!(Operation::PartnerWith as u32, 258);
+        assert_eq!(Operation::PartnerGroup as u32, 259);
+        assert_eq!(Operation::GrantProtection as u32, 260);
+        assert_eq!(Operation::ChooseType as u32, 261);
 
         let config = bincode::config::standard()
             .with_fixed_int_encoding()
