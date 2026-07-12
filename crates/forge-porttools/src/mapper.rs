@@ -190,6 +190,16 @@ const MAPPERS: &[MapperSpec] = &[
     },
     MapperSpec {
         prefix: LegacyAbilityPrefix::Activated,
+        api: "DigUntil",
+        mapper: map_dig_until,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Activated,
+        api: "Seek",
+        mapper: map_seek,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Activated,
         api: "DealDamage",
         mapper: map_damage,
     },
@@ -325,6 +335,16 @@ const MAPPERS: &[MapperSpec] = &[
     },
     MapperSpec {
         prefix: LegacyAbilityPrefix::Activated,
+        api: "RollDice",
+        mapper: map_roll_dice,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Activated,
+        api: "PeekAndReveal",
+        mapper: map_peek_and_reveal,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Activated,
         api: "SetState",
         mapper: map_set_state,
     },
@@ -337,6 +357,11 @@ const MAPPERS: &[MapperSpec] = &[
         prefix: LegacyAbilityPrefix::Activated,
         api: "Sacrifice",
         mapper: map_sacrifice_effect,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Activated,
+        api: "SacrificeAll",
+        mapper: map_sacrifice_all,
     },
     MapperSpec {
         prefix: LegacyAbilityPrefix::Activated,
@@ -402,6 +427,11 @@ const MAPPERS: &[MapperSpec] = &[
         prefix: LegacyAbilityPrefix::Activated,
         api: "ChooseCard",
         mapper: map_choose_card,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Activated,
+        api: "ChoosePlayer",
+        mapper: map_choose_player,
     },
     MapperSpec {
         prefix: LegacyAbilityPrefix::Activated,
@@ -525,9 +555,11 @@ const MAPPERS: &[MapperSpec] = &[
     },
 ];
 
+#[derive(Clone)]
 pub(crate) struct MappingContext<'a> {
     svars: BTreeMap<String, &'a LegacyExpression>,
     duplicate_svars: BTreeSet<String>,
+    value_bindings: BTreeMap<String, Expression>,
 }
 
 impl<'a> MappingContext<'a> {
@@ -545,6 +577,7 @@ impl<'a> MappingContext<'a> {
         Self {
             svars,
             duplicate_svars,
+            value_bindings: BTreeMap::new(),
         }
     }
 }
@@ -558,6 +591,7 @@ pub fn map_legacy_ability(
     let empty_context = MappingContext {
         svars: BTreeMap::new(),
         duplicate_svars: BTreeSet::new(),
+        value_bindings: BTreeMap::new(),
     };
     let (unconditioned, legacy_condition, check_on_resolution) =
         extract_legacy_conditions(&unconditioned, &empty_context)?;
@@ -986,6 +1020,16 @@ fn map_with_context_unconditioned(
             check_on_resolution,
         );
     }
+    if prefix == LegacyAbilityPrefix::Activated && api == "GenericChoice" {
+        let mapped = map_generic_choice(prefix, selector_key, expression, context, stack)?;
+        return apply_optional_legacy_condition(
+            prefix,
+            selector_key,
+            mapped,
+            condition,
+            check_on_resolution,
+        );
+    }
     if prefix == LegacyAbilityPrefix::Activated && api == "ImmediateTrigger" {
         let mapped = map_immediate_trigger(prefix, selector_key, expression, context, stack)?;
         return apply_optional_legacy_condition(
@@ -1017,6 +1061,50 @@ fn map_with_context_unconditioned(
         );
     }
     if prefix == LegacyAbilityPrefix::Activated
+        && api == "RollDice"
+        && parameters(expression)?.contains_key("ResultSubAbilities")
+    {
+        let mapped = map_roll_dice_table(prefix, selector_key, expression, context, stack)?;
+        return apply_optional_legacy_condition(
+            prefix,
+            selector_key,
+            mapped,
+            condition,
+            check_on_resolution,
+        );
+    }
+    if prefix == LegacyAbilityPrefix::Activated
+        && api == "RollDice"
+        && parameters(expression)?.contains_key("SubAbility")
+        && parameters(expression)?
+            .keys()
+            .any(|key| matches!(key.as_str(), "ResultSVar" | "ChosenSVar" | "OtherSVar"))
+    {
+        let mapped = map_roll_dice_with_result(prefix, selector_key, expression, context, stack)?;
+        return apply_optional_legacy_condition(
+            prefix,
+            selector_key,
+            mapped,
+            condition,
+            check_on_resolution,
+        );
+    }
+    if prefix == LegacyAbilityPrefix::Activated
+        && api == "Effect"
+        && parameters(expression)?
+            .keys()
+            .any(|key| matches!(key.as_str(), "Triggers" | "ReplacementEffects"))
+    {
+        let mapped = map_trigger_effect(prefix, selector_key, expression, context, stack)?;
+        return apply_optional_legacy_condition(
+            prefix,
+            selector_key,
+            mapped,
+            condition,
+            check_on_resolution,
+        );
+    }
+    if prefix == LegacyAbilityPrefix::Activated
         && api == "Effect"
         && parameters(expression)?.contains_key("StaticAbilities")
     {
@@ -1024,11 +1112,19 @@ fn map_with_context_unconditioned(
             .get("StaticAbilities")
             .cloned()
             .unwrap_or_default();
+        let linked_names = static_name
+            .split(',')
+            .map(str::trim)
+            .filter(|name| !name.is_empty())
+            .collect::<Vec<_>>();
         if !matches!(static_name.as_str(), "Unblockable" | "MustAttack")
-            && context.svars.contains_key(&static_name)
+            && !linked_names.is_empty()
+            && linked_names
+                .iter()
+                .all(|name| context.svars.contains_key(*name))
         {
             let mapped =
-                map_play_permission_effect(prefix, selector_key, expression, context, stack)?;
+                map_linked_static_effect(prefix, selector_key, expression, context, stack)?;
             return apply_optional_legacy_condition(
                 prefix,
                 selector_key,
@@ -1040,9 +1136,12 @@ fn map_with_context_unconditioned(
     }
     if prefix == LegacyAbilityPrefix::Static
         && api == "Continuous"
-        && parameters(expression)?
-            .keys()
-            .any(|key| matches!(key.as_str(), "AddAbility" | "AddTrigger"))
+        && parameters(expression)?.keys().any(|key| {
+            matches!(
+                key.as_str(),
+                "AddAbility" | "AddTrigger" | "AddStaticAbility" | "AddReplacementEffect"
+            )
+        })
     {
         let mapped =
             map_linked_continuous_traits(prefix, selector_key, expression, context, stack)?;
@@ -1054,8 +1153,37 @@ fn map_with_context_unconditioned(
             check_on_resolution,
         );
     }
+    if prefix == LegacyAbilityPrefix::Activated
+        && matches!(api, "Animate" | "AnimateAll")
+        && parameters(expression)?.keys().any(|key| {
+            matches!(
+                key.as_str(),
+                "Triggers" | "staticAbilities" | "StaticAbilities"
+            )
+        })
+    {
+        let mapped =
+            map_animated_linked_traits(prefix, api, selector_key, expression, context, stack)?;
+        return apply_optional_legacy_condition(
+            prefix,
+            selector_key,
+            mapped,
+            condition,
+            check_on_resolution,
+        );
+    }
     if prefix == LegacyAbilityPrefix::Replacement && api == "Moved" {
         let mapped = map_moved_replacement(prefix, selector_key, expression, context, stack)?;
+        return apply_optional_legacy_condition(
+            prefix,
+            selector_key,
+            mapped,
+            condition,
+            check_on_resolution,
+        );
+    }
+    if prefix == LegacyAbilityPrefix::Replacement && api == "DamageDone" {
+        let mapped = map_damage_replacement(prefix, selector_key, expression, context, stack)?;
         return apply_optional_legacy_condition(
             prefix,
             selector_key,
@@ -1553,7 +1681,10 @@ fn resolve_comparison_value(
     if let Ok(value) = value.parse::<i64>() {
         return Ok(Expression::Integer(value));
     }
-    if context.svars.contains_key(value) || context.duplicate_svars.contains(value) {
+    if context.svars.contains_key(value)
+        || context.duplicate_svars.contains(value)
+        || context.value_bindings.contains_key(value)
+    {
         return resolve_value_svar(value, context);
     }
     if let Some(value) = value.strip_prefix("Count$") {
@@ -2113,7 +2244,10 @@ fn resolve_dynamic_parameter(
         Some(reference) => (reference, true),
         None => (value.strip_prefix('+').unwrap_or(value), false),
     };
-    if !context.svars.contains_key(reference) && !context.duplicate_svars.contains(reference) {
+    if !context.svars.contains_key(reference)
+        && !context.duplicate_svars.contains(reference)
+        && !context.value_bindings.contains_key(reference)
+    {
         return Ok(None);
     }
     let resolved = resolve_value_svar(reference, context)?;
@@ -2172,6 +2306,9 @@ pub(crate) fn resolve_value_svar(
     name: &str,
     context: &MappingContext<'_>,
 ) -> Result<Expression, MappingDiagnostic> {
+    if let Some(value) = context.value_bindings.get(name) {
+        return Ok(value.clone());
+    }
     if context.duplicate_svars.contains(name) {
         return Err(diagnostic(
             "DUPLICATE_SVAR",
@@ -2745,6 +2882,121 @@ fn map_charm_ability(
     mapped_direct(prefix, "Charm", &parameters, expression)
 }
 
+fn map_generic_choice(
+    prefix: LegacyAbilityPrefix,
+    selector: &str,
+    expression: &LegacyExpression,
+    context: &MappingContext<'_>,
+    stack: &mut Vec<String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["AB", "SP", "DB"])?;
+    let parameters = parameters(expression)?;
+    reject_unknown(
+        &parameters,
+        &[
+            "Cost",
+            "Choices",
+            "Defined",
+            "ValidTgts",
+            "TgtPrompt",
+            "ChoicePrompt",
+            "ShowChoice",
+            "SetChosenMode",
+            "AtRandom",
+            "TempRemember",
+            "Secretly",
+            "SubAbility",
+            "SpellDescription",
+            "StackDescription",
+            "AILogic",
+            "Planeswalker",
+            "Ultimate",
+            "IsCurse",
+        ],
+    )?;
+    let names = required(&parameters, "Choices")?
+        .split(',')
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .collect::<Vec<_>>();
+    if names.len() < 2 {
+        return Err(unsupported_value(
+            "Choices",
+            required(&parameters, "Choices")?,
+        ));
+    }
+    let mut effects = Vec::new();
+    for name in names {
+        let linked = resolve_svar(name, context, stack)?;
+        if linked.event.is_some() || linked.timing.is_some() || !linked.costs.is_empty() {
+            return Err(diagnostic(
+                "UNSUPPORTED_LINK",
+                &format!("GenericChoice option `{name}` is not a cost-free effect chain"),
+            ));
+        }
+        effects.push(linked.expression);
+    }
+    for key in [
+        "SetChosenMode",
+        "AtRandom",
+        "Secretly",
+        "Planeswalker",
+        "Ultimate",
+        "IsCurse",
+    ] {
+        closed_true_flag(&parameters, key)?;
+    }
+    if parameters
+        .get("TempRemember")
+        .is_some_and(|value| value != "Chooser")
+    {
+        return Err(unsupported_value(
+            "TempRemember",
+            required(&parameters, "TempRemember")?,
+        ));
+    }
+    let show = match parameters.get("ShowChoice").map(String::as_str) {
+        None => "default",
+        Some("True" | "Description" | "ExceptSelf") => required(&parameters, "ShowChoice")?,
+        Some(value) => return Err(unsupported_value("ShowChoice", value)),
+    };
+    let mut arguments = vec![
+        player_selector(&parameters, DefaultSelector::You)?,
+        Expression::Text(format!(
+            "{}:{}",
+            if parameters.contains_key("AtRandom") {
+                "random"
+            } else {
+                "choose"
+            },
+            show.to_ascii_lowercase()
+        )),
+        Expression::Boolean(parameters.contains_key("SetChosenMode")),
+        Expression::Boolean(parameters.contains_key("TempRemember")),
+        Expression::Boolean(parameters.contains_key("Secretly")),
+    ];
+    arguments.extend(effects);
+    let mut mapped = MappedLegacyAbility {
+        prefix,
+        api: "GenericChoice".to_string(),
+        costs: parse_simple_cost(parameters.get("Cost"))?,
+        event: None,
+        timing: None,
+        expression: call(Operation::PlayerChooseEffect, arguments),
+    };
+    if let Some(name) = parameters.get("SubAbility") {
+        let tail = resolve_svar(name, context, stack)?;
+        if tail.event.is_some() || tail.timing.is_some() || !tail.costs.is_empty() {
+            return Err(diagnostic(
+                "UNSUPPORTED_LINK",
+                &format!("SubAbility `{name}` is not a cost-free effect chain"),
+            ));
+        }
+        mapped.expression = sequence(mapped.expression, tail.expression);
+    }
+    Ok(mapped)
+}
+
 fn map_repeat_each(
     prefix: LegacyAbilityPrefix,
     selector: &str,
@@ -2964,6 +3216,139 @@ fn map_delayed_trigger(
     )
 }
 
+fn map_damage_replacement(
+    prefix: LegacyAbilityPrefix,
+    selector: &str,
+    expression: &LegacyExpression,
+    context: &MappingContext<'_>,
+    stack: &mut Vec<String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector(selector, "Event")?;
+    let parameters = parameters(expression)?;
+    reject_unknown(
+        &parameters,
+        &[
+            "ValidSource",
+            "ValidTarget",
+            "Prevent",
+            "IsCombat",
+            "ActiveZones",
+            "ReplaceWith",
+            "PreventionEffect",
+            "Secondary",
+            "AlwaysReplace",
+            "ReplacementResult",
+            "Optional",
+            "OptionalDecider",
+            "Description",
+        ],
+    )?;
+    for key in ["PreventionEffect", "Secondary", "AlwaysReplace"] {
+        if parameters.get(key).is_some_and(|value| value != "True") {
+            return Err(unsupported_value(key, required(&parameters, key)?));
+        }
+    }
+    if parameters
+        .get("ReplacementResult")
+        .is_some_and(|value| value != "Updated")
+    {
+        return Err(unsupported_value(
+            "ReplacementResult",
+            required(&parameters, "ReplacementResult")?,
+        ));
+    }
+    let source = parameters
+        .get("ValidSource")
+        .map(|value| damage_event_selector(value, "ValidSource"))
+        .transpose()?
+        .unwrap_or_else(|| call(Operation::Any, vec![]));
+    let target = parameters
+        .get("ValidTarget")
+        .map(|value| damage_event_selector(value, "ValidTarget"))
+        .transpose()?
+        .unwrap_or_else(|| call(Operation::Any, vec![]));
+    let mut event_arguments = vec![source.clone(), target.clone()];
+    if let Some(value) = parameters.get("IsCombat") {
+        event_arguments.push(Expression::Text(
+            match value.as_str() {
+                "True" => "combat",
+                "False" => "noncombat",
+                _ => return Err(unsupported_value("IsCombat", value)),
+            }
+            .to_string(),
+        ));
+    }
+    let event = call(Operation::EventDamage, event_arguments);
+    let event = match parameters.get("ActiveZones").map(String::as_str) {
+        None | Some("Battlefield") => event,
+        Some("Command" | "Exile" | "Graveyard" | "Hand") => call(
+            Operation::EventActiveZone,
+            vec![
+                event,
+                Expression::Text(required(&parameters, "ActiveZones")?.to_ascii_lowercase()),
+            ],
+        ),
+        Some(value) => return Err(unsupported_value("ActiveZones", value)),
+    };
+    let mut replacement = match (
+        parameters.get("Prevent").map(String::as_str),
+        parameters.get("ReplaceWith"),
+    ) {
+        (Some("True"), None) => call(Operation::PreventDamage, vec![source, target]),
+        (Some(value), None) => return Err(unsupported_value("Prevent", value)),
+        (None, Some(name)) => {
+            let linked = resolve_svar(name, context, stack)?;
+            if linked.event.is_some() || linked.timing.is_some() || !linked.costs.is_empty() {
+                return Err(diagnostic(
+                    "UNSUPPORTED_LINK",
+                    &format!("ReplaceWith `{name}` is not a cost-free effect chain"),
+                ));
+            }
+            linked.expression
+        }
+        (Some(_), Some(_)) => {
+            return Err(diagnostic(
+                "UNSUPPORTED_PARAMETER",
+                "DamageDone cannot combine Prevent and ReplaceWith",
+            ));
+        }
+        (None, None) => {
+            return Err(diagnostic(
+                "MISSING_PARAMETER",
+                "DamageDone replacement requires Prevent or ReplaceWith",
+            ));
+        }
+    };
+    match (
+        parameters.get("Optional").map(String::as_str),
+        parameters.get("OptionalDecider").map(String::as_str),
+    ) {
+        (None, None) => {}
+        (Some("True"), None) | (None, Some("You")) => {
+            replacement = call(
+                Operation::ChooseUpTo,
+                vec![Expression::Integer(1), replacement],
+            );
+        }
+        (Some(value), None) => return Err(unsupported_value("Optional", value)),
+        (None, Some(value)) => return Err(unsupported_value("OptionalDecider", value)),
+        (Some(_), Some(_)) => {
+            return Err(diagnostic(
+                "UNSUPPORTED_PARAMETER",
+                "Optional and OptionalDecider cannot be combined",
+            ));
+        }
+    }
+    Ok(MappedLegacyAbility {
+        prefix,
+        api: "DamageDone".to_string(),
+        costs: Vec::new(),
+        event: Some(event),
+        timing: None,
+        expression: replacement,
+    })
+}
+
 fn map_moved_replacement(
     prefix: LegacyAbilityPrefix,
     selector: &str,
@@ -3179,6 +3564,11 @@ fn map_triggered_ability(
             return Err(unsupported_value("Secondary", &secondary));
         }
     }
+    let static_trigger = match parameters.remove("Static").as_deref() {
+        None => false,
+        Some("True") => true,
+        Some(value) => return Err(unsupported_value("Static", value)),
+    };
     let execute = required(&parameters, "Execute")?;
     let event = match api {
         "ChangesZone" => map_changes_zone_event(&parameters)?,
@@ -3226,6 +3616,11 @@ fn map_triggered_ability(
             ],
         )
     });
+    let event = if static_trigger {
+        call(Operation::EventStatic, vec![event])
+    } else {
+        event
+    };
     let linked = resolve_svar(execute, context, stack)?;
     if linked.event.is_some() {
         return Err(diagnostic(
@@ -4635,6 +5030,160 @@ fn map_dig(
     })
 }
 
+fn map_dig_until(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["AB", "SP", "DB"])?;
+    reject_unknown(
+        parameters,
+        &[
+            "Cost",
+            "Defined",
+            "ValidTgts",
+            "Valid",
+            "ValidDescription",
+            "Amount",
+            "DigZone",
+            "FoundDestination",
+            "FoundLibraryPosition",
+            "RevealedDestination",
+            "RevealedLibraryPosition",
+            "Tapped",
+            "RevealRandomOrder",
+            "Shuffle",
+            "RememberFound",
+            "RememberRevealed",
+            "SpellDescription",
+            "StackDescription",
+            "IsCurse",
+            "AILogic",
+            "Planeswalker",
+        ],
+    )?;
+    let player = player_selector(parameters, DefaultSelector::You)?;
+    let amount = optional_positive_integer(parameters, "Amount")?.unwrap_or(1);
+    let dig_zone = normalize_dig_zone(
+        parameters
+            .get("DigZone")
+            .map(String::as_str)
+            .unwrap_or("Library"),
+        "DigZone",
+    )?;
+    let valid = card_selector_in_zone(required(parameters, "Valid")?, &dig_zone)?;
+    let found_destination = parameters
+        .get("FoundDestination")
+        .map(|value| normalize_dig_zone(value, "FoundDestination"))
+        .transpose()?
+        .unwrap_or_else(|| "none".to_string());
+    let revealed_destination = normalize_dig_zone(
+        required(parameters, "RevealedDestination")?,
+        "RevealedDestination",
+    )?;
+    let found_position = dig_library_position(parameters, "FoundLibraryPosition")?;
+    let revealed_position = dig_library_position(parameters, "RevealedLibraryPosition")?;
+    for key in [
+        "Tapped",
+        "RevealRandomOrder",
+        "Shuffle",
+        "RememberFound",
+        "RememberRevealed",
+        "IsCurse",
+        "Planeswalker",
+    ] {
+        closed_true_flag(parameters, key)?;
+    }
+    if parameters.contains_key("Tapped") && found_destination != "battlefield" {
+        return Err(diagnostic(
+            "UNSUPPORTED_PARAMETER",
+            "DigUntil Tapped requires FoundDestination$ Battlefield",
+        ));
+    }
+    mapped_direct(
+        prefix,
+        api,
+        parameters,
+        call(
+            Operation::LibraryDigUntil,
+            vec![
+                player,
+                valid,
+                Expression::Integer(amount),
+                Expression::Text(dig_zone),
+                Expression::Text(found_destination),
+                Expression::Integer(found_position),
+                Expression::Text(revealed_destination),
+                Expression::Integer(revealed_position),
+                Expression::Boolean(parameters.contains_key("Tapped")),
+                Expression::Boolean(parameters.contains_key("RevealRandomOrder")),
+                Expression::Boolean(parameters.contains_key("Shuffle")),
+                Expression::Boolean(parameters.contains_key("RememberFound")),
+                Expression::Boolean(parameters.contains_key("RememberRevealed")),
+            ],
+        ),
+    )
+}
+
+fn map_seek(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["AB", "SP", "DB"])?;
+    reject_unknown(
+        parameters,
+        &[
+            "Cost",
+            "Defined",
+            "ValidPlayer",
+            "Type",
+            "Num",
+            "RememberFound",
+            "ImprintFound",
+            "SpellDescription",
+            "StackDescription",
+            "AILogic",
+            "Exhaust",
+        ],
+    )?;
+    if parameters
+        .get("ValidPlayer")
+        .is_some_and(|value| value != "You")
+    {
+        return Err(unsupported_value(
+            "ValidPlayer",
+            required(parameters, "ValidPlayer")?,
+        ));
+    }
+    for key in ["RememberFound", "ImprintFound", "Exhaust"] {
+        closed_true_flag(parameters, key)?;
+    }
+    let player = match parameters.get("Defined") {
+        Some(value) => defined_player_selector(value)?,
+        None => call(Operation::You, vec![]),
+    };
+    let candidates = card_selector_in_zone(required(parameters, "Type")?, "library")?;
+    let amount = optional_positive_integer(parameters, "Num")?.unwrap_or(1);
+    mapped_direct(
+        prefix,
+        api,
+        parameters,
+        call(
+            Operation::SeekLibrary,
+            vec![
+                player,
+                candidates,
+                Expression::Integer(amount),
+                Expression::Boolean(parameters.contains_key("RememberFound")),
+                Expression::Boolean(parameters.contains_key("ImprintFound")),
+            ],
+        ),
+    )
+}
+
 fn map_damage(
     prefix: LegacyAbilityPrefix,
     api: &str,
@@ -4678,7 +5227,98 @@ fn map_damage(
     })
 }
 
-fn map_pump(
+fn map_roll_dice(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["AB", "SP", "DB"])?;
+    reject_unknown(
+        parameters,
+        &[
+            "Cost",
+            "Defined",
+            "ValidTgts",
+            "Amount",
+            "Sides",
+            "ResultSVar",
+            "ChosenSVar",
+            "OtherSVar",
+            "ToVisitYourAttractions",
+            "SpellDescription",
+            "StackDescription",
+            "AILogic",
+            "PrecostDesc",
+        ],
+    )?;
+    let amount = optional_positive_integer(parameters, "Amount")?.unwrap_or(1);
+    let sides = optional_positive_integer(parameters, "Sides")?.unwrap_or(6);
+    if sides < 2 {
+        return Err(unsupported_value("Sides", required(parameters, "Sides")?));
+    }
+    let visit = match parameters.get("ToVisitYourAttractions").map(String::as_str) {
+        None => false,
+        Some("True") => true,
+        Some(value) => return Err(unsupported_value("ToVisitYourAttractions", value)),
+    };
+    let result = parameters.get("ResultSVar");
+    let chosen = parameters.get("ChosenSVar");
+    let other = parameters.get("OtherSVar");
+    if result.is_some() && (chosen.is_some() || other.is_some()) {
+        return Err(diagnostic(
+            "UNSUPPORTED_PARAMETER",
+            "ResultSVar cannot be combined with ChosenSVar or OtherSVar",
+        ));
+    }
+    if chosen.is_some() != other.is_some() || chosen.is_some() && amount != 2 {
+        return Err(diagnostic(
+            "UNSUPPORTED_PARAMETER",
+            "ChosenSVar and OtherSVar require exactly two dice",
+        ));
+    }
+    for (key, value) in [
+        ("ResultSVar", result),
+        ("ChosenSVar", chosen),
+        ("OtherSVar", other),
+    ] {
+        if let Some(value) = value {
+            let mut chars = value.chars();
+            if !chars
+                .next()
+                .is_some_and(|character| character.is_ascii_alphabetic() || character == '_')
+                || !chars.all(|character| character.is_ascii_alphanumeric() || character == '_')
+            {
+                return Err(unsupported_value(key, value));
+            }
+        }
+    }
+    let options = if let Some(result) = result {
+        format!("mode=standard;result={result};visit={visit}")
+    } else if let (Some(chosen), Some(other)) = (chosen, other) {
+        format!("mode=choose_one;chosen={chosen};other={other};visit={visit}")
+    } else {
+        format!("mode=standard;visit={visit}")
+    };
+    Ok(MappedLegacyAbility {
+        prefix,
+        api: api.to_string(),
+        costs: parse_simple_cost(parameters.get("Cost"))?,
+        event: None,
+        timing: None,
+        expression: call(
+            Operation::RollDice,
+            vec![
+                player_selector(parameters, DefaultSelector::You)?,
+                Expression::Integer(amount),
+                Expression::Integer(sides),
+                Expression::Text(options),
+            ],
+        ),
+    })
+}
+
+fn map_peek_and_reveal(
     prefix: LegacyAbilityPrefix,
     api: &str,
     selector: &str,
@@ -4692,26 +5332,341 @@ fn map_pump(
             "Defined",
             "ValidTgts",
             "TgtPrompt",
+            "PeekAmount",
+            "NoPeek",
+            "NoReveal",
+            "Reveal",
+            "RevealOptional",
+            "RevealValid",
+            "RememberRevealed",
+            "RememberPeeked",
+            "ImprintRevealed",
+            "SourceZone",
+            "SpellDescription",
+            "StackDescription",
+            "AILogic",
+        ],
+    )?;
+    let amount = optional_positive_integer(parameters, "PeekAmount")?.unwrap_or(1);
+    let no_peek = closed_true_flag(parameters, "NoPeek")?;
+    let no_reveal = closed_true_flag(parameters, "NoReveal")?;
+    let explicit_reveal = closed_true_flag(parameters, "Reveal")?;
+    let optional_reveal = closed_true_flag(parameters, "RevealOptional")?;
+    if (explicit_reveal || optional_reveal) && no_reveal {
+        return Err(diagnostic(
+            "UNSUPPORTED_PARAMETER",
+            "NoReveal cannot be combined with Reveal or RevealOptional",
+        ));
+    }
+    let mode = match (no_peek, no_reveal, optional_reveal) {
+        (false, false, false) => "peek_then_reveal",
+        (true, false, false) => "reveal_only",
+        (false, true, false) => "peek_only",
+        (true, true, false) => "hidden_partition",
+        (false, false, true) => "peek_then_optional_reveal",
+        (true, false, true) => "optional_reveal_only",
+        (_, true, true) => unreachable!("optional reveal with NoReveal was rejected"),
+    };
+    let memory = [
+        ("RememberRevealed", "remember_revealed"),
+        ("RememberPeeked", "remember_peeked"),
+        ("ImprintRevealed", "imprint_revealed"),
+    ]
+    .into_iter()
+    .filter_map(|(key, label)| {
+        parameters
+            .get(key)
+            .map(|value| (key, label, value.as_str()))
+    })
+    .map(|(key, label, value)| {
+        if value == "True" {
+            Ok(label)
+        } else {
+            Err(unsupported_value(key, value))
+        }
+    })
+    .collect::<Result<Vec<_>, _>>()?;
+    if memory.len() > 1 {
+        return Err(diagnostic(
+            "UNSUPPORTED_PARAMETER",
+            "PeekAndReveal memory modes are mutually exclusive",
+        ));
+    }
+    let source_zone = match parameters.get("SourceZone").map(String::as_str) {
+        None | Some("Library") => "library",
+        Some("PlanarDeck") => "planar_deck",
+        Some(value) => return Err(unsupported_value("SourceZone", value)),
+    };
+    let library_players = peek_library_players(parameters)?;
+    let revealable = affected_selector(
+        parameters
+            .get("RevealValid")
+            .map(String::as_str)
+            .unwrap_or("Card"),
+    )?;
+    Ok(MappedLegacyAbility {
+        prefix,
+        api: api.to_string(),
+        costs: parse_simple_cost(parameters.get("Cost"))?,
+        event: None,
+        timing: None,
+        expression: call(
+            Operation::PeekLibrary,
+            vec![
+                library_players,
+                call(Operation::You, vec![]),
+                Expression::Integer(amount),
+                Expression::Text(mode.to_string()),
+                revealable,
+                Expression::Text(memory.first().copied().unwrap_or("none").to_string()),
+                Expression::Text(source_zone.to_string()),
+            ],
+        ),
+    })
+}
+
+fn peek_library_players(
+    parameters: &BTreeMap<String, String>,
+) -> Result<Expression, MappingDiagnostic> {
+    if let Some(targets) = parameters.get("ValidTgts") {
+        if parameters
+            .get("Defined")
+            .is_some_and(|defined| !matches!(defined.as_str(), "Targeted" | "TargetedPlayer"))
+        {
+            return Err(unsupported_value(
+                "Defined",
+                required(parameters, "Defined")?,
+            ));
+        }
+        return Ok(call(
+            Operation::Target,
+            vec![draw_player_selector(targets, "ValidTgts")?],
+        ));
+    }
+    match parameters.get("Defined").map(String::as_str) {
+        None | Some("You") => Ok(call(Operation::You, vec![])),
+        Some("Opponent" | "Player.Opponent") => Ok(call(Operation::Opponent, vec![])),
+        Some("Player") => Ok(call(
+            Operation::All,
+            vec![
+                call(Operation::You, vec![]),
+                call(Operation::Opponent, vec![]),
+            ],
+        )),
+        Some("TargetedAndYou") => Ok(call(
+            Operation::All,
+            vec![
+                call(Operation::You, vec![]),
+                call(Operation::Target, vec![call(Operation::Any, vec![])]),
+            ],
+        )),
+        Some("Remembered") => Ok(call(
+            Operation::Remembered,
+            vec![call(Operation::Any, vec![])],
+        )),
+        Some("TriggeredPlayer") => Ok(call(Operation::Triggered, vec![])),
+        Some(value) => Err(unsupported_value("Defined", value)),
+    }
+}
+
+fn map_roll_dice_with_result(
+    prefix: LegacyAbilityPrefix,
+    selector: &str,
+    expression: &LegacyExpression,
+    context: &MappingContext<'_>,
+    stack: &mut Vec<String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    let parameter_map = parameters(expression)?;
+    let tail_name = required(&parameter_map, "SubAbility")?;
+    let mut base = expression.clone();
+    base.fields
+        .retain(|field| field.key.as_deref() != Some("SubAbility"));
+    let base_parameters = parameters(&base)?;
+    let mut mapped = map_roll_dice(prefix, "RollDice", selector, &base_parameters)?;
+    let mut scoped = context.clone();
+    for (key, role) in [
+        ("ResultSVar", "result"),
+        ("ChosenSVar", "chosen"),
+        ("OtherSVar", "other"),
+    ] {
+        if let Some(name) = parameter_map.get(key) {
+            scoped.value_bindings.insert(
+                name.clone(),
+                call(
+                    Operation::RollResult,
+                    vec![Expression::Text(role.to_string())],
+                ),
+            );
+        }
+    }
+    let tail = resolve_svar(tail_name, &scoped, stack)?;
+    if tail.event.is_some() || tail.timing.is_some() || !tail.costs.is_empty() {
+        return Err(diagnostic(
+            "UNSUPPORTED_LINK",
+            &format!("SubAbility `{tail_name}` is not a cost-free effect chain"),
+        ));
+    }
+    mapped.expression = sequence(mapped.expression, tail.expression);
+    Ok(mapped)
+}
+
+fn map_roll_dice_table(
+    prefix: LegacyAbilityPrefix,
+    selector: &str,
+    expression: &LegacyExpression,
+    context: &MappingContext<'_>,
+    stack: &mut Vec<String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["AB", "SP", "DB"])?;
+    let parameters = parameters(expression)?;
+    reject_unknown(
+        &parameters,
+        &[
+            "Cost",
+            "Defined",
+            "ValidTgts",
+            "Amount",
+            "Sides",
+            "ResultSubAbilities",
+            "SubAbility",
+            "SpellDescription",
+            "StackDescription",
+            "AILogic",
+            "PrecostDesc",
+        ],
+    )?;
+    let amount = optional_positive_integer(&parameters, "Amount")?.unwrap_or(1);
+    let sides = optional_positive_integer(&parameters, "Sides")?.unwrap_or(6);
+    if sides < 2 {
+        return Err(unsupported_value("Sides", required(&parameters, "Sides")?));
+    }
+    let mut covered = BTreeSet::new();
+    let mut has_else = false;
+    let mut table = Vec::new();
+    let mut effects = Vec::new();
+    for branch in required(&parameters, "ResultSubAbilities")?.split(',') {
+        let (range, name) = branch
+            .trim()
+            .split_once(':')
+            .ok_or_else(|| unsupported_value("ResultSubAbilities", branch))?;
+        let name = name.trim();
+        if name.is_empty() {
+            return Err(unsupported_value("ResultSubAbilities", branch));
+        }
+        let canonical_range = if range == "Else" {
+            if has_else {
+                return Err(unsupported_value("ResultSubAbilities", branch));
+            }
+            has_else = true;
+            "else".to_string()
+        } else {
+            let (minimum, maximum) = range.split_once('-').unwrap_or((range, range));
+            let minimum = minimum
+                .parse::<i64>()
+                .map_err(|_| unsupported_value("ResultSubAbilities", branch))?;
+            let maximum = maximum
+                .parse::<i64>()
+                .map_err(|_| unsupported_value("ResultSubAbilities", branch))?;
+            if minimum < 1 || maximum > sides || minimum > maximum {
+                return Err(unsupported_value("ResultSubAbilities", branch));
+            }
+            for value in minimum..=maximum {
+                if !covered.insert(value) {
+                    return Err(unsupported_value("ResultSubAbilities", branch));
+                }
+            }
+            if minimum == maximum {
+                minimum.to_string()
+            } else {
+                format!("{minimum}-{maximum}")
+            }
+        };
+        let linked = resolve_svar(name, context, stack)?;
+        if linked.event.is_some() || linked.timing.is_some() || !linked.costs.is_empty() {
+            return Err(diagnostic(
+                "UNSUPPORTED_LINK",
+                &format!("ResultSubAbilities branch `{name}` is not a cost-free effect chain"),
+            ));
+        }
+        table.push(canonical_range);
+        effects.push(linked.expression);
+    }
+    if effects.is_empty() {
+        return Err(unsupported_value(
+            "ResultSubAbilities",
+            required(&parameters, "ResultSubAbilities")?,
+        ));
+    }
+    let mut arguments = vec![
+        player_selector(&parameters, DefaultSelector::You)?,
+        Expression::Integer(amount),
+        Expression::Integer(sides),
+        Expression::Text(table.join(",")),
+    ];
+    arguments.extend(effects);
+    let mut effect = call(Operation::RollDiceTable, arguments);
+    if let Some(tail_name) = parameters.get("SubAbility") {
+        let tail = resolve_svar(tail_name, context, stack)?;
+        if tail.event.is_some() || tail.timing.is_some() || !tail.costs.is_empty() {
+            return Err(diagnostic(
+                "UNSUPPORTED_LINK",
+                &format!("SubAbility `{tail_name}` is not a cost-free effect chain"),
+            ));
+        }
+        effect = sequence(effect, tail.expression);
+    }
+    Ok(MappedLegacyAbility {
+        prefix,
+        api: "RollDice".to_string(),
+        costs: parse_simple_cost(parameters.get("Cost"))?,
+        event: None,
+        timing: None,
+        expression: effect,
+    })
+}
+
+fn map_pump(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["AB", "SP", "DB"])?;
+    reject_unknown(
+        parameters,
+        &[
+            "Cost",
+            "Defined",
+            "ValidTgts",
+            "TgtZone",
+            "PumpZone",
+            "TgtPrompt",
             "NumAtt",
             "NumDef",
             "KW",
             "Duration",
             "AtEOT",
+            "RememberObjects",
             "SpellDescription",
             "StackDescription",
             "IsCurse",
             "AILogic",
         ],
     )?;
-    let duration = pump_duration(parameters)?;
+    let perpetual = parameters.get("Duration").map(String::as_str) == Some("Perpetual");
+    let duration = if perpetual {
+        None
+    } else {
+        pump_duration(parameters)?
+    };
     if duration.is_none() && parameters.contains_key("AtEOT") {
         return Err(diagnostic(
             "UNSUPPORTED_PARAMETER",
             "permanent Pump cannot also carry AtEOT cleanup",
         ));
     }
-    let affected = object_selector(parameters, DefaultSelector::Source)?;
-    let mut effects = Vec::new();
+    let affected = pump_object_selector(parameters)?;
+    let mut modifications = Vec::new();
     if parameters.contains_key("NumAtt") || parameters.contains_key("NumDef") {
         let power = optional_signed_integer(parameters, "NumAtt")?.unwrap_or(0);
         let toughness = optional_signed_integer(parameters, "NumDef")?.unwrap_or(0);
@@ -4723,16 +5678,43 @@ fn map_pump(
         if let Some(duration) = duration {
             arguments.push(Expression::Text(duration.to_string()));
         }
-        effects.push(call(Operation::ModifyPt, arguments));
+        modifications.push(call(Operation::ModifyPt, arguments));
     }
-    append_keyword_grants(&mut effects, &affected, parameters.get("KW"), duration)?;
+    append_keyword_grants(
+        &mut modifications,
+        &affected,
+        parameters.get("KW"),
+        duration,
+    )?;
+    let mut effects = Vec::new();
+    if !modifications.is_empty() {
+        let mut modification = combine_effects(modifications, "Pump modifications must map")?;
+        if let Some(zones) = parameters.get("PumpZone") {
+            let mut arguments = vec![affected.clone(), modification];
+            arguments.extend(
+                normalize_zone_list("PumpZone", zones)?
+                    .into_iter()
+                    .map(Expression::Text),
+            );
+            modification = call(Operation::ApplyInZones, arguments);
+        }
+        if perpetual {
+            modification = call(Operation::Perpetual, vec![modification]);
+        }
+        effects.push(modification);
+    }
     if let Some(value) = parameters.get("AtEOT") {
         effects.push(map_at_eot_cleanup(value, &affected)?);
     }
-    let expression = combine_effects(
-        effects,
-        "simple Pump requires a PT, keyword modifier, or closed AtEOT cleanup",
-    )?;
+    if let Some(value) = parameters.get("RememberObjects") {
+        effects.push(remember_objects_effect(value)?);
+    }
+    if effects.is_empty()
+        && (parameters.contains_key("ValidTgts") || parameters.contains_key("Defined"))
+    {
+        effects.push(call(Operation::BindTargets, vec![affected]));
+    }
+    let expression = combine_effects(effects, "Pump requires a typed effect")?;
     Ok(MappedLegacyAbility {
         prefix,
         api: api.to_string(),
@@ -4741,6 +5723,100 @@ fn map_pump(
         timing: None,
         expression,
     })
+}
+
+fn pump_object_selector(
+    parameters: &BTreeMap<String, String>,
+) -> Result<Expression, MappingDiagnostic> {
+    let Some(zones) = parameters.get("TgtZone") else {
+        return object_selector(parameters, DefaultSelector::Source);
+    };
+    let valid = required(parameters, "ValidTgts")?;
+    if parameters.contains_key("Defined") {
+        return Err(diagnostic(
+            "UNSUPPORTED_PARAMETER",
+            "TgtZone cannot be combined with Defined",
+        ));
+    }
+    let mut candidates = Vec::new();
+    for zone in zones.split(',').map(str::trim) {
+        candidates.push(match zone {
+            "Battlefield" => affected_selector(valid)?,
+            "Graveyard" | "Hand" | "Exile" | "Library" => {
+                card_selector_in_zone(valid, &zone.to_ascii_lowercase())?
+            }
+            "Stack" => spell_selector(valid)?,
+            value => return Err(unsupported_value("TgtZone", value)),
+        });
+    }
+    let candidates = match candidates.len() {
+        0 => return Err(unsupported_value("TgtZone", zones)),
+        1 => candidates.remove(0),
+        _ => call(Operation::All, candidates),
+    };
+    Ok(call(Operation::Target, vec![candidates]))
+}
+
+fn normalize_zone_list(key: &str, value: &str) -> Result<Vec<String>, MappingDiagnostic> {
+    let mut zones = Vec::new();
+    for zone in value.split(',').map(str::trim) {
+        let normalized = match zone {
+            "Battlefield" => "battlefield",
+            "Graveyard" => "graveyard",
+            "Hand" => "hand",
+            "Exile" => "exile",
+            "Library" => "library",
+            "Stack" => "stack",
+            "Command" => "command",
+            "All" => "all",
+            _ => return Err(unsupported_value(key, value)),
+        };
+        zones.push(normalized.to_string());
+    }
+    if zones.is_empty() {
+        return Err(unsupported_value(key, value));
+    }
+    Ok(zones)
+}
+
+fn remember_objects_effect(value: &str) -> Result<Expression, MappingDiagnostic> {
+    let mut objects = Vec::new();
+    for binding in value.split(" & ").map(str::trim) {
+        objects.push(match binding {
+            "Targeted" | "ThisTargetedCard" => {
+                call(Operation::Target, vec![call(Operation::Any, vec![])])
+            }
+            "Self" => call(Operation::Source, vec![]),
+            "Remembered" | "RememberedCard" => {
+                call(Operation::Remembered, vec![call(Operation::Any, vec![])])
+            }
+            "RememberedLKI" | "DelayTriggerRememberedLKI" => call(Operation::RememberedLki, vec![]),
+            "ParentTarget" => call(Operation::ParentTarget, vec![]),
+            "ChosenCard" => call(Operation::Chosen, vec![call(Operation::Any, vec![])]),
+            "TriggeredCard"
+            | "TriggeredCardLKICopy"
+            | "TriggeredNewCardLKICopy"
+            | "TriggeredAttacker"
+            | "TriggeredAttackerLKICopy"
+            | "TriggeredBlockerLKICopy" => call(Operation::Triggered, vec![]),
+            "TriggeredTarget" | "TriggeredTargetLKICopy" => {
+                call(Operation::TriggeredTarget, vec![])
+            }
+            "TargetedController" => call(
+                Operation::ControllerOf,
+                vec![call(Operation::Target, vec![call(Operation::Any, vec![])])],
+            ),
+            "TriggeredPlayer" => call(Operation::TriggeredPlayer, vec![]),
+            "ReplacedCard" => call(Operation::Triggered, vec![]),
+            _ => return Err(unsupported_value("RememberObjects", value)),
+        });
+    }
+    let objects = match objects.len() {
+        0 => return Err(unsupported_value("RememberObjects", value)),
+        1 => objects.remove(0),
+        _ => call(Operation::All, objects),
+    };
+    Ok(call(Operation::Remember, vec![objects]))
 }
 
 fn map_at_eot_cleanup(value: &str, affected: &Expression) -> Result<Expression, MappingDiagnostic> {
@@ -4779,6 +5855,7 @@ fn map_pump_all(
             "Cost",
             "ValidCards",
             "ValidTgts",
+            "PumpZone",
             "NumAtt",
             "NumDef",
             "KW",
@@ -4789,7 +5866,12 @@ fn map_pump_all(
             "AILogic",
         ],
     )?;
-    let duration = pump_duration(parameters)?;
+    let perpetual = parameters.get("Duration").map(String::as_str) == Some("Perpetual");
+    let duration = if perpetual {
+        None
+    } else {
+        pump_duration(parameters)?
+    };
     let affected = scope_collection_to_target_player(
         affected_selector(required(parameters, "ValidCards")?)?,
         parameters,
@@ -4810,7 +5892,20 @@ fn map_pump_all(
         effects.push(call(Operation::ModifyPt, arguments));
     }
     append_keyword_grants(&mut effects, &affected, parameters.get("KW"), duration)?;
-    let expression = combine_effects(effects, "simple PumpAll requires a PT or keyword modifier")?;
+    let mut expression =
+        combine_effects(effects, "simple PumpAll requires a PT or keyword modifier")?;
+    if let Some(zones) = parameters.get("PumpZone") {
+        let mut arguments = vec![affected, expression];
+        arguments.extend(
+            normalize_zone_list("PumpZone", zones)?
+                .into_iter()
+                .map(Expression::Text),
+        );
+        expression = call(Operation::ApplyInZones, arguments);
+    }
+    if perpetual {
+        expression = call(Operation::Perpetual, vec![expression]);
+    }
     Ok(MappedLegacyAbility {
         prefix,
         api: api.to_string(),
@@ -5145,6 +6240,10 @@ fn map_continuous_with_effects(
             "AddPower",
             "AddToughness",
             "AddKeyword",
+            "AddHiddenKeyword",
+            "RemoveKeyword",
+            "CantHaveKeyword",
+            "AdjustLandPlays",
             "SetPower",
             "SetToughness",
             "AddType",
@@ -5237,6 +6336,7 @@ fn map_continuous_with_effects(
         let zone = match parameters.get("AffectedZone").map(String::as_str) {
             None | Some("Battlefield") => None,
             Some("Stack") => Some("stack"),
+            Some("All") => Some("all"),
             Some(value) => return Err(unsupported_value("AffectedZone", value)),
         };
         require_static_effect_zone(parameters, "EffectZone")?;
@@ -5297,6 +6397,74 @@ fn map_continuous_with_effects(
                 ));
             }
         }
+    }
+    if let Some(keywords) = parameters.get("AddHiddenKeyword") {
+        if affected_player {
+            return Err(unsupported_value("Affected", "You"));
+        }
+        for keyword in keywords.split(" & ").map(str::trim) {
+            let affected = call(Operation::Any, vec![]);
+            match keyword {
+                "CARDNAME can't attack." => {
+                    effects.push(call(Operation::CannotAttack, vec![affected]));
+                }
+                "CARDNAME can't block." => {
+                    effects.push(call(Operation::CannotBlock, vec![affected]));
+                }
+                "CARDNAME can't attack or block." => {
+                    effects.push(call(Operation::CannotAttack, vec![affected.clone()]));
+                    effects.push(call(Operation::CannotBlock, vec![affected]));
+                }
+                "This card doesn't untap during your next untap step."
+                | "CARDNAME doesn't untap during your next untap step." => {
+                    effects.push(call(
+                        Operation::CannotUntap,
+                        vec![affected, Expression::Text("next_untap_step".to_string())],
+                    ));
+                }
+                "CARDNAME must be blocked if able."
+                | "All creatures able to block CARDNAME do so." => {
+                    effects.push(call(Operation::MustBeBlocked, vec![affected]));
+                }
+                value => return Err(unsupported_value("AddHiddenKeyword", value)),
+            }
+        }
+    }
+    if let Some(keywords) = parameters.get("RemoveKeyword") {
+        if affected_player {
+            return Err(unsupported_value("Affected", "You"));
+        }
+        for keyword in keywords.split(" & ").map(str::trim) {
+            effects.push(call(
+                Operation::RemoveKeyword,
+                vec![
+                    call(Operation::Any, vec![]),
+                    Expression::Text(normalize_simple_keyword(keyword)?),
+                ],
+            ));
+        }
+    }
+    if let Some(keyword) = parameters.get("CantHaveKeyword") {
+        if affected_player {
+            return Err(unsupported_value("Affected", "You"));
+        }
+        effects.push(call(
+            Operation::CannotHaveKeyword,
+            vec![
+                call(Operation::Any, vec![]),
+                Expression::Text(normalize_simple_keyword(keyword)?),
+            ],
+        ));
+    }
+    if let Some(amount) = parameters.get("AdjustLandPlays") {
+        if !affected_player {
+            return Err(unsupported_value("Affected", affected_value));
+        }
+        let amount = positive_integer(amount, "AdjustLandPlays")?;
+        effects.push(call(
+            Operation::AdditionalLandPlays,
+            vec![call(Operation::Any, vec![]), Expression::Integer(amount)],
+        ));
     }
     if parameters.contains_key("SetPower") || parameters.contains_key("SetToughness") {
         if affected_player {
@@ -5460,10 +6628,46 @@ fn map_linked_continuous_traits(
             ));
         }
     }
+    if let Some(static_names) = parameter_map.get("AddStaticAbility") {
+        for name in static_names.split(" & ").map(str::trim) {
+            let linked = resolve_svar(name, context, stack)?;
+            if linked.event.is_some() || linked.timing.is_some() || !linked.costs.is_empty() {
+                return Err(diagnostic(
+                    "UNSUPPORTED_LINK",
+                    &format!("AddStaticAbility SVar `{name}` is not a cost-free static ability"),
+                ));
+            }
+            effects.push(call(
+                Operation::GrantStaticAbility,
+                vec![call(Operation::Any, vec![]), linked.expression],
+            ));
+        }
+    }
+    if let Some(replacement_names) = parameter_map.get("AddReplacementEffect") {
+        for name in replacement_names.split(" & ").map(str::trim) {
+            let linked = resolve_replacement_svar(name, context, stack)?;
+            let event = linked.event.ok_or_else(|| {
+                diagnostic(
+                    "UNSUPPORTED_LINK",
+                    &format!("AddReplacementEffect SVar `{name}` has no typed event"),
+                )
+            })?;
+            if linked.timing.is_some() || !linked.costs.is_empty() {
+                return Err(diagnostic(
+                    "UNSUPPORTED_LINK",
+                    &format!("AddReplacementEffect SVar `{name}` has an invalid cost or timing"),
+                ));
+            }
+            effects.push(call(
+                Operation::GrantReplacementAbility,
+                vec![call(Operation::Any, vec![]), event, linked.expression],
+            ));
+        }
+    }
     if effects.is_empty() {
         return Err(diagnostic(
             "MISSING_PARAMETER",
-            "linked Continuous requires AddAbility or AddTrigger",
+            "linked Continuous requires an activated, triggered, static, or replacement ability",
         ));
     }
     if let Some(names) = parameter_map.get("AddSVar") {
@@ -5480,7 +6684,13 @@ fn map_linked_continuous_traits(
     base.fields.retain(|field| {
         !matches!(
             field.key.as_deref(),
-            Some("AddAbility" | "AddTrigger" | "AddSVar")
+            Some(
+                "AddAbility"
+                    | "AddTrigger"
+                    | "AddStaticAbility"
+                    | "AddReplacementEffect"
+                    | "AddSVar"
+            )
         )
     });
     let base_parameters = parameters(&base)?;
@@ -5523,6 +6733,46 @@ fn resolve_trigger_svar(
     }
     stack.push(name.to_string());
     let result = map_with_context(LegacyAbilityPrefix::Triggered, expression, context, stack);
+    stack.pop();
+    result
+}
+
+fn resolve_replacement_svar(
+    name: &str,
+    context: &MappingContext<'_>,
+    stack: &mut Vec<String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    if context.duplicate_svars.contains(name) {
+        return Err(diagnostic(
+            "DUPLICATE_SVAR",
+            &format!("SVar `{name}` is declared more than once"),
+        ));
+    }
+    if stack.iter().any(|active| active == name) {
+        return Err(diagnostic(
+            "CYCLIC_SVAR",
+            &format!("SVar cycle reaches `{name}`"),
+        ));
+    }
+    let expression = context.svars.get(name).copied().ok_or_else(|| {
+        diagnostic(
+            "MISSING_SVAR",
+            &format!("ReplacementEffects SVar `{name}` is not declared"),
+        )
+    })?;
+    if expression
+        .fields
+        .first()
+        .and_then(|field| field.key.as_deref())
+        != Some("Event")
+    {
+        return Err(diagnostic(
+            "UNSUPPORTED_LINK",
+            &format!("ReplacementEffects SVar `{name}` is not a replacement effect"),
+        ));
+    }
+    stack.push(name.to_string());
+    let result = map_with_context(LegacyAbilityPrefix::Replacement, expression, context, stack);
     stack.pop();
     result
 }
@@ -6756,6 +8006,121 @@ fn apply_zone_move_lifetime(
     combine_effects(effects, "zone move requires an effect")
 }
 
+fn map_linked_static_effect(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    expression: &LegacyExpression,
+    context: &MappingContext<'_>,
+    stack: &mut Vec<String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    let parameters = parameters(expression)?;
+    let names = required(&parameters, "StaticAbilities")?
+        .split(',')
+        .map(str::trim)
+        .collect::<Vec<_>>();
+    let mut linked = Vec::new();
+    for name in &names {
+        let mapped = resolve_svar(name, context, stack)?;
+        if mapped.event.is_some() || mapped.timing.is_some() || !mapped.costs.is_empty() {
+            return Err(diagnostic(
+                "UNSUPPORTED_LINK",
+                &format!("StaticAbilities `{name}` is not a cost-free static ability"),
+            ));
+        }
+        linked.push(mapped.expression);
+    }
+    if linked.len() == 1 && expression_has_operation(&linked[0], Operation::PlayExiled) {
+        return map_play_permission_effect(prefix, api, expression, context, stack);
+    }
+    reject_unknown(
+        &parameters,
+        &[
+            "Cost",
+            "StaticAbilities",
+            "RememberObjects",
+            "ForgetOnMoved",
+            "ExileOnMoved",
+            "Duration",
+            "EffectOwner",
+            "ValidTgts",
+            "Defined",
+            "SubAbility",
+            "Name",
+            "Image",
+            "Planeswalker",
+            "Ultimate",
+            "Stackable",
+            "IsCurse",
+            "SpellDescription",
+            "StackDescription",
+            "AILogic",
+        ],
+    )?;
+    for (key, expected) in [
+        ("Planeswalker", "True"),
+        ("Ultimate", "True"),
+        ("Stackable", "False"),
+    ] {
+        if parameters.get(key).is_some_and(|value| value != expected) {
+            return Err(unsupported_value(key, required(&parameters, key)?));
+        }
+    }
+    let owner = match parameters.get("EffectOwner").map(String::as_str) {
+        None | Some("You") => call(Operation::You, vec![]),
+        Some("Remembered" | "Player.IsRemembered") => {
+            call(Operation::Remembered, vec![call(Operation::Any, vec![])])
+        }
+        Some("Targeted" | "TargetedPlayer") if parameters.contains_key("ValidTgts") => {
+            call(Operation::Target, vec![call(Operation::Any, vec![])])
+        }
+        Some(value) => return Err(unsupported_value("EffectOwner", value)),
+    };
+    let remembered = effect_remembered_selector(&parameters)?;
+    let cleanup = effect_cleanup_policy(&parameters, remembered.is_some())?;
+    let duration = match parameters.get("Duration").map(String::as_str) {
+        None | Some("EndOfTurn") | Some("UntilEndOfTurn") => "until_end_of_turn",
+        Some("Permanent") => "permanent",
+        Some("UntilYourNextTurn") => "until_your_next_turn",
+        Some("UntilHostLeavesPlay") => "until_host_leaves_play",
+        Some("UntilHostLeavesPlayOrEOT") => "until_host_leaves_play_or_eot",
+        Some("UntilTheEndOfYourNextTurn") => "until_end_of_your_next_turn",
+        Some(value) => return Err(unsupported_value("Duration", value)),
+    };
+    let mut effects = Vec::new();
+    for static_effect in linked {
+        let mut arguments = vec![
+            owner.clone(),
+            static_effect,
+            Expression::Text(duration.to_string()),
+            Expression::Boolean(remembered.is_some()),
+            Expression::Text(cleanup.clone()),
+        ];
+        if let Some(objects) = remembered.clone() {
+            arguments.push(objects);
+        }
+        effects.push(call(Operation::RegisterEffectStatic, arguments));
+    }
+    let mut effect = combine_effects(effects, "StaticAbilities must reference a static effect")?;
+    if let Some(tail_name) = parameters.get("SubAbility") {
+        let tail = resolve_svar(tail_name, context, stack)?;
+        if tail.event.is_some() || tail.timing.is_some() || !tail.costs.is_empty() {
+            return Err(diagnostic(
+                "UNSUPPORTED_LINK",
+                &format!("SubAbility `{tail_name}` is not a cost-free effect chain"),
+            ));
+        }
+        effect = sequence(effect, tail.expression);
+    }
+    Ok(MappedLegacyAbility {
+        prefix,
+        api: api.to_string(),
+        costs: parse_simple_cost(parameters.get("Cost"))?,
+        event: None,
+        timing: None,
+        expression: effect,
+    })
+}
+
 fn map_play_permission_effect(
     prefix: LegacyAbilityPrefix,
     api: &str,
@@ -6863,6 +8228,271 @@ fn expression_has_operation(expression: &Expression, expected: Operation) -> boo
         }
         _ => false,
     }
+}
+
+fn map_trigger_effect(
+    prefix: LegacyAbilityPrefix,
+    selector: &str,
+    expression: &LegacyExpression,
+    context: &MappingContext<'_>,
+    stack: &mut Vec<String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["AB", "SP", "DB"])?;
+    let parameters = parameters(expression)?;
+    reject_unknown(
+        &parameters,
+        &[
+            "Cost",
+            "Triggers",
+            "ReplacementEffects",
+            "StaticAbilities",
+            "RememberObjects",
+            "ExileOnMoved",
+            "ForgetOnMoved",
+            "Duration",
+            "EffectOwner",
+            "ValidTgts",
+            "Defined",
+            "SubAbility",
+            "OneOff",
+            "Name",
+            "Image",
+            "Planeswalker",
+            "Ultimate",
+            "Stackable",
+            "SpellDescription",
+            "StackDescription",
+            "AILogic",
+        ],
+    )?;
+    for (key, expected) in [
+        ("Planeswalker", "True"),
+        ("Ultimate", "True"),
+        ("Stackable", "False"),
+    ] {
+        if parameters.get(key).is_some_and(|value| value != expected) {
+            return Err(unsupported_value(key, required(&parameters, key)?));
+        }
+    }
+    let owner = match parameters.get("EffectOwner").map(String::as_str) {
+        None | Some("You") => call(Operation::You, vec![]),
+        Some("Remembered" | "Player.IsRemembered") => {
+            call(Operation::Remembered, vec![call(Operation::Any, vec![])])
+        }
+        Some("Targeted" | "TargetedPlayer") if parameters.contains_key("ValidTgts") => {
+            call(Operation::Target, vec![call(Operation::Any, vec![])])
+        }
+        Some(value) => return Err(unsupported_value("EffectOwner", value)),
+    };
+    let remembered = effect_remembered_selector(&parameters)?;
+    let cleanup = effect_cleanup_policy(&parameters, remembered.is_some())?;
+    let duration = match (
+        parameters.get("OneOff").map(String::as_str),
+        parameters.get("Duration").map(String::as_str),
+    ) {
+        (Some("True"), None) => "one_shot",
+        (Some(value), None) => return Err(unsupported_value("OneOff", value)),
+        (Some(_), Some(_)) => {
+            return Err(diagnostic(
+                "UNSUPPORTED_PARAMETER",
+                "OneOff cannot be combined with Duration",
+            ));
+        }
+        (None, None | Some("EndOfTurn") | Some("UntilEndOfTurn")) => "until_end_of_turn",
+        (None, Some("Permanent")) => "permanent",
+        (None, Some("UntilYourNextTurn")) => "until_your_next_turn",
+        (None, Some("UntilTheEndOfYourNextTurn")) => "until_end_of_your_next_turn",
+        (None, Some(value)) => return Err(unsupported_value("Duration", value)),
+    };
+    let mut effects = Vec::new();
+    if let Some(names) = parameters.get("Triggers") {
+        for name in names.split(',').map(str::trim) {
+            let linked = resolve_trigger_svar(name, context, stack)?;
+            let event = linked.event.ok_or_else(|| {
+                diagnostic(
+                    "UNSUPPORTED_LINK",
+                    &format!("Triggers SVar `{name}` has no typed event"),
+                )
+            })?;
+            if !linked.costs.is_empty() || linked.timing.is_some() {
+                return Err(diagnostic(
+                    "UNSUPPORTED_LINK",
+                    &format!("Triggers SVar `{name}` has an invalid cost or timing"),
+                ));
+            }
+            let mut arguments = vec![
+                owner.clone(),
+                event,
+                linked.expression,
+                Expression::Text(duration.to_string()),
+                Expression::Boolean(remembered.is_some()),
+                Expression::Text(cleanup.clone()),
+            ];
+            if let Some(objects) = remembered.clone() {
+                arguments.push(objects);
+            }
+            effects.push(call(Operation::RegisterEffectTrigger, arguments));
+        }
+    }
+    if let Some(names) = parameters.get("ReplacementEffects") {
+        for name in names.split(',').map(str::trim) {
+            let linked = resolve_replacement_svar(name, context, stack)?;
+            let event = linked.event.ok_or_else(|| {
+                diagnostic(
+                    "UNSUPPORTED_LINK",
+                    &format!("ReplacementEffects SVar `{name}` has no typed event"),
+                )
+            })?;
+            if !linked.costs.is_empty() || linked.timing.is_some() {
+                return Err(diagnostic(
+                    "UNSUPPORTED_LINK",
+                    &format!("ReplacementEffects SVar `{name}` has an invalid cost or timing"),
+                ));
+            }
+            let mut arguments = vec![
+                owner.clone(),
+                event,
+                linked.expression,
+                Expression::Text(duration.to_string()),
+                Expression::Boolean(remembered.is_some()),
+                Expression::Text(cleanup.clone()),
+            ];
+            if let Some(objects) = remembered.clone() {
+                arguments.push(objects);
+            }
+            effects.push(call(Operation::RegisterEffectReplacement, arguments));
+        }
+    }
+    if let Some(names) = parameters.get("StaticAbilities") {
+        for name in names.split(',').map(str::trim) {
+            let linked = resolve_svar(name, context, stack)?;
+            if linked.event.is_some() || linked.timing.is_some() || !linked.costs.is_empty() {
+                return Err(diagnostic(
+                    "UNSUPPORTED_LINK",
+                    &format!("StaticAbilities SVar `{name}` is not a cost-free static ability"),
+                ));
+            }
+            let mut arguments = vec![
+                owner.clone(),
+                linked.expression,
+                Expression::Text(duration.to_string()),
+                Expression::Boolean(remembered.is_some()),
+                Expression::Text(cleanup.clone()),
+            ];
+            if let Some(objects) = remembered.clone() {
+                arguments.push(objects);
+            }
+            effects.push(call(Operation::RegisterEffectStatic, arguments));
+        }
+    }
+    let mut effect = combine_effects(
+        effects,
+        "Effect must reference at least one triggered, replacement, or static effect",
+    )?;
+    if let Some(tail_name) = parameters.get("SubAbility") {
+        let tail = resolve_svar(tail_name, context, stack)?;
+        if tail.event.is_some() || tail.timing.is_some() || !tail.costs.is_empty() {
+            return Err(diagnostic(
+                "UNSUPPORTED_LINK",
+                &format!("SubAbility `{tail_name}` is not a cost-free effect chain"),
+            ));
+        }
+        effect = sequence(effect, tail.expression);
+    }
+    Ok(MappedLegacyAbility {
+        prefix,
+        api: "Effect".to_string(),
+        costs: parse_simple_cost(parameters.get("Cost"))?,
+        event: None,
+        timing: None,
+        expression: effect,
+    })
+}
+
+fn effect_remembered_selector(
+    parameters: &BTreeMap<String, String>,
+) -> Result<Option<Expression>, MappingDiagnostic> {
+    let Some(value) = parameters.get("RememberObjects") else {
+        return Ok(None);
+    };
+    let mut objects = Vec::new();
+    for binding in value.split(" & ").map(str::trim) {
+        objects.push(match binding {
+            "Targeted" | "ThisTargetedCard" if parameters.contains_key("ValidTgts") => {
+                call(Operation::Target, vec![call(Operation::Any, vec![])])
+            }
+            "Self" => call(Operation::Source, vec![]),
+            "ParentTarget" => call(Operation::ParentTarget, vec![]),
+            "ChosenCard" => call(Operation::Chosen, vec![call(Operation::Any, vec![])]),
+            "Remembered" | "RememberedCard" => {
+                call(Operation::Remembered, vec![call(Operation::Any, vec![])])
+            }
+            "TriggeredCard" | "TriggeredCardLKICopy" => call(Operation::Triggered, vec![]),
+            "Equipped" => call(
+                Operation::EquippedObject,
+                vec![call(Operation::Source, vec![])],
+            ),
+            "Enchanted" => call(
+                Operation::EnchantedObject,
+                vec![call(Operation::Source, vec![])],
+            ),
+            _ => return Err(unsupported_value("RememberObjects", value)),
+        });
+    }
+    Ok(match objects.len() {
+        0 => return Err(unsupported_value("RememberObjects", value)),
+        1 => objects.pop(),
+        _ => Some(call(Operation::All, objects)),
+    })
+}
+
+fn effect_cleanup_policy(
+    parameters: &BTreeMap<String, String>,
+    has_remembered: bool,
+) -> Result<String, MappingDiagnostic> {
+    let policy = match (
+        parameters.get("ForgetOnMoved").map(String::as_str),
+        parameters.get("ExileOnMoved").map(String::as_str),
+    ) {
+        (None, None) => return Ok("none".to_string()),
+        (Some(_), Some(_)) => {
+            return Err(diagnostic(
+                "UNSUPPORTED_PARAMETER",
+                "ForgetOnMoved and ExileOnMoved cannot be combined",
+            ));
+        }
+        (Some(value), None) => ("forget", value),
+        (None, Some(value)) => ("exile", value),
+    };
+    if !has_remembered {
+        return Err(diagnostic(
+            "MISSING_PARAMETER",
+            "effect cleanup requires RememberObjects",
+        ));
+    }
+    let zones = if policy.1 == "True" {
+        "any".to_string()
+    } else {
+        let mut normalized = Vec::new();
+        for zone in policy.1.split(',').map(str::trim) {
+            if !matches!(
+                zone,
+                "Battlefield" | "Graveyard" | "Exile" | "Hand" | "Stack"
+            ) {
+                return Err(unsupported_value(
+                    if policy.0 == "forget" {
+                        "ForgetOnMoved"
+                    } else {
+                        "ExileOnMoved"
+                    },
+                    policy.1,
+                ));
+            }
+            normalized.push(zone.to_ascii_lowercase());
+        }
+        normalized.join(",")
+    };
+    Ok(format!("{}_on_moved:{zones}", policy.0))
 }
 
 fn map_effect(
@@ -6987,6 +8617,16 @@ fn map_animate(
     selector: &str,
     parameters: &BTreeMap<String, String>,
 ) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    map_animate_with_effects(prefix, api, selector, parameters, Vec::new())
+}
+
+fn map_animate_with_effects(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+    mut effects: Vec<Expression>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
     require_selector_one_of(selector, &["AB", "SP", "DB"])?;
     reject_unknown(
         parameters,
@@ -7009,7 +8649,6 @@ fn map_animate(
         ],
     )?;
     let affected = object_selector(parameters, DefaultSelector::Source)?;
-    let mut effects = Vec::new();
     if let Some(value) = parameters.get("RemoveCardTypes") {
         if value != "True" {
             return Err(unsupported_value("RemoveCardTypes", value));
@@ -7099,6 +8738,9 @@ fn map_animate(
             expression = call(Operation::UntilEndOfTurn, vec![expression]);
         }
         Some("Permanent") => {}
+        Some("Perpetual") => {
+            expression = call(Operation::Perpetual, vec![expression]);
+        }
         Some(value) => return Err(unsupported_value("Duration", value)),
     }
     if let Some(value) = parameters.get("AtEOT") {
@@ -7108,6 +8750,112 @@ fn map_animate(
         );
     }
     mapped_direct(prefix, api, parameters, expression)
+}
+
+fn map_animated_linked_traits(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    expression: &LegacyExpression,
+    context: &MappingContext<'_>,
+    stack: &mut Vec<String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    let parameter_map = parameters(expression)?;
+    let sub_ability = parameter_map.get("SubAbility").cloned();
+    let affected = match api {
+        "Animate" => object_selector(&parameter_map, DefaultSelector::Source)?,
+        "AnimateAll" => scope_collection_to_target_player(
+            affected_selector(required(&parameter_map, "ValidCards")?)?,
+            &parameter_map,
+            Operation::ControlledBy,
+        )?,
+        _ => return Err(unsupported_value("API", api)),
+    };
+    let mut effects = Vec::new();
+    if let Some(names) = parameter_map.get("Triggers") {
+        for name in names.split(',').map(str::trim) {
+            let linked = resolve_trigger_svar(name, context, stack)?;
+            let event = linked.event.ok_or_else(|| {
+                diagnostic(
+                    "UNSUPPORTED_LINK",
+                    &format!("Triggers SVar `{name}` has no typed event"),
+                )
+            })?;
+            if !linked.costs.is_empty() || linked.timing.is_some() {
+                return Err(diagnostic(
+                    "UNSUPPORTED_LINK",
+                    &format!("Triggers SVar `{name}` has an invalid cost or timing"),
+                ));
+            }
+            effects.push(call(
+                Operation::GrantTriggeredAbility,
+                vec![affected.clone(), event, linked.expression],
+            ));
+        }
+    }
+    for key in ["staticAbilities", "StaticAbilities"] {
+        if let Some(names) = parameter_map.get(key) {
+            for name in names.split([',', '&']).map(str::trim) {
+                let linked = resolve_svar(name, context, stack)?;
+                if linked.event.is_some() || linked.timing.is_some() || !linked.costs.is_empty() {
+                    return Err(diagnostic(
+                        "UNSUPPORTED_LINK",
+                        &format!("{key} SVar `{name}` is not a cost-free static ability"),
+                    ));
+                }
+                effects.push(call(
+                    Operation::GrantStaticAbility,
+                    vec![affected.clone(), linked.expression],
+                ));
+            }
+        }
+    }
+    for key in ["AddSVar", "sVars", "SVars"] {
+        if let Some(names) = parameter_map.get(key) {
+            for name in names.split([',', '&']).map(str::trim) {
+                if name.is_empty() || !context.svars.contains_key(name) {
+                    return Err(diagnostic(
+                        "MISSING_SVAR",
+                        &format!("{key} dependency `{name}` is not declared"),
+                    ));
+                }
+            }
+        }
+    }
+    let mut base = expression.clone();
+    base.fields.retain(|field| {
+        !matches!(
+            field.key.as_deref(),
+            Some(
+                "Triggers"
+                    | "staticAbilities"
+                    | "StaticAbilities"
+                    | "AddSVar"
+                    | "sVars"
+                    | "SVars"
+                    | "SubAbility"
+            )
+        )
+    });
+    let base_parameters = parameters(&base)?;
+    let mut mapped = match api {
+        "Animate" => map_animate_with_effects(prefix, api, selector, &base_parameters, effects),
+        "AnimateAll" => {
+            map_animate_all_with_effects(prefix, api, selector, &base_parameters, effects)
+        }
+        _ => Err(unsupported_value("API", api)),
+    }?;
+    if let Some(name) = sub_ability {
+        let linked = resolve_svar(&name, context, stack)?;
+        if linked.event.is_some() || linked.timing.is_some() || !linked.costs.is_empty() {
+            return Err(diagnostic(
+                "UNSUPPORTED_LINK",
+                &format!("SubAbility `{name}` is not a cost-free effect chain"),
+            ));
+        }
+        mapped.expression = sequence(mapped.expression, linked.expression);
+    }
+    Ok(mapped)
 }
 
 fn map_set_state(
@@ -7268,6 +9016,67 @@ fn map_sacrifice_effect(
         add_collection_predicate(permanents, call(Operation::ControlledBy, vec![player]))?;
     let expression = apply_remembered_result(
         call(Operation::SacrificeEffect, vec![permanents]),
+        parameters,
+        "RememberSacrificed",
+        "sacrificed",
+    )?;
+    mapped_direct(prefix, api, parameters, expression)
+}
+
+fn map_sacrifice_all(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["AB", "SP", "DB"])?;
+    reject_unknown(
+        parameters,
+        &[
+            "Cost",
+            "Defined",
+            "ValidTgts",
+            "TgtPrompt",
+            "ValidCards",
+            "Controller",
+            "RememberSacrificed",
+            "SpellDescription",
+            "StackDescription",
+            "AILogic",
+        ],
+    )?;
+    if parameters.contains_key("Defined") && parameters.contains_key("ValidCards") {
+        return Err(diagnostic(
+            "UNSUPPORTED_SELECTOR",
+            "SacrificeAll cannot combine Defined and ValidCards",
+        ));
+    }
+    let mut affected = if parameters.contains_key("Defined") || parameters.contains_key("ValidTgts")
+    {
+        object_selector(parameters, DefaultSelector::Source)?
+    } else if let Some(valid) = parameters.get("ValidCards") {
+        affected_selector(valid)?
+    } else {
+        call(Operation::Permanents, vec![])
+    };
+    if let Some(controller) = parameters.get("Controller") {
+        affected = match affected {
+            Expression::Call {
+                operation: Operation::Cards | Operation::Permanents,
+                ..
+            } => add_collection_predicate(
+                affected,
+                call(
+                    Operation::ControlledBy,
+                    vec![defined_player_selector(controller)?],
+                ),
+            )?,
+            single if controller == "You" => single,
+            _ => return Err(unsupported_value("Controller", controller)),
+        };
+    }
+    let expression = apply_remembered_result(
+        call(Operation::SacrificeEffect, vec![affected]),
         parameters,
         "RememberSacrificed",
         "sacrificed",
@@ -7991,6 +9800,52 @@ fn map_choose_card(
         "chosen",
     )?;
     mapped_direct(prefix, api, parameters, expression)
+}
+
+fn map_choose_player(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["AB", "SP", "DB"])?;
+    reject_unknown(
+        parameters,
+        &[
+            "Cost",
+            "Defined",
+            "ValidTgts",
+            "TgtPrompt",
+            "Choices",
+            "ChoiceTitle",
+            "Random",
+            "Secretly",
+            "RememberChosen",
+            "SpellDescription",
+            "StackDescription",
+            "AILogic",
+        ],
+    )?;
+    let chooser = player_selector(parameters, DefaultSelector::You)?;
+    let choices = defined_player_selector(required(parameters, "Choices")?)?;
+    for key in ["Random", "Secretly", "RememberChosen"] {
+        closed_true_flag(parameters, key)?;
+    }
+    mapped_direct(
+        prefix,
+        api,
+        parameters,
+        call(
+            Operation::ChoosePlayer,
+            vec![
+                chooser,
+                choices,
+                Expression::Boolean(parameters.contains_key("Random")),
+                Expression::Boolean(parameters.contains_key("Secretly")),
+                Expression::Boolean(parameters.contains_key("RememberChosen")),
+            ],
+        ),
+    )
 }
 
 fn map_play(
@@ -8757,6 +10612,16 @@ fn map_animate_all(
     selector: &str,
     parameters: &BTreeMap<String, String>,
 ) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    map_animate_all_with_effects(prefix, api, selector, parameters, Vec::new())
+}
+
+fn map_animate_all_with_effects(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+    mut effects: Vec<Expression>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
     require_selector_one_of(selector, &["AB", "SP", "DB"])?;
     reject_unknown(
         parameters,
@@ -8788,7 +10653,6 @@ fn map_animate_all(
         parameters,
         Operation::ControlledBy,
     )?;
-    let mut effects = Vec::new();
     if let Some(value) = parameters.get("RemoveCardTypes") {
         if value != "True" {
             return Err(unsupported_value("RemoveCardTypes", value));
@@ -8909,6 +10773,9 @@ fn map_animate_all(
             expression = call(Operation::UntilEndOfTurn, vec![expression]);
         }
         Some("Permanent") => {}
+        Some("Perpetual") => {
+            expression = call(Operation::Perpetual, vec![expression]);
+        }
         Some(value) => return Err(unsupported_value("Duration", value)),
     }
     if let Some(value) = parameters.get("AtEOT") {
@@ -9905,11 +11772,13 @@ fn default_selector(default: DefaultSelector) -> Expression {
 
 fn defined_selector(value: &str) -> Result<Expression, MappingDiagnostic> {
     match value {
-        "Self" => Ok(call(Operation::Source, vec![])),
-        "Remembered" => Ok(call(
+        "Self" | "EffectSource" | "OriginalHost" => Ok(call(Operation::Source, vec![])),
+        "Remembered" | "RememberedCard" => Ok(call(
             Operation::Remembered,
             vec![call(Operation::Any, vec![])],
         )),
+        "RememberedLKI" | "DelayTriggerRememberedLKI" => Ok(call(Operation::RememberedLki, vec![])),
+        "ChosenCard" => Ok(call(Operation::Chosen, vec![call(Operation::Any, vec![])])),
         "Targeted" => Ok(call(Operation::Target, vec![call(Operation::Any, vec![])])),
         "You" => Ok(call(Operation::You, vec![])),
         "Opponent" | "Player.Opponent" => Ok(call(Operation::Opponent, vec![])),
@@ -11007,6 +12876,38 @@ mod tests {
     }
 
     #[test]
+    fn maps_closed_dig_until_partitions() {
+        for line in [
+            "A:DB$ DigUntil | Valid$ Card.Land | FoundDestination$ Hand | RevealedDestination$ Library | RevealedLibraryPosition$ -1 | RevealRandomOrder$ True",
+            "A:SP$ DigUntil | ValidTgts$ Opponent | Amount$ 4 | Valid$ Land | RevealedDestination$ Graveyard | IsCurse$ True",
+            "A:DB$ DigUntil | Defined$ Opponent | Valid$ Card.nonLand | FoundDestination$ Exile | RevealedDestination$ Exile | RememberFound$ True",
+        ] {
+            let mapped = map_line(line)
+                .unwrap_or_else(|error| panic!("DigUntil should map: {}", error.message));
+            assert!(expression_contains_operation(
+                &mapped.expression,
+                Operation::LibraryDigUntil
+            ));
+        }
+    }
+
+    #[test]
+    fn maps_closed_library_seeks() {
+        for line in [
+            "A:DB$ Seek | Type$ Card.nonLand",
+            "A:DB$ Seek | Num$ 2 | Type$ Forest | RememberFound$ True",
+            "A:SP$ Seek | Defined$ Opponent | Type$ Instant,Sorcery | ImprintFound$ True",
+        ] {
+            let mapped =
+                map_line(line).unwrap_or_else(|error| panic!("Seek should map: {}", error.message));
+            assert!(expression_contains_operation(
+                &mapped.expression,
+                Operation::SeekLibrary
+            ));
+        }
+    }
+
+    #[test]
     fn source_bound_closed_zone_moves_retain_their_origin_guard() {
         let mapped = map_line(
             "A:DB$ ChangeZone | Origin$ Graveyard | Destination$ Exile | SpellDescription$ Exile this card.",
@@ -11368,6 +13269,21 @@ mod tests {
             &mapped.expression,
             Operation::Forget
         ));
+
+        let static_effect = map_script_root(concat!(
+            "Name:Linked Static Effect\n",
+            "A:SP$ Effect | StaticAbilities$ STHandSize | Duration$ Permanent | SpellDescription$ No maximum hand size.\n",
+            "SVar:STHandSize:Mode$ Continuous | Affected$ You | SetMaxHandSize$ Unlimited | Description$ No maximum hand size.\n",
+        ))
+        .unwrap_or_else(|error| panic!("linked static effect should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &static_effect.expression,
+            Operation::RegisterEffectStatic
+        ));
+        assert!(expression_contains_operation(
+            &static_effect.expression,
+            Operation::NoMaximumHandSize
+        ));
     }
 
     #[test]
@@ -11409,6 +13325,295 @@ mod tests {
         assert!(expression_contains_operation(
             &mapped.expression,
             Operation::GainLife
+        ));
+    }
+
+    #[test]
+    fn maps_linked_continuous_static_abilities_across_all_zones() {
+        let mapped = map_script_root(concat!(
+            "Name:Granted Static Ability\n",
+            "S:Mode$ Continuous | Affected$ Creature.YouCtrl | AffectedZone$ All | AddStaticAbility$ STVigilance | Description$ Creatures have vigilance.\n",
+            "SVar:STVigilance:Mode$ Continuous | Affected$ Card.Self | AddKeyword$ Vigilance | Description$ This creature has vigilance.\n",
+        ))
+        .unwrap_or_else(|error| panic!("linked granted static should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &mapped.expression,
+            Operation::GrantStaticAbility
+        ));
+        assert!(expression_contains_operation(
+            &mapped.expression,
+            Operation::GrantKeyword
+        ));
+        assert!(matches!(
+            mapped.expression,
+            Expression::Call {
+                operation: Operation::Continuous,
+                ref arguments,
+            } if arguments.get(2) == Some(&Expression::Text("all".to_string()))
+        ));
+    }
+
+    #[test]
+    fn maps_linked_continuous_replacement_abilities() {
+        let mapped = map_script_root(concat!(
+            "Name:Granted Replacement Ability\n",
+            "S:Mode$ Continuous | Affected$ Creature.EnchantedBy | AddReplacementEffect$ RepDamage | Description$ It has a replacement.\n",
+            "SVar:RepDamage:Event$ DamageDone | ActiveZones$ Battlefield | Prevent$ True | ValidTarget$ Card.Self | Description$ Prevent damage.\n",
+        ))
+        .unwrap_or_else(|error| panic!("linked replacement should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &mapped.expression,
+            Operation::GrantReplacementAbility
+        ));
+        assert!(expression_contains_operation(
+            &mapped.expression,
+            Operation::PreventDamage
+        ));
+    }
+
+    #[test]
+    fn maps_animated_static_abilities() {
+        let mapped = map_script_root(concat!(
+            "Name:Animated Static Ability\n",
+            "A:AB$ Animate | Cost$ 1 | Defined$ Self | Types$ Artifact,Creature,Construct | staticAbilities$ STPower | SpellDescription$ Animate.\n",
+            "SVar:STPower:Mode$ Continuous | Affected$ Card.Self | SetPower$ 3 | SetToughness$ 3 | Description$ It is 3/3.\n",
+        ))
+        .unwrap_or_else(|error| panic!("animated static should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &mapped.expression,
+            Operation::GrantStaticAbility
+        ));
+        assert!(expression_contains_operation(
+            &mapped.expression,
+            Operation::SetPt
+        ));
+    }
+
+    #[test]
+    fn maps_command_effect_triggers_with_lifetimes() {
+        let mapped = map_script_root(concat!(
+            "Name:Temporary Trigger Effect\n",
+            "A:AB$ Effect | Cost$ 1 W B | Triggers$ TrigLife | SpellDescription$ Whenever you gain life this turn, an opponent loses that much life.\n",
+            "SVar:TrigLife:Mode$ LifeGained | ValidPlayer$ You | TriggerZones$ Battlefield | Execute$ DBLose | TriggerDescription$ Lose life.\n",
+            "SVar:DBLose:DB$ LoseLife | Defined$ Opponent | LifeAmount$ 1\n",
+        ))
+        .unwrap_or_else(|error| panic!("temporary trigger effect should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &mapped.expression,
+            Operation::RegisterEffectTrigger
+        ));
+        assert!(expression_contains_operation(
+            &mapped.expression,
+            Operation::LoseLife
+        ));
+
+        let remembered = map_script_root(concat!(
+            "Name:Remembered Trigger Effect\n",
+            "A:SP$ Effect | ValidTgts$ Creature.YouCtrl | RememberObjects$ Targeted | ExileOnMoved$ Battlefield | Triggers$ TrigDamage | Duration$ Permanent | SpellDescription$ Remember it.\n",
+            "SVar:TrigDamage:Mode$ DamageDone | ValidSource$ Card.IsRemembered | ValidTarget$ Player | TriggerZones$ Battlefield | Execute$ DBDraw | TriggerDescription$ Draw.\n",
+            "SVar:DBDraw:DB$ Draw | Defined$ You | NumCards$ 1\n",
+        ))
+        .unwrap_or_else(|error| panic!("remembered trigger effect should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &remembered.expression,
+            Operation::RegisterEffectTrigger
+        ));
+        assert!(expression_contains_operation(
+            &remembered.expression,
+            Operation::Target
+        ));
+
+        let replacement = map_script_root(concat!(
+            "Name:Replacement Effect\n",
+            "A:SP$ Effect | ReplacementEffects$ RPrevent | Duration$ UntilEndOfTurn | SpellDescription$ Prevent damage.\n",
+            "SVar:RPrevent:Event$ DamageDone | Prevent$ True | IsCombat$ True | ValidTarget$ You | ActiveZones$ Command | Description$ Prevent combat damage.\n",
+        ))
+        .unwrap_or_else(|error| panic!("replacement effect should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &replacement.expression,
+            Operation::RegisterEffectReplacement
+        ));
+        assert!(expression_contains_operation(
+            &replacement.expression,
+            Operation::PreventDamage
+        ));
+    }
+
+    #[test]
+    fn maps_animated_trigger_grants_and_perpetual_duration() {
+        let mapped = map_script_root(concat!(
+            "Name:Animated Trigger\n",
+            "A:SP$ Animate | Defined$ Self | Types$ Creature | Power$ 3 | Toughness$ 3 | Triggers$ TrigDies | Duration$ Permanent | SpellDescription$ Animate.\n",
+            "SVar:TrigDies:Mode$ ChangesZone | Origin$ Battlefield | Destination$ Graveyard | ValidCard$ Card.Self | TriggerZones$ Battlefield | Execute$ DBDraw | TriggerDescription$ Draw.\n",
+            "SVar:DBDraw:DB$ Draw | Defined$ You | NumCards$ 1\n",
+        ))
+        .unwrap_or_else(|error| panic!("animated trigger should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &mapped.expression,
+            Operation::GrantTriggeredAbility
+        ));
+
+        let perpetual = map_script_root(concat!(
+            "Name:Perpetual Trigger\n",
+            "A:SP$ AnimateAll | ValidCards$ Creature.YouCtrl | Triggers$ TrigUpkeep | Duration$ Perpetual | SpellDescription$ Grant perpetually.\n",
+            "SVar:TrigUpkeep:Mode$ Phase | Phase$ Upkeep | ValidPlayer$ You | TriggerZones$ Battlefield | Execute$ DBLife | TriggerDescription$ Gain life.\n",
+            "SVar:DBLife:DB$ GainLife | Defined$ You | LifeAmount$ 1\n",
+        ))
+        .unwrap_or_else(|error| panic!("perpetual trigger should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &perpetual.expression,
+            Operation::Perpetual
+        ));
+        assert!(expression_contains_operation(
+            &perpetual.expression,
+            Operation::GrantTriggeredAbility
+        ));
+    }
+
+    #[test]
+    fn maps_target_binding_pump_shells() {
+        let mapped = map_script_root(concat!(
+            "Name:Target Binding Shell\n",
+            "A:SP$ Pump | ValidTgts$ Instant.YouOwn,Sorcery.YouOwn | TgtZone$ Graveyard | SubAbility$ DBLife | SpellDescription$ Choose a card, then gain life.\n",
+            "SVar:DBLife:DB$ GainLife | Defined$ You | LifeAmount$ 1\n",
+        ))
+        .unwrap_or_else(|error| panic!("target-binding shell should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &mapped.expression,
+            Operation::BindTargets
+        ));
+        assert!(expression_contains_operation(
+            &mapped.expression,
+            Operation::Target
+        ));
+        assert!(expression_contains_operation(
+            &mapped.expression,
+            Operation::GainLife
+        ));
+    }
+
+    #[test]
+    fn maps_closed_damage_replacements() {
+        let prevent = map_script_root(concat!(
+            "Name:Damage Prevention\n",
+            "R:Event$ DamageDone | ActiveZones$ Battlefield | Prevent$ True | IsCombat$ True | ValidTarget$ Creature.YouCtrl | Description$ Prevent combat damage.\n",
+        ))
+        .unwrap_or_else(|error| panic!("damage prevention should map: {}", error.message));
+        assert!(matches!(
+            prevent.event,
+            Some(Expression::Call {
+                operation: Operation::EventDamage,
+                ..
+            })
+        ));
+        assert!(expression_contains_operation(
+            &prevent.expression,
+            Operation::PreventDamage
+        ));
+
+        let replaced = map_script_root(concat!(
+            "Name:Damage Replacement\n",
+            "R:Event$ DamageDone | ActiveZones$ Battlefield | ValidTarget$ Card.Self | ReplaceWith$ DBLife | ReplacementResult$ Updated | Description$ Gain life instead.\n",
+            "SVar:DBLife:DB$ GainLife | Defined$ You | LifeAmount$ 1\n",
+        ))
+        .unwrap_or_else(|error| panic!("linked damage replacement should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &replaced.expression,
+            Operation::GainLife
+        ));
+    }
+
+    #[test]
+    fn maps_closed_dice_rolls() {
+        for line in [
+            "A:AB$ RollDice | Cost$ 2 | Sides$ 6 | ResultSVar$ Result | SpellDescription$ Roll a d6.",
+            "A:SP$ RollDice | Amount$ 2 | Sides$ 12 | ChosenSVar$ X | OtherSVar$ Y | SpellDescription$ Choose a result.",
+            "A:DB$ RollDice | Sides$ 6 | ToVisitYourAttractions$ True",
+        ] {
+            let mapped = map_line(line)
+                .unwrap_or_else(|error| panic!("closed dice roll should map: {}", error.message));
+            assert!(expression_contains_operation(
+                &mapped.expression,
+                Operation::RollDice
+            ));
+        }
+        assert!(map_line("A:AB$ RollDice | Sides$ 1").is_err());
+        assert!(map_line("A:AB$ RollDice | Amount$ 3 | ChosenSVar$ X | OtherSVar$ Y").is_err());
+
+        let dynamic = map_script_root(concat!(
+            "Name:Roll Result Binding\n",
+            "A:AB$ RollDice | Cost$ T | Sides$ 6 | ResultSVar$ X | SubAbility$ DBLife | SpellDescription$ Gain life equal to the result.\n",
+            "SVar:DBLife:DB$ GainLife | Defined$ You | LifeAmount$ X\n",
+        ))
+        .unwrap_or_else(|error| panic!("roll result binding should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &dynamic.expression,
+            Operation::RollResult
+        ));
+        assert!(expression_contains_operation(
+            &dynamic.expression,
+            Operation::GainLife
+        ));
+
+        let table = map_script_root(concat!(
+            "Name:Roll Table\n",
+            "A:SP$ RollDice | Sides$ 20 | ResultSubAbilities$ 1-9:DBLife,10-19:DBDraw,20:DBBoth | SpellDescription$ Roll a d20.\n",
+            "SVar:DBLife:DB$ GainLife | Defined$ You | LifeAmount$ 1\n",
+            "SVar:DBDraw:DB$ Draw | Defined$ You | NumCards$ 1\n",
+            "SVar:DBBoth:DB$ GainLife | Defined$ You | LifeAmount$ 2 | SubAbility$ DBDraw\n",
+        ))
+        .unwrap_or_else(|error| panic!("roll table should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &table.expression,
+            Operation::RollDiceTable
+        ));
+        assert!(expression_contains_operation(
+            &table.expression,
+            Operation::Draw
+        ));
+    }
+
+    #[test]
+    fn maps_closed_peek_and_reveal() {
+        let mapped = map_script_root(concat!(
+            "Name:Peek and Reveal\n",
+            "A:SP$ PeekAndReveal | PeekAmount$ 5 | NoPeek$ True | RememberRevealed$ True | SubAbility$ DBLife | SpellDescription$ Reveal five.\n",
+            "SVar:DBLife:DB$ GainLife | Defined$ You | LifeAmount$ 1\n",
+        ))
+        .unwrap_or_else(|error| panic!("peek and reveal should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &mapped.expression,
+            Operation::PeekLibrary
+        ));
+        assert!(expression_contains_operation(
+            &mapped.expression,
+            Operation::GainLife
+        ));
+
+        let look = map_line(
+            "A:AB$ PeekAndReveal | Cost$ 1 | ValidTgts$ Player | NoReveal$ True | RememberPeeked$ True | SpellDescription$ Look.",
+        )
+        .unwrap_or_else(|error| panic!("private peek should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &look.expression,
+            Operation::PeekLibrary
+        ));
+    }
+
+    #[test]
+    fn preserves_static_trigger_execution() {
+        let mapped = map_script_root(concat!(
+            "Name:Static Trigger\n",
+            "T:Mode$ ChangesZone | Origin$ Battlefield | Destination$ Graveyard | ValidCard$ Card.Self | Static$ True | Execute$ DBCleanup | TriggerDescription$ Clean up immediately.\n",
+            "SVar:DBCleanup:DB$ Cleanup | ClearRemembered$ True\n",
+        ))
+        .unwrap_or_else(|error| panic!("static trigger should map: {}", error.message));
+        assert!(matches!(
+            mapped.event,
+            Some(Expression::Call {
+                operation: Operation::EventStatic,
+                ..
+            })
         ));
     }
 
@@ -11707,6 +13912,10 @@ mod tests {
             "S:Mode$ Continuous | Affected$ You | SetMaxHandSize$ Unlimited | Description$ No maximum hand size.",
             "S:Mode$ Continuous | Affected$ Card.Self | AddKeyword$ Flying | EffectZone$ All | Description$ Flying.",
             "S:Mode$ Continuous | Affected$ Instant.YouCtrl,Sorcery.YouCtrl | AffectedZone$ Stack | AddKeyword$ Lifelink | Description$ Spells have lifelink.",
+            "S:Mode$ Continuous | Affected$ Creature.OppCtrl | RemoveKeyword$ Trample | CantHaveKeyword$ Trample | Description$ Opposing creatures cannot have trample.",
+            "S:Mode$ Continuous | Affected$ You | AdjustLandPlays$ 1 | Description$ Play an additional land.",
+            "S:Mode$ Continuous | Affected$ Creature | AddHiddenKeyword$ CARDNAME can't block. | Description$ Creatures cannot block.",
+            "S:Mode$ Continuous | Affected$ Creature.EnchantedBy | AddHiddenKeyword$ All creatures able to block CARDNAME do so. | Description$ Must be blocked.",
             "S:Mode$ Continuous | CharacteristicDefining$ True | SetPower$ 4 | SetToughness$ 4 | Description$ Characteristic power and toughness.",
         ] {
             assert_operation(line, Operation::Continuous, 0);
@@ -11881,12 +14090,14 @@ mod tests {
                 .unwrap_or(&kicked_trigger.expression),
             Operation::DesignationIs
         ));
-        let error = map_line(
+        let remembered_lki = map_line(
             "A:AB$ Pump | Defined$ RememberedLKI | NumAtt$ 1 | SpellDescription$ LKI pump.",
         )
-        .err()
-        .unwrap_or_else(|| panic!("remembered LKI binding must remain quarantined"));
-        assert_eq!(error.code, "UNSUPPORTED_VALUE");
+        .unwrap_or_else(|error| panic!("typed remembered LKI should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &remembered_lki.expression,
+            Operation::RememberedLki
+        ));
 
         let error = map_line(
             "A:DB$ ChangeZone | Defined$ Remembered | Origin$ Command | Destination$ Exile | SpellDescription$ Open command move.",
@@ -12538,6 +14749,22 @@ mod tests {
     }
 
     #[test]
+    fn maps_closed_sacrifice_all_effects() {
+        for line in [
+            "A:DB$ SacrificeAll | Defined$ EffectSource",
+            "A:SP$ SacrificeAll | ValidCards$ Creature.YouCtrl",
+            "A:DB$ SacrificeAll | Defined$ DelayTriggerRememberedLKI | Controller$ You | RememberSacrificed$ True",
+        ] {
+            let mapped = map_line(line)
+                .unwrap_or_else(|error| panic!("SacrificeAll should map: {}", error.message));
+            assert!(expression_contains_operation(
+                &mapped.expression,
+                Operation::SacrificeEffect
+            ));
+        }
+    }
+
+    #[test]
     fn rejects_open_copy_permanent_shapes() {
         for line in [
             "A:SP$ CopyPermanent | ValidTgts$ Creature | AddTypes$ Nightmare",
@@ -12614,6 +14841,45 @@ mod tests {
                 "open choice must quarantine: {line}"
             );
         }
+    }
+
+    #[test]
+    fn maps_closed_player_choices() {
+        for line in [
+            "A:DB$ ChoosePlayer | Defined$ You | Choices$ Player.Opponent | ChoiceTitle$ Choose an opponent",
+            "A:DB$ ChoosePlayer | Choices$ Player | Random$ True",
+            "A:SP$ ChoosePlayer | ValidTgts$ Opponent | Choices$ You | Secretly$ True | RememberChosen$ True",
+        ] {
+            let mapped = map_line(line)
+                .unwrap_or_else(|error| panic!("ChoosePlayer should map: {}", error.message));
+            assert!(expression_contains_operation(
+                &mapped.expression,
+                Operation::ChoosePlayer
+            ));
+        }
+    }
+
+    #[test]
+    fn maps_closed_generic_effect_choices() {
+        let mapped = map_script_root(concat!(
+            "Name:Generic Choice\n",
+            "A:SP$ GenericChoice | Defined$ You | Choices$ DBLife,DBDraw | ShowChoice$ Description | SetChosenMode$ True | SpellDescription$ Choose.\n",
+            "SVar:DBLife:DB$ GainLife | Defined$ You | LifeAmount$ 2\n",
+            "SVar:DBDraw:DB$ Draw | Defined$ You | NumCards$ 1\n",
+        ))
+        .unwrap_or_else(|error| panic!("GenericChoice should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &mapped.expression,
+            Operation::PlayerChooseEffect
+        ));
+        assert!(expression_contains_operation(
+            &mapped.expression,
+            Operation::GainLife
+        ));
+        assert!(expression_contains_operation(
+            &mapped.expression,
+            Operation::Draw
+        ));
     }
 
     #[test]
@@ -14667,6 +16933,35 @@ mod tests {
                 operation: Operation::GrantKeyword,
                 arguments,
             } if arguments.len() == 2
+        ));
+    }
+
+    #[test]
+    fn maps_perpetual_cross_zone_pumps_and_memory() {
+        let mapped = map_line(
+            "A:DB$ Pump | Defined$ Remembered | PumpZone$ Hand,Graveyard | NumAtt$ +1 | NumDef$ +1 | Duration$ Perpetual | RememberObjects$ Self",
+        )
+        .unwrap_or_else(|error| panic!("cross-zone perpetual pump should map: {}", error.message));
+        for operation in [
+            Operation::ApplyInZones,
+            Operation::Perpetual,
+            Operation::ModifyPt,
+            Operation::Remember,
+        ] {
+            assert!(expression_contains_operation(&mapped.expression, operation));
+        }
+
+        let all = map_line(
+            "A:DB$ PumpAll | ValidCards$ Creature.YouCtrl | PumpZone$ Battlefield,Hand,Library,Graveyard | NumAtt$ +1 | NumDef$ +1 | Duration$ Perpetual",
+        )
+        .unwrap_or_else(|error| panic!("cross-zone perpetual PumpAll should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &all.expression,
+            Operation::ApplyInZones
+        ));
+        assert!(expression_contains_operation(
+            &all.expression,
+            Operation::Perpetual
         ));
     }
 

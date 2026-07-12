@@ -1080,6 +1080,26 @@ operations! {
     PlayPermission => ("play_permission", Effect, 5, Some(5)),
     GrantActivatedAbility => ("grant_activated_ability", Effect, 3, None),
     GrantTriggeredAbility => ("grant_triggered_ability", Effect, 3, Some(3)),
+    RegisterEffectTrigger => ("register_effect_trigger", Effect, 6, Some(7)),
+    Perpetual => ("perpetual", Effect, 1, Some(1)),
+    BindTargets => ("bind_targets", Effect, 1, Some(1)),
+    CannotHaveKeyword => ("cannot_have_keyword", Effect, 2, Some(2)),
+    MustBeBlocked => ("must_be_blocked", Effect, 1, Some(1)),
+    RegisterEffectReplacement => ("register_effect_replacement", Effect, 6, Some(7)),
+    RollDice => ("roll_dice", Effect, 4, Some(4)),
+    RollResult => ("roll_result", Value, 1, Some(1)),
+    RollDiceTable => ("roll_dice_table", Effect, 5, None),
+    PeekLibrary => ("peek_library", Effect, 7, Some(7)),
+    EventStatic => ("event_static", Event, 1, Some(1)),
+    RegisterEffectStatic => ("register_effect_static", Effect, 5, Some(6)),
+    GrantStaticAbility => ("grant_static_ability", Effect, 2, Some(2)),
+    GrantReplacementAbility => ("grant_replacement_ability", Effect, 3, Some(3)),
+    ApplyInZones => ("apply_in_zones", Effect, 3, None),
+    RememberedLki => ("remembered_lki", Selector, 0, Some(0)),
+    LibraryDigUntil => ("library_dig_until", Effect, 13, Some(13)),
+    ChoosePlayer => ("choose_player", Effect, 5, Some(5)),
+    PlayerChooseEffect => ("player_choose_effect", Effect, 7, None),
+    SeekLibrary => ("seek_library", Effect, 5, Some(5)),
 }
 
 impl Operation {
@@ -1087,7 +1107,7 @@ impl Operation {
     #[must_use]
     pub const fn variadic_signature(self) -> Option<(usize, ArgumentKind)> {
         use ArgumentKind::{
-            Cost, Effect, Integer, Predicate, PredicateOrText, Scalar, Selector, Timing,
+            Cost, Effect, Integer, Predicate, PredicateOrText, Scalar, Selector, Text, Timing,
         };
 
         match self {
@@ -1103,6 +1123,9 @@ impl Operation {
             Self::UnlessPaid => Some((2, Cost)),
             Self::PayToApply => Some((2, Cost)),
             Self::GrantActivatedAbility => Some((3, Cost)),
+            Self::RollDiceTable => Some((4, Effect)),
+            Self::ApplyInZones => Some((2, Text)),
+            Self::PlayerChooseEffect => Some((5, Effect)),
             Self::WardCost | Self::EchoCost => Some((1, Cost)),
             Self::CumulativeUpkeepCost => Some((1, Cost)),
             Self::Suspend => Some((2, Cost)),
@@ -1152,6 +1175,7 @@ impl Operation {
             | Self::You
             | Self::Source
             | Self::EffectResult
+            | Self::RememberedLki
             | Self::ParentTarget
             | Self::TriggeredPlayer
             | Self::TriggeredTarget
@@ -1764,6 +1788,100 @@ impl Operation {
                 2 => Some(Effect),
                 _ => None,
             },
+            Self::RegisterEffectTrigger => match index {
+                0 => Some(Selector),
+                1 => Some(Event),
+                2 => Some(Effect),
+                3 | 5 => Some(Text),
+                4 => Some(Boolean),
+                6 => Some(Selector),
+                _ => None,
+            },
+            Self::Perpetual => Some(Effect),
+            Self::BindTargets => Some(Selector),
+            Self::CannotHaveKeyword => match index {
+                0 => Some(Selector),
+                1 => Some(Text),
+                _ => None,
+            },
+            Self::MustBeBlocked => Some(Selector),
+            Self::RegisterEffectReplacement => match index {
+                0 => Some(Selector),
+                1 => Some(Event),
+                2 => Some(Effect),
+                3 | 5 => Some(Text),
+                4 => Some(Boolean),
+                6 => Some(Selector),
+                _ => None,
+            },
+            Self::RollDice => match index {
+                0 => Some(Selector),
+                1 | 2 => Some(Number),
+                3 => Some(Text),
+                _ => None,
+            },
+            Self::RollResult => Some(Text),
+            Self::RollDiceTable => match index {
+                0 => Some(Selector),
+                1 | 2 => Some(Number),
+                3 => Some(Text),
+                _ => None,
+            },
+            Self::PeekLibrary => match index {
+                0 | 1 | 4 => Some(Selector),
+                2 => Some(Number),
+                3 | 5 | 6 => Some(Text),
+                _ => None,
+            },
+            Self::EventStatic => Some(Event),
+            Self::RegisterEffectStatic => match index {
+                0 => Some(Selector),
+                1 => Some(Effect),
+                2 | 4 => Some(Text),
+                3 => Some(Boolean),
+                5 => Some(Selector),
+                _ => None,
+            },
+            Self::GrantStaticAbility => match index {
+                0 => Some(Selector),
+                1 => Some(Effect),
+                _ => None,
+            },
+            Self::GrantReplacementAbility => match index {
+                0 => Some(Selector),
+                1 => Some(Event),
+                2 => Some(Effect),
+                _ => None,
+            },
+            Self::ApplyInZones => match index {
+                0 => Some(Selector),
+                1 => Some(Effect),
+                _ => Some(Text),
+            },
+            Self::LibraryDigUntil => match index {
+                0 | 1 => Some(Selector),
+                2 | 5 | 7 => Some(Number),
+                3 | 4 | 6 => Some(Text),
+                8..=12 => Some(Boolean),
+                _ => None,
+            },
+            Self::ChoosePlayer => match index {
+                0 | 1 => Some(Selector),
+                2..=4 => Some(Boolean),
+                _ => None,
+            },
+            Self::PlayerChooseEffect => match index {
+                0 => Some(Selector),
+                1 => Some(Text),
+                2..=4 => Some(Boolean),
+                _ => Some(Effect),
+            },
+            Self::SeekLibrary => match index {
+                0 | 1 => Some(Selector),
+                2 => Some(Number),
+                3 | 4 => Some(Boolean),
+                _ => None,
+            },
             Self::TimingAll => None,
         }
     }
@@ -1979,6 +2097,26 @@ mod tests {
         assert_eq!(Operation::PlayPermission as u32, 280);
         assert_eq!(Operation::GrantActivatedAbility as u32, 281);
         assert_eq!(Operation::GrantTriggeredAbility as u32, 282);
+        assert_eq!(Operation::RegisterEffectTrigger as u32, 283);
+        assert_eq!(Operation::Perpetual as u32, 284);
+        assert_eq!(Operation::BindTargets as u32, 285);
+        assert_eq!(Operation::CannotHaveKeyword as u32, 286);
+        assert_eq!(Operation::MustBeBlocked as u32, 287);
+        assert_eq!(Operation::RegisterEffectReplacement as u32, 288);
+        assert_eq!(Operation::RollDice as u32, 289);
+        assert_eq!(Operation::RollResult as u32, 290);
+        assert_eq!(Operation::RollDiceTable as u32, 291);
+        assert_eq!(Operation::PeekLibrary as u32, 292);
+        assert_eq!(Operation::EventStatic as u32, 293);
+        assert_eq!(Operation::RegisterEffectStatic as u32, 294);
+        assert_eq!(Operation::GrantStaticAbility as u32, 295);
+        assert_eq!(Operation::GrantReplacementAbility as u32, 296);
+        assert_eq!(Operation::ApplyInZones as u32, 297);
+        assert_eq!(Operation::RememberedLki as u32, 298);
+        assert_eq!(Operation::LibraryDigUntil as u32, 299);
+        assert_eq!(Operation::ChoosePlayer as u32, 300);
+        assert_eq!(Operation::PlayerChooseEffect as u32, 301);
+        assert_eq!(Operation::SeekLibrary as u32, 302);
 
         let config = bincode::config::standard()
             .with_fixed_int_encoding()
