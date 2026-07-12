@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-12T20:15:00Z",
+  "task": "T3.3",
+  "batch": "object markers, trigger phases, remembered results, temporary effects, and library defaults",
+  "technical_result": "pass",
+  "product_binding": {"mapper_commit": "f66bf99", "exact_product_commit": "f66bf997c2d06299e73d0c8dbcc622273f13542a", "exact_product_tree": "7aa8b24c4ee384432046a83f0f70cb679e4e7013"},
+  "source_binding": {"legacy_forge_commit": "1f0a3e0815822d8f58f798e0304b33d4534248b1", "legacy_source": "existing local pinned checkout", "translation_fingerprint": "bd8f8a76c8be4d2e865a952bf0d01474", "cargo_lock_sha256": "f9fb1cd7230cb19b3277c1f4cb4c6750699e188f197cff4ef4e2965363675268"},
+  "verification_environment": {"local_only": true, "github_actions_used": false, "network_attempted": false, "install_performed": false, "worker_ceiling": 24, "shared_cargo_cache": true},
+  "coverage_delta": {
+    "before": {"complete_scripts": 14179, "mapped_ability_uses": 22322, "owner_priority_complete": 200},
+    "after": {"complete_scripts": 14571, "total_scripts": 33290, "complete_script_percent": 43.76990087113247, "mapped_ability_uses": 22961, "total_ability_uses": 43649, "mapped_ability_percent": 52.60372517125249, "owner_priority_complete": 209, "owner_priority_requested": 365, "quarantined_scripts": 18719, "quarantined_ability_uses": 20688},
+    "gain": {"complete_scripts": 392, "mapped_ability_uses": 639, "owner_priority_complete": 9}
+  },
+  "line_coverage": {"covered": 31327, "count": 38456, "percent": 81.4619305179946, "floor_percent": 80, "raw_report_sha256": "cbfda4ae635a5e7f0b92cb060579d617bd09108be96a10ad724ee7fd816bbc27"},
+  "planner": {"analyzed_scripts": 33290, "scripts_with_confirmed_blockers": 18207, "confirmed_observations": 37765, "unique_blocker_families": 5865, "linked_root_fanout": 38503},
+  "checkpoint_gates": {"full_workspace_tests": true, "clippy_warnings_denied": true, "compiler_roundtrips": true, "database_validation": true, "oracle_subsets_passed": true, "nightmare_suite_passed": true, "arena_smoke_passed": true, "deterministic_parallel_replay": true, "deterministic_blocker_plan_replay": true},
+  "notes": ["The exact 24-worker checkpoint completed locally in 77 seconds without GitHub Actions.", "Omitted ChangeZone LibraryPosition now follows legacy Forge's exact default of zero (library top).", "Open dynamic copy counts, global MustAttack effects, and combined static-ability forms remain quarantined.", "Structural mapping is not runtime or card-specific semantic maturity evidence.", "T3.3 remains active because the 60% complete-script floor is not reached."]
+}
