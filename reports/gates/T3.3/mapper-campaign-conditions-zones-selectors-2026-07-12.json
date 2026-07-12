@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-12T13:29:22Z",
+  "task": "T3.3",
+  "batch": "bulk closed conditions, event zones, dynamic ranges, and event-role selectors",
+  "technical_result": "pass",
+  "product_binding": {
+    "mapper_commit": "6642012",
+    "exact_product_commit": "6642012b23fa9930b25ec7e0d3d332eab4dee553",
+    "exact_product_tree": "d8eac6cf2d633dccb0aa1debffcfa01cc33e983a"
+  },
+  "source_binding": {
+    "legacy_forge_commit": "1f0a3e0815822d8f58f798e0304b33d4534248b1",
+    "legacy_source": "existing local pinned checkout",
+    "translation_fingerprint": "104aa9f67bb78b3a2aab5c461969fed4",
+    "cargo_lock_sha256": "f9fb1cd7230cb19b3277c1f4cb4c6750699e188f197cff4ef4e2965363675268"
+  },
+  "verification_environment": {
+    "local_only": true,
+    "github_actions_used": false,
+    "network_attempted": false,
+    "install_performed": false,
+    "worker_ceiling": 24,
+    "shared_cargo_cache": true
+  },
+  "coverage_delta": {
+    "before": {
+      "complete_scripts": 12069,
+      "mapped_ability_uses": 20467,
+      "owner_priority_complete": 197
+    },
+    "after": {
+      "complete_scripts": 12539,
+      "total_scripts": 33290,
+      "complete_script_percent": 37.66596575548213,
+      "mapped_ability_uses": 21313,
+      "total_ability_uses": 43649,
+      "mapped_ability_percent": 48.82815184769411,
+      "owner_priority_complete": 199,
+      "owner_priority_requested": 365,
+      "quarantined_scripts": 20751,
+      "quarantined_ability_uses": 22336
+    },
+    "gain": {
+      "complete_scripts": 470,
+      "mapped_ability_uses": 846,
+      "owner_priority_complete": 2
+    }
+  },
+  "exactly_lowered": [
+    "NoResolvingCheck trigger-only condition evaluation",
+    "closed Threshold, Delirium, Metalcraft, Hellbent, Blessing, Solved, and Kicked conditions",
+    "fixed entry counters through typed effect-result selectors",
+    "life gained this turn as typed history count",
+    "closed untap-prevention replacement and next-untap effects",
+    "closed damage-source, chooser You, and UnlessDefender selectors",
+    "dynamic TargetMin and TargetMax bounds through typed numeric patches",
+    "Graveyard, Exile, Hand, and Command trigger active zones",
+    "distinct ParentTarget, TriggeredPlayer, TriggeredTarget, TriggeredActivator, and TargetedController selectors"
+  ],
+  "line_coverage": {
+    "covered": 29090,
+    "count": 35852,
+    "percent": 81.13912752426643,
+    "floor_percent": 80,
+    "raw_report_sha256": "84c62bd2ad8efdf6b56dfc260872f67dc6b87397cd02e7a64675bd0d439ac0be"
+  },
+  "planner": {
+    "analyzed_scripts": 33290,
+    "scripts_with_confirmed_blockers": 20327,
+    "priority_scripts_with_confirmed_blockers": 158,
+    "confirmed_observations": 43818,
+    "unique_blocker_families": 6001,
+    "linked_root_fanout": 44633
+  },
+  "checkpoint_gates": {
+    "full_workspace_tests": true,
+    "clippy_warnings_denied": true,
+    "compiler_roundtrips": true,
+    "database_validation": true,
+    "oracle_scenarios": 235,
+    "oracle_subsets_passed": true,
+    "nightmare_suite_passed": true,
+    "arena_smoke_passed": true,
+    "deterministic_parallel_replay": true,
+    "deterministic_blocker_plan_replay": true
+  },
+  "notes": [
+    "The exact 24-worker checkpoint completed locally in 122 seconds without GitHub Actions.",
+    "Structural mapping is not runtime or card-specific semantic maturity evidence.",
+    "T3.3 remains active because the 60% complete-script floor is not reached."
+  ]
+}
