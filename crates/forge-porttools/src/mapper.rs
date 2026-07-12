@@ -945,9 +945,6 @@ fn extract_presence_condition(
         return Ok((expression.clone(), None));
     }
     let parameters = parameters(expression)?;
-    if has_condition_present && parameters.contains_key("ConditionDefined") {
-        return Ok((expression.clone(), None));
-    }
     let present_key = if has_presence {
         "IsPresent"
     } else {
@@ -964,7 +961,21 @@ fn extract_presence_condition(
     } else {
         "ConditionZone"
     };
+    if has_condition_present && parameters.contains_key("ConditionDefined") {
+        if let Some(zone) = parameters.get(zone_key) {
+            if zone != "Battlefield" {
+                return Err(unsupported_value(zone_key, zone));
+            }
+        }
+    }
     let selector = match parameters.get(zone_key).map(String::as_str) {
+        None | Some("Battlefield") if has_condition_present => {
+            if let Some(defined) = parameters.get("ConditionDefined") {
+                condition_defined_presence_selector(defined, present)?
+            } else {
+                presence_selector(present)?
+            }
+        }
         None | Some("Battlefield") => presence_selector(present)?,
         Some(zone @ ("Graveyard" | "Hand" | "Exile" | "Library")) => {
             card_selector_in_zone(present, &zone.to_ascii_lowercase())?
@@ -995,6 +1006,7 @@ fn extract_presence_condition(
                     | "PresentCompare"
                     | "PresentZone"
                     | "ConditionPresent"
+                    | "ConditionDefined"
                     | "ConditionPresentCompare"
                     | "ConditionCompare"
                     | "ConditionZone"
@@ -1370,6 +1382,77 @@ fn presence_selector(value: &str) -> Result<Expression, MappingDiagnostic> {
         ));
     }
     affected_selector(value).map_err(|_| unsupported_value("IsPresent", value))
+}
+
+fn condition_defined_presence_selector(
+    defined: &str,
+    present: &str,
+) -> Result<Expression, MappingDiagnostic> {
+    let presence = presence_selector(present)?;
+    match defined {
+        "Self" => {
+            let Expression::Call {
+                operation,
+                mut arguments,
+            } = presence
+            else {
+                return Err(unsupported_value("ConditionPresent", present));
+            };
+            if !matches!(operation, Operation::Cards | Operation::Permanents) || arguments.len() > 1
+            {
+                return Err(unsupported_value("ConditionPresent", present));
+            }
+            let source = call(
+                Operation::Equals,
+                vec![
+                    call(Operation::Any, vec![]),
+                    call(Operation::Source, vec![]),
+                ],
+            );
+            let predicate = arguments.pop().unwrap_or(Expression::Boolean(true));
+            Ok(call(
+                operation,
+                vec![match predicate {
+                    Expression::Boolean(true) => source,
+                    predicate => call(Operation::And, vec![source, predicate]),
+                }],
+            ))
+        }
+        "Targeted" => Ok(call(
+            Operation::Target,
+            vec![condition_defined_collection(presence, present)?],
+        )),
+        "Remembered" => Ok(call(
+            Operation::Remembered,
+            vec![condition_defined_collection(presence, present)?],
+        )),
+        "ChosenCard" => Ok(call(
+            Operation::Chosen,
+            vec![condition_defined_collection(presence, present)?],
+        )),
+        "TriggeredCard" | "TriggeredCardLKICopy" | "TriggeredNewCardLKICopy" => Ok(call(
+            Operation::Triggered,
+            vec![condition_defined_collection(presence, present)?],
+        )),
+        _ => Err(unsupported_value("ConditionDefined", defined)),
+    }
+}
+
+fn condition_defined_collection(
+    presence: Expression,
+    present: &str,
+) -> Result<Expression, MappingDiagnostic> {
+    if matches!(
+        presence,
+        Expression::Call {
+            operation: Operation::Cards | Operation::Permanents,
+            ..
+        }
+    ) {
+        Ok(presence)
+    } else {
+        Err(unsupported_value("ConditionPresent", present))
+    }
 }
 
 fn closed_count_comparison(
@@ -8496,7 +8579,7 @@ mod tests {
     }
 
     #[test]
-    fn lowers_standalone_condition_present_and_rejects_remembered_binding() {
+    fn lowers_standalone_condition_present_and_closed_defined_bindings() {
         let mapped = map_line(
             "A:AB$ Pump | Defined$ Self | NumAtt$ +1 | ConditionPresent$ Creature.YouCtrl | ConditionCompare$ GE2 | SpellDescription$ Pump.",
         )
@@ -8519,12 +8602,35 @@ mod tests {
             Operation::TimingCondition
         ));
 
-        let error = map_line(
+        let remembered = map_line(
             "A:AB$ Draw | NumCards$ 1 | ConditionDefined$ Remembered | ConditionPresent$ Card | ConditionCompare$ GE1 | SpellDescription$ Draw.",
         )
+        .unwrap_or_else(|error| panic!("closed remembered ConditionPresent should map: {}", error.message));
+        let remembered_timing = remembered.timing.unwrap_or_else(|| {
+            panic!("remembered condition should become an activation condition")
+        });
+        assert!(expression_contains_operation(
+            &remembered_timing,
+            Operation::Remembered
+        ));
+
+        let self_condition = map_line(
+            "A:AB$ Draw | NumCards$ 1 | ConditionDefined$ Self | ConditionPresent$ Creature | ConditionCompare$ GE1 | SpellDescription$ Draw.",
+        )
+        .unwrap_or_else(|error| panic!("closed self ConditionPresent should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &self_condition.timing.unwrap_or_else(|| {
+                panic!("self condition should become an activation condition")
+            }),
+            Operation::Equals
+        ));
+
+        let error = map_line(
+            "A:AB$ Draw | NumCards$ 1 | ConditionDefined$ Remembered | ConditionZone$ Graveyard | ConditionPresent$ Card | ConditionCompare$ GE1 | SpellDescription$ Draw.",
+        )
         .err()
-        .unwrap_or_else(|| panic!("remembered ConditionPresent must quarantine"));
-        assert_eq!(error.code, "UNSUPPORTED_PARAMETER");
+        .unwrap_or_else(|| panic!("defined private-zone condition must quarantine"));
+        assert_eq!(error.code, "UNSUPPORTED_VALUE");
     }
 
     #[test]
