@@ -330,6 +330,11 @@ const MAPPERS: &[MapperSpec] = &[
     },
     MapperSpec {
         prefix: LegacyAbilityPrefix::Activated,
+        api: "CopyPermanent",
+        mapper: map_copy_permanent,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Activated,
         api: "AddTurn",
         mapper: map_add_turn,
     },
@@ -5246,6 +5251,60 @@ fn map_copy_spell_ability(
     mapped_direct(prefix, api, parameters, call(Operation::Copy, vec![target]))
 }
 
+fn map_copy_permanent(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["AB", "SP", "DB"])?;
+    reject_unknown(
+        parameters,
+        &[
+            "Cost",
+            "Defined",
+            "ValidTgts",
+            "Populate",
+            "TgtPrompt",
+            "SpellDescription",
+            "StackDescription",
+            "AILogic",
+        ],
+    )?;
+    let expression = match parameters.get("Populate").map(String::as_str) {
+        Some("True") => {
+            if parameters.contains_key("Defined") || parameters.contains_key("ValidTgts") {
+                return Err(diagnostic(
+                    "UNSUPPORTED_SELECTOR",
+                    "Populate CopyPermanent cannot also define an explicit copy selector",
+                ));
+            }
+            call(Operation::Populate, vec![])
+        }
+        Some(value) => return Err(unsupported_value("Populate", value)),
+        None => {
+            if parameters.contains_key("Defined") && parameters.contains_key("ValidTgts") {
+                return Err(diagnostic(
+                    "UNSUPPORTED_SELECTOR",
+                    "CopyPermanent has both Defined and ValidTgts",
+                ));
+            }
+            let source = if let Some(value) = parameters.get("ValidTgts") {
+                valid_target_selector(value)?
+            } else if let Some(value) = parameters.get("Defined") {
+                defined_selector(value)?
+            } else {
+                return Err(diagnostic(
+                    "MISSING_PARAMETER",
+                    "CopyPermanent requires Defined, ValidTgts, or Populate$ True",
+                ));
+            };
+            call(Operation::Copy, vec![source])
+        }
+    };
+    mapped_direct(prefix, api, parameters, expression)
+}
+
 fn map_add_turn(
     prefix: LegacyAbilityPrefix,
     api: &str,
@@ -8571,6 +8630,18 @@ mod tests {
                 Operation::Copy,
             ),
             (
+                "A:SP$ CopyPermanent | ValidTgts$ Creature.YouCtrl | TgtPrompt$ Select target creature you control | SpellDescription$ Copy.",
+                Operation::Copy,
+            ),
+            (
+                "A:DB$ CopyPermanent | Defined$ Remembered",
+                Operation::Copy,
+            ),
+            (
+                "A:DB$ CopyPermanent | Populate$ True",
+                Operation::Populate,
+            ),
+            (
                 "A:SP$ AddTurn | Defined$ You | NumTurns$ 1 | SpellDescription$ Turn.",
                 Operation::ExtraTurn,
             ),
@@ -8656,6 +8727,24 @@ mod tests {
             ),
         ] {
             assert_operation(line, operation, 0);
+        }
+    }
+
+    #[test]
+    fn rejects_open_copy_permanent_shapes() {
+        for line in [
+            "A:SP$ CopyPermanent | ValidTgts$ Creature | AddTypes$ Nightmare",
+            "A:SP$ CopyPermanent | ValidTgts$ Creature | NumCopies$ 2",
+            "A:SP$ CopyPermanent | Defined$ Self | TokenTapped$ True",
+            "A:SP$ CopyPermanent | Defined$ Self | ValidTgts$ Creature",
+            "A:SP$ CopyPermanent | Populate$ False",
+            "A:SP$ CopyPermanent | Populate$ True | ValidTgts$ Creature",
+            "A:SP$ CopyPermanent",
+        ] {
+            assert!(
+                map_line(line).is_err(),
+                "open CopyPermanent form must quarantine: {line}"
+            );
         }
     }
 
