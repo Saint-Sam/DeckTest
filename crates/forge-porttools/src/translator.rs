@@ -809,6 +809,16 @@ fn translate_keywords(
                     )?),
                 )
             }
+            ("etbcounter", [counter, amount, condition, _description])
+                if condition.eq_ignore_ascii_case("no Condition") =>
+            {
+                (
+                    None,
+                    Some(translate_etb_counter(
+                        script, line.line, name, counter, amount,
+                    )?),
+                )
+            }
             ("landwalk", [land]) => {
                 let keyword = match land.as_str() {
                     "Desert" => "desertwalk",
@@ -1866,7 +1876,7 @@ mod tests {
         let script = crate::legacy::parse_legacy_script(
             "fixture.txt",
             concat!(
-                "K:etbCounter:P1P1:X:no Condition\n",
+                "K:etbCounter:P1P1:X:no Condition:CARDNAME enters with X counters.\n",
                 "SVar:X:Count$ValidGraveyard Instant,Sorcery\n",
             ),
         )
@@ -1875,6 +1885,32 @@ mod tests {
         translate_keywords(&script, &faces[0]).unwrap_or_else(|error| {
             panic!("graveyard counter fixture should translate: {error:?}")
         });
+
+        let script = crate::legacy::parse_legacy_script(
+            "fixture.txt",
+            concat!(
+                "K:etbCounter:P1P1:X:no Condition:CARDNAME enters with one counter for each other Ooze.\n",
+                "SVar:X:Count$LastStateBattlefield Ooze.YouCtrl+Other\n",
+            ),
+        )
+        .unwrap_or_else(|error| panic!("last-state counter fixture should parse: {error}"));
+        let faces = face_lines(&script);
+        let translated = translate_keywords(&script, &faces[0]).unwrap_or_else(|error| {
+            panic!("last-state counter fixture should translate: {error:?}")
+        });
+        assert!(matches!(
+            &translated.abilities[0].effect,
+            Expression::Call {
+                operation: Operation::AddCounter,
+                arguments,
+            } if matches!(
+                arguments.get(2),
+                Some(Expression::Call {
+                    operation: Operation::Count,
+                    ..
+                })
+            )
+        ));
     }
 
     #[test]

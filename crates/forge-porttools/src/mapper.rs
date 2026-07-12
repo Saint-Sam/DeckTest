@@ -1785,6 +1785,9 @@ fn map_count_value(name: &str, value: &str) -> Result<Expression, MappingDiagnos
             vec![card_selector_in_zone(valid, "graveyard")?],
         ));
     }
+    if let Some(valid) = value.strip_prefix("LastStateBattlefield ") {
+        return Ok(call(Operation::Count, vec![affected_selector(valid)?]));
+    }
     if let Some(valid) = value.strip_prefix("ThisTurnCast_") {
         return Ok(call(
             Operation::HistoryCount,
