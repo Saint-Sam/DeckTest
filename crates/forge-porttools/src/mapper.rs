@@ -3806,7 +3806,14 @@ fn map_change_zone(
     if origin == "Library" {
         return map_library_search(prefix, api, parameters);
     }
-    let closed_origin = matches!(origin, "Graveyard" | "Hand" | "Exile" | "Stack");
+    let closed_origin = matches!(origin, "Graveyard" | "Hand" | "Exile" | "Stack" | "Command");
+    if origin == "Command"
+        && parameters
+            .get("Defined")
+            .is_some_and(|value| value != "Self")
+    {
+        return Err(unsupported_value("Origin", origin));
+    }
     let zone_targeted = closed_origin
         && parameters.contains_key("ValidTgts")
         && !parameters.contains_key("Defined");
@@ -7795,6 +7802,7 @@ mod tests {
             "A:AB$ Tap | ValidTgts$ Permanent | ActivationZone$ Battlefield | TgtZone$ Battlefield | SpellDescription$ Tap.",
             "A:DB$ ChangeZone | Defined$ TriggeredNewCardLKICopy | Origin$ Graveyard | Destination$ Battlefield | SpellDescription$ Return.",
             "A:DB$ ChangeZone | Defined$ TriggeredCardLKICopy | Origin$ Graveyard | Destination$ Hand | SpellDescription$ Return.",
+            "A:DB$ ChangeZone | Defined$ Self | Origin$ Command | Destination$ Exile | SpellDescription$ Exile self from the command zone.",
         ] {
             map_line(line).unwrap_or_else(|error| {
                 panic!("closed selector should map: {}", error.message);
@@ -7806,6 +7814,13 @@ mod tests {
             Ok(_) => panic!("combat-state selector must remain quarantined"),
             Err(error) => error,
         };
+        assert_eq!(error.code, "UNSUPPORTED_VALUE");
+
+        let error = map_line(
+            "A:DB$ ChangeZone | Defined$ Remembered | Origin$ Command | Destination$ Exile | SpellDescription$ Open command move.",
+        )
+        .err()
+        .unwrap_or_else(|| panic!("remembered command-zone move must remain quarantined"));
         assert_eq!(error.code, "UNSUPPORTED_VALUE");
     }
 
