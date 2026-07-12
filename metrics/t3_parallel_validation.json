@@ -1,25 +1,25 @@
 {
   "blocker_plan": {
     "analyzed_scripts": 33290,
-    "confirmed_observations": 47084,
-    "linked_root_fanout": 47987,
-    "scripts_with_confirmed_blockers": 21573,
-    "unique_blocker_families": 5740
+    "confirmed_observations": 46311,
+    "linked_root_fanout": 47149,
+    "scripts_with_confirmed_blockers": 21468,
+    "unique_blocker_families": 6029
   },
   "coverage": {
-    "count": 34727,
-    "covered": 28134,
-    "not_covered": 6593,
-    "percent": 81.01477236732225
+    "count": 34887,
+    "covered": 28281,
+    "not_covered": 6606,
+    "percent": 81.06457992948663
   },
   "deterministic_blocker_plan_replay": true,
   "deterministic_parallel_replay": true,
   "durations_seconds": {
-    "accelerated_core_phase": 37,
+    "accelerated_core_phase": 39,
     "comparable_serial_core_baseline": null,
     "core_saved_percent": null,
-    "full_workspace_verification": 126,
-    "total": 170
+    "full_workspace_verification": 107,
+    "total": 155
   },
   "github_actions_used": false,
   "local_only": true,
@@ -28,10 +28,10 @@
   "schema_version": 3,
   "shared_cargo_target": true,
   "translation": {
-    "emitted_percent": 34.39471312706519,
-    "emitted_scripts": 11450,
-    "output_fingerprint": "3790fa66e2fc6223b4ac8bf62bf07659",
-    "priority_emitted": 195,
+    "emitted_percent": 34.60498648242716,
+    "emitted_scripts": 11520,
+    "output_fingerprint": "15e6bc080cc47590cc04e9b127a97d57",
+    "priority_emitted": 196,
     "priority_requested": 365,
     "total_scripts": 33290
   },
