@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-12T21:25:00Z",
+  "task": "T3.3",
+  "batch": "characteristics, conditional entry counters, mana reflection, remembered search partitioning, library ordering, conjuring, card attributes, and player history values",
+  "technical_result": "pass",
+  "product_binding": {"mapper_commit": "bb91f63", "exact_product_commit": "bb91f63e5106ff65acbd60e15b2016656137a257", "exact_product_tree": "59cf5da0e23878052af5e87fb88c3095baf17801"},
+  "source_binding": {"legacy_forge_commit": "1f0a3e0815822d8f58f798e0304b33d4534248b1", "legacy_source": "existing local pinned checkout", "translation_fingerprint": "9b97f07d03732e2d5bbee19599f0f6a8", "cargo_lock_sha256": "f9fb1cd7230cb19b3277c1f4cb4c6750699e188f197cff4ef4e2965363675268"},
+  "verification_environment": {"local_only": true, "github_actions_used": false, "network_attempted": false, "install_performed": false, "worker_ceiling": 24, "shared_cargo_cache": true},
+  "coverage_delta": {
+    "before": {"complete_scripts": 14571, "mapped_ability_uses": 22961, "owner_priority_complete": 209},
+    "after": {"complete_scripts": 14971, "total_scripts": 33290, "complete_script_percent": 44.971462901772306, "mapped_ability_uses": 23618, "total_ability_uses": 43649, "mapped_ability_percent": 54.10891429356916, "owner_priority_complete": 217, "owner_priority_requested": 365, "quarantined_scripts": 18319, "quarantined_ability_uses": 20031},
+    "gain": {"complete_scripts": 400, "mapped_ability_uses": 657, "owner_priority_complete": 8}
+  },
+  "line_coverage": {"covered": 32362, "count": 39626, "percent": 81.66860142330793, "floor_percent": 80, "raw_report_sha256": "2202f812668466637f1a3633ade8394bf9e682f6b295eff0263c7acfa55b07f4"},
+  "planner": {"analyzed_scripts": 33290, "scripts_with_confirmed_blockers": 17688, "confirmed_observations": 36430, "unique_blocker_families": 6123, "linked_root_fanout": 37151},
+  "checkpoint_gates": {"full_workspace_tests": true, "clippy_warnings_denied": true, "compiler_roundtrips": true, "database_validation": true, "oracle_subsets_passed": true, "nightmare_suite_passed": true, "arena_smoke_passed": true, "deterministic_parallel_replay": true, "deterministic_blocker_plan_replay": true},
+  "notes": ["The exact 24-worker checkpoint completed locally without GitHub Actions.", "All new mappings are typed and fail closed outside their documented shapes.", "Structural mapping is not runtime or card-specific semantic maturity evidence.", "T3.3 remains active because the 60% complete-script floor is not reached."]
+}
