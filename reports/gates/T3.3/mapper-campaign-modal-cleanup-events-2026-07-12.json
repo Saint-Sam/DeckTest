@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-12T13:58:47Z",
+  "task": "T3.3",
+  "batch": "singleton-ranked modal, cleanup, trigger, delayed-effect, fog, and fight families",
+  "technical_result": "pass",
+  "product_binding": {
+    "mapper_commit": "7de026c",
+    "exact_product_commit": "7de026ca843d43be0eac2d089447cf143af36e8b",
+    "exact_product_tree": "8a56c8b7657a1f7be2e8c15fd7b68528ad997216"
+  },
+  "source_binding": {
+    "legacy_forge_commit": "1f0a3e0815822d8f58f798e0304b33d4534248b1",
+    "legacy_source": "existing local pinned checkout",
+    "translation_fingerprint": "1447b6b8ea3108d4cdede81c9a824f2b",
+    "cargo_lock_sha256": "f9fb1cd7230cb19b3277c1f4cb4c6750699e188f197cff4ef4e2965363675268"
+  },
+  "verification_environment": {
+    "local_only": true,
+    "github_actions_used": false,
+    "network_attempted": false,
+    "install_performed": false,
+    "worker_ceiling": 24,
+    "shared_cargo_cache": true
+  },
+  "coverage_delta": {
+    "before": {
+      "complete_scripts": 12539,
+      "mapped_ability_uses": 21313,
+      "owner_priority_complete": 199
+    },
+    "after": {
+      "complete_scripts": 12964,
+      "total_scripts": 33290,
+      "complete_script_percent": 38.94262541303695,
+      "mapped_ability_uses": 21924,
+      "total_ability_uses": 43649,
+      "mapped_ability_percent": 50.2279548214163,
+      "owner_priority_complete": 200,
+      "owner_priority_requested": 365,
+      "quarantined_scripts": 20326,
+      "quarantined_ability_uses": 21725
+    },
+    "gain": {
+      "complete_scripts": 425,
+      "mapped_ability_uses": 611,
+      "owner_priority_complete": 1
+    }
+  },
+  "exactly_lowered": [
+    "closed modal owner and ranged Charm choices",
+    "triggered and parent stack-ability copy selectors",
+    "distinct remembered, imprinted, chosen, named, coin, and triggered cleanup domains",
+    "single-object and batched zone-change events including zone-to-any transitions",
+    "tapped, life-gained, cycled, and sacrificed trigger events",
+    "closed immediate reflexive effects and phase-based delayed triggers",
+    "prevent-all-combat-damage effects",
+    "defined-source fights with a targeted second creature"
+  ],
+  "line_coverage": {
+    "covered": 29557,
+    "count": 36374,
+    "percent": 81.25859130147907,
+    "floor_percent": 80,
+    "raw_report_sha256": "05e99dc9704e767488798a45ac13f46410edc168e734c8aa564995a4020aaf0b"
+  },
+  "planner": {
+    "analyzed_scripts": 33290,
+    "scripts_with_confirmed_blockers": 19883,
+    "priority_scripts_with_confirmed_blockers": 156,
+    "confirmed_observations": 42309,
+    "unique_blocker_families": 6066,
+    "linked_root_fanout": 43086
+  },
+  "checkpoint_gates": {
+    "full_workspace_tests": true,
+    "clippy_warnings_denied": true,
+    "compiler_roundtrips": true,
+    "database_validation": true,
+    "oracle_scenarios": 235,
+    "oracle_subsets_passed": true,
+    "nightmare_suite_passed": true,
+    "arena_smoke_passed": true,
+    "deterministic_parallel_replay": true,
+    "deterministic_blocker_plan_replay": true
+  },
+  "notes": [
+    "The exact 24-worker checkpoint completed locally in 145 seconds without GitHub Actions.",
+    "Structural mapping is not runtime or card-specific semantic maturity evidence.",
+    "T3.3 remains active because the 60% complete-script floor is not reached."
+  ]
+}
