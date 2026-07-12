@@ -2355,6 +2355,15 @@ fn map_triggered_ability(
 ) -> Result<MappedLegacyAbility, MappingDiagnostic> {
     require_selector(selector, "Mode")?;
     let mut parameters = parameters(expression)?;
+    let active_zone = parameters
+        .remove("TriggerZones")
+        .map(|value| match value.as_str() {
+            "Battlefield" => Ok(None),
+            "Graveyard" | "Exile" | "Hand" | "Command" => Ok(Some(value.to_ascii_lowercase())),
+            _ => Err(unsupported_value("TriggerZones", &value)),
+        })
+        .transpose()?
+        .flatten();
     let optional = parameters.remove("OptionalDecider");
     if optional.as_deref().is_some_and(|decider| decider != "You") {
         return Err(unsupported_value(
@@ -2392,6 +2401,12 @@ fn map_triggered_ability(
             ));
         }
     };
+    let event = active_zone.map_or(event.clone(), |zone| {
+        call(
+            Operation::EventActiveZone,
+            vec![event, Expression::Text(zone)],
+        )
+    });
     let linked = resolve_svar(execute, context, stack)?;
     if linked.event.is_some() || !linked.costs.is_empty() {
         return Err(diagnostic(
@@ -7446,6 +7461,16 @@ fn defined_selector(value: &str) -> Result<Expression, MappingDiagnostic> {
             Operation::ControllerOf,
             vec![call(Operation::Triggered, vec![])],
         )),
+        "ParentTarget" => Ok(call(Operation::ParentTarget, vec![])),
+        "TriggeredPlayer" => Ok(call(Operation::TriggeredPlayer, vec![])),
+        "TriggeredTarget" | "TriggeredTargetLKICopy" => {
+            Ok(call(Operation::TriggeredTarget, vec![]))
+        }
+        "TriggeredActivator" => Ok(call(Operation::TriggeredActivator, vec![])),
+        "TargetedController" => Ok(call(
+            Operation::ControllerOf,
+            vec![call(Operation::Target, vec![call(Operation::Any, vec![])])],
+        )),
         "ReplacedCard" => Ok(call(Operation::Triggered, vec![])),
         _ => Err(unsupported_value("Defined", value)),
     }
@@ -7467,6 +7492,12 @@ fn defined_player_selector(value: &str) -> Result<Expression, MappingDiagnostic>
             Operation::ControllerOf,
             vec![call(Operation::Triggered, vec![])],
         )),
+        "TriggeredPlayer" => Ok(call(Operation::TriggeredPlayer, vec![])),
+        "TriggeredTarget" | "TriggeredTargetLKICopy" => {
+            Ok(call(Operation::TriggeredTarget, vec![]))
+        }
+        "TriggeredActivator" => Ok(call(Operation::TriggeredActivator, vec![])),
+        "ParentTarget" => Ok(call(Operation::ParentTarget, vec![])),
         _ => Err(unsupported_value("Defined", value)),
     }
 }
@@ -9777,6 +9808,37 @@ mod tests {
             &mapped.expression,
             Operation::Power
         ));
+    }
+
+    #[test]
+    fn maps_closed_defined_event_selectors_without_conflating_roles() {
+        let cases = [
+            (
+                "A:DB$ Pump | Defined$ ParentTarget | NumAtt$ 1 | NumDef$ 1",
+                Operation::ParentTarget,
+            ),
+            (
+                "A:DB$ LoseLife | Defined$ TriggeredPlayer | LifeAmount$ 1",
+                Operation::TriggeredPlayer,
+            ),
+            (
+                "A:DB$ DealDamage | Defined$ TriggeredTarget | NumDmg$ 1",
+                Operation::TriggeredTarget,
+            ),
+            (
+                "A:DB$ LoseLife | Defined$ TriggeredActivator | LifeAmount$ 1",
+                Operation::TriggeredActivator,
+            ),
+            (
+                "A:DB$ LoseLife | Defined$ TargetedController | LifeAmount$ 1",
+                Operation::ControllerOf,
+            ),
+        ];
+        for (line, expected) in cases {
+            let mapped = map_line(line)
+                .unwrap_or_else(|error| panic!("defined selector should map: {}", error.message));
+            assert!(expression_contains_operation(&mapped.expression, expected));
+        }
     }
 
     #[test]

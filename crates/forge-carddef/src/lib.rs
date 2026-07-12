@@ -980,6 +980,11 @@ operations! {
     EffectResult => ("effect_result", Selector, 0, Some(0)),
     Targets => ("targets", Predicate, 1, Some(1)),
     CannotUntap => ("cannot_untap", Effect, 1, Some(2)),
+    EventActiveZone => ("event_active_zone", Event, 2, Some(2)),
+    ParentTarget => ("parent_target", Selector, 0, Some(0)),
+    TriggeredPlayer => ("triggered_player", Selector, 0, Some(0)),
+    TriggeredTarget => ("triggered_target", Selector, 0, Some(0)),
+    TriggeredActivator => ("triggered_activator", Selector, 0, Some(0)),
 }
 
 impl Operation {
@@ -1022,7 +1027,14 @@ impl Operation {
 
         match self {
             Self::All => Some(Selector),
-            Self::Any | Self::You | Self::Source | Self::EffectResult => None,
+            Self::Any
+            | Self::You
+            | Self::Source
+            | Self::EffectResult
+            | Self::ParentTarget
+            | Self::TriggeredPlayer
+            | Self::TriggeredTarget
+            | Self::TriggeredActivator => None,
             Self::Opponent => Some(Selector),
             Self::Chosen | Self::Target => Some(SelectorOrPredicate),
             Self::TargetRange => match index {
@@ -1126,6 +1138,11 @@ impl Operation {
             Self::EventWhen => match index {
                 0 => Some(Event),
                 1 => Some(Predicate),
+                _ => None,
+            },
+            Self::EventActiveZone => match index {
+                0 => Some(Event),
+                1 => Some(Text),
                 _ => None,
             },
 
@@ -1547,6 +1564,11 @@ mod tests {
         assert_eq!(Operation::Negate as u32, 176);
         assert_eq!(Operation::TriggeredAmount as u32, 177);
         assert_eq!(Operation::OpponentCount as u32, 178);
+        assert_eq!(Operation::EventActiveZone as u32, 183);
+        assert_eq!(Operation::ParentTarget as u32, 184);
+        assert_eq!(Operation::TriggeredPlayer as u32, 185);
+        assert_eq!(Operation::TriggeredTarget as u32, 186);
+        assert_eq!(Operation::TriggeredActivator as u32, 187);
 
         let config = bincode::config::standard()
             .with_fixed_int_encoding()
