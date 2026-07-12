@@ -1,0 +1,134 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-12T02:20:27Z",
+  "task": "T3.3",
+  "batch": "ConditionCheckSVar and ConditionSVarCompare closed scalar values",
+  "technical_result": "pass",
+  "product_binding": {
+    "mapper_commit": "5ea7d39",
+    "exact_product_commit": "5ea7d394e782e37f7926c851322d0d0657fd6183",
+    "exact_product_tree": "eea3b21b03835cf4178f9deb554c57e6ef5e3421",
+    "verified_in_detached_worktree": true,
+    "detached_root": "/private/tmp/forge-t3-3-condition-svar-5ea7d39"
+  },
+  "source_binding": {
+    "legacy_forge_commit": "1f0a3e0815822d8f58f798e0304b33d4534248b1",
+    "legacy_source": "existing local pinned checkout linked into detached worktree",
+    "translation_fingerprint": "ad4f8341306fb321f2759655b86300a9",
+    "cargo_lock_sha256": "f9fb1cd7230cb19b3277c1f4cb4c6750699e188f197cff4ef4e2965363675268"
+  },
+  "verification_environment": {
+    "local_only": true,
+    "github_actions_used": false,
+    "network_attempted": false,
+    "install_performed": false,
+    "worker_ceiling": 24,
+    "shared_cargo_cache": true,
+    "detached_target_debug_symlinked": true,
+    "detached_target_llvm_cov_symlinked": true,
+    "detached_target_coverage_local": true
+  },
+  "coverage_delta": {
+    "before": {
+      "complete_scripts": 11356,
+      "mapped_ability_uses": 19401,
+      "owner_priority_complete": 194,
+      "quarantined_scripts": 21934,
+      "quarantined_ability_uses": 24248
+    },
+    "after": {
+      "complete_scripts": 11382,
+      "total_scripts": 33290,
+      "complete_script_percent": 34.19044758185641,
+      "mapped_ability_uses": 19432,
+      "total_ability_uses": 43649,
+      "mapped_ability_percent": 44.51877477147243,
+      "owner_priority_complete": 195,
+      "owner_priority_requested": 365,
+      "quarantined_scripts": 21908,
+      "quarantined_ability_uses": 24217
+    },
+    "gain": {
+      "complete_scripts": 26,
+      "mapped_ability_uses": 31,
+      "owner_priority_complete": 1
+    }
+  },
+  "semantic_boundaries": {
+    "exactly_lowered": [
+      "ConditionCheckSVar with numeric literals and closed value SVars",
+      "ConditionSVarCompare using GE, LE, EQ, NE, GT, or LT closed operands",
+      "Count$ value expressions resolved through the existing typed Count path"
+    ],
+    "still_quarantined": [
+      "dynamic arithmetic, event-dependent, remembered, malformed, and unsupported value SVars",
+      "ConditionCheckSVar or ConditionSVarCompare without a matching closed subject",
+      "runtime and semantic card behavior beyond structural compilation"
+    ],
+    "claim": "structural translation and compiler validity only; runtime and card-specific semantic maturity remain separate T3.5 and T3.6 evidence"
+  },
+  "commands": [
+    {
+      "command": "cargo test --locked --offline -p forge-porttools lowers_named_and_svar_conditions_by_ability_kind",
+      "exit_code": 0
+    },
+    {
+      "command": "cargo test --locked --offline -p forge-porttools",
+      "exit_code": 0
+    },
+    {
+      "command": "cargo test --locked --offline -p forge-cardc --test malformed_corpus",
+      "exit_code": 0
+    },
+    {
+      "command": "FORGE_T3_TOTAL_WORKERS=24 CARGO_BUILD_JOBS=24 scripts/t3_parallel_sweep.sh development",
+      "exit_code": 0
+    },
+    {
+      "command": "cargo fmt --all -- --check",
+      "exit_code": 0
+    },
+    {
+      "command": "CARGO_BUILD_JOBS=24 cargo clippy --workspace --all-targets --all-features -- -D warnings",
+      "exit_code": 0
+    },
+    {
+      "command": "FORGE_T3_TOTAL_WORKERS=24 CARGO_BUILD_JOBS=24 scripts/t3_parallel_sweep.sh checkpoint",
+      "exit_code": 0,
+      "accelerated_core_phase_seconds": 39,
+      "full_workspace_verification_seconds": 88,
+      "total_seconds": 132
+    }
+  ],
+  "line_coverage": {
+    "covered": 27840,
+    "count": 34370,
+    "percent": 81.00087285423335,
+    "floor_percent": 80,
+    "raw_report_sha256": "4e4b72a2de091f7f2d26f6105e1e438df42cc5338e5cdb7f910245ebf0469f36"
+  },
+  "planner": {
+    "analyzed_scripts": 33290,
+    "scripts_with_confirmed_blockers": 21729,
+    "priority_scripts_with_confirmed_blockers": 164,
+    "confirmed_observations": 49450,
+    "unique_blocker_families": 5597,
+    "linked_root_fanout": 50400
+  },
+  "checkpoint_gates": {
+    "full_workspace_tests": true,
+    "compiler_roundtrips": true,
+    "database_validation": true,
+    "oracle_scenarios": 235,
+    "oracle_subsets_passed": true,
+    "nightmare_suite_passed": true,
+    "arena_smoke_passed": true,
+    "deterministic_parallel_replay": true,
+    "deterministic_blocker_plan_replay": true
+  },
+  "continuation": {
+    "t3_3_remains_active": true,
+    "exit_floor_reached": false,
+    "next_t3_3_batch_source": "metrics/blocker_plan.json recommended_batches[0]"
+  }
+}
