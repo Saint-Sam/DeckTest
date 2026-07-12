@@ -811,11 +811,18 @@ fn translate_keywords(
             }
             ("landwalk", [land]) => {
                 let keyword = match land.as_str() {
+                    "Desert" => "desertwalk",
                     "Forest" => "forestwalk",
+                    "Forest.Snow" => "snowforestwalk",
                     "Island" => "islandwalk",
+                    "Land.Legendary" => "legendarylandwalk",
+                    "Land.Snow" => "snowlandwalk",
+                    "Land.nonBasic" => "nonbasiclandwalk",
                     "Mountain" => "mountainwalk",
                     "Plains" => "plainswalk",
+                    "Plains.Snow" => "snowplainswalk",
                     "Swamp" => "swampwalk",
+                    "Swamp.Snow" => "snowswampwalk",
                     value => {
                         return Err((
                             line.line,
@@ -1834,13 +1841,14 @@ mod tests {
                 "K:etbCounter:P1P1:X\n",
                 "SVar:X:Count$xPaid\n",
                 "K:Landwalk:Swamp\n",
+                "K:Landwalk:Land.Legendary\n",
             ),
         )
         .unwrap_or_else(|error| panic!("fixture should parse: {error}"));
         let faces = face_lines(&script);
         let translated = translate_keywords(&script, &faces[0])
             .unwrap_or_else(|error| panic!("closed keyword fixture should translate: {error:?}"));
-        assert_eq!(translated.ids, vec!["swampwalk"]);
+        assert_eq!(translated.ids, vec!["legendarylandwalk", "swampwalk"]);
         assert!(matches!(
             &translated.abilities[0].effect,
             Expression::Call {
@@ -1873,7 +1881,7 @@ mod tests {
     fn rejects_open_etb_counter_and_landwalk_forms() {
         for keyword in [
             "K:etbCounter:P1P1:X:CheckSVar$ WasKicked",
-            "K:Landwalk:Desert",
+            "K:Landwalk:Artifact",
         ] {
             let script = crate::legacy::parse_legacy_script("fixture.txt", keyword)
                 .unwrap_or_else(|error| panic!("fixture should parse: {error}"));
