@@ -1,6 +1,6 @@
 # DeckTest / Forge 2.0 Status
 
-Generated: 2026-07-11T23:55:46.759886+00:00 by `tools/write_card_maturity.py`
+Generated: 2026-07-12T00:00:27.102973+00:00 by `tools/write_card_maturity.py`
 
 Plan: v1.8
 
@@ -91,4 +91,4 @@ complete-script exit floor is not reached.
 
 Per-identity generated detail: `target/card-maturity/identities.json` (untracked,
 38,306 records; SHA-256
-`cca4c1ecf0297aaff80dc5f2cf4ffbcbc87c2ca73bd8fa34e443b63ca5998106`).
+`073c9b88439697fa30f4eb11a5c2b8e4e140f3eb244957c29a9eb2861e175378`).
