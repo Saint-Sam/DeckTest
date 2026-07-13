@@ -370,6 +370,31 @@ const MAPPERS: &[MapperSpec] = &[
     },
     MapperSpec {
         prefix: LegacyAbilityPrefix::Static,
+        api: "OptionalCost",
+        mapper: map_optional_cost,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Static,
+        api: "Panharmonicon",
+        mapper: map_panharmonicon,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Static,
+        api: "CantTarget",
+        mapper: map_cant_target,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Static,
+        api: "CantAttackUnless",
+        mapper: map_cant_attack_unless,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Static,
+        api: "CantAttack,CantBlock,CantBeActivated",
+        mapper: map_disable_permanent_actions,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Static,
         api: "Continuous",
         mapper: map_continuous,
     },
@@ -12787,6 +12812,164 @@ fn map_move_counter(
             ],
         ),
     )
+}
+
+fn static_mapped(api: &str, expression: Expression) -> MappedLegacyAbility {
+    MappedLegacyAbility {
+        prefix: LegacyAbilityPrefix::Static,
+        api: api.to_string(),
+        costs: Vec::new(),
+        event: None,
+        timing: None,
+        expression,
+    }
+}
+
+fn map_optional_cost(
+    _: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    p: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["Mode", "ST"])?;
+    reject_unknown(
+        p,
+        &["EffectZone", "ValidCard", "ValidSA", "Cost", "Description"],
+    )?;
+    if p.get("EffectZone").is_some_and(|v| v != "All") {
+        return Err(unsupported_value("EffectZone", required(p, "EffectZone")?));
+    }
+    if p.get("ValidSA").is_some_and(|v| v != "Spell") {
+        return Err(unsupported_value("ValidSA", required(p, "ValidSA")?));
+    }
+    let mut args = vec![
+        affected_selector(required(p, "ValidCard")?)?,
+        Expression::Text("spell".into()),
+    ];
+    let costs = parse_simple_cost(p.get("Cost"))?;
+    if costs.is_empty() {
+        return Err(diagnostic(
+            "MISSING_PARAMETER",
+            "OptionalCost requires Cost",
+        ));
+    }
+    args.extend(costs);
+    Ok(static_mapped(
+        api,
+        call(Operation::OptionalCastingCost, args),
+    ))
+}
+
+fn map_panharmonicon(
+    _: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    p: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["Mode", "ST"])?;
+    reject_unknown(
+        p,
+        &[
+            "ValidMode",
+            "ValidCard",
+            "ValidCause",
+            "Destination",
+            "Description",
+        ],
+    )?;
+    let modes = required(p, "ValidMode")?;
+    if modes
+        .split(',')
+        .any(|m| !matches!(m, "ChangesZone" | "ChangesZoneAll"))
+    {
+        return Err(unsupported_value("ValidMode", modes));
+    }
+    let destination = p.get("Destination").map(String::as_str).unwrap_or("Any");
+    if !closed_zone(destination) {
+        return Err(unsupported_value("Destination", destination));
+    }
+    Ok(static_mapped(
+        api,
+        call(
+            Operation::AdditionalTrigger,
+            vec![
+                affected_selector(required(p, "ValidCard")?)?,
+                p.get("ValidCause")
+                    .map(|v| affected_selector(v))
+                    .transpose()?
+                    .unwrap_or_else(|| call(Operation::Any, vec![])),
+                Expression::Text(modes.to_ascii_lowercase()),
+                Expression::Text(destination.to_ascii_lowercase()),
+            ],
+        ),
+    ))
+}
+
+fn map_cant_target(
+    _: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    p: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["Mode", "ST"])?;
+    reject_unknown(p, &["ValidTarget", "ValidSA", "Description"])?;
+    let valid_sa = p
+        .get("ValidSA")
+        .map(String::as_str)
+        .unwrap_or("SpellAbility");
+    if !matches!(valid_sa, "Spell" | "Ability" | "SpellAbility") {
+        return Err(unsupported_value("ValidSA", valid_sa));
+    }
+    Ok(static_mapped(
+        api,
+        call(
+            Operation::CannotTarget,
+            vec![
+                affected_selector(required(p, "ValidTarget")?)?,
+                Expression::Text(valid_sa.to_ascii_lowercase()),
+            ],
+        ),
+    ))
+}
+
+fn map_cant_attack_unless(
+    _: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    p: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["Mode", "ST"])?;
+    reject_unknown(p, &["ValidCard", "Target", "Cost", "Description"])?;
+    let mut args = vec![
+        affected_selector(required(p, "ValidCard")?)?,
+        attacked_selector(required(p, "Target")?)?,
+    ];
+    let costs = parse_simple_cost(p.get("Cost"))?;
+    if costs.is_empty() {
+        return Err(diagnostic(
+            "MISSING_PARAMETER",
+            "CantAttackUnless requires Cost",
+        ));
+    }
+    args.extend(costs);
+    Ok(static_mapped(api, call(Operation::AttackUnlessPaid, args)))
+}
+
+fn map_disable_permanent_actions(
+    _: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    p: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["Mode", "ST"])?;
+    reject_unknown(p, &["ValidCard", "Description"])?;
+    Ok(static_mapped(
+        api,
+        call(
+            Operation::DisablePermanentActions,
+            vec![affected_selector(required(p, "ValidCard")?)?],
+        ),
+    ))
 }
 
 fn map_counter_spell(

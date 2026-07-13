@@ -1231,6 +1231,11 @@ operations! {
     Earthbend => ("earthbend", Effect, 2, Some(2)),
     Discover => ("discover", Effect, 2, Some(2)),
     MoveCounter => ("move_counter", Effect, 4, Some(4)),
+    OptionalCastingCost => ("optional_casting_cost", Effect, 3, None),
+    AdditionalTrigger => ("additional_trigger", Effect, 4, Some(4)),
+    CannotTarget => ("cannot_target", Effect, 2, Some(2)),
+    AttackUnlessPaid => ("attack_unless_paid", Effect, 3, None),
+    DisablePermanentActions => ("disable_permanent_actions", Effect, 1, Some(1)),
 }
 
 impl Operation {
@@ -1282,6 +1287,7 @@ impl Operation {
             }
             Self::TimingAll => Some((0, Timing)),
             Self::DraftFromSpellbook => Some((2, Text)),
+            Self::OptionalCastingCost | Self::AttackUnlessPaid => Some((2, Cost)),
             _ => None,
         }
     }
@@ -2378,6 +2384,26 @@ impl Operation {
                 3 => Some(Number),
                 _ => None,
             },
+            Self::OptionalCastingCost => match index {
+                0 => Some(Selector),
+                1 => Some(Text),
+                _ => Some(Cost),
+            },
+            Self::AdditionalTrigger => match index {
+                0 | 1 => Some(Selector),
+                2 | 3 => Some(Text),
+                _ => None,
+            },
+            Self::CannotTarget => match index {
+                0 => Some(Selector),
+                1 => Some(Text),
+                _ => None,
+            },
+            Self::AttackUnlessPaid => match index {
+                0 | 1 => Some(Selector),
+                _ => Some(Cost),
+            },
+            Self::DisablePermanentActions => Some(Selector),
             Self::ChooseNumber => match index {
                 0 => Some(Selector),
                 1 | 2 => Some(Number),
@@ -2750,6 +2776,11 @@ mod tests {
         assert_eq!(Operation::Earthbend as u32, 431);
         assert_eq!(Operation::Discover as u32, 432);
         assert_eq!(Operation::MoveCounter as u32, 433);
+        assert_eq!(Operation::OptionalCastingCost as u32, 434);
+        assert_eq!(Operation::AdditionalTrigger as u32, 435);
+        assert_eq!(Operation::CannotTarget as u32, 436);
+        assert_eq!(Operation::AttackUnlessPaid as u32, 437);
+        assert_eq!(Operation::DisablePermanentActions as u32, 438);
 
         let config = bincode::config::standard()
             .with_fixed_int_encoding()

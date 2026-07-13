@@ -1433,6 +1433,24 @@ fn translate_keywords(
                     mana_ability: false,
                 }),
             ),
+            ("you_may_choose_not_to_untap_cardname_during_your_untap_step.", []) => (
+                None,
+                Some(AbilityDefinition {
+                    kind: AbilityKind::Static,
+                    costs: Vec::new(),
+                    event: None,
+                    condition: None,
+                    timing: None,
+                    effect: expression_call(
+                        Operation::CannotUntap,
+                        vec![
+                            expression_call(Operation::Source, vec![]),
+                            Expression::Text("optional_each_untap_step".to_string()),
+                        ],
+                    ),
+                    mana_ability: false,
+                }),
+            ),
             (_, []) => (Some(keyword.clone()), None),
             ("cycling", [cost]) => {
                 let full_cost = format!("{cost} Discard<1/CARDNAME>");
