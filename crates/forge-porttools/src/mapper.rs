@@ -761,7 +761,10 @@ impl<'a> MappingContext<'a> {
             let LegacyLineKind::SVar { name, expression } = &line.kind else {
                 continue;
             };
-            if svars.insert(name.clone(), expression).is_some() {
+            if svars
+                .insert(name.clone(), expression)
+                .is_some_and(|previous| previous != expression)
+            {
                 duplicate_svars.insert(name.clone());
             }
         }
@@ -25545,6 +25548,22 @@ mod tests {
 
     #[test]
     fn rejects_missing_duplicate_and_cyclic_svars() {
+        let identical = map_script_root(concat!(
+            "A:SP$ Draw | SubAbility$ Again | SpellDescription$ Identical duplicate.\n",
+            "SVar:Again:DB$ GainLife | LifeAmount$ 1\n",
+            "SVar:Again:DB$ GainLife | LifeAmount$ 1\n",
+        ))
+        .unwrap_or_else(|error| {
+            panic!(
+                "identical SVar declarations should deduplicate: {}",
+                error.message
+            )
+        });
+        assert!(expression_contains_operation(
+            &identical.expression,
+            Operation::GainLife
+        ));
+
         for (script_text, expected_code) in [
             (
                 "A:SP$ Draw | SubAbility$ Missing | SpellDescription$ Missing.\n",
