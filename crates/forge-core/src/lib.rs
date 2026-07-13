@@ -3517,6 +3517,26 @@ impl ActivationTiming {
     }
 }
 
+/// Closed condition checked before an activated ability can be paid.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum ActivationCondition {
+    /// The controller must control at least this many matching battlefield permanents.
+    ControllerControlsAtLeast {
+        /// Closed permanent predicate interpreted relative to the controller.
+        predicate: ObjectTargetPredicate,
+        /// Minimum matching permanent count.
+        count: u32,
+    },
+}
+
+impl ActivationCondition {
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::ControllerControlsAtLeast { .. } => 0,
+        }
+    }
+}
+
 /// Player selector used by no-target activated ability effects.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum AbilityPlayer {
@@ -3666,6 +3686,7 @@ pub struct ActivatedAbilityDefinition {
     cost: ActivationCost,
     effect: ActivatedAbilityEffect,
     mana_ability: bool,
+    condition: Option<ActivationCondition>,
 }
 
 impl ActivatedAbilityDefinition {
@@ -3685,6 +3706,7 @@ impl ActivatedAbilityDefinition {
             cost,
             effect,
             mana_ability: false,
+            condition: None,
         }
     }
 
@@ -3692,6 +3714,13 @@ impl ActivatedAbilityDefinition {
     #[must_use]
     pub const fn as_mana_ability(mut self) -> Self {
         self.mana_ability = true;
+        self
+    }
+
+    /// Returns this ability with one closed activation condition.
+    #[must_use]
+    pub const fn with_condition(mut self, condition: ActivationCondition) -> Self {
+        self.condition = Some(condition);
         self
     }
 
@@ -3730,6 +3759,12 @@ impl ActivatedAbilityDefinition {
     pub const fn is_mana_ability(self) -> bool {
         self.mana_ability
     }
+
+    /// Returns the activation condition, when present.
+    #[must_use]
+    pub const fn condition(self) -> Option<ActivationCondition> {
+        self.condition
+    }
 }
 
 /// Scope for a T2.5 activation cost modifier.
@@ -3743,6 +3778,8 @@ pub enum CostModifierScope {
     Source(ObjectId),
     /// Applies to abilities controlled by this player.
     Controller(PlayerId),
+    /// Applies to spells whose object matches a closed predicate.
+    Spells(ObjectTargetPredicate),
 }
 
 impl CostModifierScope {
@@ -3752,6 +3789,7 @@ impl CostModifierScope {
             Self::Ability(_) => 1,
             Self::Source(_) => 2,
             Self::Controller(_) => 3,
+            Self::Spells(_) => 4,
         }
     }
 }
@@ -6060,6 +6098,8 @@ pub enum StateError {
     UnknownRestriction(RestrictionId),
     /// The object cannot currently be used as that activated ability's source.
     ObjectNotActivatable(ObjectId),
+    /// A closed activation condition was not satisfied.
+    ActivationConditionNotMet(ActivatedAbilityId),
     /// The source object is already tapped and cannot pay a tap cost.
     SourceAlreadyTapped(ObjectId),
     /// A loyalty ability of this permanent has already been activated this turn.
@@ -8747,13 +8787,19 @@ impl GameState {
             .objects
             .get(object)
             .ok_or(StateError::UnknownObject(object))?;
+        let mut cost = base;
         if record.is_commander()
             && record.owner() == player
             && self.object_zone(object) == Some(ZoneId::new(None, ZoneKind::Command))
         {
-            return Self::add_mana_costs(base, self.commander_tax(object)?);
+            cost = Self::add_mana_costs(cost, self.commander_tax(object)?)?;
         }
-        Ok(base)
+        for modifier in &self.cost_modifiers {
+            if self.spell_cost_modifier_applies(modifier.definition, player, object) {
+                cost = Self::apply_cost_modifier(cost, modifier.definition.operation())?;
+            }
+        }
+        Ok(cost)
     }
 
     /// Returns the effective spell cost for a full keyword-aware cast request.
@@ -9321,7 +9367,7 @@ impl GameState {
                 }
             }
             CostModifierScope::Controller(player) => self.require_player(player)?,
-            CostModifierScope::AllActivatedAbilities => {}
+            CostModifierScope::AllActivatedAbilities | CostModifierScope::Spells(_) => {}
         }
         let id = CostModifierId(self.next_cost_modifier);
         self.next_cost_modifier = self.next_cost_modifier.saturating_add(1);
@@ -9435,12 +9481,42 @@ impl GameState {
         definition: ActivatedAbilityDefinition,
         controller: PlayerId,
     ) -> bool {
+        if !self.cost_modifier_source_is_active(modifier) {
+            return false;
+        }
         match modifier.scope() {
             CostModifierScope::AllActivatedAbilities => true,
             CostModifierScope::Ability(expected) => expected == ability,
             CostModifierScope::Source(expected) => definition.source() == Some(expected),
             CostModifierScope::Controller(expected) => expected == controller,
+            CostModifierScope::Spells(_) => false,
         }
+    }
+
+    fn spell_cost_modifier_applies(
+        &self,
+        modifier: CostModifierDefinition,
+        player: PlayerId,
+        object: ObjectId,
+    ) -> bool {
+        if modifier.controller() != player || !self.cost_modifier_source_is_active(modifier) {
+            return false;
+        }
+        match modifier.scope() {
+            CostModifierScope::Spells(predicate) => {
+                self.object_matches_target_predicate(player, predicate, object)
+            }
+            CostModifierScope::AllActivatedAbilities
+            | CostModifierScope::Ability(_)
+            | CostModifierScope::Source(_)
+            | CostModifierScope::Controller(_) => false,
+        }
+    }
+
+    fn cost_modifier_source_is_active(&self, modifier: CostModifierDefinition) -> bool {
+        modifier.source().is_none_or(|source| {
+            self.object_zone(source) == Some(ZoneId::new(None, ZoneKind::Battlefield))
+        })
     }
 
     fn apply_cost_modifier(
@@ -9496,6 +9572,9 @@ impl GameState {
                 expected: controller,
                 actual: player,
             });
+        }
+        if !self.activation_condition_is_met(player, definition)? {
+            return Err(StateError::ActivationConditionNotMet(ability));
         }
         if !definition.is_mana_ability() {
             self.require_priority_player(player)?;
@@ -9635,6 +9714,34 @@ impl GameState {
             }
         }
         Ok(())
+    }
+
+    fn activation_condition_is_met(
+        &self,
+        controller: PlayerId,
+        definition: ActivatedAbilityDefinition,
+    ) -> Result<bool, StateError> {
+        let Some(condition) = definition.condition() else {
+            return Ok(true);
+        };
+        match condition {
+            ActivationCondition::ControllerControlsAtLeast { predicate, count } => {
+                let battlefield = self
+                    .zone_objects(ZoneId::new(None, ZoneKind::Battlefield))
+                    .ok_or(StateError::UnknownZone(ZoneId::new(
+                        None,
+                        ZoneKind::Battlefield,
+                    )))?;
+                let matches = battlefield
+                    .iter()
+                    .copied()
+                    .filter(|object| {
+                        self.object_matches_target_predicate(controller, predicate, *object)
+                    })
+                    .count();
+                Ok(matches >= usize::try_from(count).unwrap_or(usize::MAX))
+            }
+        }
     }
 
     fn resolve_activated_ability_effect(
@@ -14625,6 +14732,20 @@ impl Fnva64 {
         self.write_optional_i32(cost.loyalty_delta);
     }
 
+    fn write_activation_condition(&mut self, condition: Option<ActivationCondition>) {
+        match condition {
+            None => self.write_u8(0),
+            Some(
+                condition @ ActivationCondition::ControllerControlsAtLeast { predicate, count },
+            ) => {
+                self.write_u8(1);
+                self.write_u8(condition.canonical_code());
+                self.write_object_target_predicate(predicate);
+                self.write_u32(count);
+            }
+        }
+    }
+
     fn write_mana_cost(&mut self, cost: ManaCost) {
         for kind in COLORED_MANA_KINDS {
             self.write_u32(cost.colored(kind));
@@ -14641,6 +14762,7 @@ impl Fnva64 {
         self.write_activation_cost(definition.cost);
         self.write_activated_ability_effect(definition.effect);
         self.write_bool(definition.mana_ability);
+        self.write_activation_condition(definition.condition);
     }
 
     fn write_activated_ability_subscription(&mut self, subscription: ActivatedAbilitySubscription) {
@@ -14655,6 +14777,9 @@ impl Fnva64 {
             CostModifierScope::Ability(ability) => self.write_u32(ability.0),
             CostModifierScope::Source(object) => self.write_u32(object.0),
             CostModifierScope::Controller(player) => self.write_u32(player.0),
+            CostModifierScope::Spells(predicate) => {
+                self.write_object_target_predicate(predicate);
+            }
         }
     }
 
@@ -15904,6 +16029,20 @@ impl CanonicalBytes {
         self.write_optional_i32(cost.loyalty_delta);
     }
 
+    fn write_activation_condition(&mut self, condition: Option<ActivationCondition>) {
+        match condition {
+            None => self.write_u8(0),
+            Some(
+                condition @ ActivationCondition::ControllerControlsAtLeast { predicate, count },
+            ) => {
+                self.write_u8(1);
+                self.write_u8(condition.canonical_code());
+                self.write_object_target_predicate(predicate);
+                self.write_u32(count);
+            }
+        }
+    }
+
     fn write_activated_ability_definition(&mut self, definition: ActivatedAbilityDefinition) {
         self.write_u32(definition.controller.0);
         self.write_optional_object(definition.source);
@@ -15911,6 +16050,7 @@ impl CanonicalBytes {
         self.write_activation_cost(definition.cost);
         self.write_activated_ability_effect(definition.effect);
         self.write_bool(definition.mana_ability);
+        self.write_activation_condition(definition.condition);
     }
 
     fn write_activated_ability_subscription(&mut self, subscription: ActivatedAbilitySubscription) {
@@ -15925,6 +16065,9 @@ impl CanonicalBytes {
             CostModifierScope::Ability(ability) => self.write_u32(ability.0),
             CostModifierScope::Source(object) => self.write_u32(object.0),
             CostModifierScope::Controller(player) => self.write_u32(player.0),
+            CostModifierScope::Spells(predicate) => {
+                self.write_object_target_predicate(predicate);
+            }
         }
     }
 
@@ -16690,24 +16833,24 @@ mod tests {
     use super::{
         apply, auto_payment_plan, crate_ready, enumerate_auto_tap_payment_plans,
         enumerate_payment_plans, legal_actions, state_based_action_table, validate_payment_plan,
-        AbilityPlayer, Action, ActivatedAbilityDefinition, ActivatedAbilityEffect, ActivationCost,
-        ActivationTiming, AttackDeclaration, BaseCreatureCharacteristics,
-        BaseObjectCharacteristics, BasicLandTypes, BlockDeclaration, CardId, CastSpellRequest,
-        CombatDamageAssignment, CombatDamageAssignmentRequest, CombatDamageStepKind,
-        CombatDamageTarget, ContinuousEffectDefinition, ContinuousEffectDuration,
-        ContinuousEffectId, ContinuousEffectOperation, ContinuousEffectTarget,
-        CostModifierDefinition, CostModifierOperation, CostModifierScope, CreatureCharacteristics,
-        CreatureKeywords, EffectDuration, EventReplayError, GameEvent, GameOutcome, GameState,
-        ManaCost, ManaKind, ManaPool, ManaSource, ObjectColors, ObjectSupertypes,
-        ObjectTargetPredicate, ObjectTypes, ObjectView, Outcome, PaymentError, Phase, PlayerId,
-        PriorityOutcome, ReplacementCondition, ReplacementDamageTargetFilter,
-        ReplacementDefinition, ReplacementDuration, ReplacementEffectId, ReplacementOperation,
-        ReplacementSourceFilter, ResolutionOutcome, SpellTiming, StackEntryId, StackObjectKind,
-        StateBasedActionKind, StateBasedActionReport, StateError, Step, TargetChoice,
-        TargetControllerPredicate, TargetKind, TargetRequirement, TriggerCondition,
-        TriggerDefinition, TriggerInterveningIf, TriggerObjectFilter, TriggerPlayerFilter,
-        TriggerZoneFilter, ZoneConservation, ZoneId, ZoneKind, EVENT_RING_CAPACITY,
-        NORMAL_TURN_STEPS, OPENING_HAND_SIZE, PAYMENT_PLAN_LIMIT,
+        AbilityPlayer, Action, ActivatedAbilityDefinition, ActivatedAbilityEffect,
+        ActivationCondition, ActivationCost, ActivationTiming, AttackDeclaration,
+        BaseCreatureCharacteristics, BaseObjectCharacteristics, BasicLandTypes, BlockDeclaration,
+        CardId, CastSpellRequest, CombatDamageAssignment, CombatDamageAssignmentRequest,
+        CombatDamageStepKind, CombatDamageTarget, ContinuousEffectDefinition,
+        ContinuousEffectDuration, ContinuousEffectId, ContinuousEffectOperation,
+        ContinuousEffectTarget, CostModifierDefinition, CostModifierOperation, CostModifierScope,
+        CreatureCharacteristics, CreatureKeywords, EffectDuration, EventReplayError, GameEvent,
+        GameOutcome, GameState, ManaCost, ManaKind, ManaPool, ManaSource, ObjectColors,
+        ObjectSubtype, ObjectSubtypes, ObjectSupertypes, ObjectTargetPredicate, ObjectTypes,
+        ObjectView, Outcome, PaymentError, Phase, PlayerId, PriorityOutcome, ReplacementCondition,
+        ReplacementDamageTargetFilter, ReplacementDefinition, ReplacementDuration,
+        ReplacementEffectId, ReplacementOperation, ReplacementSourceFilter, ResolutionOutcome,
+        SpellTiming, StackEntryId, StackObjectKind, StateBasedActionKind, StateBasedActionReport,
+        StateError, Step, TargetChoice, TargetControllerPredicate, TargetKind, TargetRequirement,
+        TriggerCondition, TriggerDefinition, TriggerInterveningIf, TriggerObjectFilter,
+        TriggerPlayerFilter, TriggerZoneFilter, ZoneConservation, ZoneId, ZoneKind,
+        EVENT_RING_CAPACITY, NORMAL_TURN_STEPS, OPENING_HAND_SIZE, PAYMENT_PLAN_LIMIT,
     };
 
     #[test]
@@ -20567,6 +20710,69 @@ mod tests {
     }
 
     #[test]
+    fn mana_activation_condition_fails_closed_until_permanent_count_is_met() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+        let land_base =
+            BaseObjectCharacteristics::new(ObjectTypes::none().with_land(), ObjectColors::none());
+        let mut lands = Vec::new();
+        for offset in 0..4 {
+            let land = state
+                .create_object(CardId::new(25_100 + offset), active, active, battlefield)
+                .unwrap_or_else(|error| panic!("unexpected land create error: {error:?}"));
+            state
+                .set_base_object_characteristics(land, land_base)
+                .unwrap_or_else(|error| panic!("unexpected land type error: {error:?}"));
+            lands.push(land);
+        }
+        let source = lands[0];
+        let condition = ActivationCondition::ControllerControlsAtLeast {
+            predicate: ObjectTargetPredicate::any()
+                .with_controller(TargetControllerPredicate::You)
+                .with_required_types(ObjectTypes::none().with_land()),
+            count: 5,
+        };
+        let ability = state
+            .register_activated_ability(
+                ActivatedAbilityDefinition::new(
+                    active,
+                    Some(source),
+                    ActivationTiming::Instant,
+                    ActivationCost::new(ManaCost::new(0, 0, 0, 0, 0, 0)).with_tap_source(),
+                    ActivatedAbilityEffect::AddMana {
+                        player: AbilityPlayer::Controller,
+                        mana: ManaPool::of(ManaKind::Colorless, 2),
+                    },
+                )
+                .with_condition(condition)
+                .as_mana_ability(),
+            )
+            .unwrap_or_else(|error| panic!("unexpected ability registration error: {error:?}"));
+        let payment = zero_payment(ManaCost::new(0, 0, 0, 0, 0, 0));
+        let before = state.canonical_bytes();
+
+        assert_eq!(
+            state.activate_ability(active, ability, payment),
+            Err(StateError::ActivationConditionNotMet(ability))
+        );
+        assert_eq!(state.canonical_bytes(), before);
+
+        let fifth = state
+            .create_object(CardId::new(25_104), active, active, battlefield)
+            .unwrap_or_else(|error| panic!("unexpected fifth land create error: {error:?}"));
+        state
+            .set_base_object_characteristics(fifth, land_base)
+            .unwrap_or_else(|error| panic!("unexpected fifth land type error: {error:?}"));
+        assert_eq!(state.activate_ability(active, ability, payment), Ok(None));
+        assert!(state.object(source).is_some_and(|record| record.tapped()));
+        assert_eq!(
+            state.mana_pool(active),
+            Ok(ManaPool::of(ManaKind::Colorless, 2))
+        );
+    }
+
+    #[test]
     fn loyalty_activated_ability_is_once_per_turn() {
         let mut state = GameState::new();
         let active = state.add_player();
@@ -20674,6 +20880,70 @@ mod tests {
         );
         assert_eq!(state.players()[active.index()].life(), 20);
         assert!(state.stack_entries().is_empty());
+    }
+
+    #[test]
+    fn source_bound_spell_cost_modifier_matches_subtype_and_expires_off_battlefield() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+        let hand = ZoneId::new(Some(active), ZoneKind::Hand);
+        let source = state
+            .create_object(CardId::new(25_200), active, active, battlefield)
+            .unwrap_or_else(|error| panic!("unexpected source create error: {error:?}"));
+        let goblin = state
+            .create_object(CardId::new(25_201), active, active, hand)
+            .unwrap_or_else(|error| panic!("unexpected Goblin create error: {error:?}"));
+        let other = state
+            .create_object(CardId::new(25_202), active, active, hand)
+            .unwrap_or_else(|error| panic!("unexpected other create error: {error:?}"));
+        let goblin_subtype =
+            ObjectSubtype::parse("Goblin").unwrap_or_else(|| panic!("Goblin subtype must parse"));
+        let goblin_subtypes = ObjectSubtypes::none()
+            .try_with(goblin_subtype)
+            .unwrap_or_else(|| panic!("Goblin subtype set must fit"));
+        state
+            .set_base_object_characteristics(
+                goblin,
+                BaseObjectCharacteristics::new(
+                    ObjectTypes::none().with_creature(),
+                    ObjectColors::none().with_red(),
+                )
+                .with_subtypes(goblin_subtypes),
+            )
+            .unwrap_or_else(|error| panic!("unexpected Goblin characteristics error: {error:?}"));
+        state
+            .set_base_object_characteristics(
+                other,
+                BaseObjectCharacteristics::new(
+                    ObjectTypes::none().with_creature(),
+                    ObjectColors::none().with_red(),
+                ),
+            )
+            .unwrap_or_else(|error| panic!("unexpected other characteristics error: {error:?}"));
+        let predicate = ObjectTargetPredicate::any()
+            .with_required_types(ObjectTypes::none().with_creature())
+            .with_required_subtypes(goblin_subtypes);
+        state
+            .register_cost_modifier(CostModifierDefinition::new(
+                active,
+                Some(source),
+                CostModifierScope::Spells(predicate),
+                CostModifierOperation::ReduceGeneric(1),
+            ))
+            .unwrap_or_else(|error| panic!("unexpected modifier registration error: {error:?}"));
+        let base = ManaCost::new(0, 0, 0, 1, 0, 2);
+
+        assert_eq!(
+            state.effective_spell_cost(active, goblin, base),
+            Ok(ManaCost::new(0, 0, 0, 1, 0, 1))
+        );
+        assert_eq!(state.effective_spell_cost(active, other, base), Ok(base));
+
+        state
+            .move_object(source, ZoneId::new(Some(active), ZoneKind::Graveyard))
+            .unwrap_or_else(|error| panic!("unexpected source move error: {error:?}"));
+        assert_eq!(state.effective_spell_cost(active, goblin, base), Ok(base));
     }
 
     #[test]

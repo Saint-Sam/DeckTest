@@ -11,14 +11,15 @@ use forge_carddef::{
 };
 use forge_core::{
     apply, AbilityPlayer, Action, ActivatedAbilityDefinition, ActivatedAbilityEffect,
-    ActivationCost, ActivationTiming, BaseCreatureCharacteristics, BaseObjectCharacteristics,
-    BasicLandTypes, CardId, ContinuousEffectDefinition, ContinuousEffectDuration,
-    ContinuousEffectOperation, ContinuousEffectTarget, CreatureKeywords, GameState, ManaCost,
-    ManaKind, ManaPool, ObjectColors, ObjectId, ObjectSubtype, ObjectSubtypes, ObjectSupertypes,
-    ObjectTargetPredicate, ObjectTypes, Outcome, PlayerId, PlayerTargetPredicate, StackEntryId,
-    TargetChoice, TargetControllerPredicate, TargetKind, TargetRequirement, TriggerCondition,
-    TriggerDefinition, TriggerObjectFilter, TriggerPlayerFilter, TriggerZoneFilter, ZoneId,
-    ZoneKind,
+    ActivationCondition, ActivationCost, ActivationTiming, BaseCreatureCharacteristics,
+    BaseObjectCharacteristics, BasicLandTypes, CardId, ContinuousEffectDefinition,
+    ContinuousEffectDuration, ContinuousEffectOperation, ContinuousEffectTarget,
+    CostModifierDefinition, CostModifierOperation, CostModifierScope, CreatureKeywords, GameState,
+    ManaCost, ManaKind, ManaPool, ObjectColors, ObjectId, ObjectSubtype, ObjectSubtypes,
+    ObjectSupertypes, ObjectTargetPredicate, ObjectTypes, Outcome, PlayerId, PlayerTargetPredicate,
+    StackEntryId, TargetChoice, TargetControllerPredicate, TargetKind, TargetRequirement,
+    TriggerCondition, TriggerDefinition, TriggerObjectFilter, TriggerPlayerFilter,
+    TriggerZoneFilter, ZoneId, ZoneKind,
 };
 use std::{collections::BTreeMap, error::Error, fmt};
 
@@ -182,6 +183,8 @@ pub enum Capability {
     TapObject,
     /// Apply a typed continuous characteristic change.
     ModifyCharacteristics,
+    /// Reduce generic mana costs for matching spells.
+    ReduceSpellCost,
 }
 
 impl Capability {
@@ -207,6 +210,7 @@ impl Capability {
             Self::SearchLibrary => "search_library",
             Self::TapObject => "tap_object",
             Self::ModifyCharacteristics => "modify_characteristics",
+            Self::ReduceSpellCost => "reduce_spell_cost",
         }
     }
 }
@@ -217,6 +221,7 @@ pub struct ActivatedAbilityProgram {
     cost: ActivationCost,
     outputs: ManaOutputChoices,
     damage_to_controller: u32,
+    condition: Option<ActivationCondition>,
 }
 
 /// Closed legal mana outputs for one compiled mana ability.
@@ -280,6 +285,12 @@ impl ActivatedAbilityProgram {
         self.damage_to_controller
     }
 
+    /// Returns the closed activation condition, when present.
+    #[must_use]
+    pub const fn condition(self) -> Option<ActivationCondition> {
+        self.condition
+    }
+
     /// Binds this program to one controller and battlefield source.
     #[must_use]
     pub fn bind(self, controller: PlayerId, source: ObjectId) -> ActivatedAbilityDefinition {
@@ -296,14 +307,17 @@ impl ActivatedAbilityProgram {
                 amount: self.damage_to_controller,
             }
         };
-        ActivatedAbilityDefinition::new(
+        let mut definition = ActivatedAbilityDefinition::new(
             controller,
             Some(source),
             ActivationTiming::Instant,
             self.cost,
             effect,
-        )
-        .as_mana_ability()
+        );
+        if let Some(condition) = self.condition {
+            definition = definition.with_condition(condition);
+        }
+        definition.as_mana_ability()
     }
 
     /// Binds this program with one explicit legal output choice.
@@ -329,15 +343,17 @@ impl ActivatedAbilityProgram {
                 amount: self.damage_to_controller,
             }
         };
-        ActivatedAbilityDefinition::new(
+        let mut definition = ActivatedAbilityDefinition::new(
             controller,
             Some(source),
             ActivationTiming::Instant,
             self.cost,
             effect,
-        )
-        .as_mana_ability()
-        .into()
+        );
+        if let Some(condition) = self.condition {
+            definition = definition.with_condition(condition);
+        }
+        Some(definition.as_mana_ability())
     }
 }
 
@@ -621,12 +637,25 @@ pub struct ActivatedEffectProgram {
     optional_effect_groups: Vec<OptionalEffectGroup>,
 }
 
-/// One source-bound static continuous ability compiled without card branches.
+/// One source-bound static ability compiled without card branches.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct StaticAbilityProgram {
-    predicate: ObjectTargetPredicate,
-    exclude_source: bool,
-    operations: Vec<ContinuousEffectOperation>,
+pub enum StaticAbilityProgram {
+    /// CR 613 operations over a live permanent predicate.
+    Continuous {
+        /// Predicate interpreted relative to the source controller.
+        predicate: ObjectTargetPredicate,
+        /// Whether the source is excluded from the affected set.
+        exclude_source: bool,
+        /// Layer operations registered in source order.
+        operations: Vec<ContinuousEffectOperation>,
+    },
+    /// Generic reduction for matching spells while the source is on the battlefield.
+    SpellCostReduction {
+        /// Predicate interpreted relative to the source controller.
+        predicate: ObjectTargetPredicate,
+        /// Generic mana reduction.
+        amount: u32,
+    },
 }
 
 /// One completely compiled additional spell cost.
@@ -711,26 +740,47 @@ impl ActivatedEffectProgram {
 impl StaticAbilityProgram {
     /// Binds this static ability to one battlefield source.
     #[must_use]
-    pub fn bind(&self, controller: PlayerId, source: ObjectId) -> Vec<ContinuousEffectDefinition> {
-        let target = ContinuousEffectTarget::Objects {
-            predicate: self.predicate,
-            excluded: self.exclude_source.then_some(source),
-        };
-        self.operations
-            .iter()
-            .copied()
-            .map(|operation| {
-                ContinuousEffectDefinition::new(controller, target, operation)
-                    .with_source(source)
-                    .with_duration(ContinuousEffectDuration::WhileSourceOnBattlefield)
-            })
-            .collect()
+    pub fn bind_actions(&self, controller: PlayerId, source: ObjectId) -> Vec<Action> {
+        match self {
+            Self::Continuous {
+                predicate,
+                exclude_source,
+                operations,
+            } => {
+                let target = ContinuousEffectTarget::Objects {
+                    predicate: *predicate,
+                    excluded: exclude_source.then_some(source),
+                };
+                operations
+                    .iter()
+                    .copied()
+                    .map(|operation| Action::RegisterContinuousEffect {
+                        definition: ContinuousEffectDefinition::new(controller, target, operation)
+                            .with_source(source)
+                            .with_duration(ContinuousEffectDuration::WhileSourceOnBattlefield),
+                    })
+                    .collect()
+            }
+            Self::SpellCostReduction { predicate, amount } => {
+                vec![Action::RegisterCostModifier {
+                    definition: CostModifierDefinition::new(
+                        controller,
+                        Some(source),
+                        CostModifierScope::Spells(*predicate),
+                        CostModifierOperation::ReduceGeneric(*amount),
+                    ),
+                }]
+            }
+        }
     }
 
-    /// Returns the compiled continuous operations in layer order source order.
+    /// Returns the number of production registrations emitted by this ability.
     #[must_use]
-    pub fn operations(&self) -> &[ContinuousEffectOperation] {
-        &self.operations
+    pub fn operation_count(&self) -> usize {
+        match self {
+            Self::Continuous { operations, .. } => operations.len(),
+            Self::SpellCostReduction { .. } => 1,
+        }
     }
 }
 
@@ -958,12 +1008,13 @@ impl CardProgram {
             capabilities.push(Capability::ActivatedAbility);
         }
         for ability in &self.static_abilities {
-            capabilities.extend(
-                ability
-                    .operations()
-                    .iter()
-                    .map(|_| Capability::ModifyCharacteristics),
-            );
+            match ability {
+                StaticAbilityProgram::Continuous { operations, .. } => capabilities
+                    .extend(operations.iter().map(|_| Capability::ModifyCharacteristics)),
+                StaticAbilityProgram::SpellCostReduction { .. } => {
+                    capabilities.push(Capability::ReduceSpellCost);
+                }
+            }
         }
         capabilities.extend(self.effects.iter().map(EffectProgram::capability));
         capabilities.extend(
@@ -1097,7 +1148,7 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
     let compiled_effect_count = compiled_effect_count.saturating_add(
         static_abilities
             .iter()
-            .map(|ability: &StaticAbilityProgram| ability.operations.len())
+            .map(StaticAbilityProgram::operation_count)
             .sum::<usize>(),
     );
     if compiled_effect_count > MAX_EFFECTS {
@@ -1243,15 +1294,65 @@ fn compile_static_ability(
         ));
     };
     let spec = compile_object_selector(selector, &format!("{path}.effect.selector"))?;
-    if spec.kind != TargetKind::Permanent {
+    let kind = spec.kind;
+    let exclude_source = spec.exclude_source;
+    let predicate = object_predicate_from_spec(spec);
+    if kind == TargetKind::StackEntry {
+        if exclude_source {
+            return Err(CompileDiagnostic::new(
+                CompileDiagnosticCode::EffectArguments,
+                format!("{path}.effect.selector"),
+                "spell-cost predicates cannot exclude the static source",
+            ));
+        }
+        let Expression::Call {
+            operation: Operation::CostReduction,
+            arguments,
+        } = effect
+        else {
+            return Err(CompileDiagnostic::new(
+                CompileDiagnosticCode::EffectOperation,
+                format!("{path}.effect.operation"),
+                "spell continuous effects currently require cost_reduction(any(), amount)",
+            ));
+        };
+        let [subject, Expression::Integer(amount)] = arguments.as_slice() else {
+            return Err(effect_arity(
+                &format!("{path}.effect.operation"),
+                &Operation::CostReduction,
+                "any() and one positive generic amount",
+            ));
+        };
+        if !is_any_selector(subject) {
+            return Err(CompileDiagnostic::new(
+                CompileDiagnosticCode::EffectArguments,
+                format!("{path}.effect.operation.subject"),
+                "cost reduction must apply to any() selected spell",
+            ));
+        }
+        let amount = u32::try_from(*amount).map_err(|_| {
+            CompileDiagnostic::new(
+                CompileDiagnosticCode::EffectAmount,
+                format!("{path}.effect.operation.amount"),
+                "spell-cost reduction is outside the u32 range",
+            )
+        })?;
+        if amount == 0 {
+            return Err(CompileDiagnostic::new(
+                CompileDiagnosticCode::EffectAmount,
+                format!("{path}.effect.operation.amount"),
+                "spell-cost reduction must be positive",
+            ));
+        }
+        return Ok(StaticAbilityProgram::SpellCostReduction { predicate, amount });
+    }
+    if kind != TargetKind::Permanent {
         return Err(CompileDiagnostic::new(
             CompileDiagnosticCode::EffectArguments,
             format!("{path}.effect.selector"),
-            "source-bound continuous effects require a permanent selector",
+            "source-bound continuous effects require a permanent or spell selector",
         ));
     }
-    let exclude_source = spec.exclude_source;
-    let predicate = object_predicate_from_spec(spec);
     let mut operations = Vec::new();
     compile_static_operations(effect, &format!("{path}.effect.operation"), &mut operations)?;
     if operations.is_empty() || operations.len() > MAX_EFFECTS {
@@ -1261,7 +1362,7 @@ fn compile_static_ability(
             format!("static ability compiled {} operations", operations.len()),
         ));
     }
-    Ok(StaticAbilityProgram {
+    Ok(StaticAbilityProgram::Continuous {
         predicate,
         exclude_source,
         operations,
@@ -1593,6 +1694,82 @@ fn compile_intrinsic_basic_mana_ability(
         cost: ActivationCost::new(ManaCost::new(0, 0, 0, 0, 0, 0)).with_tap_source(),
         outputs: ManaOutputChoices::from_options(&[ManaPool::of(kind, 1)]),
         damage_to_controller: 0,
+        condition: None,
+    }))
+}
+
+fn compile_mana_activation_condition(
+    timing: Option<&Expression>,
+    path: &str,
+) -> Result<Option<ActivationCondition>, CompileDiagnostic> {
+    let Some(timing) = timing else {
+        return Ok(None);
+    };
+    let Expression::Call {
+        operation: Operation::TimingCondition,
+        arguments,
+    } = timing
+    else {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::AbilityShape,
+            path,
+            "mana-ability timing is not timing_condition(...)",
+        ));
+    };
+    let [Expression::Call {
+        operation: Operation::AtLeast,
+        arguments: comparison,
+    }] = arguments.as_slice()
+    else {
+        return Err(effect_arity(
+            path,
+            &Operation::TimingCondition,
+            "at_least(count(permanents(...)), literal)",
+        ));
+    };
+    let [Expression::Call {
+        operation: Operation::Count,
+        arguments: count_arguments,
+    }, Expression::Integer(count)] = comparison.as_slice()
+    else {
+        return Err(effect_arity(
+            &format!("{path}.condition"),
+            &Operation::AtLeast,
+            "count(permanents(...)) and one positive literal",
+        ));
+    };
+    let [selector] = count_arguments.as_slice() else {
+        return Err(effect_arity(
+            &format!("{path}.condition.count"),
+            &Operation::Count,
+            "one permanent selector",
+        ));
+    };
+    let count = u32::try_from(*count).map_err(|_| {
+        CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectAmount,
+            format!("{path}.condition.count"),
+            "activation-condition count is outside the positive u32 range",
+        )
+    })?;
+    if count == 0 {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectAmount,
+            format!("{path}.condition.count"),
+            "activation-condition count must be positive",
+        ));
+    }
+    let spec = compile_object_selector(selector, &format!("{path}.condition.selector"))?;
+    if spec.kind != TargetKind::Permanent {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectArguments,
+            format!("{path}.condition.selector"),
+            "activation-condition count requires battlefield permanents",
+        ));
+    }
+    Ok(Some(ActivationCondition::ControllerControlsAtLeast {
+        predicate: object_predicate_from_spec(spec),
+        count,
     }))
 }
 
@@ -1600,17 +1777,15 @@ fn compile_fixed_mana_ability(
     ability: &AbilityDefinition,
     path: &str,
 ) -> Result<ActivatedAbilityProgram, CompileDiagnostic> {
-    if !ability.mana_ability
-        || ability.event.is_some()
-        || ability.condition.is_some()
-        || ability.timing.is_some()
-    {
+    if !ability.mana_ability || ability.event.is_some() || ability.condition.is_some() {
         return Err(CompileDiagnostic::new(
             CompileDiagnosticCode::AbilityShape,
             path,
-            "activated mana ability must be unconditional and marked mana_ability",
+            "activated mana ability must have no event or intervening condition and be marked mana_ability",
         ));
     }
+    let condition =
+        compile_mana_activation_condition(ability.timing.as_ref(), &format!("{path}.timing"))?;
     let [Expression::Call {
         operation: Operation::TapSelf,
         arguments,
@@ -1728,6 +1903,7 @@ fn compile_fixed_mana_ability(
         cost: ActivationCost::new(ManaCost::new(0, 0, 0, 0, 0, 0)).with_tap_source(),
         outputs: compile_mana_outputs(mana, &format!("{path}.effect.mana"))?,
         damage_to_controller,
+        condition,
     })
 }
 
@@ -2693,6 +2869,7 @@ fn compile_token_template(
                     ManaPool::of(ManaKind::Green, 1),
                 ]),
                 damage_to_controller: 0,
+                condition: None,
             }),
         });
     }
@@ -3600,6 +3777,13 @@ fn compile_object_selector(
                     &format!("{path}.permanents[{index}]"),
                     &mut spec,
                 )?;
+            }
+            Ok(spec)
+        }
+        Operation::Spells => {
+            let mut spec = ObjectSelectorSpec::new(TargetKind::StackEntry);
+            for (index, predicate) in arguments.iter().enumerate() {
+                compile_object_predicate(predicate, &format!("{path}.spells[{index}]"), &mut spec)?;
             }
             Ok(spec)
         }
@@ -5253,9 +5437,10 @@ mod tests {
         ExecutionBindings, ExecutionDiagnosticCode, ProgramKind,
     };
     use forge_core::{
-        apply, Action, BaseCreatureCharacteristics, BaseObjectCharacteristics, BasicLandTypes,
-        CardId, GameState, ManaKind, ManaPool, ObjectColors, ObjectSubtype, ObjectSupertypes,
-        ObjectTypes, Outcome, StackObjectKind, TargetChoice, ZoneId, ZoneKind,
+        apply, Action, ActivationCondition, BaseCreatureCharacteristics, BaseObjectCharacteristics,
+        BasicLandTypes, CardId, GameState, ManaKind, ManaPool, ObjectColors, ObjectSubtype,
+        ObjectSupertypes, ObjectTargetPredicate, ObjectTypes, Outcome, StackObjectKind,
+        TargetChoice, TargetControllerPredicate, ZoneId, ZoneKind,
     };
 
     const SWORDS: &str = r#"
@@ -5301,6 +5486,25 @@ card "Sol Ring" {
     keywords: []
     ability activated {
       costs: [tap_self()]
+      effect: add_mana("2 x {C}", you())
+      mana_ability: true
+    }
+  }
+}
+"#;
+    const TEMPLE_OF_THE_FALSE_GOD: &str = r#"
+card "Temple of the False God" {
+  id: "cfdd5dc6-593e-495a-8cfe-3a56b3c4c7df"
+  layout: normal
+  status: unverified_playable
+  face "Temple of the False God" {
+    cost: ""
+    types: "Land"
+    oracle: "{T}: Add {C}{C}. Activate only if you control five or more lands."
+    keywords: []
+    ability activated {
+      costs: [tap_self()]
+      timing: timing_condition(at_least(count(permanents(and(type_is("land"), controlled_by(you())))), 5))
       effect: add_mana("2 x {C}", you())
       mana_ability: true
     }
@@ -5534,6 +5738,19 @@ card "Interpreter Contract" {
         assert_eq!(
             ring.activated_abilities()[0].produces(),
             ManaPool::of(ManaKind::Colorless, 2)
+        );
+
+        let temple = compile_card_program(&parse("temple.frs", TEMPLE_OF_THE_FALSE_GOD))
+            .unwrap_or_else(|error| panic!("unexpected Temple compile error: {error}"));
+        assert_eq!(temple.kind(), ProgramKind::Land);
+        assert_eq!(
+            temple.activated_abilities()[0].condition(),
+            Some(ActivationCondition::ControllerControlsAtLeast {
+                predicate: ObjectTargetPredicate::any()
+                    .with_controller(TargetControllerPredicate::You)
+                    .with_required_types(ObjectTypes::none().with_land()),
+                count: 5,
+            })
         );
     }
 

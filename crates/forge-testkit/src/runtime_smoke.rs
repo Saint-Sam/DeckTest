@@ -13,12 +13,12 @@ use forge_cards::runtime::{
     ProgramKind, SpellAdditionalCostProgram, TriggeredEventProgram,
 };
 use forge_core::{
-    apply, auto_payment_plan, Action, ActivatedAbilityId, ActivationTiming, AttackDeclaration,
-    BaseCreatureCharacteristics, BaseObjectCharacteristics, BasicLandTypes, CardId,
-    CastSpellRequest, GameOutcome, GameState, ManaPool, ObjectColors, ObjectId, ObjectTypes,
-    Outcome, PlayerId, PlayerTargetPredicate, PriorityOutcome, SpellTiming, StackEntryId,
-    StackObjectKind, Step, TargetChoice, TargetControllerPredicate, TargetKind, TargetPredicate,
-    TriggerId, ZoneId, ZoneKind,
+    apply, auto_payment_plan, Action, ActivatedAbilityId, ActivationCondition, ActivationTiming,
+    AttackDeclaration, BaseCreatureCharacteristics, BaseObjectCharacteristics, BasicLandTypes,
+    CardId, CastSpellRequest, GameOutcome, GameState, ManaPool, ObjectColors, ObjectId,
+    ObjectTypes, Outcome, PlayerId, PlayerTargetPredicate, PriorityOutcome, SpellTiming,
+    StackEntryId, StackObjectKind, Step, TargetChoice, TargetControllerPredicate, TargetKind,
+    TargetPredicate, TriggerId, ZoneId, ZoneKind,
 };
 
 /// Capability executed through the shared card runtime interpreter.
@@ -935,12 +935,16 @@ fn execute_smoke(
         "resolve.spell_destination",
     )?;
     for (ability_index, ability) in compiled.program.static_abilities().iter().enumerate() {
-        for (operation_index, definition) in ability.bind(caster, spell).into_iter().enumerate() {
+        for (operation_index, action) in ability.bind_actions(caster, spell).into_iter().enumerate()
+        {
             let outcome = execution.dispatch(
                 &format!("static[{ability_index}].register[{operation_index}]"),
-                Action::RegisterContinuousEffect { definition },
+                action,
             )?;
-            if !matches!(outcome, Outcome::ContinuousEffectRegistered(_)) {
+            if !matches!(
+                outcome,
+                Outcome::ContinuousEffectRegistered(_) | Outcome::CostModifierRegistered(_)
+            ) {
                 return Err(unexpected_outcome("static.register", outcome));
             }
         }
@@ -1020,6 +1024,13 @@ fn execute_smoke(
         }
     }
 
+    setup_activation_conditions(
+        &mut execution,
+        &compiled.program,
+        caster,
+        opponent,
+        base_card_id,
+    )?;
     let mut registered_abilities = Vec::with_capacity(compiled.program.activated_abilities().len());
     for (index, ability) in compiled
         .program
@@ -1189,7 +1200,7 @@ fn execute_smoke(
                 .program
                 .static_abilities()
                 .iter()
-                .map(|ability| ability.operations().len())
+                .map(|ability| ability.operation_count())
                 .sum::<usize>(),
         production_actions: execution.production_actions,
         final_life_totals,
@@ -1340,6 +1351,57 @@ fn setup_dynamic_amount_state(
                     .wrapping_add((predicate_index as u32).saturating_mul(1_000)),
                 object_index,
                 &format!("setup.dynamic_amount[{predicate_index}]"),
+            )?;
+        }
+    }
+    Ok(())
+}
+
+fn setup_activation_conditions(
+    execution: &mut Execution,
+    program: &CardProgram,
+    caster: PlayerId,
+    opponent: PlayerId,
+    base_card_id: u32,
+) -> Result<(), RuntimeSmokeFailure> {
+    let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+    for (ability_index, ability) in program.activated_abilities().iter().copied().enumerate() {
+        let Some(ActivationCondition::ControllerControlsAtLeast { predicate, count }) =
+            ability.condition()
+        else {
+            continue;
+        };
+        let current = execution
+            .state
+            .zone_objects(battlefield)
+            .ok_or_else(|| {
+                RuntimeSmokeFailure::new(
+                    RuntimeSmokeFailureCode::UnexpectedOutcome,
+                    format!("ability[{ability_index}].condition"),
+                    "battlefield zone is unavailable",
+                )
+            })?
+            .iter()
+            .copied()
+            .filter(|object| {
+                execution
+                    .state
+                    .object_matches_target_predicate(caster, predicate, *object)
+            })
+            .count();
+        let required = usize::try_from(count).unwrap_or(usize::MAX);
+        for object_index in current..required {
+            synthesize_object_target(
+                execution,
+                TargetKind::Permanent,
+                TargetPredicate::Object(predicate),
+                caster,
+                opponent,
+                base_card_id
+                    .wrapping_add(1_100_000)
+                    .wrapping_add((ability_index as u32).saturating_mul(1_000)),
+                object_index,
+                &format!("ability[{ability_index}].condition.setup"),
             )?;
         }
     }
