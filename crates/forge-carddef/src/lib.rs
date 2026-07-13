@@ -838,7 +838,7 @@ operations! {
     DiscardCost => ("discard_cost", Cost, 1, Some(2)),
     PayLife => ("pay_life", Cost, 1, Some(1)),
     LoyaltyCost => ("loyalty_cost", Cost, 1, Some(1)),
-    RemoveCounterCost => ("remove_counter_cost", Cost, 2, Some(2)),
+    RemoveCounterCost => ("remove_counter_cost", Cost, 2, Some(3)),
     ExileCost => ("exile_cost", Cost, 1, Some(2)),
     EventCast => ("event_cast", Event, 0, Some(2)),
     EventEnters => ("event_enters", Event, 0, Some(2)),
@@ -1149,6 +1149,18 @@ operations! {
     RepeatEffect => ("repeat_effect", Effect, 2, Some(2)),
     ExhaustCost => ("exhaust_cost", Cost, 0, Some(0)),
     RevoltOccurred => ("revolt_occurred", Predicate, 0, Some(0)),
+    TimingActivator => ("timing_activator", Timing, 1, Some(1)),
+    TargetPerPlayer => ("target_per_player", Selector, 1, Some(1)),
+    SharedSubtypeChoice => ("shared_subtype_choice", Effect, 1, Some(1)),
+    PutMovedAttacking => ("put_moved_attacking", Effect, 2, Some(2)),
+    OptionalBy => ("optional_by", Effect, 2, Some(2)),
+    ChoiceRestriction => ("choice_restriction", Effect, 2, Some(2)),
+    ApplyStaticEffect => ("apply_static_effect", Effect, 2, Some(2)),
+    TimingGameLimit => ("timing_game_limit", Timing, 1, Some(1)),
+    EventGameLimit => ("event_game_limit", Event, 3, Some(3)),
+    EventBlocker => ("event_blocker", Event, 2, Some(2)),
+    SearchZones => ("search_zones", Effect, 4, Some(4)),
+    SacrificeCount => ("sacrifice_count", Effect, 2, Some(2)),
 }
 
 impl Operation {
@@ -1288,6 +1300,7 @@ impl Operation {
             Self::RemoveCounterCost => match index {
                 0 => Some(Selector),
                 1 => Some(Text),
+                2 => Some(Number),
                 _ => None,
             },
 
@@ -1403,6 +1416,11 @@ impl Operation {
                 _ => None,
             },
             Self::SacrificeEffect | Self::RegenerateShield => Some(Selector),
+            Self::SacrificeCount => match index {
+                0 => Some(Selector),
+                1 => Some(Number),
+                _ => None,
+            },
             Self::MustAttack => match index {
                 0 => Some(Selector),
                 1 => Some(Text),
@@ -1629,6 +1647,12 @@ impl Operation {
             Self::ChangeControl | Self::ChangeTarget | Self::Attach => Some(Selector),
             Self::SearchLibrary => match index {
                 0 | 1 => Some(Selector),
+                _ => None,
+            },
+            Self::SearchZones => match index {
+                0 | 1 => Some(Selector),
+                2 => Some(Number),
+                3 => Some(Text),
                 _ => None,
             },
             Self::Shuffle => Some(Selector),
@@ -2066,6 +2090,37 @@ impl Operation {
                 _ => None,
             },
             Self::ExhaustCost | Self::RevoltOccurred => None,
+            Self::TimingActivator => Some(Text),
+            Self::TargetPerPlayer => Some(Selector),
+            Self::SharedSubtypeChoice => Some(Effect),
+            Self::PutMovedAttacking => match index {
+                0 => Some(Effect),
+                1 => Some(Text),
+                _ => None,
+            },
+            Self::OptionalBy => match index {
+                0 => Some(Selector),
+                1 => Some(Effect),
+                _ => None,
+            },
+            Self::ChoiceRestriction => match index {
+                0 => Some(Effect),
+                1 => Some(Text),
+                _ => None,
+            },
+            Self::ApplyStaticEffect => Some(Effect),
+            Self::TimingGameLimit => Some(Number),
+            Self::EventGameLimit => match index {
+                0 => Some(Event),
+                1 => Some(Selector),
+                2 => Some(Number),
+                _ => None,
+            },
+            Self::EventBlocker => match index {
+                0 => Some(Event),
+                1 => Some(Selector),
+                _ => None,
+            },
             Self::TimingAll => None,
         }
     }
@@ -2350,6 +2405,18 @@ mod tests {
         assert_eq!(Operation::RepeatEffect as u32, 349);
         assert_eq!(Operation::ExhaustCost as u32, 350);
         assert_eq!(Operation::RevoltOccurred as u32, 351);
+        assert_eq!(Operation::TimingActivator as u32, 352);
+        assert_eq!(Operation::TargetPerPlayer as u32, 353);
+        assert_eq!(Operation::SharedSubtypeChoice as u32, 354);
+        assert_eq!(Operation::PutMovedAttacking as u32, 355);
+        assert_eq!(Operation::OptionalBy as u32, 356);
+        assert_eq!(Operation::ChoiceRestriction as u32, 357);
+        assert_eq!(Operation::ApplyStaticEffect as u32, 358);
+        assert_eq!(Operation::TimingGameLimit as u32, 359);
+        assert_eq!(Operation::EventGameLimit as u32, 360);
+        assert_eq!(Operation::EventBlocker as u32, 361);
+        assert_eq!(Operation::SearchZones as u32, 362);
+        assert_eq!(Operation::SacrificeCount as u32, 363);
 
         let config = bincode::config::standard()
             .with_fixed_int_encoding()

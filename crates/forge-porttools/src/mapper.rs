@@ -1305,6 +1305,14 @@ fn map_with_context_unconditioned(
         Some("True") => true,
         Some(value) => return Err(unsupported_value("RememberTargets", value)),
     };
+    let forget_other_targets = closed_true_flag(&parameter_map, "ForgetOtherTargets")?;
+    if forget_other_targets && !remember_targets {
+        return Err(diagnostic(
+            "UNSUPPORTED_PARAMETER",
+            "ForgetOtherTargets requires RememberTargets True",
+        ));
+    }
+    let forget_other_remembered = closed_true_flag(&parameter_map, "ForgetOtherRemembered")?;
     let target_unique = closed_true_flag(&parameter_map, "TargetUnique")?;
     let target_group = match (
         parameter_map.get("TargetsWithSameController"),
@@ -1331,6 +1339,89 @@ fn map_with_context_unconditioned(
             ));
         }
     };
+    let targets_for_each_player = closed_true_flag(&parameter_map, "TargetsForEachPlayer")?;
+    let activator = (prefix == LegacyAbilityPrefix::Activated)
+        .then(|| parameter_map.get("Activator"))
+        .flatten()
+        .map(|value| match value.as_str() {
+            "Player" => Ok("any_player"),
+            "Player.Opponent" => Ok("opponent"),
+            "Player.Owner" => Ok("source_owner"),
+            "Player.EnchantedController" => Ok("enchanted_controller"),
+            _ => Err(unsupported_value("Activator", value)),
+        })
+        .transpose()?;
+    let game_activation_limit = if prefix == LegacyAbilityPrefix::Activated {
+        parameter_map
+            .get("GameActivationLimit")
+            .map(|value| {
+                value
+                    .parse::<i64>()
+                    .ok()
+                    .filter(|limit| (1..=3).contains(limit))
+                    .ok_or_else(|| unsupported_value("GameActivationLimit", value))
+            })
+            .transpose()?
+    } else {
+        None
+    };
+    let target_valid_targeting = parameter_map
+        .get("TargetValidTargeting")
+        .map(|value| {
+            if !matches!(api, "Counter" | "CopySpellAbility" | "ChangeZone") {
+                return Err(unsupported_value("TargetValidTargeting", value));
+            }
+            Ok(call(Operation::Targets, vec![affected_selector(value)?]))
+        })
+        .transpose()?;
+    let share_land_type = match parameter_map.get("ShareLandType").map(String::as_str) {
+        None => false,
+        Some("True") if api == "ChangeZone" => true,
+        Some(value) => return Err(unsupported_value("ShareLandType", value)),
+    };
+    let transformed = match parameter_map.get("Transformed").map(String::as_str) {
+        None => false,
+        Some("True") if api == "ChangeZone" => true,
+        Some(value) => return Err(unsupported_value("Transformed", value)),
+    };
+    let attacking = parameter_map
+        .get("Attacking")
+        .map(|value| match (api, value.as_str()) {
+            ("ChangeZone" | "Dig" | "DigUntil", "True") => Ok("triggered_defender"),
+            ("ChangeZone" | "Dig" | "DigUntil", "TriggeredDefender") => Ok("triggered_defender"),
+            _ => Err(unsupported_value("Attacking", value)),
+        })
+        .transpose()?;
+    let added_keywords = if matches!(api, "Clone" | "CopyPermanent") {
+        parameter_map
+            .get("AddKeywords")
+            .map(|value| {
+                value
+                    .split(" & ")
+                    .map(normalize_simple_keyword)
+                    .collect::<Result<Vec<_>, _>>()
+            })
+            .transpose()?
+            .unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+    let static_effect = parameter_map
+        .get("StaticEffect")
+        .map(|name| {
+            if !matches!(api, "ChangeZone" | "Dig" | "DigUntil") {
+                return Err(unsupported_value("StaticEffect", name));
+            }
+            let mapped = resolve_svar(name, context, stack)?;
+            if mapped.event.is_some() || mapped.timing.is_some() || !mapped.costs.is_empty() {
+                return Err(diagnostic(
+                    "UNSUPPORTED_LINK",
+                    &format!("StaticEffect `{name}` must be a cost-free static effect"),
+                ));
+            }
+            Ok(mapped.expression)
+        })
+        .transpose()?;
     let reduce_cost = parameter_map
         .get("ReduceCost")
         .map(|value| {
@@ -1373,7 +1464,9 @@ fn map_with_context_unconditioned(
         }
         Some(value) => return Err(unsupported_value("Reorder", value)),
     };
-    let repeat_effect = if prefix == LegacyAbilityPrefix::Activated && api == "CopySpellAbility" {
+    let repeat_effect = if prefix == LegacyAbilityPrefix::Activated
+        && matches!(api, "CopySpellAbility" | "MakeCard" | "Proliferate")
+    {
         parameter_map
             .get("Amount")
             .map(|value| {
@@ -1439,11 +1532,41 @@ fn map_with_context_unconditioned(
         ));
     }
     let has_ability_name = parameter_map.contains_key("Name") && api != "MakeCard";
+    let dynamic_subcounter = parameter_map
+        .get("Cost")
+        .and_then(|cost| {
+            let marker = "SubCounter<X/";
+            (cost.matches(marker).count() == 1).then(|| {
+                let tail = cost.split_once(marker)?.1;
+                let counter = tail.split_once('>')?.0.split('/').next()?.trim();
+                (!counter.is_empty()).then(|| counter.to_string())
+            })?
+        })
+        .map(|counter| Ok((counter, resolve_value_svar("X", context)?)))
+        .transpose()?;
     let mut base_expression = expression.clone();
+    if dynamic_subcounter.is_some() {
+        for field in &mut base_expression.fields {
+            if field.key.as_deref() == Some("Cost") {
+                field.value = field.value.replacen("SubCounter<X/", "SubCounter<2/", 1);
+            }
+        }
+    }
     if sub_ability.is_some()
         || remember_targets
+        || forget_other_targets
+        || forget_other_remembered
         || target_unique
         || target_group.is_some()
+        || targets_for_each_player
+        || activator.is_some()
+        || game_activation_limit.is_some()
+        || target_valid_targeting.is_some()
+        || share_land_type
+        || transformed
+        || attacking.is_some()
+        || !added_keywords.is_empty()
+        || static_effect.is_some()
         || reduce_cost.is_some()
         || etb_effect
         || power_up
@@ -1458,9 +1581,24 @@ fn map_with_context_unconditioned(
         base_expression.fields.retain(|field| {
             field.key.as_deref() != Some("SubAbility")
                 && field.key.as_deref() != Some("RememberTargets")
+                && (!forget_other_targets || field.key.as_deref() != Some("ForgetOtherTargets"))
+                && (!forget_other_remembered
+                    || field.key.as_deref() != Some("ForgetOtherRemembered"))
                 && field.key.as_deref() != Some("TargetUnique")
                 && field.key.as_deref() != Some("TargetsWithSameController")
                 && field.key.as_deref() != Some("TargetsWithDefinedController")
+                && (!targets_for_each_player
+                    || field.key.as_deref() != Some("TargetsForEachPlayer"))
+                && (activator.is_none() || field.key.as_deref() != Some("Activator"))
+                && (game_activation_limit.is_none()
+                    || field.key.as_deref() != Some("GameActivationLimit"))
+                && (target_valid_targeting.is_none()
+                    || field.key.as_deref() != Some("TargetValidTargeting"))
+                && (!share_land_type || field.key.as_deref() != Some("ShareLandType"))
+                && (!transformed || field.key.as_deref() != Some("Transformed"))
+                && (attacking.is_none() || field.key.as_deref() != Some("Attacking"))
+                && (added_keywords.is_empty() || field.key.as_deref() != Some("AddKeywords"))
+                && (static_effect.is_none() || field.key.as_deref() != Some("StaticEffect"))
                 && field.key.as_deref() != Some("ReduceCost")
                 && field.key.as_deref() != Some("ETB")
                 && (!power_up || field.key.as_deref() != Some("PowerUp"))
@@ -1474,6 +1612,16 @@ fn map_with_context_unconditioned(
                 && field.key.as_deref() != Some("Secondary")
                 && (!has_ability_name || field.key.as_deref() != Some("Name"))
         });
+    }
+    if targets_for_each_player {
+        for field in &mut base_expression.fields {
+            if field.key.as_deref() == Some("TargetMax") && field.value == "OneEach" {
+                field.value = "1".to_string();
+            }
+            if field.key.as_deref() == Some("TargetMin") && field.value == "OneEach" {
+                field.value = "1".to_string();
+            }
+        }
     }
     let dynamic_mana_limit = if base_expression
         .fields
@@ -1506,10 +1654,45 @@ fn map_with_context_unconditioned(
     } else {
         None
     };
+    let dynamic_mana_equal = if base_expression
+        .fields
+        .iter()
+        .any(|field| field.value.contains("cmcEQX"))
+    {
+        let value = resolve_value_svar("X", context)?;
+        for field in &mut base_expression.fields {
+            field.value = field.value.replace("cmcEQX", "cmcEQ0");
+        }
+        Some(value)
+    } else {
+        None
+    };
     let mut mapped = match map_dynamic_ability(prefix, &base_expression, context)? {
         Some(mapped) => mapped,
         None => map_legacy_ability(prefix, &base_expression)?,
     };
+    if let Some((counter, amount)) = dynamic_subcounter {
+        let (operation, argument, replacement) = if counter == "LOYALTY" {
+            (
+                Operation::LoyaltyCost,
+                0,
+                call(Operation::Negate, vec![amount]),
+            )
+        } else {
+            (Operation::RemoveCounterCost, 2, amount)
+        };
+        let replaced = mapped
+            .costs
+            .iter_mut()
+            .map(|cost| replace_operation_argument(cost, operation, argument, &replacement))
+            .sum::<usize>();
+        if replaced != 1 {
+            return Err(diagnostic(
+                "DYNAMIC_LOWERING_MISMATCH",
+                "dynamic SubCounter cost did not produce exactly one typed counter-removal cost",
+            ));
+        }
+    }
     if let Some(limit) = dynamic_mana_limit {
         let exclusive = call(Operation::AddValue, vec![limit, Expression::Integer(1)]);
         let replaced = replace_dynamic_mana_limit(&mut mapped.expression, &exclusive);
@@ -1520,11 +1703,21 @@ fn map_with_context_unconditioned(
             ));
         }
     }
-    if target_unique || target_group.is_some() {
+    if let Some(value) = dynamic_mana_equal {
+        let replaced = replace_dynamic_mana_equal(&mut mapped.expression, &value);
+        if replaced == 0 {
+            return Err(diagnostic(
+                "DYNAMIC_LOWERING_MISMATCH",
+                "cmcEQX did not produce a typed mana-value predicate",
+            ));
+        }
+    }
+    if target_unique || target_group.is_some() || targets_for_each_player {
         let replaced = wrap_target_selectors(
             &mut mapped.expression,
             target_unique,
             target_group.as_deref(),
+            targets_for_each_player,
         );
         if replaced == 0 {
             return Err(diagnostic(
@@ -1544,11 +1737,53 @@ fn map_with_context_unconditioned(
     if exhaust {
         mapped.costs.push(call(Operation::ExhaustCost, vec![]));
     }
+    if let Some(activator) = activator {
+        let mut timings = mapped.timing.take().into_iter().collect::<Vec<_>>();
+        timings.push(call(
+            Operation::TimingActivator,
+            vec![Expression::Text(activator.to_string())],
+        ));
+        mapped.timing = combine_timings(timings);
+    }
+    if let Some(limit) = game_activation_limit {
+        let mut timings = mapped.timing.take().into_iter().collect::<Vec<_>>();
+        timings.push(call(
+            Operation::TimingGameLimit,
+            vec![Expression::Integer(limit)],
+        ));
+        mapped.timing = combine_timings(timings);
+    }
+    if let Some(predicate) = target_valid_targeting {
+        if apply_targeting_filter(&mut mapped.expression, &predicate)? == 0 {
+            return Err(diagnostic(
+                "TARGET_BINDING_MISMATCH",
+                "TargetValidTargeting did not produce a typed stack target",
+            ));
+        }
+    }
     if remember_targets {
+        let remember = call(
+            Operation::Remember,
+            vec![call(Operation::Target, vec![call(Operation::Any, vec![])])],
+        );
+        let remember = if forget_other_targets {
+            sequence(
+                call(
+                    Operation::Forget,
+                    vec![Expression::Text("remembered".to_string())],
+                ),
+                remember,
+            )
+        } else {
+            remember
+        };
+        mapped.expression = sequence(remember, mapped.expression);
+    }
+    if forget_other_remembered {
         mapped.expression = sequence(
             call(
-                Operation::Remember,
-                vec![call(Operation::Target, vec![call(Operation::Any, vec![])])],
+                Operation::Forget,
+                vec![Expression::Text("remembered".to_string())],
             ),
             mapped.expression,
         );
@@ -1598,6 +1833,42 @@ fn map_with_context_unconditioned(
     }
     if let Some(amount) = repeat_effect {
         mapped.expression = call(Operation::RepeatEffect, vec![amount, mapped.expression]);
+    }
+    if share_land_type {
+        mapped.expression = call(Operation::SharedSubtypeChoice, vec![mapped.expression]);
+    }
+    if transformed {
+        mapped.expression = sequence(
+            mapped.expression,
+            call(
+                Operation::Transform,
+                vec![call(Operation::EffectResult, vec![])],
+            ),
+        );
+    }
+    if let Some(attacking) = attacking {
+        mapped.expression = call(
+            Operation::PutMovedAttacking,
+            vec![mapped.expression, Expression::Text(attacking.to_string())],
+        );
+    }
+    for keyword in added_keywords {
+        mapped.expression = sequence(
+            mapped.expression,
+            call(
+                Operation::GrantKeyword,
+                vec![
+                    call(Operation::EffectResult, vec![]),
+                    Expression::Text(keyword),
+                ],
+            ),
+        );
+    }
+    if let Some(effect) = static_effect {
+        mapped.expression = call(
+            Operation::ApplyStaticEffect,
+            vec![mapped.expression, effect],
+        );
     }
     if prefix == LegacyAbilityPrefix::Static
         && parameter_map
@@ -1778,6 +2049,12 @@ fn extract_legacy_conditions(
             _ => return Err(unsupported_value("Revolt", value)),
         }
     }
+    if let Some(value) = parameters.get("Delirium") {
+        match value.as_str() {
+            "True" => conditions.push(closed_activation_condition("Delirium")?),
+            _ => return Err(unsupported_value("Delirium", value)),
+        }
+    }
     if conditions.is_empty() {
         if !check_on_resolution {
             let mut unconditioned = expression.clone();
@@ -1801,6 +2078,7 @@ fn extract_legacy_conditions(
                     | "ActivatorThisTurnCast"
                     | "OpponentTurn"
                     | "Revolt"
+                    | "Delirium"
                     | "NoResolvingCheck"
                     | "ConditionDescription"
             )
@@ -1947,6 +2225,10 @@ fn legacy_named_condition(value: &str) -> Result<Expression, MappingDiagnostic> 
         "ExtraTurn" => Ok(call(
             Operation::During,
             vec![Expression::Text("extra_turn".to_string())],
+        )),
+        "MaxSpeed" => Ok(call(
+            Operation::DesignationIs,
+            vec![Expression::Text("max_speed".to_string())],
         )),
         "Threshold" | "Delirium" | "Metalcraft" | "Hellbent" | "Blessing" | "Solved" => {
             closed_activation_condition(value)
@@ -2322,6 +2604,12 @@ fn map_dynamic_ability(
                 argument: 2,
             },
         ],
+        "DigUntil" => vec![DynamicPatchSpec {
+            key: "Amount",
+            placeholder: "1",
+            operation: Operation::LibraryDigUntil,
+            argument: 2,
+        }],
         "Token" => vec![DynamicPatchSpec {
             key: "TokenAmount",
             placeholder: "1",
@@ -2459,6 +2747,30 @@ fn map_dynamic_ability(
             placeholder: "1",
             operation: Operation::Surveil,
             argument: 0,
+        }],
+        "ChooseCard" => vec![DynamicPatchSpec {
+            key: "Amount",
+            placeholder: "1",
+            operation: Operation::ChooseObjects,
+            argument: 1,
+        }],
+        "PreventDamage" => vec![DynamicPatchSpec {
+            key: "Amount",
+            placeholder: "1",
+            operation: Operation::PreventDamage,
+            argument: 2,
+        }],
+        "Sacrifice" => vec![DynamicPatchSpec {
+            key: "Amount",
+            placeholder: "2",
+            operation: Operation::SacrificeCount,
+            argument: 1,
+        }],
+        "Untap" => vec![DynamicPatchSpec {
+            key: "Amount",
+            placeholder: "1",
+            operation: Operation::ChooseObjects,
+            argument: 1,
         }],
         "RearrangeTopOfLibrary" => vec![DynamicPatchSpec {
             key: "NumCards",
@@ -3180,7 +3492,40 @@ fn replace_dynamic_mana_limit(expression: &mut Expression, replacement: &Express
     replaced
 }
 
-fn wrap_target_selectors(expression: &mut Expression, unique: bool, group: Option<&str>) -> usize {
+fn replace_dynamic_mana_equal(expression: &mut Expression, replacement: &Expression) -> usize {
+    let Expression::Call {
+        operation,
+        arguments,
+    } = expression
+    else {
+        return 0;
+    };
+    let mut replaced = 0;
+    if *operation == Operation::Equals
+        && matches!(
+            arguments.first(),
+            Some(Expression::Call {
+                operation: Operation::ManaValue,
+                ..
+            })
+        )
+        && arguments.get(1) == Some(&Expression::Integer(0))
+    {
+        arguments[1] = replacement.clone();
+        replaced += 1;
+    }
+    for argument in arguments {
+        replaced += replace_dynamic_mana_equal(argument, replacement);
+    }
+    replaced
+}
+
+fn wrap_target_selectors(
+    expression: &mut Expression,
+    unique: bool,
+    group: Option<&str>,
+    per_player: bool,
+) -> usize {
     let Expression::Call {
         operation,
         arguments,
@@ -3199,13 +3544,52 @@ fn wrap_target_selectors(expression: &mut Expression, unique: bool, group: Optio
                 vec![wrapped, Expression::Text(group.to_string())],
             );
         }
+        if per_player {
+            wrapped = call(Operation::TargetPerPlayer, vec![wrapped]);
+        }
         *expression = wrapped;
         return 1;
     }
     arguments
         .iter_mut()
-        .map(|argument| wrap_target_selectors(argument, unique, group))
+        .map(|argument| wrap_target_selectors(argument, unique, group, per_player))
         .sum()
+}
+
+fn apply_targeting_filter(
+    expression: &mut Expression,
+    predicate: &Expression,
+) -> Result<usize, MappingDiagnostic> {
+    let Expression::Call {
+        operation,
+        arguments,
+    } = expression
+    else {
+        return Ok(0);
+    };
+    if matches!(*operation, Operation::Target | Operation::TargetRange) {
+        let Some(selector) = arguments.first_mut() else {
+            return Err(diagnostic(
+                "TARGET_BINDING_MISMATCH",
+                "typed target has no selector",
+            ));
+        };
+        if matches!(
+            selector,
+            Expression::Call {
+                operation: Operation::Spells,
+                ..
+            }
+        ) {
+            *selector = add_collection_predicate(selector.clone(), predicate.clone())?;
+            return Ok(1);
+        }
+    }
+    let mut replaced = 0;
+    for argument in arguments {
+        replaced += apply_targeting_filter(argument, predicate)?;
+    }
+    Ok(replaced)
 }
 
 fn resolve_svar(
@@ -3306,6 +3690,7 @@ fn map_charm_ability(
             "MinCharmNum",
             "AdditionalDescription",
             "PrecostDesc",
+            "ChoiceRestriction",
         ],
     )?;
     if parameters
@@ -3376,6 +3761,22 @@ fn map_charm_ability(
         let mut arguments = vec![Expression::Integer(minimum), Expression::Integer(maximum)];
         arguments.extend(effects);
         call(Operation::ChooseBetween, arguments)
+    };
+    let expression = match parameters.get("ChoiceRestriction").map(String::as_str) {
+        None => expression,
+        Some("ThisGame") => call(
+            Operation::ChoiceRestriction,
+            vec![expression, Expression::Text("this_game".to_string())],
+        ),
+        Some("ThisTurn") => call(
+            Operation::ChoiceRestriction,
+            vec![expression, Expression::Text("this_turn".to_string())],
+        ),
+        Some("YourLastCombat") => call(
+            Operation::ChoiceRestriction,
+            vec![expression, Expression::Text("your_last_combat".to_string())],
+        ),
+        Some(value) => return Err(unsupported_value("ChoiceRestriction", value)),
     };
     mapped_direct(prefix, "Charm", &parameters, expression)
 }
@@ -4439,13 +4840,28 @@ fn map_triggered_ability(
                 .ok_or_else(|| unsupported_value("ActivationLimit", &value))
         })
         .transpose()?;
+    let game_activation_limit = parameters
+        .remove("GameActivationLimit")
+        .map(|value| {
+            value
+                .parse::<i64>()
+                .ok()
+                .filter(|limit| (1..=3).contains(limit))
+                .ok_or_else(|| unsupported_value("GameActivationLimit", &value))
+        })
+        .transpose()?;
     let optional = parameters.remove("OptionalDecider");
-    if optional.as_deref().is_some_and(|decider| decider != "You") {
-        return Err(unsupported_value(
-            "OptionalDecider",
-            optional.as_deref().unwrap_or_default(),
-        ));
-    }
+    let optional_decider = optional
+        .as_deref()
+        .map(|decider| match decider {
+            "You" => Ok(call(Operation::You, vec![])),
+            "TriggeredCardController" | "TriggeredSourceController" => Ok(call(
+                Operation::ControllerOf,
+                vec![call(Operation::Triggered, vec![])],
+            )),
+            value => Err(unsupported_value("OptionalDecider", value)),
+        })
+        .transpose()?;
     if let Some(secondary) = parameters.remove("Secondary") {
         if secondary != "True" {
             return Err(unsupported_value("Secondary", &secondary));
@@ -4563,6 +4979,16 @@ fn map_triggered_ability(
             ],
         )
     });
+    let event = game_activation_limit.map_or(event.clone(), |limit| {
+        call(
+            Operation::EventGameLimit,
+            vec![
+                event,
+                call(Operation::Source, vec![]),
+                Expression::Integer(limit),
+            ],
+        )
+    });
     let event = if static_trigger {
         call(Operation::EventStatic, vec![event])
     } else {
@@ -4588,11 +5014,21 @@ fn map_triggered_ability(
         arguments.extend(linked.costs);
         linked_expression = call(Operation::PayToApply, arguments);
     }
-    let expression = if optional.is_some() && !has_linked_costs {
-        call(
-            Operation::ChooseUpTo,
-            vec![Expression::Integer(1), linked_expression],
-        )
+    let expression = if let Some(decider) = optional_decider.filter(|_| !has_linked_costs) {
+        if matches!(
+            decider,
+            Expression::Call {
+                operation: Operation::You,
+                ..
+            }
+        ) {
+            call(
+                Operation::ChooseUpTo,
+                vec![Expression::Integer(1), linked_expression],
+            )
+        } else {
+            call(Operation::OptionalBy, vec![decider, linked_expression])
+        }
     } else {
         linked_expression
     };
@@ -4931,13 +5367,57 @@ fn map_attacks_event(
 ) -> Result<Expression, MappingDiagnostic> {
     reject_unknown(
         parameters,
-        &["Execute", "ValidCard", "TriggerZones", "TriggerDescription"],
+        &[
+            "Execute",
+            "ValidCard",
+            "Attacked",
+            "TriggerZones",
+            "TriggerDescription",
+        ],
     )?;
     require_battlefield_zone(parameters, "TriggerZones")?;
-    Ok(call(
-        Operation::EventAttacks,
-        vec![affected_selector(required(parameters, "ValidCard")?)?],
-    ))
+    let mut arguments = vec![affected_selector(required(parameters, "ValidCard")?)?];
+    if let Some(attacked) = parameters.get("Attacked") {
+        arguments.push(attacked_selector(attacked)?);
+    }
+    Ok(call(Operation::EventAttacks, arguments))
+}
+
+fn attacked_selector(value: &str) -> Result<Expression, MappingDiagnostic> {
+    let mut selectors = Vec::new();
+    for branch in value.split(',') {
+        selectors.push(match branch {
+            "You" => call(Operation::You, vec![]),
+            "Opponent" | "Player.Opponent" => call(Operation::Opponent, vec![]),
+            "Player" => call(Operation::Any, vec![]),
+            "Battle" => call(
+                Operation::Permanents,
+                vec![call(
+                    Operation::TypeIs,
+                    vec![Expression::Text("battle".to_string())],
+                )],
+            ),
+            "Planeswalker.YouCtrl" => call(
+                Operation::Permanents,
+                vec![call(
+                    Operation::And,
+                    vec![
+                        call(
+                            Operation::TypeIs,
+                            vec![Expression::Text("planeswalker".to_string())],
+                        ),
+                        call(Operation::ControlledBy, vec![call(Operation::You, vec![])]),
+                    ],
+                )],
+            ),
+            _ => return Err(unsupported_value("Attacked", value)),
+        });
+    }
+    match selectors.len() {
+        0 => Err(unsupported_value("Attacked", value)),
+        1 => Ok(selectors.remove(0)),
+        _ => Ok(call(Operation::All, selectors)),
+    }
 }
 
 fn map_spell_cast_event(
@@ -5151,6 +5631,7 @@ fn map_attackers_declared_event(
             "Execute",
             "AttackingPlayer",
             "ValidAttackers",
+            "ValidAttackersAmount",
             "TriggerZones",
             "TriggerDescription",
         ],
@@ -5178,10 +5659,26 @@ fn map_attackers_declared_event(
             ),
         )?;
     }
-    Ok(call(
+    let counted_attackers = attackers.clone();
+    let event = call(
         Operation::EventAttacks,
         vec![attackers, Expression::Text("declaration".to_string())],
-    ))
+    );
+    if let Some(amount) = parameters.get("ValidAttackersAmount") {
+        Ok(call(
+            Operation::EventWhen,
+            vec![
+                event,
+                closed_count_comparison(
+                    call(Operation::Count, vec![counted_attackers]),
+                    amount,
+                    "ValidAttackersAmount",
+                )?,
+            ],
+        ))
+    } else {
+        Ok(event)
+    }
 }
 
 fn map_blocks_event(
@@ -5218,16 +5715,34 @@ fn map_attacker_blocked_event(
 ) -> Result<Expression, MappingDiagnostic> {
     reject_unknown(
         parameters,
-        &["Execute", "ValidCard", "TriggerZones", "TriggerDescription"],
+        &[
+            "Execute",
+            "ValidCard",
+            "ValidBlocker",
+            "TriggerZones",
+            "TriggerDescription",
+        ],
     )?;
     require_battlefield_zone(parameters, "TriggerZones")?;
-    Ok(call(
+    let event = call(
         Operation::EventBlocks,
         vec![
-            affected_selector(required(parameters, "ValidCard")?)?,
+            parameters
+                .get("ValidCard")
+                .map(|value| affected_selector(value))
+                .transpose()?
+                .unwrap_or_else(|| call(Operation::Permanents, vec![])),
             Expression::Text("attacker_blocked_once".to_string()),
         ],
-    ))
+    );
+    if let Some(blocker) = parameters.get("ValidBlocker") {
+        Ok(call(
+            Operation::EventBlocker,
+            vec![event, affected_selector(blocker)?],
+        ))
+    } else {
+        Ok(event)
+    }
 }
 
 fn map_attacker_blocked_by_creature_event(
@@ -8114,6 +8629,7 @@ fn map_change_zone(
             "TgtZone",
             "TgtPrompt",
             "Origin",
+            "OriginAlternative",
             "Destination",
             "ChangeType",
             "ChangeTypeDesc",
@@ -8156,9 +8672,6 @@ fn map_change_zone(
             return Err(unsupported_value("Chooser", chooser));
         }
     }
-    let replacement_object = parameters
-        .get("Defined")
-        .is_some_and(|value| value == "ReplacedCard");
     let defined_object_bound = parameters.get("Defined").is_some_and(|value| {
         matches!(
             value.as_str(),
@@ -8208,7 +8721,7 @@ fn map_change_zone(
     }
     let closed_origin = matches!(
         origin,
-        "Library" | "Graveyard" | "Hand" | "Exile" | "Stack" | "Command"
+        "Library" | "Graveyard" | "Hand" | "Exile" | "Stack" | "Command" | "All"
     );
     if origin == "Command"
         && parameters
@@ -8222,7 +8735,6 @@ fn map_change_zone(
         && !parameters.contains_key("Defined");
     if !(origin == "Battlefield"
         || zone_targeted
-        || origin == "All" && replacement_object
         || closed_origin && (defined_object_bound || source_bound || player_bound)
         || origin == "Battlefield" && player_bound)
     {
@@ -8291,7 +8803,7 @@ fn map_change_zone(
                 Expression::Integer(amount),
             ],
         )
-    } else if closed_origin {
+    } else if closed_origin && origin != "All" {
         call(
             Operation::MoveZoneFrom,
             vec![
@@ -8432,11 +8944,39 @@ fn map_library_search(
     let amount = optional_positive_integer(parameters, "ChangeNum")?.unwrap_or(1);
     let player = zone_owner_selector(parameters)?;
     let cards = card_selector_in_zone(required(parameters, "ChangeType")?, "library")?;
-    let chosen = call(Operation::Chosen, vec![cards.clone()]);
-    let mut effects = vec![call(
-        Operation::SearchLibrary,
-        vec![cards, player.clone(), Expression::Integer(amount)],
-    )];
+    let (chosen, search) = if let Some(alternatives) = parameters.get("OriginAlternative") {
+        let mut zones = vec!["library".to_string()];
+        for zone in normalize_zone_list("OriginAlternative", alternatives)? {
+            if !matches!(zone.as_str(), "graveyard" | "hand" | "exile") {
+                return Err(unsupported_value("OriginAlternative", alternatives));
+            }
+            if !zones.contains(&zone) {
+                zones.push(zone);
+            }
+        }
+        let candidates = affected_selector(required(parameters, "ChangeType")?)?;
+        (
+            call(Operation::EffectResult, vec![]),
+            call(
+                Operation::SearchZones,
+                vec![
+                    candidates,
+                    player.clone(),
+                    Expression::Integer(amount),
+                    Expression::Text(zones.join(",")),
+                ],
+            ),
+        )
+    } else {
+        (
+            call(Operation::Chosen, vec![cards.clone()]),
+            call(
+                Operation::SearchLibrary,
+                vec![cards, player.clone(), Expression::Integer(amount)],
+            ),
+        )
+    };
+    let mut effects = vec![search];
     if parameters.contains_key("Reveal") {
         effects.push(call(Operation::Reveal, vec![chosen.clone()]));
     }
@@ -10392,9 +10932,7 @@ fn map_sacrifice_effect(
             "RememberSacrificed",
         ],
     )?;
-    if optional_positive_integer(parameters, "Amount")?.unwrap_or(1) != 1 {
-        return Err(unsupported_value("Amount", required(parameters, "Amount")?));
-    }
+    let amount = optional_positive_integer(parameters, "Amount")?.unwrap_or(1);
     if parameters.contains_key("Defined") && parameters.contains_key("ValidTgts") {
         return Err(diagnostic(
             "UNSUPPORTED_SELECTOR",
@@ -10420,12 +10958,16 @@ fn map_sacrifice_effect(
     };
     let permanents =
         add_collection_predicate(permanents, call(Operation::ControlledBy, vec![player]))?;
-    let expression = apply_remembered_result(
-        call(Operation::SacrificeEffect, vec![permanents]),
-        parameters,
-        "RememberSacrificed",
-        "sacrificed",
-    )?;
+    let sacrifice = if amount == 1 {
+        call(Operation::SacrificeEffect, vec![permanents])
+    } else {
+        call(
+            Operation::SacrificeCount,
+            vec![permanents, Expression::Integer(amount)],
+        )
+    };
+    let expression =
+        apply_remembered_result(sacrifice, parameters, "RememberSacrificed", "sacrificed")?;
     mapped_direct(prefix, api, parameters, expression)
 }
 
@@ -10551,6 +11093,7 @@ fn map_gain_control(
             "Defined",
             "ValidTgts",
             "TgtPrompt",
+            "AllValid",
             "NewController",
             "LoseControl",
             "Untap",
@@ -10568,7 +11111,17 @@ fn map_gain_control(
             required(parameters, "NewController")?,
         ));
     }
-    let affected = object_selector(parameters, DefaultSelector::Source)?;
+    if parameters.contains_key("AllValid") && parameters.contains_key("Defined") {
+        return Err(diagnostic(
+            "UNSUPPORTED_SELECTOR",
+            "GainControl cannot combine AllValid with Defined",
+        ));
+    }
+    let affected = if let Some(valid) = parameters.get("AllValid") {
+        affected_selector(valid)?
+    } else {
+        object_selector(parameters, DefaultSelector::Source)?
+    };
     let temporary = match parameters.get("LoseControl").map(String::as_str) {
         None => false,
         Some("EOT") => true,
@@ -12901,15 +13454,14 @@ fn parse_cost_with_controller(
                     vec![Expression::Integer(-amount)],
                 ));
             } else {
-                for _ in 0..amount {
-                    costs.push(call(
-                        Operation::RemoveCounterCost,
-                        vec![
-                            call(Operation::Source, vec![]),
-                            Expression::Text(counter.to_ascii_lowercase()),
-                        ],
-                    ));
-                }
+                costs.push(call(
+                    Operation::RemoveCounterCost,
+                    vec![
+                        call(Operation::Source, vec![]),
+                        Expression::Text(counter.to_ascii_lowercase()),
+                        Expression::Integer(amount),
+                    ],
+                ));
             }
         } else {
             return Err(unsupported_value("Cost", value));
@@ -13389,6 +13941,10 @@ fn defined_selector(value: &str) -> Result<Expression, MappingDiagnostic> {
             Operation::ControllerOf,
             vec![call(Operation::Target, vec![call(Operation::Any, vec![])])],
         )),
+        "TargetedOwner" => Ok(call(
+            Operation::OwnerOf,
+            vec![call(Operation::Target, vec![call(Operation::Any, vec![])])],
+        )),
         "ReplacedCard" => Ok(call(Operation::Triggered, vec![])),
         _ => Err(unsupported_value("Defined", value)),
     }
@@ -13404,6 +13960,10 @@ fn defined_player_selector(value: &str) -> Result<Expression, MappingDiagnostic>
         }
         "TargetedController" => Ok(call(
             Operation::ControllerOf,
+            vec![call(Operation::Target, vec![call(Operation::Any, vec![])])],
+        )),
+        "TargetedOwner" => Ok(call(
+            Operation::OwnerOf,
             vec![call(Operation::Target, vec![call(Operation::Any, vec![])])],
         )),
         "TriggeredCardController" => Ok(call(
@@ -13849,7 +14409,9 @@ fn affected_selector_branch(value: &str) -> Result<Expression, MappingDiagnostic
                     )
                 }
                 _ => {
-                    if let Some(predicate) = closed_numeric_predicate(modifier) {
+                    if let Some(predicate) = closed_counter_predicate(modifier) {
+                        predicate?
+                    } else if let Some(predicate) = closed_numeric_predicate(modifier) {
                         predicate?
                     } else if let Some(predicate) = closed_negated_predicate(modifier) {
                         predicate
@@ -13874,6 +14436,36 @@ fn affected_selector_branch(value: &str) -> Result<Expression, MappingDiagnostic
         Operation::Permanents
     };
     Ok(call(operation, predicate.into_iter().collect()))
+}
+
+fn closed_counter_predicate(value: &str) -> Option<Result<Expression, MappingDiagnostic>> {
+    let rest = value.strip_prefix("counters_")?;
+    let (comparison, counter_type) = match rest.split_once('_') {
+        Some(parts) => parts,
+        None => return Some(Err(unsupported_value("Affected", value))),
+    };
+    let minimum = match comparison
+        .strip_prefix("GE")
+        .and_then(|amount| amount.parse::<i64>().ok())
+        .filter(|amount| *amount > 0)
+    {
+        Some(amount) => amount,
+        None => return Some(Err(unsupported_value("Affected", value))),
+    };
+    if counter_type.is_empty()
+        || !counter_type
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric())
+    {
+        return Some(Err(unsupported_value("Affected", value)));
+    }
+    Some(Ok(call(
+        Operation::WithCounter,
+        vec![
+            Expression::Text(counter_type.to_ascii_lowercase()),
+            Expression::Integer(minimum),
+        ],
+    )))
 }
 
 fn kicked_predicate(value: &str) -> Option<Expression> {
@@ -14231,6 +14823,7 @@ fn is_nonsemantic_metadata(key: &str) -> bool {
     matches!(
         key,
         "AILogic"
+            | "AINoRecursiveCheck"
             | "AITgts"
             | "CostDesc"
             | "IsCurse"
@@ -14238,6 +14831,7 @@ fn is_nonsemantic_metadata(key: &str) -> bool {
             | "Planeswalker"
             | "PreCostDesc"
             | "PrecostDesc"
+            | "SacMessage"
             | "SpellDescription"
             | "StackDescription"
             | "TgtPrompt"
@@ -14746,6 +15340,71 @@ mod tests {
                 })
             })
         ));
+
+        for (script, expected) in [
+            (
+                "A:SP$ PreventDamage | Defined$ You | Amount$ X\nSVar:X:Count$Valid Creature.YouCtrl\n",
+                Operation::PreventDamage,
+            ),
+            (
+                "A:SP$ Sacrifice | Defined$ You | SacValid$ Creature | Amount$ X\nSVar:X:Count$Valid Creature.YouCtrl\n",
+                Operation::SacrificeCount,
+            ),
+            (
+                "A:SP$ ChooseCard | Choices$ Creature.YouCtrl | Amount$ X | MinAmount$ 0\nSVar:X:Count$Valid Land.YouCtrl\n",
+                Operation::ChooseObjects,
+            ),
+            (
+                "A:SP$ DigUntil | Valid$ Land | Amount$ X | RevealedDestination$ Graveyard\nSVar:X:Count$Valid Creature.YouCtrl\n",
+                Operation::LibraryDigUntil,
+            ),
+            (
+                "A:SP$ Untap | UntapUpTo$ True | UntapType$ Land.YouCtrl | Amount$ X\nSVar:X:Count$Valid Creature.YouCtrl\n",
+                Operation::ChooseObjects,
+            ),
+        ] {
+            let mapped = map_script_root(script).unwrap_or_else(|error| {
+                panic!("dynamic count should map: {}", error.message)
+            });
+            assert!(expression_contains_operation(&mapped.expression, expected));
+            assert!(expression_contains_operation(
+                &mapped.expression,
+                Operation::Count
+            ));
+        }
+
+        for script in [
+            "A:SP$ MakeCard | Conjure$ True | Name$ Colossal Dreadmaw | Zone$ Battlefield | Amount$ X\nSVar:X:Count$Valid Creature.YouCtrl\n",
+            "A:SP$ Proliferate | Amount$ X\nSVar:X:Count$Valid Creature.YouCtrl\n",
+        ] {
+            let mapped = map_script_root(script).unwrap_or_else(|error| {
+                panic!("dynamic repeated effect should map: {}", error.message)
+            });
+            assert!(expression_contains_operation(
+                &mapped.expression,
+                Operation::RepeatEffect
+            ));
+            assert!(expression_contains_operation(
+                &mapped.expression,
+                Operation::Count
+            ));
+        }
+
+        let multi_zone = map_line(
+            "A:SP$ ChangeZone | Origin$ Library | OriginAlternative$ Graveyard,Hand | Destination$ Battlefield | ChangeType$ Creature.YouOwn | ChangeNum$ 1 | Hidden$ True",
+        )
+        .unwrap_or_else(|error| panic!("closed multi-zone search should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &multi_zone.expression,
+            Operation::SearchZones
+        ));
+
+        let open_zone = map_line(
+            "A:SP$ ChangeZone | Origin$ Library | OriginAlternative$ Battlefield | Destination$ Hand | ChangeType$ Card | ChangeNum$ 1",
+        )
+        .err()
+        .unwrap_or_else(|| panic!("open alternative search zone must quarantine"));
+        assert_eq!(open_zone.code, "UNSUPPORTED_VALUE");
     }
 
     #[test]
@@ -15480,6 +16139,191 @@ mod tests {
             &search.expression,
             Operation::Count
         ));
+
+        let public_activation = map_script_root(
+            "A:AB$ Pump | Cost$ 1 | Defined$ Self | NumAtt$ +1 | NumDef$ +1 | Activator$ Player\n",
+        )
+        .unwrap_or_else(|error| panic!("public activation should map: {}", error.message));
+        assert!(public_activation.timing.as_ref().is_some_and(|timing| {
+            expression_contains_operation(timing, Operation::TimingActivator)
+        }));
+
+        let per_player = map_script_root(
+            "A:DB$ Tap | ValidTgts$ Creature.OppCtrl | TargetMin$ 0 | TargetMax$ OneEach | TargetsForEachPlayer$ True\n",
+        )
+        .unwrap_or_else(|error| panic!("per-player targets should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &per_player.expression,
+            Operation::TargetPerPlayer
+        ));
+
+        let shared_type = map_script_root(
+            "A:AB$ ChangeZone | Cost$ 2 | Origin$ Library | Destination$ Battlefield | ChangeType$ Land.Basic | Tapped$ True | ChangeNum$ 2 | ShareLandType$ True\n",
+        )
+        .unwrap_or_else(|error| panic!("shared land type search should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &shared_type.expression,
+            Operation::SharedSubtypeChoice
+        ));
+
+        let counter_affected = map_line(
+            "S:Mode$ Continuous | Affected$ Creature.YouCtrl+counters_GE1_P1P1 | AddKeyword$ Flying",
+        )
+        .unwrap_or_else(|error| panic!("counter-filtered affected set should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &counter_affected.expression,
+            Operation::WithCounter
+        ));
+
+        let attacked = map_script_root(concat!(
+            "Name:Attacked Filter\n",
+            "T:Mode$ Attacks | ValidCard$ Creature | Attacked$ You,Planeswalker.YouCtrl | TriggerZones$ Battlefield | Execute$ DBLife\n",
+            "SVar:DBLife:DB$ GainLife | Defined$ You | LifeAmount$ 1\n",
+        ))
+        .unwrap_or_else(|error| panic!("attacked-object filter should map: {}", error.message));
+        assert!(attacked.event.as_ref().is_some_and(|event| {
+            matches!(event, Expression::Call { operation: Operation::EventAttacks, arguments } if arguments.len() == 2)
+        }));
+
+        let optional_controller = map_script_root(concat!(
+            "Name:Controller Choice\n",
+            "T:Mode$ Discarded | ValidCard$ Card | TriggerZones$ Battlefield | OptionalDecider$ TriggeredCardController | Execute$ DBLife\n",
+            "SVar:DBLife:DB$ GainLife | Defined$ You | LifeAmount$ 1\n",
+        ))
+        .unwrap_or_else(|error| panic!("trigger controller choice should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &optional_controller.expression,
+            Operation::OptionalBy
+        ));
+
+        let transformed = map_script_root(
+            "A:DB$ ChangeZone | Defined$ Remembered | Origin$ Exile | Destination$ Battlefield | Transformed$ True\n",
+        )
+        .unwrap_or_else(|error| panic!("transformed return should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &transformed.expression,
+            Operation::Transform
+        ));
+
+        let attacking = map_script_root(
+            "A:DB$ ChangeZone | Origin$ Hand | Destination$ Battlefield | ChangeType$ Creature | ChangeNum$ 1 | Tapped$ True | Attacking$ True\n",
+        )
+        .unwrap_or_else(|error| panic!("attacking zone move should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &attacking.expression,
+            Operation::PutMovedAttacking
+        ));
+
+        let party = map_script_root(concat!(
+            "Name:Party Attack\n",
+            "T:Mode$ AttackersDeclared | ValidAttackers$ Creature | ValidAttackersAmount$ GE3 | AttackingPlayer$ You | TriggerZones$ Battlefield | Execute$ DBLife\n",
+            "SVar:DBLife:DB$ GainLife | Defined$ You | LifeAmount$ 1\n",
+        ))
+        .unwrap_or_else(|error| panic!("attacker-count trigger should map: {}", error.message));
+        assert!(party
+            .event
+            .as_ref()
+            .is_some_and(|event| { expression_contains_operation(event, Operation::EventWhen) }));
+
+        let restricted_charm = map_script_root(concat!(
+            "Name:Restricted Charm\n",
+            "A:AB$ Charm | Cost$ 1 | Choices$ DBLife,DBDraw | ChoiceRestriction$ ThisTurn\n",
+            "SVar:DBLife:DB$ GainLife | Defined$ You | LifeAmount$ 1\n",
+            "SVar:DBDraw:DB$ Draw | Defined$ You | NumCards$ 1\n",
+        ))
+        .unwrap_or_else(|error| panic!("restricted charm should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &restricted_charm.expression,
+            Operation::ChoiceRestriction
+        ));
+
+        let keyword_copy =
+            map_script_root("A:DB$ Clone | Choices$ Creature | AddKeywords$ Flying & Vigilance\n")
+                .unwrap_or_else(|error| {
+                    panic!("keyword-modified clone should map: {}", error.message)
+                });
+        assert!(expression_contains_operation(
+            &keyword_copy.expression,
+            Operation::GrantKeyword
+        ));
+
+        let dynamic_cmc = map_script_root(concat!(
+            "Name:Dynamic CMC\n",
+            "S:Mode$ Continuous | Affected$ Creature.YouCtrl+cmcEQX | AddKeyword$ Flying\n",
+            "SVar:X:Count$Valid Creature.YouCtrl\n",
+        ))
+        .unwrap_or_else(|error| panic!("dynamic mana equality should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &dynamic_cmc.expression,
+            Operation::Count
+        ));
+
+        let static_return = map_script_root(concat!(
+            "Name:Static Return\n",
+            "A:SP$ ChangeZone | Origin$ Graveyard | Destination$ Battlefield | ValidTgts$ Creature.YouOwn | StaticEffect$ Animate\n",
+            "SVar:Animate:Mode$ Continuous | Affected$ Card.IsRemembered | SetPower$ 4 | SetToughness$ 4\n",
+        ))
+        .unwrap_or_else(|error| panic!("static-effect return should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &static_return.expression,
+            Operation::ApplyStaticEffect
+        ));
+
+        let game_limited =
+            map_script_root("A:AB$ Scry | Cost$ 1 | ScryNum$ 1 | GameActivationLimit$ 1\n")
+                .unwrap_or_else(|error| {
+                    panic!("game-limited activation should map: {}", error.message)
+                });
+        assert!(game_limited.timing.as_ref().is_some_and(|timing| {
+            expression_contains_operation(timing, Operation::TimingGameLimit)
+        }));
+
+        let blocker = map_script_root(concat!(
+            "Name:Blocker Filter\n",
+            "T:Mode$ AttackerBlocked | ValidCard$ Creature | ValidBlocker$ Card.Self | Execute$ DBLife\n",
+            "SVar:DBLife:DB$ GainLife | Defined$ You | LifeAmount$ 1\n",
+        ))
+        .unwrap_or_else(|error| panic!("blocker-filtered event should map: {}", error.message));
+        assert!(blocker.event.as_ref().is_some_and(|event| {
+            expression_contains_operation(event, Operation::EventBlocker)
+        }));
+
+        let targeting = map_script_root(
+            "A:SP$ Counter | TargetType$ Spell | ValidTgts$ Card | TargetValidTargeting$ You\n",
+        )
+        .unwrap_or_else(|error| panic!("targeting-filtered counter should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &targeting.expression,
+            Operation::Targets
+        ));
+
+        let memory = map_script_root(
+            "A:SP$ Destroy | ValidTgts$ Creature | RememberTargets$ True | ForgetOtherTargets$ True\n",
+        )
+        .unwrap_or_else(|error| panic!("replacing remembered targets should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &memory.expression,
+            Operation::Forget
+        ));
+
+        let all_origin = map_script_root(
+            "A:DB$ ChangeZone | Defined$ TriggeredCard | Origin$ All | Destination$ Exile\n",
+        )
+        .unwrap_or_else(|error| panic!("defined all-zone move should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &all_origin.expression,
+            Operation::Exile
+        ));
+
+        for condition in ["MaxSpeed", "Delirium"] {
+            let line =
+                format!("A:DB$ GainLife | Defined$ You | LifeAmount$ 1 | Condition$ {condition}\n");
+            map_script_root(&line).unwrap_or_else(|error| {
+                panic!("{condition} condition should map: {}", error.message)
+            });
+        }
+        map_script_root("A:DB$ GainLife | Defined$ You | LifeAmount$ 1 | Delirium$ True\n")
+            .unwrap_or_else(|error| panic!("Delirium flag should map: {}", error.message));
     }
 
     #[test]
@@ -16999,7 +17843,7 @@ mod tests {
             (
                 "A:AB$ Draw | Cost$ SubCounter<3/CHARGE> | NumCards$ 1 | SpellDescription$ Draw.",
                 Operation::Draw,
-                3,
+                1,
             ),
             (
                 "A:AB$ Mill | Cost$ B Discard<1/Card> | NumCards$ 2 | SpellDescription$ Mill.",
@@ -17028,6 +17872,19 @@ mod tests {
             ),
         ] {
             assert_operation(line, operation, costs);
+        }
+
+        for line in [
+            "A:AB$ Mana | Cost$ T SubCounter<X/CHARGE> | Produced$ B | Amount$ X\nSVar:X:Count$xPaid\n",
+            "A:AB$ ChooseCard | Cost$ SubCounter<X/LOYALTY> | Choices$ Creature.cmcEQX+ExiledWithSource | ChoiceZone$ Exile\nSVar:X:Count$xPaid\n",
+        ] {
+            let mapped = map_script_root(line).unwrap_or_else(|error| {
+                panic!("dynamic counter-removal cost should map: {}", error.message)
+            });
+            assert!(mapped
+                .costs
+                .iter()
+                .any(|cost| expression_contains_operation(cost, Operation::PaidX)));
         }
     }
 
@@ -17937,9 +18794,10 @@ mod tests {
             "T:Mode$ AttackerBlocked | ValidCard$ Creature | ValidBlocker$ Card.Self | Execute$ TrigDraw | TriggerDescription$ Draw.\n",
             "SVar:TrigDraw:DB$ Draw | Defined$ You\n",
         ))
-        .err()
-        .unwrap_or_else(|| panic!("aggregate blocker filter must quarantine"));
-        assert_eq!(aggregate_blocked.code, "UNSUPPORTED_PARAMETER");
+        .unwrap_or_else(|error| panic!("aggregate blocker filter should map: {}", error.message));
+        assert!(aggregate_blocked.event.as_ref().is_some_and(|event| {
+            expression_contains_operation(event, Operation::EventBlocker)
+        }));
 
         let per_blocker = map_script_root(concat!(
             "Name:Per Blocker Trigger\n",
@@ -18881,9 +19739,11 @@ mod tests {
         let qualified_target = map_line(
             "A:SP$ Destroy | ValidTgts$ Creature.counters_GE1_P1P1 | SpellDescription$ Qualified target.",
         )
-        .err()
-        .unwrap_or_else(|| panic!("qualified target must quarantine"));
-        assert_eq!(qualified_target.code, "UNSUPPORTED_VALUE");
+        .unwrap_or_else(|error| panic!("counter-qualified target should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &qualified_target.expression,
+            Operation::WithCounter
+        ));
 
         let dynamic_continuous = map_line(
             "S:Mode$ Continuous | Affected$ Card.Self | AddPower$ X | Description$ Dynamic power.",
