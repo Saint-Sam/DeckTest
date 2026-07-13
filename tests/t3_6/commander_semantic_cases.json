@@ -1,0 +1,3446 @@
+{
+  "candidate_payload_sha256": "901a08efac2e4eaefc3c2adba3fa23515709595efcde30e43032f24112552e0b",
+  "cases": [
+    {
+      "card_name": "Plains",
+      "claim_boundary": "one deterministic card-specific production path plus shared primitive validation",
+      "expected_behavior": "Play Plains, then tap it to add exactly {W}.",
+      "expected_runtime": {
+        "capabilities": [
+          "land_play",
+          "mana_ability"
+        ],
+        "destination": "battlefield",
+        "disposition": "passed",
+        "effect_actions": 0,
+        "final_hash": "16179524449187369753",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 35
+      },
+      "freeze_rank": 1,
+      "legacy_source_path": "p/plains.txt",
+      "legacy_source_sha256": "7b72280280cf668427e25283026a88ebcf3c67963e1097eda39ed6433c228f9c",
+      "oracle_id": "bc71ebf6-2056-41f7-be35-b2e5c34afa99",
+      "oracle_text": "({T}: Add {W}.)",
+      "scenario_id": "T3.6-001",
+      "semantic_atoms": [
+        {
+          "destination": "battlefield",
+          "op": "play_land",
+          "type_line": "Basic Land - Plains"
+        },
+        {
+          "legal_outputs": [
+            "{W}"
+          ],
+          "op": "activate_mana",
+          "tap_source": true
+        }
+      ],
+      "status": "semantic_case_ready",
+      "stratum": "mana_sources",
+      "translated_path": "p/plains.frs",
+      "translated_source_sha256": "276f3a8c208bd38b2a02bb7b389cb4fa611d4f0015bbfa0b0ef870c3fd379030"
+    },
+    {
+      "card_name": "Island",
+      "claim_boundary": "one deterministic card-specific production path plus shared primitive validation",
+      "expected_behavior": "Play Island, then tap it to add exactly {U}.",
+      "expected_runtime": {
+        "capabilities": [
+          "land_play",
+          "mana_ability"
+        ],
+        "destination": "battlefield",
+        "disposition": "passed",
+        "effect_actions": 0,
+        "final_hash": "1419791934737378606",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 35
+      },
+      "freeze_rank": 2,
+      "legacy_source_path": "i/island.txt",
+      "legacy_source_sha256": "e590434de75aa3e39a03555d0c91788cdabe37f5fdf91ce7c1a189c79f4cade6",
+      "oracle_id": "b2c6aa39-2d2a-459c-a555-fb48ba993373",
+      "oracle_text": "({T}: Add {U}.)",
+      "scenario_id": "T3.6-002",
+      "semantic_atoms": [
+        {
+          "destination": "battlefield",
+          "op": "play_land",
+          "type_line": "Basic Land - Island"
+        },
+        {
+          "legal_outputs": [
+            "{U}"
+          ],
+          "op": "activate_mana",
+          "tap_source": true
+        }
+      ],
+      "status": "semantic_case_ready",
+      "stratum": "mana_sources",
+      "translated_path": "i/island.frs",
+      "translated_source_sha256": "ad075528578279f8838695f4daff6db26f64dd8dc57f2ffc99dab6be0020faae"
+    },
+    {
+      "card_name": "Swamp",
+      "claim_boundary": "one deterministic card-specific production path plus shared primitive validation",
+      "expected_behavior": "Play Swamp, then tap it to add exactly {B}.",
+      "expected_runtime": {
+        "capabilities": [
+          "land_play",
+          "mana_ability"
+        ],
+        "destination": "battlefield",
+        "disposition": "passed",
+        "effect_actions": 0,
+        "final_hash": "13027204784879610444",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 35
+      },
+      "freeze_rank": 3,
+      "legacy_source_path": "s/swamp.txt",
+      "legacy_source_sha256": "96a473942577dee4fffe52906874ef343a7e8d1413872334baa576066112d252",
+      "oracle_id": "56719f6a-1a6c-4c0a-8d21-18f7d7350b68",
+      "oracle_text": "({T}: Add {B}.)",
+      "scenario_id": "T3.6-003",
+      "semantic_atoms": [
+        {
+          "destination": "battlefield",
+          "op": "play_land",
+          "type_line": "Basic Land - Swamp"
+        },
+        {
+          "legal_outputs": [
+            "{B}"
+          ],
+          "op": "activate_mana",
+          "tap_source": true
+        }
+      ],
+      "status": "semantic_case_ready",
+      "stratum": "mana_sources",
+      "translated_path": "s/swamp.frs",
+      "translated_source_sha256": "5e5a8254bd8699f2122aa7de779cbcafa3c410134e00dd59a058be280b0991a3"
+    },
+    {
+      "card_name": "Mountain",
+      "claim_boundary": "one deterministic card-specific production path plus shared primitive validation",
+      "expected_behavior": "Play Mountain, then tap it to add exactly {R}.",
+      "expected_runtime": {
+        "capabilities": [
+          "land_play",
+          "mana_ability"
+        ],
+        "destination": "battlefield",
+        "disposition": "passed",
+        "effect_actions": 0,
+        "final_hash": "11390131254545673164",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 35
+      },
+      "freeze_rank": 4,
+      "legacy_source_path": "m/mountain.txt",
+      "legacy_source_sha256": "d421d9639d7b7f2a8c4ed04fa2fa8526cbc768733a92b0a1a453535ee99a3799",
+      "oracle_id": "a3fb7228-e76b-4e96-a40e-20b5fed75685",
+      "oracle_text": "({T}: Add {R}.)",
+      "scenario_id": "T3.6-004",
+      "semantic_atoms": [
+        {
+          "destination": "battlefield",
+          "op": "play_land",
+          "type_line": "Basic Land - Mountain"
+        },
+        {
+          "legal_outputs": [
+            "{R}"
+          ],
+          "op": "activate_mana",
+          "tap_source": true
+        }
+      ],
+      "status": "semantic_case_ready",
+      "stratum": "mana_sources",
+      "translated_path": "m/mountain.frs",
+      "translated_source_sha256": "537071cdc5b1c102e9991dcc57110426bcf4c46342b7f155372a99821e2e74f5"
+    },
+    {
+      "card_name": "Forest",
+      "claim_boundary": "one deterministic card-specific production path plus shared primitive validation",
+      "expected_behavior": "Play Forest, then tap it to add exactly {G}.",
+      "expected_runtime": {
+        "capabilities": [
+          "land_play",
+          "mana_ability"
+        ],
+        "destination": "battlefield",
+        "disposition": "passed",
+        "effect_actions": 0,
+        "final_hash": "12543251140340501752",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 35
+      },
+      "freeze_rank": 5,
+      "legacy_source_path": "f/forest.txt",
+      "legacy_source_sha256": "9a574ea2a8136e588ab77ff8bf260075a94572d8099a7d0d98c62590479aa5a6",
+      "oracle_id": "b34bb2dc-c1af-4d77-b0b3-a0fb342a5fc6",
+      "oracle_text": "({T}: Add {G}.)",
+      "scenario_id": "T3.6-005",
+      "semantic_atoms": [
+        {
+          "destination": "battlefield",
+          "op": "play_land",
+          "type_line": "Basic Land - Forest"
+        },
+        {
+          "legal_outputs": [
+            "{G}"
+          ],
+          "op": "activate_mana",
+          "tap_source": true
+        }
+      ],
+      "status": "semantic_case_ready",
+      "stratum": "mana_sources",
+      "translated_path": "f/forest.frs",
+      "translated_source_sha256": "774b197199b777c7e3549b881f1546351965929ee69af3ce46d864ca816a1558"
+    },
+    {
+      "card_name": "Wastes",
+      "claim_boundary": "one deterministic card-specific production path plus shared primitive validation",
+      "expected_behavior": "Play Wastes, then tap it to add exactly {C}.",
+      "expected_runtime": {
+        "capabilities": [
+          "land_play",
+          "mana_ability"
+        ],
+        "destination": "battlefield",
+        "disposition": "passed",
+        "effect_actions": 0,
+        "final_hash": "1626917408095278058",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 35
+      },
+      "freeze_rank": 6,
+      "legacy_source_path": "w/wastes.txt",
+      "legacy_source_sha256": "471ac5a8e8a8d63609f6e31a14d8ce20bdc9bfbfa34395bb45a047139928f8d9",
+      "oracle_id": "05d24b0c-904a-46b6-b42a-96a4d91a0dd4",
+      "oracle_text": "{T}: Add {C}.",
+      "scenario_id": "T3.6-006",
+      "semantic_atoms": [
+        {
+          "destination": "battlefield",
+          "op": "play_land",
+          "type_line": "Basic Land"
+        },
+        {
+          "legal_outputs": [
+            "{C}"
+          ],
+          "op": "activate_mana",
+          "tap_source": true
+        }
+      ],
+      "status": "semantic_case_ready",
+      "stratum": "mana_sources",
+      "translated_path": "w/wastes.frs",
+      "translated_source_sha256": "1d6f623b1745739a67f409582ad34115e3bdc70758c14747b8526c3b386c3ecd"
+    },
+    {
+      "card_name": "Sol Ring",
+      "claim_boundary": "one deterministic card-specific production path plus shared primitive validation",
+      "expected_behavior": "Resolve Sol Ring, then tap it to add exactly two colorless mana.",
+      "expected_runtime": {
+        "capabilities": [
+          "permanent_spell",
+          "mana_ability"
+        ],
+        "destination": "battlefield",
+        "disposition": "passed",
+        "effect_actions": 0,
+        "final_hash": "9262100765423513335",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 38
+      },
+      "freeze_rank": 7,
+      "legacy_source_path": "s/sol_ring.txt",
+      "legacy_source_sha256": "c96e86daad1367bceefc198abcbb3dd36129c893377ec0471d68041446478356",
+      "oracle_id": "6ad8011d-3471-4369-9d68-b264cc027487",
+      "oracle_text": "{T}: Add {C}{C}.",
+      "scenario_id": "T3.6-007",
+      "semantic_atoms": [
+        {
+          "destination": "battlefield",
+          "op": "resolve_permanent",
+          "type_line": "Artifact"
+        },
+        {
+          "legal_outputs": [
+            "{C}{C}"
+          ],
+          "op": "activate_mana",
+          "tap_source": true
+        }
+      ],
+      "status": "semantic_case_ready",
+      "stratum": "mana_sources",
+      "translated_path": "s/sol_ring.frs",
+      "translated_source_sha256": "8c5bd449508c5bba439bff5854f5deee57ca7c35f056c4b64a8bcf3c25fe5d2e"
+    },
+    {
+      "card_name": "Mind Stone",
+      "claim_boundary": "one deterministic card-specific production path plus shared primitive validation",
+      "expected_behavior": "Resolve Mind Stone, exercise its colorless mana ability, then pay {1}, tap, and sacrifice it to draw one card.",
+      "expected_runtime": {
+        "capabilities": [
+          "permanent_spell",
+          "mana_ability",
+          "activated_ability",
+          "draw_cards"
+        ],
+        "destination": "battlefield",
+        "disposition": "passed",
+        "effect_actions": 1,
+        "final_hash": "946913094583984788",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 50
+      },
+      "freeze_rank": 8,
+      "legacy_source_path": "m/mind_stone.txt",
+      "legacy_source_sha256": "4ea32eebda9ae9aac0f65311c5b09041307186436f03c4f1af6a4b40cafb3567",
+      "oracle_id": "c97361b5-af16-4a7b-af85-a429dbaf4ad2",
+      "oracle_text": "{T}: Add {C}.\n{1}, {T}, Sacrifice Mind Stone: Draw a card.",
+      "scenario_id": "T3.6-008",
+      "semantic_atoms": [
+        {
+          "destination": "battlefield",
+          "op": "resolve_permanent",
+          "type_line": "Artifact"
+        },
+        {
+          "legal_outputs": [
+            "{C}"
+          ],
+          "op": "activate_mana",
+          "tap_source": true
+        },
+        {
+          "mana_cost": "{1}",
+          "op": "activate_ability",
+          "sacrifice_source": true,
+          "source_destination": "owner_graveyard",
+          "tap_source": true
+        },
+        {
+          "count": 1,
+          "op": "draw_cards",
+          "player": "controller"
+        }
+      ],
+      "status": "semantic_case_ready",
+      "stratum": "card_flow",
+      "translated_path": "m/mind_stone.frs",
+      "translated_source_sha256": "b7a499ec758127a554348b36f24dfcc72bbbc62669fda166c17faea8c321fbe9"
+    },
+    {
+      "blockers": [
+        {
+          "code": "T3_5_UNSUPPORTED_ABILITY_SHAPE",
+          "detail": "card.faces[0].abilities[0]: ability kind Static is not compiled for Permanent"
+        }
+      ],
+      "card_name": "Thought Vessel",
+      "expected_runtime": {
+        "code": "unsupported_ability_shape",
+        "detail": "card.faces[0].abilities[0]: ability kind Static is not compiled for Permanent",
+        "detail_sha256": "21fb483c07691cba4934d68f9c7c744763dd75912c1729643ee2755e99e1694d",
+        "disposition": "unsupported_setup"
+      },
+      "freeze_rank": 9,
+      "legacy_source_path": "t/thought_vessel.txt",
+      "legacy_source_sha256": "708bce2742e7ad3424b823c4b20b0285a05f7d1127aee736aeb33d25b58c9121",
+      "oracle_id": "9965d9c5-2ebf-4a6c-930e-55c5890979be",
+      "oracle_text": "You have no maximum hand size.\n{T}: Add {C}.",
+      "scenario_id": "T3.6-009",
+      "status": "blocked_runtime",
+      "stratum": "continuous_combat_and_costs",
+      "translated_path": "t/thought_vessel.frs",
+      "translated_source_sha256": "039260a50d38c95bc7f8b659d3286df4e3cdbd30bbeb5e5a4da9eba1d92fec39"
+    },
+    {
+      "blockers": [
+        {
+          "code": "T3_5_UNSUPPORTED_KEYWORD_SEMANTICS",
+          "detail": "card.faces[0].keywords: 1 noncreature keyword(s) require runtime lowering"
+        }
+      ],
+      "card_name": "Swiftfoot Boots",
+      "expected_runtime": {
+        "code": "unsupported_keyword_semantics",
+        "detail": "card.faces[0].keywords: 1 noncreature keyword(s) require runtime lowering",
+        "detail_sha256": "f948efa21fb38f29327bce749d47abd386d7addbb7fc79376fece432f78fc999",
+        "disposition": "unsupported_setup"
+      },
+      "freeze_rank": 10,
+      "legacy_source_path": "s/swiftfoot_boots.txt",
+      "legacy_source_sha256": "dcce91503ca23972bf1da1e5e308604424147da77bc1769e040e6a8e98c01631",
+      "oracle_id": "c8b143ad-43ec-4e0d-a440-e348daa31391",
+      "oracle_text": "Equipped creature has hexproof and haste.\nEquip {1}",
+      "scenario_id": "T3.6-010",
+      "status": "blocked_runtime",
+      "stratum": "stack_interaction_and_protection",
+      "translated_path": "s/swiftfoot_boots.frs",
+      "translated_source_sha256": "99b402fe8fa6541d734753b21a513be87f4296c9a9957d6bc3a5ddec0dd40c92"
+    },
+    {
+      "blockers": [
+        {
+          "code": "T3_5_UNSUPPORTED_KEYWORD_SEMANTICS",
+          "detail": "card.faces[0].keywords: 1 noncreature keyword(s) require runtime lowering"
+        }
+      ],
+      "card_name": "Lightning Greaves",
+      "expected_runtime": {
+        "code": "unsupported_keyword_semantics",
+        "detail": "card.faces[0].keywords: 1 noncreature keyword(s) require runtime lowering",
+        "detail_sha256": "f948efa21fb38f29327bce749d47abd386d7addbb7fc79376fece432f78fc999",
+        "disposition": "unsupported_setup"
+      },
+      "freeze_rank": 11,
+      "legacy_source_path": "l/lightning_greaves.txt",
+      "legacy_source_sha256": "d2fc44d4a141f4d70bf5301c23b79ef8291add365b231648d84a479afac2fce4",
+      "oracle_id": "ca204b66-8d0c-431a-8d34-282f7c2d17da",
+      "oracle_text": "Equipped creature has haste and shroud. (It can't be the target of spells or abilities.)\nEquip {0}",
+      "scenario_id": "T3.6-011",
+      "status": "blocked_runtime",
+      "stratum": "continuous_combat_and_costs",
+      "translated_path": "l/lightning_greaves.frs",
+      "translated_source_sha256": "6244e84bef0a91b849e1148c94b8a8cb6606dbbb09e607562db90ad442d1f793"
+    },
+    {
+      "card_name": "Swords to Plowshares",
+      "claim_boundary": "one deterministic card-specific production path plus shared primitive validation",
+      "expected_behavior": "Exile a targeted creature and give its controller life equal to that creature's power.",
+      "expected_runtime": {
+        "capabilities": [
+          "exile_object",
+          "gain_life"
+        ],
+        "destination": "owner_graveyard",
+        "disposition": "passed",
+        "effect_actions": 2,
+        "final_hash": "1097100301194076338",
+        "final_life_totals": [
+          20,
+          22
+        ],
+        "production_actions": 36
+      },
+      "freeze_rank": 12,
+      "legacy_source_path": "s/swords_to_plowshares.txt",
+      "legacy_source_sha256": "b220a132bd93473b212e9572ce283d52669bd92071c8cdef772581867fa8eef5",
+      "oracle_id": "b1544f21-7e98-461b-aed5-e748b0168c52",
+      "oracle_text": "Exile target creature. Its controller gains life equal to its power.",
+      "scenario_id": "T3.6-012",
+      "semantic_atoms": [
+        {
+          "destination": "exile",
+          "op": "exile_object",
+          "target": "creature"
+        },
+        {
+          "amount": "target_power",
+          "op": "gain_life",
+          "player": "target_controller"
+        }
+      ],
+      "status": "semantic_case_ready",
+      "stratum": "targeted_permanent_interaction",
+      "translated_path": "s/swords_to_plowshares.frs",
+      "translated_source_sha256": "4cfcbc8e4749591e86c50c3e548fa7cce0938c77633a4315730ddc40e152524a"
+    },
+    {
+      "blockers": [
+        {
+          "code": "TOKEN_SUBTYPE_STATE_MISSING",
+          "detail": "The 3/3 token is created without its Beast subtype."
+        }
+      ],
+      "card_name": "Beast Within",
+      "expected_runtime": {
+        "capabilities": [
+          "destroy_permanent",
+          "create_token"
+        ],
+        "destination": "owner_graveyard",
+        "disposition": "passed",
+        "effect_actions": 2,
+        "final_hash": "10723423575682817555",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 35
+      },
+      "freeze_rank": 13,
+      "legacy_source_path": "b/beast_within.txt",
+      "legacy_source_sha256": "f1f14e5fe66c457b3d98165a813baf57b3394d9ff759161cc154a73ec7f8fc5e",
+      "oracle_id": "7735eeba-693b-47e2-bd51-414379cf1016",
+      "oracle_text": "Destroy target permanent. Its controller creates a 3/3 green Beast creature token.",
+      "scenario_id": "T3.6-013",
+      "status": "blocked_semantic_gap",
+      "stratum": "targeted_permanent_interaction",
+      "translated_path": "b/beast_within.frs",
+      "translated_source_sha256": "6ae4c76618ea25bd801657cba5a2f6f6999606523491fca02d088335e50287c5"
+    },
+    {
+      "blockers": [
+        {
+          "code": "TOKEN_SUBTYPE_STATE_MISSING",
+          "detail": "The 3/3 token is created without its Elephant subtype."
+        }
+      ],
+      "card_name": "Generous Gift",
+      "expected_runtime": {
+        "capabilities": [
+          "destroy_permanent",
+          "create_token"
+        ],
+        "destination": "owner_graveyard",
+        "disposition": "passed",
+        "effect_actions": 2,
+        "final_hash": "14954126110270489141",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 35
+      },
+      "freeze_rank": 14,
+      "legacy_source_path": "g/generous_gift.txt",
+      "legacy_source_sha256": "054989252877c08b4434bbe1d9060aafd6a3f9cad07c038de6640af52fc919bc",
+      "oracle_id": "fae37e28-e137-4177-b973-fa8b4dd8f409",
+      "oracle_text": "Destroy target permanent. Its controller creates a 3/3 green Elephant creature token.",
+      "scenario_id": "T3.6-014",
+      "status": "blocked_semantic_gap",
+      "stratum": "targeted_permanent_interaction",
+      "translated_path": "g/generous_gift.frs",
+      "translated_source_sha256": "12eaf71870e7723bc780bc282863e9e7342456faa2ea00ad3812856a083cc487"
+    },
+    {
+      "card_name": "Counterspell",
+      "claim_boundary": "one deterministic card-specific production path plus shared primitive validation",
+      "expected_behavior": "Counter a targeted spell on the stack.",
+      "expected_runtime": {
+        "capabilities": [
+          "counter_stack_entry"
+        ],
+        "destination": "owner_graveyard",
+        "disposition": "passed",
+        "effect_actions": 1,
+        "final_hash": "418488773572688342",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 35
+      },
+      "freeze_rank": 15,
+      "legacy_source_path": "c/counterspell.txt",
+      "legacy_source_sha256": "893b826ac94d6c73d4dd80c975ff6e2bbb0fd3d9a8f26fe08b050f7999bb2c0c",
+      "oracle_id": "cc187110-1148-4090-bbb8-e205694a39f5",
+      "oracle_text": "Counter target spell.",
+      "scenario_id": "T3.6-015",
+      "semantic_atoms": [
+        {
+          "op": "counter_stack_entry",
+          "target": "spell"
+        }
+      ],
+      "status": "semantic_case_ready",
+      "stratum": "stack_interaction_and_protection",
+      "translated_path": "c/counterspell.frs",
+      "translated_source_sha256": "fe64fefbd19a7ba4c754c3e90365b091a2d2c4b401da6764f4894504e6d4c7ba"
+    },
+    {
+      "card_name": "Negate",
+      "claim_boundary": "one deterministic card-specific production path plus shared primitive validation",
+      "expected_behavior": "Counter a targeted noncreature spell and reject creature spells as targets.",
+      "expected_runtime": {
+        "capabilities": [
+          "counter_stack_entry"
+        ],
+        "destination": "owner_graveyard",
+        "disposition": "passed",
+        "effect_actions": 1,
+        "final_hash": "13540891029385470761",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 35
+      },
+      "freeze_rank": 16,
+      "legacy_source_path": "n/negate.txt",
+      "legacy_source_sha256": "857f31f0f7437e974f0e18585af8bb68a735c26a8b1d68dc2a5519c4c3d68ae0",
+      "oracle_id": "3407fe41-fdd3-4119-8f70-4bc4590a379f",
+      "oracle_text": "Counter target noncreature spell.",
+      "scenario_id": "T3.6-016",
+      "semantic_atoms": [
+        {
+          "op": "counter_stack_entry",
+          "target": "noncreature_spell"
+        }
+      ],
+      "status": "semantic_case_ready",
+      "stratum": "stack_interaction_and_protection",
+      "translated_path": "n/negate.frs",
+      "translated_source_sha256": "16c02c750d0992fc5a7213c86be461ab2663f5a41dfd7733ba9ccbcf10c7c163"
+    },
+    {
+      "blockers": [
+        {
+          "code": "T3_5_UNSUPPORTED_KEYWORD_SEMANTICS",
+          "detail": "card.faces[0].keywords: 1 noncreature keyword(s) require runtime lowering"
+        }
+      ],
+      "card_name": "Cyclonic Rift",
+      "expected_runtime": {
+        "code": "unsupported_keyword_semantics",
+        "detail": "card.faces[0].keywords: 1 noncreature keyword(s) require runtime lowering",
+        "detail_sha256": "f948efa21fb38f29327bce749d47abd386d7addbb7fc79376fece432f78fc999",
+        "disposition": "unsupported_setup"
+      },
+      "freeze_rank": 17,
+      "legacy_source_path": "c/cyclonic_rift.txt",
+      "legacy_source_sha256": "a3a9f9836d1d89dbe04adabfcdb468c316988e276c481284346269644d9a8a7b",
+      "oracle_id": "d75b9c82-1b49-4c3e-a1b5-aeef57d6644b",
+      "oracle_text": "Return target nonland permanent you don't control to its owner's hand.\nOverload {6}{U} (You may cast this spell for its overload cost. If you do, change its text by replacing all instances of \"target\" with \"each.\")",
+      "scenario_id": "T3.6-017",
+      "status": "blocked_runtime",
+      "stratum": "targeted_permanent_interaction",
+      "translated_path": "c/cyclonic_rift.frs",
+      "translated_source_sha256": "cf16768c8a2e209d5d7c55293f4dc737b2bccf87937ad3ca9dee8c4c7926635b"
+    },
+    {
+      "card_name": "Rampant Growth",
+      "claim_boundary": "one deterministic card-specific production path plus shared primitive validation",
+      "expected_behavior": "Find one basic land, put it onto the battlefield tapped, then shuffle.",
+      "expected_runtime": {
+        "capabilities": [
+          "search_library",
+          "move_zone",
+          "tap_object",
+          "shuffle_library"
+        ],
+        "destination": "owner_graveyard",
+        "disposition": "passed",
+        "effect_actions": 4,
+        "final_hash": "15933693461109922850",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 41
+      },
+      "freeze_rank": 18,
+      "legacy_source_path": "r/rampant_growth.txt",
+      "legacy_source_sha256": "2af8f19de6b282fd7da174d80d72d5f9934fefcde99e8de29f0e6f5079f483fc",
+      "oracle_id": "8539f295-5d58-4436-a73a-b9277c4c7795",
+      "oracle_text": "Search your library for a basic land card, put that card onto the battlefield tapped, then shuffle.",
+      "scenario_id": "T3.6-018",
+      "semantic_atoms": [
+        {
+          "maximum": 1,
+          "op": "search_library",
+          "player": "controller",
+          "selector": "basic land"
+        },
+        {
+          "chosen": "search_result",
+          "destination": "battlefield",
+          "maximum": 1,
+          "op": "move_zone"
+        },
+        {
+          "chosen": "search_result",
+          "op": "tap_object"
+        },
+        {
+          "op": "shuffle_library",
+          "player": "controller"
+        }
+      ],
+      "status": "semantic_case_ready",
+      "stratum": "land_ramp_and_search",
+      "translated_path": "r/rampant_growth.frs",
+      "translated_source_sha256": "8654d8badc638bf5eed0b4c1d3168ac57789e0331471a9015f82be3fb02b37cb"
+    },
+    {
+      "card_name": "Farseek",
+      "claim_boundary": "one deterministic card-specific production path plus shared primitive validation",
+      "expected_behavior": "Find one Plains, Island, Swamp, or Mountain card, put it onto the battlefield tapped, then shuffle.",
+      "expected_runtime": {
+        "capabilities": [
+          "search_library",
+          "move_zone",
+          "tap_object",
+          "shuffle_library"
+        ],
+        "destination": "owner_graveyard",
+        "disposition": "passed",
+        "effect_actions": 4,
+        "final_hash": "7529597243800518892",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 41
+      },
+      "freeze_rank": 19,
+      "legacy_source_path": "f/farseek.txt",
+      "legacy_source_sha256": "247977858e36c9c10fc99e53ba6ac92c82208d975804fc72a7708611980a1686",
+      "oracle_id": "495e52e6-4c2b-4574-9474-eadbdcc8b4ac",
+      "oracle_text": "Search your library for a Plains, Island, Swamp, or Mountain card, put it onto the battlefield tapped, then shuffle.",
+      "scenario_id": "T3.6-019",
+      "semantic_atoms": [
+        {
+          "maximum": 1,
+          "op": "search_library",
+          "player": "controller",
+          "selector": "land with Plains|Island|Swamp|Mountain subtype"
+        },
+        {
+          "chosen": "search_result",
+          "destination": "battlefield",
+          "maximum": 1,
+          "op": "move_zone"
+        },
+        {
+          "chosen": "search_result",
+          "op": "tap_object"
+        },
+        {
+          "op": "shuffle_library",
+          "player": "controller"
+        }
+      ],
+      "status": "semantic_case_ready",
+      "stratum": "land_ramp_and_search",
+      "translated_path": "f/farseek.frs",
+      "translated_source_sha256": "e9318bee862becb03d853de78c5002d3d1b04e20374e0c135fb39d4e08a487b0"
+    },
+    {
+      "card_name": "Nature's Lore",
+      "claim_boundary": "one deterministic card-specific production path plus shared primitive validation",
+      "expected_behavior": "Find one Forest card, put it onto the battlefield untapped, then shuffle.",
+      "expected_runtime": {
+        "capabilities": [
+          "search_library",
+          "move_zone",
+          "shuffle_library"
+        ],
+        "destination": "owner_graveyard",
+        "disposition": "passed",
+        "effect_actions": 3,
+        "final_hash": "11528063259538232332",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 40
+      },
+      "freeze_rank": 20,
+      "legacy_source_path": "n/natures_lore.txt",
+      "legacy_source_sha256": "93e0ff34eae59db8bc8c225d50612154874e951aa638fa45c1ff595eb6c2781f",
+      "oracle_id": "78826359-fe63-44ad-adc4-a17ffcd710e4",
+      "oracle_text": "Search your library for a Forest card, put that card onto the battlefield, then shuffle.",
+      "scenario_id": "T3.6-020",
+      "semantic_atoms": [
+        {
+          "maximum": 1,
+          "op": "search_library",
+          "player": "controller",
+          "selector": "land with Forest subtype"
+        },
+        {
+          "chosen": "search_result",
+          "destination": "battlefield",
+          "maximum": 1,
+          "op": "move_zone"
+        },
+        {
+          "op": "shuffle_library",
+          "player": "controller"
+        }
+      ],
+      "status": "semantic_case_ready",
+      "stratum": "land_ramp_and_search",
+      "translated_path": "n/natures_lore.frs",
+      "translated_source_sha256": "8905036ce2037901c94b9814f65742c1695aa35d989634cf01a1fbbdd76e1dcc"
+    },
+    {
+      "card_name": "Three Visits",
+      "claim_boundary": "one deterministic card-specific production path plus shared primitive validation",
+      "expected_behavior": "Find one Forest card, put it onto the battlefield untapped, then shuffle.",
+      "expected_runtime": {
+        "capabilities": [
+          "search_library",
+          "move_zone",
+          "shuffle_library"
+        ],
+        "destination": "owner_graveyard",
+        "disposition": "passed",
+        "effect_actions": 3,
+        "final_hash": "11326259878321415412",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 40
+      },
+      "freeze_rank": 21,
+      "legacy_source_path": "t/three_visits.txt",
+      "legacy_source_sha256": "5e36383f5425c5b9eac2119e5bc3bb50b8ff8f42197ce53a63066da64cf062ef",
+      "oracle_id": "1b882a0e-0ede-4d1a-bd1a-9b7cffbcde8e",
+      "oracle_text": "Search your library for a Forest card, put that card onto the battlefield, then shuffle.",
+      "scenario_id": "T3.6-021",
+      "semantic_atoms": [
+        {
+          "maximum": 1,
+          "op": "search_library",
+          "player": "controller",
+          "selector": "land with Forest subtype"
+        },
+        {
+          "chosen": "search_result",
+          "destination": "battlefield",
+          "maximum": 1,
+          "op": "move_zone"
+        },
+        {
+          "op": "shuffle_library",
+          "player": "controller"
+        }
+      ],
+      "status": "semantic_case_ready",
+      "stratum": "land_ramp_and_search",
+      "translated_path": "t/three_visits.frs",
+      "translated_source_sha256": "cc5a4cc546e2adf1fbc3a587565dbfb394fecf48603815dcee99ad874d01a66b"
+    },
+    {
+      "blockers": [
+        {
+          "code": "GENERAL_SUBTYPE_STATE_MISSING",
+          "detail": "The source does not carry its Snake and Shaman subtypes."
+        }
+      ],
+      "card_name": "Sakura-Tribe Elder",
+      "expected_runtime": {
+        "capabilities": [
+          "permanent_spell",
+          "activated_ability",
+          "search_library",
+          "move_zone",
+          "tap_object",
+          "shuffle_library"
+        ],
+        "destination": "battlefield",
+        "disposition": "passed",
+        "effect_actions": 4,
+        "final_hash": "11603804248450872066",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 50
+      },
+      "freeze_rank": 22,
+      "legacy_source_path": "s/sakura_tribe_elder.txt",
+      "legacy_source_sha256": "7ddbe348c81de36982ea204691b6a31720b58dcb5657c0471c762f0d8cbe56d0",
+      "oracle_id": "e3afc704-220f-498f-9eaa-0821b17dc24c",
+      "oracle_text": "Sacrifice Sakura-Tribe Elder: Search your library for a basic land card, put that card onto the battlefield tapped, then shuffle.",
+      "scenario_id": "T3.6-022",
+      "status": "blocked_semantic_gap",
+      "stratum": "land_ramp_and_search",
+      "translated_path": "s/sakura_tribe_elder.frs",
+      "translated_source_sha256": "8cc57375179168a5f2b9eb715983af662d0a7d189da7c58128e46ff55187dce3"
+    },
+    {
+      "blockers": [
+        {
+          "code": "GENERAL_SUBTYPE_STATE_MISSING",
+          "detail": "The source does not carry its Elf and Druid subtypes."
+        }
+      ],
+      "card_name": "Llanowar Elves",
+      "expected_runtime": {
+        "capabilities": [
+          "permanent_spell",
+          "mana_ability"
+        ],
+        "destination": "battlefield",
+        "disposition": "passed",
+        "effect_actions": 0,
+        "final_hash": "11027682821595466282",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 77
+      },
+      "freeze_rank": 23,
+      "legacy_source_path": "l/llanowar_elves.txt",
+      "legacy_source_sha256": "f8eab9c6d1b3bc9c180228a150d3a386248c10b8563f2ac54319129d7570e7f3",
+      "oracle_id": "68954295-54e3-4303-a6bc-fc4547a4e3a3",
+      "oracle_text": "{T}: Add {G}.",
+      "scenario_id": "T3.6-023",
+      "status": "blocked_semantic_gap",
+      "stratum": "mana_sources",
+      "translated_path": "l/llanowar_elves.frs",
+      "translated_source_sha256": "f53a52debc3163a11284db7aa90603d933fb7c57d933e07afd4cd066b1a60930"
+    },
+    {
+      "blockers": [
+        {
+          "code": "GENERAL_SUBTYPE_STATE_MISSING",
+          "detail": "The source does not carry its Elf and Druid subtypes."
+        }
+      ],
+      "card_name": "Elvish Mystic",
+      "expected_runtime": {
+        "capabilities": [
+          "permanent_spell",
+          "mana_ability"
+        ],
+        "destination": "battlefield",
+        "disposition": "passed",
+        "effect_actions": 0,
+        "final_hash": "14512137348764704018",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 77
+      },
+      "freeze_rank": 24,
+      "legacy_source_path": "e/elvish_mystic.txt",
+      "legacy_source_sha256": "032fdc52a4f8f965afc76feef3fc298385ebddb859aad4d116da4507a3504740",
+      "oracle_id": "3f3b2c10-21f8-4e13-be83-4ef3fa36e123",
+      "oracle_text": "{T}: Add {G}.",
+      "scenario_id": "T3.6-024",
+      "status": "blocked_semantic_gap",
+      "stratum": "mana_sources",
+      "translated_path": "e/elvish_mystic.frs",
+      "translated_source_sha256": "64ea89e3252ac7f477064cc38b9f235e987edc6422d07d639edf643851dcc9ab"
+    },
+    {
+      "blockers": [
+        {
+          "code": "GENERAL_SUBTYPE_STATE_MISSING",
+          "detail": "The source does not carry its Bird subtype."
+        },
+        {
+          "code": "MANA_CHOICE_PATHS_NOT_CARD_SPECIFICALLY_REPLAYED",
+          "detail": "The smoke executes one output; the card-specific lane has not replayed all five legal color choices."
+        }
+      ],
+      "card_name": "Birds of Paradise",
+      "expected_runtime": {
+        "capabilities": [
+          "permanent_spell",
+          "mana_ability"
+        ],
+        "destination": "battlefield",
+        "disposition": "passed",
+        "effect_actions": 0,
+        "final_hash": "2409036052669933453",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 77
+      },
+      "freeze_rank": 25,
+      "legacy_source_path": "b/birds_of_paradise.txt",
+      "legacy_source_sha256": "8dff7dc54b140c97135233f5cbb52d1338e88c7fa9e0084af8b7075ffe81f1fc",
+      "oracle_id": "d3a0b660-358c-41bd-9cd2-41fbf3491b1a",
+      "oracle_text": "Flying\n{T}: Add one mana of any color.",
+      "scenario_id": "T3.6-025",
+      "status": "blocked_semantic_gap",
+      "stratum": "mana_sources",
+      "translated_path": "b/birds_of_paradise.frs",
+      "translated_source_sha256": "85bb0c92f7528efbe6468dcd7424220791fdb8f46e2085a776521d539bc74528"
+    },
+    {
+      "blockers": [
+        {
+          "code": "T3_5_UNSUPPORTED_ABILITY_SHAPE",
+          "detail": "card.faces[0].abilities[0].event: only event_enters(source()) is compiled for triggered abilities"
+        }
+      ],
+      "card_name": "Phyrexian Arena",
+      "expected_runtime": {
+        "code": "unsupported_ability_shape",
+        "detail": "card.faces[0].abilities[0].event: only event_enters(source()) is compiled for triggered abilities",
+        "detail_sha256": "580c9aa803adf1dabf75d2e1b1193dd21e77f30e33e5242b67c2a6f2879bebdd",
+        "disposition": "unsupported_setup"
+      },
+      "freeze_rank": 26,
+      "legacy_source_path": "p/phyrexian_arena.txt",
+      "legacy_source_sha256": "8f02df2ddc816e4a6cb0897ec20dfeffe3b5947bdebf52e609c05452714866f6",
+      "oracle_id": "ee579a32-a048-4335-b966-231ba731cdea",
+      "oracle_text": "At the beginning of your upkeep, you draw a card and you lose 1 life.",
+      "scenario_id": "T3.6-026",
+      "status": "blocked_runtime",
+      "stratum": "card_flow",
+      "translated_path": "p/phyrexian_arena.frs",
+      "translated_source_sha256": "f947ee9e283be55eb74a3d0660eb10046d785d58b018985fa108f0ae35f1550e"
+    },
+    {
+      "card_name": "Read the Bones",
+      "claim_boundary": "one deterministic card-specific production path plus shared primitive validation",
+      "expected_behavior": "Scry two with the explicit keep-on-top choice, draw two cards, then lose two life.",
+      "expected_runtime": {
+        "capabilities": [
+          "scry",
+          "draw_cards",
+          "lose_life"
+        ],
+        "destination": "owner_graveyard",
+        "disposition": "passed",
+        "effect_actions": 3,
+        "final_hash": "8843672127907282447",
+        "final_life_totals": [
+          18,
+          20
+        ],
+        "production_actions": 43
+      },
+      "freeze_rank": 27,
+      "legacy_source_path": "r/read_the_bones.txt",
+      "legacy_source_sha256": "1aca73ca724e6395212876206fd4b0a1def089719fba1eada7e99c8f3f90663c",
+      "oracle_id": "5bf4d8d9-a2b2-4dba-ac05-9d4470a89db2",
+      "oracle_text": "Scry 2, then draw two cards. You lose 2 life.",
+      "scenario_id": "T3.6-027",
+      "semantic_atoms": [
+        {
+          "bottom_count": 0,
+          "count": 2,
+          "op": "scry",
+          "player": "controller"
+        },
+        {
+          "count": 2,
+          "op": "draw_cards",
+          "player": "controller"
+        },
+        {
+          "amount": 2,
+          "op": "lose_life",
+          "player": "controller"
+        }
+      ],
+      "status": "semantic_case_ready",
+      "stratum": "card_flow",
+      "translated_path": "r/read_the_bones.frs",
+      "translated_source_sha256": "a51fb8638556d35f909dc47aa7ed9eb410d82e5bcaf2f3098ecd0eb224b65b7a"
+    },
+    {
+      "card_name": "Night's Whisper",
+      "claim_boundary": "one deterministic card-specific production path plus shared primitive validation",
+      "expected_behavior": "Draw two cards and lose two life.",
+      "expected_runtime": {
+        "capabilities": [
+          "draw_cards",
+          "lose_life"
+        ],
+        "destination": "owner_graveyard",
+        "disposition": "passed",
+        "effect_actions": 2,
+        "final_hash": "13363325441167328751",
+        "final_life_totals": [
+          18,
+          20
+        ],
+        "production_actions": 40
+      },
+      "freeze_rank": 28,
+      "legacy_source_path": "n/nights_whisper.txt",
+      "legacy_source_sha256": "4b01505f1b629b07e15c0ed6ae862ca1ebd9e87a517d995c2329d736ad1ae602",
+      "oracle_id": "7ffae8f8-3006-4969-a339-6d30678f87ea",
+      "oracle_text": "You draw two cards and you lose 2 life.",
+      "scenario_id": "T3.6-028",
+      "semantic_atoms": [
+        {
+          "count": 2,
+          "op": "draw_cards",
+          "player": "controller"
+        },
+        {
+          "amount": 2,
+          "op": "lose_life",
+          "player": "controller"
+        }
+      ],
+      "status": "semantic_case_ready",
+      "stratum": "card_flow",
+      "translated_path": "n/nights_whisper.frs",
+      "translated_source_sha256": "85f2081371ffd438a5dcfd1b7de9f66552565779a5985bf8c51f222959bce07f"
+    },
+    {
+      "card_name": "Sign in Blood",
+      "claim_boundary": "one deterministic card-specific production path plus shared primitive validation",
+      "expected_behavior": "Target the opponent; that player draws two cards and loses two life.",
+      "expected_runtime": {
+        "capabilities": [
+          "draw_cards",
+          "lose_life"
+        ],
+        "destination": "owner_graveyard",
+        "disposition": "passed",
+        "effect_actions": 2,
+        "final_hash": "1116460998381468464",
+        "final_life_totals": [
+          20,
+          18
+        ],
+        "production_actions": 40
+      },
+      "freeze_rank": 29,
+      "legacy_source_path": "s/sign_in_blood.txt",
+      "legacy_source_sha256": "666948d1dffd6bff476639cd4ad740d0a75e985543e5590b181830db75dc3855",
+      "oracle_id": "c6207f6a-a624-4754-88f5-dbe700c841ff",
+      "oracle_text": "Target player draws two cards and loses 2 life.",
+      "scenario_id": "T3.6-029",
+      "semantic_atoms": [
+        {
+          "count": 2,
+          "op": "draw_cards",
+          "player": "target_opponent"
+        },
+        {
+          "amount": 2,
+          "op": "lose_life",
+          "player": "target_opponent"
+        }
+      ],
+      "status": "semantic_case_ready",
+      "stratum": "card_flow",
+      "translated_path": "s/sign_in_blood.frs",
+      "translated_source_sha256": "c453d3673359492e407833ac15c23128f6c3792f18161d9af4f79ece100fa66b"
+    },
+    {
+      "card_name": "Harmonize",
+      "claim_boundary": "one deterministic card-specific production path plus shared primitive validation",
+      "expected_behavior": "Draw exactly three cards.",
+      "expected_runtime": {
+        "capabilities": [
+          "draw_cards"
+        ],
+        "destination": "owner_graveyard",
+        "disposition": "passed",
+        "effect_actions": 1,
+        "final_hash": "7505910723301149912",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 40
+      },
+      "freeze_rank": 30,
+      "legacy_source_path": "h/harmonize.txt",
+      "legacy_source_sha256": "21dac47c35bef60db64e7f5254ef29f1ee5e3da25a6f2ed983047322805a45c8",
+      "oracle_id": "7eff84f1-f772-497a-b350-bbc93d0230f7",
+      "oracle_text": "Draw three cards.",
+      "scenario_id": "T3.6-030",
+      "semantic_atoms": [
+        {
+          "count": 3,
+          "op": "draw_cards",
+          "player": "controller"
+        }
+      ],
+      "status": "semantic_case_ready",
+      "stratum": "card_flow",
+      "translated_path": "h/harmonize.frs",
+      "translated_source_sha256": "e818b1cdf5fb7a6f3dcef7fd92f6c6fa51ebddfca7fa7589a9c4b3a8e157cab3"
+    },
+    {
+      "card_name": "Preordain",
+      "claim_boundary": "one deterministic card-specific production path plus shared primitive validation",
+      "expected_behavior": "Scry two with the explicit keep-on-top choice, then draw one card.",
+      "expected_runtime": {
+        "capabilities": [
+          "scry",
+          "draw_cards"
+        ],
+        "destination": "owner_graveyard",
+        "disposition": "passed",
+        "effect_actions": 2,
+        "final_hash": "8283585297198353310",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 41
+      },
+      "freeze_rank": 31,
+      "legacy_source_path": "p/preordain.txt",
+      "legacy_source_sha256": "581996aaaf6e33cd225923ea7323f6f444870a5ae05d31d04b24183addf12491",
+      "oracle_id": "ac641490-ca14-48d7-8cc4-b69ce984befa",
+      "oracle_text": "Scry 2, then draw a card. (To scry 2, look at the top two cards of your library, then put any number of them on the bottom and the rest on top in any order.)",
+      "scenario_id": "T3.6-031",
+      "semantic_atoms": [
+        {
+          "bottom_count": 0,
+          "count": 2,
+          "op": "scry",
+          "player": "controller"
+        },
+        {
+          "count": 1,
+          "op": "draw_cards",
+          "player": "controller"
+        }
+      ],
+      "status": "semantic_case_ready",
+      "stratum": "card_flow",
+      "translated_path": "p/preordain.frs",
+      "translated_source_sha256": "a5ac770e2430aea0e4d2ee6ce0abacdf55d42698e36896bac5e8b73a91d22e80"
+    },
+    {
+      "card_name": "Opt",
+      "claim_boundary": "one deterministic card-specific production path plus shared primitive validation",
+      "expected_behavior": "Scry one with the explicit keep-on-top choice, then draw one card.",
+      "expected_runtime": {
+        "capabilities": [
+          "scry",
+          "draw_cards"
+        ],
+        "destination": "owner_graveyard",
+        "disposition": "passed",
+        "effect_actions": 2,
+        "final_hash": "2845588492165323777",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 35
+      },
+      "freeze_rank": 32,
+      "legacy_source_path": "o/opt.txt",
+      "legacy_source_sha256": "589e7822d532f94b80b469a5322d84ce02078277153c5ad3ba205105650b5dcd",
+      "oracle_id": "713332c1-5bd8-400f-bfff-c1ca0697a043",
+      "oracle_text": "Scry 1.\nDraw a card.",
+      "scenario_id": "T3.6-032",
+      "semantic_atoms": [
+        {
+          "bottom_count": 0,
+          "count": 1,
+          "op": "scry",
+          "player": "controller"
+        },
+        {
+          "count": 1,
+          "op": "draw_cards",
+          "player": "controller"
+        }
+      ],
+      "status": "semantic_case_ready",
+      "stratum": "card_flow",
+      "translated_path": "o/opt.frs",
+      "translated_source_sha256": "d6156ce68217a025db2feeab8fd11e0c861d78a89d517835fcb8a2ae3ebce2b4"
+    },
+    {
+      "card_name": "Evolving Wilds",
+      "claim_boundary": "one deterministic card-specific production path plus shared primitive validation",
+      "expected_behavior": "Play Evolving Wilds; tap and sacrifice it to find one basic land, put that land onto the battlefield tapped, then shuffle.",
+      "expected_runtime": {
+        "capabilities": [
+          "land_play",
+          "activated_ability",
+          "search_library",
+          "move_zone",
+          "tap_object",
+          "shuffle_library"
+        ],
+        "destination": "battlefield",
+        "disposition": "passed",
+        "effect_actions": 4,
+        "final_hash": "9615507177046431522",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 46
+      },
+      "freeze_rank": 33,
+      "legacy_source_path": "e/evolving_wilds.txt",
+      "legacy_source_sha256": "468461da8bb30131cbc4dcdfe1823d32912e9876913867000e9f80e8f0f2e1ce",
+      "oracle_id": "a75445d3-1303-4bb5-89ad-26ea93fecd48",
+      "oracle_text": "{T}, Sacrifice Evolving Wilds: Search your library for a basic land card, put it onto the battlefield tapped, then shuffle.",
+      "scenario_id": "T3.6-033",
+      "semantic_atoms": [
+        {
+          "destination": "battlefield",
+          "op": "play_land",
+          "type_line": "Land"
+        },
+        {
+          "op": "activate_ability",
+          "sacrifice_source": true,
+          "source_destination": "owner_graveyard",
+          "tap_source": true
+        },
+        {
+          "maximum": 1,
+          "op": "search_library",
+          "player": "controller",
+          "selector": "basic land"
+        },
+        {
+          "chosen": "search_result",
+          "destination": "battlefield",
+          "maximum": 1,
+          "op": "move_zone"
+        },
+        {
+          "chosen": "search_result",
+          "op": "tap_object"
+        },
+        {
+          "op": "shuffle_library",
+          "player": "controller"
+        }
+      ],
+      "status": "semantic_case_ready",
+      "stratum": "land_ramp_and_search",
+      "translated_path": "e/evolving_wilds.frs",
+      "translated_source_sha256": "c2a30b5014bf0a425510c53b1044304ca2c07ecd2478d18203ae72234c1f1587"
+    },
+    {
+      "card_name": "Terramorphic Expanse",
+      "claim_boundary": "one deterministic card-specific production path plus shared primitive validation",
+      "expected_behavior": "Play Terramorphic Expanse; tap and sacrifice it to find one basic land, put that land onto the battlefield tapped, then shuffle.",
+      "expected_runtime": {
+        "capabilities": [
+          "land_play",
+          "activated_ability",
+          "search_library",
+          "move_zone",
+          "tap_object",
+          "shuffle_library"
+        ],
+        "destination": "battlefield",
+        "disposition": "passed",
+        "effect_actions": 4,
+        "final_hash": "7778300779639400174",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 46
+      },
+      "freeze_rank": 34,
+      "legacy_source_path": "t/terramorphic_expanse.txt",
+      "legacy_source_sha256": "15373cad5f7fe28e0c6e3408107c23b23ee3344fa1a999f079b6c08039f4e52b",
+      "oracle_id": "1bd3e453-aa21-4ee6-95c2-d6d920ee8e7a",
+      "oracle_text": "{T}, Sacrifice Terramorphic Expanse: Search your library for a basic land card, put it onto the battlefield tapped, then shuffle.",
+      "scenario_id": "T3.6-034",
+      "semantic_atoms": [
+        {
+          "destination": "battlefield",
+          "op": "play_land",
+          "type_line": "Land"
+        },
+        {
+          "op": "activate_ability",
+          "sacrifice_source": true,
+          "source_destination": "owner_graveyard",
+          "tap_source": true
+        },
+        {
+          "maximum": 1,
+          "op": "search_library",
+          "player": "controller",
+          "selector": "basic land"
+        },
+        {
+          "chosen": "search_result",
+          "destination": "battlefield",
+          "maximum": 1,
+          "op": "move_zone"
+        },
+        {
+          "chosen": "search_result",
+          "op": "tap_object"
+        },
+        {
+          "op": "shuffle_library",
+          "player": "controller"
+        }
+      ],
+      "status": "semantic_case_ready",
+      "stratum": "land_ramp_and_search",
+      "translated_path": "t/terramorphic_expanse.frs",
+      "translated_source_sha256": "176211ff5e8a2753d716aaf3a44edc5bc6471a393f8dddb43f12154ad0149fc9"
+    },
+    {
+      "blockers": [
+        {
+          "code": "T3_5_UNSUPPORTED_ABILITY_SHAPE",
+          "detail": "card.faces[0].abilities[0]: ability kind Static is not compiled for Land"
+        }
+      ],
+      "card_name": "Reliquary Tower",
+      "expected_runtime": {
+        "code": "unsupported_ability_shape",
+        "detail": "card.faces[0].abilities[0]: ability kind Static is not compiled for Land",
+        "detail_sha256": "f5e5b967a2099c00da4e111fa5405b6981099c660d6730dcef8ac8a90c1d7f86",
+        "disposition": "unsupported_setup"
+      },
+      "freeze_rank": 35,
+      "legacy_source_path": "r/reliquary_tower.txt",
+      "legacy_source_sha256": "1d1cb9a54f87c4cbf00d0f2e1f17fa7018447e1922718eb4a9a9b574faef5f7b",
+      "oracle_id": "c23e5b80-08d2-4e24-9908-fe2aa4f30f6f",
+      "oracle_text": "You have no maximum hand size.\n{T}: Add {C}.",
+      "scenario_id": "T3.6-035",
+      "status": "blocked_runtime",
+      "stratum": "continuous_combat_and_costs",
+      "translated_path": "r/reliquary_tower.frs",
+      "translated_source_sha256": "119d0c9fb4e48dd3095d68cfea0383173dc588252ef070cf1affad9d2ab59381"
+    },
+    {
+      "blockers": [
+        {
+          "code": "T3_5_UNSUPPORTED_ABILITY_SHAPE",
+          "detail": "card.faces[0].abilities[0]: activated mana ability must be unconditional and marked mana_ability"
+        }
+      ],
+      "card_name": "Temple of the False God",
+      "expected_runtime": {
+        "code": "unsupported_ability_shape",
+        "detail": "card.faces[0].abilities[0]: activated mana ability must be unconditional and marked mana_ability",
+        "detail_sha256": "69ca33a78b985cd3a4d56f4df6bd1106680cbe467a3394f8ee60a57df8936dec",
+        "disposition": "unsupported_setup"
+      },
+      "freeze_rank": 36,
+      "legacy_source_path": "t/temple_of_the_false_god.txt",
+      "legacy_source_sha256": "4a68c47756af2bd599ad13780d9e80ce224bd95e8634b7c38b7b962c4c4f6a9c",
+      "oracle_id": "cfdd5dc6-593e-495a-8cfe-3a56b3c4c7df",
+      "oracle_text": "{T}: Add {C}{C}. Activate only if you control five or more lands.",
+      "scenario_id": "T3.6-036",
+      "status": "blocked_runtime",
+      "stratum": "mana_sources",
+      "translated_path": "t/temple_of_the_false_god.frs",
+      "translated_source_sha256": "96b26124e72d9041d6e5f9f79e2a383fdeed9e090e5b6d3e9737f40741c62cb7"
+    },
+    {
+      "blockers": [
+        {
+          "code": "T3_5_UNSUPPORTED_EFFECT_OPERATION",
+          "detail": "card.faces[0].abilities[1].effect: activated ability is not one fixed add_mana operation"
+        }
+      ],
+      "card_name": "Talisman of Dominance",
+      "expected_runtime": {
+        "code": "unsupported_effect_operation",
+        "detail": "card.faces[0].abilities[1].effect: activated ability is not one fixed add_mana operation",
+        "detail_sha256": "994ed7332282037a65d7565adb8f25650965f91ebddfe4ddca8e41edce77e330",
+        "disposition": "unsupported_setup"
+      },
+      "freeze_rank": 37,
+      "legacy_source_path": "t/talisman_of_dominance.txt",
+      "legacy_source_sha256": "b484b6210d5981b69264fd9bf65231a7b1265a28516c3be6a23d95ffdc0ba9e0",
+      "oracle_id": "4c0a0448-b9d6-43a0-8549-64066dac63f0",
+      "oracle_text": "{T}: Add {C}.\n{T}: Add {U} or {B}. Talisman of Dominance deals 1 damage to you.",
+      "scenario_id": "T3.6-037",
+      "status": "blocked_runtime",
+      "stratum": "mana_sources",
+      "translated_path": "t/talisman_of_dominance.frs",
+      "translated_source_sha256": "4f9b4705dbf6c82f7670b70297513f26288ca25f0de3eb2e55a241f2aaa22d98"
+    },
+    {
+      "blockers": [
+        {
+          "code": "T3_5_UNSUPPORTED_EFFECT_OPERATION",
+          "detail": "card.faces[0].abilities[1].effect: activated ability is not one fixed add_mana operation"
+        }
+      ],
+      "card_name": "Talisman of Progress",
+      "expected_runtime": {
+        "code": "unsupported_effect_operation",
+        "detail": "card.faces[0].abilities[1].effect: activated ability is not one fixed add_mana operation",
+        "detail_sha256": "994ed7332282037a65d7565adb8f25650965f91ebddfe4ddca8e41edce77e330",
+        "disposition": "unsupported_setup"
+      },
+      "freeze_rank": 38,
+      "legacy_source_path": "t/talisman_of_progress.txt",
+      "legacy_source_sha256": "8b594c8932bd295db7b541480c0039fe758f44f33568633cf5c9bac33204add8",
+      "oracle_id": "00e35322-1a9a-41e3-9ce1-359c8eaa3bc7",
+      "oracle_text": "{T}: Add {C}.\n{T}: Add {W} or {U}. Talisman of Progress deals 1 damage to you.",
+      "scenario_id": "T3.6-038",
+      "status": "blocked_runtime",
+      "stratum": "mana_sources",
+      "translated_path": "t/talisman_of_progress.frs",
+      "translated_source_sha256": "2b9b6ff103b2fb0ee899c548a3b67257deff171ddb0e933fb640bacb115b8835"
+    },
+    {
+      "blockers": [
+        {
+          "code": "T3_5_UNSUPPORTED_EFFECT_OPERATION",
+          "detail": "card.faces[0].abilities[1].effect: activated ability is not one fixed add_mana operation"
+        }
+      ],
+      "card_name": "Talisman of Creativity",
+      "expected_runtime": {
+        "code": "unsupported_effect_operation",
+        "detail": "card.faces[0].abilities[1].effect: activated ability is not one fixed add_mana operation",
+        "detail_sha256": "994ed7332282037a65d7565adb8f25650965f91ebddfe4ddca8e41edce77e330",
+        "disposition": "unsupported_setup"
+      },
+      "freeze_rank": 39,
+      "legacy_source_path": "t/talisman_of_creativity.txt",
+      "legacy_source_sha256": "5ce61d119aa7e8cda4777a0f97187c3cfc889ef4ab65be9ef91067bed1d85afc",
+      "oracle_id": "14d2979d-5728-42d7-a027-0eb1f754655d",
+      "oracle_text": "{T}: Add {C}.\n{T}: Add {U} or {R}. Talisman of Creativity deals 1 damage to you.",
+      "scenario_id": "T3.6-039",
+      "status": "blocked_runtime",
+      "stratum": "mana_sources",
+      "translated_path": "t/talisman_of_creativity.frs",
+      "translated_source_sha256": "f9bc1fbf9e68e6c806b523f104f92949477b5642480b162f0b4d1a61d1e4b9cd"
+    },
+    {
+      "card_name": "Wayfarer's Bauble",
+      "claim_boundary": "one deterministic card-specific production path plus shared primitive validation",
+      "expected_behavior": "Resolve Wayfarer's Bauble; pay {2}, tap, and sacrifice it to find one basic land, put that land onto the battlefield tapped, then shuffle.",
+      "expected_runtime": {
+        "capabilities": [
+          "permanent_spell",
+          "activated_ability",
+          "search_library",
+          "move_zone",
+          "tap_object",
+          "shuffle_library"
+        ],
+        "destination": "battlefield",
+        "disposition": "passed",
+        "effect_actions": 4,
+        "final_hash": "13679985515610747883",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 51
+      },
+      "freeze_rank": 40,
+      "legacy_source_path": "w/wayfarers_bauble.txt",
+      "legacy_source_sha256": "c609a4e2c8c67129f8ab103e875a76f325f642f88e38ee003e944299b177961f",
+      "oracle_id": "31f15274-301b-47c5-ba19-0ced04520878",
+      "oracle_text": "{2}, {T}, Sacrifice Wayfarer's Bauble: Search your library for a basic land card, put that card onto the battlefield tapped, then shuffle.",
+      "scenario_id": "T3.6-040",
+      "semantic_atoms": [
+        {
+          "destination": "battlefield",
+          "op": "resolve_permanent",
+          "type_line": "Artifact"
+        },
+        {
+          "mana_cost": "{2}",
+          "op": "activate_ability",
+          "sacrifice_source": true,
+          "source_destination": "owner_graveyard",
+          "tap_source": true
+        },
+        {
+          "maximum": 1,
+          "op": "search_library",
+          "player": "controller",
+          "selector": "basic land"
+        },
+        {
+          "chosen": "search_result",
+          "destination": "battlefield",
+          "maximum": 1,
+          "op": "move_zone"
+        },
+        {
+          "chosen": "search_result",
+          "op": "tap_object"
+        },
+        {
+          "op": "shuffle_library",
+          "player": "controller"
+        }
+      ],
+      "status": "semantic_case_ready",
+      "stratum": "land_ramp_and_search",
+      "translated_path": "w/wayfarers_bauble.frs",
+      "translated_source_sha256": "fb773fac47556cb53cff4ed3ed645ed3b7b2ecab951f47d4a5e8235c657b7bce"
+    },
+    {
+      "blockers": [
+        {
+          "code": "GENERAL_SUBTYPE_STATE_MISSING",
+          "detail": "The source does not carry its Elk subtype."
+        }
+      ],
+      "card_name": "Burnished Hart",
+      "expected_runtime": {
+        "capabilities": [
+          "permanent_spell",
+          "activated_ability",
+          "search_library",
+          "move_zone",
+          "tap_object",
+          "shuffle_library"
+        ],
+        "destination": "battlefield",
+        "disposition": "passed",
+        "effect_actions": 4,
+        "final_hash": "5828947229109549402",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 56
+      },
+      "freeze_rank": 41,
+      "legacy_source_path": "b/burnished_hart.txt",
+      "legacy_source_sha256": "90ad73b986f2595599fa61e772d76a5d918e4c9313ebca0d8760017c7f66e60a",
+      "oracle_id": "893fed41-c144-433f-af88-bc7d419b7fb3",
+      "oracle_text": "{3}, Sacrifice Burnished Hart: Search your library for up to two basic land cards, put them onto the battlefield tapped, then shuffle.",
+      "scenario_id": "T3.6-041",
+      "status": "blocked_semantic_gap",
+      "stratum": "land_ramp_and_search",
+      "translated_path": "b/burnished_hart.frs",
+      "translated_source_sha256": "37179315ca2e244187185119a3192834cef31635c043b0bc3a5075191963a00a"
+    },
+    {
+      "blockers": [
+        {
+          "code": "T3_5_UNSUPPORTED_KEYWORD_SEMANTICS",
+          "detail": "card.faces[0].keywords: 1 noncreature keyword(s) require runtime lowering"
+        }
+      ],
+      "card_name": "Krosan Grip",
+      "expected_runtime": {
+        "code": "unsupported_keyword_semantics",
+        "detail": "card.faces[0].keywords: 1 noncreature keyword(s) require runtime lowering",
+        "detail_sha256": "f948efa21fb38f29327bce749d47abd386d7addbb7fc79376fece432f78fc999",
+        "disposition": "unsupported_setup"
+      },
+      "freeze_rank": 42,
+      "legacy_source_path": "k/krosan_grip.txt",
+      "legacy_source_sha256": "f07bb7d61ee2f5c68449ee2f9c4ab8a21bd8de722ab467e7d5fc4ffeb66797e9",
+      "oracle_id": "3e39224c-72ce-4ecc-aa17-12c071ea1f3e",
+      "oracle_text": "Split second (As long as this spell is on the stack, players can't cast spells or activate abilities that aren't mana abilities.)\nDestroy target artifact or enchantment.",
+      "scenario_id": "T3.6-042",
+      "status": "blocked_runtime",
+      "stratum": "targeted_permanent_interaction",
+      "translated_path": "k/krosan_grip.frs",
+      "translated_source_sha256": "66653b8483d0cafb61cfccced40f8c51f7bb3d23d7611296fd0afe6738a3fe54"
+    },
+    {
+      "card_name": "Nature's Claim",
+      "claim_boundary": "one deterministic card-specific production path plus shared primitive validation",
+      "expected_behavior": "Destroy a targeted artifact or enchantment and give its controller four life.",
+      "expected_runtime": {
+        "capabilities": [
+          "destroy_permanent",
+          "gain_life"
+        ],
+        "destination": "owner_graveyard",
+        "disposition": "passed",
+        "effect_actions": 2,
+        "final_hash": "11090244815162230362",
+        "final_life_totals": [
+          20,
+          24
+        ],
+        "production_actions": 35
+      },
+      "freeze_rank": 43,
+      "legacy_source_path": "n/natures_claim.txt",
+      "legacy_source_sha256": "63ed3bb8fe8d945dfb0593deab62feb46f115fce1ccb4acd18a1d89f3a624696",
+      "oracle_id": "6d4e558e-9109-4918-a082-fdcbaffd516b",
+      "oracle_text": "Destroy target artifact or enchantment. Its controller gains 4 life.",
+      "scenario_id": "T3.6-043",
+      "semantic_atoms": [
+        {
+          "op": "destroy_permanent",
+          "target": "artifact|enchantment"
+        },
+        {
+          "amount": 4,
+          "op": "gain_life",
+          "player": "target_controller"
+        }
+      ],
+      "status": "semantic_case_ready",
+      "stratum": "targeted_permanent_interaction",
+      "translated_path": "n/natures_claim.frs",
+      "translated_source_sha256": "2469d37771014d029caf70daa44a523e631707eddf1d129d721036e31345ce70"
+    },
+    {
+      "card_name": "Anguished Unmaking",
+      "claim_boundary": "one deterministic card-specific production path plus shared primitive validation",
+      "expected_behavior": "Exile a targeted nonland permanent and make the caster lose three life.",
+      "expected_runtime": {
+        "capabilities": [
+          "exile_object",
+          "lose_life"
+        ],
+        "destination": "owner_graveyard",
+        "disposition": "passed",
+        "effect_actions": 2,
+        "final_hash": "4894293676893468805",
+        "final_life_totals": [
+          17,
+          20
+        ],
+        "production_actions": 35
+      },
+      "freeze_rank": 44,
+      "legacy_source_path": "a/anguished_unmaking.txt",
+      "legacy_source_sha256": "bc3a98f8e323871d7f89fe9ddf80d793ee9749abc7a702787e0ec58187349825",
+      "oracle_id": "ad09b3c3-c8e7-481c-8c45-e7f234935117",
+      "oracle_text": "Exile target nonland permanent. You lose 3 life.",
+      "scenario_id": "T3.6-044",
+      "semantic_atoms": [
+        {
+          "destination": "exile",
+          "op": "exile_object",
+          "target": "nonland permanent"
+        },
+        {
+          "amount": 3,
+          "op": "lose_life",
+          "player": "controller"
+        }
+      ],
+      "status": "semantic_case_ready",
+      "stratum": "targeted_permanent_interaction",
+      "translated_path": "a/anguished_unmaking.frs",
+      "translated_source_sha256": "5085c2c7ffd58fa764f1060fb4a5f245d45adb2a338d14d271cf2e90717f7e88"
+    },
+    {
+      "card_name": "Utter End",
+      "claim_boundary": "one deterministic card-specific production path plus shared primitive validation",
+      "expected_behavior": "Exile a targeted nonland permanent.",
+      "expected_runtime": {
+        "capabilities": [
+          "exile_object"
+        ],
+        "destination": "owner_graveyard",
+        "disposition": "passed",
+        "effect_actions": 1,
+        "final_hash": "13761952128567465425",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 34
+      },
+      "freeze_rank": 45,
+      "legacy_source_path": "u/utter_end.txt",
+      "legacy_source_sha256": "9ca9216d38f82fd9dc6543368eec04abca6e994b547cb36fa7bab1a795534fa9",
+      "oracle_id": "cba94732-1f1f-4ffd-9aba-45db990043fa",
+      "oracle_text": "Exile target nonland permanent.",
+      "scenario_id": "T3.6-045",
+      "semantic_atoms": [
+        {
+          "destination": "exile",
+          "op": "exile_object",
+          "target": "nonland permanent"
+        }
+      ],
+      "status": "semantic_case_ready",
+      "stratum": "targeted_permanent_interaction",
+      "translated_path": "u/utter_end.frs",
+      "translated_source_sha256": "bf7636ae5e79c5f6c2b328d4b6113390ca32cf74630e073227745e148f57df23"
+    },
+    {
+      "blockers": [
+        {
+          "code": "T3_5_UNSUPPORTED_EFFECT_ARGUMENTS",
+          "detail": "card.faces[0].abilities[0].effect.target.permanents[0]: object predicate `at_least` is not compiled"
+        }
+      ],
+      "card_name": "Despark",
+      "expected_runtime": {
+        "code": "unsupported_effect_arguments",
+        "detail": "card.faces[0].abilities[0].effect.target.permanents[0]: object predicate `at_least` is not compiled",
+        "detail_sha256": "67b6975a875a1dc00ce70f14822329e22b2740c1116399c435ac52b1e30ad65f",
+        "disposition": "unsupported_setup"
+      },
+      "freeze_rank": 46,
+      "legacy_source_path": "d/despark.txt",
+      "legacy_source_sha256": "8936d749d57ff27472d8c17597db541ab160ca1724a4e06403a07fd1479cbc68",
+      "oracle_id": "bd16434d-55ea-4c5a-a9ef-752971a4af16",
+      "oracle_text": "Exile target permanent with mana value 4 or greater.",
+      "scenario_id": "T3.6-046",
+      "status": "blocked_runtime",
+      "stratum": "targeted_permanent_interaction",
+      "translated_path": "d/despark.frs",
+      "translated_source_sha256": "7f3808087543f1321811f6801e6b35e7f62ee7648214c18f8c9d8c51b4214544"
+    },
+    {
+      "card_name": "Mortify",
+      "claim_boundary": "one deterministic card-specific production path plus shared primitive validation",
+      "expected_behavior": "Destroy a targeted creature or enchantment.",
+      "expected_runtime": {
+        "capabilities": [
+          "destroy_permanent"
+        ],
+        "destination": "owner_graveyard",
+        "disposition": "passed",
+        "effect_actions": 1,
+        "final_hash": "12445437999732356968",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 35
+      },
+      "freeze_rank": 47,
+      "legacy_source_path": "m/mortify.txt",
+      "legacy_source_sha256": "fab7dce06cd331c29c4a83f64def101048474e3cb63db8752de5931818bd519b",
+      "oracle_id": "faa01ed1-ccfa-4e58-951f-cd81f9068027",
+      "oracle_text": "Destroy target creature or enchantment.",
+      "scenario_id": "T3.6-047",
+      "semantic_atoms": [
+        {
+          "op": "destroy_permanent",
+          "target": "creature|enchantment"
+        }
+      ],
+      "status": "semantic_case_ready",
+      "stratum": "targeted_permanent_interaction",
+      "translated_path": "m/mortify.frs",
+      "translated_source_sha256": "0a7bb07a2c6390a56f01986ecfab1cce2cd35cdb2c3f51870c5379705ef21e8e"
+    },
+    {
+      "blockers": [
+        {
+          "code": "REGENERATION_PROHIBITION_MISSING",
+          "detail": "The destroy action does not retain the card's cannot-regenerate rider."
+        }
+      ],
+      "card_name": "Putrefy",
+      "expected_runtime": {
+        "capabilities": [
+          "destroy_permanent"
+        ],
+        "destination": "owner_graveyard",
+        "disposition": "passed",
+        "effect_actions": 1,
+        "final_hash": "17271822296993255508",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 34
+      },
+      "freeze_rank": 48,
+      "legacy_source_path": "p/putrefy.txt",
+      "legacy_source_sha256": "8e3dac1c19544e8c82f16fbaea27ec4e97dfd4db00a41e55edb2778892fe9e16",
+      "oracle_id": "9b271430-f53d-42d6-a547-2f286dd9bcb6",
+      "oracle_text": "Destroy target artifact or creature. It can't be regenerated.",
+      "scenario_id": "T3.6-048",
+      "status": "blocked_semantic_gap",
+      "stratum": "targeted_permanent_interaction",
+      "translated_path": "p/putrefy.frs",
+      "translated_source_sha256": "ff0a28101270869f17d9491cd1296d1909a6404b5a4bc96dcfa9959fa06690ed"
+    },
+    {
+      "blockers": [
+        {
+          "code": "REGENERATION_PROHIBITION_MISSING",
+          "detail": "The destroy action does not retain the card's cannot-regenerate rider."
+        }
+      ],
+      "card_name": "Terminate",
+      "expected_runtime": {
+        "capabilities": [
+          "destroy_permanent"
+        ],
+        "destination": "owner_graveyard",
+        "disposition": "passed",
+        "effect_actions": 1,
+        "final_hash": "9993113592575716288",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 35
+      },
+      "freeze_rank": 49,
+      "legacy_source_path": "t/terminate.txt",
+      "legacy_source_sha256": "9e60d3a17ebeeb5dbc92fab70a3646f37f8c0adcdbf07d47355cf967c22e398e",
+      "oracle_id": "6257c2fd-005f-41e3-8a72-af76df1eb134",
+      "oracle_text": "Destroy target creature. It can't be regenerated.",
+      "scenario_id": "T3.6-049",
+      "status": "blocked_semantic_gap",
+      "stratum": "targeted_permanent_interaction",
+      "translated_path": "t/terminate.frs",
+      "translated_source_sha256": "98986ffa5a1c2752438415b359caf70b1c5aab7db0d62e42911ad06dc230fc27"
+    },
+    {
+      "card_name": "Bedevil",
+      "claim_boundary": "one deterministic card-specific production path plus shared primitive validation",
+      "expected_behavior": "Destroy a targeted artifact, creature, or planeswalker.",
+      "expected_runtime": {
+        "capabilities": [
+          "destroy_permanent"
+        ],
+        "destination": "owner_graveyard",
+        "disposition": "passed",
+        "effect_actions": 1,
+        "final_hash": "14096458207073814861",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 34
+      },
+      "freeze_rank": 50,
+      "legacy_source_path": "b/bedevil.txt",
+      "legacy_source_sha256": "20b2cb547828f705c9bf6bf7073f7a066949d05c15fbc5adbf8605fede737ded",
+      "oracle_id": "bceecc64-96f1-4e7b-8904-0aef90377764",
+      "oracle_text": "Destroy target artifact, creature, or planeswalker.",
+      "scenario_id": "T3.6-050",
+      "semantic_atoms": [
+        {
+          "op": "destroy_permanent",
+          "target": "artifact|creature|planeswalker"
+        }
+      ],
+      "status": "semantic_case_ready",
+      "stratum": "targeted_permanent_interaction",
+      "translated_path": "b/bedevil.frs",
+      "translated_source_sha256": "1546ad36bdf0c4c58f1803762380e4f4fb3c98bd1cd0951b0c6f1ec27f2b589a"
+    },
+    {
+      "card_name": "Vindicate",
+      "claim_boundary": "one deterministic card-specific production path plus shared primitive validation",
+      "expected_behavior": "Destroy any targeted permanent.",
+      "expected_runtime": {
+        "capabilities": [
+          "destroy_permanent"
+        ],
+        "destination": "owner_graveyard",
+        "disposition": "passed",
+        "effect_actions": 1,
+        "final_hash": "12662235410837470378",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 39
+      },
+      "freeze_rank": 51,
+      "legacy_source_path": "v/vindicate.txt",
+      "legacy_source_sha256": "c90e83392a302810ec86122ba550f04260970b6682922bbb3fa69490d89ae62f",
+      "oracle_id": "63c1ac21-e3d8-40c2-8c09-3f31c52992ef",
+      "oracle_text": "Destroy target permanent.",
+      "scenario_id": "T3.6-051",
+      "semantic_atoms": [
+        {
+          "op": "destroy_permanent",
+          "target": "permanent"
+        }
+      ],
+      "status": "semantic_case_ready",
+      "stratum": "targeted_permanent_interaction",
+      "translated_path": "v/vindicate.frs",
+      "translated_source_sha256": "41455afa3e4433c0985cbf95276c5e8a48ce3b08cd5ae0d12830896303ea5610"
+    },
+    {
+      "blockers": [
+        {
+          "code": "TOKEN_SUBTYPE_STATE_MISSING",
+          "detail": "The 3/3 token is created without its Ape subtype."
+        },
+        {
+          "code": "REGENERATION_PROHIBITION_MISSING",
+          "detail": "The destroy action does not retain the card's cannot-regenerate rider."
+        }
+      ],
+      "card_name": "Pongify",
+      "expected_runtime": {
+        "capabilities": [
+          "destroy_permanent",
+          "create_token"
+        ],
+        "destination": "owner_graveyard",
+        "disposition": "passed",
+        "effect_actions": 2,
+        "final_hash": "10175398289194996171",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 36
+      },
+      "freeze_rank": 52,
+      "legacy_source_path": "p/pongify.txt",
+      "legacy_source_sha256": "b94e83a10a0afa57dc21396efd3dcd979d18696f4d48fc711ac8900ab77504aa",
+      "oracle_id": "05849bd6-8f38-4031-be2b-e2aa03beb8cc",
+      "oracle_text": "Destroy target creature. It can't be regenerated. Its controller creates a 3/3 green Ape creature token.",
+      "scenario_id": "T3.6-052",
+      "status": "blocked_semantic_gap",
+      "stratum": "token_and_sacrifice",
+      "translated_path": "p/pongify.frs",
+      "translated_source_sha256": "f09551590388b2ba2659e4445e906ba6cf3269a79163191d2161e729f387d8aa"
+    },
+    {
+      "blockers": [
+        {
+          "code": "TOKEN_SUBTYPE_STATE_MISSING",
+          "detail": "The 3/3 token is created without its Frog and Lizard subtypes."
+        },
+        {
+          "code": "REGENERATION_PROHIBITION_MISSING",
+          "detail": "The destroy action does not retain the card's cannot-regenerate rider."
+        }
+      ],
+      "card_name": "Rapid Hybridization",
+      "expected_runtime": {
+        "capabilities": [
+          "destroy_permanent",
+          "create_token"
+        ],
+        "destination": "owner_graveyard",
+        "disposition": "passed",
+        "effect_actions": 2,
+        "final_hash": "4073629049246874332",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 36
+      },
+      "freeze_rank": 53,
+      "legacy_source_path": "r/rapid_hybridization.txt",
+      "legacy_source_sha256": "652f6f8290f06231f7b6d24c6fd6286a7ef47d9c6e7d83cbdc320b4d5544b8a2",
+      "oracle_id": "06692cd9-ac2f-4a32-8fd1-043ba3c0fe71",
+      "oracle_text": "Destroy target creature. It can't be regenerated. That creature's controller creates a 3/3 green Frog Lizard creature token.",
+      "scenario_id": "T3.6-053",
+      "status": "blocked_semantic_gap",
+      "stratum": "token_and_sacrifice",
+      "translated_path": "r/rapid_hybridization.frs",
+      "translated_source_sha256": "3e5ef8afb5d03792cd6731c598608f4bab2b38c1ca0aae41f95158bcbcd6635e"
+    },
+    {
+      "blockers": [
+        {
+          "code": "TOKEN_SUBTYPE_STATE_MISSING",
+          "detail": "The flying 2/2 token is created without its Bird subtype."
+        }
+      ],
+      "card_name": "Swan Song",
+      "expected_runtime": {
+        "capabilities": [
+          "counter_stack_entry",
+          "create_token"
+        ],
+        "destination": "owner_graveyard",
+        "disposition": "passed",
+        "effect_actions": 2,
+        "final_hash": "15222040734086301956",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 36
+      },
+      "freeze_rank": 54,
+      "legacy_source_path": "s/swan_song.txt",
+      "legacy_source_sha256": "4fc6aaf3c5e4751559e7464e20d4df836a4658a3410726d6f6dd9edd17121c00",
+      "oracle_id": "8ddfc283-c9b4-41a5-af88-cf0068e986cc",
+      "oracle_text": "Counter target enchantment, instant, or sorcery spell. Its controller creates a 2/2 blue Bird creature token with flying.",
+      "scenario_id": "T3.6-054",
+      "status": "blocked_semantic_gap",
+      "stratum": "stack_interaction_and_protection",
+      "translated_path": "s/swan_song.frs",
+      "translated_source_sha256": "c0298e763ceb011894e427bde258b6bb0ba59a875f5bb9e5b0b44ff79ce6d797"
+    },
+    {
+      "blockers": [
+        {
+          "code": "T3_5_UNSUPPORTED_EFFECT_ARGUMENTS",
+          "detail": "card.faces[0].abilities[0].effect.sequence[1].template: token template `c_a_treasure_sac` is not in the exact runtime registry"
+        }
+      ],
+      "card_name": "An Offer You Can't Refuse",
+      "expected_runtime": {
+        "code": "unsupported_effect_arguments",
+        "detail": "card.faces[0].abilities[0].effect.sequence[1].template: token template `c_a_treasure_sac` is not in the exact runtime registry",
+        "detail_sha256": "04a68100ae0e61cc77b2cdf418baedab5661b37a3b94d336cb77f9a37544785b",
+        "disposition": "unsupported_setup"
+      },
+      "freeze_rank": 55,
+      "legacy_source_path": "a/an_offer_you_cant_refuse.txt",
+      "legacy_source_sha256": "896408e0f2227a6087392b0e3d2f0fcd803d57f53085acbb05aa27016370c3f8",
+      "oracle_id": "234a734b-ba28-4f1b-9d01-3c3e7d516590",
+      "oracle_text": "Counter target noncreature spell. Its controller creates two Treasure tokens. (They're artifacts with \"{T}, Sacrifice this token: Add one mana of any color.\")",
+      "scenario_id": "T3.6-055",
+      "status": "blocked_runtime",
+      "stratum": "stack_interaction_and_protection",
+      "translated_path": "a/an_offer_you_cant_refuse.frs",
+      "translated_source_sha256": "69e781595bdbe8a09089face0930e2e2fb7c876fbd1a56847432af5690ebdefc"
+    },
+    {
+      "card_name": "Dispel",
+      "claim_boundary": "one deterministic card-specific production path plus shared primitive validation",
+      "expected_behavior": "Counter a targeted instant spell.",
+      "expected_runtime": {
+        "capabilities": [
+          "counter_stack_entry"
+        ],
+        "destination": "owner_graveyard",
+        "disposition": "passed",
+        "effect_actions": 1,
+        "final_hash": "11066772563020065277",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 35
+      },
+      "freeze_rank": 56,
+      "legacy_source_path": "d/dispel.txt",
+      "legacy_source_sha256": "4a451d473584e6276de5eb83798b46eeeb39b418f137cab64098afb06ab5b39e",
+      "oracle_id": "6d7be242-a072-40ce-b540-95880506cccd",
+      "oracle_text": "Counter target instant spell.",
+      "scenario_id": "T3.6-056",
+      "semantic_atoms": [
+        {
+          "op": "counter_stack_entry",
+          "target": "instant spell"
+        }
+      ],
+      "status": "semantic_case_ready",
+      "stratum": "stack_interaction_and_protection",
+      "translated_path": "d/dispel.frs",
+      "translated_source_sha256": "f24c37b73157209a5e1a9c86d4a1f30189a80acb50408f521c80ac2a8517ee67"
+    },
+    {
+      "blockers": [
+        {
+          "code": "T3_5_UNSUPPORTED_ABILITY_SHAPE",
+          "detail": "card.faces[0].abilities[0]: ability kind Static is not compiled for Instant"
+        }
+      ],
+      "card_name": "Fierce Guardianship",
+      "expected_runtime": {
+        "code": "unsupported_ability_shape",
+        "detail": "card.faces[0].abilities[0]: ability kind Static is not compiled for Instant",
+        "detail_sha256": "2152bbc2d70275587547ad8a3e0247721b8c560fee547799756dc10cd560e019",
+        "disposition": "unsupported_setup"
+      },
+      "freeze_rank": 57,
+      "legacy_source_path": "f/fierce_guardianship.txt",
+      "legacy_source_sha256": "629d27bf0e9ce0edaf4a3b3972d97df90ce44a239491fe614a83a0caa7aa16a8",
+      "oracle_id": "d09c9cba-fdd2-479b-ad5d-d05181c3e3f9",
+      "oracle_text": "If you control a commander, you may cast this spell without paying its mana cost.\nCounter target noncreature spell.",
+      "scenario_id": "T3.6-057",
+      "status": "blocked_runtime",
+      "stratum": "stack_interaction_and_protection",
+      "translated_path": "f/fierce_guardianship.frs",
+      "translated_source_sha256": "c9e254461936a33c6fb2214a8f5d378be98e780c28bbcd2bbccc431f27827250"
+    },
+    {
+      "blockers": [
+        {
+          "code": "T3_5_UNSUPPORTED_EFFECT_OPERATION",
+          "detail": "card.faces[0].abilities[0].effect.sequence[0]: effect operation `grant_keyword` has no complete runtime lowering"
+        }
+      ],
+      "card_name": "Heroic Intervention",
+      "expected_runtime": {
+        "code": "unsupported_effect_operation",
+        "detail": "card.faces[0].abilities[0].effect.sequence[0]: effect operation `grant_keyword` has no complete runtime lowering",
+        "detail_sha256": "63e31becd213c942deb8fe1925dffb9365f38203b7f82aba0719f2529c628bf5",
+        "disposition": "unsupported_setup"
+      },
+      "freeze_rank": 58,
+      "legacy_source_path": "h/heroic_intervention.txt",
+      "legacy_source_sha256": "435417a019492a29458f2d2a09ff76e6d311c384e90f1271698cbc0bd90215f3",
+      "oracle_id": "24882fa2-3fe9-4c1b-aa3d-0e6488b9db27",
+      "oracle_text": "Permanents you control gain hexproof and indestructible until end of turn.",
+      "scenario_id": "T3.6-058",
+      "status": "blocked_runtime",
+      "stratum": "stack_interaction_and_protection",
+      "translated_path": "h/heroic_intervention.frs",
+      "translated_source_sha256": "1060d9f61514a1ac5e14325738f2cacbe74f8c07ca7324ed9a93dde480a0189d"
+    },
+    {
+      "blockers": [
+        {
+          "code": "T3_5_UNSUPPORTED_EFFECT_OPERATION",
+          "detail": "card.faces[0].abilities[0].effect: effect operation `choose_one` has no complete runtime lowering"
+        }
+      ],
+      "card_name": "Boros Charm",
+      "expected_runtime": {
+        "code": "unsupported_effect_operation",
+        "detail": "card.faces[0].abilities[0].effect: effect operation `choose_one` has no complete runtime lowering",
+        "detail_sha256": "0eb16937eda99fe3a35a682d413d78dca08ddb65b59ce298eb4e9221f507b641",
+        "disposition": "unsupported_setup"
+      },
+      "freeze_rank": 59,
+      "legacy_source_path": "b/boros_charm.txt",
+      "legacy_source_sha256": "09d1373fcca2d4628a05e91be27a769c86a19a8fa4df7f2424d78aee149727c2",
+      "oracle_id": "2679d0dd-ba30-4a1c-b6a0-b3ac6c790496",
+      "oracle_text": "Choose one \u2014\n\u2022 Boros Charm deals 4 damage to target player or planeswalker.\n\u2022 Permanents you control gain indestructible until end of turn.\n\u2022 Target creature gains double strike until end of turn.",
+      "scenario_id": "T3.6-059",
+      "status": "blocked_runtime",
+      "stratum": "continuous_combat_and_costs",
+      "translated_path": "b/boros_charm.frs",
+      "translated_source_sha256": "2d401fcc0be135d805a52d20f565bac746396883a85c9d368e8ffd161440a0db"
+    },
+    {
+      "blockers": [
+        {
+          "code": "T3_5_UNSUPPORTED_ABILITY_SHAPE",
+          "detail": "card.faces[0].abilities[0]: ability kind Static is not compiled for Instant"
+        }
+      ],
+      "card_name": "Flawless Maneuver",
+      "expected_runtime": {
+        "code": "unsupported_ability_shape",
+        "detail": "card.faces[0].abilities[0]: ability kind Static is not compiled for Instant",
+        "detail_sha256": "2152bbc2d70275587547ad8a3e0247721b8c560fee547799756dc10cd560e019",
+        "disposition": "unsupported_setup"
+      },
+      "freeze_rank": 60,
+      "legacy_source_path": "f/flawless_maneuver.txt",
+      "legacy_source_sha256": "c7273610481514c1f7a1eaf86e4e0c0a9afdb633c59108e89580795b69e5d8da",
+      "oracle_id": "4e183439-17d2-47ff-9d99-5e22821d91e3",
+      "oracle_text": "If you control a commander, you may cast this spell without paying its mana cost.\nCreatures you control gain indestructible until end of turn.",
+      "scenario_id": "T3.6-060",
+      "status": "blocked_runtime",
+      "stratum": "continuous_combat_and_costs",
+      "translated_path": "f/flawless_maneuver.frs",
+      "translated_source_sha256": "710cb01f73cd3bce01b7d7cec070c06b37b58a156b8ac0251a957faaf56d927a"
+    },
+    {
+      "card_name": "Skyshroud Claim",
+      "claim_boundary": "one deterministic card-specific production path plus shared primitive validation",
+      "expected_behavior": "Find up to two Forest cards, put them onto the battlefield untapped, then shuffle.",
+      "expected_runtime": {
+        "capabilities": [
+          "search_library",
+          "move_zone",
+          "shuffle_library"
+        ],
+        "destination": "owner_graveyard",
+        "disposition": "passed",
+        "effect_actions": 3,
+        "final_hash": "9046607963842493294",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 43
+      },
+      "freeze_rank": 61,
+      "legacy_source_path": "s/skyshroud_claim.txt",
+      "legacy_source_sha256": "186c7b8270b704b536c6019c7a86736eae7d7accd3c2f73e3ddccf71d97b4aab",
+      "oracle_id": "376c9d3f-21d3-4251-bb6a-026fa9e1b0e1",
+      "oracle_text": "Search your library for up to two Forest cards, put them onto the battlefield, then shuffle.",
+      "scenario_id": "T3.6-061",
+      "semantic_atoms": [
+        {
+          "maximum": 2,
+          "op": "search_library",
+          "player": "controller",
+          "selector": "land with Forest subtype"
+        },
+        {
+          "chosen": "search_result",
+          "destination": "battlefield",
+          "maximum": 2,
+          "op": "move_zone"
+        },
+        {
+          "op": "shuffle_library",
+          "player": "controller"
+        }
+      ],
+      "status": "semantic_case_ready",
+      "stratum": "land_ramp_and_search",
+      "translated_path": "s/skyshroud_claim.frs",
+      "translated_source_sha256": "3ba4ac253aaf5fafdba48c17c1e04e29b2c2f2da14ada8623f58b18531196012"
+    },
+    {
+      "blockers": [
+        {
+          "code": "T3_5_UNSUPPORTED_ABILITY_SHAPE",
+          "detail": "card.faces[0].abilities[0]: ability kind Spell is not compiled for Instant"
+        }
+      ],
+      "card_name": "Harrow",
+      "expected_runtime": {
+        "code": "unsupported_ability_shape",
+        "detail": "card.faces[0].abilities[0]: ability kind Spell is not compiled for Instant",
+        "detail_sha256": "555a55094b0ac988ee639784bdd93e24a2f6724609a947720febd28b03bab4ec",
+        "disposition": "unsupported_setup"
+      },
+      "freeze_rank": 62,
+      "legacy_source_path": "h/harrow.txt",
+      "legacy_source_sha256": "7137389f49dcf3cd8a41a9947d498395fd0df4bb52963caa418035d7a58d3978",
+      "oracle_id": "705509e9-a034-4a5a-9c65-66f58748b8a2",
+      "oracle_text": "As an additional cost to cast this spell, sacrifice a land.\nSearch your library for up to two basic land cards, put them onto the battlefield, then shuffle.",
+      "scenario_id": "T3.6-062",
+      "status": "blocked_runtime",
+      "stratum": "token_and_sacrifice",
+      "translated_path": "h/harrow.frs",
+      "translated_source_sha256": "eb4c068e90e30dd17e063460e41c497ff25b31d5f58c9d7ad0ae3033255e4a1c"
+    },
+    {
+      "blockers": [
+        {
+          "code": "GENERAL_SUBTYPE_STATE_MISSING",
+          "detail": "The source does not carry its Elf and Scout subtypes."
+        }
+      ],
+      "card_name": "Wood Elves",
+      "expected_runtime": {
+        "capabilities": [
+          "permanent_spell",
+          "search_library",
+          "move_zone",
+          "shuffle_library"
+        ],
+        "destination": "battlefield",
+        "disposition": "passed",
+        "effect_actions": 3,
+        "final_hash": "6316426446090590018",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 45
+      },
+      "freeze_rank": 63,
+      "legacy_source_path": "w/wood_elves.txt",
+      "legacy_source_sha256": "7a9298c7e5056527e55e52d56a51c873981b8f1f5ef46397d00c7dce4f198aef",
+      "oracle_id": "8973bd99-20f8-4867-90ef-50392147ee1b",
+      "oracle_text": "When Wood Elves enters, search your library for a Forest card, put that card onto the battlefield, then shuffle.",
+      "scenario_id": "T3.6-063",
+      "status": "blocked_semantic_gap",
+      "stratum": "triggered_synergies",
+      "translated_path": "w/wood_elves.frs",
+      "translated_source_sha256": "fda54ba2948a2643c8d1ceb00bf6aea56d7206673b6c60a7fafe91cb0b46780a"
+    },
+    {
+      "blockers": [
+        {
+          "code": "GENERAL_SUBTYPE_STATE_MISSING",
+          "detail": "The source does not carry its Elf and Druid subtypes."
+        }
+      ],
+      "card_name": "Farhaven Elf",
+      "expected_runtime": {
+        "capabilities": [
+          "permanent_spell",
+          "search_library",
+          "move_zone",
+          "tap_object",
+          "shuffle_library"
+        ],
+        "destination": "battlefield",
+        "disposition": "passed",
+        "effect_actions": 4,
+        "final_hash": "173688238520800426",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 46
+      },
+      "freeze_rank": 64,
+      "legacy_source_path": "f/farhaven_elf.txt",
+      "legacy_source_sha256": "718b26d6d4893c4a497f64aeb28bdf0043bc4603b4a9fdc8963022dd99ced576",
+      "oracle_id": "4ce2357f-93e6-40ca-beca-8f4e15adc464",
+      "oracle_text": "When Farhaven Elf enters, you may search your library for a basic land card, put it onto the battlefield tapped, then shuffle.",
+      "scenario_id": "T3.6-064",
+      "status": "blocked_semantic_gap",
+      "stratum": "triggered_synergies",
+      "translated_path": "f/farhaven_elf.frs",
+      "translated_source_sha256": "1ed816a130542328a17bcca08d9d60d38ada457b42f28ed2f329ac817d786f08"
+    },
+    {
+      "blockers": [
+        {
+          "code": "T3_5_UNSUPPORTED_KEYWORD_SEMANTICS",
+          "detail": "card.faces[0].keywords: 1 noncreature keyword(s) require runtime lowering"
+        }
+      ],
+      "card_name": "Sword of the Animist",
+      "expected_runtime": {
+        "code": "unsupported_keyword_semantics",
+        "detail": "card.faces[0].keywords: 1 noncreature keyword(s) require runtime lowering",
+        "detail_sha256": "f948efa21fb38f29327bce749d47abd386d7addbb7fc79376fece432f78fc999",
+        "disposition": "unsupported_setup"
+      },
+      "freeze_rank": 65,
+      "legacy_source_path": "s/sword_of_the_animist.txt",
+      "legacy_source_sha256": "2fe329b339e55f70361cc6edbd5a14dd53cbe430b6d70e058005b62ef477740a",
+      "oracle_id": "d79cbc61-6c15-48ea-bbba-3cffb819ccba",
+      "oracle_text": "Equipped creature gets +1/+1.\nWhenever equipped creature attacks, you may search your library for a basic land card, put it onto the battlefield tapped, then shuffle.\nEquip {2}",
+      "scenario_id": "T3.6-065",
+      "status": "blocked_runtime",
+      "stratum": "triggered_synergies",
+      "translated_path": "s/sword_of_the_animist.frs",
+      "translated_source_sha256": "4fb53457a5a44f9c343355c22d991c7f63e32b4276a1d8b8fc28e15b14f4b75b"
+    },
+    {
+      "blockers": [
+        {
+          "code": "T3_5_UNSUPPORTED_KEYWORD_SEMANTICS",
+          "detail": "card.faces[0].keywords: 1 noncreature keyword(s) require runtime lowering"
+        }
+      ],
+      "card_name": "Reconnaissance Mission",
+      "expected_runtime": {
+        "code": "unsupported_keyword_semantics",
+        "detail": "card.faces[0].keywords: 1 noncreature keyword(s) require runtime lowering",
+        "detail_sha256": "f948efa21fb38f29327bce749d47abd386d7addbb7fc79376fece432f78fc999",
+        "disposition": "unsupported_setup"
+      },
+      "freeze_rank": 66,
+      "legacy_source_path": "r/reconnaissance_mission.txt",
+      "legacy_source_sha256": "2d37ebe0e7ce7ac720a915910a8c0954846690e8113db4de3f85e81c8e2443f4",
+      "oracle_id": "11bf211c-95a3-4e7f-bd08-13f979d54e73",
+      "oracle_text": "Whenever a creature you control deals combat damage to a player, you may draw a card.\nCycling {2} ({2}, Discard this card: Draw a card.)",
+      "scenario_id": "T3.6-066",
+      "status": "blocked_runtime",
+      "stratum": "card_flow",
+      "translated_path": "r/reconnaissance_mission.frs",
+      "translated_source_sha256": "19cef5dad9567997746a83c60e961effb5579d4c80b6c3ee9bdc4775a70e90e7"
+    },
+    {
+      "blockers": [
+        {
+          "code": "T3_5_UNSUPPORTED_ABILITY_SHAPE",
+          "detail": "card.faces[0].abilities[0].event: only event_enters(source()) is compiled for triggered abilities"
+        }
+      ],
+      "card_name": "Beast Whisperer",
+      "expected_runtime": {
+        "code": "unsupported_ability_shape",
+        "detail": "card.faces[0].abilities[0].event: only event_enters(source()) is compiled for triggered abilities",
+        "detail_sha256": "580c9aa803adf1dabf75d2e1b1193dd21e77f30e33e5242b67c2a6f2879bebdd",
+        "disposition": "unsupported_setup"
+      },
+      "freeze_rank": 67,
+      "legacy_source_path": "b/beast_whisperer.txt",
+      "legacy_source_sha256": "0fe7b100d1246705ba339bbbe23781184ddb6415550f097981f9d12256d1fed8",
+      "oracle_id": "5da7eea8-bb9e-47ce-a554-8a1ee058bd7a",
+      "oracle_text": "Whenever you cast a creature spell, draw a card.",
+      "scenario_id": "T3.6-067",
+      "status": "blocked_runtime",
+      "stratum": "card_flow",
+      "translated_path": "b/beast_whisperer.frs",
+      "translated_source_sha256": "ccec91ee3a04d0d07c345dc963d7b79b698f7fc9750def60c4ccd6e3885e0b78"
+    },
+    {
+      "card_name": "Greed",
+      "claim_boundary": "one deterministic card-specific production path plus shared primitive validation",
+      "expected_behavior": "Resolve Greed, then pay {B} and two life to draw one card.",
+      "expected_runtime": {
+        "capabilities": [
+          "permanent_spell",
+          "activated_ability",
+          "draw_cards"
+        ],
+        "destination": "battlefield",
+        "disposition": "passed",
+        "effect_actions": 1,
+        "final_hash": "6951098209591896458",
+        "final_life_totals": [
+          18,
+          20
+        ],
+        "production_actions": 47
+      },
+      "freeze_rank": 68,
+      "legacy_source_path": "g/greed.txt",
+      "legacy_source_sha256": "caf070eee9c10e44d3a93e205ab94756cc7f03e0df1d55718372ef05dad5a37c",
+      "oracle_id": "1ff62220-be95-4901-b8d8-812b9a1a1b0a",
+      "oracle_text": "{B}, Pay 2 life: Draw a card.",
+      "scenario_id": "T3.6-068",
+      "semantic_atoms": [
+        {
+          "destination": "battlefield",
+          "op": "resolve_permanent",
+          "type_line": "Enchantment"
+        },
+        {
+          "mana_cost": "{B}",
+          "op": "activate_ability",
+          "pay_life": 2
+        },
+        {
+          "count": 1,
+          "op": "draw_cards",
+          "player": "controller"
+        }
+      ],
+      "status": "semantic_case_ready",
+      "stratum": "card_flow",
+      "translated_path": "g/greed.frs",
+      "translated_source_sha256": "5cb4097596b01d6b71cd9958e19fde85b3a8b3df8035ec694363a2a5e935d1e9"
+    },
+    {
+      "blockers": [
+        {
+          "code": "T3_5_UNSUPPORTED_ABILITY_SHAPE",
+          "detail": "card.faces[0].abilities[0]: ability kind Spell is not compiled for Instant"
+        }
+      ],
+      "card_name": "Village Rites",
+      "expected_runtime": {
+        "code": "unsupported_ability_shape",
+        "detail": "card.faces[0].abilities[0]: ability kind Spell is not compiled for Instant",
+        "detail_sha256": "555a55094b0ac988ee639784bdd93e24a2f6724609a947720febd28b03bab4ec",
+        "disposition": "unsupported_setup"
+      },
+      "freeze_rank": 69,
+      "legacy_source_path": "v/village_rites.txt",
+      "legacy_source_sha256": "9d75126c5f9548e4ae1484bd6b76893dfaf32f174c00091bf5360f6fef77b015",
+      "oracle_id": "365548fb-5acc-4a8a-b20b-26d28b7d029f",
+      "oracle_text": "As an additional cost to cast this spell, sacrifice a creature.\nDraw two cards.",
+      "scenario_id": "T3.6-069",
+      "status": "blocked_runtime",
+      "stratum": "card_flow",
+      "translated_path": "v/village_rites.frs",
+      "translated_source_sha256": "af81b1f4cfad68a98c18b429e669b9f04b22533089e4ab7c65b91a18a79733bb"
+    },
+    {
+      "blockers": [
+        {
+          "code": "T3_5_UNSUPPORTED_EFFECT_OPERATION",
+          "detail": "card.faces[0].abilities[0].effect.sequence[0]: effect operation `discard_cards` has no complete runtime lowering"
+        }
+      ],
+      "card_name": "Wheel of Fortune",
+      "expected_runtime": {
+        "code": "unsupported_effect_operation",
+        "detail": "card.faces[0].abilities[0].effect.sequence[0]: effect operation `discard_cards` has no complete runtime lowering",
+        "detail_sha256": "8e8b465036e1eb5764fb02d86af6a1b1d33067cb752e2aca5ff955a33e9c7f5f",
+        "disposition": "unsupported_setup"
+      },
+      "freeze_rank": 70,
+      "legacy_source_path": "w/wheel_of_fortune.txt",
+      "legacy_source_sha256": "bd704f2fd7b14d2a9102865b0c5dc4bf2910fe2f4cbe2b255d07c4eb65a48076",
+      "oracle_id": "a8abd966-de7b-46a3-8ac7-8747ab35653a",
+      "oracle_text": "Each player discards their hand, then draws seven cards.",
+      "scenario_id": "T3.6-070",
+      "status": "blocked_runtime",
+      "stratum": "card_flow",
+      "translated_path": "w/wheel_of_fortune.frs",
+      "translated_source_sha256": "f4bf27a46a306a4983a7a02d795b49e2eca54b88d3c2b854cfa434299419e49a"
+    },
+    {
+      "blockers": [
+        {
+          "code": "T3_5_UNSUPPORTED_KEYWORD_SEMANTICS",
+          "detail": "card.faces[0].keywords: 1 noncreature keyword(s) require runtime lowering"
+        }
+      ],
+      "card_name": "Faithless Looting",
+      "expected_runtime": {
+        "code": "unsupported_keyword_semantics",
+        "detail": "card.faces[0].keywords: 1 noncreature keyword(s) require runtime lowering",
+        "detail_sha256": "f948efa21fb38f29327bce749d47abd386d7addbb7fc79376fece432f78fc999",
+        "disposition": "unsupported_setup"
+      },
+      "freeze_rank": 71,
+      "legacy_source_path": "f/faithless_looting.txt",
+      "legacy_source_sha256": "7314a5d5ff247623d70abe92b320ce7f0261aad9f76ca30d3ce3eb5a4dcc16b5",
+      "oracle_id": "3d6fa57a-aa53-4b5c-b8af-a7612c823117",
+      "oracle_text": "Draw two cards, then discard two cards.\nFlashback {2}{R} (You may cast this card from your graveyard for its flashback cost. Then exile it.)",
+      "scenario_id": "T3.6-071",
+      "status": "blocked_runtime",
+      "stratum": "card_flow",
+      "translated_path": "f/faithless_looting.frs",
+      "translated_source_sha256": "1d703adca892c5c775b9b76cc8f2eed9b86de184e71eb8906172220b32113c5a"
+    },
+    {
+      "blockers": [
+        {
+          "code": "T3_5_UNSUPPORTED_ABILITY_SHAPE",
+          "detail": "card.faces[0].abilities[0]: ability kind Spell is not compiled for Instant"
+        }
+      ],
+      "card_name": "Big Score",
+      "expected_runtime": {
+        "code": "unsupported_ability_shape",
+        "detail": "card.faces[0].abilities[0]: ability kind Spell is not compiled for Instant",
+        "detail_sha256": "555a55094b0ac988ee639784bdd93e24a2f6724609a947720febd28b03bab4ec",
+        "disposition": "unsupported_setup"
+      },
+      "freeze_rank": 72,
+      "legacy_source_path": "b/big_score.txt",
+      "legacy_source_sha256": "d49ad09e9a27d53921aac2c72af40cc8b9dd9621fe79ddd6d577e48e50db1df9",
+      "oracle_id": "a5cbd257-c836-493e-bb1a-76242619dea2",
+      "oracle_text": "As an additional cost to cast this spell, discard a card.\nDraw two cards and create two Treasure tokens. (They're artifacts with \"{T}, Sacrifice this token: Add one mana of any color.\")",
+      "scenario_id": "T3.6-072",
+      "status": "blocked_runtime",
+      "stratum": "token_and_sacrifice",
+      "translated_path": "b/big_score.frs",
+      "translated_source_sha256": "4f793dcd6741910def68cc0ee6090f0ab534e93ed895d324937151130c667a61"
+    },
+    {
+      "blockers": [
+        {
+          "code": "T3_5_UNSUPPORTED_ABILITY_SHAPE",
+          "detail": "card.faces[0].abilities[0]: ability kind Spell is not compiled for Instant"
+        }
+      ],
+      "card_name": "Unexpected Windfall",
+      "expected_runtime": {
+        "code": "unsupported_ability_shape",
+        "detail": "card.faces[0].abilities[0]: ability kind Spell is not compiled for Instant",
+        "detail_sha256": "555a55094b0ac988ee639784bdd93e24a2f6724609a947720febd28b03bab4ec",
+        "disposition": "unsupported_setup"
+      },
+      "freeze_rank": 73,
+      "legacy_source_path": "u/unexpected_windfall.txt",
+      "legacy_source_sha256": "f6d00354b10f859de001dd033e5a26dbb4771ae46d399f6ffbdcef8d0128f1f6",
+      "oracle_id": "498c10c9-253d-4b15-b48c-1509381b17e8",
+      "oracle_text": "As an additional cost to cast this spell, discard a card.\nDraw two cards and create two Treasure tokens. (They're artifacts with \"{T}, Sacrifice this token: Add one mana of any color.\")",
+      "scenario_id": "T3.6-073",
+      "status": "blocked_runtime",
+      "stratum": "token_and_sacrifice",
+      "translated_path": "u/unexpected_windfall.frs",
+      "translated_source_sha256": "bbe5815a116b3a3a23d1a6e3a48e89fcaa69d812087dc1aadb5b6df87e1e1cb7"
+    },
+    {
+      "blockers": [
+        {
+          "code": "T3_5_UNSUPPORTED_ABILITY_SHAPE",
+          "detail": "card.faces[0].abilities[0]: ability kind Spell is not compiled for Sorcery"
+        }
+      ],
+      "card_name": "Seize the Spoils",
+      "expected_runtime": {
+        "code": "unsupported_ability_shape",
+        "detail": "card.faces[0].abilities[0]: ability kind Spell is not compiled for Sorcery",
+        "detail_sha256": "26d465ec28959d45f341ca337b20c79f3bd74f729ba3998b29372bbc76d0a4b1",
+        "disposition": "unsupported_setup"
+      },
+      "freeze_rank": 74,
+      "legacy_source_path": "s/seize_the_spoils.txt",
+      "legacy_source_sha256": "d0364f26f4da097a7ee17356205f3de474acde2499e812a7bad5ae71975012b1",
+      "oracle_id": "58f83528-9110-4895-b5ea-51b90af30a8d",
+      "oracle_text": "As an additional cost to cast this spell, discard a card.\nDraw two cards and create a Treasure token. (It's an artifact with \"{T}, Sacrifice this token: Add one mana of any color.\")",
+      "scenario_id": "T3.6-074",
+      "status": "blocked_runtime",
+      "stratum": "token_and_sacrifice",
+      "translated_path": "s/seize_the_spoils.frs",
+      "translated_source_sha256": "6dd16da2cd40cfaab057591b7df54b1bfea5332952dcbe504698d4886fb249ec"
+    },
+    {
+      "blockers": [
+        {
+          "code": "T3_5_UNSUPPORTED_ABILITY_SHAPE",
+          "detail": "card.faces[0].abilities[0].event: only event_enters(source()) is compiled for triggered abilities"
+        }
+      ],
+      "card_name": "Archmage Emeritus",
+      "expected_runtime": {
+        "code": "unsupported_ability_shape",
+        "detail": "card.faces[0].abilities[0].event: only event_enters(source()) is compiled for triggered abilities",
+        "detail_sha256": "580c9aa803adf1dabf75d2e1b1193dd21e77f30e33e5242b67c2a6f2879bebdd",
+        "disposition": "unsupported_setup"
+      },
+      "freeze_rank": 75,
+      "legacy_source_path": "a/archmage_emeritus.txt",
+      "legacy_source_sha256": "5c43283cea30646a39dab843114cf48e549cbf27d4e7b3b0117ee6c211cf3516",
+      "oracle_id": "8305d576-21d8-4ce7-8eda-a7cd9793aca5",
+      "oracle_text": "Magecraft \u2014 Whenever you cast or copy an instant or sorcery spell, draw a card.",
+      "scenario_id": "T3.6-075",
+      "status": "blocked_runtime",
+      "stratum": "triggered_synergies",
+      "translated_path": "a/archmage_emeritus.frs",
+      "translated_source_sha256": "16f16663117ac2f949b33bb0f8fc57e749073a2de6db938886a02ecac55bbd58"
+    },
+    {
+      "blockers": [
+        {
+          "code": "T3_5_UNSUPPORTED_KEYWORD_SEMANTICS",
+          "detail": "card.faces[0].keywords[0]: keyword `evoke` requires runtime lowering"
+        }
+      ],
+      "card_name": "Mulldrifter",
+      "expected_runtime": {
+        "code": "unsupported_keyword_semantics",
+        "detail": "card.faces[0].keywords[0]: keyword `evoke` requires runtime lowering",
+        "detail_sha256": "8abef61fbf5071d6fc58784e80da7914348bb17a159896b9182ea1e57ce8c355",
+        "disposition": "unsupported_setup"
+      },
+      "freeze_rank": 76,
+      "legacy_source_path": "m/mulldrifter.txt",
+      "legacy_source_sha256": "dbd89f30c85442197e9e064488187625114564df967ee941d753870fca7761ed",
+      "oracle_id": "24d0f5e7-0d9e-4b76-900e-a7274e80312d",
+      "oracle_text": "Flying\nWhen Mulldrifter enters, draw two cards.\nEvoke {2}{U} (You may cast this spell for its evoke cost. If you do, it's sacrificed when it enters.)",
+      "scenario_id": "T3.6-076",
+      "status": "blocked_runtime",
+      "stratum": "triggered_synergies",
+      "translated_path": "m/mulldrifter.frs",
+      "translated_source_sha256": "b416b41cea2b35a00f9bcb5e53f5337ea1e4402dbe21c1d4c63ea232693af064"
+    },
+    {
+      "blockers": [
+        {
+          "code": "GENERAL_SUBTYPE_STATE_MISSING",
+          "detail": "The source does not carry its Human and Scout subtypes."
+        }
+      ],
+      "card_name": "Cloudblazer",
+      "expected_runtime": {
+        "capabilities": [
+          "permanent_spell",
+          "gain_life",
+          "draw_cards"
+        ],
+        "destination": "battlefield",
+        "disposition": "passed",
+        "effect_actions": 2,
+        "final_hash": "18007882108855809093",
+        "final_life_totals": [
+          22,
+          20
+        ],
+        "production_actions": 45
+      },
+      "freeze_rank": 77,
+      "legacy_source_path": "c/cloudblazer.txt",
+      "legacy_source_sha256": "40bf93532cd08411cf25dc522981ffb86f0a70125d031cc51813719e16484189",
+      "oracle_id": "f84d1291-1f82-4b67-a26e-b79624b4ce1d",
+      "oracle_text": "Flying\nWhen Cloudblazer enters, you gain 2 life and draw two cards.",
+      "scenario_id": "T3.6-077",
+      "status": "blocked_semantic_gap",
+      "stratum": "triggered_synergies",
+      "translated_path": "c/cloudblazer.frs",
+      "translated_source_sha256": "40a03d6e68fe4b8ddae371f4576f0e7c784cac47938031e03e6b58fd3aa542e4"
+    },
+    {
+      "blockers": [
+        {
+          "code": "T3_5_UNSUPPORTED_EFFECT_ARGUMENTS",
+          "detail": "card.faces[0].abilities[0].effect.choice[0].target.cards[0].and[0].and[1]: object predicate `less_than` is not compiled"
+        }
+      ],
+      "card_name": "Sun Titan",
+      "expected_runtime": {
+        "code": "unsupported_effect_arguments",
+        "detail": "card.faces[0].abilities[0].effect.choice[0].target.cards[0].and[0].and[1]: object predicate `less_than` is not compiled",
+        "detail_sha256": "00e1c524def5f84d562802fc0b3405072b481b5900219e0927cf39a204598a7a",
+        "disposition": "unsupported_setup"
+      },
+      "freeze_rank": 78,
+      "legacy_source_path": "s/sun_titan.txt",
+      "legacy_source_sha256": "390d7963dc35cee8f1f67dddcc01b06b7c57b178058f37431d6a57b35271a7ba",
+      "oracle_id": "b2e950fb-cb7e-40a0-a311-5bbdd0477b29",
+      "oracle_text": "Vigilance\nWhenever Sun Titan enters or attacks, you may return target permanent card with mana value 3 or less from your graveyard to the battlefield.",
+      "scenario_id": "T3.6-078",
+      "status": "blocked_runtime",
+      "stratum": "library_and_graveyard_access",
+      "translated_path": "s/sun_titan.frs",
+      "translated_source_sha256": "d7ca57d63eb2d8ce1d9e7ba311c47f1c5cba9f6c2c22c765af2b3ea3988a3c55"
+    },
+    {
+      "blockers": [
+        {
+          "code": "T3_5_UNSUPPORTED_ABILITY_SHAPE",
+          "detail": "card.faces[0].abilities[1].event: only event_enters(source()) is compiled for triggered abilities"
+        }
+      ],
+      "card_name": "Grave Titan",
+      "expected_runtime": {
+        "code": "unsupported_ability_shape",
+        "detail": "card.faces[0].abilities[1].event: only event_enters(source()) is compiled for triggered abilities",
+        "detail_sha256": "8a5dae56d843ba6f046d5732fc002b75022050a16ca259ff5e0faa7139dfeed3",
+        "disposition": "unsupported_setup"
+      },
+      "freeze_rank": 79,
+      "legacy_source_path": "g/grave_titan.txt",
+      "legacy_source_sha256": "86abd1d6e09e53319c57804d7633363c65c5cea1bbef014504fd177dfa6fc6de",
+      "oracle_id": "f3abd4d1-a975-4e85-8684-aa0fce029670",
+      "oracle_text": "Deathtouch\nWhenever Grave Titan enters or attacks, create two 2/2 black Zombie creature tokens.",
+      "scenario_id": "T3.6-079",
+      "status": "blocked_runtime",
+      "stratum": "token_and_sacrifice",
+      "translated_path": "g/grave_titan.frs",
+      "translated_source_sha256": "c676496b280e4cc5769c2476ac978f55e8c08869ec8db59c6efc80ab472bbfb8"
+    },
+    {
+      "blockers": [
+        {
+          "code": "T3_5_UNSUPPORTED_ABILITY_SHAPE",
+          "detail": "card.faces[0].abilities[1].event: only event_enters(source()) is compiled for triggered abilities"
+        }
+      ],
+      "card_name": "Primeval Titan",
+      "expected_runtime": {
+        "code": "unsupported_ability_shape",
+        "detail": "card.faces[0].abilities[1].event: only event_enters(source()) is compiled for triggered abilities",
+        "detail_sha256": "8a5dae56d843ba6f046d5732fc002b75022050a16ca259ff5e0faa7139dfeed3",
+        "disposition": "unsupported_setup"
+      },
+      "freeze_rank": 80,
+      "legacy_source_path": "p/primeval_titan.txt",
+      "legacy_source_sha256": "040f16882d7dd8dcb3da2bb28a74298b697d841495c1d5d27d9a1957de604761",
+      "oracle_id": "ae83ef2c-960f-4c5b-97cc-52465c687c18",
+      "oracle_text": "Trample\nWhenever Primeval Titan enters or attacks, you may search your library for up to two land cards, put them onto the battlefield tapped, then shuffle.",
+      "scenario_id": "T3.6-080",
+      "status": "blocked_runtime",
+      "stratum": "triggered_synergies",
+      "translated_path": "p/primeval_titan.frs",
+      "translated_source_sha256": "c6da83e60bf2b71c6850560fc4a0a65c290e5add70d6992a4e31b38fa8761d31"
+    },
+    {
+      "blockers": [
+        {
+          "code": "GENERAL_SUBTYPE_STATE_MISSING",
+          "detail": "The source does not carry its Elf and Shaman subtypes."
+        }
+      ],
+      "card_name": "Reclamation Sage",
+      "expected_runtime": {
+        "capabilities": [
+          "permanent_spell",
+          "destroy_permanent"
+        ],
+        "destination": "battlefield",
+        "disposition": "passed",
+        "effect_actions": 1,
+        "final_hash": "5290150689754281238",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 44
+      },
+      "freeze_rank": 81,
+      "legacy_source_path": "r/reclamation_sage.txt",
+      "legacy_source_sha256": "6fb0b4f6a2ccd559e259decbc2cbb5cf9705951cb29e03abab8f6cc5a4fe658d",
+      "oracle_id": "032ec6e2-6cc3-4a97-9cc7-3233f5e11904",
+      "oracle_text": "When Reclamation Sage enters, you may destroy target artifact or enchantment.",
+      "scenario_id": "T3.6-081",
+      "status": "blocked_semantic_gap",
+      "stratum": "triggered_synergies",
+      "translated_path": "r/reclamation_sage.frs",
+      "translated_source_sha256": "43c441d936af001a91604d9acbc939f4b2987cb31388e16e6c234d527e00aef1"
+    },
+    {
+      "blockers": [
+        {
+          "code": "GENERAL_SUBTYPE_STATE_MISSING",
+          "detail": "The source does not carry its Insect subtype."
+        }
+      ],
+      "card_name": "Caustic Caterpillar",
+      "expected_runtime": {
+        "capabilities": [
+          "permanent_spell",
+          "activated_ability",
+          "destroy_permanent"
+        ],
+        "destination": "battlefield",
+        "disposition": "passed",
+        "effect_actions": 1,
+        "final_hash": "16029576461900566556",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 50
+      },
+      "freeze_rank": 82,
+      "legacy_source_path": "c/caustic_caterpillar.txt",
+      "legacy_source_sha256": "4a662f9428c8a7d6dff1bae2954d1cd5abddcc862ef84386f4f2bb37de114a66",
+      "oracle_id": "45d35128-76e6-43f9-8d23-41f7506c3a71",
+      "oracle_text": "{1}{G}, Sacrifice Caustic Caterpillar: Destroy target artifact or enchantment.",
+      "scenario_id": "T3.6-082",
+      "status": "blocked_semantic_gap",
+      "stratum": "token_and_sacrifice",
+      "translated_path": "c/caustic_caterpillar.frs",
+      "translated_source_sha256": "e67d01c5f55fd9b609e5c36c36c1b933dd09211de384d5ac613b0a09e24268f8"
+    },
+    {
+      "blockers": [
+        {
+          "code": "GENERAL_SUBTYPE_STATE_MISSING",
+          "detail": "The source does not carry its Ooze subtype."
+        }
+      ],
+      "card_name": "Acidic Slime",
+      "expected_runtime": {
+        "capabilities": [
+          "permanent_spell",
+          "destroy_permanent"
+        ],
+        "destination": "battlefield",
+        "disposition": "passed",
+        "effect_actions": 1,
+        "final_hash": "8141692259608873908",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 44
+      },
+      "freeze_rank": 83,
+      "legacy_source_path": "a/acidic_slime.txt",
+      "legacy_source_sha256": "60fadc817e7f65ba17bf010ab78e780c708b30fcfcc36dd995198fe729e7adf7",
+      "oracle_id": "21f45043-5419-4019-8b6c-e5294bd5f549",
+      "oracle_text": "Deathtouch (Any amount of damage this deals to a creature is enough to destroy it.)\nWhen Acidic Slime enters, destroy target artifact, enchantment, or land.",
+      "scenario_id": "T3.6-083",
+      "status": "blocked_semantic_gap",
+      "stratum": "triggered_synergies",
+      "translated_path": "a/acidic_slime.frs",
+      "translated_source_sha256": "dfd38fc702a8d48a80dd8bc959d25d63594af1d107d6c00c0974b2ef4dd18f2e"
+    },
+    {
+      "blockers": [
+        {
+          "code": "GENERAL_SUBTYPE_STATE_MISSING",
+          "detail": "The source does not carry its Human and Shaman subtypes."
+        }
+      ],
+      "card_name": "Eternal Witness",
+      "expected_runtime": {
+        "capabilities": [
+          "permanent_spell",
+          "move_zone"
+        ],
+        "destination": "battlefield",
+        "disposition": "passed",
+        "effect_actions": 1,
+        "final_hash": "716721955365795718",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 44
+      },
+      "freeze_rank": 84,
+      "legacy_source_path": "e/eternal_witness.txt",
+      "legacy_source_sha256": "dc79adedc12ee93301cfac72ff4565d53e77d85beb7e430acf9a47e0471fbda2",
+      "oracle_id": "30b24e8e-3b0e-4d8e-90f3-f66eb7c1858c",
+      "oracle_text": "When Eternal Witness enters, you may return target card from your graveyard to your hand.",
+      "scenario_id": "T3.6-084",
+      "status": "blocked_semantic_gap",
+      "stratum": "library_and_graveyard_access",
+      "translated_path": "e/eternal_witness.frs",
+      "translated_source_sha256": "78d3b685ad59f4f8d3b04e27eff3e7509e1daa6f21a7a73438df6faffd1397ce"
+    },
+    {
+      "card_name": "Regrowth",
+      "claim_boundary": "one deterministic card-specific production path plus shared primitive validation",
+      "expected_behavior": "Return one targeted card owned by the caster from that graveyard to hand.",
+      "expected_runtime": {
+        "capabilities": [
+          "move_zone"
+        ],
+        "destination": "owner_graveyard",
+        "disposition": "passed",
+        "effect_actions": 1,
+        "final_hash": "5650775885398727515",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 39
+      },
+      "freeze_rank": 85,
+      "legacy_source_path": "r/regrowth.txt",
+      "legacy_source_sha256": "1dce28f064bcc46215b7a562658c72790add117e42316c816b068fd28a4fd2c9",
+      "oracle_id": "e6e4a8bd-5c40-4654-8de1-0da9afed90fd",
+      "oracle_text": "Return target card from your graveyard to your hand.",
+      "scenario_id": "T3.6-085",
+      "semantic_atoms": [
+        {
+          "destination": "hand",
+          "maximum": 1,
+          "op": "move_zone",
+          "source": "graveyard",
+          "target": "card owned by controller"
+        }
+      ],
+      "status": "semantic_case_ready",
+      "stratum": "library_and_graveyard_access",
+      "translated_path": "r/regrowth.frs",
+      "translated_source_sha256": "4b9c178da8fd0de347e1650e319d6ea6e444db8f9cfcd6fe2449341767bc82a2"
+    },
+    {
+      "blockers": [
+        {
+          "code": "T3_5_UNSUPPORTED_CARD_LAYOUT",
+          "detail": "card.layout: layout ModalDfc is not compiled"
+        }
+      ],
+      "card_name": "Bala Ged Recovery",
+      "expected_runtime": {
+        "code": "unsupported_card_layout",
+        "detail": "card.layout: layout ModalDfc is not compiled",
+        "detail_sha256": "b5e11ec19d3be608243d29bc17bb499eb0d28b4813f10eaf185a3dd835aa592b",
+        "disposition": "unsupported_setup"
+      },
+      "freeze_rank": 86,
+      "legacy_source_path": "b/bala_ged_recovery_bala_ged_sanctuary.txt",
+      "legacy_source_sha256": "ecaed61e782595157d64e7875595cf14099a853dd3e9310e9d5cdbd3272aea45",
+      "oracle_id": "d2075f58-b0e9-4e85-b7e6-0523a27a1d5b",
+      "oracle_text": "Return target card from your graveyard to your hand.",
+      "scenario_id": "T3.6-086",
+      "status": "blocked_runtime",
+      "stratum": "library_and_graveyard_access",
+      "translated_path": "b/bala_ged_recovery_bala_ged_sanctuary.frs",
+      "translated_source_sha256": "88680bc2f4f68343e8c0b30e32385ee9e28c313135cb7fc8d87b3616c763965c"
+    },
+    {
+      "blockers": [
+        {
+          "code": "T3_5_UNSUPPORTED_ABILITY_SHAPE",
+          "detail": "card.faces[0].abilities[0].event: only event_enters(source()) is compiled for triggered abilities"
+        }
+      ],
+      "card_name": "Smothering Tithe",
+      "expected_runtime": {
+        "code": "unsupported_ability_shape",
+        "detail": "card.faces[0].abilities[0].event: only event_enters(source()) is compiled for triggered abilities",
+        "detail_sha256": "580c9aa803adf1dabf75d2e1b1193dd21e77f30e33e5242b67c2a6f2879bebdd",
+        "disposition": "unsupported_setup"
+      },
+      "freeze_rank": 87,
+      "legacy_source_path": "s/smothering_tithe.txt",
+      "legacy_source_sha256": "b12f01aa18557d9c85b3a45c40939cdc2a53f6d544d7972beca2ebffe2ebbe30",
+      "oracle_id": "153376c9-dffd-458c-8ce3-a4c8269bc4e9",
+      "oracle_text": "Whenever an opponent draws a card, that player may pay {2}. If the player doesn't, you create a Treasure token. (It's an artifact with \"{T}, Sacrifice this token: Add one mana of any color.\")",
+      "scenario_id": "T3.6-087",
+      "status": "blocked_runtime",
+      "stratum": "token_and_sacrifice",
+      "translated_path": "s/smothering_tithe.frs",
+      "translated_source_sha256": "fb0f5a25fee2fe040f9431516c27347b15ceadfd55988a1a5900027eaf843207"
+    },
+    {
+      "blockers": [
+        {
+          "code": "T3_5_UNSUPPORTED_EFFECT_ARGUMENTS",
+          "detail": "card.faces[0].abilities[0].effect.template: token template `c_a_treasure_sac` is not in the exact runtime registry"
+        }
+      ],
+      "card_name": "Dockside Extortionist",
+      "expected_runtime": {
+        "code": "unsupported_effect_arguments",
+        "detail": "card.faces[0].abilities[0].effect.template: token template `c_a_treasure_sac` is not in the exact runtime registry",
+        "detail_sha256": "d4cb69a7cd2516cc071084e96b20d28187566340fbbe86217c9d6efa527d4841",
+        "disposition": "unsupported_setup"
+      },
+      "freeze_rank": 88,
+      "legacy_source_path": "d/dockside_extortionist.txt",
+      "legacy_source_sha256": "967c4a8d427762dac4137cba78f0ed96f847c6257cdc2f4dd5fed6410f5eff46",
+      "oracle_id": "697bcfe1-ecbf-42a1-bfc7-0766d48ca56b",
+      "oracle_text": "When Dockside Extortionist enters, create X Treasure tokens, where X is the number of artifacts and enchantments your opponents control. (Treasure tokens are artifacts with \"{T}, Sacrifice this token: Add one mana of any color.\")",
+      "scenario_id": "T3.6-088",
+      "status": "blocked_runtime",
+      "stratum": "token_and_sacrifice",
+      "translated_path": "d/dockside_extortionist.frs",
+      "translated_source_sha256": "c671cd1f66eb4ea5c416732aa4d479f3cb88e4c23869634501e090909bba71df"
+    },
+    {
+      "blockers": [
+        {
+          "code": "T3_5_UNSUPPORTED_EFFECT_ARGUMENTS",
+          "detail": "card.faces[0].abilities[0].effect.target.cards[0].and[0]: object predicate `or` is not compiled"
+        }
+      ],
+      "card_name": "Archaeomancer",
+      "expected_runtime": {
+        "code": "unsupported_effect_arguments",
+        "detail": "card.faces[0].abilities[0].effect.target.cards[0].and[0]: object predicate `or` is not compiled",
+        "detail_sha256": "e4b7d8f62d1b24704642916e50175cd9b19f2d060dddf5a3aa08e878861da00c",
+        "disposition": "unsupported_setup"
+      },
+      "freeze_rank": 89,
+      "legacy_source_path": "a/archaeomancer.txt",
+      "legacy_source_sha256": "c9d45ec75f29abe822c5bc6dc5fef73cf12407de6df8aed6bfb7a00d7eb08b3d",
+      "oracle_id": "a91a3266-cadd-47a0-9b20-160307f14c07",
+      "oracle_text": "When Archaeomancer enters, return target instant or sorcery card from your graveyard to your hand.",
+      "scenario_id": "T3.6-089",
+      "status": "blocked_runtime",
+      "stratum": "library_and_graveyard_access",
+      "translated_path": "a/archaeomancer.frs",
+      "translated_source_sha256": "a4683b58048d5b1540e231ffb5422257a1e45a1c4bd6916bace8e71020507ddc"
+    },
+    {
+      "blockers": [
+        {
+          "code": "REVEAL_KNOWLEDGE_EVENT_MISSING",
+          "detail": "The selected hidden card moves correctly, but no public reveal/known-information event is emitted."
+        }
+      ],
+      "card_name": "Mystical Tutor",
+      "expected_runtime": {
+        "capabilities": [
+          "search_library",
+          "shuffle_library",
+          "move_zone"
+        ],
+        "destination": "owner_graveyard",
+        "disposition": "passed",
+        "effect_actions": 3,
+        "final_hash": "12865070859592143601",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 35
+      },
+      "freeze_rank": 90,
+      "legacy_source_path": "m/mystical_tutor.txt",
+      "legacy_source_sha256": "a1593a8de54b499575d8ec6ab443d9cc6d71f431ab3eb6440bfa2b0f8583a36d",
+      "oracle_id": "fb81f95c-70f8-4eb7-8d15-15d0ae23ec03",
+      "oracle_text": "Search your library for an instant or sorcery card, reveal it, then shuffle and put that card on top.",
+      "scenario_id": "T3.6-090",
+      "status": "blocked_semantic_gap",
+      "stratum": "library_and_graveyard_access",
+      "translated_path": "m/mystical_tutor.frs",
+      "translated_source_sha256": "e46cb977e9fe468d9a90f8fed6a17c850ccb38208c0ed762ffb735ea1adeecf4"
+    },
+    {
+      "blockers": [
+        {
+          "code": "REVEAL_KNOWLEDGE_EVENT_MISSING",
+          "detail": "The selected hidden card moves correctly, but no public reveal/known-information event is emitted."
+        }
+      ],
+      "card_name": "Enlightened Tutor",
+      "expected_runtime": {
+        "capabilities": [
+          "search_library",
+          "shuffle_library",
+          "move_zone"
+        ],
+        "destination": "owner_graveyard",
+        "disposition": "passed",
+        "effect_actions": 3,
+        "final_hash": "1280585804350295596",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 35
+      },
+      "freeze_rank": 91,
+      "legacy_source_path": "e/enlightened_tutor.txt",
+      "legacy_source_sha256": "85338127d45a2e116ab7d7298c879892f47012b4ecf99a557ce130008cb0d91a",
+      "oracle_id": "c5229c17-b7be-4b05-b683-f2277edc4849",
+      "oracle_text": "Search your library for an artifact or enchantment card, reveal it, then shuffle and put that card on top.",
+      "scenario_id": "T3.6-091",
+      "status": "blocked_semantic_gap",
+      "stratum": "library_and_graveyard_access",
+      "translated_path": "e/enlightened_tutor.frs",
+      "translated_source_sha256": "5deeb96b804f381fe27ca682e51e3a9c289666feb991e6708266a2127ebee090"
+    },
+    {
+      "blockers": [
+        {
+          "code": "REVEAL_KNOWLEDGE_EVENT_MISSING",
+          "detail": "The selected hidden card moves correctly, but no public reveal/known-information event is emitted."
+        }
+      ],
+      "card_name": "Worldly Tutor",
+      "expected_runtime": {
+        "capabilities": [
+          "search_library",
+          "shuffle_library",
+          "move_zone"
+        ],
+        "destination": "owner_graveyard",
+        "disposition": "passed",
+        "effect_actions": 3,
+        "final_hash": "6662628135104927458",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 36
+      },
+      "freeze_rank": 92,
+      "legacy_source_path": "w/worldly_tutor.txt",
+      "legacy_source_sha256": "1a3bd182bd060cd44231836fb73529e0e812d1ac72dfd529d5c52794eeb83064",
+      "oracle_id": "e8863518-0bfa-49c3-8c6e-6c9116a81051",
+      "oracle_text": "Search your library for a creature card, reveal it, then shuffle and put the card on top.",
+      "scenario_id": "T3.6-092",
+      "status": "blocked_semantic_gap",
+      "stratum": "library_and_graveyard_access",
+      "translated_path": "w/worldly_tutor.frs",
+      "translated_source_sha256": "14a7729860f3723cce3b094af8f65130f36c11a885737d1228286506b50e4fb2"
+    },
+    {
+      "blockers": [
+        {
+          "code": "REVEAL_KNOWLEDGE_EVENT_MISSING",
+          "detail": "The selected hidden card moves correctly, but no public reveal/known-information event is emitted."
+        }
+      ],
+      "card_name": "Eladamri's Call",
+      "expected_runtime": {
+        "capabilities": [
+          "search_library",
+          "move_zone",
+          "shuffle_library"
+        ],
+        "destination": "owner_graveyard",
+        "disposition": "passed",
+        "effect_actions": 3,
+        "final_hash": "8605841111060042463",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 36
+      },
+      "freeze_rank": 93,
+      "legacy_source_path": "e/eladamris_call.txt",
+      "legacy_source_sha256": "ab5275ef22be9c38dd05349459ad0682a63ad2df642d3e80902705074b6ee5c3",
+      "oracle_id": "4acb6612-54e8-428d-acb6-c7259a5ad6a8",
+      "oracle_text": "Search your library for a creature card, reveal that card, put it into your hand, then shuffle.",
+      "scenario_id": "T3.6-093",
+      "status": "blocked_semantic_gap",
+      "stratum": "library_and_graveyard_access",
+      "translated_path": "e/eladamris_call.frs",
+      "translated_source_sha256": "62d57726d92ca162531d144ce41f1b52c901f57b27398ca882586440185ede1d"
+    },
+    {
+      "blockers": [
+        {
+          "code": "REVEAL_KNOWLEDGE_EVENT_MISSING",
+          "detail": "The selected hidden card moves correctly, but no public reveal/known-information event is emitted."
+        }
+      ],
+      "card_name": "Fabricate",
+      "expected_runtime": {
+        "capabilities": [
+          "search_library",
+          "move_zone",
+          "shuffle_library"
+        ],
+        "destination": "owner_graveyard",
+        "disposition": "passed",
+        "effect_actions": 3,
+        "final_hash": "2357752677894006937",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 40
+      },
+      "freeze_rank": 94,
+      "legacy_source_path": "f/fabricate.txt",
+      "legacy_source_sha256": "b0f7a42caf80caf6df1ca286a2c2a05440f5591684e333ac9a6ead81855422de",
+      "oracle_id": "422e1869-134f-463d-9fa1-86b66a998b3e",
+      "oracle_text": "Search your library for an artifact card, reveal it, put it into your hand, then shuffle.",
+      "scenario_id": "T3.6-094",
+      "status": "blocked_semantic_gap",
+      "stratum": "library_and_graveyard_access",
+      "translated_path": "f/fabricate.frs",
+      "translated_source_sha256": "fb5bc809e8d5aa83f924c045376bd04e23aca1e02f65d952108853cebbe8cf08"
+    },
+    {
+      "blockers": [
+        {
+          "code": "T3_5_UNSUPPORTED_ABILITY_SHAPE",
+          "detail": "card.faces[0].abilities[0]: ability kind Static is not compiled for Permanent"
+        }
+      ],
+      "card_name": "Goblin Chieftain",
+      "expected_runtime": {
+        "code": "unsupported_ability_shape",
+        "detail": "card.faces[0].abilities[0]: ability kind Static is not compiled for Permanent",
+        "detail_sha256": "21fb483c07691cba4934d68f9c7c744763dd75912c1729643ee2755e99e1694d",
+        "disposition": "unsupported_setup"
+      },
+      "freeze_rank": 95,
+      "legacy_source_path": "g/goblin_chieftain.txt",
+      "legacy_source_sha256": "a0549b662155461aa44ef5e89a3a20b56d1c354d93bac9df55e8061425371f65",
+      "oracle_id": "368b4052-174e-4458-a6e6-eaf8093aa0fe",
+      "oracle_text": "Haste (This creature can attack and {T} as soon as it comes under your control.)\nOther Goblin creatures you control get +1/+1 and have haste.",
+      "scenario_id": "T3.6-095",
+      "status": "blocked_runtime",
+      "stratum": "continuous_combat_and_costs",
+      "translated_path": "g/goblin_chieftain.frs",
+      "translated_source_sha256": "46c54d0aa9d2321630992a73df794cfabcaee804491b78d5333a0c9a57a05b31"
+    },
+    {
+      "blockers": [
+        {
+          "code": "T3_5_UNSUPPORTED_ABILITY_SHAPE",
+          "detail": "card.faces[0].abilities[0]: ability kind Static is not compiled for Permanent"
+        }
+      ],
+      "card_name": "Goblin Warchief",
+      "expected_runtime": {
+        "code": "unsupported_ability_shape",
+        "detail": "card.faces[0].abilities[0]: ability kind Static is not compiled for Permanent",
+        "detail_sha256": "21fb483c07691cba4934d68f9c7c744763dd75912c1729643ee2755e99e1694d",
+        "disposition": "unsupported_setup"
+      },
+      "freeze_rank": 96,
+      "legacy_source_path": "g/goblin_warchief.txt",
+      "legacy_source_sha256": "28d0c18607c1e9870b99e0c9e8fe4bd4b938ad0498acb219149950b627f7be8b",
+      "oracle_id": "39882df0-c20f-469d-94ba-1617224e71a1",
+      "oracle_text": "Goblin spells you cast cost {1} less to cast.\nGoblins you control have haste.",
+      "scenario_id": "T3.6-096",
+      "status": "blocked_runtime",
+      "stratum": "continuous_combat_and_costs",
+      "translated_path": "g/goblin_warchief.frs",
+      "translated_source_sha256": "cd218b6fe8633a9d6131aa42516386961b9499ecf0828f7e64133550a34d67d1"
+    },
+    {
+      "blockers": [
+        {
+          "code": "T3_5_UNSUPPORTED_EFFECT_ARGUMENTS",
+          "detail": "card.faces[0].abilities[0].effect.choice[0].sequence[0].selector.cards[0].and[0]: subtype `goblin` is not one of the five basic land types"
+        }
+      ],
+      "card_name": "Goblin Matron",
+      "expected_runtime": {
+        "code": "unsupported_effect_arguments",
+        "detail": "card.faces[0].abilities[0].effect.choice[0].sequence[0].selector.cards[0].and[0]: subtype `goblin` is not one of the five basic land types",
+        "detail_sha256": "2cccedbfc8b4060cdeee46e0e8ed9403b53d24280c98208ce717eeb95ad2c3ae",
+        "disposition": "unsupported_setup"
+      },
+      "freeze_rank": 97,
+      "legacy_source_path": "g/goblin_matron.txt",
+      "legacy_source_sha256": "af86de1430a3bc38ef9456627a847e42cbadb904337052acbd4cf14797050695",
+      "oracle_id": "145737a7-c597-4dec-b752-207c2d0501e3",
+      "oracle_text": "When Goblin Matron enters, you may search your library for a Goblin card, reveal that card, put it into your hand, then shuffle.",
+      "scenario_id": "T3.6-097",
+      "status": "blocked_runtime",
+      "stratum": "triggered_synergies",
+      "translated_path": "g/goblin_matron.frs",
+      "translated_source_sha256": "a4d30999f5dbefe81f20dae55ace8769dbd9a866db671e2ab69ea8466ac898a9"
+    },
+    {
+      "blockers": [
+        {
+          "code": "T3_5_UNSUPPORTED_ABILITY_SHAPE",
+          "detail": "card.faces[0].abilities[0]: ability kind Static is not compiled for Permanent"
+        }
+      ],
+      "card_name": "Purphoros, God of the Forge",
+      "expected_runtime": {
+        "code": "unsupported_ability_shape",
+        "detail": "card.faces[0].abilities[0]: ability kind Static is not compiled for Permanent",
+        "detail_sha256": "21fb483c07691cba4934d68f9c7c744763dd75912c1729643ee2755e99e1694d",
+        "disposition": "unsupported_setup"
+      },
+      "freeze_rank": 98,
+      "legacy_source_path": "p/purphoros_god_of_the_forge.txt",
+      "legacy_source_sha256": "61b619859b1b702a7aca1ed1ca1f9aa4a71ad288b7d0c736adfe12e51549b602",
+      "oracle_id": "4fdbbec2-e921-4b63-958d-f9ba1e417197",
+      "oracle_text": "Indestructible\nAs long as your devotion to red is less than five, Purphoros isn't a creature.\nWhenever another creature you control enters, Purphoros deals 2 damage to each opponent.\n{2}{R}: Creatures you control get +1/+0 until end of turn.",
+      "scenario_id": "T3.6-098",
+      "status": "blocked_runtime",
+      "stratum": "continuous_combat_and_costs",
+      "translated_path": "p/purphoros_god_of_the_forge.frs",
+      "translated_source_sha256": "140aca105aa426e63217a37d56b44cca1a3e5ad06b8a8ea341bfa36a015c1d14"
+    },
+    {
+      "blockers": [
+        {
+          "code": "T3_5_UNSUPPORTED_ABILITY_SHAPE",
+          "detail": "card.faces[0].abilities[0]: ability kind Static is not compiled for Permanent"
+        }
+      ],
+      "card_name": "Carrion Feeder",
+      "expected_runtime": {
+        "code": "unsupported_ability_shape",
+        "detail": "card.faces[0].abilities[0]: ability kind Static is not compiled for Permanent",
+        "detail_sha256": "21fb483c07691cba4934d68f9c7c744763dd75912c1729643ee2755e99e1694d",
+        "disposition": "unsupported_setup"
+      },
+      "freeze_rank": 99,
+      "legacy_source_path": "c/carrion_feeder.txt",
+      "legacy_source_sha256": "0a69042cf00bd24aabe3a75ff2ac956b5ef3a011707917388e268e92b09629d3",
+      "oracle_id": "a1cc5e37-b09a-4b7f-afd5-77c1c35aa425",
+      "oracle_text": "Carrion Feeder can't block.\nSacrifice a creature: Put a +1/+1 counter on Carrion Feeder.",
+      "scenario_id": "T3.6-099",
+      "status": "blocked_runtime",
+      "stratum": "continuous_combat_and_costs",
+      "translated_path": "c/carrion_feeder.frs",
+      "translated_source_sha256": "643d27142bc84c8856b404b39a8659292d868bdf05332f4940399fd8b4b02076"
+    },
+    {
+      "blockers": [
+        {
+          "code": "T3_5_UNSUPPORTED_EFFECT_OPERATION",
+          "detail": "card.faces[0].abilities[0].effect.sequence[0]: effect operation `modify_pt` has no complete runtime lowering"
+        }
+      ],
+      "card_name": "Craterhoof Behemoth",
+      "expected_runtime": {
+        "code": "unsupported_effect_operation",
+        "detail": "card.faces[0].abilities[0].effect.sequence[0]: effect operation `modify_pt` has no complete runtime lowering",
+        "detail_sha256": "16716934d6f0812f7c296283e55931240ee2673c27e9421182c9332bb6b71ba5",
+        "disposition": "unsupported_setup"
+      },
+      "freeze_rank": 100,
+      "legacy_source_path": "c/craterhoof_behemoth.txt",
+      "legacy_source_sha256": "678a2b8cde69b913b79315307735ed67ff38b208e93a4a628c094a95ab3ad3c3",
+      "oracle_id": "8c52bd39-0586-48ca-b263-17210cf9feb6",
+      "oracle_text": "Haste\nWhen Craterhoof Behemoth enters, creatures you control gain trample and get +X/+X until end of turn, where X is the number of creatures you control.",
+      "scenario_id": "T3.6-100",
+      "status": "blocked_runtime",
+      "stratum": "continuous_combat_and_costs",
+      "translated_path": "c/craterhoof_behemoth.frs",
+      "translated_source_sha256": "b5c7921c67c20b4e25f85e2abcddb51670ad6efc694789c4b98c8897d9c26bd6"
+    }
+  ],
+  "claim_boundary": "Only semantic_case_ready entries can be promoted by a passing replay. Runtime-smoke success alone never promotes blocked_semantic_gap entries.",
+  "payload_sha256": "72474ab399f2ecc97848e9e82094448ce9aeb7ebbaca733d2d7504d5a5793afe",
+  "product_source_commit": "f032ae53a1af74335af30916b6a4c7a68bb8b41d",
+  "schema_version": 1,
+  "summary": {
+    "blocked_runtime": 42,
+    "blocked_semantic_gap": 24,
+    "candidate_count": 100,
+    "semantic_case_ready": 34
+  }
+}
