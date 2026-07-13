@@ -493,6 +493,7 @@ fn compile_life_totals(
             | EffectProgram::ExileObject { .. }
             | EffectProgram::CounterStackEntry { .. }
             | EffectProgram::MoveTargetObject { .. }
+            | EffectProgram::SacrificeSource
             | EffectProgram::CreateTokens { .. }
             | EffectProgram::SearchLibrary { .. }
             | EffectProgram::MoveChosenObjects { .. }
@@ -589,6 +590,7 @@ fn compile_library_reserve(
             | EffectProgram::ExileObject { .. }
             | EffectProgram::CounterStackEntry { .. }
             | EffectProgram::MoveTargetObject { .. }
+            | EffectProgram::SacrificeSource
             | EffectProgram::CreateTokens { .. }
             | EffectProgram::SearchLibrary { .. }
             | EffectProgram::MoveChosenObjects { .. }
@@ -820,6 +822,12 @@ fn execute_smoke(
         if ability.event() != TriggeredEventProgram::SourceEnters {
             continue;
         }
+        if ability
+            .required_alternate_cost()
+            .is_some_and(|required| Some(required) != alternate_kind)
+        {
+            continue;
+        }
         let outcome = execution.dispatch(
             &format!("trigger[{index}].register"),
             Action::RegisterTriggeredAbility {
@@ -1000,7 +1008,7 @@ fn execute_smoke(
         }
     }
 
-    let (destination, destination_name) = if smoke_flashback {
+    let (resolved_destination, resolved_destination_name) = if smoke_flashback {
         (ZoneId::new(None, ZoneKind::Exile), "exile")
     } else {
         compiled.lifecycle.destination(caster)
@@ -1008,9 +1016,17 @@ fn execute_smoke(
     assert_zone(
         &execution.state,
         spell,
-        destination,
+        resolved_destination,
         "resolve.spell_destination",
     )?;
+    let (destination, destination_name) = if alternate_kind == Some(AlternateCostKind::Evoke) {
+        (
+            ZoneId::new(Some(caster), ZoneKind::Graveyard),
+            "owner_graveyard",
+        )
+    } else {
+        (resolved_destination, resolved_destination_name)
+    };
     for (ability_index, ability) in compiled.program.static_abilities().iter().enumerate() {
         for (operation_index, action) in ability.bind_actions(caster, spell).into_iter().enumerate()
         {
@@ -1050,10 +1066,17 @@ fn execute_smoke(
         caster,
         opponent,
         base_card_id,
+        Some(spell),
         &mut hand_delta,
     )?;
     for (index, ability) in compiled.program.triggered_abilities().iter().enumerate() {
         if ability.event() == TriggeredEventProgram::SourceEnters {
+            continue;
+        }
+        if ability
+            .required_alternate_cost()
+            .is_some_and(|required| Some(required) != alternate_kind)
+        {
             continue;
         }
         let outcome = execution.dispatch(
@@ -1471,6 +1494,7 @@ fn setup_dynamic_amount_state(
             | EffectProgram::ExileObject { .. }
             | EffectProgram::CounterStackEntry { .. }
             | EffectProgram::MoveTargetObject { .. }
+            | EffectProgram::SacrificeSource
             | EffectProgram::SearchLibrary { .. }
             | EffectProgram::MoveChosenObjects { .. }
             | EffectProgram::TapChosenObjects { .. }
@@ -1698,6 +1722,7 @@ fn execute_controller_cast_triggers(
         caster,
         opponent,
         base_card_id.wrapping_add(910_000),
+        None,
         hand_delta,
     )?;
     resolve_stack_entry(execution, test_spell)?;
@@ -1744,6 +1769,7 @@ fn execute_turn_triggers(
             caster,
             opponent,
             base_card_id.wrapping_add(920_000),
+            Some(source),
             hand_delta,
         )?;
     }
@@ -1816,6 +1842,7 @@ fn execute_turn_triggers(
             caster,
             opponent,
             base_card_id.wrapping_add(930_000),
+            Some(source),
             hand_delta,
         )?;
     }
@@ -1886,6 +1913,7 @@ fn execute_pending_triggers(
     caster: PlayerId,
     opponent: PlayerId,
     base_card_id: u32,
+    source: Option<ObjectId>,
     hand_delta: &mut [i64; PLAYER_COUNT],
 ) -> Result<(), RuntimeSmokeFailure> {
     if expected_count == 0 {
@@ -1961,7 +1989,7 @@ fn execute_pending_triggers(
                 .wrapping_add((ability_index as u32).saturating_mul(1_000)),
             &format!("setup.trigger[{ability_index}].choice"),
         )?;
-        let bindings = prepare_effect_bindings_and_hand_delta(
+        let mut bindings = prepare_effect_bindings_and_hand_delta(
             &execution.state,
             ability.effects(),
             ability.optional_choice_count(),
@@ -1973,6 +2001,9 @@ fn execute_pending_triggers(
             hand_delta,
             &format!("trigger[{ability_index}].effect"),
         )?;
+        if let Some(source) = source {
+            bindings = bindings.with_source(source);
+        }
         let actions = bind_triggered_ability_actions(&execution.state, ability, &bindings)
             .map_err(|error| {
                 RuntimeSmokeFailure::new(
@@ -2407,6 +2438,7 @@ fn prepare_effect_bindings_and_hand_delta(
             | EffectProgram::DestroyPermanent { .. }
             | EffectProgram::ExileObject { .. }
             | EffectProgram::CounterStackEntry { .. }
+            | EffectProgram::SacrificeSource
             | EffectProgram::CreateTokens { .. }
             | EffectProgram::SearchLibrary { .. }
             | EffectProgram::MoveChosenObjects { .. }
@@ -3378,6 +3410,28 @@ card "Cyclonic Rift" {
   }
 }
 "#;
+    const MULLDRIFTER: &str = r#"
+card "Mulldrifter" {
+  id: "24d0f5e7-0d9e-4b76-900e-a7274e80312d"
+  layout: normal
+  status: unverified_playable
+  face "Mulldrifter" {
+    cost: "{4}{U}"
+    types: "Creature - Elemental"
+    oracle: "Flying. When Mulldrifter enters, draw two cards. Evoke {2}{U}."
+    power: "2"
+    toughness: "2"
+    keywords: [evoke, flying]
+    ability static {
+      effect: continuous(source(), alternate_cost(source(), mana_cost("{2}{U}")))
+    }
+    ability triggered {
+      event: event_enters(source())
+      effect: draw(2, you())
+    }
+  }
+}
+"#;
 
     #[test]
     fn supported_life_spell_executes_and_reaches_owner_graveyard() {
@@ -3582,6 +3636,26 @@ card "Cyclonic Rift" {
             ]
         );
         assert_eq!(pass.effect_actions(), 1);
+        assert_eq!(pass.destination(), "owner_graveyard");
+    }
+
+    #[test]
+    fn mulldrifter_evoke_draws_then_finishes_in_its_owners_graveyard() {
+        let definition = parse("mulldrifter.frs", MULLDRIFTER);
+        let report = run_translated_card_runtime_smoke(&definition);
+        let RuntimeSmokeResult::Passed(pass) = report.result() else {
+            panic!("expected pass, found {:?}", report.result());
+        };
+        assert_eq!(
+            pass.capabilities(),
+            [
+                RuntimeSmokeCapability::PermanentSpell,
+                RuntimeSmokeCapability::AlternateCost,
+                RuntimeSmokeCapability::DrawCards,
+                RuntimeSmokeCapability::SacrificePermanent,
+            ]
+        );
+        assert_eq!(pass.effect_actions(), 2);
         assert_eq!(pass.destination(), "owner_graveyard");
     }
 

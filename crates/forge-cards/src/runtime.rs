@@ -177,6 +177,8 @@ pub enum Capability {
     CounterStackEntry,
     /// Move a targeted object between explicit zones.
     MoveZone,
+    /// Sacrifice a source permanent without applying destruction rules.
+    SacrificePermanent,
     /// Create one or more exact registered token templates.
     CreateToken,
     /// Search a library with an explicit validated object choice.
@@ -226,6 +228,7 @@ impl Capability {
             Self::ExileObject => "exile_object",
             Self::CounterStackEntry => "counter_stack_entry",
             Self::MoveZone => "move_zone",
+            Self::SacrificePermanent => "sacrifice_permanent",
             Self::CreateToken => "create_token",
             Self::SearchLibrary => "search_library",
             Self::TapObject => "tap_object",
@@ -583,6 +586,8 @@ pub enum EffectProgram {
         /// Closed each-object selector used only by an overload cast.
         overload_predicate: Option<ObjectTargetPredicate>,
     },
+    /// Sacrifice the executing ability's source permanent.
+    SacrificeSource,
     /// Create one or more exact registered token templates.
     CreateTokens {
         /// Stable card identity for the token face.
@@ -674,6 +679,7 @@ pub enum EffectProgram {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TriggeredAbilityProgram {
     event: TriggeredEventProgram,
+    required_alternate_cost: Option<AlternateCostKind>,
     target_requirements: Vec<TargetRequirement>,
     object_choice_requirements: Vec<ObjectChoiceRequirement>,
     effects: Vec<EffectProgram>,
@@ -784,6 +790,8 @@ pub enum AlternateCostKind {
     Commander,
     /// Graveyard flashback cost.
     Flashback,
+    /// Permanent-spell evoke cost with a source-entered sacrifice trigger.
+    Evoke,
     /// Target-to-each overload cost.
     Overload,
 }
@@ -1079,6 +1087,12 @@ impl TriggeredAbilityProgram {
         self.event
     }
 
+    /// Returns the alternate cost that must have been selected for this trigger.
+    #[must_use]
+    pub const fn required_alternate_cost(&self) -> Option<AlternateCostKind> {
+        self.required_alternate_cost
+    }
+
     /// Returns target slots chosen when this trigger is put on the stack.
     #[must_use]
     pub fn target_requirements(&self) -> &[TargetRequirement] {
@@ -1123,6 +1137,7 @@ impl EffectProgram {
             Self::ExileObject { .. } => Capability::ExileObject,
             Self::CounterStackEntry { .. } => Capability::CounterStackEntry,
             Self::MoveTargetObject { .. } => Capability::MoveZone,
+            Self::SacrificeSource => Capability::SacrificePermanent,
             Self::CreateTokens { .. } => Capability::CreateToken,
             Self::SearchLibrary { .. } => Capability::SearchLibrary,
             Self::MoveChosenObjects { .. } => Capability::MoveZone,
@@ -1398,23 +1413,38 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
         &face.mana_cost.symbols,
         mana_value,
     )?;
-    let has_flashback_keyword = face
+    let flashback_count = face
         .keywords
         .iter()
-        .any(|keyword| keyword.as_str() == "flashback");
+        .filter(|keyword| keyword.as_str() == "flashback")
+        .count();
     let overload_count = face
         .keywords
         .iter()
         .filter(|keyword| keyword.as_str() == "overload")
         .count();
-    if overload_count > 1 || (overload_count == 1 && has_flashback_keyword) {
+    let evoke_count = face
+        .keywords
+        .iter()
+        .filter(|keyword| keyword.as_str() == "evoke")
+        .count();
+    if flashback_count > 1
+        || overload_count > 1
+        || evoke_count > 1
+        || flashback_count
+            .saturating_add(overload_count)
+            .saturating_add(evoke_count)
+            > 1
+    {
         return Err(CompileDiagnostic::new(
             CompileDiagnosticCode::KeywordSemantics,
             "card.faces[0].keywords",
             "exactly one supported intrinsic alternate-cost keyword is allowed",
         ));
     }
+    let has_flashback_keyword = flashback_count == 1;
     let overload = overload_count == 1;
+    let evoke = evoke_count == 1;
     if overload && !matches!(kind, ProgramKind::Instant | ProgramKind::Sorcery) {
         return Err(CompileDiagnostic::new(
             CompileDiagnosticCode::KeywordSemantics,
@@ -1422,10 +1452,19 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
             "overload is valid only on instant or sorcery spells",
         ));
     }
+    if evoke && kind != ProgramKind::Permanent {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::KeywordSemantics,
+            "card.faces[0].keywords",
+            "evoke is valid only on permanent spells",
+        ));
+    }
     let alternate_keyword = if has_flashback_keyword {
         Some(AlternateCostKind::Flashback)
     } else if overload {
         Some(AlternateCostKind::Overload)
+    } else if evoke {
+        Some(AlternateCostKind::Evoke)
     } else {
         None
     };
@@ -1452,7 +1491,12 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
     let intrinsic_keywords = face
         .keywords
         .iter()
-        .filter(|keyword| !matches!(keyword.as_str(), "flashback" | "overload" | "split_second"))
+        .filter(|keyword| {
+            !matches!(
+                keyword.as_str(),
+                "evoke" | "flashback" | "overload" | "split_second"
+            )
+        })
         .cloned()
         .collect::<Vec<_>>();
     let base_creature = compile_base_creature(
@@ -1509,6 +1553,16 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
             AbilityKind::Triggered if matches!(kind, ProgramKind::Permanent) => {
                 triggered_abilities.push(compile_triggered_ability(ability, &path)?);
             }
+            AbilityKind::Static
+                if kind == ProgramKind::Permanent
+                    && alternate_keyword == Some(AlternateCostKind::Evoke) =>
+            {
+                alternate_costs.push(compile_spell_alternate_cost(
+                    ability,
+                    &path,
+                    alternate_keyword,
+                )?);
+            }
             AbilityKind::Static if matches!(kind, ProgramKind::Permanent | ProgramKind::Land) => {
                 static_abilities.push(compile_static_ability(ability, &path)?);
             }
@@ -1564,6 +1618,17 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
             "overload requires an exact source-bound hand alternate cost",
         ));
     }
+    if evoke
+        && !alternate_costs
+            .iter()
+            .any(|cost| cost.kind == AlternateCostKind::Evoke)
+    {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::KeywordSemantics,
+            "card.faces[0].keywords",
+            "evoke requires an exact source-bound hand alternate cost",
+        ));
+    }
     if overload
         && !matches!(
             compiler.effects.as_slice(),
@@ -1578,6 +1643,16 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
             "card.faces[0].abilities",
             "overload currently requires one exact target-to-each object move",
         ));
+    }
+    if evoke {
+        triggered_abilities.push(TriggeredAbilityProgram {
+            event: TriggeredEventProgram::SourceEnters,
+            required_alternate_cost: Some(AlternateCostKind::Evoke),
+            target_requirements: Vec::new(),
+            object_choice_requirements: Vec::new(),
+            effects: vec![EffectProgram::SacrificeSource],
+            optional_effect_groups: Vec::new(),
+        });
     }
     let compiled_effect_count = triggered_abilities
         .iter()
@@ -1692,6 +1767,7 @@ fn compile_triggered_ability(
     }
     Ok(TriggeredAbilityProgram {
         event,
+        required_alternate_cost: None,
         target_requirements: compiler
             .targets
             .into_iter()
@@ -1771,7 +1847,9 @@ fn compile_spell_alternate_cost(
             let kind = alternate_keyword.expect("guarded intrinsic alternate cost");
             let condition = match kind {
                 AlternateCostKind::Flashback => AlternateCostCondition::SourceInControllerGraveyard,
-                AlternateCostKind::Overload => AlternateCostCondition::SourceInControllerHand,
+                AlternateCostKind::Evoke | AlternateCostKind::Overload => {
+                    AlternateCostCondition::SourceInControllerHand
+                }
                 AlternateCostKind::Commander => {
                     return Err(CompileDiagnostic::new(
                         CompileDiagnosticCode::EffectArguments,
@@ -6148,6 +6226,39 @@ fn bind_effect_actions(
                     });
                 }
             }
+            EffectProgram::SacrificeSource => {
+                let source = bindings.source.ok_or_else(|| {
+                    ExecutionDiagnostic::new(
+                        ExecutionDiagnosticCode::MissingBinding,
+                        Some(effect_index),
+                        "source sacrifice requires the executing source object",
+                    )
+                })?;
+                if state.object_zone(source) != Some(ZoneId::new(None, ZoneKind::Battlefield)) {
+                    return Err(ExecutionDiagnostic::new(
+                        ExecutionDiagnosticCode::InvalidChoice,
+                        Some(effect_index),
+                        format!("source object {source:?} is not on the battlefield"),
+                    ));
+                }
+                let owner = state
+                    .object(source)
+                    .ok_or_else(|| {
+                        ExecutionDiagnostic::new(
+                            ExecutionDiagnosticCode::MissingBinding,
+                            Some(effect_index),
+                            format!("source object {source:?} is unknown"),
+                        )
+                    })?
+                    .owner();
+                actions.push(BoundAction {
+                    effect_index,
+                    action: Action::MoveObject {
+                        object: source,
+                        to: ZoneId::new(Some(owner), ZoneKind::Graveyard),
+                    },
+                });
+            }
             EffectProgram::CreateTokens {
                 card,
                 base_object,
@@ -6757,8 +6868,9 @@ pub fn execute_program(
 #[cfg(test)]
 mod tests {
     use super::{
-        compile_card_program, execute_program, AlternateCostCondition, AlternateCostKind,
-        Capability, CompileDiagnosticCode, ExecutionBindings, ExecutionDiagnosticCode, ProgramKind,
+        bind_triggered_ability_actions, compile_card_program, execute_program,
+        AlternateCostCondition, AlternateCostKind, Capability, CompileDiagnosticCode,
+        ExecutionBindings, ExecutionDiagnosticCode, ProgramKind,
     };
     use forge_core::{
         apply, Action, ActivationCondition, BaseCreatureCharacteristics, BaseObjectCharacteristics,
@@ -6902,6 +7014,28 @@ card "Cyclonic Rift" {
     }
     ability spell {
       effect: return_to_hand(target(permanents(and(not(type_is("land")), not(controlled_by(you()))))))
+    }
+  }
+}
+"#;
+    const MULLDRIFTER: &str = r#"
+card "Mulldrifter" {
+  id: "24d0f5e7-0d9e-4b76-900e-a7274e80312d"
+  layout: normal
+  status: unverified_playable
+  face "Mulldrifter" {
+    cost: "{4}{U}"
+    types: "Creature - Elemental"
+    oracle: "Flying. When Mulldrifter enters, draw two cards. Evoke {2}{U}."
+    power: "2"
+    toughness: "2"
+    keywords: [evoke, flying]
+    ability static {
+      effect: continuous(source(), alternate_cost(source(), mana_cost("{2}{U}")))
+    }
+    ability triggered {
+      event: event_enters(source())
+      effect: draw(2, you())
     }
   }
 }
@@ -8014,6 +8148,57 @@ card "Interpreter Contract" {
         assert_eq!(state.object_zone(second), Some(opponent_hand));
         assert_eq!(state.object_zone(friendly), Some(battlefield));
         assert_eq!(state.object_zone(land), Some(battlefield));
+    }
+
+    #[test]
+    fn evoke_adds_only_the_alternate_cast_source_sacrifice_trigger() {
+        let program = compile_card_program(&parse("mulldrifter.frs", MULLDRIFTER))
+            .unwrap_or_else(|error| panic!("unexpected compile error: {error}"));
+        assert_eq!(
+            program.capabilities(),
+            vec![
+                Capability::PermanentSpell,
+                Capability::AlternateCost,
+                Capability::DrawCards,
+                Capability::SacrificePermanent,
+            ]
+        );
+        let [alternate] = program.alternate_costs() else {
+            panic!("expected one evoke cost");
+        };
+        assert_eq!(alternate.kind(), AlternateCostKind::Evoke);
+        assert_eq!(
+            alternate.condition(),
+            AlternateCostCondition::SourceInControllerHand
+        );
+        assert_eq!(alternate.mana_cost(), ManaCost::new(0, 1, 0, 0, 0, 2));
+        let [draw_trigger, evoke_trigger] = program.triggered_abilities() else {
+            panic!("expected draw and evoke triggers");
+        };
+        assert_eq!(draw_trigger.required_alternate_cost(), None);
+        assert_eq!(
+            evoke_trigger.required_alternate_cost(),
+            Some(AlternateCostKind::Evoke)
+        );
+
+        let state = &mut GameState::new();
+        let caster = add_player(state);
+        let source = create_object(
+            state,
+            CardId::new(2_400),
+            caster,
+            ZoneId::new(None, ZoneKind::Battlefield),
+        );
+        let bindings = ExecutionBindings::new(caster, Vec::new()).with_source(source);
+        let actions = bind_triggered_ability_actions(state, evoke_trigger, &bindings)
+            .unwrap_or_else(|error| panic!("unexpected evoke binding error: {error}"));
+        assert_eq!(actions.len(), 1);
+        assert!(matches!(
+            actions[0].action(),
+            Action::MoveObject { object, to }
+                if *object == source
+                    && *to == ZoneId::new(Some(caster), ZoneKind::Graveyard)
+        ));
     }
 
     fn parse(path: &str, source: &str) -> forge_carddef::CardDefinition {
