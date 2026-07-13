@@ -12,22 +12,23 @@ use forge_carddef::{
 use forge_core::{
     apply, AbilityPlayer, Action, ActivatedAbilityDefinition, ActivatedAbilityEffect,
     ActivationCondition, ActivationCost, ActivationTiming, BaseCreatureCharacteristics,
-    BaseObjectCharacteristics, BasicLandTypes, CardId, CombatRestriction, CombatRestrictionSubject,
-    ContinuousEffectDefinition, ContinuousEffectDuration, ContinuousEffectOperation,
-    ContinuousEffectTarget, CostModifierDefinition, CostModifierOperation, CostModifierScope,
-    CounterKind, CreatureKeywords, GameState, ManaCost, ManaKind, ManaPool, ObjectColors, ObjectId,
-    ObjectSubtype, ObjectSubtypes, ObjectSupertypes, ObjectTargetPredicate, ObjectTypes, Outcome,
-    PlayerId, PlayerRule, PlayerRuleSubject, PlayerTargetPredicate, RestrictionDefinition,
-    RestrictionEffect, StackEntryId, TargetChoice, TargetControllerPredicate, TargetKind,
-    TargetRequirement, TargetRestriction, TargetRestrictionSubject, TriggerCondition,
-    TriggerDefinition, TriggerObjectFilter, TriggerPlayerFilter, TriggerZoneFilter, ZoneId,
-    ZoneKind,
+    BaseObjectCharacteristics, BasicLandTypes, CardId, CombatDamageTarget, CombatRestriction,
+    CombatRestrictionSubject, ContinuousEffectDefinition, ContinuousEffectDuration,
+    ContinuousEffectOperation, ContinuousEffectTarget, CostModifierDefinition,
+    CostModifierOperation, CostModifierScope, CounterKind, CreatureKeywords, GameState, ManaCost,
+    ManaKind, ManaPool, ObjectColors, ObjectId, ObjectSubtype, ObjectSubtypes, ObjectSupertypes,
+    ObjectTargetPredicate, ObjectTypes, Outcome, PlayerId, PlayerRule, PlayerRuleSubject,
+    PlayerTargetPredicate, RestrictionDefinition, RestrictionEffect, StackEntryId, TargetChoice,
+    TargetControllerPredicate, TargetKind, TargetRequirement, TargetRestriction,
+    TargetRestrictionSubject, TriggerCondition, TriggerDefinition, TriggerObjectFilter,
+    TriggerPlayerFilter, TriggerZoneFilter, ZoneId, ZoneKind,
 };
 use std::{collections::BTreeMap, error::Error, fmt};
 
 const MAX_EFFECTS: usize = 64;
 const MAX_ACTIVATED_ABILITIES: usize = 16;
 const MAX_TOKEN_COUNT: u32 = 64;
+const MAX_SPELL_MODES: usize = 8;
 
 /// Stable reason that a definition could not compile into a complete program.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -159,6 +160,8 @@ pub enum Capability {
     GainLife,
     /// Lose life.
     LoseLife,
+    /// Deal noncombat damage through the production damage pipeline.
+    DealDamage,
     /// Draw cards.
     DrawCards,
     /// Discard every card from one or more hands.
@@ -203,6 +206,8 @@ pub enum Capability {
     CombatRestriction,
     /// Offer a typed alternate casting cost under a closed condition.
     AlternateCost,
+    /// Announce and execute exactly one mode of a modal spell.
+    ChooseMode,
     /// Replace targeted spell text with the compiled each-object form.
     Overload,
     /// Prevent spell casts and non-mana activations while this spell is on the stack.
@@ -219,6 +224,7 @@ impl Capability {
             Self::ActivatedAbility => "activated_ability",
             Self::GainLife => "gain_life",
             Self::LoseLife => "lose_life",
+            Self::DealDamage => "deal_damage",
             Self::DrawCards => "draw_cards",
             Self::DiscardCards => "discard_cards",
             Self::Scry => "scry",
@@ -241,6 +247,7 @@ impl Capability {
             Self::AddCounters => "add_counters",
             Self::CombatRestriction => "combat_restriction",
             Self::AlternateCost => "alternate_cost",
+            Self::ChooseMode => "choose_mode",
             Self::Overload => "overload",
             Self::SplitSecond => "split_second",
         }
@@ -534,6 +541,13 @@ pub enum EffectProgram {
         /// Affected players.
         players: PlayerBinding,
         /// Life amount.
+        amount: AmountProgram,
+    },
+    /// Deal noncombat damage to one announced player-or-object target.
+    DealDamageToTarget {
+        /// Target slot.
+        target: usize,
+        /// Damage amount.
         amount: AmountProgram,
     },
     /// Draw cards.
@@ -1124,11 +1138,47 @@ struct OptionalEffectGroup {
     end: usize,
 }
 
+/// One complete branch of a modal spell.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SpellModeProgram {
+    target_requirements: Vec<TargetRequirement>,
+    object_choice_requirements: Vec<ObjectChoiceRequirement>,
+    effects: Vec<EffectProgram>,
+    optional_effect_groups: Vec<OptionalEffectGroup>,
+}
+
+impl SpellModeProgram {
+    /// Returns target slots announced only when this mode is selected.
+    #[must_use]
+    pub fn target_requirements(&self) -> &[TargetRequirement] {
+        &self.target_requirements
+    }
+
+    /// Returns hidden-zone choices announced only when this mode is selected.
+    #[must_use]
+    pub fn object_choice_requirements(&self) -> &[ObjectChoiceRequirement] {
+        &self.object_choice_requirements
+    }
+
+    /// Returns this mode's effect operations in source order.
+    #[must_use]
+    pub fn effects(&self) -> &[EffectProgram] {
+        &self.effects
+    }
+
+    /// Returns this mode's explicit optional-effect decision count.
+    #[must_use]
+    pub fn optional_choice_count(&self) -> usize {
+        self.optional_effect_groups.len()
+    }
+}
+
 impl EffectProgram {
     const fn capability(&self) -> Capability {
         match self {
             Self::GainLife { .. } => Capability::GainLife,
             Self::LoseLife { .. } => Capability::LoseLife,
+            Self::DealDamageToTarget { .. } => Capability::DealDamage,
             Self::DrawCards { .. } => Capability::DrawCards,
             Self::DiscardHands { .. } => Capability::DiscardCards,
             Self::Scry { .. } => Capability::Scry,
@@ -1168,6 +1218,7 @@ pub struct CardProgram {
     object_choice_requirements: Vec<ObjectChoiceRequirement>,
     effects: Vec<EffectProgram>,
     optional_effect_groups: Vec<OptionalEffectGroup>,
+    spell_modes: Vec<SpellModeProgram>,
     additional_costs: Vec<SpellAdditionalCostProgram>,
     alternate_costs: Vec<AlternateCastCostProgram>,
     overload: bool,
@@ -1258,6 +1309,12 @@ impl CardProgram {
         self.optional_effect_groups.len()
     }
 
+    /// Returns the complete modal branches in printed order.
+    #[must_use]
+    pub fn spell_modes(&self) -> &[SpellModeProgram] {
+        &self.spell_modes
+    }
+
     /// Returns additional spell costs in announcement order.
     #[must_use]
     pub fn additional_costs(&self) -> &[SpellAdditionalCostProgram] {
@@ -1332,6 +1389,9 @@ impl CardProgram {
         if self.split_second {
             capabilities.push(Capability::SplitSecond);
         }
+        if !self.spell_modes.is_empty() {
+            capabilities.push(Capability::ChooseMode);
+        }
         for ability in &self.static_abilities {
             match ability {
                 StaticAbilityProgram::Continuous { operations, .. } => capabilities
@@ -1360,6 +1420,11 @@ impl CardProgram {
             }
         }
         capabilities.extend(self.effects.iter().map(EffectProgram::capability));
+        capabilities.extend(
+            self.spell_modes
+                .iter()
+                .flat_map(|mode| mode.effects.iter().map(EffectProgram::capability)),
+        );
         capabilities.extend(
             self.activated_effects
                 .iter()
@@ -1519,6 +1584,7 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
     let mut static_abilities = Vec::new();
     let mut additional_costs = Vec::new();
     let mut alternate_costs = Vec::new();
+    let mut spell_modes = Vec::new();
     let mut spell_abilities = 0_usize;
     for (index, ability) in face.abilities.iter().enumerate() {
         let path = format!("card.faces[0].abilities[{index}]");
@@ -1539,7 +1605,17 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
                     ));
                 }
                 additional_costs = compile_spell_additional_costs(ability, mana_cost, &path)?;
-                compile_effect(&ability.effect, &format!("{path}.effect"), &mut compiler)?;
+                if matches!(
+                    ability.effect,
+                    Expression::Call {
+                        operation: Operation::ChooseOne,
+                        ..
+                    }
+                ) {
+                    spell_modes = compile_spell_modes(&ability.effect, &format!("{path}.effect"))?;
+                } else {
+                    compile_effect(&ability.effect, &format!("{path}.effect"), &mut compiler)?;
+                }
             }
             AbilityKind::Activated
                 if matches!(kind, ProgramKind::Permanent | ProgramKind::Land) =>
@@ -1666,6 +1742,12 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
         )
         .saturating_add(compiler.effects.len());
     let compiled_effect_count = compiled_effect_count.saturating_add(
+        spell_modes
+            .iter()
+            .map(|mode: &SpellModeProgram| mode.effects.len())
+            .sum::<usize>(),
+    );
+    let compiled_effect_count = compiled_effect_count.saturating_add(
         static_abilities
             .iter()
             .map(StaticAbilityProgram::operation_count)
@@ -1694,7 +1776,10 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
             ),
         ));
     }
-    if compiler.effects.is_empty() && matches!(kind, ProgramKind::Instant | ProgramKind::Sorcery) {
+    if compiler.effects.is_empty()
+        && spell_modes.is_empty()
+        && matches!(kind, ProgramKind::Instant | ProgramKind::Sorcery)
+    {
         return Err(CompileDiagnostic::new(
             CompileDiagnosticCode::AbilityShape,
             "card.faces[0].abilities[0].effect",
@@ -1721,6 +1806,7 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
             .collect(),
         effects: compiler.effects,
         optional_effect_groups: compiler.optional_effect_groups,
+        spell_modes,
         additional_costs,
         alternate_costs,
         overload,
@@ -2617,6 +2703,60 @@ struct CompiledTarget {
 struct CompiledObjectChoice {
     selector: Expression,
     requirement: ObjectChoiceRequirement,
+}
+
+fn compile_spell_modes(
+    expression: &Expression,
+    path: &str,
+) -> Result<Vec<SpellModeProgram>, CompileDiagnostic> {
+    let Expression::Call {
+        operation: Operation::ChooseOne,
+        arguments,
+    } = expression
+    else {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::AbilityShape,
+            path,
+            "modal spell root is not choose_one(...) ",
+        ));
+    };
+    if !(2..=MAX_SPELL_MODES).contains(&arguments.len()) {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::ProgramBounds,
+            path,
+            format!(
+                "choose_one requires 2..={MAX_SPELL_MODES} modes, found {}",
+                arguments.len()
+            ),
+        ));
+    }
+    let mut modes = Vec::with_capacity(arguments.len());
+    for (index, effect) in arguments.iter().enumerate() {
+        let mut compiler = ProgramCompiler::default();
+        compile_effect(effect, &format!("{path}.mode[{index}]"), &mut compiler)?;
+        if compiler.effects.is_empty() {
+            return Err(CompileDiagnostic::new(
+                CompileDiagnosticCode::AbilityShape,
+                format!("{path}.mode[{index}]"),
+                "spell mode compiled no executable effect",
+            ));
+        }
+        modes.push(SpellModeProgram {
+            target_requirements: compiler
+                .targets
+                .into_iter()
+                .map(|target| target.requirement)
+                .collect(),
+            object_choice_requirements: compiler
+                .object_choices
+                .into_iter()
+                .map(|choice| choice.requirement)
+                .collect(),
+            effects: compiler.effects,
+            optional_effect_groups: compiler.optional_effect_groups,
+        });
+    }
+    Ok(modes)
 }
 
 fn compile_intrinsic_basic_mana_ability(
@@ -3547,6 +3687,17 @@ fn compile_effect(
             });
             Ok(())
         }
+        Operation::DealDamage => {
+            let [target, amount] = arguments.as_slice() else {
+                return Err(effect_arity(path, operation, "target and amount"));
+            };
+            let target = compile_damage_target(target, &format!("{path}.target"), compiler)?;
+            let amount = compile_amount(amount, &format!("{path}.amount"), compiler)?;
+            compiler
+                .effects
+                .push(EffectProgram::DealDamageToTarget { target, amount });
+            Ok(())
+        }
         Operation::Draw | Operation::Scry => {
             let [count, players] = arguments.as_slice() else {
                 return Err(effect_arity(path, operation, "count and players"));
@@ -4358,6 +4509,67 @@ fn compile_player_target(
         selector,
         TargetRequirement::new(TargetKind::Player).with_player_predicate(predicate),
     )
+}
+
+fn compile_damage_target(
+    expression: &Expression,
+    path: &str,
+    compiler: &mut ProgramCompiler,
+) -> Result<usize, CompileDiagnostic> {
+    let selector = target_selector(expression, path)?;
+    match selector {
+        Expression::Call {
+            operation: Operation::All,
+            arguments,
+        } => {
+            let [player_selector, object_selector] = arguments.as_slice() else {
+                return Err(effect_arity(
+                    path,
+                    &Operation::All,
+                    "any() and one permanent selector",
+                ));
+            };
+            if !is_any_selector(player_selector) {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::EffectArguments,
+                    format!("{path}.player"),
+                    "player-or-permanent damage target requires any() for the player branch",
+                ));
+            }
+            let spec = compile_object_selector(object_selector, &format!("{path}.object"))?;
+            if spec.kind != TargetKind::Permanent || spec.exclude_source {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::EffectArguments,
+                    format!("{path}.object"),
+                    "player-or-permanent damage target requires an absolute battlefield selector",
+                ));
+            }
+            intern_target(
+                compiler,
+                selector,
+                TargetRequirement::new(TargetKind::PlayerOrPermanent)
+                    .with_player_or_object_predicate(
+                        PlayerTargetPredicate::Any,
+                        object_predicate_from_spec(spec),
+                    ),
+            )
+        }
+        Expression::Call {
+            operation: Operation::Any | Operation::You | Operation::Opponent,
+            ..
+        } => compile_player_target(expression, compiler, path),
+        _ => {
+            let target = compile_object_target(expression, path, compiler)?;
+            if compiler.targets[target].requirement.kind() != TargetKind::Permanent {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::EffectArguments,
+                    path,
+                    "damage object target must be a battlefield permanent",
+                ));
+            }
+            Ok(target)
+        }
+    }
 }
 
 fn compile_stack_target(
@@ -5673,6 +5885,7 @@ pub struct ExecutionBindings {
     controller: PlayerId,
     source: Option<ObjectId>,
     alternate_cost: Option<AlternateCostKind>,
+    spell_mode: Option<usize>,
     opponents: Vec<PlayerId>,
     targets: Vec<TargetChoice>,
     object_choices: Vec<Vec<ObjectId>>,
@@ -5688,6 +5901,7 @@ impl ExecutionBindings {
             controller,
             source: None,
             alternate_cost: None,
+            spell_mode: None,
             opponents,
             targets: Vec::new(),
             object_choices: Vec::new(),
@@ -5707,6 +5921,13 @@ impl ExecutionBindings {
     #[must_use]
     pub const fn with_alternate_cost(mut self, kind: AlternateCostKind) -> Self {
         self.alternate_cost = Some(kind);
+        self
+    }
+
+    /// Supplies the zero-based mode announced while casting a modal spell.
+    #[must_use]
+    pub const fn with_spell_mode(mut self, mode: usize) -> Self {
+        self.spell_mode = Some(mode);
         self
     }
 
@@ -5753,6 +5974,12 @@ impl ExecutionBindings {
     #[must_use]
     pub const fn alternate_cost(&self) -> Option<AlternateCostKind> {
         self.alternate_cost
+    }
+
+    /// Returns the announced modal branch, when this is a modal spell.
+    #[must_use]
+    pub const fn spell_mode(&self) -> Option<usize> {
+        self.spell_mode
     }
 
     /// Returns opponents in deterministic execution order.
@@ -5940,13 +6167,56 @@ pub fn bind_program_actions(
             ));
         }
     }
-    let target_requirements = program.target_requirements_for_alternate(bindings.alternate_cost);
+    let (target_requirements, object_choice_requirements, effects, optional_effect_groups) =
+        if program.spell_modes.is_empty() {
+            if bindings.spell_mode.is_some() {
+                return Err(ExecutionDiagnostic::new(
+                    ExecutionDiagnosticCode::InvalidChoice,
+                    None,
+                    "a mode was supplied for a non-modal spell",
+                ));
+            }
+            (
+                program.target_requirements_for_alternate(bindings.alternate_cost),
+                program.object_choice_requirements.as_slice(),
+                program.effects.as_slice(),
+                program.optional_effect_groups.as_slice(),
+            )
+        } else {
+            if bindings.alternate_cost == Some(AlternateCostKind::Overload) {
+                return Err(ExecutionDiagnostic::new(
+                    ExecutionDiagnosticCode::InvalidChoice,
+                    None,
+                    "overload is not defined for modal spells",
+                ));
+            }
+            let mode = bindings
+                .spell_mode
+                .and_then(|index| program.spell_modes.get(index))
+                .ok_or_else(|| {
+                    ExecutionDiagnostic::new(
+                        ExecutionDiagnosticCode::MissingChoice,
+                        None,
+                        format!(
+                            "modal spell requires one mode in 0..{}, found {:?}",
+                            program.spell_modes.len(),
+                            bindings.spell_mode
+                        ),
+                    )
+                })?;
+            (
+                mode.target_requirements.as_slice(),
+                mode.object_choice_requirements.as_slice(),
+                mode.effects.as_slice(),
+                mode.optional_effect_groups.as_slice(),
+            )
+        };
     bind_effect_actions(
         state,
         target_requirements,
-        &program.object_choice_requirements,
-        &program.effects,
-        &program.optional_effect_groups,
+        object_choice_requirements,
+        effects,
+        optional_effect_groups,
         bindings,
     )
 }
@@ -6045,6 +6315,28 @@ fn bind_effect_actions(
                         action: Action::LoseLife { player, amount },
                     });
                 }
+            }
+            EffectProgram::DealDamageToTarget { target, amount } => {
+                let amount = resolve_amount(state, *amount, bindings, effect_index)?;
+                let target = match bindings.targets.get(*target) {
+                    Some(TargetChoice::Player(player)) => CombatDamageTarget::Player(*player),
+                    Some(TargetChoice::Object(object)) => CombatDamageTarget::Object(*object),
+                    _ => {
+                        return Err(ExecutionDiagnostic::new(
+                            ExecutionDiagnosticCode::MissingBinding,
+                            Some(effect_index),
+                            format!("target slot {target} is not a player or object"),
+                        ));
+                    }
+                };
+                actions.push(BoundAction {
+                    effect_index,
+                    action: Action::DealDamage {
+                        source: bindings.source,
+                        target,
+                        amount,
+                    },
+                });
             }
             EffectProgram::DrawCards { players, count } => {
                 let count = resolve_amount(state, *count, bindings, effect_index)?;
@@ -6945,6 +7237,7 @@ card "Heroic Intervention" {
   }
 }
 "#;
+    const BOROS_CHARM: &str = include_str!("../../../cards/cp_dsl/definitions/012_boros_charm.frs");
     const FLAWLESS_MANEUVER: &str = r#"
 card "Flawless Maneuver" {
   id: "4e183439-17d2-47ff-9d99-5e22821d91e3"
@@ -7887,6 +8180,94 @@ card "Interpreter Contract" {
             Outcome::Applied
         );
         assert_eq!(state.object_zone(artifact), Some(battlefield));
+    }
+
+    #[test]
+    fn boros_charm_compiles_and_executes_each_announced_mode() {
+        let program = compile_card_program(&parse("boros_charm.frs", BOROS_CHARM))
+            .unwrap_or_else(|error| panic!("unexpected compile error: {error}"));
+        assert_eq!(program.spell_modes().len(), 3);
+        assert_eq!(program.spell_modes()[0].target_requirements().len(), 1);
+        assert!(program.spell_modes()[1].target_requirements().is_empty());
+        assert_eq!(program.spell_modes()[2].target_requirements().len(), 1);
+        assert_eq!(
+            program.capabilities(),
+            vec![
+                Capability::ChooseMode,
+                Capability::DealDamage,
+                Capability::Indestructible,
+                Capability::ModifyCharacteristics,
+            ]
+        );
+
+        let mut state = GameState::new();
+        let caster = add_player(&mut state);
+        let opponent = add_player(&mut state);
+        let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+        let creature = create_object(&mut state, CardId::new(2_202), caster, battlefield);
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::SetBaseObjectCharacteristics {
+                    object: creature,
+                    base: BaseObjectCharacteristics::new(
+                        ObjectTypes::none().with_creature(),
+                        ObjectColors::none().with_white(),
+                    ),
+                },
+            ),
+            Outcome::Applied
+        );
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::SetBaseCreatureCharacteristics {
+                    object: creature,
+                    base: BaseCreatureCharacteristics::new(2, 2),
+                },
+            ),
+            Outcome::Applied
+        );
+
+        assert!(execute_program(
+            &mut state,
+            &program,
+            &ExecutionBindings::new(caster, vec![opponent]),
+        )
+        .is_err());
+        execute_program(
+            &mut state,
+            &program,
+            &ExecutionBindings::new(caster, vec![opponent])
+                .with_spell_mode(0)
+                .with_targets(vec![TargetChoice::Player(opponent)]),
+        )
+        .unwrap_or_else(|error| panic!("unexpected damage-mode error: {error}"));
+        assert_eq!(state.players()[opponent.index()].life(), 16);
+
+        execute_program(
+            &mut state,
+            &program,
+            &ExecutionBindings::new(caster, vec![opponent]).with_spell_mode(1),
+        )
+        .unwrap_or_else(|error| panic!("unexpected indestructible-mode error: {error}"));
+        assert_eq!(
+            apply(&mut state, Action::DestroyPermanent { object: creature }),
+            Outcome::Applied
+        );
+        assert_eq!(state.object_zone(creature), Some(battlefield));
+
+        execute_program(
+            &mut state,
+            &program,
+            &ExecutionBindings::new(caster, vec![opponent])
+                .with_spell_mode(2)
+                .with_targets(vec![TargetChoice::Object(creature)]),
+        )
+        .unwrap_or_else(|error| panic!("unexpected double-strike-mode error: {error}"));
+        assert!(state
+            .creature_characteristics(creature)
+            .is_ok_and(|characteristics| characteristics.keywords().double_strike()));
     }
 
     #[test]

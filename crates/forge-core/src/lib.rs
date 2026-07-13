@@ -2339,6 +2339,8 @@ pub enum TargetKind {
     StackEntry,
     /// An object in this zone kind, regardless of which player owns the zone.
     ObjectInZoneKind(ZoneKind),
+    /// Either a player or an object currently on the battlefield.
+    PlayerOrPermanent,
 }
 
 impl TargetKind {
@@ -2349,6 +2351,7 @@ impl TargetKind {
             Self::ObjectInZone(_) => 2,
             Self::StackEntry => 3,
             Self::ObjectInZoneKind(_) => 4,
+            Self::PlayerOrPermanent => 5,
         }
     }
 }
@@ -2580,6 +2583,13 @@ pub enum TargetPredicate {
     Object(ObjectTargetPredicate),
     /// Apply a player predicate.
     Player(PlayerTargetPredicate),
+    /// Apply distinct predicates to the player and permanent branches of a union target.
+    PlayerOrObject {
+        /// Predicate for a selected player.
+        player: PlayerTargetPredicate,
+        /// Predicate for a selected permanent.
+        object: ObjectTargetPredicate,
+    },
 }
 
 impl TargetPredicate {
@@ -2588,6 +2598,7 @@ impl TargetPredicate {
             Self::Any => 0,
             Self::Object(_) => 1,
             Self::Player(_) => 2,
+            Self::PlayerOrObject { .. } => 3,
         }
     }
 }
@@ -2626,6 +2637,17 @@ impl TargetRequirement {
     #[must_use]
     pub const fn with_player_predicate(mut self, predicate: PlayerTargetPredicate) -> Self {
         self.predicate = TargetPredicate::Player(predicate);
+        self
+    }
+
+    /// Returns this union requirement with distinct player and permanent predicates.
+    #[must_use]
+    pub const fn with_player_or_object_predicate(
+        mut self,
+        player: PlayerTargetPredicate,
+        object: ObjectTargetPredicate,
+    ) -> Self {
+        self.predicate = TargetPredicate::PlayerOrObject { player, object };
         self
     }
 
@@ -13560,6 +13582,12 @@ impl GameState {
             (TargetKind::Permanent, TargetChoice::Object(object)) => {
                 self.object_zone(object) == Some(ZoneId::new(None, ZoneKind::Battlefield))
             }
+            (TargetKind::PlayerOrPermanent, TargetChoice::Player(player)) => {
+                self.require_player(player).is_ok()
+            }
+            (TargetKind::PlayerOrPermanent, TargetChoice::Object(object)) => {
+                self.object_zone(object) == Some(ZoneId::new(None, ZoneKind::Battlefield))
+            }
             (TargetKind::ObjectInZone(zone), TargetChoice::Object(object)) => {
                 self.object_zone(object) == Some(zone)
             }
@@ -13577,6 +13605,7 @@ impl GameState {
                 | TargetKind::ObjectInZoneKind(_),
                 TargetChoice::Player(_) | TargetChoice::StackEntry(_),
             )
+            | (TargetKind::PlayerOrPermanent, TargetChoice::StackEntry(_))
             | (TargetKind::StackEntry, TargetChoice::Player(_) | TargetChoice::Object(_)) => false,
         }
     }
@@ -13603,8 +13632,21 @@ impl GameState {
                 .is_some_and(|object| {
                     self.object_target_predicate_matches(player, predicate, object)
                 }),
+            (
+                TargetPredicate::PlayerOrObject {
+                    player: predicate, ..
+                },
+                TargetChoice::Player(target),
+            ) => self.player_target_predicate_matches(player, predicate, target),
+            (
+                TargetPredicate::PlayerOrObject {
+                    object: predicate, ..
+                },
+                TargetChoice::Object(object),
+            ) => self.object_target_predicate_matches(player, predicate, object),
             (TargetPredicate::Player(_), TargetChoice::Object(_) | TargetChoice::StackEntry(_))
-            | (TargetPredicate::Object(_), TargetChoice::Player(_)) => false,
+            | (TargetPredicate::Object(_), TargetChoice::Player(_))
+            | (TargetPredicate::PlayerOrObject { .. }, TargetChoice::StackEntry(_)) => false,
         }
     }
 
@@ -14718,7 +14760,10 @@ impl Fnva64 {
         match kind {
             TargetKind::ObjectInZone(zone) => self.write_zone_id(zone),
             TargetKind::ObjectInZoneKind(kind) => self.write_u8(kind.canonical_code()),
-            TargetKind::Player | TargetKind::Permanent | TargetKind::StackEntry => {}
+            TargetKind::Player
+            | TargetKind::Permanent
+            | TargetKind::StackEntry
+            | TargetKind::PlayerOrPermanent => {}
         }
     }
 
@@ -14757,6 +14802,10 @@ impl Fnva64 {
             TargetPredicate::Any => {}
             TargetPredicate::Object(predicate) => self.write_object_target_predicate(predicate),
             TargetPredicate::Player(predicate) => self.write_player_target_predicate(predicate),
+            TargetPredicate::PlayerOrObject { player, object } => {
+                self.write_player_target_predicate(player);
+                self.write_object_target_predicate(object);
+            }
         }
     }
 
@@ -16025,7 +16074,10 @@ impl CanonicalBytes {
         match kind {
             TargetKind::ObjectInZone(zone) => self.write_zone_id(zone),
             TargetKind::ObjectInZoneKind(kind) => self.write_u8(kind.canonical_code()),
-            TargetKind::Player | TargetKind::Permanent | TargetKind::StackEntry => {}
+            TargetKind::Player
+            | TargetKind::Permanent
+            | TargetKind::StackEntry
+            | TargetKind::PlayerOrPermanent => {}
         }
     }
 
@@ -16064,6 +16116,10 @@ impl CanonicalBytes {
             TargetPredicate::Any => {}
             TargetPredicate::Object(predicate) => self.write_object_target_predicate(predicate),
             TargetPredicate::Player(predicate) => self.write_player_target_predicate(predicate),
+            TargetPredicate::PlayerOrObject { player, object } => {
+                self.write_player_target_predicate(player);
+                self.write_object_target_predicate(object);
+            }
         }
     }
 

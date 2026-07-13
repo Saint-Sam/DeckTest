@@ -331,6 +331,7 @@ pub fn run_translated_card_runtime_smoke(definition: &CardDefinition) -> Runtime
 
 struct CompiledSmoke {
     program: CardProgram,
+    spell_mode: Option<usize>,
     lifecycle: SmokeSpellKind,
     initial_life: [i32; PLAYER_COUNT],
     expected_life: [i32; PLAYER_COUNT],
@@ -376,9 +377,30 @@ fn compile_smoke(definition: &CardDefinition) -> Result<CompiledSmoke, RuntimeSm
         ProgramKind::Permanent => SmokeSpellKind::Permanent,
         ProgramKind::Land => SmokeSpellKind::Land,
     };
+    let spell_mode = (!program.spell_modes().is_empty()).then(|| {
+        program
+            .spell_modes()
+            .iter()
+            .enumerate()
+            .min_by_key(|(index, mode)| {
+                (
+                    mode.target_requirements()
+                        .len()
+                        .saturating_add(mode.object_choice_requirements().len()),
+                    *index,
+                )
+            })
+            .map_or(0, |(index, _)| index)
+    });
+    let selected_mode = spell_mode.and_then(|index| program.spell_modes().get(index));
     let all_effects = program
         .effects()
         .iter()
+        .chain(
+            selected_mode
+                .into_iter()
+                .flat_map(|mode| mode.effects().iter()),
+        )
         .chain(
             program
                 .activated_effects()
@@ -442,6 +464,7 @@ fn compile_smoke(definition: &CardDefinition) -> Result<CompiledSmoke, RuntimeSm
     }
     Ok(CompiledSmoke {
         program,
+        spell_mode,
         lifecycle,
         initial_life,
         expected_life,
@@ -485,7 +508,8 @@ fn compile_life_totals(
             EffectProgram::LoseLife { players, amount } => {
                 (&mut losses, *players, smoke_amount(*amount)?)
             }
-            EffectProgram::DrawCards { .. }
+            EffectProgram::DealDamageToTarget { .. }
+            | EffectProgram::DrawCards { .. }
             | EffectProgram::DiscardHands { .. }
             | EffectProgram::Scry { .. }
             | EffectProgram::ShuffleLibrary { .. }
@@ -584,6 +608,7 @@ fn compile_library_reserve(
             }
             EffectProgram::GainLife { .. }
             | EffectProgram::LoseLife { .. }
+            | EffectProgram::DealDamageToTarget { .. }
             | EffectProgram::DiscardHands { .. }
             | EffectProgram::ShuffleLibrary { .. }
             | EffectProgram::DestroyPermanent { .. }
@@ -693,6 +718,9 @@ fn execute_smoke(
     let caster = expect_player(execution.dispatch("setup.add_caster", Action::AddPlayer)?)?;
     let opponent = expect_player(execution.dispatch("setup.add_opponent", Action::AddPlayer)?)?;
     let players = [caster, opponent];
+    let selected_mode = compiled
+        .spell_mode
+        .and_then(|index| compiled.program.spell_modes().get(index));
     let turn_order = execution.dispatch(
         "setup.turn_order",
         Action::SetTurnOrder {
@@ -892,11 +920,27 @@ fn execute_smoke(
             )?;
         }
     }
+    let spell_target_requirements = selected_mode.map_or_else(
+        || {
+            compiled
+                .program
+                .target_requirements_for_alternate(alternate_kind)
+        },
+        |mode| mode.target_requirements(),
+    );
+    let spell_effects =
+        selected_mode.map_or_else(|| compiled.program.effects(), |mode| mode.effects());
+    let spell_object_choice_requirements = selected_mode.map_or_else(
+        || compiled.program.object_choice_requirements(),
+        |mode| mode.object_choice_requirements(),
+    );
+    let spell_optional_choice_count = selected_mode.map_or_else(
+        || compiled.program.optional_choice_count(),
+        |mode| mode.optional_choice_count(),
+    );
     let targets = synthesize_targets(
         &mut execution,
-        compiled
-            .program
-            .target_requirements_for_alternate(alternate_kind),
+        spell_target_requirements,
         caster,
         opponent,
         base_card_id,
@@ -904,7 +948,7 @@ fn execute_smoke(
     )?;
     let object_choices = synthesize_object_choices(
         &mut execution,
-        compiled.program.object_choice_requirements(),
+        spell_object_choice_requirements,
         caster,
         base_card_id,
         "setup.spell_choice",
@@ -950,13 +994,7 @@ fn execute_smoke(
                 )
             })?;
         let mut request = CastSpellRequest::new(stack_kind, timing, cast_cost, payment)
-            .with_targets(
-                compiled
-                    .program
-                    .target_requirements_for_alternate(alternate_kind)
-                    .to_vec(),
-                targets.clone(),
-            );
+            .with_targets(spell_target_requirements.to_vec(), targets.clone());
         if smoke_flashback {
             request = request.with_flashback(cast_cost);
         }
@@ -1053,6 +1091,7 @@ fn execute_smoke(
     setup_dynamic_amount_state(
         &mut execution,
         &compiled.program,
+        spell_effects,
         caster,
         opponent,
         base_card_id,
@@ -1201,10 +1240,10 @@ fn execute_smoke(
         &mut hand_delta,
     )?;
 
-    let bindings = prepare_effect_bindings_and_hand_delta(
+    let mut bindings = prepare_effect_bindings_and_hand_delta(
         &execution.state,
-        compiled.program.effects(),
-        compiled.program.optional_choice_count(),
+        spell_effects,
+        spell_optional_choice_count,
         targets,
         object_choices.clone(),
         caster,
@@ -1213,6 +1252,9 @@ fn execute_smoke(
         &mut hand_delta,
         "effect",
     )?;
+    if let Some(mode) = compiled.spell_mode {
+        bindings = bindings.with_spell_mode(mode);
+    }
     let bound_actions = bind_program_actions(&execution.state, &compiled.program, &bindings)
         .map_err(|error| {
             RuntimeSmokeFailure::new(
@@ -1221,18 +1263,8 @@ fn execute_smoke(
                 error.to_string(),
             )
         })?;
-    dispatch_bound_actions(
-        &mut execution,
-        bound_actions,
-        compiled.program.effects(),
-        "effect",
-    )?;
-    assert_object_choice_destinations(
-        &execution.state,
-        compiled.program.effects(),
-        &object_choices,
-        caster,
-    )?;
+    dispatch_bound_actions(&mut execution, bound_actions, spell_effects, "effect")?;
+    assert_object_choice_destinations(&execution.state, spell_effects, &object_choices, caster)?;
 
     execute_turn_triggers(
         &mut execution,
@@ -1457,12 +1489,12 @@ fn synthesize_alternate_cost_conditions(
 fn setup_dynamic_amount_state(
     execution: &mut Execution,
     program: &CardProgram,
+    spell_effects: &[EffectProgram],
     caster: PlayerId,
     opponent: PlayerId,
     base_card_id: u32,
 ) -> Result<(), RuntimeSmokeFailure> {
-    let effects = program
-        .effects()
+    let effects = spell_effects
         .iter()
         .chain(
             program
@@ -1479,9 +1511,9 @@ fn setup_dynamic_amount_state(
     let mut predicates = Vec::new();
     for effect in effects {
         let amounts = match effect {
-            EffectProgram::GainLife { amount, .. } | EffectProgram::LoseLife { amount, .. } => {
-                [Some(*amount), None]
-            }
+            EffectProgram::GainLife { amount, .. }
+            | EffectProgram::LoseLife { amount, .. }
+            | EffectProgram::DealDamageToTarget { amount, .. } => [Some(*amount), None],
             EffectProgram::DrawCards { count, .. }
             | EffectProgram::Scry { count, .. }
             | EffectProgram::CreateTokens { count, .. } => [Some(*count), None],
@@ -2434,6 +2466,7 @@ fn prepare_effect_bindings_and_hand_delta(
             }
             EffectProgram::GainLife { .. }
             | EffectProgram::LoseLife { .. }
+            | EffectProgram::DealDamageToTarget { .. }
             | EffectProgram::ShuffleLibrary { .. }
             | EffectProgram::DestroyPermanent { .. }
             | EffectProgram::ExileObject { .. }
@@ -2677,7 +2710,7 @@ fn synthesize_targets(
                     TargetPredicate::Player(PlayerTargetPredicate::You) => caster,
                     TargetPredicate::Player(PlayerTargetPredicate::Opponent) => opponent,
                     TargetPredicate::Player(PlayerTargetPredicate::Player(player)) => player,
-                    TargetPredicate::Object(_) => {
+                    TargetPredicate::Object(_) | TargetPredicate::PlayerOrObject { .. } => {
                         return Err(RuntimeSmokeFailure::new(
                             RuntimeSmokeFailureCode::UnexpectedOutcome,
                             format!("{phase}[{index}]"),
@@ -2687,6 +2720,7 @@ fn synthesize_targets(
                 };
                 TargetChoice::Player(player)
             }
+            TargetKind::PlayerOrPermanent => TargetChoice::Player(opponent),
             TargetKind::StackEntry => {
                 let (types, kind) = synthesize_stack_spell_shape(
                     requirement.predicate(),
@@ -2851,7 +2885,7 @@ fn synthesize_stack_spell_shape(
     let predicate = match predicate {
         TargetPredicate::Any => None,
         TargetPredicate::Object(predicate) => Some(predicate),
-        TargetPredicate::Player(_) => {
+        TargetPredicate::Player(_) | TargetPredicate::PlayerOrObject { .. } => {
             return Err(RuntimeSmokeFailure::new(
                 RuntimeSmokeFailureCode::UnexpectedOutcome,
                 phase,
@@ -2914,7 +2948,7 @@ fn synthesize_object_target(
     let predicate = match predicate {
         TargetPredicate::Any => None,
         TargetPredicate::Object(predicate) => Some(predicate),
-        TargetPredicate::Player(_) => {
+        TargetPredicate::Player(_) | TargetPredicate::PlayerOrObject { .. } => {
             return Err(RuntimeSmokeFailure::new(
                 RuntimeSmokeFailureCode::UnexpectedOutcome,
                 format!("{phase}[{index}]"),
@@ -2932,7 +2966,9 @@ fn synthesize_object_target(
         TargetKind::Permanent => ZoneId::new(None, ZoneKind::Battlefield),
         TargetKind::ObjectInZone(zone) => zone,
         TargetKind::ObjectInZoneKind(kind) => ZoneId::new(smoke_zone_owner(kind, owner), kind),
-        TargetKind::Player | TargetKind::StackEntry => unreachable!("object target kind checked"),
+        TargetKind::Player | TargetKind::PlayerOrPermanent | TargetKind::StackEntry => {
+            unreachable!("object target kind checked")
+        }
     };
     let object = expect_object(execution.dispatch(
         &format!("{phase}[{index}].create"),

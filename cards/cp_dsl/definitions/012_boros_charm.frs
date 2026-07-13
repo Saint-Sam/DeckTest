@@ -9,7 +9,7 @@ card "Boros Charm" {
     oracle: "Choose one —\n• Boros Charm deals 4 damage to target player or planeswalker.\n• Permanents you control gain indestructible until end of turn.\n• Target creature gains double strike until end of turn."
     keywords: []
     ability spell {
-      effect: choose_one(deal_damage(target(any()), 4), grant_keyword(all(permanents(controlled_by(you()))), "indestructible", "until_end_of_turn"), grant_keyword(target(permanents(type_is("creature"))), "double_strike", "until_end_of_turn"))
+      effect: choose_one(deal_damage(target(all(any(), permanents(type_is("planeswalker")))), 4), grant_keyword(permanents(controlled_by(you())), "indestructible", "until_end_of_turn"), grant_keyword(target(permanents(type_is("creature"))), "double_strike", "until_end_of_turn"))
     }
   }
 }
