@@ -1257,6 +1257,10 @@ operations! {
     DistinctNames => ("distinct_names", Selector, 1, Some(1)),
     Emblems => ("emblems", Selector, 0, Some(0)),
     CounterSpellTo => ("counter_spell_to", Effect, 2, Some(2)),
+    EventWouldUntap => ("event_would_untap", Event, 1, Some(1)),
+    FlipCard => ("flip_card", Effect, 1, Some(1)),
+    WinGame => ("win_game", Effect, 1, Some(1)),
+    SkipTurns => ("skip_turns", Effect, 2, Some(2)),
 }
 
 impl Operation {
@@ -2480,6 +2484,12 @@ impl Operation {
                 1 => Some(Text),
                 _ => None,
             },
+            Self::EventWouldUntap | Self::FlipCard | Self::WinGame => Some(Selector),
+            Self::SkipTurns => match index {
+                0 => Some(Selector),
+                1 => Some(Number),
+                _ => None,
+            },
             Self::ChooseNumber => match index {
                 0 => Some(Selector),
                 1 | 2 => Some(Number),
@@ -2878,6 +2888,10 @@ mod tests {
         assert_eq!(Operation::DistinctNames as u32, 457);
         assert_eq!(Operation::Emblems as u32, 458);
         assert_eq!(Operation::CounterSpellTo as u32, 459);
+        assert_eq!(Operation::EventWouldUntap as u32, 460);
+        assert_eq!(Operation::FlipCard as u32, 461);
+        assert_eq!(Operation::WinGame as u32, 462);
+        assert_eq!(Operation::SkipTurns as u32, 463);
 
         let config = bincode::config::standard()
             .with_fixed_int_encoding()

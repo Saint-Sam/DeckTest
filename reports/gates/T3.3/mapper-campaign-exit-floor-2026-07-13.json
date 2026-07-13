@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "task": "T3.3",
+  "result": "pass",
+  "exit_floor_reached": true,
+  "verification_mode": "local_only_no_github_actions",
+  "source_binding": {
+    "base_commit": "d88b80ebb06c50df48c34a26164f1258369e9220",
+    "worktree_bound": true,
+    "forge_carddef_sha256": "f5464e2c7cf9a5ae5b2aabc8b8b8ea759322f72758519411d878027baa0b5e93",
+    "forge_porttools_mapper_sha256": "32e2f0b427547a5c28576e1a9ddc3d371c47ea0b9cc81b802bdcd4e3fafb9f70",
+    "legacy_forge_commit": "1f0a3e0815822d8f58f798e0304b33d4534248b1"
+  },
+  "translation": {
+    "complete_scripts": 20082,
+    "total_scripts": 33290,
+    "complete_percent": 60.324421748272755,
+    "quarantined_scripts": 13208,
+    "priority_complete": 281,
+    "priority_total": 365,
+    "fingerprint": "c8924edf2056140f6940f7846978c47a",
+    "metrics_sha256": "8a37acbd9b78ba3423d6d1a1a5b538b329ccc832db3f67b3fbc16f9ec482bbb0"
+  },
+  "api_mapping": {
+    "mapped_uses": 32075,
+    "legacy_uses": 43649,
+    "mapped_percent": 73.48392861233934,
+    "quarantined_uses": 11574,
+    "metrics_sha256": "9e44f31e13c20926792eace1e32b9e2014ac2a99d0597caea2ebfd12dc6878ad"
+  },
+  "blockers": {
+    "scripts_with_confirmed_blockers": 11049,
+    "unique_families": 5718,
+    "confirmed_observations": 16889,
+    "linked_root_fanout": 17286,
+    "metrics_sha256": "7fd9de7124a160b25052d77a90b55f45037964c77e76d078368bb9d99c2954ca"
+  },
+  "verification": {
+    "workers": 24,
+    "translation_replay_deterministic": true,
+    "planner_replay_deterministic": true,
+    "workspace_tests": "pass",
+    "clippy_deny_warnings": "pass",
+    "compiler_database_roundtrip": "pass",
+    "oracle_scenarios": "pass",
+    "nightmare_smoke": "pass",
+    "coverage_lines": 41388,
+    "coverage_total_lines": 51181,
+    "coverage_percent": 80.8659463472773,
+    "coverage_raw_sha256": "277f0c216a67412edc05384f0b62f47581445659fa4f12225570d062ac4e35d8",
+    "parallel_validation_sha256": "e48fb03e0a106b3a3c59d74920dd36bbb88df65efee663866c74d234c32d9905",
+    "duration_seconds": 340,
+    "github_actions_used": false,
+    "network_attempted": false,
+    "install_performed": false
+  },
+  "note": "T3.3's documented 60% complete-script floor is met. Remaining quarantines stay fail-closed and are not deleted or approximated. Runtime capability and card-semantic claims remain governed by T3.5 and T3.6."
+}

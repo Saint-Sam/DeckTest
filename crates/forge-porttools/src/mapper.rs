@@ -295,6 +295,11 @@ const MAPPERS: &[MapperSpec] = &[
     },
     MapperSpec {
         prefix: LegacyAbilityPrefix::Activated,
+        api: "SkipPhase",
+        mapper: map_skip_phase,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Activated,
         api: "MultiplyCounter",
         mapper: map_multiply_counter,
     },
@@ -602,6 +607,16 @@ const MAPPERS: &[MapperSpec] = &[
         prefix: LegacyAbilityPrefix::Activated,
         api: "AddTurn",
         mapper: map_add_turn,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Activated,
+        api: "SkipTurn",
+        mapper: map_skip_turn,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Activated,
+        api: "WinsGame",
+        mapper: map_wins_game,
     },
     MapperSpec {
         prefix: LegacyAbilityPrefix::Activated,
@@ -4287,6 +4302,15 @@ fn map_count_value(name: &str, value: &str) -> Result<Expression, MappingDiagnos
             ],
         ));
     }
+    if value == "ResolvedThisTurn" {
+        return Ok(call(
+            Operation::HistoryCount,
+            vec![
+                call(Operation::Source, vec![]),
+                Expression::Text("current_ability_resolved_this_turn".to_string()),
+            ],
+        ));
+    }
     if value == "AttackersDeclared" {
         return Ok(call(
             Operation::HistoryCount,
@@ -6555,32 +6579,24 @@ fn map_untap_replacement(
     if required(&parameters, "Layer")? != "CantHappen" {
         return Err(unsupported_value("Layer", required(&parameters, "Layer")?));
     }
-    match parameters
+    let untap_step = match parameters
         .get("ValidStepTurnToController")
         .map(String::as_str)
     {
-        None | Some("You") => {}
+        None | Some("You") => "controller_untap_step",
+        Some("Player.Activator") => "activator_untap_step",
         Some(value) => return Err(unsupported_value("ValidStepTurnToController", value)),
-    }
+    };
     let affected = affected_selector(required(&parameters, "ValidCard")?)?;
     Ok(MappedLegacyAbility {
         prefix,
         api: "Untap".to_string(),
         costs: Vec::new(),
-        event: None,
+        event: Some(call(Operation::EventWouldUntap, vec![affected.clone()])),
         timing: None,
         expression: call(
-            Operation::Continuous,
-            vec![
-                affected,
-                call(
-                    Operation::CannotUntap,
-                    vec![
-                        call(Operation::Any, vec![]),
-                        Expression::Text("controller_untap_step".to_string()),
-                    ],
-                ),
-            ],
+            Operation::CannotUntap,
+            vec![affected, Expression::Text(untap_step.to_string())],
         ),
     })
 }
@@ -7484,6 +7500,19 @@ fn zone_event_selector(value: &str, origin: &str) -> Result<Expression, MappingD
             )],
         ),
         Expression::Call {
+            operation: Operation::EquippedObject,
+            arguments,
+        } => call(
+            Operation::Cards,
+            vec![call(
+                Operation::Equals,
+                vec![
+                    call(Operation::Any, vec![]),
+                    call(Operation::EquippedObject, arguments),
+                ],
+            )],
+        ),
+        Expression::Call {
             operation,
             arguments,
         } if matches!(operation, Operation::Cards | Operation::Permanents) => {
@@ -7505,6 +7534,7 @@ fn map_phase_event(parameters: &BTreeMap<String, String>) -> Result<Expression, 
         &[
             "Execute",
             "Phase",
+            "PhaseCount",
             "ValidPlayer",
             "TriggerZones",
             "TriggerDescription",
@@ -7512,6 +7542,11 @@ fn map_phase_event(parameters: &BTreeMap<String, String>) -> Result<Expression, 
     )?;
     require_battlefield_zone(parameters, "TriggerZones")?;
     let phase = required(parameters, "Phase")?;
+    let phase = match parameters.get("PhaseCount").map(String::as_str) {
+        None => phase,
+        Some("2") if phase == "Main" => "Main2",
+        Some(value) => return Err(unsupported_value("PhaseCount", value)),
+    };
     let player = match parameters.get("ValidPlayer").map(String::as_str) {
         None | Some("Any") | Some("Player") => call(Operation::Any, vec![]),
         Some(value) => draw_player_selector(value, "ValidPlayer")?,
@@ -8119,6 +8154,12 @@ fn draw_player_selector(value: &str, key: &str) -> Result<Expression, MappingDia
         "You" | "Player.You" => Ok(call(Operation::You, vec![])),
         "Opponent" | "Player.Opponent" => Ok(call(Operation::Opponent, vec![])),
         "Player.Chosen" => Ok(call(Operation::Chosen, vec![call(Operation::Any, vec![])])),
+        "TriggeredPlayer" => Ok(call(Operation::TriggeredPlayer, vec![])),
+        "TriggeredActivator" => Ok(call(Operation::TriggeredActivator, vec![])),
+        "TriggeredCardController" => Ok(call(
+            Operation::ControllerOf,
+            vec![call(Operation::Triggered, vec![])],
+        )),
         "Player.EnchantedController" => Ok(call(
             Operation::ControllerOf,
             vec![call(
@@ -8308,7 +8349,7 @@ fn map_mana(
     selector: &str,
     parameters: &BTreeMap<String, String>,
 ) -> Result<MappedLegacyAbility, MappingDiagnostic> {
-    require_selector_one_of(selector, &["AB", "DB"])?;
+    require_selector_one_of(selector, &["AB", "SP", "DB"])?;
     reject_unknown(
         parameters,
         &[
@@ -8360,7 +8401,50 @@ fn map_mana_reflected(
     selector: &str,
     parameters: &BTreeMap<String, String>,
 ) -> Result<MappedLegacyAbility, MappingDiagnostic> {
-    require_selector(selector, "AB")?;
+    require_selector_one_of(selector, &["AB", "DB"])?;
+    if selector == "DB" {
+        reject_unknown(
+            parameters,
+            &[
+                "Defined",
+                "ColorOrType",
+                "ReflectProperty",
+                "Amount",
+                "SpellDescription",
+                "StackDescription",
+            ],
+        )?;
+        let mode = match required(parameters, "ColorOrType")? {
+            "Color" => "color",
+            "Type" => "type",
+            value => return Err(unsupported_value("ColorOrType", value)),
+        };
+        if required(parameters, "ReflectProperty")? != "Produced" {
+            return Err(unsupported_value(
+                "ReflectProperty",
+                required(parameters, "ReflectProperty")?,
+            ));
+        }
+        return Ok(MappedLegacyAbility {
+            prefix,
+            api: api.to_string(),
+            costs: Vec::new(),
+            event: None,
+            timing: None,
+            expression: call(
+                Operation::AddReflectedMana,
+                vec![
+                    call(Operation::Triggered, vec![]),
+                    Expression::Text(mode.to_string()),
+                    Expression::Text("produced".to_string()),
+                    player_selector(parameters, DefaultSelector::You)?,
+                    Expression::Integer(
+                        optional_positive_integer(parameters, "Amount")?.unwrap_or(1),
+                    ),
+                ],
+            ),
+        });
+    }
     reject_unknown(
         parameters,
         &[
@@ -10100,7 +10184,9 @@ fn map_put_counter(
         .collect::<Vec<_>>();
     if let Some(source) = parameters.get("EachFromSource") {
         if !mechanics.is_empty()
-            || parameters.contains_key("CounterType")
+            || parameters
+                .get("CounterType")
+                .is_some_and(|counter_type| counter_type != "EachFromSource")
             || parameters.contains_key("CounterTypes")
             || parameters.contains_key("TriggeredCounterMap")
         {
@@ -10484,6 +10570,7 @@ fn map_continuous_with_effects(
         Some(value) => return Err(unsupported_value("CharacteristicDefining", value)),
     };
     let affected_value = match parameters.get("Affected") {
+        Some(value) if characteristic_defining && value == "Card.Self" => value.as_str(),
         Some(value) if characteristic_defining => {
             return Err(unsupported_value("Affected", value));
         }
@@ -10503,10 +10590,14 @@ fn map_continuous_with_effects(
         if let Some(zone) = parameters.get("EffectZone") {
             return Err(unsupported_value("EffectZone", zone));
         }
-        if !parameters.contains_key("SetPower") && !parameters.contains_key("SetToughness") {
+        if !parameters.contains_key("SetPower")
+            && !parameters.contains_key("SetToughness")
+            && !parameters.contains_key("AddType")
+            && !parameters.contains_key("SetColor")
+        {
             return Err(diagnostic(
                 "MISSING_PARAMETER",
-                "CharacteristicDefining requires SetPower or SetToughness",
+                "CharacteristicDefining requires a characteristic change",
             ));
         }
         None
@@ -12669,6 +12760,77 @@ fn map_add_phase(
     mapped_direct(prefix, api, parameters, expression)
 }
 
+fn map_skip_phase(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["AB", "SP", "DB"])?;
+    reject_unknown(
+        parameters,
+        &[
+            "Cost",
+            "Defined",
+            "ValidTgts",
+            "Phase",
+            "Step",
+            "Start",
+            "Duration",
+            "IsCurse",
+            "SpellDescription",
+            "StackDescription",
+            "AILogic",
+        ],
+    )?;
+    if parameters.contains_key("Phase") && parameters.contains_key("Step") {
+        return Err(diagnostic(
+            "UNSUPPORTED_PARAMETER",
+            "SkipPhase cannot combine Phase and Step",
+        ));
+    }
+    let value = parameters
+        .get("Step")
+        .map(|value| ("Step", value.as_str()))
+        .or_else(|| {
+            parameters
+                .get("Phase")
+                .map(|value| ("Phase", value.as_str()))
+        })
+        .ok_or_else(|| diagnostic("MISSING_PARAMETER", "SkipPhase requires Phase or Step"))?;
+    let mut phase = match value {
+        ("Step", "Untap") => "untap_step",
+        ("Step", "Draw") => "draw_step",
+        ("Phase", "BeginCombat") => "begin_combat",
+        ("Phase", "Main") => "main_phase",
+        (key, value) => return Err(unsupported_value(key, value)),
+    }
+    .to_string();
+    match (
+        parameters.get("Start").map(String::as_str),
+        parameters.get("Duration").map(String::as_str),
+    ) {
+        (None, None | Some("EndOfTurn")) => {}
+        (Some("FromNext"), Some("UntilTheEndOfTargetedNextTurn")) => {
+            phase = format!("next_{phase}_through_targeted_next_turn");
+        }
+        (Some(value), _) => return Err(unsupported_value("Start", value)),
+        (None, Some(value)) => return Err(unsupported_value("Duration", value)),
+    }
+    mapped_direct(
+        prefix,
+        api,
+        parameters,
+        call(
+            Operation::SkipStep,
+            vec![
+                Expression::Text(phase),
+                player_selector(parameters, DefaultSelector::You)?,
+            ],
+        ),
+    )
+}
+
 fn map_multiply_counter(
     prefix: LegacyAbilityPrefix,
     api: &str,
@@ -14699,10 +14861,12 @@ fn map_effect(
             ),
         );
     }
-    match parameters.get("Duration").map(String::as_str) {
-        None | Some("EndOfTurn") | Some("UntilEndOfTurn") => {}
+    let duration = match parameters.get("Duration").map(String::as_str) {
+        None | Some("EndOfTurn") | Some("UntilEndOfTurn") => "until_end_of_turn",
+        Some("UntilEndOfCombat") => "until_end_of_combat",
+        Some("UntilYourNextTurn") => "until_your_next_turn",
         Some(value) => return Err(unsupported_value("Duration", value)),
-    }
+    };
     let blockers = call(
         Operation::Permanents,
         vec![call(
@@ -14711,18 +14875,23 @@ fn map_effect(
         )],
     );
     let expression = call(
-        Operation::UntilEndOfTurn,
-        vec![call(
-            Operation::Continuous,
-            vec![
-                affected,
-                call(
-                    Operation::CannotBeBlockedBy,
-                    vec![call(Operation::Any, vec![]), blockers],
-                ),
-            ],
-        )],
+        Operation::Continuous,
+        vec![
+            affected,
+            call(
+                Operation::CannotBeBlockedBy,
+                vec![call(Operation::Any, vec![]), blockers],
+            ),
+        ],
     );
+    let expression = if duration == "until_end_of_turn" {
+        call(Operation::UntilEndOfTurn, vec![expression])
+    } else {
+        call(
+            Operation::ApplyDuration,
+            vec![expression, Expression::Text(duration.to_string())],
+        )
+    };
     mapped_direct(prefix, api, parameters, expression)
 }
 
@@ -15047,15 +15216,17 @@ fn map_set_state(
         ],
     )?;
     let mode = required(parameters, "Mode")?;
-    if mode != "Transform" {
-        return Err(unsupported_value("Mode", mode));
-    }
+    let operation = match mode {
+        "Transform" => Operation::Transform,
+        "Flip" => Operation::FlipCard,
+        value => return Err(unsupported_value("Mode", value)),
+    };
     mapped_direct(
         prefix,
         api,
         parameters,
         call(
-            Operation::Transform,
+            operation,
             vec![object_selector(parameters, DefaultSelector::Source)?],
         ),
     )
@@ -16260,6 +16431,71 @@ fn map_add_turn(
         api,
         parameters,
         combine_effects(effects, "AddTurn requires at least one turn")?,
+    )
+}
+
+fn map_skip_turn(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["AB", "SP", "DB"])?;
+    reject_unknown(
+        parameters,
+        &[
+            "Cost",
+            "Defined",
+            "ValidTgts",
+            "NumTurns",
+            "SpellDescription",
+            "StackDescription",
+            "AILogic",
+        ],
+    )?;
+    mapped_direct(
+        prefix,
+        api,
+        parameters,
+        call(
+            Operation::SkipTurns,
+            vec![
+                player_selector(parameters, DefaultSelector::You)?,
+                Expression::Integer(positive_integer(
+                    required(parameters, "NumTurns")?,
+                    "NumTurns",
+                )?),
+            ],
+        ),
+    )
+}
+
+fn map_wins_game(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector_one_of(selector, &["AB", "SP", "DB"])?;
+    reject_unknown(
+        parameters,
+        &[
+            "Cost",
+            "Defined",
+            "ValidTgts",
+            "SpellDescription",
+            "StackDescription",
+            "AILogic",
+        ],
+    )?;
+    mapped_direct(
+        prefix,
+        api,
+        parameters,
+        call(
+            Operation::WinGame,
+            vec![player_selector(parameters, DefaultSelector::You)?],
+        ),
     )
 }
 
@@ -18105,6 +18341,18 @@ fn normalize_mana(value: &str, amount: i64) -> Result<String, MappingDiagnostic>
         "command_color_identity".to_string()
     } else if value == "Combo Any" {
         "any_combination_of_colors".to_string()
+    } else if value.split_whitespace().count() > 1
+        && value
+            .split_whitespace()
+            .all(|color| matches!(color, "W" | "U" | "B" | "R" | "G" | "C"))
+    {
+        if amount != 1 {
+            return Err(unsupported_value("Amount", &amount.to_string()));
+        }
+        value
+            .split_whitespace()
+            .map(|color| format!("{{{color}}}"))
+            .collect::<String>()
     } else if let Some(colors) = value.strip_prefix("Combo ") {
         let choices = colors
             .split_whitespace()
@@ -18784,6 +19032,24 @@ fn spell_predicate(value: &str) -> Result<Expression, MappingDiagnostic> {
                 Operation::OwnedBy,
                 vec![call(Operation::TriggeredDefendingPlayer, vec![])],
             )
+        } else if modifier == "!wasCastFromYourHand" {
+            call(
+                Operation::Not,
+                vec![call(
+                    Operation::DesignationIs,
+                    vec![Expression::Text("cast_from_your_hand".to_string())],
+                )],
+            )
+        } else if modifier == "wasCastFromYourHandByYou" {
+            call(
+                Operation::DesignationIs,
+                vec![Expression::Text("cast_from_your_hand_by_you".to_string())],
+            )
+        } else if modifier == "wasCastByYou" {
+            call(
+                Operation::DesignationIs,
+                vec![Expression::Text("cast_by_you".to_string())],
+            )
         } else if let Some(predicate) = kicked_predicate(modifier) {
             predicate
         } else if let Some(predicate) = object_marker_predicate(modifier) {
@@ -19292,10 +19558,23 @@ fn normalize_simple_keyword(value: &str) -> Result<String, MappingDiagnostic> {
     if value.trim() == "Flashback" {
         return Ok("flashback=mana_cost".to_string());
     }
+    if let Some(land_type) = value.trim().strip_prefix("Landwalk:") {
+        if matches!(
+            land_type,
+            "Plains" | "Island" | "Swamp" | "Mountain" | "Forest"
+        ) {
+            return Ok(format!("landwalk_{}", land_type.to_ascii_lowercase()));
+        }
+        return Err(unsupported_value("AddKeyword", value));
+    }
+    if value.trim() == "HIDDEN CARDNAME must be blocked if able." {
+        return Ok("must_be_blocked_if_able".to_string());
+    }
     let normalized = value.trim().to_ascii_lowercase().replace(' ', "_");
     if matches!(
         normalized.as_str(),
-        "deathtouch"
+        "banding"
+            | "deathtouch"
             | "defender"
             | "double_strike"
             | "fear"
@@ -19705,6 +19984,11 @@ mod tests {
         assert_operation(
             "A:SP$ Draw | NumCards$ 2 | SpellDescription$ Draw two cards.",
             Operation::Draw,
+            0,
+        );
+        assert_operation(
+            "A:SP$ Mana | Produced$ B | Amount$ 3 | SpellDescription$ Add mana.",
+            Operation::AddMana,
             0,
         );
         assert_operation(
@@ -20381,6 +20665,17 @@ mod tests {
             Operation::AddReflectedMana
         ));
 
+        let triggered = map_line(
+            "A:DB$ ManaReflected | ColorOrType$ Type | ReflectProperty$ Produced | Defined$ TriggeredActivator",
+        )
+        .unwrap_or_else(|error| {
+            panic!("triggered reflected mana should map: {}", error.message)
+        });
+        assert!(expression_contains_operation(
+            &triggered.expression,
+            Operation::TriggeredActivator
+        ));
+
         let error = map_line(
             "A:AB$ ManaReflected | Cost$ T | ColorOrType$ Color | Valid$ Land.OppCtrl | ReflectProperty$ Is | SpellDescription$ Add reflected mana.",
         )
@@ -20703,16 +20998,21 @@ mod tests {
             ));
         }
 
-        let enchanted = map_script_root(concat!(
-            "T:Mode$ ChangesZone | Origin$ Battlefield | Destination$ Graveyard | ValidCard$ Card.EnchantedBy | Execute$ TrigDraw\n",
-            "SVar:TrigDraw:DB$ Draw | Defined$ You | NumCards$ 1\n",
-        ))
-        .unwrap_or_else(|error| {
-            panic!("enchanted-object zone trigger should map: {}", error.message)
-        });
-        assert!(enchanted.event.as_ref().is_some_and(|event| {
-            expression_contains_operation(event, Operation::EnchantedObject)
-        }));
+        for (valid, operation) in [
+            ("Card.EnchantedBy", Operation::EnchantedObject),
+            ("Card.EquippedBy", Operation::EquippedObject),
+        ] {
+            let attached = map_script_root(&format!(
+                "T:Mode$ ChangesZone | Origin$ Battlefield | Destination$ Graveyard | ValidCard$ {valid} | Execute$ TrigDraw\nSVar:TrigDraw:DB$ Draw | Defined$ You | NumCards$ 1\n"
+            ))
+            .unwrap_or_else(|error| {
+                panic!("attached-object zone trigger should map: {}", error.message)
+            });
+            assert!(attached
+                .event
+                .as_ref()
+                .is_some_and(|event| { expression_contains_operation(event, operation) }));
+        }
 
         let perpetual = map_script_root(concat!(
             "Name:Perpetual Trigger\n",
@@ -21823,6 +22123,21 @@ mod tests {
             assert_operation(line, operation, costs);
         }
 
+        for keyword in [
+            "Banding",
+            "Landwalk:Forest",
+            "HIDDEN CARDNAME must be blocked if able.",
+        ] {
+            let mapped = map_line(&format!(
+                "A:DB$ Pump | Defined$ Self | KW$ {keyword} | Duration$ UntilEndOfTurn"
+            ))
+            .unwrap_or_else(|error| panic!("closed combat keyword should map: {}", error.message));
+            assert!(expression_contains_operation(
+                &mapped.expression,
+                Operation::GrantKeyword
+            ));
+        }
+
         let no_regen = map_line(
             "A:SP$ DestroyAll | ValidCards$ Creature | NoRegen$ True | SpellDescription$ Destroy all.",
         )
@@ -21887,13 +22202,13 @@ mod tests {
             "S:Mode$ Continuous | Affected$ Creature | AddHiddenKeyword$ CARDNAME can't block. | Description$ Creatures cannot block.",
             "S:Mode$ Continuous | Affected$ Creature.EnchantedBy | AddHiddenKeyword$ All creatures able to block CARDNAME do so. | Description$ Must be blocked.",
             "S:Mode$ Continuous | CharacteristicDefining$ True | SetPower$ 4 | SetToughness$ 4 | Description$ Characteristic power and toughness.",
+            "S:Mode$ Continuous | CharacteristicDefining$ True | Affected$ Card.Self | SetPower$ 1 | Description$ Explicit self CDA.",
         ] {
             assert_operation(line, Operation::Continuous, 0);
         }
 
         for line in [
             "S:Mode$ Continuous | CharacteristicDefining$ False | SetPower$ 1 | Description$ Invalid CDA.",
-            "S:Mode$ Continuous | CharacteristicDefining$ True | Affected$ Card.Self | SetPower$ 1 | Description$ Ambiguous CDA.",
             "S:Mode$ Continuous | CharacteristicDefining$ True | AddKeyword$ Flying | Description$ Invalid CDA.",
         ] {
             let error = map_line(line)
@@ -22597,7 +22912,6 @@ mod tests {
         for line in [
             "A:AB$ Effect | ValidTgts$ Creature | StaticAbilities$ KWPump",
             "A:AB$ Effect | ValidTgts$ Creature | StaticAbilities$ Unblockable | Duration$ Permanent",
-            "A:AB$ Effect | ValidTgts$ Creature | StaticAbilities$ Unblockable | Duration$ UntilYourNextTurn",
             "A:AB$ Effect | StaticAbilities$ Unblockable",
             "A:AB$ Effect | ValidTgts$ Creature | StaticAbilities$ Unblockable | RememberObjects$ Targeted & TargetedController",
         ] {
@@ -23538,6 +23852,13 @@ mod tests {
             Operation::AddMana
         ));
 
+        let fixed = map_line("A:SP$ Mana | Produced$ G U | Amount$ 1")
+            .unwrap_or_else(|error| panic!("fixed multicolor mana should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &fixed.expression,
+            Operation::AddMana
+        ));
+
         for (count, operation) in [
             ("TimesKicked", Operation::TimesKicked),
             ("TimesKicked/Plus.1", Operation::AddValue),
@@ -23944,6 +24265,75 @@ mod tests {
             Operation::CurrentPhaseIs
         ));
 
+        for line in [
+            "A:DB$ SkipPhase | Defined$ TriggeredPlayer | Step$ Draw | Duration$ EndOfTurn",
+            "A:SP$ SkipPhase | ValidTgts$ Opponent | Phase$ BeginCombat | Start$ FromNext | Duration$ UntilTheEndOfTargetedNextTurn",
+        ] {
+            let skipped = map_line(line)
+                .unwrap_or_else(|error| panic!("closed phase skip should map: {}", error.message));
+            assert!(expression_contains_operation(
+                &skipped.expression,
+                Operation::SkipStep
+            ));
+        }
+
+        let skipped_turn = map_line("A:DB$ SkipTurn | Defined$ You | NumTurns$ 2")
+            .unwrap_or_else(|error| panic!("turn skip should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &skipped_turn.expression,
+            Operation::SkipTurns
+        ));
+
+        let win = map_line("A:DB$ WinsGame | Defined$ You")
+            .unwrap_or_else(|error| panic!("win effect should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &win.expression,
+            Operation::WinGame
+        ));
+
+        let flipped = map_line("A:DB$ SetState | Defined$ Self | Mode$ Flip")
+            .unwrap_or_else(|error| panic!("flip state should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &flipped.expression,
+            Operation::FlipCard
+        ));
+
+        let second_main = map_script_root(concat!(
+            "T:Mode$ Phase | Phase$ Main | PhaseCount$ 2 | Execute$ TrigDraw\n",
+            "SVar:TrigDraw:DB$ Draw | Defined$ You | NumCards$ 1\n",
+        ))
+        .unwrap_or_else(|error| panic!("second-main trigger should map: {}", error.message));
+        assert!(expression_contains_operation(
+            second_main
+                .event
+                .as_ref()
+                .unwrap_or(&second_main.expression),
+            Operation::EventPhase
+        ));
+
+        let resolved = map_script_root(concat!(
+            "A:DB$ Draw | Defined$ You | NumCards$ X\n",
+            "SVar:X:Count$ResolvedThisTurn\n",
+        ))
+        .unwrap_or_else(|error| panic!("resolved-this-turn value should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &resolved.expression,
+            Operation::HistoryCount
+        ));
+
+        let cast_origin = map_script_root(concat!(
+            "T:Mode$ SpellCast | ValidCard$ Card.!wasCastFromYourHand | Execute$ TrigDraw\n",
+            "SVar:TrigDraw:DB$ Draw | Defined$ You | NumCards$ 1\n",
+        ))
+        .unwrap_or_else(|error| panic!("cast-origin predicate should map: {}", error.message));
+        assert!(expression_contains_operation(
+            cast_origin
+                .event
+                .as_ref()
+                .unwrap_or(&cast_origin.expression),
+            Operation::DesignationIs
+        ));
+
         let stored = map_script_root(concat!(
             "A:DB$ StoreSVar | SVar$ Doodles | Type$ CountSVar | Expression$ Doodles/Plus.1\n",
             "SVar:Doodles:Number$0\n",
@@ -24027,7 +24417,7 @@ mod tests {
                 Operation::CopyTriggeredCounters,
             ),
             (
-                "A:DB$ PutCounter | Defined$ Remembered | EachFromSource$ TriggeredCardLKICopy",
+                "A:DB$ PutCounter | Defined$ Remembered | CounterType$ EachFromSource | EachFromSource$ TriggeredCardLKICopy",
                 Operation::CopyCountersFrom,
             ),
         ] {
@@ -24044,11 +24434,22 @@ mod tests {
         )
         .unwrap_or_else(|error| panic!("untap prevention should map: {}", error.message));
         assert!(expression_contains_operation(
-            &mapped.expression,
-            Operation::Continuous
+            mapped.event.as_ref().unwrap_or(&mapped.expression),
+            Operation::EventWouldUntap
         ));
         assert!(expression_contains_operation(
             &mapped.expression,
+            Operation::CannotUntap
+        ));
+
+        let activator = map_script_root(
+            "R:Event$ Untap | ValidCard$ Card.IsRemembered | ValidStepTurnToController$ Player.Activator | Layer$ CantHappen\n",
+        )
+        .unwrap_or_else(|error| {
+            panic!("activator untap prevention should map: {}", error.message)
+        });
+        assert!(expression_contains_operation(
+            &activator.expression,
             Operation::CannotUntap
         ));
 
@@ -26097,6 +26498,15 @@ mod tests {
         assert!(expression_contains_operation(
             &mapped.expression,
             Operation::Source
+        ));
+
+        let triggered = map_line("A:DB$ Sacrifice | Defined$ TriggeredPlayer | SacValid$ Creature")
+            .unwrap_or_else(|error| {
+                panic!("triggered-player sacrifice should map: {}", error.message)
+            });
+        assert!(expression_contains_operation(
+            &triggered.expression,
+            Operation::TriggeredPlayer
         ));
     }
 
