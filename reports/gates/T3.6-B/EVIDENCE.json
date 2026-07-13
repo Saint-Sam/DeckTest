@@ -2,15 +2,15 @@
   "artifacts": {
     "runner": {
       "path": "tools/run_t3_6_commander_semantics.py",
-      "sha256": "8712712ffe8312dcf0cbe90c7905761303811986f19999bb97b1d7a7d0b5e8cb"
+      "sha256": "4fb1bf4d575ca64c88a2f1a3300074e3d2f60f31c2c0d88d22340bda3244ae65"
     },
     "runtime_probe": {
       "path": "tests/t3_6/runtime_probe.rs",
-      "sha256": "e6f56d459bfffc20f59f5a5d8a79337fcdf69572e9468f6a4e47218b5265ad88"
+      "sha256": "1b3256c22413bdd24b8e90c34725d505c600fd847ca92033c1afefa39cf6227e"
     },
     "semantic_cases": {
       "path": "tests/t3_6/commander_semantic_cases.json",
-      "sha256": "66aef709ff4cbba36adc083ca71c1d21cfe44e6554ed8b122bbd21c74671755d"
+      "sha256": "3d75cd10eb2ae7347a8260d847baaef08245deb29b3022d7b86df3d40c1258b9"
     }
   },
   "blocked_runtime": [
@@ -25,24 +25,9 @@
       "scenario_id": "T3.6-042"
     },
     {
-      "card_name": "Fierce Guardianship",
-      "reason_code": "unsupported_ability_shape",
-      "scenario_id": "T3.6-057"
-    },
-    {
-      "card_name": "Heroic Intervention",
-      "reason_code": "unsupported_effect_arguments",
-      "scenario_id": "T3.6-058"
-    },
-    {
       "card_name": "Boros Charm",
       "reason_code": "unsupported_effect_operation",
       "scenario_id": "T3.6-059"
-    },
-    {
-      "card_name": "Flawless Maneuver",
-      "reason_code": "unsupported_ability_shape",
-      "scenario_id": "T3.6-060"
     },
     {
       "card_name": "Reconnaissance Mission",
@@ -221,12 +206,12 @@
   ],
   "checkpoint": {
     "id": "CP-CARD-SEMANTICS-100",
-    "remaining": 32,
+    "remaining": 29,
     "required": 100,
-    "semantic_verified": 68,
+    "semantic_verified": 71,
     "status": "in_progress"
   },
-  "claim_boundary": "68 identities have one card-specific expected production path and exact deterministic replay. The other 32 remain reason-coded and are not semantic_verified; CP-CARD-SEMANTICS-100 remains open.",
+  "claim_boundary": "71 identities have one card-specific expected production path and exact deterministic replay. The other 29 remain reason-coded and are not semantic_verified; CP-CARD-SEMANTICS-100 remains open.",
   "constraints": {
     "github_actions_used": false,
     "installs_performed": false,
@@ -241,31 +226,30 @@
   },
   "generated_at": "2026-07-13",
   "measured": {
-    "blocked_runtime": 12,
+    "blocked_runtime": 9,
     "blocked_semantic_gap": 20,
     "frozen_candidates": 100,
     "production_failures": 0,
     "runtime_blocker_reason_counts": {
-      "unsupported_ability_shape": 3,
+      "unsupported_ability_shape": 1,
       "unsupported_card_layout": 1,
-      "unsupported_effect_arguments": 1,
       "unsupported_effect_operation": 2,
       "unsupported_keyword_semantics": 5
     },
-    "runtime_smoke_passed": 88,
+    "runtime_smoke_passed": 91,
     "semantic_blocker_reason_counts": {
       "COPY_TRIGGER_EVENT_MISSING": 1,
       "REGENERATION_PROHIBITION_MISSING": 4,
       "REVEAL_KNOWLEDGE_EVENT_MISSING": 6,
       "TOKEN_SUBTYPE_STATE_MISSING": 11
     },
-    "semantic_verified": 68
+    "semantic_verified": 71
   },
   "product_binding": {
     "candidate_payload_sha256": "901a08efac2e4eaefc3c2adba3fa23515709595efcde30e43032f24112552e0b",
-    "observed_replay_sha256": "ca8b651ee77d22626a6077c3cd43d8f1b2ab56b9285e0ab0947176994d771fed",
-    "runtime_source_commit": "deb1547006fe4665d3b8c4c6b072c5889971f532",
-    "semantic_cases_payload_sha256": "ca386cb47b3a32280d15c3b09f1c17b079b697d7591c15cb0bc41e4a69a81004",
+    "observed_replay_sha256": "5fa566e75148aed776a9989ee2ef6c121fdf24dd6027642bef50ef5872e65dd8",
+    "runtime_source_commit": "a87c71623ecca65f93d2997c6beacd1e5ff23c5d",
+    "semantic_cases_payload_sha256": "c661b35e3eb0514ea20df6e56cc22e775ca990e21c505e3d078d1c90663bf528",
     "translated_definitions_aggregate_sha256": "9e09956bdd16d34c77905dcbf53fea2b9f31164b7049c3a30424dc7109801fb0"
   },
   "schema_version": 2,
@@ -336,7 +320,7 @@
     },
     {
       "card_name": "Thought Vessel",
-      "final_hash": "18384593747005322422",
+      "final_hash": "1183247711630488754",
       "freeze_rank": 9,
       "oracle_id": "9965d9c5-2ebf-4a6c-930e-55c5890979be",
       "scenario_id": "T3.6-009",
@@ -344,7 +328,7 @@
     },
     {
       "card_name": "Swiftfoot Boots",
-      "final_hash": "17343426485281010121",
+      "final_hash": "1913661080457352577",
       "freeze_rank": 10,
       "oracle_id": "c8b143ad-43ec-4e0d-a440-e348daa31391",
       "scenario_id": "T3.6-010",
@@ -352,7 +336,7 @@
     },
     {
       "card_name": "Lightning Greaves",
-      "final_hash": "17194523036364943123",
+      "final_hash": "3668359424859327907",
       "freeze_rank": 11,
       "oracle_id": "ca204b66-8d0c-431a-8d34-282f7c2d17da",
       "scenario_id": "T3.6-011",
@@ -520,7 +504,7 @@
     },
     {
       "card_name": "Reliquary Tower",
-      "final_hash": "15659756639220051538",
+      "final_hash": "3920126985669564248",
       "freeze_rank": 35,
       "oracle_id": "c23e5b80-08d2-4e24-9908-fe2aa4f30f6f",
       "scenario_id": "T3.6-035",
@@ -637,6 +621,30 @@
       "oracle_id": "6d7be242-a072-40ce-b540-95880506cccd",
       "scenario_id": "T3.6-056",
       "stratum": "stack_interaction_and_protection"
+    },
+    {
+      "card_name": "Fierce Guardianship",
+      "final_hash": "6529959110902247039",
+      "freeze_rank": 57,
+      "oracle_id": "d09c9cba-fdd2-479b-ad5d-d05181c3e3f9",
+      "scenario_id": "T3.6-057",
+      "stratum": "stack_interaction_and_protection"
+    },
+    {
+      "card_name": "Heroic Intervention",
+      "final_hash": "7658552940165801494",
+      "freeze_rank": 58,
+      "oracle_id": "24882fa2-3fe9-4c1b-aa3d-0e6488b9db27",
+      "scenario_id": "T3.6-058",
+      "stratum": "stack_interaction_and_protection"
+    },
+    {
+      "card_name": "Flawless Maneuver",
+      "final_hash": "3569019749649835006",
+      "freeze_rank": 60,
+      "oracle_id": "4e183439-17d2-47ff-9d99-5e22821d91e3",
+      "scenario_id": "T3.6-060",
+      "stratum": "continuous_combat_and_costs"
     },
     {
       "card_name": "Skyshroud Claim",
@@ -800,7 +808,7 @@
     },
     {
       "card_name": "Carrion Feeder",
-      "final_hash": "14502260374801811923",
+      "final_hash": "8182468761079477921",
       "freeze_rank": 99,
       "oracle_id": "a1cc5e37-b09a-4b7f-afd5-77c1c35aa425",
       "scenario_id": "T3.6-099",
@@ -820,7 +828,7 @@
   "verification": [
     {
       "command": "CARGO_NET_OFFLINE=true python3 tools/run_t3_6_commander_semantics.py --translated-root target/translated-cards --cargo-target-dir target --report reports/gates/T3.6-B/EVIDENCE.json",
-      "result": "PASS; two exact production replays, 68 semantic outcomes matched, 20 semantic gaps and 12 runtime blockers remained fail-closed"
+      "result": "PASS; two exact production replays, 71 semantic outcomes matched, 20 semantic gaps and 9 runtime blockers remained fail-closed"
     }
   ],
   "verification_mode": "local_only"

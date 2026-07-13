@@ -45,8 +45,10 @@ ATOM_CAPABILITIES = {
     "reduce_spell_cost": "reduce_spell_cost",
     "attach_object": "attach_object",
     "targeting_restriction": "targeting_restriction",
+    "indestructible": "indestructible",
     "add_counters": "add_counters",
     "combat_restriction": "combat_restriction",
+    "alternate_cost": "alternate_cost",
 }
 SEMANTIC_BLOCKER_CODES = {
     "COPY_TRIGGER_EVENT_MISSING",
@@ -628,6 +630,162 @@ def expected_sacrifice_counter_probe(case: dict[str, Any]) -> dict[str, Any] | N
     }
 
 
+def expected_temporary_protection_probe(case: dict[str, Any]) -> dict[str, Any] | None:
+    atoms = case.get("semantic_atoms", [])
+    targeting = [atom for atom in atoms if atom.get("op") == "targeting_restriction"]
+    indestructible = [atom for atom in atoms if atom.get("op") == "indestructible"]
+    if not targeting or not indestructible:
+        return None
+    if targeting != [
+        {
+            "duration": "until_end_of_turn",
+            "op": "targeting_restriction",
+            "restriction": "hexproof",
+            "subject": "permanents_you_control",
+        }
+    ] or indestructible != [
+        {
+            "duration": "until_end_of_turn",
+            "op": "indestructible",
+            "subject": "permanents_you_control",
+        }
+    ]:
+        raise ValueError(f"{case['scenario_id']}: invalid temporary protection expectation")
+    return {
+        "setup_succeeded": True,
+        "bound_action_count": 4,
+        "bound_actions_are_restrictions": True,
+        "all_actions_applied": True,
+        "restriction_count": 4,
+        "all_until_end_of_turn": True,
+        "controlled_creature_has_hexproof": True,
+        "controlled_artifact_has_hexproof": True,
+        "controlled_creature_has_indestructible": True,
+        "controlled_artifact_has_indestructible": True,
+        "opponent_creature_unprotected": True,
+        "opponent_artifact_unprotected": True,
+        "opponent_cannot_target_controlled_creature": True,
+        "opponent_cannot_target_controlled_artifact": True,
+        "controller_can_target_controlled_creature": True,
+        "controller_can_target_controlled_artifact": True,
+        "protected_creature_survived_destroy": True,
+        "protected_artifact_survived_destroy": True,
+        "protected_creature_survived_lethal_damage": True,
+        "cleanup_reached": True,
+        "expired_restriction_count": 4,
+        "restrictions_removed_at_cleanup": True,
+        "opponent_can_target_creature_after_cleanup": True,
+        "opponent_can_target_artifact_after_cleanup": True,
+        "artifact_destroyed_after_cleanup": True,
+        "creature_died_to_lethal_damage_after_cleanup": True,
+    }
+
+
+def expected_commander_alternate_cost_probe(
+    case: dict[str, Any],
+) -> dict[str, Any] | None:
+    alternate_costs = [
+        atom for atom in case.get("semantic_atoms", []) if atom.get("op") == "alternate_cost"
+    ]
+    if not alternate_costs:
+        return None
+    if alternate_costs != [
+        {
+            "condition": "controller_controls_commander",
+            "cost": "{0}",
+            "op": "alternate_cost",
+            "spell": "this_spell",
+        }
+    ]:
+        raise ValueError(f"{case['scenario_id']}: invalid commander alternate-cost expectation")
+    return {
+        "setup_succeeded": True,
+        "alternate_cost_count": 1,
+        "condition_is_controller_controls_commander": True,
+        "printed_generic_mana": 2,
+        "printed_colored_mana": 1,
+        "alternate_generic_mana": 0,
+        "alternate_colored_mana": 0,
+        "exact_payment_total": 0,
+        "zero_payment_plan_available": True,
+        "available_without_controlled_battlefield_commander": False,
+        "opponent_commander_does_not_enable": True,
+        "undesignated_controlled_creature_does_not_enable": True,
+        "available_with_controlled_battlefield_commander": True,
+        "unavailable_in_command_zone": True,
+        "available_after_return_to_battlefield": True,
+    }
+
+
+def expected_noncreature_counter_probe(case: dict[str, Any]) -> dict[str, Any] | None:
+    if not any(
+        atom.get("op") == "alternate_cost" for atom in case.get("semantic_atoms", [])
+    ):
+        return None
+    counters = [
+        atom
+        for atom in case.get("semantic_atoms", [])
+        if atom.get("op") == "counter_stack_entry"
+    ]
+    if not counters:
+        return None
+    if counters != [{"op": "counter_stack_entry", "target": "noncreature_spell"}]:
+        raise ValueError(f"{case['scenario_id']}: invalid noncreature-counter expectation")
+    return {
+        "setup_succeeded": True,
+        "target_slots": 1,
+        "requirement_is_stack_entry": True,
+        "creature_stack_target_rejected": True,
+        "noncreature_stack_target_accepted": True,
+        "creature_binding_rejected": True,
+        "bound_action_count": 1,
+        "source_bound_counter_action": True,
+        "counter_action_applied": True,
+        "noncreature_countered_to_owner_graveyard": True,
+        "creature_remained_on_stack": True,
+    }
+
+
+def expected_temporary_creature_protection_probe(
+    case: dict[str, Any],
+) -> dict[str, Any] | None:
+    atoms = case.get("semantic_atoms", [])
+    if not any(atom.get("op") == "alternate_cost" for atom in atoms):
+        return None
+    indestructible = [atom for atom in atoms if atom.get("op") == "indestructible"]
+    if not indestructible:
+        return None
+    if indestructible != [
+        {
+            "duration": "until_end_of_turn",
+            "op": "indestructible",
+            "subject": "creatures_you_control",
+        }
+    ]:
+        raise ValueError(
+            f"{case['scenario_id']}: invalid temporary creature-protection expectation"
+        )
+    return {
+        "setup_succeeded": True,
+        "bound_action_count": 2,
+        "bound_actions_are_restrictions": True,
+        "all_actions_applied": True,
+        "restriction_count": 2,
+        "destroy_creature_protected": True,
+        "lethal_creature_protected": True,
+        "controlled_noncreature_unprotected": True,
+        "opponent_creature_unprotected": True,
+        "protected_creature_survived_destroy": True,
+        "protected_creature_survived_lethal_damage": True,
+        "controlled_noncreature_destroyed_while_effect_active": True,
+        "cleanup_reached": True,
+        "expired_restriction_count": 2,
+        "restrictions_removed_at_cleanup": True,
+        "creature_destroyed_after_cleanup": True,
+        "creature_died_to_lethal_damage_after_cleanup": True,
+    }
+
+
 def verify_semantic_probe(case: dict[str, Any], actual: dict[str, Any]) -> None:
     if case.get("status") != "semantic_case_ready":
         return
@@ -713,6 +871,37 @@ def verify_semantic_probe(case: dict[str, Any], actual: dict[str, Any]) -> None:
     sacrifice_counter = expected_sacrifice_counter_probe(case)
     if sacrifice_counter is not None and probe.get("sacrifice_counter") != sacrifice_counter:
         raise ValueError(f"{case['scenario_id']}: sacrifice-counter semantic probe changed")
+
+    temporary_protection = expected_temporary_protection_probe(case)
+    if (
+        temporary_protection is not None
+        and probe.get("temporary_protection") != temporary_protection
+    ):
+        raise ValueError(f"{case['scenario_id']}: temporary-protection semantic probe changed")
+
+    commander_alternate_cost = expected_commander_alternate_cost_probe(case)
+    if (
+        commander_alternate_cost is not None
+        and probe.get("commander_alternate_cost") != commander_alternate_cost
+    ):
+        raise ValueError(f"{case['scenario_id']}: commander alternate-cost probe changed")
+
+    noncreature_counter = expected_noncreature_counter_probe(case)
+    if (
+        noncreature_counter is not None
+        and probe.get("noncreature_counter") != noncreature_counter
+    ):
+        raise ValueError(f"{case['scenario_id']}: noncreature-counter semantic probe changed")
+
+    temporary_creature_protection = expected_temporary_creature_protection_probe(case)
+    if (
+        temporary_creature_protection is not None
+        and probe.get("temporary_creature_protection")
+        != temporary_creature_protection
+    ):
+        raise ValueError(
+            f"{case['scenario_id']}: temporary creature-protection probe changed"
+        )
 
 
 def aggregate_translated_hash(cases: dict[str, Any]) -> str:

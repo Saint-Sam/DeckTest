@@ -67,6 +67,18 @@ def observed_from_cases(cases: dict) -> list[dict]:
                 ),
                 "equipment": SEMANTICS.expected_equipment_probe(case),
                 "sacrifice_counter": SEMANTICS.expected_sacrifice_counter_probe(case),
+                "temporary_protection": (
+                    SEMANTICS.expected_temporary_protection_probe(case)
+                ),
+                "commander_alternate_cost": (
+                    SEMANTICS.expected_commander_alternate_cost_probe(case)
+                ),
+                "noncreature_counter": (
+                    SEMANTICS.expected_noncreature_counter_probe(case)
+                ),
+                "temporary_creature_protection": (
+                    SEMANTICS.expected_temporary_creature_protection_probe(case)
+                ),
             }
         else:
             entry.update(
@@ -101,9 +113,9 @@ class CommanderSemanticSidecarTests(unittest.TestCase):
             self.cases["summary"],
             {
                 "candidate_count": 100,
-                "semantic_case_ready": 68,
+                "semantic_case_ready": 71,
                 "blocked_semantic_gap": 20,
-                "blocked_runtime": 12,
+                "blocked_runtime": 9,
             },
         )
 
@@ -249,6 +261,64 @@ class CommanderSemanticSidecarTests(unittest.TestCase):
             "source_bound_counter_action"
         ] = False
         with self.assertRaisesRegex(ValueError, "sacrifice-counter semantic probe changed"):
+            SEMANTICS.verify_observed(self.cases, observed)
+
+    def test_temporary_protection_probe_requires_cleanup_expiration(self) -> None:
+        observed = observed_from_cases(self.cases)
+        intervention_index = next(
+            index
+            for index, case in enumerate(self.cases["cases"])
+            if case["card_name"] == "Heroic Intervention"
+        )
+        observed[intervention_index]["semantic_probe"]["temporary_protection"][
+            "restrictions_removed_at_cleanup"
+        ] = False
+        with self.assertRaisesRegex(
+            ValueError, "temporary-protection semantic probe changed"
+        ):
+            SEMANTICS.verify_observed(self.cases, observed)
+
+    def test_commander_alternate_cost_requires_a_controlled_battlefield_commander(
+        self,
+    ) -> None:
+        observed = observed_from_cases(self.cases)
+        guardianship_index = next(
+            index
+            for index, case in enumerate(self.cases["cases"])
+            if case["card_name"] == "Fierce Guardianship"
+        )
+        observed[guardianship_index]["semantic_probe"]["commander_alternate_cost"][
+            "available_without_controlled_battlefield_commander"
+        ] = True
+        with self.assertRaisesRegex(ValueError, "commander alternate-cost probe changed"):
+            SEMANTICS.verify_observed(self.cases, observed)
+
+    def test_fierce_guardianship_rejects_creature_stack_targets(self) -> None:
+        observed = observed_from_cases(self.cases)
+        guardianship_index = next(
+            index
+            for index, case in enumerate(self.cases["cases"])
+            if case["card_name"] == "Fierce Guardianship"
+        )
+        observed[guardianship_index]["semantic_probe"]["noncreature_counter"][
+            "creature_stack_target_rejected"
+        ] = False
+        with self.assertRaisesRegex(ValueError, "noncreature-counter semantic probe changed"):
+            SEMANTICS.verify_observed(self.cases, observed)
+
+    def test_flawless_maneuver_requires_cleanup_expiration(self) -> None:
+        observed = observed_from_cases(self.cases)
+        maneuver_index = next(
+            index
+            for index, case in enumerate(self.cases["cases"])
+            if case["card_name"] == "Flawless Maneuver"
+        )
+        observed[maneuver_index]["semantic_probe"]["temporary_creature_protection"][
+            "restrictions_removed_at_cleanup"
+        ] = False
+        with self.assertRaisesRegex(
+            ValueError, "temporary creature-protection probe changed"
+        ):
             SEMANTICS.verify_observed(self.cases, observed)
 
     def test_incremental_report_keeps_checkpoint_open(self) -> None:

@@ -1,17 +1,18 @@
 #![forbid(unsafe_code)]
 
 use forge_cards::runtime::{
-    bind_activated_effect_actions, bind_triggered_ability_actions, compile_card_program,
-    ActivatedAbilityProgram, ActivatedEffectProgram, CardProgram, EffectProgram, ExecutionBindings,
-    StaticAbilityProgram, TriggeredEventProgram,
+    bind_activated_effect_actions, bind_program_actions, bind_triggered_ability_actions,
+    compile_card_program, ActivatedAbilityProgram, ActivatedEffectProgram, AlternateCostCondition,
+    CardProgram, EffectProgram, ExecutionBindings, StaticAbilityProgram, TriggeredEventProgram,
 };
 use forge_core::{
     apply, auto_payment_plan, Action, ActivationCondition, ActivationTiming, AttackDeclaration,
     BaseCreatureCharacteristics, BaseObjectCharacteristics, BlockDeclaration, CardId,
-    CombatRestriction, CombatRestrictionSubject, CounterKind, GameState, ManaKind, ManaPool,
-    ObjectColors, ObjectSupertypes, ObjectTargetPredicate, ObjectTypes, Outcome, PlayerRule,
-    RestrictionEffect, StateError, Step, TargetChoice, TargetControllerPredicate, TargetKind,
-    TargetRequirement, TriggerCondition, TriggerObjectFilter, ZoneId, ZoneKind,
+    CombatRestriction, CombatRestrictionSubject, ContinuousEffectDuration, CounterKind, GameState,
+    ManaKind, ManaPool, ObjectColors, ObjectSupertypes, ObjectTargetPredicate, ObjectTypes,
+    Outcome, PlayerRule, RestrictionEffect, StackObjectKind, StateError, Step, TargetChoice,
+    TargetControllerPredicate, TargetKind, TargetRequirement, TargetRestriction,
+    TargetRestrictionSubject, TriggerCondition, TriggerObjectFilter, ZoneId, ZoneKind,
 };
 use forge_testkit::runtime_smoke::{run_translated_card_runtime_smoke, RuntimeSmokeResult};
 use serde_json::json;
@@ -1030,6 +1031,730 @@ fn sacrifice_counter_probe(program: &CardProgram) -> Option<serde_json::Value> {
     }))
 }
 
+fn object_targetable(
+    state: &GameState,
+    player: forge_core::PlayerId,
+    object: forge_core::ObjectId,
+) -> bool {
+    state
+        .validate_target_choices(
+            player,
+            None,
+            &[TargetRequirement::new(TargetKind::Permanent)],
+            &[TargetChoice::Object(object)],
+        )
+        .is_ok()
+}
+
+fn has_hexproof_restriction(state: &GameState, object: forge_core::ObjectId) -> bool {
+    state.restrictions().any(|(_, definition)| {
+        definition.duration() == ContinuousEffectDuration::UntilEndOfTurn
+            && matches!(
+                definition.effect(),
+                RestrictionEffect::Targeting {
+                    subject: TargetRestrictionSubject::Object(candidate),
+                    restriction: TargetRestriction::Hexproof,
+                } if candidate == object
+            )
+    })
+}
+
+fn has_indestructible_restriction(state: &GameState, object: forge_core::ObjectId) -> bool {
+    state.restrictions().any(|(_, definition)| {
+        definition.duration() == ContinuousEffectDuration::UntilEndOfTurn
+            && matches!(
+                definition.effect(),
+                RestrictionEffect::Indestructible { object: candidate } if candidate == object
+            )
+    })
+}
+
+fn advance_to_cleanup(state: &mut GameState, active: forge_core::PlayerId) -> bool {
+    if !matches!(
+        apply(
+            state,
+            Action::CreateObject {
+                card: CardId::new(9_600_100),
+                owner: active,
+                controller: active,
+                zone: ZoneId::new(Some(active), ZoneKind::Library),
+            },
+        ),
+        Outcome::ObjectCreated(_)
+    ) || !matches!(
+        apply(
+            state,
+            Action::StartTurn {
+                active_player: active,
+            },
+        ),
+        Outcome::Applied
+    ) {
+        return false;
+    }
+    for _ in 0..20 {
+        if state.current_step() == Some(Step::Cleanup) {
+            return true;
+        }
+        if !matches!(apply(state, Action::AdvanceStep), Outcome::StepAdvanced(_)) {
+            return false;
+        }
+    }
+    false
+}
+
+fn commander_alternate_cost_probe(program: &CardProgram) -> Option<serde_json::Value> {
+    if program.alternate_costs().is_empty() {
+        return None;
+    }
+    let alternate = *program.alternate_costs().first()?;
+    let mut state = GameState::new();
+    let controller = match apply(&mut state, Action::AddPlayer) {
+        Outcome::PlayerAdded(player) => player,
+        _ => return Some(json!({"setup_succeeded": false})),
+    };
+    let opponent = match apply(&mut state, Action::AddPlayer) {
+        Outcome::PlayerAdded(player) => player,
+        _ => return Some(json!({"setup_succeeded": false})),
+    };
+    let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+    let creature_base =
+        BaseObjectCharacteristics::new(ObjectTypes::none().with_creature(), ObjectColors::none());
+    let opponent_commander = create_probe_object(
+        &mut state,
+        9_610_000,
+        opponent,
+        opponent,
+        battlefield,
+        creature_base,
+        Some(BaseCreatureCharacteristics::new(2, 2)),
+    )?;
+    let opponent_designated = matches!(
+        apply(
+            &mut state,
+            Action::DesignateCommander {
+                object: opponent_commander,
+                color_identity: ObjectColors::none(),
+            },
+        ),
+        Outcome::Applied
+    );
+    let available_without_controlled_battlefield_commander =
+        alternate.is_available(&state, controller);
+    let opponent_commander_does_not_enable =
+        opponent_designated && !alternate.is_available(&state, controller);
+
+    let controlled_creature = create_probe_object(
+        &mut state,
+        9_610_001,
+        controller,
+        controller,
+        battlefield,
+        creature_base,
+        Some(BaseCreatureCharacteristics::new(2, 2)),
+    )?;
+    let undesignated_controlled_creature_does_not_enable =
+        !alternate.is_available(&state, controller);
+    let controlled_designated = matches!(
+        apply(
+            &mut state,
+            Action::DesignateCommander {
+                object: controlled_creature,
+                color_identity: ObjectColors::none(),
+            },
+        ),
+        Outcome::Applied
+    );
+    let available_with_controlled_battlefield_commander =
+        controlled_designated && alternate.is_available(&state, controller);
+    let moved_to_command_zone = matches!(
+        apply(
+            &mut state,
+            Action::MoveObject {
+                object: controlled_creature,
+                to: ZoneId::new(None, ZoneKind::Command),
+            },
+        ),
+        Outcome::Applied
+    );
+    let unavailable_in_command_zone =
+        moved_to_command_zone && !alternate.is_available(&state, controller);
+    let returned_to_battlefield = matches!(
+        apply(
+            &mut state,
+            Action::MoveObject {
+                object: controlled_creature,
+                to: battlefield,
+            },
+        ),
+        Outcome::Applied
+    );
+    let available_after_return_to_battlefield =
+        returned_to_battlefield && alternate.is_available(&state, controller);
+    let zero_payment_plan_available =
+        auto_payment_plan(alternate.exact_payment(), alternate.mana_cost())
+            .ok()
+            .flatten()
+            .is_some();
+
+    Some(json!({
+        "setup_succeeded": true,
+        "alternate_cost_count": program.alternate_costs().len(),
+        "condition_is_controller_controls_commander": matches!(
+            alternate.condition(),
+            AlternateCostCondition::ControllerControlsCommander
+        ),
+        "printed_generic_mana": program.mana_cost().generic_total().ok(),
+        "printed_colored_mana": program.mana_cost().colored_pool().total(),
+        "alternate_generic_mana": alternate.mana_cost().generic_total().ok(),
+        "alternate_colored_mana": alternate.mana_cost().colored_pool().total(),
+        "exact_payment_total": alternate.exact_payment().total(),
+        "zero_payment_plan_available": zero_payment_plan_available,
+        "available_without_controlled_battlefield_commander":
+            available_without_controlled_battlefield_commander,
+        "opponent_commander_does_not_enable": opponent_commander_does_not_enable,
+        "undesignated_controlled_creature_does_not_enable":
+            undesignated_controlled_creature_does_not_enable,
+        "available_with_controlled_battlefield_commander":
+            available_with_controlled_battlefield_commander,
+        "unavailable_in_command_zone": unavailable_in_command_zone,
+        "available_after_return_to_battlefield": available_after_return_to_battlefield,
+    }))
+}
+
+fn prepare_stack_priority(state: &mut GameState, active: forge_core::PlayerId) -> bool {
+    matches!(
+        apply(
+            state,
+            Action::CreateObject {
+                card: CardId::new(9_620_100),
+                owner: active,
+                controller: active,
+                zone: ZoneId::new(Some(active), ZoneKind::Library),
+            },
+        ),
+        Outcome::ObjectCreated(_)
+    ) && matches!(
+        apply(
+            state,
+            Action::StartTurn {
+                active_player: active,
+            },
+        ),
+        Outcome::Applied
+    ) && matches!(
+        apply(state, Action::AdvanceStep),
+        Outcome::StepAdvanced(Step::Upkeep)
+    )
+}
+
+fn noncreature_counter_probe(program: &CardProgram) -> Option<serde_json::Value> {
+    if program.alternate_costs().is_empty()
+        || !program
+            .effects()
+            .iter()
+            .any(|effect| matches!(effect, EffectProgram::CounterStackEntry { .. }))
+    {
+        return None;
+    }
+    let mut state = GameState::new();
+    let controller = match apply(&mut state, Action::AddPlayer) {
+        Outcome::PlayerAdded(player) => player,
+        _ => return Some(json!({"setup_succeeded": false})),
+    };
+    let opponent = match apply(&mut state, Action::AddPlayer) {
+        Outcome::PlayerAdded(player) => player,
+        _ => return Some(json!({"setup_succeeded": false})),
+    };
+    let creature_object = create_probe_object(
+        &mut state,
+        9_620_000,
+        opponent,
+        opponent,
+        ZoneId::new(Some(opponent), ZoneKind::Hand),
+        BaseObjectCharacteristics::new(ObjectTypes::none().with_creature(), ObjectColors::none()),
+        Some(BaseCreatureCharacteristics::new(2, 2)),
+    )?;
+    let noncreature_object = create_probe_object(
+        &mut state,
+        9_620_001,
+        opponent,
+        opponent,
+        ZoneId::new(Some(opponent), ZoneKind::Hand),
+        BaseObjectCharacteristics::new(ObjectTypes::none().with_instant(), ObjectColors::none()),
+        None,
+    )?;
+    let priority_ready = prepare_stack_priority(&mut state, controller);
+    let creature_entry = match apply(
+        &mut state,
+        Action::PutSpellOnStack {
+            player: controller,
+            object: creature_object,
+            kind: StackObjectKind::PermanentSpell,
+            hold_priority: true,
+        },
+    ) {
+        Outcome::StackEntryAdded(entry) => entry,
+        _ => return Some(json!({"setup_succeeded": false})),
+    };
+    let noncreature_entry = match apply(
+        &mut state,
+        Action::PutSpellOnStack {
+            player: controller,
+            object: noncreature_object,
+            kind: StackObjectKind::InstantSpell,
+            hold_priority: true,
+        },
+    ) {
+        Outcome::StackEntryAdded(entry) => entry,
+        _ => return Some(json!({"setup_succeeded": false})),
+    };
+    let target_slots = program.target_requirements().len();
+    let requirement = *program.target_requirements().first()?;
+    let requirement_is_stack_entry = requirement.kind() == TargetKind::StackEntry;
+    let creature_stack_target_rejected = !state.can_target(
+        controller,
+        None,
+        requirement,
+        TargetChoice::StackEntry(creature_entry),
+    );
+    let noncreature_stack_target_accepted = state.can_target(
+        controller,
+        None,
+        requirement,
+        TargetChoice::StackEntry(noncreature_entry),
+    );
+    let creature_binding_rejected = bind_program_actions(
+        &state,
+        program,
+        &ExecutionBindings::new(controller, vec![opponent])
+            .with_targets(vec![TargetChoice::StackEntry(creature_entry)]),
+    )
+    .is_err();
+    let legal_actions = bind_program_actions(
+        &state,
+        program,
+        &ExecutionBindings::new(controller, vec![opponent])
+            .with_targets(vec![TargetChoice::StackEntry(noncreature_entry)]),
+    )
+    .ok()?;
+    let source_bound_counter_action = legal_actions.len() == 1
+        && matches!(
+            legal_actions.first().map(|bound| bound.action()),
+            Some(Action::CounterStackEntry { entry }) if *entry == noncreature_entry
+        );
+    let counter_action_applied = legal_actions
+        .iter()
+        .all(|bound| matches!(apply(&mut state, bound.action().clone()), Outcome::Applied));
+    let noncreature_countered_to_owner_graveyard = state.object_zone(noncreature_object)
+        == Some(ZoneId::new(Some(opponent), ZoneKind::Graveyard));
+    let creature_remained_on_stack = state
+        .stack_entries()
+        .iter()
+        .any(|entry| entry.id() == creature_entry)
+        && state.object_zone(creature_object) == Some(ZoneId::new(None, ZoneKind::Stack));
+
+    Some(json!({
+        "setup_succeeded": priority_ready,
+        "target_slots": target_slots,
+        "requirement_is_stack_entry": requirement_is_stack_entry,
+        "creature_stack_target_rejected": creature_stack_target_rejected,
+        "noncreature_stack_target_accepted": noncreature_stack_target_accepted,
+        "creature_binding_rejected": creature_binding_rejected,
+        "bound_action_count": legal_actions.len(),
+        "source_bound_counter_action": source_bound_counter_action,
+        "counter_action_applied": counter_action_applied,
+        "noncreature_countered_to_owner_graveyard":
+            noncreature_countered_to_owner_graveyard,
+        "creature_remained_on_stack": creature_remained_on_stack,
+    }))
+}
+
+fn temporary_creature_protection_probe(program: &CardProgram) -> Option<serde_json::Value> {
+    if program.alternate_costs().is_empty()
+        || !program.effects().iter().any(|effect| {
+            matches!(
+                effect,
+                EffectProgram::GrantIndestructible {
+                    duration: ContinuousEffectDuration::UntilEndOfTurn,
+                    ..
+                }
+            )
+        })
+    {
+        return None;
+    }
+    let mut state = GameState::new();
+    let controller = match apply(&mut state, Action::AddPlayer) {
+        Outcome::PlayerAdded(player) => player,
+        _ => return Some(json!({"setup_succeeded": false})),
+    };
+    let opponent = match apply(&mut state, Action::AddPlayer) {
+        Outcome::PlayerAdded(player) => player,
+        _ => return Some(json!({"setup_succeeded": false})),
+    };
+    let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+    let creature_base =
+        BaseObjectCharacteristics::new(ObjectTypes::none().with_creature(), ObjectColors::none());
+    let destroy_creature = create_probe_object(
+        &mut state,
+        9_630_000,
+        controller,
+        controller,
+        battlefield,
+        creature_base,
+        Some(BaseCreatureCharacteristics::new(2, 2)),
+    )?;
+    let lethal_creature = create_probe_object(
+        &mut state,
+        9_630_001,
+        controller,
+        controller,
+        battlefield,
+        creature_base,
+        Some(BaseCreatureCharacteristics::new(2, 2)),
+    )?;
+    let controlled_artifact = create_probe_object(
+        &mut state,
+        9_630_002,
+        controller,
+        controller,
+        battlefield,
+        BaseObjectCharacteristics::new(ObjectTypes::none().with_artifact(), ObjectColors::none()),
+        None,
+    )?;
+    let opponent_creature = create_probe_object(
+        &mut state,
+        9_630_003,
+        opponent,
+        opponent,
+        battlefield,
+        creature_base,
+        Some(BaseCreatureCharacteristics::new(2, 2)),
+    )?;
+    let actions = bind_program_actions(
+        &state,
+        program,
+        &ExecutionBindings::new(controller, vec![opponent]),
+    )
+    .ok()?;
+    let bound_actions_are_restrictions = actions
+        .iter()
+        .all(|bound| matches!(bound.action(), Action::RegisterRestriction { .. }));
+    let bound_action_count = actions.len();
+    let all_actions_applied = actions.iter().all(|bound| {
+        matches!(
+            apply(&mut state, bound.action().clone()),
+            Outcome::RestrictionRegistered(_)
+        )
+    });
+    let restriction_count = state.restrictions().count();
+    let destroy_creature_protected = has_indestructible_restriction(&state, destroy_creature);
+    let lethal_creature_protected = has_indestructible_restriction(&state, lethal_creature);
+    let controlled_noncreature_unprotected =
+        !has_indestructible_restriction(&state, controlled_artifact);
+    let opponent_creature_unprotected = !has_indestructible_restriction(&state, opponent_creature);
+    let protected_creature_survived_destroy = matches!(
+        apply(
+            &mut state,
+            Action::DestroyPermanent {
+                object: destroy_creature,
+            },
+        ),
+        Outcome::Applied
+    ) && state.object_zone(destroy_creature)
+        == Some(battlefield);
+    let protected_creature_survived_lethal_damage = matches!(
+        apply(
+            &mut state,
+            Action::MarkDamageOnObject {
+                object: lethal_creature,
+                amount: 2,
+            },
+        ),
+        Outcome::Applied
+    ) && matches!(
+        apply(&mut state, Action::CheckStateBasedActions),
+        Outcome::StateBasedActions(report) if report.actions_performed() == 0
+    ) && state.object_zone(lethal_creature)
+        == Some(battlefield);
+    let controlled_noncreature_destroyed_while_effect_active = matches!(
+        apply(
+            &mut state,
+            Action::DestroyPermanent {
+                object: controlled_artifact,
+            },
+        ),
+        Outcome::Applied
+    ) && state
+        .object_zone(controlled_artifact)
+        == Some(ZoneId::new(Some(controller), ZoneKind::Graveyard));
+
+    let cleanup_reached = advance_to_cleanup(&mut state, controller);
+    let expired_restriction_count = state.last_cleanup_report().expired_until_end_of_turn();
+    let restrictions_removed_at_cleanup = state.restrictions().next().is_none();
+    let creature_destroyed_after_cleanup = matches!(
+        apply(
+            &mut state,
+            Action::DestroyPermanent {
+                object: destroy_creature,
+            },
+        ),
+        Outcome::Applied
+    ) && state.object_zone(destroy_creature)
+        == Some(ZoneId::new(Some(controller), ZoneKind::Graveyard));
+    let creature_died_to_lethal_damage_after_cleanup = matches!(
+        apply(
+            &mut state,
+            Action::MarkDamageOnObject {
+                object: lethal_creature,
+                amount: 2,
+            },
+        ),
+        Outcome::Applied
+    ) && matches!(
+        apply(&mut state, Action::CheckStateBasedActions),
+        Outcome::StateBasedActions(report) if report.actions_performed() == 1
+    ) && state.object_zone(lethal_creature)
+        == Some(ZoneId::new(Some(controller), ZoneKind::Graveyard));
+
+    Some(json!({
+        "setup_succeeded": true,
+        "bound_action_count": bound_action_count,
+        "bound_actions_are_restrictions": bound_actions_are_restrictions,
+        "all_actions_applied": all_actions_applied,
+        "restriction_count": restriction_count,
+        "destroy_creature_protected": destroy_creature_protected,
+        "lethal_creature_protected": lethal_creature_protected,
+        "controlled_noncreature_unprotected": controlled_noncreature_unprotected,
+        "opponent_creature_unprotected": opponent_creature_unprotected,
+        "protected_creature_survived_destroy": protected_creature_survived_destroy,
+        "protected_creature_survived_lethal_damage":
+            protected_creature_survived_lethal_damage,
+        "controlled_noncreature_destroyed_while_effect_active":
+            controlled_noncreature_destroyed_while_effect_active,
+        "cleanup_reached": cleanup_reached,
+        "expired_restriction_count": expired_restriction_count,
+        "restrictions_removed_at_cleanup": restrictions_removed_at_cleanup,
+        "creature_destroyed_after_cleanup": creature_destroyed_after_cleanup,
+        "creature_died_to_lethal_damage_after_cleanup":
+            creature_died_to_lethal_damage_after_cleanup,
+    }))
+}
+
+fn temporary_protection_probe(program: &CardProgram) -> Option<serde_json::Value> {
+    let has_hexproof_program = program.effects().iter().any(|effect| {
+        matches!(
+            effect,
+            EffectProgram::GrantTargetingRestriction {
+                restriction: TargetRestriction::Hexproof,
+                duration: ContinuousEffectDuration::UntilEndOfTurn,
+                ..
+            }
+        )
+    });
+    let has_indestructible_program = program.effects().iter().any(|effect| {
+        matches!(
+            effect,
+            EffectProgram::GrantIndestructible {
+                duration: ContinuousEffectDuration::UntilEndOfTurn,
+                ..
+            }
+        )
+    });
+    if !has_hexproof_program || !has_indestructible_program {
+        return None;
+    }
+
+    let mut state = GameState::new();
+    let controller = match apply(&mut state, Action::AddPlayer) {
+        Outcome::PlayerAdded(player) => player,
+        _ => return Some(json!({"setup_succeeded": false})),
+    };
+    let opponent = match apply(&mut state, Action::AddPlayer) {
+        Outcome::PlayerAdded(player) => player,
+        _ => return Some(json!({"setup_succeeded": false})),
+    };
+    let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+    let creature_base =
+        BaseObjectCharacteristics::new(ObjectTypes::none().with_creature(), ObjectColors::none());
+    let artifact_base =
+        BaseObjectCharacteristics::new(ObjectTypes::none().with_artifact(), ObjectColors::none());
+    let controlled_creature = create_probe_object(
+        &mut state,
+        9_600_000,
+        controller,
+        controller,
+        battlefield,
+        creature_base,
+        Some(BaseCreatureCharacteristics::new(2, 2)),
+    )?;
+    let controlled_artifact = create_probe_object(
+        &mut state,
+        9_600_001,
+        controller,
+        controller,
+        battlefield,
+        artifact_base,
+        None,
+    )?;
+    let opponent_creature = create_probe_object(
+        &mut state,
+        9_600_002,
+        opponent,
+        opponent,
+        battlefield,
+        creature_base,
+        Some(BaseCreatureCharacteristics::new(2, 2)),
+    )?;
+    let opponent_artifact = create_probe_object(
+        &mut state,
+        9_600_003,
+        opponent,
+        opponent,
+        battlefield,
+        artifact_base,
+        None,
+    )?;
+
+    let bindings = ExecutionBindings::new(controller, vec![opponent]);
+    let actions = bind_program_actions(&state, program, &bindings).ok()?;
+    let bound_actions_are_restrictions = actions
+        .iter()
+        .all(|bound| matches!(bound.action(), Action::RegisterRestriction { .. }));
+    let bound_action_count = actions.len();
+    let all_actions_applied = actions.iter().all(|bound| {
+        matches!(
+            apply(&mut state, bound.action().clone()),
+            Outcome::RestrictionRegistered(_)
+        )
+    });
+    let restriction_count = state.restrictions().count();
+    let all_until_end_of_turn = state
+        .restrictions()
+        .all(|(_, definition)| definition.duration() == ContinuousEffectDuration::UntilEndOfTurn);
+    let controlled_creature_has_hexproof = has_hexproof_restriction(&state, controlled_creature);
+    let controlled_artifact_has_hexproof = has_hexproof_restriction(&state, controlled_artifact);
+    let controlled_creature_has_indestructible =
+        has_indestructible_restriction(&state, controlled_creature);
+    let controlled_artifact_has_indestructible =
+        has_indestructible_restriction(&state, controlled_artifact);
+    let opponent_creature_unprotected = !has_hexproof_restriction(&state, opponent_creature)
+        && !has_indestructible_restriction(&state, opponent_creature);
+    let opponent_artifact_unprotected = !has_hexproof_restriction(&state, opponent_artifact)
+        && !has_indestructible_restriction(&state, opponent_artifact);
+    let opponent_cannot_target_controlled_creature =
+        !object_targetable(&state, opponent, controlled_creature);
+    let opponent_cannot_target_controlled_artifact =
+        !object_targetable(&state, opponent, controlled_artifact);
+    let controller_can_target_controlled_creature =
+        object_targetable(&state, controller, controlled_creature);
+    let controller_can_target_controlled_artifact =
+        object_targetable(&state, controller, controlled_artifact);
+
+    let protected_artifact_survived_destroy = matches!(
+        apply(
+            &mut state,
+            Action::DestroyPermanent {
+                object: controlled_artifact,
+            },
+        ),
+        Outcome::Applied
+    ) && state.object_zone(controlled_artifact)
+        == Some(battlefield);
+    let protected_creature_survived_destroy = matches!(
+        apply(
+            &mut state,
+            Action::DestroyPermanent {
+                object: controlled_creature,
+            },
+        ),
+        Outcome::Applied
+    ) && state.object_zone(controlled_creature)
+        == Some(battlefield);
+    let protected_creature_survived_lethal_damage = matches!(
+        apply(
+            &mut state,
+            Action::MarkDamageOnObject {
+                object: controlled_creature,
+                amount: 2,
+            },
+        ),
+        Outcome::Applied
+    ) && matches!(
+        apply(&mut state, Action::CheckStateBasedActions),
+        Outcome::StateBasedActions(report) if report.actions_performed() == 0
+    ) && state.object_zone(controlled_creature)
+        == Some(battlefield);
+
+    let cleanup_reached = advance_to_cleanup(&mut state, controller);
+    let expired_restriction_count = state.last_cleanup_report().expired_until_end_of_turn();
+    let restrictions_removed_at_cleanup = state.restrictions().next().is_none();
+    let opponent_can_target_creature_after_cleanup =
+        object_targetable(&state, opponent, controlled_creature);
+    let opponent_can_target_artifact_after_cleanup =
+        object_targetable(&state, opponent, controlled_artifact);
+    let artifact_destroyed_after_cleanup = matches!(
+        apply(
+            &mut state,
+            Action::DestroyPermanent {
+                object: controlled_artifact,
+            },
+        ),
+        Outcome::Applied
+    ) && state.object_zone(controlled_artifact)
+        == Some(ZoneId::new(Some(controller), ZoneKind::Graveyard));
+    let creature_died_to_lethal_damage_after_cleanup = matches!(
+        apply(
+            &mut state,
+            Action::MarkDamageOnObject {
+                object: controlled_creature,
+                amount: 2,
+            },
+        ),
+        Outcome::Applied
+    ) && matches!(
+        apply(&mut state, Action::CheckStateBasedActions),
+        Outcome::StateBasedActions(report) if report.actions_performed() == 1
+    ) && state.object_zone(controlled_creature)
+        == Some(ZoneId::new(Some(controller), ZoneKind::Graveyard));
+
+    Some(json!({
+        "setup_succeeded": true,
+        "bound_action_count": bound_action_count,
+        "bound_actions_are_restrictions": bound_actions_are_restrictions,
+        "all_actions_applied": all_actions_applied,
+        "restriction_count": restriction_count,
+        "all_until_end_of_turn": all_until_end_of_turn,
+        "controlled_creature_has_hexproof": controlled_creature_has_hexproof,
+        "controlled_artifact_has_hexproof": controlled_artifact_has_hexproof,
+        "controlled_creature_has_indestructible": controlled_creature_has_indestructible,
+        "controlled_artifact_has_indestructible": controlled_artifact_has_indestructible,
+        "opponent_creature_unprotected": opponent_creature_unprotected,
+        "opponent_artifact_unprotected": opponent_artifact_unprotected,
+        "opponent_cannot_target_controlled_creature":
+            opponent_cannot_target_controlled_creature,
+        "opponent_cannot_target_controlled_artifact":
+            opponent_cannot_target_controlled_artifact,
+        "controller_can_target_controlled_creature": controller_can_target_controlled_creature,
+        "controller_can_target_controlled_artifact": controller_can_target_controlled_artifact,
+        "protected_creature_survived_destroy": protected_creature_survived_destroy,
+        "protected_artifact_survived_destroy": protected_artifact_survived_destroy,
+        "protected_creature_survived_lethal_damage":
+            protected_creature_survived_lethal_damage,
+        "cleanup_reached": cleanup_reached,
+        "expired_restriction_count": expired_restriction_count,
+        "restrictions_removed_at_cleanup": restrictions_removed_at_cleanup,
+        "opponent_can_target_creature_after_cleanup":
+            opponent_can_target_creature_after_cleanup,
+        "opponent_can_target_artifact_after_cleanup":
+            opponent_can_target_artifact_after_cleanup,
+        "artifact_destroyed_after_cleanup": artifact_destroyed_after_cleanup,
+        "creature_died_to_lethal_damage_after_cleanup":
+            creature_died_to_lethal_damage_after_cleanup,
+    }))
+}
+
 fn semantic_probe(program: &CardProgram) -> serde_json::Value {
     let base_subtypes = program
         .base_object()
@@ -1058,6 +1783,10 @@ fn semantic_probe(program: &CardProgram) -> serde_json::Value {
         "no_maximum_hand_size": no_maximum_hand_size_probe(program),
         "equipment": equipment_probe(program),
         "sacrifice_counter": sacrifice_counter_probe(program),
+        "temporary_protection": temporary_protection_probe(program),
+        "commander_alternate_cost": commander_alternate_cost_probe(program),
+        "noncreature_counter": noncreature_counter_probe(program),
+        "temporary_creature_protection": temporary_creature_protection_probe(program),
     })
 }
 

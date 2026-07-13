@@ -380,7 +380,7 @@
         "destination": "battlefield",
         "disposition": "passed",
         "effect_actions": 1,
-        "final_hash": "18384593747005322422",
+        "final_hash": "1183247711630488754",
         "final_life_totals": [
           20,
           20
@@ -433,7 +433,7 @@
         "destination": "battlefield",
         "disposition": "passed",
         "effect_actions": 3,
-        "final_hash": "17343426485281010121",
+        "final_hash": "1913661080457352577",
         "final_life_totals": [
           20,
           20
@@ -502,7 +502,7 @@
         "destination": "battlefield",
         "disposition": "passed",
         "effect_actions": 3,
-        "final_hash": "17194523036364943123",
+        "final_hash": "3668359424859327907",
         "final_life_totals": [
           20,
           20
@@ -1639,7 +1639,7 @@
         "destination": "battlefield",
         "disposition": "passed",
         "effect_actions": 1,
-        "final_hash": "15659756639220051538",
+        "final_hash": "3920126985669564248",
         "final_life_totals": [
           20,
           20
@@ -2561,18 +2561,23 @@
       "translated_source_sha256": "f24c37b73157209a5e1a9c86d4a1f30189a80acb50408f521c80ac2a8517ee67"
     },
     {
-      "blockers": [
-        {
-          "code": "T3_5_UNSUPPORTED_ABILITY_SHAPE",
-          "detail": "card.faces[0].abilities[0]: ability kind Static is not compiled for Instant"
-        }
-      ],
       "card_name": "Fierce Guardianship",
+      "claim_boundary": "Focused compiled-program validation covers the exact zero-mana alternate cost gated by a controlled battlefield commander and the noncreature-only stack target filter.",
+      "expected_behavior": "Prove the {0} option is unavailable without a controlled battlefield commander and available with one, reject a creature spell as a target, then counter the selected legal noncreature spell while leaving the creature spell on the stack.",
       "expected_runtime": {
-        "code": "unsupported_ability_shape",
-        "detail": "card.faces[0].abilities[0]: ability kind Static is not compiled for Instant",
-        "detail_sha256": "2152bbc2d70275587547ad8a3e0247721b8c560fee547799756dc10cd560e019",
-        "disposition": "unsupported_setup"
+        "capabilities": [
+          "alternate_cost",
+          "counter_stack_entry"
+        ],
+        "destination": "owner_graveyard",
+        "disposition": "passed",
+        "effect_actions": 1,
+        "final_hash": "6529959110902247039",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 39
       },
       "freeze_rank": 57,
       "legacy_source_path": "f/fierce_guardianship.txt",
@@ -2580,24 +2585,41 @@
       "oracle_id": "d09c9cba-fdd2-479b-ad5d-d05181c3e3f9",
       "oracle_text": "If you control a commander, you may cast this spell without paying its mana cost.\nCounter target noncreature spell.",
       "scenario_id": "T3.6-057",
-      "status": "blocked_runtime",
+      "semantic_atoms": [
+        {
+          "condition": "controller_controls_commander",
+          "cost": "{0}",
+          "op": "alternate_cost",
+          "spell": "this_spell"
+        },
+        {
+          "op": "counter_stack_entry",
+          "target": "noncreature_spell"
+        }
+      ],
+      "status": "semantic_case_ready",
       "stratum": "stack_interaction_and_protection",
       "translated_path": "f/fierce_guardianship.frs",
       "translated_source_sha256": "c9e254461936a33c6fb2214a8f5d378be98e780c28bbcd2bbccc431f27827250"
     },
     {
-      "blockers": [
-        {
-          "code": "T3_5_UNSUPPORTED_EFFECT_ARGUMENTS",
-          "detail": "card.faces[0].abilities[0].effect.sequence[0].objects: the current keyword and power/toughness model requires a creature-only selector"
-        }
-      ],
       "card_name": "Heroic Intervention",
+      "claim_boundary": "Focused compiled-program validation covers controlled permanent selection, opponent-only targeting exclusion, destruction and lethal-damage protection, and cleanup expiration; no broader protection semantics are claimed.",
+      "expected_behavior": "Resolve Heroic Intervention; prove both a controlled creature and a controlled noncreature permanent gain opponent-blocking hexproof and indestructible until cleanup, survive destruction while protected, the creature survives lethal damage, and all protections expire at cleanup.",
       "expected_runtime": {
-        "code": "unsupported_effect_arguments",
-        "detail": "card.faces[0].abilities[0].effect.sequence[0].objects: the current keyword and power/toughness model requires a creature-only selector",
-        "detail_sha256": "fd181921949e685dfa4a7ea9466427437d6e2bb1f87b77d5bfebfaa90ef4ba01",
-        "disposition": "unsupported_setup"
+        "capabilities": [
+          "targeting_restriction",
+          "indestructible"
+        ],
+        "destination": "owner_graveyard",
+        "disposition": "passed",
+        "effect_actions": 2,
+        "final_hash": "7658552940165801494",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 31
       },
       "freeze_rank": 58,
       "legacy_source_path": "h/heroic_intervention.txt",
@@ -2605,7 +2627,20 @@
       "oracle_id": "24882fa2-3fe9-4c1b-aa3d-0e6488b9db27",
       "oracle_text": "Permanents you control gain hexproof and indestructible until end of turn.",
       "scenario_id": "T3.6-058",
-      "status": "blocked_runtime",
+      "semantic_atoms": [
+        {
+          "duration": "until_end_of_turn",
+          "op": "targeting_restriction",
+          "restriction": "hexproof",
+          "subject": "permanents_you_control"
+        },
+        {
+          "duration": "until_end_of_turn",
+          "op": "indestructible",
+          "subject": "permanents_you_control"
+        }
+      ],
+      "status": "semantic_case_ready",
       "stratum": "stack_interaction_and_protection",
       "translated_path": "h/heroic_intervention.frs",
       "translated_source_sha256": "1060d9f61514a1ac5e14325738f2cacbe74f8c07ca7324ed9a93dde480a0189d"
@@ -2636,18 +2671,23 @@
       "translated_source_sha256": "2d401fcc0be135d805a52d20f565bac746396883a85c9d368e8ffd161440a0db"
     },
     {
-      "blockers": [
-        {
-          "code": "T3_5_UNSUPPORTED_ABILITY_SHAPE",
-          "detail": "card.faces[0].abilities[0]: ability kind Static is not compiled for Instant"
-        }
-      ],
       "card_name": "Flawless Maneuver",
+      "claim_boundary": "Focused compiled-program validation covers the exact zero-mana alternate cost gated by a controlled battlefield commander and temporary indestructibility for controlled creatures only.",
+      "expected_behavior": "Prove the {0} option is unavailable without a controlled battlefield commander and available with one; controlled creatures survive destruction and lethal damage until cleanup, noncreatures and opposing creatures remain unprotected, and destruction and lethal damage work after expiration.",
       "expected_runtime": {
-        "code": "unsupported_ability_shape",
-        "detail": "card.faces[0].abilities[0]: ability kind Static is not compiled for Instant",
-        "detail_sha256": "2152bbc2d70275587547ad8a3e0247721b8c560fee547799756dc10cd560e019",
-        "disposition": "unsupported_setup"
+        "capabilities": [
+          "alternate_cost",
+          "indestructible"
+        ],
+        "destination": "owner_graveyard",
+        "disposition": "passed",
+        "effect_actions": 1,
+        "final_hash": "3569019749649835006",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 36
       },
       "freeze_rank": 60,
       "legacy_source_path": "f/flawless_maneuver.txt",
@@ -2655,7 +2695,20 @@
       "oracle_id": "4e183439-17d2-47ff-9d99-5e22821d91e3",
       "oracle_text": "If you control a commander, you may cast this spell without paying its mana cost.\nCreatures you control gain indestructible until end of turn.",
       "scenario_id": "T3.6-060",
-      "status": "blocked_runtime",
+      "semantic_atoms": [
+        {
+          "condition": "controller_controls_commander",
+          "cost": "{0}",
+          "op": "alternate_cost",
+          "spell": "this_spell"
+        },
+        {
+          "duration": "until_end_of_turn",
+          "op": "indestructible",
+          "subject": "creatures_you_control"
+        }
+      ],
+      "status": "semantic_case_ready",
       "stratum": "continuous_combat_and_costs",
       "translated_path": "f/flawless_maneuver.frs",
       "translated_source_sha256": "710cb01f73cd3bce01b7d7cec070c06b37b58a156b8ac0251a957faaf56d927a"
@@ -4343,7 +4396,7 @@
         "destination": "battlefield",
         "disposition": "passed",
         "effect_actions": 2,
-        "final_hash": "14502260374801811923",
+        "final_hash": "8182468761079477921",
         "final_life_totals": [
           20,
           20
@@ -4457,13 +4510,13 @@
   ],
   "claim_boundary": "Only semantic_case_ready entries can be promoted by a passing replay and any required card-specific semantic probe. Runtime-smoke success alone never promotes a known gap.",
   "generated_at": "2026-07-13",
-  "payload_sha256": "ca386cb47b3a32280d15c3b09f1c17b079b697d7591c15cb0bc41e4a69a81004",
-  "product_source_commit": "deb1547006fe4665d3b8c4c6b072c5889971f532",
+  "payload_sha256": "c661b35e3eb0514ea20df6e56cc22e775ca990e21c505e3d078d1c90663bf528",
+  "product_source_commit": "a87c71623ecca65f93d2997c6beacd1e5ff23c5d",
   "schema_version": 2,
   "summary": {
-    "blocked_runtime": 12,
+    "blocked_runtime": 9,
     "blocked_semantic_gap": 20,
     "candidate_count": 100,
-    "semantic_case_ready": 68
+    "semantic_case_ready": 71
   }
 }
