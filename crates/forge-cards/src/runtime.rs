@@ -199,6 +199,8 @@ pub enum Capability {
     AddCounters,
     /// Apply a typed combat declaration restriction.
     CombatRestriction,
+    /// Offer a typed alternate casting cost under a closed condition.
+    AlternateCost,
 }
 
 impl Capability {
@@ -231,6 +233,7 @@ impl Capability {
             Self::Indestructible => "indestructible",
             Self::AddCounters => "add_counters",
             Self::CombatRestriction => "combat_restriction",
+            Self::AlternateCost => "alternate_cost",
         }
     }
 }
@@ -743,6 +746,57 @@ pub enum SpellAdditionalCostProgram {
     },
 }
 
+/// Closed condition for offering an alternate casting cost.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AlternateCostCondition {
+    /// The caster currently controls a designated commander permanent.
+    ControllerControlsCommander,
+}
+
+/// One completely compiled conditional alternate casting cost.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct AlternateCastCostProgram {
+    condition: AlternateCostCondition,
+    mana_cost: ManaCost,
+    exact_payment: ManaPool,
+}
+
+impl AlternateCastCostProgram {
+    /// Returns the condition that makes this alternate cost available.
+    #[must_use]
+    pub const fn condition(self) -> AlternateCostCondition {
+        self.condition
+    }
+
+    /// Returns the exact alternate mana cost.
+    #[must_use]
+    pub const fn mana_cost(self) -> ManaCost {
+        self.mana_cost
+    }
+
+    /// Returns one exact deterministic payment pool for the alternate cost.
+    #[must_use]
+    pub const fn exact_payment(self) -> ManaPool {
+        self.exact_payment
+    }
+
+    /// Returns whether the current state satisfies this alternate-cost condition.
+    #[must_use]
+    pub fn is_available(self, state: &GameState, controller: PlayerId) -> bool {
+        match self.condition {
+            AlternateCostCondition::ControllerControlsCommander => state
+                .zone_objects(ZoneId::new(None, ZoneKind::Battlefield))
+                .is_some_and(|objects| {
+                    objects.iter().copied().any(|object| {
+                        state.object(object).is_some_and(|record| {
+                            record.controller() == controller && record.is_commander()
+                        })
+                    })
+                }),
+        }
+    }
+}
+
 impl ActivatedEffectProgram {
     /// Returns the mana portion of the activation cost.
     #[must_use]
@@ -1038,6 +1092,7 @@ pub struct CardProgram {
     effects: Vec<EffectProgram>,
     optional_effect_groups: Vec<OptionalEffectGroup>,
     additional_costs: Vec<SpellAdditionalCostProgram>,
+    alternate_costs: Vec<AlternateCastCostProgram>,
     activated_abilities: Vec<ActivatedAbilityProgram>,
     activated_effects: Vec<ActivatedEffectProgram>,
     triggered_abilities: Vec<TriggeredAbilityProgram>,
@@ -1117,6 +1172,12 @@ impl CardProgram {
         &self.additional_costs
     }
 
+    /// Returns conditional alternate casting costs in printed order.
+    #[must_use]
+    pub fn alternate_costs(&self) -> &[AlternateCastCostProgram] {
+        &self.alternate_costs
+    }
+
     /// Returns completely compiled activated abilities in printed order.
     #[must_use]
     pub fn activated_abilities(&self) -> &[ActivatedAbilityProgram] {
@@ -1156,6 +1217,11 @@ impl CardProgram {
         if !self.activated_effects.is_empty() {
             capabilities.push(Capability::ActivatedAbility);
         }
+        capabilities.extend(
+            self.alternate_costs
+                .iter()
+                .map(|_| Capability::AlternateCost),
+        );
         for ability in &self.static_abilities {
             match ability {
                 StaticAbilityProgram::Continuous { operations, .. } => capabilities
@@ -1256,6 +1322,7 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
     let mut triggered_abilities = Vec::new();
     let mut static_abilities = Vec::new();
     let mut additional_costs = Vec::new();
+    let mut alternate_costs = Vec::new();
     let mut spell_abilities = 0_usize;
     for (index, ability) in face.abilities.iter().enumerate() {
         let path = format!("card.faces[0].abilities[{index}]");
@@ -1292,6 +1359,9 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
             }
             AbilityKind::Static if matches!(kind, ProgramKind::Permanent | ProgramKind::Land) => {
                 static_abilities.push(compile_static_ability(ability, &path)?);
+            }
+            AbilityKind::Static if matches!(kind, ProgramKind::Instant | ProgramKind::Sorcery) => {
+                alternate_costs.push(compile_spell_alternate_cost(ability, &path)?);
             }
             _ => {
                 return Err(CompileDiagnostic::new(
@@ -1384,6 +1454,7 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
         effects: compiler.effects,
         optional_effect_groups: compiler.optional_effect_groups,
         additional_costs,
+        alternate_costs,
         activated_abilities,
         activated_effects,
         triggered_abilities,
@@ -1439,6 +1510,185 @@ fn compile_triggered_ability(
         effects: compiler.effects,
         optional_effect_groups: compiler.optional_effect_groups,
     })
+}
+
+fn compile_spell_alternate_cost(
+    ability: &AbilityDefinition,
+    path: &str,
+) -> Result<AlternateCastCostProgram, CompileDiagnostic> {
+    if !ability.costs.is_empty()
+        || ability.event.is_some()
+        || ability.condition.is_some()
+        || ability.timing.is_some()
+        || ability.mana_ability
+    {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::AbilityShape,
+            path,
+            "spell alternate-cost ability must have no costs, event, condition, timing, or mana flag",
+        ));
+    }
+    let Expression::Call {
+        operation: Operation::WhileCondition,
+        arguments,
+    } = &ability.effect
+    else {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::AbilityShape,
+            format!("{path}.effect"),
+            "spell static ability must be a closed conditional alternate cost",
+        ));
+    };
+    let [condition, alternate_cost] = arguments.as_slice() else {
+        return Err(effect_arity(
+            &format!("{path}.effect"),
+            &Operation::WhileCondition,
+            "commander-control condition and alternate_cost(...) ",
+        ));
+    };
+    if !is_controller_controls_commander_condition(condition) {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectArguments,
+            format!("{path}.effect.condition"),
+            "alternate cost requires exactly controller-controls-a-commander",
+        ));
+    }
+    let Expression::Call {
+        operation: Operation::AlternateCost,
+        arguments,
+    } = alternate_cost
+    else {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectArguments,
+            format!("{path}.effect.alternate_cost"),
+            "conditional effect is not alternate_cost(...) ",
+        ));
+    };
+    let [selector, mana] = arguments.as_slice() else {
+        return Err(effect_arity(
+            &format!("{path}.effect.alternate_cost"),
+            &Operation::AlternateCost,
+            "this spell selector and mana_cost(...) ",
+        ));
+    };
+    if !is_this_spell_controlled_by_you(selector) {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectArguments,
+            format!("{path}.effect.alternate_cost.selector"),
+            "alternate cost must select exactly this spell controlled by you",
+        ));
+    }
+    let Expression::Call {
+        operation: Operation::ManaCost,
+        arguments,
+    } = mana
+    else {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectArguments,
+            format!("{path}.effect.alternate_cost.cost"),
+            "alternate cost is not mana_cost(...) ",
+        ));
+    };
+    let [Expression::Text(value)] = arguments.as_slice() else {
+        return Err(effect_arity(
+            &format!("{path}.effect.alternate_cost.cost"),
+            &Operation::ManaCost,
+            "one exact mana-cost string",
+        ));
+    };
+    let (mana_cost, exact_payment) =
+        compile_mana_cost_text(value, &format!("{path}.effect.alternate_cost.cost"))?;
+    Ok(AlternateCastCostProgram {
+        condition: AlternateCostCondition::ControllerControlsCommander,
+        mana_cost,
+        exact_payment,
+    })
+}
+
+fn is_controller_controls_commander_condition(expression: &Expression) -> bool {
+    let Expression::Call {
+        operation: Operation::AtLeast,
+        arguments,
+    } = expression
+    else {
+        return false;
+    };
+    let [Expression::Call {
+        operation: Operation::Count,
+        arguments: count,
+    }, Expression::Integer(1)] = arguments.as_slice()
+    else {
+        return false;
+    };
+    let [Expression::Call {
+        operation: Operation::Permanents,
+        arguments: permanents,
+    }] = count.as_slice()
+    else {
+        return false;
+    };
+    let [Expression::Call {
+        operation: Operation::And,
+        arguments: predicates,
+    }] = permanents.as_slice()
+    else {
+        return false;
+    };
+    predicates.len() == 2 && predicates.iter().any(|predicate| {
+        matches!(
+            predicate,
+            Expression::Call {
+                operation: Operation::DesignationIs,
+                arguments,
+            } if matches!(arguments.as_slice(), [Expression::Text(value)] if value == "commander")
+        )
+    }) && predicates.iter().any(|predicate| {
+        matches!(
+            predicate,
+            Expression::Call {
+                operation: Operation::ControlledBy,
+                arguments,
+            } if matches!(arguments.as_slice(), [you] if is_you_selector(you))
+        )
+    })
+}
+
+fn is_this_spell_controlled_by_you(expression: &Expression) -> bool {
+    let Expression::Call {
+        operation: Operation::Spells,
+        arguments,
+    } = expression
+    else {
+        return false;
+    };
+    let [Expression::Call {
+        operation: Operation::And,
+        arguments: predicates,
+    }] = arguments.as_slice()
+    else {
+        return false;
+    };
+    predicates.len() == 2
+        && predicates.iter().any(|predicate| {
+            matches!(
+                predicate,
+                Expression::Call {
+                    operation: Operation::Equals,
+                    arguments,
+                } if matches!(arguments.as_slice(), [left, right]
+                    if (is_any_selector(left) && is_source_selector(right))
+                        || (is_source_selector(left) && is_any_selector(right)))
+            )
+        })
+        && predicates.iter().any(|predicate| {
+            matches!(
+                predicate,
+                Expression::Call {
+                    operation: Operation::ControlledBy,
+                    arguments,
+                } if matches!(arguments.as_slice(), [you] if is_you_selector(you))
+            )
+        })
 }
 
 fn compile_static_ability(
@@ -6069,14 +6319,15 @@ pub fn execute_program(
 #[cfg(test)]
 mod tests {
     use super::{
-        compile_card_program, execute_program, Capability, CompileDiagnosticCode,
-        ExecutionBindings, ExecutionDiagnosticCode, ProgramKind,
+        compile_card_program, execute_program, AlternateCostCondition, Capability,
+        CompileDiagnosticCode, ExecutionBindings, ExecutionDiagnosticCode, ProgramKind,
     };
     use forge_core::{
         apply, Action, ActivationCondition, BaseCreatureCharacteristics, BaseObjectCharacteristics,
-        BasicLandTypes, CardId, GameState, ManaKind, ManaPool, ObjectColors, ObjectSubtype,
-        ObjectSupertypes, ObjectTargetPredicate, ObjectTypes, Outcome, StackObjectKind,
-        TargetChoice, TargetControllerPredicate, TargetKind, TargetRequirement, ZoneId, ZoneKind,
+        BasicLandTypes, CardId, GameState, ManaCost, ManaKind, ManaPool, ObjectColors,
+        ObjectSubtype, ObjectSupertypes, ObjectTargetPredicate, ObjectTypes, Outcome,
+        StackObjectKind, TargetChoice, TargetControllerPredicate, TargetKind, TargetRequirement,
+        ZoneId, ZoneKind,
     };
 
     const SWORDS: &str = r#"
@@ -6140,6 +6391,25 @@ card "Heroic Intervention" {
     keywords: []
     ability spell {
       effect: sequence(grant_keyword(permanents(controlled_by(you())), "hexproof", "until_end_of_turn"), grant_keyword(permanents(controlled_by(you())), "indestructible", "until_end_of_turn"))
+    }
+  }
+}
+"#;
+    const FLAWLESS_MANEUVER: &str = r#"
+card "Flawless Maneuver" {
+  id: "4e183439-17d2-47ff-9d99-5e22821d91e3"
+  layout: normal
+  status: unverified_playable
+  face "Flawless Maneuver" {
+    cost: "{2}{W}"
+    types: "Instant"
+    oracle: "If you control a commander, you may cast this spell without paying its mana cost. Creatures you control gain indestructible until end of turn."
+    keywords: []
+    ability static {
+      effect: while_condition(at_least(count(permanents(and(designation_is("commander"), controlled_by(you())))), 1), alternate_cost(spells(and(equals(any(), source()), controlled_by(you()))), mana_cost("{0}")))
+    }
+    ability spell {
+      effect: grant_keyword(permanents(and(type_is("creature"), controlled_by(you()))), "indestructible", "until_end_of_turn")
     }
   }
 }
@@ -6991,6 +7261,78 @@ card "Interpreter Contract" {
             Outcome::Applied
         );
         assert_eq!(state.object_zone(artifact), Some(battlefield));
+    }
+
+    #[test]
+    fn commander_condition_enables_exact_zero_mana_alternate_cost() {
+        let program = compile_card_program(&parse("flawless_maneuver.frs", FLAWLESS_MANEUVER))
+            .unwrap_or_else(|error| panic!("unexpected compile error: {error}"));
+        assert_eq!(
+            program.capabilities(),
+            vec![Capability::AlternateCost, Capability::Indestructible]
+        );
+        let [alternate] = program.alternate_costs() else {
+            panic!("expected one alternate cost");
+        };
+        assert_eq!(
+            alternate.condition(),
+            AlternateCostCondition::ControllerControlsCommander
+        );
+        assert_eq!(alternate.mana_cost(), ManaCost::new(0, 0, 0, 0, 0, 0));
+        assert_eq!(alternate.exact_payment(), ManaPool::empty());
+
+        let mut state = GameState::new();
+        let caster = add_player(&mut state);
+        let opponent = add_player(&mut state);
+        assert!(!alternate.is_available(&state, caster));
+        let commander = create_object(
+            &mut state,
+            CardId::new(2_202),
+            caster,
+            ZoneId::new(None, ZoneKind::Battlefield),
+        );
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::SetBaseObjectCharacteristics {
+                    object: commander,
+                    base: BaseObjectCharacteristics::new(
+                        ObjectTypes::none().with_creature(),
+                        ObjectColors::none().with_white(),
+                    ),
+                },
+            ),
+            Outcome::Applied
+        );
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::SetBaseCreatureCharacteristics {
+                    object: commander,
+                    base: BaseCreatureCharacteristics::new(2, 2),
+                },
+            ),
+            Outcome::Applied
+        );
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::DesignateCommander {
+                    object: commander,
+                    color_identity: ObjectColors::none().with_white(),
+                },
+            ),
+            Outcome::Applied
+        );
+        assert!(alternate.is_available(&state, caster));
+        let trace = execute_program(
+            &mut state,
+            &program,
+            &ExecutionBindings::new(caster, vec![opponent]),
+        )
+        .unwrap_or_else(|error| panic!("unexpected execution error: {error}"));
+        assert_eq!(trace.records().len(), 1);
+        assert_eq!(state.restrictions().count(), 1);
     }
 
     fn parse(path: &str, source: &str) -> forge_carddef::CardDefinition {

@@ -8,9 +8,10 @@
 use forge_carddef::CardDefinition;
 use forge_cards::runtime::{
     bind_activated_effect_actions, bind_program_actions, bind_triggered_ability_actions,
-    compile_card_program, ActivatedEffectProgram, AmountProgram, CardProgram, ChosenDestination,
-    CompileDiagnostic, CompileDiagnosticCode, EffectProgram, ExecutionBindings, PlayerBinding,
-    ProgramKind, SpellAdditionalCostProgram, TriggeredEventProgram,
+    compile_card_program, ActivatedEffectProgram, AlternateCostCondition, AmountProgram,
+    CardProgram, ChosenDestination, CompileDiagnostic, CompileDiagnosticCode, EffectProgram,
+    ExecutionBindings, PlayerBinding, ProgramKind, SpellAdditionalCostProgram,
+    TriggeredEventProgram,
 };
 use forge_core::{
     apply, auto_payment_plan, Action, ActivatedAbilityId, ActivationCondition, ActivationTiming,
@@ -792,6 +793,7 @@ fn execute_smoke(
             },
         )?;
     }
+    synthesize_alternate_cost_conditions(&mut execution, &compiled.program, caster, base_card_id)?;
     let mut registered_triggers = Vec::with_capacity(compiled.program.triggered_abilities().len());
     for (index, ability) in compiled.program.triggered_abilities().iter().enumerate() {
         if ability.event() != TriggeredEventProgram::SourceEnters {
@@ -871,46 +873,53 @@ fn execute_smoke(
             opponent,
             base_card_id,
         )?;
+        let alternate_cost = compiled
+            .program
+            .alternate_costs()
+            .iter()
+            .copied()
+            .find(|cost| cost.is_available(&execution.state, caster));
+        let (cast_cost, exact_payment) = alternate_cost.map_or_else(
+            || {
+                (
+                    compiled.program.mana_cost(),
+                    compiled.program.exact_payment(),
+                )
+            },
+            |cost| (cost.mana_cost(), cost.exact_payment()),
+        );
         execution.dispatch(
             "cast.add_mana",
             Action::AddManaToPool {
                 player: caster,
-                mana: compiled.program.exact_payment(),
+                mana: exact_payment,
             },
         )?;
-        let payment = auto_payment_plan(
-            compiled.program.exact_payment(),
-            compiled.program.mana_cost(),
-        )
-        .map_err(|error| {
-            RuntimeSmokeFailure::new(
-                RuntimeSmokeFailureCode::UnexpectedOutcome,
-                "cast.payment",
-                format!("payment planner failed: {error:?}"),
-            )
-        })?
-        .ok_or_else(|| {
-            RuntimeSmokeFailure::new(
-                RuntimeSmokeFailureCode::UnexpectedOutcome,
-                "cast.payment",
-                "exact synthesized mana did not produce a payment plan",
-            )
-        })?;
+        let payment = auto_payment_plan(exact_payment, cast_cost)
+            .map_err(|error| {
+                RuntimeSmokeFailure::new(
+                    RuntimeSmokeFailureCode::UnexpectedOutcome,
+                    "cast.payment",
+                    format!("payment planner failed: {error:?}"),
+                )
+            })?
+            .ok_or_else(|| {
+                RuntimeSmokeFailure::new(
+                    RuntimeSmokeFailureCode::UnexpectedOutcome,
+                    "cast.payment",
+                    "exact synthesized mana did not produce a payment plan",
+                )
+            })?;
         let cast = execution.dispatch(
             "cast.cast_spell",
             Action::CastSpell {
                 player: caster,
                 object: spell,
-                request: CastSpellRequest::new(
-                    stack_kind,
-                    timing,
-                    compiled.program.mana_cost(),
-                    payment,
-                )
-                .with_targets(
-                    compiled.program.target_requirements().to_vec(),
-                    targets.clone(),
-                ),
+                request: CastSpellRequest::new(stack_kind, timing, cast_cost, payment)
+                    .with_targets(
+                        compiled.program.target_requirements().to_vec(),
+                        targets.clone(),
+                    ),
             },
         )?;
         let stack_entry = match cast {
@@ -1298,6 +1307,67 @@ fn pay_spell_additional_costs(
                 }
             }
         }
+    }
+    Ok(())
+}
+
+fn synthesize_alternate_cost_conditions(
+    execution: &mut Execution,
+    program: &CardProgram,
+    caster: PlayerId,
+    base_card_id: u32,
+) -> Result<(), RuntimeSmokeFailure> {
+    if !program
+        .alternate_costs()
+        .iter()
+        .any(|cost| cost.condition() == AlternateCostCondition::ControllerControlsCommander)
+    {
+        return Ok(());
+    }
+    let commander = expect_object(execution.dispatch(
+        "cast.alternate_cost.commander.create",
+        Action::CreateObject {
+            card: CardId::new(base_card_id.wrapping_add(900_000)),
+            owner: caster,
+            controller: caster,
+            zone: ZoneId::new(None, ZoneKind::Battlefield),
+        },
+    )?)?;
+    execution.dispatch(
+        "cast.alternate_cost.commander.characteristics",
+        Action::SetBaseObjectCharacteristics {
+            object: commander,
+            base: BaseObjectCharacteristics::new(
+                ObjectTypes::none().with_creature(),
+                ObjectColors::none(),
+            ),
+        },
+    )?;
+    execution.dispatch(
+        "cast.alternate_cost.commander.creature",
+        Action::SetBaseCreatureCharacteristics {
+            object: commander,
+            base: BaseCreatureCharacteristics::new(2, 2),
+        },
+    )?;
+    execution.dispatch(
+        "cast.alternate_cost.commander.designate",
+        Action::DesignateCommander {
+            object: commander,
+            color_identity: ObjectColors::none(),
+        },
+    )?;
+    if program
+        .alternate_costs()
+        .iter()
+        .copied()
+        .all(|cost| !cost.is_available(&execution.state, caster))
+    {
+        return Err(RuntimeSmokeFailure::new(
+            RuntimeSmokeFailureCode::UnexpectedOutcome,
+            "cast.alternate_cost.commander",
+            "synthesized commander did not enable alternate cost",
+        ));
     }
     Ok(())
 }
