@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "task": "T3.3",
+  "source_commit": "f024f4956883f7a5d05a18bc88a074374fb12227",
+  "verification_mode": "local_only_no_github_actions",
+  "workers": 24,
+  "result": "pass_in_progress",
+  "translation": {
+    "complete_scripts": 19413,
+    "total_scripts": 33290,
+    "complete_percent": 58.314809252027636,
+    "priority_complete": 269,
+    "priority_total": 365,
+    "fingerprint": "24355666659abd6a8bb311495780cc1b"
+  },
+  "api_mapping": {
+    "mapped_uses": 31152,
+    "legacy_uses": 43649,
+    "mapped_percent": 71.369332630759,
+    "quarantined_uses": 12497
+  },
+  "blockers": {
+    "scripts_with_confirmed_blockers": 11799,
+    "unique_families": 5857,
+    "confirmed_observations": 18000,
+    "linked_root_fanout": 18436
+  },
+  "verification": {
+    "translation_replay_deterministic": true,
+    "planner_replay_deterministic": true,
+    "workspace_tests": "pass",
+    "clippy_deny_warnings": "pass",
+    "compiler_database_roundtrip": "pass",
+    "oracle_scenarios": "235/235 pass plus gated subsets",
+    "nightmare_smoke": "pass",
+    "coverage_lines": 40902,
+    "coverage_total_lines": 50615,
+    "coverage_percent": 80.81003655042971,
+    "coverage_raw_sha256": "81ea2d53fd4284ae7a7869b1835e611f412c6b57c0d4469147aa68eafbd0be25",
+    "duration_seconds": 330
+  },
+  "exit_floor_reached": false,
+  "note": "Structural mapping is not runtime or semantic evidence. T3.3 remains active until at least 60% complete scripts and all exit gates pass."
+}

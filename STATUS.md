@@ -1,6 +1,6 @@
 # DeckTest / Forge 2.0 Status
 
-Generated: 2026-07-13T08:14:12.238730+00:00 by `tools/write_card_maturity.py`
+Generated: 2026-07-13T09:29:24.531360+00:00 by `tools/write_card_maturity.py`
 
 Plan: v1.8
 
@@ -32,19 +32,19 @@ Exclusive highest evidence stage for the 32,792 in-v1 Oracle identities:
 
 | Highest stage | Identities |
 | --- | ---: |
-| Absent identity-bound definition evidence | 13,737 |
+| Absent identity-bound definition evidence | 13,340 |
 | Parsed | 0 |
 | Mapped partial | 0 |
 | Structurally translated | 0 |
-| Compiler valid | 19,055 |
+| Compiler valid | 19,452 |
 | Runtime smoke passed | 0 |
 | Semantic verified | 0 |
 | Pod integration verified | 0 |
 | AI supported | 0 |
 | Product eligible | 0 |
 
-Compiler-valid evidence currently reaches 19,055/32,792
-in-v1 identities (58.1087%). This includes the
+Compiler-valid evidence currently reaches 19,452/32,792
+in-v1 identities (59.3193%). This includes the
 unverified CP-DSL language-stress corpus and therefore is not a playable claim.
 Parsing and mapping remain below in their own units rather than being guessed
 onto identities.
@@ -54,11 +54,11 @@ onto identities.
 | Literal unit | Result |
 | --- | ---: |
 | Legacy scripts parsed | 33,290/33,290 |
-| Compiler-valid translated legacy definitions | 19,015 |
-| Fail-closed quarantined legacy definitions | 14,275 |
-| Structurally tested legacy ability uses | 30,653/43,649 |
-| Quarantined legacy ability uses | 12,996 |
-| Owner-priority compiler-valid definitions | 266/365 |
+| Compiler-valid translated legacy definitions | 19,413 |
+| Fail-closed quarantined legacy definitions | 13,877 |
+| Structurally tested legacy ability uses | 31,152/43,649 |
+| Quarantined legacy ability uses | 12,497 |
+| Owner-priority compiler-valid definitions | 269/365 |
 
 ## Evidence Breadth
 
@@ -82,4 +82,4 @@ onto identities.
 
 Per-identity generated detail: `target/card-maturity/identities.json` (untracked,
 38,306 records; SHA-256
-`59007d9ce32a3075e67652e967894f3864b3cab7d8db1e682c74cadd2f770d6b`).
+`4855229dba66cce1302a2581b5b08cef6d7cb76ce1dcdd380929a4de685c2e53`).
