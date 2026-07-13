@@ -2,16 +2,19 @@
 
 use forge_cards::runtime::{
     bind_activated_effect_actions, bind_program_actions, bind_triggered_ability_actions,
-    compile_card_program, ActivatedAbilityProgram, ActivatedEffectProgram, AlternateCostCondition,
-    CardProgram, EffectProgram, ExecutionBindings, StaticAbilityProgram, TriggeredEventProgram,
+    compile_card_program, execute_program, ActivatedAbilityProgram, ActivatedEffectProgram,
+    AlternateCostCondition, CardProgram, EffectProgram, ExecutionBindings, ExecutionDiagnosticCode,
+    PlayerBinding, StaticAbilityProgram, TriggeredEventProgram,
 };
 use forge_core::{
-    apply, auto_payment_plan, Action, ActivationCondition, ActivationTiming, AttackDeclaration,
-    BaseCreatureCharacteristics, BaseObjectCharacteristics, BlockDeclaration, CardId,
-    CombatRestriction, CombatRestrictionSubject, ContinuousEffectDuration, CounterKind, GameState,
-    ManaKind, ManaPool, ObjectColors, ObjectSupertypes, ObjectTargetPredicate, ObjectTypes,
-    Outcome, PlayerRule, RestrictionEffect, StackObjectKind, StateError, Step, TargetChoice,
-    TargetControllerPredicate, TargetKind, TargetRequirement, TargetRestriction,
+    apply, auto_payment_plan, AbilityPlayer, Action, ActivatedAbilityDefinition,
+    ActivatedAbilityEffect, ActivationCondition, ActivationCost, ActivationTiming,
+    AttackDeclaration, BaseCreatureCharacteristics, BaseObjectCharacteristics, BlockDeclaration,
+    CardId, CastSpellRequest, CombatRestriction, CombatRestrictionSubject,
+    ContinuousEffectDuration, CounterKind, GameState, ManaCost, ManaKind, ManaPool, ObjectColors,
+    ObjectSupertypes, ObjectTargetPredicate, ObjectTypes, Outcome, PlayerRule, PriorityOutcome,
+    ResolutionOutcome, RestrictionEffect, SpellTiming, StackObjectKind, StateError, Step,
+    TargetChoice, TargetControllerPredicate, TargetKind, TargetRequirement, TargetRestriction,
     TargetRestrictionSubject, TriggerCondition, TriggerObjectFilter, ZoneId, ZoneKind,
 };
 use forge_testkit::runtime_smoke::{run_translated_card_runtime_smoke, RuntimeSmokeResult};
@@ -1104,10 +1107,16 @@ fn advance_to_cleanup(state: &mut GameState, active: forge_core::PlayerId) -> bo
 }
 
 fn commander_alternate_cost_probe(program: &CardProgram) -> Option<serde_json::Value> {
-    if program.alternate_costs().is_empty() {
-        return None;
-    }
-    let alternate = *program.alternate_costs().first()?;
+    let alternate = program
+        .alternate_costs()
+        .iter()
+        .copied()
+        .find(|cost| cost.condition() == AlternateCostCondition::ControllerControlsCommander)?;
+    let alternate_cost_count = program
+        .alternate_costs()
+        .iter()
+        .filter(|cost| cost.condition() == AlternateCostCondition::ControllerControlsCommander)
+        .count();
     let mut state = GameState::new();
     let controller = match apply(&mut state, Action::AddPlayer) {
         Outcome::PlayerAdded(player) => player,
@@ -1140,9 +1149,9 @@ fn commander_alternate_cost_probe(program: &CardProgram) -> Option<serde_json::V
         Outcome::Applied
     );
     let available_without_controlled_battlefield_commander =
-        alternate.is_available(&state, controller);
+        alternate.is_available(&state, controller, None);
     let opponent_commander_does_not_enable =
-        opponent_designated && !alternate.is_available(&state, controller);
+        opponent_designated && !alternate.is_available(&state, controller, None);
 
     let controlled_creature = create_probe_object(
         &mut state,
@@ -1154,7 +1163,7 @@ fn commander_alternate_cost_probe(program: &CardProgram) -> Option<serde_json::V
         Some(BaseCreatureCharacteristics::new(2, 2)),
     )?;
     let undesignated_controlled_creature_does_not_enable =
-        !alternate.is_available(&state, controller);
+        !alternate.is_available(&state, controller, None);
     let controlled_designated = matches!(
         apply(
             &mut state,
@@ -1166,7 +1175,7 @@ fn commander_alternate_cost_probe(program: &CardProgram) -> Option<serde_json::V
         Outcome::Applied
     );
     let available_with_controlled_battlefield_commander =
-        controlled_designated && alternate.is_available(&state, controller);
+        controlled_designated && alternate.is_available(&state, controller, None);
     let moved_to_command_zone = matches!(
         apply(
             &mut state,
@@ -1178,7 +1187,7 @@ fn commander_alternate_cost_probe(program: &CardProgram) -> Option<serde_json::V
         Outcome::Applied
     );
     let unavailable_in_command_zone =
-        moved_to_command_zone && !alternate.is_available(&state, controller);
+        moved_to_command_zone && !alternate.is_available(&state, controller, None);
     let returned_to_battlefield = matches!(
         apply(
             &mut state,
@@ -1190,7 +1199,7 @@ fn commander_alternate_cost_probe(program: &CardProgram) -> Option<serde_json::V
         Outcome::Applied
     );
     let available_after_return_to_battlefield =
-        returned_to_battlefield && alternate.is_available(&state, controller);
+        returned_to_battlefield && alternate.is_available(&state, controller, None);
     let zero_payment_plan_available =
         auto_payment_plan(alternate.exact_payment(), alternate.mana_cost())
             .ok()
@@ -1199,7 +1208,7 @@ fn commander_alternate_cost_probe(program: &CardProgram) -> Option<serde_json::V
 
     Some(json!({
         "setup_succeeded": true,
-        "alternate_cost_count": program.alternate_costs().len(),
+        "alternate_cost_count": alternate_cost_count,
         "condition_is_controller_controls_commander": matches!(
             alternate.condition(),
             AlternateCostCondition::ControllerControlsCommander
@@ -1219,6 +1228,306 @@ fn commander_alternate_cost_probe(program: &CardProgram) -> Option<serde_json::V
             available_with_controlled_battlefield_commander,
         "unavailable_in_command_zone": unavailable_in_command_zone,
         "available_after_return_to_battlefield": available_after_return_to_battlefield,
+    }))
+}
+
+fn pass_empty_stack_round(state: &mut GameState) -> bool {
+    for _ in 0..state.players().len() {
+        let Some(player) = state.priority_player() else {
+            return false;
+        };
+        match apply(state, Action::PassPriority { player }) {
+            Outcome::Priority(PriorityOutcome::StepComplete) => return true,
+            Outcome::Priority(PriorityOutcome::PassedTo(_)) => {}
+            _ => return false,
+        }
+    }
+    false
+}
+
+fn advance_to_precombat_main(state: &mut GameState, active: forge_core::PlayerId) -> bool {
+    matches!(
+        apply(
+            state,
+            Action::StartTurn {
+                active_player: active,
+            },
+        ),
+        Outcome::Applied
+    ) && matches!(
+        apply(state, Action::AdvanceStep),
+        Outcome::StepAdvanced(Step::Upkeep)
+    ) && pass_empty_stack_round(state)
+        && state.current_step() == Some(Step::Draw)
+        && pass_empty_stack_round(state)
+        && state.current_step() == Some(Step::PrecombatMain)
+}
+
+fn resolve_expected_stack_entry(state: &mut GameState, expected: forge_core::StackEntryId) -> bool {
+    for _ in 0..state.players().len() {
+        let Some(player) = state.priority_player() else {
+            return false;
+        };
+        match apply(state, Action::PassPriority { player }) {
+            Outcome::Priority(PriorityOutcome::PassedTo(_)) => {}
+            Outcome::Priority(PriorityOutcome::Resolved(entry)) if entry == expected => {
+                return true;
+            }
+            _ => return false,
+        }
+    }
+    false
+}
+
+fn invalid_choice_rejected_without_mutation(
+    state: &mut GameState,
+    program: &CardProgram,
+    controller: forge_core::PlayerId,
+    opponent: forge_core::PlayerId,
+    choices: Vec<forge_core::ObjectId>,
+) -> bool {
+    let before = state.deterministic_hash();
+    let result = execute_program(
+        state,
+        program,
+        &ExecutionBindings::new(controller, vec![opponent]).with_object_choices(vec![choices]),
+    );
+    matches!(
+        result,
+        Err(error) if error.code() == ExecutionDiagnosticCode::InvalidChoice
+    ) && state.deterministic_hash() == before
+}
+
+fn flashback_looting_probe(program: &CardProgram) -> Option<serde_json::Value> {
+    let alternate = program
+        .alternate_costs()
+        .iter()
+        .copied()
+        .find(|cost| cost.condition() == AlternateCostCondition::SourceInControllerGraveyard)?;
+    let mut state = GameState::new();
+    let controller = match apply(&mut state, Action::AddPlayer) {
+        Outcome::PlayerAdded(player) => player,
+        _ => return Some(json!({"setup_succeeded": false})),
+    };
+    let opponent = match apply(&mut state, Action::AddPlayer) {
+        Outcome::PlayerAdded(player) => player,
+        _ => return Some(json!({"setup_succeeded": false})),
+    };
+    let hand = ZoneId::new(Some(controller), ZoneKind::Hand);
+    let graveyard = ZoneId::new(Some(controller), ZoneKind::Graveyard);
+    let source = create_probe_object(
+        &mut state,
+        9_640_000,
+        controller,
+        controller,
+        hand,
+        program.base_object(),
+        program.base_creature(),
+    )?;
+    let unavailable_from_hand = !alternate.is_available(&state, controller, Some(source));
+    let source_moved_to_graveyard = matches!(
+        apply(
+            &mut state,
+            Action::MoveObject {
+                object: source,
+                to: graveyard,
+            },
+        ),
+        Outcome::Applied
+    );
+    let available_from_graveyard =
+        source_moved_to_graveyard && alternate.is_available(&state, controller, Some(source));
+
+    let card_base =
+        BaseObjectCharacteristics::new(ObjectTypes::none().with_artifact(), ObjectColors::none());
+    let first_choice = create_probe_object(
+        &mut state, 9_640_001, controller, controller, hand, card_base, None,
+    )?;
+    let second_choice = create_probe_object(
+        &mut state, 9_640_002, controller, controller, hand, card_base, None,
+    )?;
+    let retained_card = create_probe_object(
+        &mut state, 9_640_003, controller, controller, hand, card_base, None,
+    )?;
+    let out_of_zone = create_probe_object(
+        &mut state, 9_640_004, controller, controller, graveyard, card_base, None,
+    )?;
+    for card in 9_640_010..9_640_014 {
+        create_probe_object(
+            &mut state,
+            card,
+            controller,
+            controller,
+            ZoneId::new(Some(controller), ZoneKind::Library),
+            card_base,
+            None,
+        )?;
+    }
+    let cast_window_ready = advance_to_precombat_main(&mut state, controller);
+
+    let mana_added = matches!(
+        apply(
+            &mut state,
+            Action::AddManaToPool {
+                player: controller,
+                mana: alternate.exact_payment(),
+            },
+        ),
+        Outcome::Applied
+    );
+    let payment = auto_payment_plan(alternate.exact_payment(), alternate.mana_cost())
+        .ok()
+        .flatten()?;
+    let cast = apply(
+        &mut state,
+        Action::CastSpell {
+            player: controller,
+            object: source,
+            request: CastSpellRequest::new(
+                StackObjectKind::SorcerySpell,
+                SpellTiming::Sorcery,
+                alternate.mana_cost(),
+                payment,
+            )
+            .with_flashback(alternate.mana_cost()),
+        },
+    );
+    let stack_entry = match cast {
+        Outcome::StackEntryAdded(entry) => entry,
+        _ => return Some(json!({"setup_succeeded": false})),
+    };
+    let source_on_stack = state.object_zone(source) == Some(ZoneId::new(None, ZoneKind::Stack));
+    let stack_entry_marked_flashback = state
+        .stack_entries()
+        .iter()
+        .find(|entry| entry.id() == stack_entry)
+        .is_some_and(|entry| entry.flashback());
+    let flashback_cost_consumed =
+        mana_added && state.mana_pool(controller).ok() == Some(ManaPool::empty());
+    let stack_resolved = resolve_expected_stack_entry(&mut state, stack_entry);
+    let source_exiled_on_resolution =
+        state.object_zone(source) == Some(ZoneId::new(None, ZoneKind::Exile));
+    let resolution_recorded = state.resolution_log().last().is_some_and(|record| {
+        record.stack_entry() == stack_entry
+            && record.object() == Some(source)
+            && record.outcome() == ResolutionOutcome::Resolved
+            && record.flashback()
+    });
+
+    let requirements = program.object_choice_requirements();
+    let choice_slot_count = requirements.len();
+    let requirement = *requirements.first()?;
+    let undersized_choice_rejected_before_mutation = invalid_choice_rejected_without_mutation(
+        &mut state,
+        program,
+        controller,
+        opponent,
+        vec![first_choice],
+    );
+    let duplicate_choice_rejected_before_mutation = invalid_choice_rejected_without_mutation(
+        &mut state,
+        program,
+        controller,
+        opponent,
+        vec![first_choice, first_choice],
+    );
+    let out_of_zone_choice_rejected_before_mutation = invalid_choice_rejected_without_mutation(
+        &mut state,
+        program,
+        controller,
+        opponent,
+        vec![first_choice, out_of_zone],
+    );
+
+    let bindings = ExecutionBindings::new(controller, vec![opponent])
+        .with_object_choices(vec![vec![first_choice, second_choice]]);
+    let actions = bind_program_actions(&state, program, &bindings).ok()?;
+    let bound_action_count = actions.len();
+    let draw_action_exact = matches!(
+        actions.first().map(|bound| bound.action()),
+        Some(Action::DrawCards { player, count: 2 }) if *player == controller
+    );
+    let discard_actions_exact = matches!(
+        actions.get(1).map(|bound| bound.action()),
+        Some(Action::MoveObject { object, to })
+            if *object == first_choice && *to == graveyard
+    ) && matches!(
+        actions.get(2).map(|bound| bound.action()),
+        Some(Action::MoveObject { object, to })
+            if *object == second_choice && *to == graveyard
+    );
+    let hand_before_effect = state
+        .zone_objects(hand)
+        .map_or(0, <[forge_core::ObjectId]>::len);
+    let library = ZoneId::new(Some(controller), ZoneKind::Library);
+    let library_before_effect = state
+        .zone_objects(library)
+        .map_or(0, <[forge_core::ObjectId]>::len);
+    let draw_applied = actions
+        .first()
+        .is_some_and(|bound| matches!(apply(&mut state, bound.action().clone()), Outcome::Applied));
+    let hand_after_draw = state
+        .zone_objects(hand)
+        .map_or(0, <[forge_core::ObjectId]>::len);
+    let library_after_draw = state
+        .zone_objects(library)
+        .map_or(0, <[forge_core::ObjectId]>::len);
+    let discard_actions_applied = actions
+        .iter()
+        .skip(1)
+        .all(|bound| matches!(apply(&mut state, bound.action().clone()), Outcome::Applied));
+    let final_hand_size = state
+        .zone_objects(hand)
+        .map_or(0, <[forge_core::ObjectId]>::len);
+    let exactly_two_cards_drawn = draw_applied
+        && hand_after_draw == hand_before_effect.saturating_add(2)
+        && library_after_draw.saturating_add(2) == library_before_effect;
+    let exactly_two_explicit_choices_discarded = discard_actions_applied
+        && final_hand_size == hand_before_effect
+        && state.object_zone(first_choice) == Some(graveyard)
+        && state.object_zone(second_choice) == Some(graveyard);
+    let retained_card_remained_in_hand = state.object_zone(retained_card) == Some(hand);
+    let out_of_zone_card_unchanged = state.object_zone(out_of_zone) == Some(graveyard);
+
+    Some(json!({
+        "setup_succeeded": true,
+        "alternate_cost_count": program.alternate_costs().len(),
+        "condition_is_source_in_controller_graveyard": matches!(
+            alternate.condition(),
+            AlternateCostCondition::SourceInControllerGraveyard
+        ),
+        "printed_generic_mana": program.mana_cost().generic_total().ok(),
+        "printed_red_mana": program.mana_cost().colored_pool().get(ManaKind::Red),
+        "flashback_generic_mana": alternate.mana_cost().generic_total().ok(),
+        "flashback_red_mana": alternate.mana_cost().colored_pool().get(ManaKind::Red),
+        "flashback_exact_payment_total": alternate.exact_payment().total(),
+        "unavailable_from_hand": unavailable_from_hand,
+        "available_from_graveyard": available_from_graveyard,
+        "cast_window_ready": cast_window_ready,
+        "source_on_stack": source_on_stack,
+        "stack_entry_marked_flashback": stack_entry_marked_flashback,
+        "flashback_cost_consumed": flashback_cost_consumed,
+        "stack_resolved": stack_resolved,
+        "source_exiled_on_resolution": source_exiled_on_resolution,
+        "resolution_recorded": resolution_recorded,
+        "choice_slot_count": choice_slot_count,
+        "choice_player_is_controller": requirement.player() == PlayerBinding::Controller,
+        "choice_zone_is_hand": requirement.zone() == ZoneKind::Hand,
+        "choice_minimum": requirement.minimum(),
+        "choice_maximum": requirement.maximum(),
+        "undersized_choice_rejected_before_mutation":
+            undersized_choice_rejected_before_mutation,
+        "duplicate_choice_rejected_before_mutation":
+            duplicate_choice_rejected_before_mutation,
+        "out_of_zone_choice_rejected_before_mutation":
+            out_of_zone_choice_rejected_before_mutation,
+        "bound_action_count": bound_action_count,
+        "draw_action_exact": draw_action_exact,
+        "discard_actions_exact": discard_actions_exact,
+        "exactly_two_cards_drawn": exactly_two_cards_drawn,
+        "exactly_two_explicit_choices_discarded": exactly_two_explicit_choices_discarded,
+        "retained_card_remained_in_hand": retained_card_remained_in_hand,
+        "out_of_zone_card_unchanged": out_of_zone_card_unchanged,
     }))
 }
 
@@ -1246,6 +1555,338 @@ fn prepare_stack_priority(state: &mut GameState, active: forge_core::PlayerId) -
         apply(state, Action::AdvanceStep),
         Outcome::StepAdvanced(Step::Upkeep)
     )
+}
+
+fn split_second_probe(program: &CardProgram) -> Option<serde_json::Value> {
+    if !program.split_second() {
+        return None;
+    }
+    let requirement = *program.target_requirements().first()?;
+    let mut state = GameState::new();
+    let controller = match apply(&mut state, Action::AddPlayer) {
+        Outcome::PlayerAdded(player) => player,
+        _ => return Some(json!({"setup_succeeded": false})),
+    };
+    let opponent = match apply(&mut state, Action::AddPlayer) {
+        Outcome::PlayerAdded(player) => player,
+        _ => return Some(json!({"setup_succeeded": false})),
+    };
+    let controller_hand = ZoneId::new(Some(controller), ZoneKind::Hand);
+    let opponent_hand = ZoneId::new(Some(opponent), ZoneKind::Hand);
+    let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+    let controller_graveyard = ZoneId::new(Some(controller), ZoneKind::Graveyard);
+    let source = create_probe_object(
+        &mut state,
+        9_650_000,
+        controller,
+        controller,
+        controller_hand,
+        program.base_object(),
+        program.base_creature(),
+    )?;
+    let artifact = create_probe_object(
+        &mut state,
+        9_650_001,
+        opponent,
+        opponent,
+        battlefield,
+        BaseObjectCharacteristics::new(ObjectTypes::none().with_artifact(), ObjectColors::none()),
+        None,
+    )?;
+    let enchantment = create_probe_object(
+        &mut state,
+        9_650_002,
+        opponent,
+        opponent,
+        battlefield,
+        BaseObjectCharacteristics::new(
+            ObjectTypes::none().with_enchantment(),
+            ObjectColors::none(),
+        ),
+        None,
+    )?;
+    let creature = create_probe_object(
+        &mut state,
+        9_650_003,
+        opponent,
+        opponent,
+        battlefield,
+        BaseObjectCharacteristics::new(ObjectTypes::none().with_creature(), ObjectColors::none()),
+        Some(BaseCreatureCharacteristics::new(2, 2)),
+    )?;
+    let blocked_spell = create_probe_object(
+        &mut state,
+        9_650_004,
+        opponent,
+        opponent,
+        opponent_hand,
+        BaseObjectCharacteristics::new(ObjectTypes::none().with_instant(), ObjectColors::none()),
+        None,
+    )?;
+    let follow_up_spell = create_probe_object(
+        &mut state,
+        9_650_005,
+        controller,
+        controller,
+        controller_hand,
+        BaseObjectCharacteristics::new(ObjectTypes::none().with_instant(), ObjectColors::none()),
+        None,
+    )?;
+    let non_mana_source = create_probe_object(
+        &mut state,
+        9_650_006,
+        opponent,
+        opponent,
+        battlefield,
+        BaseObjectCharacteristics::new(ObjectTypes::none().with_artifact(), ObjectColors::none()),
+        None,
+    )?;
+    let mana_source = create_probe_object(
+        &mut state,
+        9_650_007,
+        opponent,
+        opponent,
+        battlefield,
+        BaseObjectCharacteristics::new(ObjectTypes::none().with_artifact(), ObjectColors::none()),
+        None,
+    )?;
+
+    let zero_cost = ManaCost::new(0, 0, 0, 0, 0, 0);
+    let zero_payment = auto_payment_plan(ManaPool::empty(), zero_cost)
+        .ok()
+        .flatten()?;
+    let non_mana_ability = match apply(
+        &mut state,
+        Action::RegisterActivatedAbility {
+            definition: ActivatedAbilityDefinition::new(
+                opponent,
+                Some(non_mana_source),
+                ActivationTiming::Instant,
+                ActivationCost::new(zero_cost),
+                ActivatedAbilityEffect::GainLife {
+                    player: AbilityPlayer::Controller,
+                    amount: 1,
+                },
+            ),
+        },
+    ) {
+        Outcome::ActivatedAbilityRegistered(ability) => ability,
+        _ => return Some(json!({"setup_succeeded": false})),
+    };
+    let mana_ability = match apply(
+        &mut state,
+        Action::RegisterActivatedAbility {
+            definition: ActivatedAbilityDefinition::new(
+                opponent,
+                Some(mana_source),
+                ActivationTiming::Instant,
+                ActivationCost::new(zero_cost).with_tap_source(),
+                ActivatedAbilityEffect::AddMana {
+                    player: AbilityPlayer::Controller,
+                    mana: ManaPool::of(ManaKind::Green, 1),
+                },
+            )
+            .as_mana_ability(),
+        },
+    ) {
+        Outcome::ActivatedAbilityRegistered(ability) => ability,
+        _ => return Some(json!({"setup_succeeded": false})),
+    };
+
+    let artifact_target = TargetChoice::Object(artifact);
+    let enchantment_target = TargetChoice::Object(enchantment);
+    let creature_target = TargetChoice::Object(creature);
+    let artifact_target_accepted =
+        state.can_target(controller, Some(source), requirement, artifact_target);
+    let enchantment_target_accepted =
+        state.can_target(controller, Some(source), requirement, enchantment_target);
+    let creature_target_rejected =
+        !state.can_target(controller, Some(source), requirement, creature_target);
+    let artifact_actions = bind_program_actions(
+        &state,
+        program,
+        &ExecutionBindings::new(controller, vec![opponent])
+            .with_source(source)
+            .with_targets(vec![artifact_target]),
+    )
+    .ok()?;
+    let enchantment_binding_accepted = bind_program_actions(
+        &state,
+        program,
+        &ExecutionBindings::new(controller, vec![opponent])
+            .with_source(source)
+            .with_targets(vec![enchantment_target]),
+    )
+    .is_ok();
+    let creature_binding_rejected = bind_program_actions(
+        &state,
+        program,
+        &ExecutionBindings::new(controller, vec![opponent])
+            .with_source(source)
+            .with_targets(vec![creature_target]),
+    )
+    .is_err();
+    let destroy_action_exact = matches!(
+        artifact_actions.as_slice(),
+        [bound] if matches!(bound.action(), Action::DestroyPermanent { object } if *object == artifact)
+    );
+
+    let priority_ready = prepare_stack_priority(&mut state, controller);
+    let generic_mana = program.mana_cost().generic_total().ok()?;
+    let exact_pool = program
+        .mana_cost()
+        .colored_pool()
+        .checked_add(ManaPool::of(ManaKind::Colorless, generic_mana))?;
+    let funded = matches!(
+        apply(
+            &mut state,
+            Action::AddManaToPool {
+                player: controller,
+                mana: exact_pool,
+            },
+        ),
+        Outcome::Applied
+    );
+    let payment = auto_payment_plan(exact_pool, program.mana_cost())
+        .ok()
+        .flatten()?;
+    let split_entry = match apply(
+        &mut state,
+        Action::CastSpell {
+            player: controller,
+            object: source,
+            request: CastSpellRequest::new(
+                StackObjectKind::InstantSpell,
+                SpellTiming::Instant,
+                program.mana_cost(),
+                payment,
+            )
+            .with_targets(vec![requirement], vec![artifact_target])
+            .with_split_second(),
+        },
+    ) {
+        Outcome::StackEntryAdded(entry) => entry,
+        _ => return Some(json!({"setup_succeeded": false})),
+    };
+    let source_on_stack = state.object_zone(source) == Some(ZoneId::new(None, ZoneKind::Stack));
+    let stack_entry_marked_split_second = state
+        .stack_entries()
+        .iter()
+        .any(|entry| entry.id() == split_entry && entry.split_second());
+    let cast_cost_consumed = state.mana_pool(controller).ok() == Some(ManaPool::empty());
+    let priority_passed_to_responder = matches!(
+        apply(
+            &mut state,
+            Action::PassPriority { player: controller },
+        ),
+        Outcome::Priority(PriorityOutcome::PassedTo(player)) if player == opponent
+    );
+
+    let ordinary_request = CastSpellRequest::new(
+        StackObjectKind::InstantSpell,
+        SpellTiming::Instant,
+        zero_cost,
+        zero_payment,
+    );
+    let before_spell = state.deterministic_hash();
+    let responder_spell_rejected_before_mutation = matches!(
+        apply(
+            &mut state,
+            Action::CastSpell {
+                player: opponent,
+                object: blocked_spell,
+                request: ordinary_request.clone(),
+            },
+        ),
+        Outcome::Failed(StateError::SplitSecondActionForbidden)
+    ) && state.deterministic_hash() == before_spell;
+    let before_non_mana = state.deterministic_hash();
+    let responder_non_mana_ability_rejected_before_mutation = matches!(
+        apply(
+            &mut state,
+            Action::ActivateAbility {
+                player: opponent,
+                ability: non_mana_ability,
+                payment: zero_payment,
+            },
+        ),
+        Outcome::Failed(StateError::SplitSecondActionForbidden)
+    ) && state.deterministic_hash()
+        == before_non_mana;
+    let responder_mana_ability_allowed = matches!(
+        apply(
+            &mut state,
+            Action::ActivateAbility {
+                player: opponent,
+                ability: mana_ability,
+                payment: zero_payment,
+            },
+        ),
+        Outcome::Applied
+    );
+    let responder_green_mana_added =
+        state.mana_pool(opponent).ok() == Some(ManaPool::of(ManaKind::Green, 1));
+    let mana_source_tapped = state
+        .object(mana_source)
+        .is_some_and(|record| record.tapped());
+    let stack_resolved = matches!(
+        apply(&mut state, Action::PassPriority { player: opponent }),
+        Outcome::Priority(PriorityOutcome::Resolved(entry)) if entry == split_entry
+    );
+    let source_moved_to_owner_graveyard = state.object_zone(source) == Some(controller_graveyard);
+    let resolution_recorded_split_second = state.resolution_log().last().is_some_and(|record| {
+        record.stack_entry() == split_entry
+            && record.outcome() == ResolutionOutcome::Resolved
+            && record.split_second()
+    });
+    let destroy_action_applied = artifact_actions
+        .iter()
+        .all(|bound| matches!(apply(&mut state, bound.action().clone()), Outcome::Applied));
+    let artifact_destroyed_to_owner_graveyard =
+        state.object_zone(artifact) == Some(ZoneId::new(Some(opponent), ZoneKind::Graveyard));
+    let ordinary_cast_available_after_resolution = matches!(
+        apply(
+            &mut state,
+            Action::CastSpell {
+                player: controller,
+                object: follow_up_spell,
+                request: ordinary_request,
+            },
+        ),
+        Outcome::StackEntryAdded(_)
+    );
+
+    Some(json!({
+        "setup_succeeded": priority_ready && funded,
+        "split_second_compiled": program.split_second(),
+        "target_slot_count": program.target_requirements().len(),
+        "artifact_target_accepted": artifact_target_accepted,
+        "enchantment_target_accepted": enchantment_target_accepted,
+        "creature_target_rejected": creature_target_rejected,
+        "enchantment_binding_accepted": enchantment_binding_accepted,
+        "creature_binding_rejected": creature_binding_rejected,
+        "bound_action_count": artifact_actions.len(),
+        "destroy_action_exact": destroy_action_exact,
+        "printed_generic_mana": generic_mana,
+        "printed_green_mana": program.mana_cost().colored_pool().get(ManaKind::Green),
+        "cast_payment_total": payment.paid().total(),
+        "source_on_stack": source_on_stack,
+        "stack_entry_marked_split_second": stack_entry_marked_split_second,
+        "cast_cost_consumed": cast_cost_consumed,
+        "priority_passed_to_responder": priority_passed_to_responder,
+        "responder_spell_rejected_before_mutation": responder_spell_rejected_before_mutation,
+        "responder_non_mana_ability_rejected_before_mutation":
+            responder_non_mana_ability_rejected_before_mutation,
+        "responder_mana_ability_allowed": responder_mana_ability_allowed,
+        "responder_green_mana_added": responder_green_mana_added,
+        "mana_source_tapped": mana_source_tapped,
+        "stack_resolved": stack_resolved,
+        "source_moved_to_owner_graveyard": source_moved_to_owner_graveyard,
+        "resolution_recorded_split_second": resolution_recorded_split_second,
+        "destroy_action_applied": destroy_action_applied,
+        "artifact_destroyed_to_owner_graveyard": artifact_destroyed_to_owner_graveyard,
+        "ordinary_cast_available_after_resolution": ordinary_cast_available_after_resolution,
+    }))
 }
 
 fn noncreature_counter_probe(program: &CardProgram) -> Option<serde_json::Value> {
@@ -1785,6 +2426,8 @@ fn semantic_probe(program: &CardProgram) -> serde_json::Value {
         "sacrifice_counter": sacrifice_counter_probe(program),
         "temporary_protection": temporary_protection_probe(program),
         "commander_alternate_cost": commander_alternate_cost_probe(program),
+        "flashback_looting": flashback_looting_probe(program),
+        "split_second": split_second_probe(program),
         "noncreature_counter": noncreature_counter_probe(program),
         "temporary_creature_protection": temporary_creature_protection_probe(program),
     })

@@ -73,6 +73,8 @@ def observed_from_cases(cases: dict) -> list[dict]:
                 "commander_alternate_cost": (
                     SEMANTICS.expected_commander_alternate_cost_probe(case)
                 ),
+                "flashback_looting": SEMANTICS.expected_flashback_looting_probe(case),
+                "split_second": SEMANTICS.expected_split_second_probe(case),
                 "noncreature_counter": (
                     SEMANTICS.expected_noncreature_counter_probe(case)
                 ),
@@ -113,9 +115,9 @@ class CommanderSemanticSidecarTests(unittest.TestCase):
             self.cases["summary"],
             {
                 "candidate_count": 100,
-                "semantic_case_ready": 71,
+                "semantic_case_ready": 73,
                 "blocked_semantic_gap": 20,
-                "blocked_runtime": 9,
+                "blocked_runtime": 7,
             },
         )
 
@@ -319,6 +321,58 @@ class CommanderSemanticSidecarTests(unittest.TestCase):
         with self.assertRaisesRegex(
             ValueError, "temporary creature-protection probe changed"
         ):
+            SEMANTICS.verify_observed(self.cases, observed)
+
+    def test_faithless_looting_requires_flashback_exile_resolution(self) -> None:
+        observed = observed_from_cases(self.cases)
+        looting_index = next(
+            index
+            for index, case in enumerate(self.cases["cases"])
+            if case["card_name"] == "Faithless Looting"
+        )
+        observed[looting_index]["semantic_probe"]["flashback_looting"][
+            "source_exiled_on_resolution"
+        ] = False
+        with self.assertRaisesRegex(ValueError, "flashback-looting semantic probe changed"):
+            SEMANTICS.verify_observed(self.cases, observed)
+
+    def test_faithless_looting_choices_fail_before_mutation(self) -> None:
+        observed = observed_from_cases(self.cases)
+        looting_index = next(
+            index
+            for index, case in enumerate(self.cases["cases"])
+            if case["card_name"] == "Faithless Looting"
+        )
+        observed[looting_index]["semantic_probe"]["flashback_looting"][
+            "duplicate_choice_rejected_before_mutation"
+        ] = False
+        with self.assertRaisesRegex(ValueError, "flashback-looting semantic probe changed"):
+            SEMANTICS.verify_observed(self.cases, observed)
+
+    def test_krosan_grip_split_second_blocks_non_mana_responses(self) -> None:
+        observed = observed_from_cases(self.cases)
+        grip_index = next(
+            index
+            for index, case in enumerate(self.cases["cases"])
+            if case["card_name"] == "Krosan Grip"
+        )
+        observed[grip_index]["semantic_probe"]["split_second"][
+            "responder_non_mana_ability_rejected_before_mutation"
+        ] = False
+        with self.assertRaisesRegex(ValueError, "split-second semantic probe changed"):
+            SEMANTICS.verify_observed(self.cases, observed)
+
+    def test_krosan_grip_split_second_allows_mana_and_then_expires(self) -> None:
+        observed = observed_from_cases(self.cases)
+        grip_index = next(
+            index
+            for index, case in enumerate(self.cases["cases"])
+            if case["card_name"] == "Krosan Grip"
+        )
+        observed[grip_index]["semantic_probe"]["split_second"][
+            "ordinary_cast_available_after_resolution"
+        ] = False
+        with self.assertRaisesRegex(ValueError, "split-second semantic probe changed"):
             SEMANTICS.verify_observed(self.cases, observed)
 
     def test_incremental_report_keeps_checkpoint_open(self) -> None:

@@ -49,6 +49,8 @@ ATOM_CAPABILITIES = {
     "add_counters": "add_counters",
     "combat_restriction": "combat_restriction",
     "alternate_cost": "alternate_cost",
+    "flashback": "alternate_cost",
+    "split_second": "split_second",
 }
 SEMANTIC_BLOCKER_CODES = {
     "COPY_TRIGGER_EVENT_MISSING",
@@ -132,7 +134,11 @@ def validate_expected_runtime(case: dict[str, Any]) -> None:
         life = expected.get("final_life_totals")
         if not isinstance(life, list) or len(life) != 2 or not all(isinstance(v, int) for v in life):
             raise ValueError(f"{case['scenario_id']}: invalid final life totals")
-        if expected.get("destination") not in {"battlefield", "owner_graveyard"}:
+        if expected.get("destination") not in {
+            "battlefield",
+            "exile",
+            "owner_graveyard",
+        }:
             raise ValueError(f"{case['scenario_id']}: invalid card lifecycle destination")
         final_hash = expected.get("final_hash")
         if not isinstance(final_hash, str) or not final_hash.isdigit() or int(final_hash) == 0:
@@ -786,6 +792,117 @@ def expected_temporary_creature_protection_probe(
     }
 
 
+def expected_flashback_looting_probe(case: dict[str, Any]) -> dict[str, Any] | None:
+    atoms = case.get("semantic_atoms", [])
+    flashback = [atom for atom in atoms if atom.get("op") == "flashback"]
+    if not flashback:
+        return None
+    draws = [atom for atom in atoms if atom.get("op") == "draw_cards"]
+    discards = [atom for atom in atoms if atom.get("op") == "discard_cards"]
+    if flashback != [
+        {
+            "cost": "{2}{R}",
+            "destination": "exile",
+            "op": "flashback",
+            "source_zone": "graveyard",
+        }
+    ] or draws != [
+        {"count": 2, "op": "draw_cards", "player": "controller"}
+    ] or discards != [
+        {
+            "count": 2,
+            "mode": "explicit_choice",
+            "op": "discard_cards",
+            "player": "controller",
+            "zone": "hand",
+        }
+    ]:
+        raise ValueError(f"{case['scenario_id']}: invalid flashback-looting expectation")
+    return {
+        "setup_succeeded": True,
+        "alternate_cost_count": 1,
+        "condition_is_source_in_controller_graveyard": True,
+        "printed_generic_mana": 0,
+        "printed_red_mana": 1,
+        "flashback_generic_mana": 2,
+        "flashback_red_mana": 1,
+        "flashback_exact_payment_total": 3,
+        "unavailable_from_hand": True,
+        "available_from_graveyard": True,
+        "cast_window_ready": True,
+        "source_on_stack": True,
+        "stack_entry_marked_flashback": True,
+        "flashback_cost_consumed": True,
+        "stack_resolved": True,
+        "source_exiled_on_resolution": True,
+        "resolution_recorded": True,
+        "choice_slot_count": 1,
+        "choice_player_is_controller": True,
+        "choice_zone_is_hand": True,
+        "choice_minimum": 2,
+        "choice_maximum": 2,
+        "undersized_choice_rejected_before_mutation": True,
+        "duplicate_choice_rejected_before_mutation": True,
+        "out_of_zone_choice_rejected_before_mutation": True,
+        "bound_action_count": 3,
+        "draw_action_exact": True,
+        "discard_actions_exact": True,
+        "exactly_two_cards_drawn": True,
+        "exactly_two_explicit_choices_discarded": True,
+        "retained_card_remained_in_hand": True,
+        "out_of_zone_card_unchanged": True,
+    }
+
+
+def expected_split_second_probe(case: dict[str, Any]) -> dict[str, Any] | None:
+    atoms = case.get("semantic_atoms", [])
+    split_second = [atom for atom in atoms if atom.get("op") == "split_second"]
+    if not split_second:
+        return None
+    destroy = [atom for atom in atoms if atom.get("op") == "destroy_permanent"]
+    if split_second != [
+        {
+            "allows": ["activate_mana_abilities"],
+            "forbids": ["cast_spells", "activate_non_mana_abilities"],
+            "op": "split_second",
+            "while": "source_on_stack",
+        }
+    ] or destroy != [
+        {"op": "destroy_permanent", "target": "artifact|enchantment"}
+    ]:
+        raise ValueError(f"{case['scenario_id']}: invalid split-second expectation")
+    return {
+        "setup_succeeded": True,
+        "split_second_compiled": True,
+        "target_slot_count": 1,
+        "artifact_target_accepted": True,
+        "enchantment_target_accepted": True,
+        "creature_target_rejected": True,
+        "enchantment_binding_accepted": True,
+        "creature_binding_rejected": True,
+        "bound_action_count": 1,
+        "destroy_action_exact": True,
+        "printed_generic_mana": 2,
+        "printed_green_mana": 1,
+        "cast_payment_total": 3,
+        "source_on_stack": True,
+        "stack_entry_marked_split_second": True,
+        "cast_cost_consumed": True,
+        "priority_passed_to_responder": True,
+        "responder_spell_rejected_before_mutation": True,
+        "responder_non_mana_ability_rejected_before_mutation": True,
+        "responder_mana_ability_allowed": True,
+        "responder_green_mana_added": True,
+        "mana_source_tapped": True,
+        "stack_resolved": True,
+        "source_moved_to_owner_graveyard": True,
+        "resolution_recorded_split_second": True,
+        "destroy_action_applied": True,
+        "artifact_destroyed_to_owner_graveyard": True,
+        "ordinary_cast_available_after_resolution": True,
+    }
+
+
 def verify_semantic_probe(case: dict[str, Any], actual: dict[str, Any]) -> None:
     if case.get("status") != "semantic_case_ready":
         return
@@ -902,6 +1019,17 @@ def verify_semantic_probe(case: dict[str, Any], actual: dict[str, Any]) -> None:
         raise ValueError(
             f"{case['scenario_id']}: temporary creature-protection probe changed"
         )
+
+    flashback_looting = expected_flashback_looting_probe(case)
+    if (
+        flashback_looting is not None
+        and probe.get("flashback_looting") != flashback_looting
+    ):
+        raise ValueError(f"{case['scenario_id']}: flashback-looting semantic probe changed")
+
+    split_second = expected_split_second_probe(case)
+    if split_second is not None and probe.get("split_second") != split_second:
+        raise ValueError(f"{case['scenario_id']}: split-second semantic probe changed")
 
 
 def aggregate_translated_hash(cases: dict[str, Any]) -> str:

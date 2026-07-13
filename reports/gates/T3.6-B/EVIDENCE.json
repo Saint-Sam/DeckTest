@@ -2,15 +2,15 @@
   "artifacts": {
     "runner": {
       "path": "tools/run_t3_6_commander_semantics.py",
-      "sha256": "4fb1bf4d575ca64c88a2f1a3300074e3d2f60f31c2c0d88d22340bda3244ae65"
+      "sha256": "4dbce1dbbab1f2b16781823b8e37178fccd0acc953ccd93714f88c88f01cc3ca"
     },
     "runtime_probe": {
       "path": "tests/t3_6/runtime_probe.rs",
-      "sha256": "1b3256c22413bdd24b8e90c34725d505c600fd847ca92033c1afefa39cf6227e"
+      "sha256": "3ba40ef5cee354a64f824a9d85a6803fe1c18675520d1b42a853a382dd82a13a"
     },
     "semantic_cases": {
       "path": "tests/t3_6/commander_semantic_cases.json",
-      "sha256": "3d75cd10eb2ae7347a8260d847baaef08245deb29b3022d7b86df3d40c1258b9"
+      "sha256": "5c640be14f74723ebf0d4c79ef589e684e74a35c42fbce1f77950c5525d3a28f"
     }
   },
   "blocked_runtime": [
@@ -18,11 +18,6 @@
       "card_name": "Cyclonic Rift",
       "reason_code": "unsupported_keyword_semantics",
       "scenario_id": "T3.6-017"
-    },
-    {
-      "card_name": "Krosan Grip",
-      "reason_code": "unsupported_keyword_semantics",
-      "scenario_id": "T3.6-042"
     },
     {
       "card_name": "Boros Charm",
@@ -33,11 +28,6 @@
       "card_name": "Reconnaissance Mission",
       "reason_code": "unsupported_keyword_semantics",
       "scenario_id": "T3.6-066"
-    },
-    {
-      "card_name": "Faithless Looting",
-      "reason_code": "unsupported_keyword_semantics",
-      "scenario_id": "T3.6-071"
     },
     {
       "card_name": "Mulldrifter",
@@ -206,12 +196,12 @@
   ],
   "checkpoint": {
     "id": "CP-CARD-SEMANTICS-100",
-    "remaining": 29,
+    "remaining": 27,
     "required": 100,
-    "semantic_verified": 71,
+    "semantic_verified": 73,
     "status": "in_progress"
   },
-  "claim_boundary": "71 identities have one card-specific expected production path and exact deterministic replay. The other 29 remain reason-coded and are not semantic_verified; CP-CARD-SEMANTICS-100 remains open.",
+  "claim_boundary": "73 identities have one card-specific expected production path and exact deterministic replay. The other 27 remain reason-coded and are not semantic_verified; CP-CARD-SEMANTICS-100 remains open.",
   "constraints": {
     "github_actions_used": false,
     "installs_performed": false,
@@ -226,7 +216,7 @@
   },
   "generated_at": "2026-07-13",
   "measured": {
-    "blocked_runtime": 9,
+    "blocked_runtime": 7,
     "blocked_semantic_gap": 20,
     "frozen_candidates": 100,
     "production_failures": 0,
@@ -234,22 +224,22 @@
       "unsupported_ability_shape": 1,
       "unsupported_card_layout": 1,
       "unsupported_effect_operation": 2,
-      "unsupported_keyword_semantics": 5
+      "unsupported_keyword_semantics": 3
     },
-    "runtime_smoke_passed": 91,
+    "runtime_smoke_passed": 93,
     "semantic_blocker_reason_counts": {
       "COPY_TRIGGER_EVENT_MISSING": 1,
       "REGENERATION_PROHIBITION_MISSING": 4,
       "REVEAL_KNOWLEDGE_EVENT_MISSING": 6,
       "TOKEN_SUBTYPE_STATE_MISSING": 11
     },
-    "semantic_verified": 71
+    "semantic_verified": 73
   },
   "product_binding": {
     "candidate_payload_sha256": "901a08efac2e4eaefc3c2adba3fa23515709595efcde30e43032f24112552e0b",
-    "observed_replay_sha256": "5fa566e75148aed776a9989ee2ef6c121fdf24dd6027642bef50ef5872e65dd8",
-    "runtime_source_commit": "a87c71623ecca65f93d2997c6beacd1e5ff23c5d",
-    "semantic_cases_payload_sha256": "c661b35e3eb0514ea20df6e56cc22e775ca990e21c505e3d078d1c90663bf528",
+    "observed_replay_sha256": "75c323457b7b4d2c732ff5693a16fedb4f867e0c7a0ae29752f7b1f75968b83b",
+    "runtime_source_commit": "74312eb720924fb5651539de63976a53c3f03eef",
+    "semantic_cases_payload_sha256": "f794515f41aaf8898176ae8f38d66082a94eeaaef9c9ea949d6df0272eb19213",
     "translated_definitions_aggregate_sha256": "9e09956bdd16d34c77905dcbf53fea2b9f31164b7049c3a30424dc7109801fb0"
   },
   "schema_version": 2,
@@ -304,7 +294,7 @@
     },
     {
       "card_name": "Sol Ring",
-      "final_hash": "10736175156471362934",
+      "final_hash": "7477903323980869258",
       "freeze_rank": 7,
       "oracle_id": "6ad8011d-3471-4369-9d68-b264cc027487",
       "scenario_id": "T3.6-007",
@@ -312,7 +302,7 @@
     },
     {
       "card_name": "Mind Stone",
-      "final_hash": "3316642912589021956",
+      "final_hash": "681106034955386464",
       "freeze_rank": 8,
       "oracle_id": "c97361b5-af16-4a7b-af85-a429dbaf4ad2",
       "scenario_id": "T3.6-008",
@@ -320,7 +310,7 @@
     },
     {
       "card_name": "Thought Vessel",
-      "final_hash": "1183247711630488754",
+      "final_hash": "16184873450149450118",
       "freeze_rank": 9,
       "oracle_id": "9965d9c5-2ebf-4a6c-930e-55c5890979be",
       "scenario_id": "T3.6-009",
@@ -328,7 +318,7 @@
     },
     {
       "card_name": "Swiftfoot Boots",
-      "final_hash": "1913661080457352577",
+      "final_hash": "6547161080866451285",
       "freeze_rank": 10,
       "oracle_id": "c8b143ad-43ec-4e0d-a440-e348daa31391",
       "scenario_id": "T3.6-010",
@@ -336,7 +326,7 @@
     },
     {
       "card_name": "Lightning Greaves",
-      "final_hash": "3668359424859327907",
+      "final_hash": "4785064261266803675",
       "freeze_rank": 11,
       "oracle_id": "ca204b66-8d0c-431a-8d34-282f7c2d17da",
       "scenario_id": "T3.6-011",
@@ -344,7 +334,7 @@
     },
     {
       "card_name": "Swords to Plowshares",
-      "final_hash": "4842367332379216463",
+      "final_hash": "12253421639670347125",
       "freeze_rank": 12,
       "oracle_id": "b1544f21-7e98-461b-aed5-e748b0168c52",
       "scenario_id": "T3.6-012",
@@ -352,7 +342,7 @@
     },
     {
       "card_name": "Counterspell",
-      "final_hash": "3483841764383140600",
+      "final_hash": "591598661151780188",
       "freeze_rank": 15,
       "oracle_id": "cc187110-1148-4090-bbb8-e205694a39f5",
       "scenario_id": "T3.6-015",
@@ -360,7 +350,7 @@
     },
     {
       "card_name": "Negate",
-      "final_hash": "15901256546813549335",
+      "final_hash": "7833089808869482211",
       "freeze_rank": 16,
       "oracle_id": "3407fe41-fdd3-4119-8f70-4bc4590a379f",
       "scenario_id": "T3.6-016",
@@ -368,7 +358,7 @@
     },
     {
       "card_name": "Rampant Growth",
-      "final_hash": "10842329424430152236",
+      "final_hash": "866780946908220808",
       "freeze_rank": 18,
       "oracle_id": "8539f295-5d58-4436-a73a-b9277c4c7795",
       "scenario_id": "T3.6-018",
@@ -376,7 +366,7 @@
     },
     {
       "card_name": "Farseek",
-      "final_hash": "693907114362046302",
+      "final_hash": "4156434846549609666",
       "freeze_rank": 19,
       "oracle_id": "495e52e6-4c2b-4574-9474-eadbdcc8b4ac",
       "scenario_id": "T3.6-019",
@@ -384,7 +374,7 @@
     },
     {
       "card_name": "Nature's Lore",
-      "final_hash": "7205941223963722186",
+      "final_hash": "8699036504010268454",
       "freeze_rank": 20,
       "oracle_id": "78826359-fe63-44ad-adc4-a17ffcd710e4",
       "scenario_id": "T3.6-020",
@@ -392,7 +382,7 @@
     },
     {
       "card_name": "Three Visits",
-      "final_hash": "11856776118488928010",
+      "final_hash": "9805664731913268400",
       "freeze_rank": 21,
       "oracle_id": "1b882a0e-0ede-4d1a-bd1a-9b7cffbcde8e",
       "scenario_id": "T3.6-021",
@@ -400,7 +390,7 @@
     },
     {
       "card_name": "Sakura-Tribe Elder",
-      "final_hash": "15747954545281033611",
+      "final_hash": "14437669376454446171",
       "freeze_rank": 22,
       "oracle_id": "e3afc704-220f-498f-9eaa-0821b17dc24c",
       "scenario_id": "T3.6-022",
@@ -408,7 +398,7 @@
     },
     {
       "card_name": "Llanowar Elves",
-      "final_hash": "12908995026950480160",
+      "final_hash": "8370553609178112868",
       "freeze_rank": 23,
       "oracle_id": "68954295-54e3-4303-a6bc-fc4547a4e3a3",
       "scenario_id": "T3.6-023",
@@ -416,7 +406,7 @@
     },
     {
       "card_name": "Elvish Mystic",
-      "final_hash": "5320307283971862560",
+      "final_hash": "16612671324008505444",
       "freeze_rank": 24,
       "oracle_id": "3f3b2c10-21f8-4e13-be83-4ef3fa36e123",
       "scenario_id": "T3.6-024",
@@ -424,7 +414,7 @@
     },
     {
       "card_name": "Birds of Paradise",
-      "final_hash": "5477551285250211390",
+      "final_hash": "701256138470923822",
       "freeze_rank": 25,
       "oracle_id": "d3a0b660-358c-41bd-9cd2-41fbf3491b1a",
       "scenario_id": "T3.6-025",
@@ -432,7 +422,7 @@
     },
     {
       "card_name": "Phyrexian Arena",
-      "final_hash": "11254350382828560135",
+      "final_hash": "5523983122782289827",
       "freeze_rank": 26,
       "oracle_id": "ee579a32-a048-4335-b966-231ba731cdea",
       "scenario_id": "T3.6-026",
@@ -440,7 +430,7 @@
     },
     {
       "card_name": "Read the Bones",
-      "final_hash": "12566782012412252434",
+      "final_hash": "17521348064747580774",
       "freeze_rank": 27,
       "oracle_id": "5bf4d8d9-a2b2-4dba-ac05-9d4470a89db2",
       "scenario_id": "T3.6-027",
@@ -448,7 +438,7 @@
     },
     {
       "card_name": "Night's Whisper",
-      "final_hash": "2829699755894225497",
+      "final_hash": "5120713571929626593",
       "freeze_rank": 28,
       "oracle_id": "7ffae8f8-3006-4969-a339-6d30678f87ea",
       "scenario_id": "T3.6-028",
@@ -456,7 +446,7 @@
     },
     {
       "card_name": "Sign in Blood",
-      "final_hash": "681282963173335036",
+      "final_hash": "9114196735938820304",
       "freeze_rank": 29,
       "oracle_id": "c6207f6a-a624-4754-88f5-dbe700c841ff",
       "scenario_id": "T3.6-029",
@@ -464,7 +454,7 @@
     },
     {
       "card_name": "Harmonize",
-      "final_hash": "17935078743937733256",
+      "final_hash": "2366884570865651768",
       "freeze_rank": 30,
       "oracle_id": "7eff84f1-f772-497a-b350-bbc93d0230f7",
       "scenario_id": "T3.6-030",
@@ -472,7 +462,7 @@
     },
     {
       "card_name": "Preordain",
-      "final_hash": "15289906292506784851",
+      "final_hash": "2430633452379971197",
       "freeze_rank": 31,
       "oracle_id": "ac641490-ca14-48d7-8cc4-b69ce984befa",
       "scenario_id": "T3.6-031",
@@ -480,7 +470,7 @@
     },
     {
       "card_name": "Opt",
-      "final_hash": "8452056962495109796",
+      "final_hash": "14069576830985346780",
       "freeze_rank": 32,
       "oracle_id": "713332c1-5bd8-400f-bfff-c1ca0697a043",
       "scenario_id": "T3.6-032",
@@ -488,7 +478,7 @@
     },
     {
       "card_name": "Evolving Wilds",
-      "final_hash": "9932894168750189202",
+      "final_hash": "298020292362982198",
       "freeze_rank": 33,
       "oracle_id": "a75445d3-1303-4bb5-89ad-26ea93fecd48",
       "scenario_id": "T3.6-033",
@@ -496,7 +486,7 @@
     },
     {
       "card_name": "Terramorphic Expanse",
-      "final_hash": "10472441502861976322",
+      "final_hash": "17795902093389904846",
       "freeze_rank": 34,
       "oracle_id": "1bd3e453-aa21-4ee6-95c2-d6d920ee8e7a",
       "scenario_id": "T3.6-034",
@@ -520,7 +510,7 @@
     },
     {
       "card_name": "Talisman of Dominance",
-      "final_hash": "4165899379185879856",
+      "final_hash": "6183595603462054788",
       "freeze_rank": 37,
       "oracle_id": "4c0a0448-b9d6-43a0-8549-64066dac63f0",
       "scenario_id": "T3.6-037",
@@ -528,7 +518,7 @@
     },
     {
       "card_name": "Talisman of Progress",
-      "final_hash": "11460197759201535062",
+      "final_hash": "8720133960160957814",
       "freeze_rank": 38,
       "oracle_id": "00e35322-1a9a-41e3-9ce1-359c8eaa3bc7",
       "scenario_id": "T3.6-038",
@@ -536,7 +526,7 @@
     },
     {
       "card_name": "Talisman of Creativity",
-      "final_hash": "13585493412272072238",
+      "final_hash": "18016704792855033438",
       "freeze_rank": 39,
       "oracle_id": "14d2979d-5728-42d7-a027-0eb1f754655d",
       "scenario_id": "T3.6-039",
@@ -544,7 +534,7 @@
     },
     {
       "card_name": "Wayfarer's Bauble",
-      "final_hash": "15308050620487344058",
+      "final_hash": "17288911492947205898",
       "freeze_rank": 40,
       "oracle_id": "31f15274-301b-47c5-ba19-0ced04520878",
       "scenario_id": "T3.6-040",
@@ -552,15 +542,23 @@
     },
     {
       "card_name": "Burnished Hart",
-      "final_hash": "6012944628672657009",
+      "final_hash": "4825506002237266369",
       "freeze_rank": 41,
       "oracle_id": "893fed41-c144-433f-af88-bc7d419b7fb3",
       "scenario_id": "T3.6-041",
       "stratum": "land_ramp_and_search"
     },
     {
+      "card_name": "Krosan Grip",
+      "final_hash": "7251025175685622351",
+      "freeze_rank": 42,
+      "oracle_id": "3e39224c-72ce-4ecc-aa17-12c071ea1f3e",
+      "scenario_id": "T3.6-042",
+      "stratum": "targeted_permanent_interaction"
+    },
+    {
       "card_name": "Nature's Claim",
-      "final_hash": "15493759703132795785",
+      "final_hash": "11070667981692208653",
       "freeze_rank": 43,
       "oracle_id": "6d4e558e-9109-4918-a082-fdcbaffd516b",
       "scenario_id": "T3.6-043",
@@ -568,7 +566,7 @@
     },
     {
       "card_name": "Anguished Unmaking",
-      "final_hash": "14147693397252249170",
+      "final_hash": "12370686077147356312",
       "freeze_rank": 44,
       "oracle_id": "ad09b3c3-c8e7-481c-8c45-e7f234935117",
       "scenario_id": "T3.6-044",
@@ -576,7 +574,7 @@
     },
     {
       "card_name": "Utter End",
-      "final_hash": "138309007077900427",
+      "final_hash": "7920049398696084173",
       "freeze_rank": 45,
       "oracle_id": "cba94732-1f1f-4ffd-9aba-45db990043fa",
       "scenario_id": "T3.6-045",
@@ -584,7 +582,7 @@
     },
     {
       "card_name": "Despark",
-      "final_hash": "4283933516385070894",
+      "final_hash": "9900768950820896144",
       "freeze_rank": 46,
       "oracle_id": "bd16434d-55ea-4c5a-a9ef-752971a4af16",
       "scenario_id": "T3.6-046",
@@ -592,7 +590,7 @@
     },
     {
       "card_name": "Mortify",
-      "final_hash": "1642049723713045215",
+      "final_hash": "14735852942293351759",
       "freeze_rank": 47,
       "oracle_id": "faa01ed1-ccfa-4e58-951f-cd81f9068027",
       "scenario_id": "T3.6-047",
@@ -600,7 +598,7 @@
     },
     {
       "card_name": "Bedevil",
-      "final_hash": "14110477734965979100",
+      "final_hash": "9267421872557387962",
       "freeze_rank": 50,
       "oracle_id": "bceecc64-96f1-4e7b-8904-0aef90377764",
       "scenario_id": "T3.6-050",
@@ -608,7 +606,7 @@
     },
     {
       "card_name": "Vindicate",
-      "final_hash": "3180982829165440527",
+      "final_hash": "9349708585009244671",
       "freeze_rank": 51,
       "oracle_id": "63c1ac21-e3d8-40c2-8c09-3f31c52992ef",
       "scenario_id": "T3.6-051",
@@ -616,7 +614,7 @@
     },
     {
       "card_name": "Dispel",
-      "final_hash": "5528310795036954826",
+      "final_hash": "12848773503449442254",
       "freeze_rank": 56,
       "oracle_id": "6d7be242-a072-40ce-b540-95880506cccd",
       "scenario_id": "T3.6-056",
@@ -624,7 +622,7 @@
     },
     {
       "card_name": "Fierce Guardianship",
-      "final_hash": "6529959110902247039",
+      "final_hash": "4747664361224921861",
       "freeze_rank": 57,
       "oracle_id": "d09c9cba-fdd2-479b-ad5d-d05181c3e3f9",
       "scenario_id": "T3.6-057",
@@ -632,7 +630,7 @@
     },
     {
       "card_name": "Heroic Intervention",
-      "final_hash": "7658552940165801494",
+      "final_hash": "4561315836801110030",
       "freeze_rank": 58,
       "oracle_id": "24882fa2-3fe9-4c1b-aa3d-0e6488b9db27",
       "scenario_id": "T3.6-058",
@@ -640,7 +638,7 @@
     },
     {
       "card_name": "Flawless Maneuver",
-      "final_hash": "3569019749649835006",
+      "final_hash": "4239291050910438860",
       "freeze_rank": 60,
       "oracle_id": "4e183439-17d2-47ff-9d99-5e22821d91e3",
       "scenario_id": "T3.6-060",
@@ -648,7 +646,7 @@
     },
     {
       "card_name": "Skyshroud Claim",
-      "final_hash": "3053584489009515142",
+      "final_hash": "3076447145265721746",
       "freeze_rank": 61,
       "oracle_id": "376c9d3f-21d3-4251-bb6a-026fa9e1b0e1",
       "scenario_id": "T3.6-061",
@@ -656,7 +654,7 @@
     },
     {
       "card_name": "Harrow",
-      "final_hash": "4105676030335014096",
+      "final_hash": "5120084697485060574",
       "freeze_rank": 62,
       "oracle_id": "705509e9-a034-4a5a-9c65-66f58748b8a2",
       "scenario_id": "T3.6-062",
@@ -664,7 +662,7 @@
     },
     {
       "card_name": "Wood Elves",
-      "final_hash": "9065400679619638094",
+      "final_hash": "5505131200519641562",
       "freeze_rank": 63,
       "oracle_id": "8973bd99-20f8-4867-90ef-50392147ee1b",
       "scenario_id": "T3.6-063",
@@ -672,7 +670,7 @@
     },
     {
       "card_name": "Farhaven Elf",
-      "final_hash": "13530641084220943900",
+      "final_hash": "9212093166280731952",
       "freeze_rank": 64,
       "oracle_id": "4ce2357f-93e6-40ca-beca-8f4e15adc464",
       "scenario_id": "T3.6-064",
@@ -680,7 +678,7 @@
     },
     {
       "card_name": "Sword of the Animist",
-      "final_hash": "14000570846894602531",
+      "final_hash": "16558694966735709377",
       "freeze_rank": 65,
       "oracle_id": "d79cbc61-6c15-48ea-bbba-3cffb819ccba",
       "scenario_id": "T3.6-065",
@@ -688,7 +686,7 @@
     },
     {
       "card_name": "Beast Whisperer",
-      "final_hash": "1383743251051582234",
+      "final_hash": "15903271587033912266",
       "freeze_rank": 67,
       "oracle_id": "5da7eea8-bb9e-47ce-a554-8a1ee058bd7a",
       "scenario_id": "T3.6-067",
@@ -696,7 +694,7 @@
     },
     {
       "card_name": "Greed",
-      "final_hash": "13037519941277632162",
+      "final_hash": "6544290825905954706",
       "freeze_rank": 68,
       "oracle_id": "1ff62220-be95-4901-b8d8-812b9a1a1b0a",
       "scenario_id": "T3.6-068",
@@ -704,7 +702,7 @@
     },
     {
       "card_name": "Village Rites",
-      "final_hash": "10854478979309842999",
+      "final_hash": "977601941668524627",
       "freeze_rank": 69,
       "oracle_id": "365548fb-5acc-4a8a-b20b-26d28b7d029f",
       "scenario_id": "T3.6-069",
@@ -712,15 +710,23 @@
     },
     {
       "card_name": "Wheel of Fortune",
-      "final_hash": "11616542004449931682",
+      "final_hash": "13979330533876127200",
       "freeze_rank": 70,
       "oracle_id": "a8abd966-de7b-46a3-8ac7-8747ab35653a",
       "scenario_id": "T3.6-070",
       "stratum": "card_flow"
     },
     {
+      "card_name": "Faithless Looting",
+      "final_hash": "10251951558279970935",
+      "freeze_rank": 71,
+      "oracle_id": "3d6fa57a-aa53-4b5c-b8af-a7612c823117",
+      "scenario_id": "T3.6-071",
+      "stratum": "card_flow"
+    },
+    {
       "card_name": "Cloudblazer",
-      "final_hash": "3677566661606350959",
+      "final_hash": "14992304440545294507",
       "freeze_rank": 77,
       "oracle_id": "f84d1291-1f82-4b67-a26e-b79624b4ce1d",
       "scenario_id": "T3.6-077",
@@ -728,7 +734,7 @@
     },
     {
       "card_name": "Sun Titan",
-      "final_hash": "3194242844786675008",
+      "final_hash": "14484847599769818814",
       "freeze_rank": 78,
       "oracle_id": "b2e950fb-cb7e-40a0-a311-5bbdd0477b29",
       "scenario_id": "T3.6-078",
@@ -736,7 +742,7 @@
     },
     {
       "card_name": "Primeval Titan",
-      "final_hash": "5840126593961012407",
+      "final_hash": "12398891745750314413",
       "freeze_rank": 80,
       "oracle_id": "ae83ef2c-960f-4c5b-97cc-52465c687c18",
       "scenario_id": "T3.6-080",
@@ -744,7 +750,7 @@
     },
     {
       "card_name": "Reclamation Sage",
-      "final_hash": "1719872110786835599",
+      "final_hash": "3999107966465916555",
       "freeze_rank": 81,
       "oracle_id": "032ec6e2-6cc3-4a97-9cc7-3233f5e11904",
       "scenario_id": "T3.6-081",
@@ -752,7 +758,7 @@
     },
     {
       "card_name": "Caustic Caterpillar",
-      "final_hash": "8337253688385813472",
+      "final_hash": "2174115153764937392",
       "freeze_rank": 82,
       "oracle_id": "45d35128-76e6-43f9-8d23-41f7506c3a71",
       "scenario_id": "T3.6-082",
@@ -760,7 +766,7 @@
     },
     {
       "card_name": "Acidic Slime",
-      "final_hash": "82780635942812505",
+      "final_hash": "6905816095485390605",
       "freeze_rank": 83,
       "oracle_id": "21f45043-5419-4019-8b6c-e5294bd5f549",
       "scenario_id": "T3.6-083",
@@ -768,7 +774,7 @@
     },
     {
       "card_name": "Eternal Witness",
-      "final_hash": "14936703798306271449",
+      "final_hash": "8077502263177166941",
       "freeze_rank": 84,
       "oracle_id": "30b24e8e-3b0e-4d8e-90f3-f66eb7c1858c",
       "scenario_id": "T3.6-084",
@@ -776,7 +782,7 @@
     },
     {
       "card_name": "Regrowth",
-      "final_hash": "8580741204860800339",
+      "final_hash": "3598024908264645271",
       "freeze_rank": 85,
       "oracle_id": "e6e4a8bd-5c40-4654-8de1-0da9afed90fd",
       "scenario_id": "T3.6-085",
@@ -784,7 +790,7 @@
     },
     {
       "card_name": "Archaeomancer",
-      "final_hash": "3906715705423980593",
+      "final_hash": "10778599250025023197",
       "freeze_rank": 89,
       "oracle_id": "a91a3266-cadd-47a0-9b20-160307f14c07",
       "scenario_id": "T3.6-089",
@@ -792,7 +798,7 @@
     },
     {
       "card_name": "Goblin Chieftain",
-      "final_hash": "11177804651359492460",
+      "final_hash": "4771257057065797888",
       "freeze_rank": 95,
       "oracle_id": "368b4052-174e-4458-a6e6-eaf8093aa0fe",
       "scenario_id": "T3.6-095",
@@ -800,7 +806,7 @@
     },
     {
       "card_name": "Goblin Warchief",
-      "final_hash": "16452218097578251045",
+      "final_hash": "10708653345083723491",
       "freeze_rank": 96,
       "oracle_id": "39882df0-c20f-469d-94ba-1617224e71a1",
       "scenario_id": "T3.6-096",
@@ -808,7 +814,7 @@
     },
     {
       "card_name": "Carrion Feeder",
-      "final_hash": "8182468761079477921",
+      "final_hash": "2807246118300059025",
       "freeze_rank": 99,
       "oracle_id": "a1cc5e37-b09a-4b7f-afd5-77c1c35aa425",
       "scenario_id": "T3.6-099",
@@ -816,7 +822,7 @@
     },
     {
       "card_name": "Craterhoof Behemoth",
-      "final_hash": "15012946979314124079",
+      "final_hash": "8895386011941069195",
       "freeze_rank": 100,
       "oracle_id": "8c52bd39-0586-48ca-b263-17210cf9feb6",
       "scenario_id": "T3.6-100",
@@ -828,7 +834,7 @@
   "verification": [
     {
       "command": "CARGO_NET_OFFLINE=true python3 tools/run_t3_6_commander_semantics.py --translated-root target/translated-cards --cargo-target-dir target --report reports/gates/T3.6-B/EVIDENCE.json",
-      "result": "PASS; two exact production replays, 71 semantic outcomes matched, 20 semantic gaps and 9 runtime blockers remained fail-closed"
+      "result": "PASS; two exact production replays, 73 semantic outcomes matched, 20 semantic gaps and 7 runtime blockers remained fail-closed"
     }
   ],
   "verification_mode": "local_only"
