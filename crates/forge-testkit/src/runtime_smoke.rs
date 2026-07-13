@@ -5,7 +5,7 @@
 //! invariant checks. Unsupported definitions are returned as data with stable
 //! reason codes; they are never counted as passing smoke.
 
-use forge_carddef::CardDefinition;
+use forge_carddef::{CardDefinition, CardLayout};
 use forge_cards::runtime::{
     bind_activated_effect_actions, bind_program_actions, bind_triggered_ability_actions,
     compile_card_program, ActivatedEffectProgram, AlternateCostCondition, AlternateCostKind,
@@ -316,17 +316,89 @@ impl RuntimeSmokeReport {
 /// [`apply`] with no intervening gameplay action.
 #[must_use]
 pub fn run_translated_card_runtime_smoke(definition: &CardDefinition) -> RuntimeSmokeReport {
-    let result = match compile_smoke(definition) {
-        Ok(compiled) => match execute_smoke(definition, &compiled) {
-            Ok(pass) => RuntimeSmokeResult::Passed(pass),
-            Err(failure) => RuntimeSmokeResult::Failed(failure),
-        },
-        Err(unsupported) => RuntimeSmokeResult::UnsupportedSetup(unsupported),
+    let result = if definition.layout == CardLayout::ModalDfc {
+        run_modal_dfc_smoke(definition)
+    } else {
+        run_single_face_smoke(definition)
     };
     RuntimeSmokeReport {
         oracle_id: definition.id.as_str().to_owned(),
         card_name: definition.name.clone(),
         result,
+    }
+}
+
+fn run_single_face_smoke(definition: &CardDefinition) -> RuntimeSmokeResult {
+    match compile_smoke(definition) {
+        Ok(compiled) => match execute_smoke(definition, &compiled) {
+            Ok(pass) => RuntimeSmokeResult::Passed(pass),
+            Err(failure) => RuntimeSmokeResult::Failed(failure),
+        },
+        Err(unsupported) => RuntimeSmokeResult::UnsupportedSetup(unsupported),
+    }
+}
+
+fn run_modal_dfc_smoke(definition: &CardDefinition) -> RuntimeSmokeResult {
+    let full_program = match compile_card_program(definition) {
+        Ok(program) => program,
+        Err(diagnostic) => {
+            return RuntimeSmokeResult::UnsupportedSetup(map_compile_diagnostic(diagnostic));
+        }
+    };
+    let [front, back] = definition.faces.as_slice() else {
+        return RuntimeSmokeResult::UnsupportedSetup(RuntimeSmokeUnsupported::new(
+            UnsupportedSetupCode::FaceCount,
+            format!(
+                "modal_dfc requires exactly two ordered faces, found {}",
+                definition.faces.len()
+            ),
+        ));
+    };
+    let make_face = |face: &forge_carddef::CardFace| CardDefinition {
+        id: definition.id.clone(),
+        name: face.name.clone(),
+        layout: CardLayout::Normal,
+        status: definition.status.clone(),
+        faces: vec![face.clone()],
+    };
+    let front_pass = match run_single_face_smoke(&make_face(front)) {
+        RuntimeSmokeResult::Passed(pass) => pass,
+        result => return qualify_modal_face_result(result, "front", &front.name),
+    };
+    let back_pass = match run_single_face_smoke(&make_face(back)) {
+        RuntimeSmokeResult::Passed(pass) => pass,
+        result => return qualify_modal_face_result(result, "back", &back.name),
+    };
+    RuntimeSmokeResult::Passed(RuntimeSmokePass {
+        capabilities: full_program.capabilities(),
+        effect_actions: front_pass
+            .effect_actions
+            .saturating_add(back_pass.effect_actions),
+        production_actions: front_pass
+            .production_actions
+            .saturating_add(back_pass.production_actions),
+        final_life_totals: front_pass.final_life_totals,
+        final_hash: front_pass.final_hash.rotate_left(1) ^ back_pass.final_hash,
+        destination: "modal_dfc_faces",
+    })
+}
+
+fn qualify_modal_face_result(
+    result: RuntimeSmokeResult,
+    side: &str,
+    face_name: &str,
+) -> RuntimeSmokeResult {
+    match result {
+        RuntimeSmokeResult::Passed(pass) => RuntimeSmokeResult::Passed(pass),
+        RuntimeSmokeResult::UnsupportedSetup(mut unsupported) => {
+            unsupported.detail = format!("{side} face {face_name:?}: {}", unsupported.detail);
+            RuntimeSmokeResult::UnsupportedSetup(unsupported)
+        }
+        RuntimeSmokeResult::Failed(mut failure) => {
+            failure.phase = format!("modal_dfc.{side}.{}", failure.phase);
+            failure.detail = format!("face {face_name:?}: {}", failure.detail);
+            RuntimeSmokeResult::Failed(failure)
+        }
     }
 }
 
@@ -1144,6 +1216,28 @@ fn execute_smoke(
         resolved_destination,
         "resolve.spell_destination",
     )?;
+    if resolved_destination == ZoneId::new(None, ZoneKind::Battlefield)
+        && compiled.program.base_object().enters_tapped()
+    {
+        if !execution
+            .state
+            .object(spell)
+            .is_some_and(|record| record.tapped())
+        {
+            return Err(RuntimeSmokeFailure::new(
+                RuntimeSmokeFailureCode::ZoneDestinationMismatch,
+                "resolve.enters_tapped",
+                "compiled enters-tapped face reached the battlefield untapped",
+            ));
+        }
+        execution.dispatch(
+            "ability.prepare_after_enters_tapped",
+            Action::SetObjectTapped {
+                object: spell,
+                tapped: false,
+            },
+        )?;
+    }
     let (destination, destination_name) = if alternate_kind == Some(AlternateCostKind::Evoke) {
         (
             ZoneId::new(Some(caster), ZoneKind::Graveyard),
@@ -3814,6 +3908,8 @@ mod tests {
         include_str!("../tests/fixtures/runtime_smoke/smothering_tithe.frs");
     const PURPHOROS: &str =
         include_str!("../tests/fixtures/runtime_smoke/purphoros_god_of_the_forge.frs");
+    const BALA_GED_RECOVERY: &str =
+        include_str!("../tests/fixtures/runtime_smoke/bala_ged_recovery_bala_ged_sanctuary.frs");
     const CREATURE_MANA_SOURCE: &str = r#"
 card "Creature Mana Source" {
   id: "forge:testkit:runtime:creature-mana"
@@ -4285,6 +4381,27 @@ card "Mulldrifter" {
         assert!(pass
             .capabilities()
             .contains(&RuntimeSmokeCapability::DealDamage));
+    }
+
+    #[test]
+    fn bala_ged_recovery_executes_both_modal_dfc_faces() {
+        let definition = parse("bala_ged_recovery.frs", BALA_GED_RECOVERY);
+        let report = run_translated_card_runtime_smoke(&definition);
+        let RuntimeSmokeResult::Passed(pass) = report.result() else {
+            panic!("expected pass, found {:?}", report.result());
+        };
+        assert_eq!(
+            pass.capabilities(),
+            [
+                RuntimeSmokeCapability::ModalDfc,
+                RuntimeSmokeCapability::MoveZone,
+                RuntimeSmokeCapability::LandPlay,
+                RuntimeSmokeCapability::ManaAbility,
+            ]
+        );
+        assert_eq!(pass.effect_actions(), 1);
+        assert_eq!(pass.destination(), "modal_dfc_faces");
+        assert_ne!(pass.final_hash(), 0);
     }
 
     #[test]

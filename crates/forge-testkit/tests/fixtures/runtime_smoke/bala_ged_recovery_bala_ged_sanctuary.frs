@@ -1,0 +1,29 @@
+card "Bala Ged Recovery // Bala Ged Sanctuary" {
+  id: "d2075f58-b0e9-4e85-b7e6-0523a27a1d5b"
+  layout: modal_dfc
+  status: unverified_playable
+  face "Bala Ged Recovery" {
+    cost: "{2}{G}"
+    types: "Sorcery"
+    oracle: "Return target card from your graveyard to your hand."
+    keywords: []
+    ability spell {
+      effect: move_zone_from(target(cards(and(owned_by(you()), zone_is("graveyard")))), "graveyard", "hand")
+    }
+  }
+  face "Bala Ged Sanctuary" {
+    cost: ""
+    types: "Land"
+    oracle: "Bala Ged Sanctuary enters tapped.\n{T}: Add {G}."
+    keywords: []
+    ability replacement {
+      event: event_enters(source())
+      effect: etb_effect(tap(source()))
+    }
+    ability activated {
+      costs: [tap_self()]
+      effect: add_mana("{G}", you())
+      mana_ability: true
+    }
+  }
+}

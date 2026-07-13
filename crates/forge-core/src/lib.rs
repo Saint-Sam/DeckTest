@@ -1805,6 +1805,7 @@ pub struct BaseObjectCharacteristics {
     subtypes: ObjectSubtypes,
     mana_value: u32,
     printed_mana_symbols: ManaPool,
+    enters_tapped: bool,
 }
 
 impl BaseObjectCharacteristics {
@@ -1819,6 +1820,7 @@ impl BaseObjectCharacteristics {
             subtypes: ObjectSubtypes::none(),
             mana_value: 0,
             printed_mana_symbols: ManaPool::empty(),
+            enters_tapped: false,
         }
     }
 
@@ -1854,6 +1856,13 @@ impl BaseObjectCharacteristics {
     #[must_use]
     pub const fn with_printed_mana_symbols(mut self, symbols: ManaPool) -> Self {
         self.printed_mana_symbols = symbols;
+        self
+    }
+
+    /// Marks this face as entering the battlefield tapped.
+    #[must_use]
+    pub const fn with_enters_tapped(mut self) -> Self {
+        self.enters_tapped = true;
         self
     }
 
@@ -1897,6 +1906,12 @@ impl BaseObjectCharacteristics {
     #[must_use]
     pub const fn printed_mana_symbols(self) -> ManaPool {
         self.printed_mana_symbols
+    }
+
+    /// Returns whether this face enters the battlefield tapped.
+    #[must_use]
+    pub const fn enters_tapped(self) -> bool {
+        self.enters_tapped
     }
 }
 
@@ -11835,6 +11850,7 @@ impl GameState {
                 record.controlled_since_turn = self.turn_number;
                 record.damage_marked = 0;
                 record.deathtouch_damage_marked = false;
+                record.tapped = record.base_object.enters_tapped();
             }
         }
         self.emit_event(GameEvent::ObjectMoved {
@@ -14820,6 +14836,7 @@ impl Fnva64 {
         self.write_object_subtypes(base.subtypes());
         self.write_u32(base.mana_value());
         self.write_mana_pool(base.printed_mana_symbols());
+        self.write_bool(base.enters_tapped());
     }
 
     fn write_base_creature_characteristics(&mut self, base: BaseCreatureCharacteristics) {
@@ -16194,6 +16211,7 @@ impl CanonicalBytes {
         self.write_object_subtypes(base.subtypes());
         self.write_u32(base.mana_value());
         self.write_mana_pool(base.printed_mana_symbols());
+        self.write_bool(base.enters_tapped());
     }
 
     fn write_base_creature_characteristics(&mut self, base: BaseCreatureCharacteristics) {
@@ -17388,20 +17406,19 @@ mod tests {
         CombatDamageStepKind, CombatDamageTarget, ContinuousEffectCondition,
         ContinuousEffectDefinition, ContinuousEffectDuration, ContinuousEffectId,
         ContinuousEffectOperation, ContinuousEffectTarget, CostModifierDefinition,
-        CostModifierOperation, CostModifierScope,
-        CreatureCharacteristics, CreatureKeywords, EffectDuration, EventReplayError, GameEvent,
-        GameOutcome, GameState, ManaCost, ManaKind, ManaPool, ManaSource, ObjectColors,
-        ObjectSubtype, ObjectSubtypes, ObjectSupertypes, ObjectTargetPredicate, ObjectTypes,
-        ObjectView, Outcome, PaymentError, Phase, PlayerId, PlayerRule, PlayerRuleSubject,
-        PriorityOutcome, ReplacementCondition, ReplacementDamageTargetFilter,
-        ReplacementDefinition, ReplacementDuration, ReplacementEffectId, ReplacementOperation,
-        ReplacementSourceFilter, ResolutionOutcome, RestrictionDefinition, RestrictionEffect,
-        SpellTiming, StackEntryId, StackObjectKind, StateBasedActionKind, StateBasedActionReport,
-        StateError, Step, TargetChoice, TargetControllerPredicate, TargetKind, TargetRequirement,
-        TargetRestriction, TargetRestrictionSubject, TriggerCondition, TriggerDefinition,
-        TriggerInterveningIf, TriggerObjectFilter, TriggerPlayerFilter, TriggerZoneFilter,
-        ZoneConservation, ZoneId, ZoneKind, EVENT_RING_CAPACITY, NORMAL_TURN_STEPS,
-        OPENING_HAND_SIZE, PAYMENT_PLAN_LIMIT,
+        CostModifierOperation, CostModifierScope, CreatureCharacteristics, CreatureKeywords,
+        EffectDuration, EventReplayError, GameEvent, GameOutcome, GameState, ManaCost, ManaKind,
+        ManaPool, ManaSource, ObjectColors, ObjectSubtype, ObjectSubtypes, ObjectSupertypes,
+        ObjectTargetPredicate, ObjectTypes, ObjectView, Outcome, PaymentError, Phase, PlayerId,
+        PlayerRule, PlayerRuleSubject, PriorityOutcome, ReplacementCondition,
+        ReplacementDamageTargetFilter, ReplacementDefinition, ReplacementDuration,
+        ReplacementEffectId, ReplacementOperation, ReplacementSourceFilter, ResolutionOutcome,
+        RestrictionDefinition, RestrictionEffect, SpellTiming, StackEntryId, StackObjectKind,
+        StateBasedActionKind, StateBasedActionReport, StateError, Step, TargetChoice,
+        TargetControllerPredicate, TargetKind, TargetRequirement, TargetRestriction,
+        TargetRestrictionSubject, TriggerCondition, TriggerDefinition, TriggerInterveningIf,
+        TriggerObjectFilter, TriggerPlayerFilter, TriggerZoneFilter, ZoneConservation, ZoneId,
+        ZoneKind, EVENT_RING_CAPACITY, NORMAL_TURN_STEPS, OPENING_HAND_SIZE, PAYMENT_PLAN_LIMIT,
     };
 
     #[test]
@@ -20159,6 +20176,51 @@ mod tests {
                 .map(|value| value.object_count()),
             Ok(4)
         );
+        assert_eq!(
+            state.deterministic_hash(),
+            state.deterministic_hash_streaming()
+        );
+    }
+
+    #[test]
+    fn land_with_enters_tapped_characteristic_enters_tapped_atomically() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let hand = ZoneId::new(Some(active), ZoneKind::Hand);
+        let land = state
+            .create_object(CardId::new(9_404), active, active, hand)
+            .unwrap_or_else(|error| panic!("unexpected land create error: {error:?}"));
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::SetBaseObjectCharacteristics {
+                    object: land,
+                    base: BaseObjectCharacteristics::new(
+                        ObjectTypes::none().with_land(),
+                        ObjectColors::none(),
+                    )
+                    .with_enters_tapped(),
+                },
+            ),
+            Outcome::Applied
+        );
+        start_upkeep(&mut state, active);
+        while state.current_step() != Some(Step::PrecombatMain) {
+            state
+                .advance_step()
+                .unwrap_or_else(|error| panic!("unexpected advance error: {error:?}"));
+        }
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::PlayLand {
+                    player: active,
+                    object: land,
+                },
+            ),
+            Outcome::Applied
+        );
+        assert!(state.object(land).is_some_and(|record| record.tapped()));
         assert_eq!(
             state.deterministic_hash(),
             state.deterministic_hash_streaming()

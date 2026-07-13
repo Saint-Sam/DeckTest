@@ -215,6 +215,8 @@ pub enum Capability {
     Overload,
     /// Prevent spell casts and non-mana activations while this spell is on the stack.
     SplitSecond,
+    /// Choose and execute either face of a modal double-faced card.
+    ModalDfc,
 }
 
 impl Capability {
@@ -254,6 +256,7 @@ impl Capability {
             Self::ChooseMode => "choose_mode",
             Self::Overload => "overload",
             Self::SplitSecond => "split_second",
+            Self::ModalDfc => "modal_dfc",
         }
     }
 }
@@ -1351,6 +1354,7 @@ pub struct CardProgram {
     activated_effects: Vec<ActivatedEffectProgram>,
     triggered_abilities: Vec<TriggeredAbilityProgram>,
     static_abilities: Vec<StaticAbilityProgram>,
+    modal_dfc_back: Option<Box<CardProgram>>,
 }
 
 impl CardProgram {
@@ -1493,6 +1497,12 @@ impl CardProgram {
         &self.static_abilities
     }
 
+    /// Returns the independently compiled back-face program of a modal DFC.
+    #[must_use]
+    pub fn modal_dfc_back(&self) -> Option<&CardProgram> {
+        self.modal_dfc_back.as_deref()
+    }
+
     /// Returns all compiled capabilities in source execution order.
     #[must_use]
     pub fn capabilities(&self) -> Vec<Capability> {
@@ -1571,6 +1581,18 @@ impl CardProgram {
                 .iter()
                 .flat_map(|ability| ability.effects.iter().map(EffectProgram::capability)),
         );
+        if let Some(back) = &self.modal_dfc_back {
+            let mut combined = Vec::with_capacity(
+                capabilities
+                    .len()
+                    .saturating_add(back.capabilities().len())
+                    .saturating_add(1),
+            );
+            combined.push(Capability::ModalDfc);
+            combined.extend(capabilities);
+            combined.extend(back.capabilities());
+            return combined;
+        }
         capabilities
     }
 }
@@ -1590,6 +1612,9 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
             format!("classification is {:?}", definition.status),
         ));
     }
+    if definition.layout == CardLayout::ModalDfc {
+        return compile_modal_dfc_program(definition);
+    }
     if definition.layout != CardLayout::Normal {
         return Err(CompileDiagnostic::new(
             CompileDiagnosticCode::CardLayout,
@@ -1607,7 +1632,7 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
     let kind = compile_program_kind(&face.type_line.card_types)?;
     let (mana_cost, exact_payment) = compile_mana_cost(&face.mana_cost.symbols)?;
     let mana_value = compile_printed_mana_value(&face.mana_cost.symbols)?;
-    let base_object = compile_base_object(
+    let mut base_object = compile_base_object(
         &face.type_line.supertypes,
         &face.type_line.card_types,
         &face.type_line.subtypes,
@@ -1735,6 +1760,7 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
     let mut alternate_costs = Vec::new();
     let mut spell_modes = Vec::new();
     let mut cycling = None;
+    let mut enters_tapped = false;
     let mut spell_abilities = 0_usize;
     for (index, ability) in face.abilities.iter().enumerate() {
         let path = format!("card.faces[0].abilities[{index}]");
@@ -1808,6 +1834,19 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
                     alternate_keyword,
                 )?);
             }
+            AbilityKind::Replacement
+                if matches!(kind, ProgramKind::Permanent | ProgramKind::Land) =>
+            {
+                if enters_tapped {
+                    return Err(CompileDiagnostic::new(
+                        CompileDiagnosticCode::AbilityShape,
+                        path,
+                        "multiple enters-tapped replacements are not compiled",
+                    ));
+                }
+                compile_enters_tapped_replacement(ability, &path)?;
+                enters_tapped = true;
+            }
             _ => {
                 return Err(CompileDiagnostic::new(
                     CompileDiagnosticCode::AbilityShape,
@@ -1819,6 +1858,9 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
                 ));
             }
         }
+    }
+    if enters_tapped {
+        base_object = base_object.with_enters_tapped();
     }
     if has_equip_keyword
         && !activated_effects.iter().any(|ability| {
@@ -1983,7 +2025,124 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
         activated_effects,
         triggered_abilities,
         static_abilities,
+        modal_dfc_back: None,
     })
+}
+
+fn compile_modal_dfc_program(
+    definition: &CardDefinition,
+) -> Result<CardProgram, CompileDiagnostic> {
+    let [front_face, back_face] = definition.faces.as_slice() else {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::FaceCount,
+            "card.faces",
+            format!(
+                "modal_dfc requires exactly two ordered faces, found {}",
+                definition.faces.len()
+            ),
+        ));
+    };
+    let compile_face = |face: &forge_carddef::CardFace| {
+        compile_card_program(&CardDefinition {
+            id: definition.id.clone(),
+            name: face.name.clone(),
+            layout: CardLayout::Normal,
+            status: definition.status.clone(),
+            faces: vec![face.clone()],
+        })
+    };
+    let mut front = compile_face(front_face)
+        .map_err(|diagnostic| repath_modal_face_diagnostic(diagnostic, 0))?;
+    let back = compile_face(back_face)
+        .map_err(|diagnostic| repath_modal_face_diagnostic(diagnostic, 1))?;
+    front.name = definition.name.clone();
+    front.modal_dfc_back = Some(Box::new(back));
+    Ok(front)
+}
+
+fn repath_modal_face_diagnostic(
+    diagnostic: CompileDiagnostic,
+    face_index: usize,
+) -> CompileDiagnostic {
+    let suffix = diagnostic
+        .path()
+        .strip_prefix("card.faces[0]")
+        .unwrap_or_else(|| {
+            diagnostic
+                .path()
+                .strip_prefix("card")
+                .unwrap_or(diagnostic.path())
+        });
+    CompileDiagnostic::new(
+        diagnostic.code(),
+        format!("card.faces[{face_index}]{suffix}"),
+        diagnostic.detail(),
+    )
+}
+
+fn compile_enters_tapped_replacement(
+    ability: &AbilityDefinition,
+    path: &str,
+) -> Result<(), CompileDiagnostic> {
+    if !ability.costs.is_empty()
+        || ability.condition.is_some()
+        || ability.timing.is_some()
+        || ability.mana_ability
+    {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::AbilityShape,
+            path,
+            "enters-tapped replacement must have no costs, condition, timing, or mana flag",
+        ));
+    }
+    let Some(Expression::Call {
+        operation: Operation::EventEnters,
+        arguments: event_arguments,
+    }) = ability.event.as_ref()
+    else {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::AbilityShape,
+            format!("{path}.event"),
+            "replacement event must be event_enters(source())",
+        ));
+    };
+    if !matches!(event_arguments.as_slice(), [source] if is_source_selector(source)) {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectArguments,
+            format!("{path}.event"),
+            "replacement event must bind exactly source()",
+        ));
+    }
+    let Expression::Call {
+        operation: Operation::EtbEffect,
+        arguments: etb_arguments,
+    } = &ability.effect
+    else {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectArguments,
+            format!("{path}.effect"),
+            "enters-tapped replacement must use etb_effect(tap(source()))",
+        ));
+    };
+    let [Expression::Call {
+        operation: Operation::Tap,
+        arguments: tap_arguments,
+    }] = etb_arguments.as_slice()
+    else {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectArguments,
+            format!("{path}.effect"),
+            "etb_effect must contain exactly tap(source())",
+        ));
+    };
+    if !matches!(tap_arguments.as_slice(), [source] if is_source_selector(source)) {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectArguments,
+            format!("{path}.effect"),
+            "enters-tapped tap must bind exactly source()",
+        ));
+    }
+    Ok(())
 }
 
 fn compile_triggered_ability(
@@ -7899,6 +8058,37 @@ card "Plains" {
   }
 }
 "#;
+    const BALA_GED_RECOVERY: &str = r#"
+card "Bala Ged Recovery // Bala Ged Sanctuary" {
+  id: "d2075f58-b0e9-4e85-b7e6-0523a27a1d5b"
+  layout: modal_dfc
+  status: unverified_playable
+  face "Bala Ged Recovery" {
+    cost: "{2}{G}"
+    types: "Sorcery"
+    oracle: "Return target card from your graveyard to your hand."
+    keywords: []
+    ability spell {
+      effect: move_zone_from(target(cards(and(owned_by(you()), zone_is("graveyard")))), "graveyard", "hand")
+    }
+  }
+  face "Bala Ged Sanctuary" {
+    cost: ""
+    types: "Land"
+    oracle: "Bala Ged Sanctuary enters tapped.\n{T}: Add {G}."
+    keywords: []
+    ability replacement {
+      event: event_enters(source())
+      effect: etb_effect(tap(source()))
+    }
+    ability activated {
+      costs: [tap_self()]
+      effect: add_mana("{G}", you())
+      mana_ability: true
+    }
+  }
+}
+"#;
     const SOL_RING: &str = r#"
 card "Sol Ring" {
   id: "6ad8011d-3471-4369-9d68-b264cc027487"
@@ -9270,6 +9460,84 @@ card "Purphoros, God of the Forge" {
         assert_eq!(state.object_zone(second), Some(opponent_hand));
         assert_eq!(state.object_zone(friendly), Some(battlefield));
         assert_eq!(state.object_zone(land), Some(battlefield));
+    }
+
+    #[test]
+    fn modal_dfc_compiles_and_executes_each_face_without_cross_face_leakage() {
+        let program = compile_card_program(&parse("bala_ged_recovery.frs", BALA_GED_RECOVERY))
+            .unwrap_or_else(|error| panic!("unexpected compile error: {error}"));
+        assert_eq!(program.kind(), ProgramKind::Sorcery);
+        assert_eq!(
+            program.capabilities(),
+            vec![
+                Capability::ModalDfc,
+                Capability::MoveZone,
+                Capability::LandPlay,
+                Capability::ManaAbility,
+            ]
+        );
+        let back = program.modal_dfc_back().expect("compiled back face");
+        assert_eq!(back.kind(), ProgramKind::Land);
+        assert!(back.base_object().enters_tapped());
+        let [mana_ability] = back.activated_abilities() else {
+            panic!("expected one back-face mana ability");
+        };
+        assert_eq!(mana_ability.produces(), ManaPool::of(ManaKind::Green, 1));
+
+        let mut state = GameState::new();
+        let caster = add_player(&mut state);
+        let opponent = add_player(&mut state);
+        let graveyard = ZoneId::new(Some(caster), ZoneKind::Graveyard);
+        let hand = ZoneId::new(Some(caster), ZoneKind::Hand);
+        let recovered = create_object(&mut state, CardId::new(2_500), caster, graveyard);
+        let trace = execute_program(
+            &mut state,
+            &program,
+            &ExecutionBindings::new(caster, vec![opponent])
+                .with_targets(vec![TargetChoice::Object(recovered)]),
+        )
+        .unwrap_or_else(|error| panic!("unexpected front-face execution error: {error}"));
+        assert_eq!(trace.records().len(), 1);
+        assert_eq!(state.object_zone(recovered), Some(hand));
+
+        let land = create_object(&mut state, CardId::new(2_501), caster, hand);
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::SetBaseObjectCharacteristics {
+                    object: land,
+                    base: back.base_object(),
+                },
+            ),
+            Outcome::Applied
+        );
+        prepare_turn(&mut state, caster, opponent);
+        for _ in 0..8 {
+            if state.current_step() == Some(forge_core::Step::PrecombatMain) {
+                break;
+            }
+            let player = state.priority_player().expect("priority player");
+            assert!(matches!(
+                apply(&mut state, Action::PassPriority { player }),
+                Outcome::Priority(_)
+            ));
+        }
+        assert_eq!(state.current_step(), Some(forge_core::Step::PrecombatMain));
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::PlayLand {
+                    player: caster,
+                    object: land,
+                },
+            ),
+            Outcome::Applied
+        );
+        assert_eq!(
+            state.object_zone(land),
+            Some(ZoneId::new(None, ZoneKind::Battlefield))
+        );
+        assert!(state.object(land).is_some_and(|record| record.tapped()));
     }
 
     #[test]
