@@ -2369,6 +2369,11 @@ fn synthesize_object_choices(
         if basic_land_types != BasicLandTypes::none() {
             types = types.union(ObjectTypes::none().with_land());
         }
+        if types == ObjectTypes::none()
+            && requirement.required_subtypes() != forge_core::ObjectSubtypes::none()
+        {
+            types = ObjectTypes::none().with_creature();
+        }
         if types == ObjectTypes::none() || types.intersects(requirement.forbidden_types()) {
             return Err(RuntimeSmokeFailure::new(
                 RuntimeSmokeFailureCode::UnexpectedOutcome,
@@ -2400,7 +2405,8 @@ fn synthesize_object_choices(
                     object,
                     base: BaseObjectCharacteristics::new(types, ObjectColors::none())
                         .with_supertypes(requirement.required_supertypes())
-                        .with_basic_land_types(basic_land_types),
+                        .with_basic_land_types(basic_land_types)
+                        .with_subtypes(requirement.required_subtypes()),
                 },
             )?;
             if types.creature() {
@@ -2527,11 +2533,30 @@ fn synthesize_object_target(
     if types == ObjectTypes::none() && kind == TargetKind::Permanent {
         types = ObjectTypes::none().with_artifact();
     }
+    let mana_value = predicate
+        .and_then(forge_core::ObjectTargetPredicate::minimum_mana_value)
+        .unwrap_or(0);
+    if predicate
+        .and_then(forge_core::ObjectTargetPredicate::maximum_mana_value)
+        .is_some_and(|maximum| mana_value > maximum)
+    {
+        return Err(RuntimeSmokeFailure::new(
+            RuntimeSmokeFailureCode::UnexpectedOutcome,
+            format!("{phase}[{index}].mana_value"),
+            "object target has contradictory mana-value bounds",
+        ));
+    }
     execution.dispatch(
         &format!("{phase}[{index}].characteristics"),
         Action::SetBaseObjectCharacteristics {
             object,
-            base: BaseObjectCharacteristics::new(types, ObjectColors::none()),
+            base: BaseObjectCharacteristics::new(types, ObjectColors::none())
+                .with_subtypes(
+                    predicate
+                        .map(forge_core::ObjectTargetPredicate::required_subtypes)
+                        .unwrap_or_else(forge_core::ObjectSubtypes::none),
+                )
+                .with_mana_value(mana_value),
         },
     )?;
     if types.creature() {

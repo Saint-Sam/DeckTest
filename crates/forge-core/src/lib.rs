@@ -1675,6 +1675,120 @@ impl BasicLandTypes {
     }
 }
 
+const MAX_OBJECT_SUBTYPE_BYTES: usize = 64;
+const MAX_OBJECT_SUBTYPES: usize = 8;
+
+/// One exact canonical card subtype stored without allocation.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct ObjectSubtype {
+    len: u8,
+    bytes: [u8; MAX_OBJECT_SUBTYPE_BYTES],
+}
+
+impl Default for ObjectSubtype {
+    fn default() -> Self {
+        Self {
+            len: 0,
+            bytes: [0; MAX_OBJECT_SUBTYPE_BYTES],
+        }
+    }
+}
+
+impl ObjectSubtype {
+    /// Parses a nonempty ASCII subtype and canonicalizes it case-insensitively.
+    #[must_use]
+    pub fn parse(value: &str) -> Option<Self> {
+        let source = value.as_bytes();
+        if source.is_empty() || source.len() > MAX_OBJECT_SUBTYPE_BYTES || !value.is_ascii() {
+            return None;
+        }
+        let mut bytes = [0_u8; MAX_OBJECT_SUBTYPE_BYTES];
+        for (index, byte) in source.iter().copied().enumerate() {
+            bytes[index] = byte.to_ascii_lowercase();
+        }
+        Some(Self {
+            len: source.len() as u8,
+            bytes,
+        })
+    }
+
+    /// Returns the canonical ASCII bytes.
+    #[must_use]
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.bytes[..usize::from(self.len)]
+    }
+}
+
+/// A bounded exact set of printed card subtypes.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct ObjectSubtypes {
+    len: u8,
+    values: [ObjectSubtype; MAX_OBJECT_SUBTYPES],
+}
+
+impl Default for ObjectSubtypes {
+    fn default() -> Self {
+        Self::none()
+    }
+}
+
+impl ObjectSubtypes {
+    /// Creates an empty subtype set.
+    #[must_use]
+    pub const fn none() -> Self {
+        Self {
+            len: 0,
+            values: [ObjectSubtype {
+                len: 0,
+                bytes: [0; MAX_OBJECT_SUBTYPE_BYTES],
+            }; MAX_OBJECT_SUBTYPES],
+        }
+    }
+
+    /// Inserts one subtype in canonical sorted order, or returns none if full.
+    #[must_use]
+    pub fn try_with(mut self, subtype: ObjectSubtype) -> Option<Self> {
+        if self.contains(subtype) {
+            return Some(self);
+        }
+        let len = usize::from(self.len);
+        if len == MAX_OBJECT_SUBTYPES {
+            return None;
+        }
+        let insertion = self.values[..len]
+            .iter()
+            .position(|existing| subtype < *existing)
+            .unwrap_or(len);
+        for index in (insertion..len).rev() {
+            self.values[index + 1] = self.values[index];
+        }
+        self.values[insertion] = subtype;
+        self.len += 1;
+        Some(self)
+    }
+
+    /// Returns true when this set contains one subtype.
+    #[must_use]
+    pub fn contains(self, subtype: ObjectSubtype) -> bool {
+        self.values[..usize::from(self.len)].contains(&subtype)
+    }
+
+    /// Returns true when every required subtype is present.
+    #[must_use]
+    pub fn contains_all(self, required: Self) -> bool {
+        required
+            .as_slice()
+            .iter()
+            .all(|value| self.contains(*value))
+    }
+
+    /// Returns the canonical sorted subtype slice.
+    #[must_use]
+    pub fn as_slice(&self) -> &[ObjectSubtype] {
+        &self.values[..usize::from(self.len)]
+    }
+}
+
 /// Printed type and color characteristics shared by every card object.
 ///
 /// Power, toughness, and combat keywords remain in
@@ -1686,6 +1800,8 @@ pub struct BaseObjectCharacteristics {
     colors: ObjectColors,
     supertypes: ObjectSupertypes,
     basic_land_types: BasicLandTypes,
+    subtypes: ObjectSubtypes,
+    mana_value: u32,
 }
 
 impl BaseObjectCharacteristics {
@@ -1697,6 +1813,8 @@ impl BaseObjectCharacteristics {
             colors,
             supertypes: ObjectSupertypes::none(),
             basic_land_types: BasicLandTypes::none(),
+            subtypes: ObjectSubtypes::none(),
+            mana_value: 0,
         }
     }
 
@@ -1711,6 +1829,20 @@ impl BaseObjectCharacteristics {
     #[must_use]
     pub const fn with_basic_land_types(mut self, land_types: BasicLandTypes) -> Self {
         self.basic_land_types = land_types;
+        self
+    }
+
+    /// Sets exact printed subtypes.
+    #[must_use]
+    pub const fn with_subtypes(mut self, subtypes: ObjectSubtypes) -> Self {
+        self.subtypes = subtypes;
+        self
+    }
+
+    /// Sets the printed mana value represented by this object.
+    #[must_use]
+    pub const fn with_mana_value(mut self, mana_value: u32) -> Self {
+        self.mana_value = mana_value;
         self
     }
 
@@ -1736,6 +1868,18 @@ impl BaseObjectCharacteristics {
     #[must_use]
     pub const fn basic_land_types(self) -> BasicLandTypes {
         self.basic_land_types
+    }
+
+    /// Returns exact printed subtypes.
+    #[must_use]
+    pub const fn subtypes(self) -> ObjectSubtypes {
+        self.subtypes
+    }
+
+    /// Returns the printed mana value represented by this object.
+    #[must_use]
+    pub const fn mana_value(self) -> u32 {
+        self.mana_value
     }
 }
 
@@ -2240,6 +2384,9 @@ pub struct ObjectTargetPredicate {
     forbidden_colors: ObjectColors,
     required_keywords: CreatureKeywords,
     forbidden_keywords: CreatureKeywords,
+    required_subtypes: ObjectSubtypes,
+    minimum_mana_value: Option<u32>,
+    maximum_mana_value: Option<u32>,
 }
 
 impl ObjectTargetPredicate {
@@ -2256,6 +2403,9 @@ impl ObjectTargetPredicate {
             forbidden_colors: ObjectColors::none(),
             required_keywords: CreatureKeywords::none(),
             forbidden_keywords: CreatureKeywords::none(),
+            required_subtypes: ObjectSubtypes::none(),
+            minimum_mana_value: None,
+            maximum_mana_value: None,
         }
     }
 
@@ -2322,6 +2472,27 @@ impl ObjectTargetPredicate {
         self
     }
 
+    /// Returns this predicate requiring all listed exact subtypes.
+    #[must_use]
+    pub const fn with_required_subtypes(mut self, subtypes: ObjectSubtypes) -> Self {
+        self.required_subtypes = subtypes;
+        self
+    }
+
+    /// Returns this predicate with an inclusive minimum printed mana value.
+    #[must_use]
+    pub const fn with_minimum_mana_value(mut self, minimum: u32) -> Self {
+        self.minimum_mana_value = Some(minimum);
+        self
+    }
+
+    /// Returns this predicate with an inclusive maximum printed mana value.
+    #[must_use]
+    pub const fn with_maximum_mana_value(mut self, maximum: u32) -> Self {
+        self.maximum_mana_value = Some(maximum);
+        self
+    }
+
     /// Returns the controller relationship constraint.
     #[must_use]
     pub const fn controller(self) -> TargetControllerPredicate {
@@ -2350,6 +2521,24 @@ impl ObjectTargetPredicate {
     #[must_use]
     pub const fn forbidden_types(self) -> ObjectTypes {
         self.forbidden_types
+    }
+
+    /// Returns exact subtypes that must all be present.
+    #[must_use]
+    pub const fn required_subtypes(self) -> ObjectSubtypes {
+        self.required_subtypes
+    }
+
+    /// Returns the inclusive minimum printed mana value, when constrained.
+    #[must_use]
+    pub const fn minimum_mana_value(self) -> Option<u32> {
+        self.minimum_mana_value
+    }
+
+    /// Returns the inclusive maximum printed mana value, when constrained.
+    #[must_use]
+    pub const fn maximum_mana_value(self) -> Option<u32> {
+        self.maximum_mana_value
     }
 }
 
@@ -4235,6 +4424,7 @@ pub struct ObjectCharacteristics {
     types: ObjectTypes,
     supertypes: ObjectSupertypes,
     basic_land_types: BasicLandTypes,
+    subtypes: ObjectSubtypes,
     creature: Option<CreatureCharacteristics>,
     text_marker: u32,
 }
@@ -4254,6 +4444,7 @@ impl ObjectCharacteristics {
             types,
             supertypes: ObjectSupertypes::none(),
             basic_land_types: BasicLandTypes::none(),
+            subtypes: ObjectSubtypes::none(),
             creature,
             text_marker: 0,
         }
@@ -4289,13 +4480,21 @@ impl ObjectCharacteristics {
         self.basic_land_types
     }
 
+    /// Returns effective exact subtypes after type-line effects.
+    #[must_use]
+    pub const fn subtypes(self) -> ObjectSubtypes {
+        self.subtypes
+    }
+
     const fn with_type_line(
         mut self,
         supertypes: ObjectSupertypes,
         basic_land_types: BasicLandTypes,
+        subtypes: ObjectSubtypes,
     ) -> Self {
         self.supertypes = supertypes;
         self.basic_land_types = basic_land_types;
+        self.subtypes = subtypes;
         self
     }
 
@@ -12076,6 +12275,7 @@ impl GameState {
         .with_type_line(
             record.base_object().supertypes(),
             record.base_object().basic_land_types(),
+            record.base_object().subtypes(),
         );
 
         for layer in [
@@ -12919,6 +13119,22 @@ impl GameState {
             return false;
         };
         if !self.controller_predicate_matches(player, predicate.owner, record.owner()) {
+            return false;
+        }
+        let mana_value = record.base_object().mana_value();
+        if predicate
+            .minimum_mana_value
+            .is_some_and(|minimum| mana_value < minimum)
+            || predicate
+                .maximum_mana_value
+                .is_some_and(|maximum| mana_value > maximum)
+        {
+            return false;
+        }
+        if !characteristics
+            .subtypes()
+            .contains_all(predicate.required_subtypes)
+        {
             return false;
         }
         if !characteristics
@@ -13769,11 +13985,23 @@ impl Fnva64 {
         self.write_u8(land_types.canonical_bits());
     }
 
+    fn write_object_subtypes(&mut self, subtypes: ObjectSubtypes) {
+        self.write_u8(subtypes.len);
+        for subtype in subtypes.as_slice() {
+            self.write_u8(subtype.len);
+            for byte in subtype.as_bytes() {
+                self.write_u8(*byte);
+            }
+        }
+    }
+
     fn write_base_object_characteristics(&mut self, base: BaseObjectCharacteristics) {
         self.write_object_types(base.types());
         self.write_object_colors(base.colors());
         self.write_object_supertypes(base.supertypes());
         self.write_basic_land_types(base.basic_land_types());
+        self.write_object_subtypes(base.subtypes());
+        self.write_u32(base.mana_value());
     }
 
     fn write_base_creature_characteristics(&mut self, base: BaseCreatureCharacteristics) {
@@ -13814,6 +14042,16 @@ impl Fnva64 {
             EffectDuration::UntilEndOfCombat
             | EffectDuration::UntilEndOfTurn
             | EffectDuration::ThisTurn => {}
+        }
+    }
+
+    fn write_optional_u32(&mut self, value: Option<u32>) {
+        match value {
+            Some(value) => {
+                self.write_u8(1);
+                self.write_u32(value);
+            }
+            None => self.write_u8(0),
         }
     }
 
@@ -13884,6 +14122,9 @@ impl Fnva64 {
         self.write_object_colors(predicate.forbidden_colors);
         self.write_creature_keywords(predicate.required_keywords);
         self.write_creature_keywords(predicate.forbidden_keywords);
+        self.write_object_subtypes(predicate.required_subtypes);
+        self.write_optional_u32(predicate.minimum_mana_value);
+        self.write_optional_u32(predicate.maximum_mana_value);
     }
 
     fn write_player_target_predicate(&mut self, predicate: PlayerTargetPredicate) {
@@ -15019,11 +15260,23 @@ impl CanonicalBytes {
         self.write_u8(land_types.canonical_bits());
     }
 
+    fn write_object_subtypes(&mut self, subtypes: ObjectSubtypes) {
+        self.write_u8(subtypes.len);
+        for subtype in subtypes.as_slice() {
+            self.write_u8(subtype.len);
+            for byte in subtype.as_bytes() {
+                self.write_u8(*byte);
+            }
+        }
+    }
+
     fn write_base_object_characteristics(&mut self, base: BaseObjectCharacteristics) {
         self.write_object_types(base.types());
         self.write_object_colors(base.colors());
         self.write_object_supertypes(base.supertypes());
         self.write_basic_land_types(base.basic_land_types());
+        self.write_object_subtypes(base.subtypes());
+        self.write_u32(base.mana_value());
     }
 
     fn write_base_creature_characteristics(&mut self, base: BaseCreatureCharacteristics) {
@@ -15067,6 +15320,16 @@ impl CanonicalBytes {
         }
     }
 
+    fn write_optional_u32(&mut self, value: Option<u32>) {
+        match value {
+            Some(value) => {
+                self.write_u8(1);
+                self.write_u32(value);
+            }
+            None => self.write_u8(0),
+        }
+    }
+
     fn write_optional_object(&mut self, object: Option<ObjectId>) {
         match object {
             Some(object) => {
@@ -15103,6 +15366,9 @@ impl CanonicalBytes {
         self.write_object_colors(predicate.forbidden_colors);
         self.write_creature_keywords(predicate.required_keywords);
         self.write_creature_keywords(predicate.forbidden_keywords);
+        self.write_object_subtypes(predicate.required_subtypes);
+        self.write_optional_u32(predicate.minimum_mana_value);
+        self.write_optional_u32(predicate.maximum_mana_value);
     }
 
     fn write_player_target_predicate(&mut self, predicate: PlayerTargetPredicate) {

@@ -13,10 +13,10 @@ use forge_core::{
     apply, AbilityPlayer, Action, ActivatedAbilityDefinition, ActivatedAbilityEffect,
     ActivationCost, ActivationTiming, BaseCreatureCharacteristics, BaseObjectCharacteristics,
     BasicLandTypes, CardId, CreatureKeywords, GameState, ManaCost, ManaKind, ManaPool,
-    ObjectColors, ObjectId, ObjectSupertypes, ObjectTargetPredicate, ObjectTypes, Outcome,
-    PlayerId, PlayerTargetPredicate, StackEntryId, TargetChoice, TargetControllerPredicate,
-    TargetKind, TargetRequirement, TriggerCondition, TriggerDefinition, TriggerObjectFilter,
-    TriggerPlayerFilter, TriggerZoneFilter, ZoneId, ZoneKind,
+    ObjectColors, ObjectId, ObjectSubtype, ObjectSubtypes, ObjectSupertypes, ObjectTargetPredicate,
+    ObjectTypes, Outcome, PlayerId, PlayerTargetPredicate, StackEntryId, TargetChoice,
+    TargetControllerPredicate, TargetKind, TargetRequirement, TriggerCondition, TriggerDefinition,
+    TriggerObjectFilter, TriggerPlayerFilter, TriggerZoneFilter, ZoneId, ZoneKind,
 };
 use std::{collections::BTreeMap, error::Error, fmt};
 
@@ -351,6 +351,7 @@ pub struct ObjectChoiceRequirement {
     required_supertypes: ObjectSupertypes,
     required_land_types: BasicLandTypes,
     required_any_land_types: BasicLandTypes,
+    required_subtypes: ObjectSubtypes,
 }
 
 impl ObjectChoiceRequirement {
@@ -406,6 +407,12 @@ impl ObjectChoiceRequirement {
     #[must_use]
     pub const fn required_any_land_types(self) -> BasicLandTypes {
         self.required_any_land_types
+    }
+
+    /// Returns exact subtypes every chosen object must have.
+    #[must_use]
+    pub const fn required_subtypes(self) -> ObjectSubtypes {
+        self.required_subtypes
     }
 }
 
@@ -893,11 +900,13 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
     };
     let kind = compile_program_kind(&face.type_line.card_types)?;
     let (mana_cost, exact_payment) = compile_mana_cost(&face.mana_cost.symbols)?;
+    let mana_value = compile_printed_mana_value(&face.mana_cost.symbols)?;
     let base_object = compile_base_object(
         &face.type_line.supertypes,
         &face.type_line.card_types,
         &face.type_line.subtypes,
         &face.mana_cost.symbols,
+        mana_value,
     )?;
     let base_creature = compile_base_creature(
         &face.type_line.card_types,
@@ -1476,12 +1485,19 @@ fn compile_spell_additional_costs(
                         "sacrifice cost requires permanents controlled by you()",
                     ));
                 }
-                let predicate = ObjectTargetPredicate::any()
+                let mut predicate = ObjectTargetPredicate::any()
                     .with_owner(spec.owner)
                     .with_controller(TargetControllerPredicate::You)
                     .with_required_types(spec.required_types)
                     .with_required_any_types(spec.required_any_types)
-                    .with_forbidden_types(spec.forbidden_types);
+                    .with_forbidden_types(spec.forbidden_types)
+                    .with_required_subtypes(spec.required_subtypes);
+                if let Some(minimum) = spec.minimum_mana_value {
+                    predicate = predicate.with_minimum_mana_value(minimum);
+                }
+                if let Some(maximum) = spec.maximum_mana_value {
+                    predicate = predicate.with_maximum_mana_value(maximum);
+                }
                 compiled.push(SpellAdditionalCostProgram::SacrificePermanents {
                     count: compile_bounded_positive_literal(
                         count,
@@ -1788,6 +1804,7 @@ fn compile_base_object(
     card_types: &[CardType],
     subtypes: &[String],
     mana_symbols: &[ManaSymbol],
+    mana_value: u32,
 ) -> Result<BaseObjectCharacteristics, CompileDiagnostic> {
     let mut types = ObjectTypes::none();
     for card_type in card_types {
@@ -1831,6 +1848,23 @@ fn compile_base_object(
         };
     }
     let mut basic_land_types = BasicLandTypes::none();
+    let mut runtime_subtypes = ObjectSubtypes::none();
+    for (index, subtype) in subtypes.iter().enumerate() {
+        let parsed = ObjectSubtype::parse(subtype).ok_or_else(|| {
+            CompileDiagnostic::new(
+                CompileDiagnosticCode::CardType,
+                format!("card.faces[0].types.subtypes[{index}]"),
+                format!("subtype `{subtype}` is empty, non-ASCII, or exceeds runtime bounds"),
+            )
+        })?;
+        runtime_subtypes = runtime_subtypes.try_with(parsed).ok_or_else(|| {
+            CompileDiagnostic::new(
+                CompileDiagnosticCode::ProgramBounds,
+                "card.faces[0].types.subtypes",
+                "printed subtype count exceeds the bounded runtime set",
+            )
+        })?;
+    }
     if types.land() {
         for subtype in subtypes {
             basic_land_types = match subtype.to_ascii_lowercase().as_str() {
@@ -1845,7 +1879,34 @@ fn compile_base_object(
     }
     Ok(BaseObjectCharacteristics::new(types, colors)
         .with_supertypes(runtime_supertypes)
-        .with_basic_land_types(basic_land_types))
+        .with_basic_land_types(basic_land_types)
+        .with_subtypes(runtime_subtypes)
+        .with_mana_value(mana_value))
+}
+
+fn compile_printed_mana_value(symbols: &[ManaSymbol]) -> Result<u32, CompileDiagnostic> {
+    let mut mana_value = 0_u32;
+    for (index, symbol) in symbols.iter().enumerate() {
+        let contribution = match symbol {
+            ManaSymbol::Color(_) => 1,
+            ManaSymbol::Generic(amount) => u32::from(*amount),
+            unsupported => {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::ManaSymbol,
+                    format!("card.faces[0].cost[{index}]"),
+                    format!("mana symbol {unsupported:?} has no exact mana-value lowering"),
+                ));
+            }
+        };
+        mana_value = mana_value.checked_add(contribution).ok_or_else(|| {
+            CompileDiagnostic::new(
+                CompileDiagnosticCode::ProgramBounds,
+                format!("card.faces[0].cost[{index}]"),
+                "printed mana value overflowed",
+            )
+        })?;
+    }
+    Ok(mana_value)
 }
 
 fn compile_mana_cost(symbols: &[ManaSymbol]) -> Result<(ManaCost, ManaPool), CompileDiagnostic> {
@@ -2111,6 +2172,7 @@ fn compile_effect(
                 required_supertypes,
                 required_land_types,
                 required_any_land_types,
+                required_subtypes,
             ) = compile_library_choice_selector(selector, &format!("{path}.selector"))?;
             let choice = intern_object_choice(
                 compiler,
@@ -2125,6 +2187,7 @@ fn compile_effect(
                     required_supertypes,
                     required_land_types,
                     required_any_land_types,
+                    required_subtypes,
                 },
             );
             compiler
@@ -2441,9 +2504,16 @@ fn compile_amount(
                 .with_owner(spec.owner)
                 .with_required_types(spec.required_types)
                 .with_required_any_types(spec.required_any_types)
-                .with_forbidden_types(spec.forbidden_types);
+                .with_forbidden_types(spec.forbidden_types)
+                .with_required_subtypes(spec.required_subtypes);
             if let Some(controller) = spec.controller {
                 predicate = predicate.with_controller(controller);
+            }
+            if let Some(minimum) = spec.minimum_mana_value {
+                predicate = predicate.with_minimum_mana_value(minimum);
+            }
+            if let Some(maximum) = spec.maximum_mana_value {
+                predicate = predicate.with_maximum_mana_value(maximum);
             }
             Ok(AmountProgram::CountPermanents(predicate))
         }
@@ -2678,7 +2748,8 @@ fn compile_stack_spell_predicate(
     Ok(ObjectTargetPredicate::any()
         .with_required_types(spec.required_types)
         .with_required_any_types(spec.required_any_types)
-        .with_forbidden_types(spec.forbidden_types))
+        .with_forbidden_types(spec.forbidden_types)
+        .with_required_subtypes(spec.required_subtypes))
 }
 
 fn compile_object_target(
@@ -2697,9 +2768,16 @@ fn compile_object_target(
         .with_owner(spec.owner)
         .with_required_types(spec.required_types)
         .with_required_any_types(spec.required_any_types)
-        .with_forbidden_types(spec.forbidden_types);
+        .with_forbidden_types(spec.forbidden_types)
+        .with_required_subtypes(spec.required_subtypes);
     if let Some(controller) = spec.controller {
         predicate = predicate.with_controller(controller);
+    }
+    if let Some(minimum) = spec.minimum_mana_value {
+        predicate = predicate.with_minimum_mana_value(minimum);
+    }
+    if let Some(maximum) = spec.maximum_mana_value {
+        predicate = predicate.with_maximum_mana_value(maximum);
     }
     intern_target(
         compiler,
@@ -2833,6 +2911,7 @@ struct LibraryChoiceConstraints {
     required_supertypes: ObjectSupertypes,
     required_land_types: BasicLandTypes,
     required_any_land_types: BasicLandTypes,
+    required_subtypes: ObjectSubtypes,
     library_zone: bool,
 }
 
@@ -2847,6 +2926,7 @@ fn compile_library_choice_selector(
         ObjectSupertypes,
         BasicLandTypes,
         BasicLandTypes,
+        ObjectSubtypes,
     ),
     CompileDiagnostic,
 > {
@@ -2880,6 +2960,7 @@ fn compile_library_choice_selector(
         && constraints.required_any == ObjectTypes::none()
         && constraints.required_land_types == BasicLandTypes::none()
         && constraints.required_any_land_types == BasicLandTypes::none()
+        && constraints.required_subtypes == ObjectSubtypes::none()
     {
         return Err(CompileDiagnostic::new(
             CompileDiagnosticCode::EffectArguments,
@@ -2904,6 +2985,7 @@ fn compile_library_choice_selector(
         constraints.required_supertypes,
         constraints.required_land_types,
         constraints.required_any_land_types,
+        constraints.required_subtypes,
     ))
 }
 
@@ -2970,9 +3052,20 @@ fn compile_library_choice_predicate(
             let [value] = arguments.as_slice() else {
                 return Err(effect_arity(path, operation, "one subtype string"));
             };
-            constraints.required_land_types = constraints
-                .required_land_types
-                .union(compile_basic_land_type(value, path)?);
+            let subtype = compile_object_subtype(value, path)?;
+            constraints.required_subtypes = constraints
+                .required_subtypes
+                .try_with(subtype)
+                .ok_or_else(|| {
+                    CompileDiagnostic::new(
+                        CompileDiagnosticCode::ProgramBounds,
+                        path,
+                        "library subtype constraint exceeds the bounded runtime set",
+                    )
+                })?;
+            if let Ok(land_type) = compile_basic_land_type(value, path) {
+                constraints.required_land_types = constraints.required_land_types.union(land_type);
+            }
             Ok(())
         }
         Operation::Not => {
@@ -3072,6 +3165,9 @@ struct ObjectSelectorSpec {
     required_types: ObjectTypes,
     required_any_types: ObjectTypes,
     forbidden_types: ObjectTypes,
+    required_subtypes: ObjectSubtypes,
+    minimum_mana_value: Option<u32>,
+    maximum_mana_value: Option<u32>,
 }
 
 impl ObjectSelectorSpec {
@@ -3083,6 +3179,9 @@ impl ObjectSelectorSpec {
             required_types: ObjectTypes::none(),
             required_any_types: ObjectTypes::none(),
             forbidden_types: ObjectTypes::none(),
+            required_subtypes: ObjectSubtypes::none(),
+            minimum_mana_value: None,
+            maximum_mana_value: None,
         }
     }
 }
@@ -3171,6 +3270,9 @@ fn compile_object_selector_union(
             || spec.controller != first.controller
             || spec.forbidden_types != ObjectTypes::none()
             || spec.required_any_types != ObjectTypes::none()
+            || spec.required_subtypes != ObjectSubtypes::none()
+            || spec.minimum_mana_value.is_some()
+            || spec.maximum_mana_value.is_some()
     }) {
         return Err(CompileDiagnostic::new(
             CompileDiagnosticCode::EffectArguments,
@@ -3196,6 +3298,9 @@ fn compile_object_selector_union(
         required_types: ObjectTypes::none(),
         required_any_types: union,
         forbidden_types: ObjectTypes::none(),
+        required_subtypes: ObjectSubtypes::none(),
+        minimum_mana_value: None,
+        maximum_mana_value: None,
     })
 }
 
@@ -3281,12 +3386,18 @@ fn compile_object_predicate(
             if first.required_types == ObjectTypes::none()
                 || first.required_any_types != ObjectTypes::none()
                 || first.forbidden_types != ObjectTypes::none()
+                || first.required_subtypes != ObjectSubtypes::none()
+                || first.minimum_mana_value.is_some()
+                || first.maximum_mana_value.is_some()
                 || alternatives.iter().any(|alternative| {
                     alternative.owner != first.owner
                         || alternative.controller != first.controller
                         || alternative.required_types == ObjectTypes::none()
                         || alternative.required_any_types != ObjectTypes::none()
                         || alternative.forbidden_types != ObjectTypes::none()
+                        || alternative.required_subtypes != ObjectSubtypes::none()
+                        || alternative.minimum_mana_value.is_some()
+                        || alternative.maximum_mana_value.is_some()
                 })
             {
                 return Err(CompileDiagnostic::new(
@@ -3325,6 +3436,22 @@ fn compile_object_predicate(
             spec.required_types = spec.required_types.union(compile_object_type(value, path)?);
             Ok(())
         }
+        Operation::SubtypeIs => {
+            let [value] = arguments.as_slice() else {
+                return Err(effect_arity(path, operation, "one subtype string"));
+            };
+            spec.required_subtypes = spec
+                .required_subtypes
+                .try_with(compile_object_subtype(value, path)?)
+                .ok_or_else(|| {
+                    CompileDiagnostic::new(
+                        CompileDiagnosticCode::ProgramBounds,
+                        path,
+                        "subtype predicate exceeds the bounded runtime set",
+                    )
+                })?;
+            Ok(())
+        }
         Operation::Not => {
             let [predicate] = arguments.as_slice() else {
                 return Err(effect_arity(path, operation, "one predicate"));
@@ -3357,6 +3484,79 @@ fn compile_object_predicate(
                 spec.owner = relationship;
             } else {
                 spec.controller = Some(relationship);
+            }
+            Ok(())
+        }
+        Operation::AtLeast | Operation::LessThan => {
+            let [Expression::Call {
+                operation: Operation::ManaValue,
+                arguments: mana_value_arguments,
+            }, Expression::Integer(bound)] = arguments.as_slice()
+            else {
+                return Err(effect_arity(
+                    path,
+                    operation,
+                    "mana_value(any()) and a nonnegative literal",
+                ));
+            };
+            let [Expression::Call {
+                operation: Operation::Any,
+                arguments: any_arguments,
+            }] = mana_value_arguments.as_slice()
+            else {
+                return Err(effect_arity(
+                    &format!("{path}.mana_value"),
+                    &Operation::ManaValue,
+                    "any()",
+                ));
+            };
+            if !any_arguments.is_empty() || *bound < 0 {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::EffectArguments,
+                    path,
+                    "mana-value bound requires any() and a nonnegative literal",
+                ));
+            }
+            let bound = u32::try_from(*bound).map_err(|_| {
+                CompileDiagnostic::new(
+                    CompileDiagnosticCode::EffectArguments,
+                    path,
+                    "mana-value bound does not fit u32",
+                )
+            })?;
+            if *operation == Operation::AtLeast {
+                if spec.minimum_mana_value.replace(bound).is_some() {
+                    return Err(CompileDiagnostic::new(
+                        CompileDiagnosticCode::EffectArguments,
+                        path,
+                        "multiple minimum mana-value bounds are not compiled",
+                    ));
+                }
+            } else {
+                let maximum = bound.checked_sub(1).ok_or_else(|| {
+                    CompileDiagnostic::new(
+                        CompileDiagnosticCode::EffectArguments,
+                        path,
+                        "less_than mana-value bound must be greater than zero",
+                    )
+                })?;
+                if spec.maximum_mana_value.replace(maximum).is_some() {
+                    return Err(CompileDiagnostic::new(
+                        CompileDiagnosticCode::EffectArguments,
+                        path,
+                        "multiple maximum mana-value bounds are not compiled",
+                    ));
+                }
+            }
+            if matches!(
+                (spec.minimum_mana_value, spec.maximum_mana_value),
+                (Some(minimum), Some(maximum)) if minimum > maximum
+            ) {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::EffectArguments,
+                    path,
+                    "mana-value bounds are contradictory",
+                ));
             }
             Ok(())
         }
@@ -3464,6 +3664,26 @@ fn compile_basic_land_type(
             format!("subtype `{value}` is not one of the five basic land types"),
         )),
     }
+}
+
+fn compile_object_subtype(
+    expression: &Expression,
+    path: &str,
+) -> Result<ObjectSubtype, CompileDiagnostic> {
+    let Expression::Text(value) = expression else {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectArguments,
+            path,
+            "object subtype is not text",
+        ));
+    };
+    ObjectSubtype::parse(value).ok_or_else(|| {
+        CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectArguments,
+            path,
+            format!("subtype `{value}` is empty, non-ASCII, or exceeds runtime bounds"),
+        )
+    })
 }
 
 fn compile_zone_kind(expression: &Expression, path: &str) -> Result<ZoneKind, CompileDiagnostic> {
@@ -4165,6 +4385,9 @@ fn validate_object_choices(
                     .supertypes()
                     .contains_all(requirement.required_supertypes)
                 || !characteristics
+                    .subtypes()
+                    .contains_all(requirement.required_subtypes)
+                || !characteristics
                     .basic_land_types()
                     .contains_all(requirement.required_land_types)
                 || (requirement.required_any_land_types != BasicLandTypes::none()
@@ -4402,8 +4625,8 @@ mod tests {
     };
     use forge_core::{
         apply, Action, BaseCreatureCharacteristics, BaseObjectCharacteristics, BasicLandTypes,
-        CardId, GameState, ManaKind, ManaPool, ObjectColors, ObjectSupertypes, ObjectTypes,
-        Outcome, StackObjectKind, TargetChoice, ZoneId, ZoneKind,
+        CardId, GameState, ManaKind, ManaPool, ObjectColors, ObjectSubtype, ObjectSupertypes,
+        ObjectTypes, Outcome, StackObjectKind, TargetChoice, ZoneId, ZoneKind,
     };
 
     const SWORDS: &str = r#"
@@ -5109,17 +5332,16 @@ card "Interpreter Contract" {
     }
 
     #[test]
-    fn library_search_subtype_predicate_remains_fail_closed() {
+    fn library_search_subtype_predicate_compiles_to_exact_subtype_state() {
         let definition = parse(
-            "unsupported_search.frs",
+            "subtype_search.frs",
             &ELADAMRIS_CALL.replace("type_is(\"creature\")", "subtype_is(\"elf\")"),
         );
-        let error = match compile_card_program(&definition) {
-            Ok(_) => panic!("subtype search must not compile without subtype state"),
-            Err(error) => error,
-        };
-        assert_eq!(error.code(), CompileDiagnosticCode::EffectArguments);
-        assert!(error.detail().contains("five basic land types"));
+        let program = compile_card_program(&definition)
+            .unwrap_or_else(|error| panic!("unexpected compile error: {error}"));
+        let requirement = program.object_choice_requirements()[0];
+        let elf = ObjectSubtype::parse("Elf").expect("fixture subtype is valid");
+        assert!(requirement.required_subtypes().contains(elf));
     }
 
     fn parse(path: &str, source: &str) -> forge_carddef::CardDefinition {
