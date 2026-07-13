@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-13T04:07:56Z",
+  "task": "T3.3",
+  "batch": "dynamic counts, multi-zone search, and typed cost wave",
+  "technical_result": "pass",
+  "product_binding": {
+    "exact_product_commit": "f3d555733ae416b24cf647e0cf45591bce55f81e",
+    "exact_product_tree": "c613a43b1efb107362ee8273387295ac2c31782c"
+  },
+  "source_binding": {
+    "legacy_forge_commit": "1f0a3e0815822d8f58f798e0304b33d4534248b1",
+    "translation_fingerprint": "1c4130b1f44fdce0c9eefe31790944f2"
+  },
+  "verification_environment": {
+    "local_only": true,
+    "github_actions_used": false,
+    "network_attempted": false,
+    "install_performed": false,
+    "worker_ceiling": 24,
+    "shared_cargo_cache": true
+  },
+  "coverage_delta": {
+    "before": {"complete_scripts": 16941, "mapped_ability_uses": 27240, "owner_priority_complete": 233},
+    "after": {
+      "complete_scripts": 17367,
+      "total_scripts": 33290,
+      "complete_script_percent": 52.1688194653049,
+      "mapped_ability_uses": 28019,
+      "total_ability_uses": 43649,
+      "mapped_ability_percent": 64.19161951018351,
+      "owner_priority_complete": 236,
+      "owner_priority_requested": 365,
+      "quarantined_scripts": 15923,
+      "quarantined_ability_uses": 15630
+    },
+    "gain": {"complete_scripts": 426, "mapped_ability_uses": 779, "owner_priority_complete": 3}
+  },
+  "line_coverage": {
+    "covered": 36773,
+    "count": 45148,
+    "percent": 81.44989811287321,
+    "floor_percent": 80,
+    "raw_report_sha256": "93655831c39025d02c2fc8c0f61061cc32efe4d39e2b9d687a6638bb8e50d5d5"
+  },
+  "planner": {
+    "analyzed_scripts": 33290,
+    "scripts_with_confirmed_blockers": 14413,
+    "confirmed_observations": 24000,
+    "unique_blocker_families": 6006,
+    "linked_root_fanout": 24543
+  },
+  "checkpoint_gates": {
+    "full_workspace_tests": true,
+    "clippy_warnings_denied": true,
+    "compiler_roundtrips": true,
+    "database_validation": true,
+    "oracle_subsets_passed": true,
+    "nightmare_suite_passed": true,
+    "arena_smoke_passed": true,
+    "deterministic_parallel_replay": true,
+    "deterministic_blocker_plan_replay": true
+  },
+  "notes": [
+    "The exact 24-worker checkpoint completed locally in 202 seconds without GitHub Actions.",
+    "The checkpoint caught an attempted frozen-DSL argument-slot reuse; the final product appends a typed SacrificeCount operation and preserves existing SacrificeEffect serialization.",
+    "T3.3 remains active because the 60% complete-script floor is not reached."
+  ]
+}
