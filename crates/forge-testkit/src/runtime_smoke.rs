@@ -497,6 +497,7 @@ fn compile_life_totals(
             | EffectProgram::SearchLibrary { .. }
             | EffectProgram::MoveChosenObjects { .. }
             | EffectProgram::TapChosenObjects { .. }
+            | EffectProgram::DiscardChosenObjects { .. }
             | EffectProgram::ModifyPowerToughness { .. }
             | EffectProgram::GrantKeywords { .. }
             | EffectProgram::GrantTargetingRestriction { .. }
@@ -592,6 +593,7 @@ fn compile_library_reserve(
             | EffectProgram::SearchLibrary { .. }
             | EffectProgram::MoveChosenObjects { .. }
             | EffectProgram::TapChosenObjects { .. }
+            | EffectProgram::DiscardChosenObjects { .. }
             | EffectProgram::ModifyPowerToughness { .. }
             | EffectProgram::GrantKeywords { .. }
             | EffectProgram::GrantTargetingRestriction { .. }
@@ -710,6 +712,11 @@ fn execute_smoke(
     }
 
     let base_card_id = stable_card_id(definition.id.as_str());
+    let smoke_flashback = compiled
+        .program
+        .alternate_costs()
+        .iter()
+        .any(|cost| cost.condition() == AlternateCostCondition::SourceInControllerGraveyard);
     for (player_index, player) in players.iter().copied().enumerate() {
         let draw_step_filler = u32::from(
             player_index == 0
@@ -774,7 +781,14 @@ fn execute_smoke(
             card: CardId::new(base_card_id),
             owner: caster,
             controller: caster,
-            zone: ZoneId::new(Some(caster), ZoneKind::Hand),
+            zone: ZoneId::new(
+                Some(caster),
+                if smoke_flashback {
+                    ZoneKind::Graveyard
+                } else {
+                    ZoneKind::Hand
+                },
+            ),
         },
     )?)?;
     execution.dispatch(
@@ -878,7 +892,7 @@ fn execute_smoke(
             .alternate_costs()
             .iter()
             .copied()
-            .find(|cost| cost.is_available(&execution.state, caster));
+            .find(|cost| cost.is_available(&execution.state, caster, Some(spell)));
         let (cast_cost, exact_payment) = alternate_cost.map_or_else(
             || {
                 (
@@ -910,16 +924,20 @@ fn execute_smoke(
                     "exact synthesized mana did not produce a payment plan",
                 )
             })?;
+        let mut request = CastSpellRequest::new(stack_kind, timing, cast_cost, payment)
+            .with_targets(
+                compiled.program.target_requirements().to_vec(),
+                targets.clone(),
+            );
+        if smoke_flashback {
+            request = request.with_flashback(cast_cost);
+        }
         let cast = execution.dispatch(
             "cast.cast_spell",
             Action::CastSpell {
                 player: caster,
                 object: spell,
-                request: CastSpellRequest::new(stack_kind, timing, cast_cost, payment)
-                    .with_targets(
-                        compiled.program.target_requirements().to_vec(),
-                        targets.clone(),
-                    ),
+                request,
             },
         )?;
         let stack_entry = match cast {
@@ -946,7 +964,11 @@ fn execute_smoke(
         }
     }
 
-    let (destination, destination_name) = compiled.lifecycle.destination(caster);
+    let (destination, destination_name) = if smoke_flashback {
+        (ZoneId::new(None, ZoneKind::Exile), "exile")
+    } else {
+        compiled.lifecycle.destination(caster)
+    };
     assert_zone(
         &execution.state,
         spell,
@@ -1361,7 +1383,7 @@ fn synthesize_alternate_cost_conditions(
         .alternate_costs()
         .iter()
         .copied()
-        .all(|cost| !cost.is_available(&execution.state, caster))
+        .all(|cost| !cost.is_available(&execution.state, caster, None))
     {
         return Err(RuntimeSmokeFailure::new(
             RuntimeSmokeFailureCode::UnexpectedOutcome,
@@ -1415,6 +1437,7 @@ fn setup_dynamic_amount_state(
             | EffectProgram::SearchLibrary { .. }
             | EffectProgram::MoveChosenObjects { .. }
             | EffectProgram::TapChosenObjects { .. }
+            | EffectProgram::DiscardChosenObjects { .. }
             | EffectProgram::GrantKeywords { .. }
             | EffectProgram::GrantTargetingRestriction { .. }
             | EffectProgram::GrantIndestructible { .. }
@@ -2248,6 +2271,11 @@ fn prepare_effect_bindings_and_hand_delta(
                         .saturating_sub(i64::try_from(hand.len()).unwrap_or(i64::MAX));
                 }
             }
+            EffectProgram::DiscardChosenObjects { choice } => {
+                hand_delta[0] = hand_delta[0].saturating_sub(
+                    i64::try_from(object_choices[*choice].len()).unwrap_or(i64::MAX),
+                );
+            }
             EffectProgram::Scry { players, .. } => {
                 for player in smoke_bound_players(*players, caster, opponent) {
                     bindings = bindings.with_scry_bottom(index, player, Vec::new());
@@ -2620,12 +2648,12 @@ fn synthesize_object_choices(
     let mut choices = Vec::with_capacity(requirements.len());
     for (choice_index, requirement) in requirements.iter().copied().enumerate() {
         if requirement.player() != PlayerBinding::Controller
-            || requirement.zone() != ZoneKind::Library
+            || !matches!(requirement.zone(), ZoneKind::Library | ZoneKind::Hand)
         {
             return Err(RuntimeSmokeFailure::new(
                 RuntimeSmokeFailureCode::UnexpectedOutcome,
                 format!("{phase}[{choice_index}]"),
-                "smoke only synthesizes controller library choices",
+                "smoke only synthesizes controller library or hand choices",
             ));
         }
         let mut types = requirement.required_types();
@@ -2646,7 +2674,10 @@ fn synthesize_object_choices(
         {
             types = ObjectTypes::none().with_creature();
         }
-        if types == ObjectTypes::none() || types.intersects(requirement.forbidden_types()) {
+        if types == ObjectTypes::none() {
+            types = ObjectTypes::none().with_artifact();
+        }
+        if types.intersects(requirement.forbidden_types()) {
             return Err(RuntimeSmokeFailure::new(
                 RuntimeSmokeFailureCode::UnexpectedOutcome,
                 format!("{phase}[{choice_index}]"),
@@ -2667,7 +2698,7 @@ fn synthesize_object_choices(
                         ),
                         owner: caster,
                         controller: caster,
-                        zone: ZoneId::new(Some(caster), ZoneKind::Library),
+                        zone: ZoneId::new(Some(caster), requirement.zone()),
                     },
                 )?,
             )?;

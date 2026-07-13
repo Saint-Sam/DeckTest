@@ -422,6 +422,7 @@ pub enum ObjectSetProgram {
 pub struct ObjectChoiceRequirement {
     player: PlayerBinding,
     zone: ZoneKind,
+    minimum: u32,
     maximum: u32,
     required_types: ObjectTypes,
     required_any_types: ObjectTypes,
@@ -449,6 +450,12 @@ impl ObjectChoiceRequirement {
     #[must_use]
     pub const fn maximum(self) -> u32 {
         self.maximum
+    }
+
+    /// Returns the minimum number of objects that must be chosen.
+    #[must_use]
+    pub const fn minimum(self) -> u32 {
+        self.minimum
     }
 
     /// Returns types every chosen object must have.
@@ -598,6 +605,11 @@ pub enum EffectProgram {
     /// Tap objects selected by a prior explicit choice.
     TapChosenObjects {
         /// Object-choice slot.
+        choice: usize,
+    },
+    /// Discard explicitly chosen cards from their owner's hand.
+    DiscardChosenObjects {
+        /// Object-choice slot containing the cards to discard.
         choice: usize,
     },
     /// Modify current power and toughness until a represented duration ends.
@@ -751,6 +763,8 @@ pub enum SpellAdditionalCostProgram {
 pub enum AlternateCostCondition {
     /// The caster currently controls a designated commander permanent.
     ControllerControlsCommander,
+    /// The spell object is in its controller's graveyard and is cast with flashback.
+    SourceInControllerGraveyard,
 }
 
 /// One completely compiled conditional alternate casting cost.
@@ -782,7 +796,12 @@ impl AlternateCastCostProgram {
 
     /// Returns whether the current state satisfies this alternate-cost condition.
     #[must_use]
-    pub fn is_available(self, state: &GameState, controller: PlayerId) -> bool {
+    pub fn is_available(
+        self,
+        state: &GameState,
+        controller: PlayerId,
+        source: Option<ObjectId>,
+    ) -> bool {
         match self.condition {
             AlternateCostCondition::ControllerControlsCommander => state
                 .zone_objects(ZoneId::new(None, ZoneKind::Battlefield))
@@ -793,6 +812,13 @@ impl AlternateCastCostProgram {
                         })
                     })
                 }),
+            AlternateCostCondition::SourceInControllerGraveyard => source.is_some_and(|source| {
+                state
+                    .object(source)
+                    .is_some_and(|record| record.owner() == controller)
+                    && state.object_zone(source)
+                        == Some(ZoneId::new(Some(controller), ZoneKind::Graveyard))
+            }),
         }
     }
 }
@@ -1066,6 +1092,7 @@ impl EffectProgram {
             Self::SearchLibrary { .. } => Capability::SearchLibrary,
             Self::MoveChosenObjects { .. } => Capability::MoveZone,
             Self::TapChosenObjects { .. } => Capability::TapObject,
+            Self::DiscardChosenObjects { .. } => Capability::DiscardCards,
             Self::ModifyPowerToughness { .. } | Self::GrantKeywords { .. } => {
                 Capability::ModifyCharacteristics
             }
@@ -1303,11 +1330,21 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
         &face.mana_cost.symbols,
         mana_value,
     )?;
+    let has_flashback_keyword = face
+        .keywords
+        .iter()
+        .any(|keyword| keyword.as_str() == "flashback");
+    let intrinsic_keywords = face
+        .keywords
+        .iter()
+        .filter(|keyword| keyword.as_str() != "flashback")
+        .cloned()
+        .collect::<Vec<_>>();
     let base_creature = compile_base_creature(
         &face.type_line.card_types,
         face.power.as_deref(),
         face.toughness.as_deref(),
-        &face.keywords,
+        &intrinsic_keywords,
     )?;
     let has_equip_keyword = face
         .keywords
@@ -1361,7 +1398,11 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
                 static_abilities.push(compile_static_ability(ability, &path)?);
             }
             AbilityKind::Static if matches!(kind, ProgramKind::Instant | ProgramKind::Sorcery) => {
-                alternate_costs.push(compile_spell_alternate_cost(ability, &path)?);
+                alternate_costs.push(compile_spell_alternate_cost(
+                    ability,
+                    &path,
+                    has_flashback_keyword,
+                )?);
             }
             _ => {
                 return Err(CompileDiagnostic::new(
@@ -1384,6 +1425,17 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
             CompileDiagnosticCode::KeywordSemantics,
             "card.faces[0].keywords",
             "equip requires a sorcery-speed source-to-target attachment ability",
+        ));
+    }
+    if has_flashback_keyword
+        && !alternate_costs
+            .iter()
+            .any(|cost| cost.condition == AlternateCostCondition::SourceInControllerGraveyard)
+    {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::KeywordSemantics,
+            "card.faces[0].keywords",
+            "flashback requires an exact source-bound graveyard alternate cost",
         ));
     }
     let compiled_effect_count = triggered_abilities
@@ -1515,6 +1567,7 @@ fn compile_triggered_ability(
 fn compile_spell_alternate_cost(
     ability: &AbilityDefinition,
     path: &str,
+    has_flashback_keyword: bool,
 ) -> Result<AlternateCastCostProgram, CompileDiagnostic> {
     if !ability.costs.is_empty()
         || ability.event.is_some()
@@ -1528,31 +1581,63 @@ fn compile_spell_alternate_cost(
             "spell alternate-cost ability must have no costs, event, condition, timing, or mana flag",
         ));
     }
-    let Expression::Call {
-        operation: Operation::WhileCondition,
-        arguments,
-    } = &ability.effect
-    else {
-        return Err(CompileDiagnostic::new(
-            CompileDiagnosticCode::AbilityShape,
-            format!("{path}.effect"),
-            "spell static ability must be a closed conditional alternate cost",
-        ));
+    let (condition, alternate_cost, source_selector) = match &ability.effect {
+        Expression::Call {
+            operation: Operation::WhileCondition,
+            arguments,
+        } => {
+            let [condition, alternate_cost] = arguments.as_slice() else {
+                return Err(effect_arity(
+                    &format!("{path}.effect"),
+                    &Operation::WhileCondition,
+                    "commander-control condition and alternate_cost(...) ",
+                ));
+            };
+            if !is_controller_controls_commander_condition(condition) {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::EffectArguments,
+                    format!("{path}.effect.condition"),
+                    "alternate cost requires exactly controller-controls-a-commander",
+                ));
+            }
+            (
+                AlternateCostCondition::ControllerControlsCommander,
+                alternate_cost,
+                false,
+            )
+        }
+        Expression::Call {
+            operation: Operation::Continuous,
+            arguments,
+        } if has_flashback_keyword => {
+            let [source, alternate_cost] = arguments.as_slice() else {
+                return Err(effect_arity(
+                    &format!("{path}.effect"),
+                    &Operation::Continuous,
+                    "source() and alternate_cost(...) ",
+                ));
+            };
+            if !is_source_selector(source) {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::EffectArguments,
+                    format!("{path}.effect.source"),
+                    "flashback alternate cost must be bound to source()",
+                ));
+            }
+            (
+                AlternateCostCondition::SourceInControllerGraveyard,
+                alternate_cost,
+                true,
+            )
+        }
+        _ => {
+            return Err(CompileDiagnostic::new(
+                CompileDiagnosticCode::AbilityShape,
+                format!("{path}.effect"),
+                "spell static ability must be a closed conditional or flashback alternate cost",
+            ));
+        }
     };
-    let [condition, alternate_cost] = arguments.as_slice() else {
-        return Err(effect_arity(
-            &format!("{path}.effect"),
-            &Operation::WhileCondition,
-            "commander-control condition and alternate_cost(...) ",
-        ));
-    };
-    if !is_controller_controls_commander_condition(condition) {
-        return Err(CompileDiagnostic::new(
-            CompileDiagnosticCode::EffectArguments,
-            format!("{path}.effect.condition"),
-            "alternate cost requires exactly controller-controls-a-commander",
-        ));
-    }
     let Expression::Call {
         operation: Operation::AlternateCost,
         arguments,
@@ -1571,11 +1656,16 @@ fn compile_spell_alternate_cost(
             "this spell selector and mana_cost(...) ",
         ));
     };
-    if !is_this_spell_controlled_by_you(selector) {
+    let valid_selector = if source_selector {
+        is_source_selector(selector)
+    } else {
+        is_this_spell_controlled_by_you(selector)
+    };
+    if !valid_selector {
         return Err(CompileDiagnostic::new(
             CompileDiagnosticCode::EffectArguments,
             format!("{path}.effect.alternate_cost.selector"),
-            "alternate cost must select exactly this spell controlled by you",
+            "alternate cost must select exactly its source spell",
         ));
     }
     let Expression::Call {
@@ -1599,7 +1689,7 @@ fn compile_spell_alternate_cost(
     let (mana_cost, exact_payment) =
         compile_mana_cost_text(value, &format!("{path}.effect.alternate_cost.cost"))?;
     Ok(AlternateCastCostProgram {
-        condition: AlternateCostCondition::ControllerControlsCommander,
+        condition,
         mana_cost,
         exact_payment,
     })
@@ -3240,7 +3330,7 @@ fn compile_effect(
             Ok(())
         }
         Operation::DiscardCards => {
-            let [Expression::Integer(placeholder), players, Expression::Text(mode)] =
+            let [Expression::Integer(count), players, Expression::Text(mode)] =
                 arguments.as_slice()
             else {
                 return Err(effect_arity(
@@ -3249,17 +3339,61 @@ fn compile_effect(
                     "the canonical hand placeholder, players, and mode",
                 ));
             };
-            if *placeholder != 1 || mode != "hand" {
-                return Err(CompileDiagnostic::new(
-                    CompileDiagnosticCode::EffectArguments,
-                    path,
-                    "only discard_cards(1, players, \"hand\") is compiled",
-                ));
-            }
             let players = compile_player_binding(players, &format!("{path}.players"), compiler)?;
-            compiler
-                .effects
-                .push(EffectProgram::DiscardHands { players });
+            match mode.as_str() {
+                "hand" if *count == 1 => {
+                    compiler
+                        .effects
+                        .push(EffectProgram::DiscardHands { players });
+                }
+                "choose" if players == PlayerBinding::Controller => {
+                    let count = u32::try_from(*count).map_err(|_| {
+                        CompileDiagnostic::new(
+                            CompileDiagnosticCode::EffectAmount,
+                            format!("{path}.count"),
+                            "chosen discard count is outside the u32 range",
+                        )
+                    })?;
+                    if count == 0 || count > MAX_EFFECTS as u32 {
+                        return Err(CompileDiagnostic::new(
+                            CompileDiagnosticCode::EffectAmount,
+                            format!("{path}.count"),
+                            "chosen discard count must be positive and bounded",
+                        ));
+                    }
+                    let selector = Expression::Call {
+                        operation: Operation::Cards,
+                        arguments: Vec::new(),
+                    };
+                    let choice = intern_object_choice(
+                        compiler,
+                        &selector,
+                        ObjectChoiceRequirement {
+                            player: PlayerBinding::Controller,
+                            zone: ZoneKind::Hand,
+                            minimum: count,
+                            maximum: count,
+                            required_types: ObjectTypes::none(),
+                            required_any_types: ObjectTypes::none(),
+                            forbidden_types: ObjectTypes::none(),
+                            required_supertypes: ObjectSupertypes::none(),
+                            required_land_types: BasicLandTypes::none(),
+                            required_any_land_types: BasicLandTypes::none(),
+                            required_subtypes: ObjectSubtypes::none(),
+                        },
+                    );
+                    compiler
+                        .effects
+                        .push(EffectProgram::DiscardChosenObjects { choice });
+                }
+                _ => {
+                    return Err(CompileDiagnostic::new(
+                        CompileDiagnosticCode::EffectArguments,
+                        path,
+                        "discard_cards requires either the complete-hand marker or an exact controller choice",
+                    ));
+                }
+            }
             Ok(())
         }
         Operation::Shuffle => {
@@ -3428,6 +3562,7 @@ fn compile_effect(
                 ObjectChoiceRequirement {
                     player: players,
                     zone: ZoneKind::Library,
+                    minimum: 0,
                     maximum,
                     required_types,
                     required_any_types,
@@ -5843,6 +5978,34 @@ fn bind_effect_actions(
                     });
                 }
             }
+            EffectProgram::DiscardChosenObjects { choice } => {
+                let selected = bindings.object_choices.get(*choice).ok_or_else(|| {
+                    ExecutionDiagnostic::new(
+                        ExecutionDiagnosticCode::MissingChoice,
+                        Some(effect_index),
+                        format!("no object choice supplied for slot {choice}"),
+                    )
+                })?;
+                for object in selected {
+                    let owner = state
+                        .object(*object)
+                        .ok_or_else(|| {
+                            ExecutionDiagnostic::new(
+                                ExecutionDiagnosticCode::InvalidChoice,
+                                Some(effect_index),
+                                format!("discard choice contains unknown object {object:?}"),
+                            )
+                        })?
+                        .owner();
+                    actions.push(BoundAction {
+                        effect_index,
+                        action: Action::MoveObject {
+                            object: *object,
+                            to: ZoneId::new(Some(owner), ZoneKind::Graveyard),
+                        },
+                    });
+                }
+            }
             EffectProgram::ModifyPowerToughness {
                 objects,
                 power,
@@ -5998,13 +6161,16 @@ fn validate_object_choices(
         .zip(&bindings.object_choices)
         .enumerate()
     {
-        if selected.len() > requirement.maximum as usize {
+        if selected.len() < requirement.minimum as usize
+            || selected.len() > requirement.maximum as usize
+        {
             return Err(ExecutionDiagnostic::new(
                 ExecutionDiagnosticCode::InvalidChoice,
                 None,
                 format!(
-                    "object choice {choice_index} selected {} objects, maximum is {}",
+                    "object choice {choice_index} selected {} objects, required range is {}..={}",
                     selected.len(),
+                    requirement.minimum,
                     requirement.maximum
                 ),
             ));
@@ -6410,6 +6576,25 @@ card "Flawless Maneuver" {
     }
     ability spell {
       effect: grant_keyword(permanents(and(type_is("creature"), controlled_by(you()))), "indestructible", "until_end_of_turn")
+    }
+  }
+}
+"#;
+    const FAITHLESS_LOOTING: &str = r#"
+card "Faithless Looting" {
+  id: "3d6fa57a-aa53-4b5c-b8af-a7612c823117"
+  layout: normal
+  status: unverified_playable
+  face "Faithless Looting" {
+    cost: "{R}"
+    types: "Sorcery"
+    oracle: "Draw two cards, then discard two cards. Flashback {2}{R}."
+    keywords: [flashback]
+    ability static {
+      effect: continuous(source(), alternate_cost(source(), mana_cost("{2}{R}")))
+    }
+    ability spell {
+      effect: sequence(draw(2, you()), discard_cards(2, you(), "choose"))
     }
   }
 }
@@ -7284,7 +7469,7 @@ card "Interpreter Contract" {
         let mut state = GameState::new();
         let caster = add_player(&mut state);
         let opponent = add_player(&mut state);
-        assert!(!alternate.is_available(&state, caster));
+        assert!(!alternate.is_available(&state, caster, None));
         let commander = create_object(
             &mut state,
             CardId::new(2_202),
@@ -7324,7 +7509,7 @@ card "Interpreter Contract" {
             ),
             Outcome::Applied
         );
-        assert!(alternate.is_available(&state, caster));
+        assert!(alternate.is_available(&state, caster, None));
         let trace = execute_program(
             &mut state,
             &program,
@@ -7333,6 +7518,101 @@ card "Interpreter Contract" {
         .unwrap_or_else(|error| panic!("unexpected execution error: {error}"));
         assert_eq!(trace.records().len(), 1);
         assert_eq!(state.restrictions().count(), 1);
+    }
+
+    #[test]
+    fn flashback_and_exact_chosen_discard_are_bound_fail_closed() {
+        let program = compile_card_program(&parse("faithless_looting.frs", FAITHLESS_LOOTING))
+            .unwrap_or_else(|error| panic!("unexpected compile error: {error}"));
+        assert_eq!(
+            program.capabilities(),
+            vec![
+                Capability::AlternateCost,
+                Capability::DrawCards,
+                Capability::DiscardCards,
+            ]
+        );
+        let [alternate] = program.alternate_costs() else {
+            panic!("expected one flashback cost");
+        };
+        assert_eq!(
+            alternate.condition(),
+            AlternateCostCondition::SourceInControllerGraveyard
+        );
+
+        let mut state = GameState::new();
+        let caster = add_player(&mut state);
+        let opponent = add_player(&mut state);
+        let source = create_object(
+            &mut state,
+            CardId::new(2_203),
+            caster,
+            ZoneId::new(Some(caster), ZoneKind::Hand),
+        );
+        assert!(!alternate.is_available(&state, caster, Some(source)));
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::MoveObject {
+                    object: source,
+                    to: ZoneId::new(Some(caster), ZoneKind::Graveyard),
+                },
+            ),
+            Outcome::Applied
+        );
+        assert!(alternate.is_available(&state, caster, Some(source)));
+
+        let first = create_object(
+            &mut state,
+            CardId::new(2_204),
+            caster,
+            ZoneId::new(Some(caster), ZoneKind::Hand),
+        );
+        let second = create_object(
+            &mut state,
+            CardId::new(2_205),
+            caster,
+            ZoneId::new(Some(caster), ZoneKind::Hand),
+        );
+        for card in 2_206..2_208 {
+            create_object(
+                &mut state,
+                CardId::new(card),
+                caster,
+                ZoneId::new(Some(caster), ZoneKind::Library),
+            );
+        }
+        let before = state.deterministic_hash();
+        assert!(execute_program(
+            &mut state,
+            &program,
+            &ExecutionBindings::new(caster, vec![opponent]).with_object_choices(vec![vec![first]]),
+        )
+        .is_err());
+        assert_eq!(state.deterministic_hash(), before);
+
+        let trace = execute_program(
+            &mut state,
+            &program,
+            &ExecutionBindings::new(caster, vec![opponent])
+                .with_object_choices(vec![vec![first, second]]),
+        )
+        .unwrap_or_else(|error| panic!("unexpected execution error: {error}"));
+        assert_eq!(trace.records().len(), 3);
+        assert_eq!(
+            state.object_zone(first),
+            Some(ZoneId::new(Some(caster), ZoneKind::Graveyard))
+        );
+        assert_eq!(
+            state.object_zone(second),
+            Some(ZoneId::new(Some(caster), ZoneKind::Graveyard))
+        );
+        assert_eq!(
+            state
+                .zone_objects(ZoneId::new(Some(caster), ZoneKind::Hand))
+                .map(<[forge_core::ObjectId]>::len),
+            Some(2)
+        );
     }
 
     fn parse(path: &str, source: &str) -> forge_carddef::CardDefinition {
