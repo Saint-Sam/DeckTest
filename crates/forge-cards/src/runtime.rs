@@ -12,10 +12,11 @@ use forge_carddef::{
 use forge_core::{
     apply, AbilityPlayer, Action, ActivatedAbilityDefinition, ActivatedAbilityEffect,
     ActivationCost, ActivationTiming, BaseCreatureCharacteristics, BaseObjectCharacteristics,
-    BasicLandTypes, CardId, GameState, ManaCost, ManaKind, ManaPool, ObjectColors, ObjectId,
-    ObjectSupertypes, ObjectTargetPredicate, ObjectTypes, Outcome, PlayerId, PlayerTargetPredicate,
-    StackEntryId, TargetChoice, TargetControllerPredicate, TargetKind, TargetRequirement, ZoneId,
-    ZoneKind,
+    BasicLandTypes, CardId, CreatureKeywords, GameState, ManaCost, ManaKind, ManaPool,
+    ObjectColors, ObjectId, ObjectSupertypes, ObjectTargetPredicate, ObjectTypes, Outcome,
+    PlayerId, PlayerTargetPredicate, StackEntryId, TargetChoice, TargetControllerPredicate,
+    TargetKind, TargetRequirement, TriggerCondition, TriggerDefinition, TriggerObjectFilter,
+    TriggerZoneFilter, ZoneId, ZoneKind,
 };
 use std::{collections::BTreeMap, error::Error, fmt};
 
@@ -147,6 +148,8 @@ pub enum Capability {
     LandPlay,
     /// Register and execute a fixed-output mana ability.
     ManaAbility,
+    /// Pay costs and resolve a non-mana activated ability.
+    ActivatedAbility,
     /// Gain life.
     GainLife,
     /// Lose life.
@@ -182,6 +185,7 @@ impl Capability {
         match self {
             Self::LandPlay => "land_play",
             Self::ManaAbility => "mana_ability",
+            Self::ActivatedAbility => "activated_ability",
             Self::GainLife => "gain_life",
             Self::LoseLife => "lose_life",
             Self::DrawCards => "draw_cards",
@@ -203,7 +207,43 @@ impl Capability {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ActivatedAbilityProgram {
     cost: ActivationCost,
-    produces: ManaPool,
+    outputs: ManaOutputChoices,
+}
+
+/// Closed legal mana outputs for one compiled mana ability.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ManaOutputChoices {
+    options: [ManaPool; 6],
+    len: u8,
+}
+
+impl ManaOutputChoices {
+    fn from_options(options: &[ManaPool]) -> Self {
+        let mut stored = [ManaPool::empty(); 6];
+        for (index, option) in options.iter().copied().enumerate() {
+            stored[index] = option;
+        }
+        Self {
+            options: stored,
+            len: u8::try_from(options.len()).unwrap_or(6),
+        }
+    }
+
+    /// Returns legal outputs in canonical choice order.
+    #[must_use]
+    pub fn options(&self) -> &[ManaPool] {
+        &self.options[..usize::from(self.len)]
+    }
+
+    /// Returns whether the exact output is legal for this ability.
+    #[must_use]
+    pub fn contains(self, output: ManaPool) -> bool {
+        self.options().contains(&output)
+    }
+
+    fn deterministic_smoke_output(self) -> ManaPool {
+        self.options[0]
+    }
 }
 
 impl ActivatedAbilityProgram {
@@ -216,12 +256,19 @@ impl ActivatedAbilityProgram {
     /// Returns the deterministic mana output.
     #[must_use]
     pub const fn produces(self) -> ManaPool {
-        self.produces
+        self.outputs.options[0]
+    }
+
+    /// Returns every exact legal mana output.
+    #[must_use]
+    pub const fn output_choices(self) -> ManaOutputChoices {
+        self.outputs
     }
 
     /// Binds this program to one controller and battlefield source.
     #[must_use]
-    pub const fn bind(self, controller: PlayerId, source: ObjectId) -> ActivatedAbilityDefinition {
+    pub fn bind(self, controller: PlayerId, source: ObjectId) -> ActivatedAbilityDefinition {
+        let output = self.outputs.deterministic_smoke_output();
         ActivatedAbilityDefinition::new(
             controller,
             Some(source),
@@ -229,10 +276,35 @@ impl ActivatedAbilityProgram {
             self.cost,
             ActivatedAbilityEffect::AddMana {
                 player: AbilityPlayer::Controller,
-                mana: self.produces,
+                mana: output,
             },
         )
         .as_mana_ability()
+    }
+
+    /// Binds this program with one explicit legal output choice.
+    #[must_use]
+    pub fn bind_selected(
+        self,
+        controller: PlayerId,
+        source: ObjectId,
+        output: ManaPool,
+    ) -> Option<ActivatedAbilityDefinition> {
+        if !self.outputs.contains(output) {
+            return None;
+        }
+        ActivatedAbilityDefinition::new(
+            controller,
+            Some(source),
+            ActivationTiming::Instant,
+            self.cost,
+            ActivatedAbilityEffect::AddMana {
+                player: AbilityPlayer::Controller,
+                mana: output,
+            },
+        )
+        .as_mana_ability()
+        .into()
     }
 }
 
@@ -247,6 +319,8 @@ pub enum PlayerBinding {
     Target(usize),
     /// The current controller of one explicit object target slot.
     ControllerOfTargetObject(usize),
+    /// The controller of one explicit stack-entry target slot.
+    ControllerOfTargetStack(usize),
 }
 
 /// A nonnegative effect amount resolved during prebinding.
@@ -429,6 +503,138 @@ pub enum EffectProgram {
     },
 }
 
+/// One completely compiled triggered ability.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TriggeredAbilityProgram {
+    target_requirements: Vec<TargetRequirement>,
+    object_choice_requirements: Vec<ObjectChoiceRequirement>,
+    effects: Vec<EffectProgram>,
+    optional_effect_groups: Vec<OptionalEffectGroup>,
+}
+
+/// One completely compiled non-mana activated ability.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ActivatedEffectProgram {
+    mana_cost: ManaCost,
+    exact_payment: ManaPool,
+    tap_source: bool,
+    sacrifice_source: bool,
+    pay_life: u32,
+    timing: ActivationTiming,
+    target_requirements: Vec<TargetRequirement>,
+    object_choice_requirements: Vec<ObjectChoiceRequirement>,
+    effects: Vec<EffectProgram>,
+    optional_effect_groups: Vec<OptionalEffectGroup>,
+}
+
+impl ActivatedEffectProgram {
+    /// Returns the mana portion of the activation cost.
+    #[must_use]
+    pub const fn mana_cost(&self) -> ManaCost {
+        self.mana_cost
+    }
+
+    /// Returns one exact payment pool for deterministic smoke execution.
+    #[must_use]
+    pub const fn exact_payment(&self) -> ManaPool {
+        self.exact_payment
+    }
+
+    /// Returns whether the source must be tapped.
+    #[must_use]
+    pub const fn tap_source(&self) -> bool {
+        self.tap_source
+    }
+
+    /// Returns whether the source is sacrificed as a cost.
+    #[must_use]
+    pub const fn sacrifice_source(&self) -> bool {
+        self.sacrifice_source
+    }
+
+    /// Returns life paid as an activation cost.
+    #[must_use]
+    pub const fn pay_life(&self) -> u32 {
+        self.pay_life
+    }
+
+    /// Returns the activation timing restriction.
+    #[must_use]
+    pub const fn timing(&self) -> ActivationTiming {
+        self.timing
+    }
+
+    /// Returns target slots chosen during activation.
+    #[must_use]
+    pub fn target_requirements(&self) -> &[TargetRequirement] {
+        &self.target_requirements
+    }
+
+    /// Returns explicit hidden-zone choices used while resolving.
+    #[must_use]
+    pub fn object_choice_requirements(&self) -> &[ObjectChoiceRequirement] {
+        &self.object_choice_requirements
+    }
+
+    /// Returns compiled effect operations in resolution order.
+    #[must_use]
+    pub fn effects(&self) -> &[EffectProgram] {
+        &self.effects
+    }
+
+    /// Returns the number of explicit optional-effect decisions.
+    #[must_use]
+    pub fn optional_choice_count(&self) -> usize {
+        self.optional_effect_groups.len()
+    }
+}
+
+impl TriggeredAbilityProgram {
+    /// Binds this source-enter trigger to its controller and source object.
+    #[must_use]
+    pub const fn bind(&self, controller: PlayerId, source: ObjectId) -> TriggerDefinition {
+        TriggerDefinition::new(
+            controller,
+            TriggerCondition::ObjectMoved {
+                object: TriggerObjectFilter::Source,
+                from: TriggerZoneFilter::Any,
+                to: TriggerZoneFilter::Kind(ZoneKind::Battlefield),
+            },
+        )
+        .with_source(source)
+    }
+
+    /// Returns target slots chosen when this trigger is put on the stack.
+    #[must_use]
+    pub fn target_requirements(&self) -> &[TargetRequirement] {
+        &self.target_requirements
+    }
+
+    /// Returns explicit hidden-zone choices used while this trigger resolves.
+    #[must_use]
+    pub fn object_choice_requirements(&self) -> &[ObjectChoiceRequirement] {
+        &self.object_choice_requirements
+    }
+
+    /// Returns compiled effect operations in resolution order.
+    #[must_use]
+    pub fn effects(&self) -> &[EffectProgram] {
+        &self.effects
+    }
+
+    /// Returns the number of explicit optional-effect decisions.
+    #[must_use]
+    pub fn optional_choice_count(&self) -> usize {
+        self.optional_effect_groups.len()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct OptionalEffectGroup {
+    start: usize,
+    end: usize,
+}
+
 impl EffectProgram {
     const fn capability(&self) -> Capability {
         match self {
@@ -458,10 +664,14 @@ pub struct CardProgram {
     mana_cost: ManaCost,
     exact_payment: ManaPool,
     base_object: BaseObjectCharacteristics,
+    base_creature: Option<BaseCreatureCharacteristics>,
     target_requirements: Vec<TargetRequirement>,
     object_choice_requirements: Vec<ObjectChoiceRequirement>,
     effects: Vec<EffectProgram>,
+    optional_effect_groups: Vec<OptionalEffectGroup>,
     activated_abilities: Vec<ActivatedAbilityProgram>,
+    activated_effects: Vec<ActivatedEffectProgram>,
+    triggered_abilities: Vec<TriggeredAbilityProgram>,
 }
 
 impl CardProgram {
@@ -501,6 +711,12 @@ impl CardProgram {
         self.base_object
     }
 
+    /// Returns exact printed creature characteristics when this is a creature.
+    #[must_use]
+    pub const fn base_creature(&self) -> Option<BaseCreatureCharacteristics> {
+        self.base_creature
+    }
+
     /// Returns target slots in announcement order.
     #[must_use]
     pub fn target_requirements(&self) -> &[TargetRequirement] {
@@ -519,10 +735,28 @@ impl CardProgram {
         &self.effects
     }
 
+    /// Returns the number of explicit optional-effect decisions.
+    #[must_use]
+    pub fn optional_choice_count(&self) -> usize {
+        self.optional_effect_groups.len()
+    }
+
     /// Returns completely compiled activated abilities in printed order.
     #[must_use]
     pub fn activated_abilities(&self) -> &[ActivatedAbilityProgram] {
         &self.activated_abilities
+    }
+
+    /// Returns completely compiled non-mana activated abilities in printed order.
+    #[must_use]
+    pub fn activated_effects(&self) -> &[ActivatedEffectProgram] {
+        &self.activated_effects
+    }
+
+    /// Returns completely compiled triggered abilities in printed order.
+    #[must_use]
+    pub fn triggered_abilities(&self) -> &[TriggeredAbilityProgram] {
+        &self.triggered_abilities
     }
 
     /// Returns all compiled capabilities in source execution order.
@@ -537,7 +771,20 @@ impl CardProgram {
         if !self.activated_abilities.is_empty() {
             capabilities.push(Capability::ManaAbility);
         }
+        if !self.activated_effects.is_empty() {
+            capabilities.push(Capability::ActivatedAbility);
+        }
         capabilities.extend(self.effects.iter().map(EffectProgram::capability));
+        capabilities.extend(
+            self.activated_effects
+                .iter()
+                .flat_map(|ability| ability.effects.iter().map(EffectProgram::capability)),
+        );
+        capabilities.extend(
+            self.triggered_abilities
+                .iter()
+                .flat_map(|ability| ability.effects.iter().map(EffectProgram::capability)),
+        );
         capabilities
     }
 }
@@ -572,16 +819,6 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
         ));
     };
     let kind = compile_program_kind(&face.type_line.card_types)?;
-    if !face.keywords.is_empty() {
-        return Err(CompileDiagnostic::new(
-            CompileDiagnosticCode::KeywordSemantics,
-            "card.faces[0].keywords",
-            format!(
-                "{} keyword(s) require runtime lowering",
-                face.keywords.len()
-            ),
-        ));
-    }
     let (mana_cost, exact_payment) = compile_mana_cost(&face.mana_cost.symbols)?;
     let base_object = compile_base_object(
         &face.type_line.supertypes,
@@ -589,11 +826,19 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
         &face.type_line.subtypes,
         &face.mana_cost.symbols,
     )?;
+    let base_creature = compile_base_creature(
+        &face.type_line.card_types,
+        face.power.as_deref(),
+        face.toughness.as_deref(),
+        &face.keywords,
+    )?;
     let mut compiler = ProgramCompiler::default();
     let mut activated_abilities =
         compile_intrinsic_basic_mana_ability(&face.type_line.supertypes, &face.type_line.subtypes)?
             .into_iter()
             .collect::<Vec<_>>();
+    let mut activated_effects = Vec::new();
+    let mut triggered_abilities = Vec::new();
     let mut spell_abilities = 0_usize;
     for (index, ability) in face.abilities.iter().enumerate() {
         let path = format!("card.faces[0].abilities[{index}]");
@@ -619,7 +864,14 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
             AbilityKind::Activated
                 if matches!(kind, ProgramKind::Permanent | ProgramKind::Land) =>
             {
-                activated_abilities.push(compile_fixed_mana_ability(ability, &path)?);
+                if ability.mana_ability {
+                    activated_abilities.push(compile_fixed_mana_ability(ability, &path)?);
+                } else {
+                    activated_effects.push(compile_activated_effect(ability, &path)?);
+                }
+            }
+            AbilityKind::Triggered if matches!(kind, ProgramKind::Permanent) => {
+                triggered_abilities.push(compile_source_enters_trigger(ability, &path)?);
             }
             _ => {
                 return Err(CompileDiagnostic::new(
@@ -633,23 +885,37 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
             }
         }
     }
-    if compiler.effects.len() > MAX_EFFECTS {
+    let compiled_effect_count = triggered_abilities
+        .iter()
+        .map(|ability: &TriggeredAbilityProgram| ability.effects.len())
+        .sum::<usize>()
+        .saturating_add(
+            activated_effects
+                .iter()
+                .map(|ability: &ActivatedEffectProgram| ability.effects.len())
+                .sum::<usize>(),
+        )
+        .saturating_add(compiler.effects.len());
+    if compiled_effect_count > MAX_EFFECTS {
         return Err(CompileDiagnostic::new(
             CompileDiagnosticCode::ProgramBounds,
             "card.faces[0].abilities[0].effect",
-            format!(
-                "compiled {} effects; maximum is {MAX_EFFECTS}",
-                compiler.effects.len()
-            ),
+            format!("compiled {compiled_effect_count} effects; maximum is {MAX_EFFECTS}"),
         ));
     }
-    if activated_abilities.len() > MAX_ACTIVATED_ABILITIES {
+    if activated_abilities
+        .len()
+        .saturating_add(activated_effects.len())
+        > MAX_ACTIVATED_ABILITIES
+    {
         return Err(CompileDiagnostic::new(
             CompileDiagnosticCode::ProgramBounds,
             "card.faces[0].abilities",
             format!(
                 "compiled {} activated abilities; maximum is {MAX_ACTIVATED_ABILITIES}",
-                activated_abilities.len()
+                activated_abilities
+                    .len()
+                    .saturating_add(activated_effects.len())
             ),
         ));
     }
@@ -667,6 +933,7 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
         mana_cost,
         exact_payment,
         base_object,
+        base_creature,
         target_requirements: compiler
             .targets
             .into_iter()
@@ -678,8 +945,153 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
             .map(|choice| choice.requirement)
             .collect(),
         effects: compiler.effects,
+        optional_effect_groups: compiler.optional_effect_groups,
         activated_abilities,
+        activated_effects,
+        triggered_abilities,
     })
+}
+
+fn compile_source_enters_trigger(
+    ability: &AbilityDefinition,
+    path: &str,
+) -> Result<TriggeredAbilityProgram, CompileDiagnostic> {
+    if !ability.costs.is_empty()
+        || ability.condition.is_some()
+        || ability.timing.is_some()
+        || ability.mana_ability
+    {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::AbilityShape,
+            path,
+            "source-enter trigger must have no costs, timing, condition, or mana flag",
+        ));
+    }
+    let Some(Expression::Call {
+        operation: Operation::EventEnters,
+        arguments,
+    }) = ability.event.as_ref()
+    else {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::AbilityShape,
+            format!("{path}.event"),
+            "only event_enters(source()) is compiled for triggered abilities",
+        ));
+    };
+    let [Expression::Call {
+        operation: Operation::Source,
+        arguments: source_arguments,
+    }] = arguments.as_slice()
+    else {
+        return Err(effect_arity(
+            &format!("{path}.event"),
+            &Operation::EventEnters,
+            "source()",
+        ));
+    };
+    if !source_arguments.is_empty() {
+        return Err(effect_arity(
+            &format!("{path}.event.source"),
+            &Operation::Source,
+            "no arguments",
+        ));
+    }
+
+    let mut compiler = ProgramCompiler::default();
+    compile_effect(&ability.effect, &format!("{path}.effect"), &mut compiler)?;
+    if compiler.effects.is_empty() {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::AbilityShape,
+            format!("{path}.effect"),
+            "trigger compiled no executable effect",
+        ));
+    }
+    Ok(TriggeredAbilityProgram {
+        target_requirements: compiler
+            .targets
+            .into_iter()
+            .map(|target| target.requirement)
+            .collect(),
+        object_choice_requirements: compiler
+            .object_choices
+            .into_iter()
+            .map(|choice| choice.requirement)
+            .collect(),
+        effects: compiler.effects,
+        optional_effect_groups: compiler.optional_effect_groups,
+    })
+}
+
+fn compile_base_creature(
+    card_types: &[CardType],
+    power: Option<&str>,
+    toughness: Option<&str>,
+    keywords: &[forge_carddef::KeywordId],
+) -> Result<Option<BaseCreatureCharacteristics>, CompileDiagnostic> {
+    if !card_types.contains(&CardType::Creature) {
+        if keywords.is_empty() {
+            return Ok(None);
+        }
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::KeywordSemantics,
+            "card.faces[0].keywords",
+            format!(
+                "{} noncreature keyword(s) require runtime lowering",
+                keywords.len()
+            ),
+        ));
+    }
+
+    let parse_stat = |value: Option<&str>, label: &str| {
+        let Some(value) = value else {
+            return Err(CompileDiagnostic::new(
+                CompileDiagnosticCode::EffectAmount,
+                format!("card.faces[0].{label}"),
+                format!("creature {label} is absent"),
+            ));
+        };
+        value.parse::<i32>().map_err(|_| {
+            CompileDiagnostic::new(
+                CompileDiagnosticCode::EffectAmount,
+                format!("card.faces[0].{label}"),
+                format!("creature {label} `{value}` is not a fixed i32"),
+            )
+        })
+    };
+
+    let mut runtime_keywords = CreatureKeywords::none();
+    for (index, keyword) in keywords.iter().enumerate() {
+        runtime_keywords = match keyword.as_str() {
+            "first_strike" => runtime_keywords.with_first_strike(),
+            "double_strike" => runtime_keywords.with_double_strike(),
+            "trample" => runtime_keywords.with_trample(),
+            "deathtouch" => runtime_keywords.with_deathtouch(),
+            "lifelink" => runtime_keywords.with_lifelink(),
+            "flying" => runtime_keywords.with_flying(),
+            "reach" => runtime_keywords.with_reach(),
+            "menace" => runtime_keywords.with_menace(),
+            "vigilance" => runtime_keywords.with_vigilance(),
+            "haste" => runtime_keywords.with_haste(),
+            "defender" => runtime_keywords.with_defender(),
+            "indestructible" => runtime_keywords.with_indestructible(),
+            "prowess" => runtime_keywords.with_prowess(),
+            unsupported => {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::KeywordSemantics,
+                    format!("card.faces[0].keywords[{index}]"),
+                    format!("keyword `{unsupported}` requires runtime lowering"),
+                ));
+            }
+        };
+    }
+
+    Ok(Some(
+        BaseCreatureCharacteristics::new(
+            parse_stat(power, "power")?,
+            parse_stat(toughness, "toughness")?,
+        )
+        .with_keywords(runtime_keywords),
+    ))
 }
 
 #[derive(Default)]
@@ -687,6 +1099,7 @@ struct ProgramCompiler {
     effects: Vec<EffectProgram>,
     targets: Vec<CompiledTarget>,
     object_choices: Vec<CompiledObjectChoice>,
+    optional_effect_groups: Vec<OptionalEffectGroup>,
 }
 
 struct CompiledTarget {
@@ -728,7 +1141,7 @@ fn compile_intrinsic_basic_mana_ability(
     }
     Ok(Some(ActivatedAbilityProgram {
         cost: ActivationCost::new(ManaCost::new(0, 0, 0, 0, 0, 0)).with_tap_source(),
-        produces: ManaPool::of(kind, 1),
+        outputs: ManaOutputChoices::from_options(&[ManaPool::of(kind, 1)]),
     }))
 }
 
@@ -798,8 +1211,218 @@ fn compile_fixed_mana_ability(
     }
     Ok(ActivatedAbilityProgram {
         cost: ActivationCost::new(ManaCost::new(0, 0, 0, 0, 0, 0)).with_tap_source(),
-        produces: compile_fixed_mana_output(mana, &format!("{path}.effect.mana"))?,
+        outputs: compile_mana_outputs(mana, &format!("{path}.effect.mana"))?,
     })
+}
+
+fn compile_activated_effect(
+    ability: &AbilityDefinition,
+    path: &str,
+) -> Result<ActivatedEffectProgram, CompileDiagnostic> {
+    if ability.event.is_some() || ability.condition.is_some() || ability.mana_ability {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::AbilityShape,
+            path,
+            "non-mana activated ability cannot carry an event, condition, or mana flag",
+        ));
+    }
+    let timing = match ability.timing.as_ref() {
+        None => ActivationTiming::Instant,
+        Some(Expression::Call {
+            operation: Operation::TimingSorcery,
+            arguments,
+        }) if arguments.is_empty() => ActivationTiming::Sorcery,
+        Some(_) => {
+            return Err(CompileDiagnostic::new(
+                CompileDiagnosticCode::AbilityShape,
+                format!("{path}.timing"),
+                "only timing_sorcery() is compiled for non-mana activations",
+            ));
+        }
+    };
+
+    let zero_cost = ManaCost::new(0, 0, 0, 0, 0, 0);
+    let mut mana_cost = zero_cost;
+    let mut exact_payment = ManaPool::empty();
+    let mut tap_source = false;
+    let mut sacrifice_source = false;
+    let mut pay_life = 0_u32;
+    for (index, cost) in ability.costs.iter().enumerate() {
+        let cost_path = format!("{path}.costs[{index}]");
+        let Expression::Call {
+            operation,
+            arguments,
+        } = cost
+        else {
+            return Err(CompileDiagnostic::new(
+                CompileDiagnosticCode::AbilityShape,
+                cost_path,
+                "activation cost is not an operation call",
+            ));
+        };
+        match operation {
+            Operation::ManaCost => {
+                if mana_cost != zero_cost {
+                    return Err(CompileDiagnostic::new(
+                        CompileDiagnosticCode::AbilityShape,
+                        cost_path,
+                        "activation repeats its mana cost",
+                    ));
+                }
+                let [Expression::Text(value)] = arguments.as_slice() else {
+                    return Err(effect_arity(
+                        &cost_path,
+                        operation,
+                        "one fixed mana-cost string",
+                    ));
+                };
+                (mana_cost, exact_payment) = compile_mana_cost_text(value, &cost_path)?;
+            }
+            Operation::TapSelf if arguments.is_empty() && !tap_source => tap_source = true,
+            Operation::SacrificeSelf if arguments.is_empty() && !sacrifice_source => {
+                sacrifice_source = true;
+            }
+            Operation::PayLife => {
+                let [Expression::Integer(amount)] = arguments.as_slice() else {
+                    return Err(effect_arity(
+                        &cost_path,
+                        operation,
+                        "one literal life amount",
+                    ));
+                };
+                let amount = u32::try_from(*amount).map_err(|_| {
+                    CompileDiagnostic::new(
+                        CompileDiagnosticCode::EffectAmount,
+                        &cost_path,
+                        format!("life payment {amount} is outside the u32 action range"),
+                    )
+                })?;
+                if amount == 0 || pay_life != 0 {
+                    return Err(CompileDiagnostic::new(
+                        CompileDiagnosticCode::AbilityShape,
+                        cost_path,
+                        "life payment must be positive and appear once",
+                    ));
+                }
+                pay_life = amount;
+            }
+            unsupported => {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::AbilityShape,
+                    cost_path,
+                    format!(
+                        "activation cost `{}` has no complete runtime lowering",
+                        unsupported.as_str()
+                    ),
+                ));
+            }
+        }
+    }
+
+    let mut compiler = ProgramCompiler::default();
+    compile_effect(&ability.effect, &format!("{path}.effect"), &mut compiler)?;
+    if compiler.effects.is_empty() {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::AbilityShape,
+            format!("{path}.effect"),
+            "activation compiled no executable effect",
+        ));
+    }
+    Ok(ActivatedEffectProgram {
+        mana_cost,
+        exact_payment,
+        tap_source,
+        sacrifice_source,
+        pay_life,
+        timing,
+        target_requirements: compiler
+            .targets
+            .into_iter()
+            .map(|target| target.requirement)
+            .collect(),
+        object_choice_requirements: compiler
+            .object_choices
+            .into_iter()
+            .map(|choice| choice.requirement)
+            .collect(),
+        effects: compiler.effects,
+        optional_effect_groups: compiler.optional_effect_groups,
+    })
+}
+
+fn compile_mana_cost_text(
+    value: &str,
+    path: &str,
+) -> Result<(ManaCost, ManaPool), CompileDiagnostic> {
+    let mut symbols = Vec::new();
+    let mut rest = value;
+    while !rest.is_empty() {
+        let Some(opened) = rest.strip_prefix('{') else {
+            return Err(CompileDiagnostic::new(
+                CompileDiagnosticCode::ManaSymbol,
+                path,
+                format!("mana cost `{value}` has text outside braces"),
+            ));
+        };
+        let Some(end) = opened.find('}') else {
+            return Err(CompileDiagnostic::new(
+                CompileDiagnosticCode::ManaSymbol,
+                path,
+                format!("mana cost `{value}` has an unterminated symbol"),
+            ));
+        };
+        let symbol = &opened[..end];
+        if let Some(color) = Color::parse(symbol) {
+            symbols.push(ManaSymbol::Color(color));
+        } else if let Ok(generic) = symbol.parse::<u16>() {
+            symbols.push(ManaSymbol::Generic(generic));
+        } else {
+            return Err(CompileDiagnostic::new(
+                CompileDiagnosticCode::ManaSymbol,
+                path,
+                format!("mana symbol `{{{symbol}}}` has no exact activation lowering"),
+            ));
+        }
+        rest = &opened[end + 1..];
+    }
+    compile_mana_cost(&symbols)
+}
+
+fn compile_mana_outputs(value: &str, path: &str) -> Result<ManaOutputChoices, CompileDiagnostic> {
+    if value == "any_color" {
+        return Ok(ManaOutputChoices::from_options(&[
+            ManaPool::of(ManaKind::White, 1),
+            ManaPool::of(ManaKind::Blue, 1),
+            ManaPool::of(ManaKind::Black, 1),
+            ManaPool::of(ManaKind::Red, 1),
+            ManaPool::of(ManaKind::Green, 1),
+        ]));
+    }
+    if value.contains(" or ") {
+        let mut outputs = Vec::new();
+        for choice in value.split(" or ") {
+            let output = compile_fixed_mana_output(choice, path)?;
+            if outputs.contains(&output) {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::EffectArguments,
+                    path,
+                    format!("mana choice `{value}` repeats an output"),
+                ));
+            }
+            outputs.push(output);
+        }
+        if outputs.len() < 2 || outputs.len() > 6 {
+            return Err(CompileDiagnostic::new(
+                CompileDiagnosticCode::EffectArguments,
+                path,
+                format!("mana choice `{value}` must contain 2..=6 outputs"),
+            ));
+        }
+        return Ok(ManaOutputChoices::from_options(&outputs));
+    }
+    Ok(ManaOutputChoices::from_options(&[
+        compile_fixed_mana_output(value, path)?,
+    ]))
 }
 
 fn compile_fixed_mana_output(value: &str, path: &str) -> Result<ManaPool, CompileDiagnostic> {
@@ -1010,6 +1633,42 @@ fn compile_effect(
                     ));
                 }
             }
+            Ok(())
+        }
+        Operation::ChooseUpTo => {
+            let [maximum, choice] = arguments.as_slice() else {
+                return Err(effect_arity(
+                    path,
+                    operation,
+                    "literal maximum and one optional effect",
+                ));
+            };
+            let maximum = compile_bounded_positive_literal(
+                maximum,
+                &format!("{path}.maximum"),
+                1,
+                "optional-effect maximum",
+            )?;
+            if maximum != 1 {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::EffectArguments,
+                    format!("{path}.maximum"),
+                    "the current optional-effect grammar requires maximum 1",
+                ));
+            }
+            let start = compiler.effects.len();
+            compile_effect(choice, &format!("{path}.choice[0]"), compiler)?;
+            let end = compiler.effects.len();
+            if start == end {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::EffectArguments,
+                    path,
+                    "optional effect compiled no operations",
+                ));
+            }
+            compiler
+                .optional_effect_groups
+                .push(OptionalEffectGroup { start, end });
             Ok(())
         }
         Operation::GainLife | Operation::LoseLife => {
@@ -1254,24 +1913,32 @@ fn compile_token_template(
             "token template is not text",
         ));
     };
-    let supported = matches!(
-        script.as_str(),
-        "g_3_3_beast" | "g_3_3_elephant" | "g_3_3_ape" | "g_3_3_frog_lizard"
-    );
-    if !supported {
-        return Err(CompileDiagnostic::new(
-            CompileDiagnosticCode::EffectArguments,
-            path,
-            format!("token template `{script}` is not in the exact runtime registry"),
-        ));
-    }
+    let (colors, base_creature) = match script.as_str() {
+        "g_3_3_beast" | "g_3_3_elephant" | "g_3_3_ape" | "g_3_3_frog_lizard" => (
+            ObjectColors::none().with_green(),
+            BaseCreatureCharacteristics::new(3, 3),
+        ),
+        "u_2_2_bird_flying" => (
+            ObjectColors::none().with_blue(),
+            BaseCreatureCharacteristics::new(2, 2)
+                .with_keywords(CreatureKeywords::none().with_flying()),
+        ),
+        "b_2_2_zombie" => (
+            ObjectColors::none().with_black(),
+            BaseCreatureCharacteristics::new(2, 2),
+        ),
+        _ => {
+            return Err(CompileDiagnostic::new(
+                CompileDiagnosticCode::EffectArguments,
+                path,
+                format!("token template `{script}` is not in the exact runtime registry"),
+            ));
+        }
+    };
     Ok(TokenTemplate {
         card: CardId::new(stable_runtime_id(script)),
-        base_object: BaseObjectCharacteristics::new(
-            ObjectTypes::none().with_creature(),
-            ObjectColors::none().with_green(),
-        ),
-        base_creature: BaseCreatureCharacteristics::new(3, 3),
+        base_object: BaseObjectCharacteristics::new(ObjectTypes::none().with_creature(), colors),
+        base_creature,
     })
 }
 
@@ -1456,6 +2123,25 @@ fn compile_player_binding(
                     "controller_of requires one object target",
                 ));
             };
+            let selector = target_selector(target, path)?;
+            if is_any_selector(selector) {
+                let object = unique_existing_target(compiler, TargetClass::Object, path)?;
+                let stack = unique_existing_target(compiler, TargetClass::Stack, path)?;
+                return match (object, stack) {
+                    (Some(target), None) => Ok(PlayerBinding::ControllerOfTargetObject(target)),
+                    (None, Some(target)) => Ok(PlayerBinding::ControllerOfTargetStack(target)),
+                    (None, None) => Err(CompileDiagnostic::new(
+                        CompileDiagnosticCode::PlayerSelector,
+                        path,
+                        "controller_of(target(any())) has no preceding object or stack target",
+                    )),
+                    (Some(_), Some(_)) => Err(CompileDiagnostic::new(
+                        CompileDiagnosticCode::PlayerSelector,
+                        path,
+                        "controller_of(target(any())) is ambiguous across object and stack targets",
+                    )),
+                };
+            }
             Ok(PlayerBinding::ControllerOfTargetObject(
                 compile_object_target(target, &format!("{path}.object"), compiler)?,
             ))
@@ -2388,6 +3074,7 @@ pub struct ExecutionBindings {
     opponents: Vec<PlayerId>,
     targets: Vec<TargetChoice>,
     object_choices: Vec<Vec<ObjectId>>,
+    optional_effect_choices: Vec<bool>,
     scry_bottoms: BTreeMap<(usize, PlayerId), Vec<ObjectId>>,
 }
 
@@ -2400,6 +3087,7 @@ impl ExecutionBindings {
             opponents,
             targets: Vec::new(),
             object_choices: Vec::new(),
+            optional_effect_choices: Vec::new(),
             scry_bottoms: BTreeMap::new(),
         }
     }
@@ -2415,6 +3103,13 @@ impl ExecutionBindings {
     #[must_use]
     pub fn with_object_choices(mut self, choices: Vec<Vec<ObjectId>>) -> Self {
         self.object_choices = choices;
+        self
+    }
+
+    /// Supplies execute-or-skip decisions for optional effects in source order.
+    #[must_use]
+    pub fn with_optional_effect_choices(mut self, choices: Vec<bool>) -> Self {
+        self.optional_effect_choices = choices;
         self
     }
 
@@ -2452,6 +3147,12 @@ impl ExecutionBindings {
     #[must_use]
     pub fn object_choices(&self) -> &[Vec<ObjectId>] {
         &self.object_choices
+    }
+
+    /// Returns execute-or-skip decisions for optional effects.
+    #[must_use]
+    pub fn optional_effect_choices(&self) -> &[bool] {
+        &self.optional_effect_choices
     }
 }
 
@@ -2606,12 +3307,62 @@ pub fn bind_program_actions(
     program: &CardProgram,
     bindings: &ExecutionBindings,
 ) -> Result<Vec<BoundAction>, ExecutionDiagnostic> {
+    bind_effect_actions(
+        state,
+        &program.target_requirements,
+        &program.object_choice_requirements,
+        &program.effects,
+        &program.optional_effect_groups,
+        bindings,
+    )
+}
+
+/// Resolves one triggered ability's bindings without mutating game state.
+pub fn bind_triggered_ability_actions(
+    state: &GameState,
+    ability: &TriggeredAbilityProgram,
+    bindings: &ExecutionBindings,
+) -> Result<Vec<BoundAction>, ExecutionDiagnostic> {
+    bind_effect_actions(
+        state,
+        &ability.target_requirements,
+        &ability.object_choice_requirements,
+        &ability.effects,
+        &ability.optional_effect_groups,
+        bindings,
+    )
+}
+
+/// Resolves one non-mana activated ability's bindings without mutating game state.
+pub fn bind_activated_effect_actions(
+    state: &GameState,
+    ability: &ActivatedEffectProgram,
+    bindings: &ExecutionBindings,
+) -> Result<Vec<BoundAction>, ExecutionDiagnostic> {
+    bind_effect_actions(
+        state,
+        &ability.target_requirements,
+        &ability.object_choice_requirements,
+        &ability.effects,
+        &ability.optional_effect_groups,
+        bindings,
+    )
+}
+
+fn bind_effect_actions(
+    state: &GameState,
+    target_requirements: &[TargetRequirement],
+    object_choice_requirements: &[ObjectChoiceRequirement],
+    effects: &[EffectProgram],
+    optional_effect_groups: &[OptionalEffectGroup],
+    bindings: &ExecutionBindings,
+) -> Result<Vec<BoundAction>, ExecutionDiagnostic> {
     validate_player_bindings(bindings)?;
     state
         .validate_target_choices(
             bindings.controller,
             None,
-            &program.target_requirements,
+            target_requirements,
             &bindings.targets,
         )
         .map_err(|error| {
@@ -2621,9 +3372,27 @@ pub fn bind_program_actions(
                 format!("kernel rejected target binding: {error:?}"),
             )
         })?;
-    validate_object_choices(state, program, bindings)?;
+    validate_object_choices(state, object_choice_requirements, bindings)?;
+    if optional_effect_groups.len() != bindings.optional_effect_choices.len() {
+        return Err(ExecutionDiagnostic::new(
+            ExecutionDiagnosticCode::MissingChoice,
+            None,
+            format!(
+                "program requires {} optional-effect decision(s), found {}",
+                optional_effect_groups.len(),
+                bindings.optional_effect_choices.len()
+            ),
+        ));
+    }
     let mut actions = Vec::new();
-    for (effect_index, effect) in program.effects.iter().enumerate() {
+    for (effect_index, effect) in effects.iter().enumerate() {
+        if optional_effect_groups
+            .iter()
+            .zip(&bindings.optional_effect_choices)
+            .any(|(group, execute)| !*execute && (group.start..group.end).contains(&effect_index))
+        {
+            continue;
+        }
         match effect {
             EffectProgram::GainLife { players, amount } => {
                 let amount = resolve_amount(state, *amount, bindings, effect_index)?;
@@ -2867,22 +3636,21 @@ pub fn bind_program_actions(
 
 fn validate_object_choices(
     state: &GameState,
-    program: &CardProgram,
+    requirements: &[ObjectChoiceRequirement],
     bindings: &ExecutionBindings,
 ) -> Result<(), ExecutionDiagnostic> {
-    if program.object_choice_requirements.len() != bindings.object_choices.len() {
+    if requirements.len() != bindings.object_choices.len() {
         return Err(ExecutionDiagnostic::new(
             ExecutionDiagnosticCode::MissingChoice,
             None,
             format!(
                 "program requires {} object choice slot(s), found {}",
-                program.object_choice_requirements.len(),
+                requirements.len(),
                 bindings.object_choices.len()
             ),
         ));
     }
-    for (choice_index, (requirement, selected)) in program
-        .object_choice_requirements
+    for (choice_index, (requirement, selected)) in requirements
         .iter()
         .zip(&bindings.object_choices)
         .enumerate()
@@ -3018,6 +3786,27 @@ fn resolve_players(
                         ExecutionDiagnosticCode::MissingBinding,
                         Some(effect_index),
                         format!("cannot resolve controller of target {target}: {error:?}"),
+                    )
+                })
+        }
+        PlayerBinding::ControllerOfTargetStack(target) => {
+            let Some(TargetChoice::StackEntry(entry)) = bindings.targets.get(target) else {
+                return Err(ExecutionDiagnostic::new(
+                    ExecutionDiagnosticCode::MissingBinding,
+                    Some(effect_index),
+                    format!("target slot {target} is not a stack entry"),
+                ));
+            };
+            state
+                .stack_entries()
+                .iter()
+                .find(|candidate| candidate.id() == *entry)
+                .map(|entry| vec![entry.controller()])
+                .ok_or_else(|| {
+                    ExecutionDiagnostic::new(
+                        ExecutionDiagnosticCode::MissingBinding,
+                        Some(effect_index),
+                        format!("target stack entry {entry:?} is unavailable"),
                     )
                 })
         }
@@ -3167,6 +3956,26 @@ card "Sol Ring" {
     ability activated {
       costs: [tap_self()]
       effect: add_mana("2 x {C}", you())
+      mana_ability: true
+    }
+  }
+}
+"#;
+    const BIRDS_OF_PARADISE: &str = r#"
+card "Birds of Paradise" {
+  id: "d3a0b660-358c-41bd-9cd2-41fbf3491b1a"
+  layout: normal
+  status: unverified_playable
+  face "Birds of Paradise" {
+    cost: "{G}"
+    types: "Creature - Bird"
+    oracle: "Flying\n{T}: Add one mana of any color."
+    power: "0"
+    toughness: "1"
+    keywords: [flying]
+    ability activated {
+      costs: [tap_self()]
+      effect: add_mana("any_color", you())
       mana_ability: true
     }
   }
@@ -3383,6 +4192,30 @@ card "Interpreter Contract" {
     }
 
     #[test]
+    fn creature_characteristics_and_all_color_mana_choices_compile_exactly() {
+        let birds = compile_card_program(&parse("birds.frs", BIRDS_OF_PARADISE))
+            .unwrap_or_else(|error| panic!("unexpected Birds compile error: {error}"));
+        let base = birds
+            .base_creature()
+            .unwrap_or_else(|| panic!("Birds must carry creature characteristics"));
+        assert_eq!(base.power(), 0);
+        assert_eq!(base.toughness(), 1);
+        assert!(base.keywords().flying());
+        let outputs = birds.activated_abilities()[0].output_choices();
+        assert_eq!(outputs.options().len(), 5);
+        for kind in [
+            ManaKind::White,
+            ManaKind::Blue,
+            ManaKind::Black,
+            ManaKind::Red,
+            ManaKind::Green,
+        ] {
+            assert!(outputs.contains(ManaPool::of(kind, 1)));
+        }
+        assert!(!outputs.contains(ManaPool::of(ManaKind::Colorless, 1)));
+    }
+
+    #[test]
     fn targeted_exile_prebinds_power_and_controller_before_moving_object() {
         let program = compile_card_program(&parse("swords.frs", SWORDS))
             .unwrap_or_else(|error| panic!("unexpected compile error: {error}"));
@@ -3547,7 +4380,7 @@ card "Interpreter Contract" {
     fn unknown_token_template_fails_closed_with_a_qualified_path() {
         let definition = parse(
             "unknown_token.frs",
-            &BEAST_WITHIN.replace("g_3_3_beast", "u_2_2_bird_flying"),
+            &BEAST_WITHIN.replace("g_3_3_beast", "u_1_1_faerie_flying"),
         );
         let error = match compile_card_program(&definition) {
             Ok(_) => panic!("unknown token must not compile"),
