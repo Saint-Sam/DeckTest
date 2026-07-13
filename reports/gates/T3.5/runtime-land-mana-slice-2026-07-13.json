@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-13",
+  "task": "T3.5",
+  "slice": "land-play-and-fixed-mana-abilities",
+  "status": "pass_incremental_slice",
+  "claim_boundary": "This proves legal land play and fixed-output mana abilities for the accepted shapes. It does not close T3.5 or semantically verify cards.",
+  "source_binding": "The kernel, interpreter, smoke harness, tests, specification, and this evidence record are committed together.",
+  "production_path": [
+    "Action::PlayLand validates active player, priority, empty-stack main phase, hand source, land characteristics, and one play per turn",
+    "basic land subtypes compile intrinsic mana abilities without card-name branches",
+    "explicit tap_self plus fixed add_mana abilities compile to ActivatedAbilityDefinition",
+    "Action::RegisterActivatedAbility and Action::ActivateAbility resolve the mana ability without the stack",
+    "all actions run invariant, player-view, zone-conservation, and deterministic-hash checks"
+  ],
+  "fail_closed_boundaries": [
+    "mana alternatives such as {U} or {B} require an explicit choice and remain unsupported",
+    "creature mana abilities remain unsupported in smoke until a post-summoning-sickness turn is synthesized",
+    "mixed or non-mana activated abilities remain unsupported",
+    "conditional mana abilities remain unsupported"
+  ],
+  "translated_corpus": {
+    "source": "target/translated-cards",
+    "report": "target/t3_5_runtime_land_mana_audit.json",
+    "report_sha256": "cc7bff1ddbf72575b81249329e74709644c3df84dea84eeee726472dbf189c6e",
+    "total": 20082,
+    "passed": 547,
+    "unsupported_setup": 19535,
+    "failed": 0,
+    "prior_interpreter_passed": 515,
+    "net_new_passed": 32,
+    "land_play": 22,
+    "mana_ability": 22
+  },
+  "frozen_semantic_100": {
+    "runtime_smoke_passed": 24,
+    "unsupported_setup": 76,
+    "failed": 0,
+    "newly_passing": [
+      "Plains",
+      "Island",
+      "Swamp",
+      "Mountain",
+      "Forest",
+      "Wastes",
+      "Sol Ring"
+    ]
+  },
+  "verification": [
+    {
+      "command": "cargo test --offline --workspace",
+      "result": "pass: all workspace unit, integration, and doc tests"
+    },
+    {
+      "command": "cargo test --offline -p forge-core -p forge-cards -p forge-testkit",
+      "result": "pass: forge-core 97, forge-cards 11, forge-testkit 29 across library and binary targets"
+    },
+    {
+      "command": "cargo clippy --offline -p forge-core -p forge-cards -p forge-testkit --all-targets -- -D warnings",
+      "result": "pass"
+    },
+    {
+      "command": "target/debug/forge-testkit runtime-smoke target/translated-cards --report target/t3_5_runtime_land_mana_audit.json --quiet",
+      "result": "expected exit 2 because unsupported definitions remain; 547 passed, 19535 unsupported, 0 failed"
+    }
+  ],
+  "constraints": {
+    "local_only": true,
+    "network_used": false,
+    "installs_performed": false,
+    "github_actions_used": false,
+    "push_performed": false
+  }
+}

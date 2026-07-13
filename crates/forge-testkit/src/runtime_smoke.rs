@@ -1,10 +1,9 @@
 //! Capability-specific runtime smoke for compiler-valid translated cards.
 //!
-//! This first T3.5 slice deliberately supports only ordinary instant and
-//! sorcery spells with literal `gain_life`, `lose_life`, and `sequence`
-//! effects addressed to `you()` or `opponent()`. Unsupported definitions are
-//! returned as data with stable reason codes; they are never counted as
-//! passing smoke.
+//! The T3.5 harness drives compiled card programs through legal casting or land
+//! play, targeting, production effects, activated mana abilities, zones, and
+//! invariant checks. Unsupported definitions are returned as data with stable
+//! reason codes; they are never counted as passing smoke.
 
 use forge_carddef::CardDefinition;
 use forge_cards::runtime::{
@@ -12,10 +11,11 @@ use forge_cards::runtime::{
     CompileDiagnosticCode, EffectProgram, ExecutionBindings, PlayerBinding, ProgramKind,
 };
 use forge_core::{
-    apply, auto_payment_plan, Action, BaseCreatureCharacteristics, BaseObjectCharacteristics,
-    CardId, CastSpellRequest, GameOutcome, GameState, ObjectColors, ObjectId, ObjectTypes, Outcome,
-    PlayerId, PlayerTargetPredicate, PriorityOutcome, SpellTiming, StackEntryId, StackObjectKind,
-    Step, TargetChoice, TargetControllerPredicate, TargetKind, TargetPredicate, ZoneId, ZoneKind,
+    apply, auto_payment_plan, Action, ActivatedAbilityId, BaseCreatureCharacteristics,
+    BaseObjectCharacteristics, CardId, CastSpellRequest, GameOutcome, GameState, ManaPool,
+    ObjectColors, ObjectId, ObjectTypes, Outcome, PlayerId, PlayerTargetPredicate, PriorityOutcome,
+    SpellTiming, StackEntryId, StackObjectKind, Step, TargetChoice, TargetControllerPredicate,
+    TargetKind, TargetPredicate, ZoneId, ZoneKind,
 };
 
 /// Capability executed through the shared card runtime interpreter.
@@ -338,21 +338,16 @@ enum SmokeSpellKind {
     Instant,
     Sorcery,
     Permanent,
+    Land,
 }
 
 impl SmokeSpellKind {
-    const fn stack_kind(self) -> StackObjectKind {
+    const fn spell_profile(self) -> Option<(StackObjectKind, SpellTiming)> {
         match self {
-            Self::Instant => StackObjectKind::InstantSpell,
-            Self::Sorcery => StackObjectKind::SorcerySpell,
-            Self::Permanent => StackObjectKind::PermanentSpell,
-        }
-    }
-
-    const fn timing(self) -> SpellTiming {
-        match self {
-            Self::Instant => SpellTiming::Instant,
-            Self::Sorcery | Self::Permanent => SpellTiming::Sorcery,
+            Self::Instant => Some((StackObjectKind::InstantSpell, SpellTiming::Instant)),
+            Self::Sorcery => Some((StackObjectKind::SorcerySpell, SpellTiming::Sorcery)),
+            Self::Permanent => Some((StackObjectKind::PermanentSpell, SpellTiming::Sorcery)),
+            Self::Land => None,
         }
     }
 
@@ -362,7 +357,9 @@ impl SmokeSpellKind {
                 ZoneId::new(Some(owner), ZoneKind::Graveyard),
                 "owner_graveyard",
             ),
-            Self::Permanent => (ZoneId::new(None, ZoneKind::Battlefield), "battlefield"),
+            Self::Permanent | Self::Land => {
+                (ZoneId::new(None, ZoneKind::Battlefield), "battlefield")
+            }
         }
     }
 }
@@ -373,13 +370,14 @@ fn compile_smoke(definition: &CardDefinition) -> Result<CompiledSmoke, RuntimeSm
         ProgramKind::Instant => SmokeSpellKind::Instant,
         ProgramKind::Sorcery => SmokeSpellKind::Sorcery,
         ProgramKind::Permanent => SmokeSpellKind::Permanent,
-        ProgramKind::Land => {
-            return Err(RuntimeSmokeUnsupported::new(
-                UnsupportedSetupCode::CardType,
-                "land programs require the play-land lifecycle, which is not yet synthesized",
-            ))
-        }
+        ProgramKind::Land => SmokeSpellKind::Land,
     };
+    if compiled_mana_ability_needs_haste(&program) {
+        return Err(RuntimeSmokeUnsupported::new(
+            UnsupportedSetupCode::AbilityShape,
+            "creature mana abilities require a post-summoning-sickness smoke turn",
+        ));
+    }
     let (initial_life, expected_life) = compile_life_totals(program.effects())?;
     let library_reserve = compile_library_reserve(program.effects())?;
     Ok(CompiledSmoke {
@@ -389,6 +387,10 @@ fn compile_smoke(definition: &CardDefinition) -> Result<CompiledSmoke, RuntimeSm
         expected_life,
         library_reserve,
     })
+}
+
+fn compiled_mana_ability_needs_haste(program: &CardProgram) -> bool {
+    !program.activated_abilities().is_empty() && program.base_object().types().creature()
 }
 
 fn map_compile_diagnostic(diagnostic: CompileDiagnostic) -> RuntimeSmokeUnsupported {
@@ -607,7 +609,7 @@ fn execute_smoke(
             player_index == 0
                 && matches!(
                     compiled.lifecycle,
-                    SmokeSpellKind::Sorcery | SmokeSpellKind::Permanent
+                    SmokeSpellKind::Sorcery | SmokeSpellKind::Permanent | SmokeSpellKind::Land
                 ),
         );
         let library_size = OPENING_HAND_SIZE
@@ -692,7 +694,7 @@ fn execute_smoke(
     }
     if matches!(
         compiled.lifecycle,
-        SmokeSpellKind::Sorcery | SmokeSpellKind::Permanent
+        SmokeSpellKind::Sorcery | SmokeSpellKind::Permanent | SmokeSpellKind::Land
     ) {
         finish_empty_stack_step(&mut execution, "cast_window.finish_upkeep")?;
         if execution.state.current_step() != Some(Step::Draw) {
@@ -717,59 +719,72 @@ fn execute_smoke(
 
     let targets = synthesize_targets(&mut execution, compiled, caster, opponent, base_card_id)?;
 
-    execution.dispatch(
-        "cast.add_mana",
-        Action::AddManaToPool {
-            player: caster,
-            mana: compiled.program.exact_payment(),
-        },
-    )?;
-    let payment = auto_payment_plan(
-        compiled.program.exact_payment(),
-        compiled.program.mana_cost(),
-    )
-    .map_err(|error| {
-        RuntimeSmokeFailure::new(
-            RuntimeSmokeFailureCode::UnexpectedOutcome,
-            "cast.payment",
-            format!("payment planner failed: {error:?}"),
+    if let Some((stack_kind, timing)) = compiled.lifecycle.spell_profile() {
+        execution.dispatch(
+            "cast.add_mana",
+            Action::AddManaToPool {
+                player: caster,
+                mana: compiled.program.exact_payment(),
+            },
+        )?;
+        let payment = auto_payment_plan(
+            compiled.program.exact_payment(),
+            compiled.program.mana_cost(),
         )
-    })?
-    .ok_or_else(|| {
-        RuntimeSmokeFailure::new(
-            RuntimeSmokeFailureCode::UnexpectedOutcome,
-            "cast.payment",
-            "exact synthesized mana did not produce a payment plan",
-        )
-    })?;
-    let cast = execution.dispatch(
-        "cast.cast_spell",
-        Action::CastSpell {
-            player: caster,
-            object: spell,
-            request: CastSpellRequest::new(
-                compiled.lifecycle.stack_kind(),
-                compiled.lifecycle.timing(),
-                compiled.program.mana_cost(),
-                payment,
+        .map_err(|error| {
+            RuntimeSmokeFailure::new(
+                RuntimeSmokeFailureCode::UnexpectedOutcome,
+                "cast.payment",
+                format!("payment planner failed: {error:?}"),
             )
-            .with_targets(
-                compiled.program.target_requirements().to_vec(),
-                targets.clone(),
-            ),
-        },
-    )?;
-    let stack_entry = match cast {
-        Outcome::StackEntryAdded(entry) => entry,
-        other => return Err(unexpected_outcome("cast.cast_spell", other)),
-    };
-    assert_zone(
-        &execution.state,
-        spell,
-        ZoneId::new(None, ZoneKind::Stack),
-        "cast.stack_destination",
-    )?;
-    resolve_stack_entry(&mut execution, stack_entry)?;
+        })?
+        .ok_or_else(|| {
+            RuntimeSmokeFailure::new(
+                RuntimeSmokeFailureCode::UnexpectedOutcome,
+                "cast.payment",
+                "exact synthesized mana did not produce a payment plan",
+            )
+        })?;
+        let cast = execution.dispatch(
+            "cast.cast_spell",
+            Action::CastSpell {
+                player: caster,
+                object: spell,
+                request: CastSpellRequest::new(
+                    stack_kind,
+                    timing,
+                    compiled.program.mana_cost(),
+                    payment,
+                )
+                .with_targets(
+                    compiled.program.target_requirements().to_vec(),
+                    targets.clone(),
+                ),
+            },
+        )?;
+        let stack_entry = match cast {
+            Outcome::StackEntryAdded(entry) => entry,
+            other => return Err(unexpected_outcome("cast.cast_spell", other)),
+        };
+        assert_zone(
+            &execution.state,
+            spell,
+            ZoneId::new(None, ZoneKind::Stack),
+            "cast.stack_destination",
+        )?;
+        resolve_stack_entry(&mut execution, stack_entry)?;
+    } else {
+        let played = execution.dispatch(
+            "land.play",
+            Action::PlayLand {
+                player: caster,
+                object: spell,
+            },
+        )?;
+        if !matches!(played, Outcome::Applied) {
+            return Err(unexpected_outcome("land.play", played));
+        }
+    }
 
     let (destination, destination_name) = compiled.lifecycle.destination(caster);
     assert_zone(
@@ -778,6 +793,41 @@ fn execute_smoke(
         destination,
         "resolve.spell_destination",
     )?;
+
+    let mut registered_abilities = Vec::with_capacity(compiled.program.activated_abilities().len());
+    for (index, ability) in compiled
+        .program
+        .activated_abilities()
+        .iter()
+        .copied()
+        .enumerate()
+    {
+        let outcome = execution.dispatch(
+            &format!("ability[{index}].register"),
+            Action::RegisterActivatedAbility {
+                definition: ability.bind(caster, spell),
+            },
+        )?;
+        let Outcome::ActivatedAbilityRegistered(id) = outcome else {
+            return Err(unexpected_outcome("ability.register", outcome));
+        };
+        registered_abilities.push(id);
+    }
+    if let Some((id, program)) = registered_abilities
+        .first()
+        .copied()
+        .zip(compiled.program.activated_abilities().first().copied())
+    {
+        activate_mana_ability(&mut execution, caster, id, program.cost().mana())?;
+        let actual = execution.state.players()[caster.index()].mana_pool();
+        if actual != program.produces() {
+            return Err(RuntimeSmokeFailure::new(
+                RuntimeSmokeFailureCode::UnexpectedOutcome,
+                "ability.assert_mana",
+                format!("expected {:?}, found {actual:?}", program.produces()),
+            ));
+        }
+    }
 
     let initial_hand_sizes = [
         hand_size(&execution.state, caster)?,
@@ -1168,6 +1218,41 @@ fn resolve_stack_entry(
     Ok(())
 }
 
+fn activate_mana_ability(
+    execution: &mut Execution,
+    player: PlayerId,
+    ability: ActivatedAbilityId,
+    cost: forge_core::ManaCost,
+) -> Result<(), RuntimeSmokeFailure> {
+    let payment = auto_payment_plan(ManaPool::empty(), cost)
+        .map_err(|error| {
+            RuntimeSmokeFailure::new(
+                RuntimeSmokeFailureCode::UnexpectedOutcome,
+                "ability.payment",
+                format!("activation payment planner failed: {error:?}"),
+            )
+        })?
+        .ok_or_else(|| {
+            RuntimeSmokeFailure::new(
+                RuntimeSmokeFailureCode::UnexpectedOutcome,
+                "ability.payment",
+                "zero-mana activation did not produce a payment plan",
+            )
+        })?;
+    let outcome = execution.dispatch(
+        "ability.activate",
+        Action::ActivateAbility {
+            player,
+            ability,
+            payment,
+        },
+    )?;
+    if !matches!(outcome, Outcome::Applied) {
+        return Err(unexpected_outcome("ability.activate", outcome));
+    }
+    Ok(())
+}
+
 fn expect_player(outcome: Outcome) -> Result<PlayerId, RuntimeSmokeFailure> {
     match outcome {
         Outcome::PlayerAdded(player) => Ok(player),
@@ -1281,6 +1366,8 @@ mod tests {
     const DRAW: &str = include_str!("../tests/fixtures/runtime_smoke/unsupported_draw_spell.frs");
     const PERMANENT: &str =
         include_str!("../tests/fixtures/runtime_smoke/supported_permanent_spell.frs");
+    const BASIC_LAND: &str =
+        include_str!("../tests/fixtures/runtime_smoke/supported_basic_land.frs");
 
     #[test]
     fn supported_life_spell_executes_and_reaches_owner_graveyard() {
@@ -1324,6 +1411,24 @@ mod tests {
         assert_eq!(
             pass.capabilities(),
             [RuntimeSmokeCapability::PermanentSpell]
+        );
+        assert_eq!(pass.effect_actions(), 0);
+        assert_eq!(pass.destination(), "battlefield");
+    }
+
+    #[test]
+    fn basic_land_is_played_and_its_intrinsic_mana_ability_executes() {
+        let definition = parse("supported_basic_land.frs", BASIC_LAND);
+        let report = run_translated_card_runtime_smoke(&definition);
+        let RuntimeSmokeResult::Passed(pass) = report.result() else {
+            panic!("expected pass, found {:?}", report.result());
+        };
+        assert_eq!(
+            pass.capabilities(),
+            [
+                RuntimeSmokeCapability::LandPlay,
+                RuntimeSmokeCapability::ManaAbility,
+            ]
         );
         assert_eq!(pass.effect_actions(), 0);
         assert_eq!(pass.destination(), "battlefield");

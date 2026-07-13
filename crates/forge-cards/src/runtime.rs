@@ -6,18 +6,20 @@
 //! must not contain branches keyed by card identity or card name.
 
 use forge_carddef::{
-    AbilityKind, CardClassification, CardDefinition, CardLayout, CardType, Color, Expression,
-    ManaSymbol, Operation,
+    AbilityDefinition, AbilityKind, CardClassification, CardDefinition, CardLayout, CardType,
+    Color, Expression, ManaSymbol, Operation, Supertype,
 };
 use forge_core::{
-    apply, Action, BaseObjectCharacteristics, GameState, ManaCost, ManaPool, ObjectColors,
-    ObjectId, ObjectTargetPredicate, ObjectTypes, Outcome, PlayerId, PlayerTargetPredicate,
-    StackEntryId, TargetChoice, TargetControllerPredicate, TargetKind, TargetRequirement, ZoneId,
-    ZoneKind,
+    apply, AbilityPlayer, Action, ActivatedAbilityDefinition, ActivatedAbilityEffect,
+    ActivationCost, ActivationTiming, BaseObjectCharacteristics, GameState, ManaCost, ManaKind,
+    ManaPool, ObjectColors, ObjectId, ObjectTargetPredicate, ObjectTypes, Outcome, PlayerId,
+    PlayerTargetPredicate, StackEntryId, TargetChoice, TargetControllerPredicate, TargetKind,
+    TargetRequirement, ZoneId, ZoneKind,
 };
 use std::{collections::BTreeMap, error::Error, fmt};
 
 const MAX_EFFECTS: usize = 64;
+const MAX_ACTIVATED_ABILITIES: usize = 16;
 
 /// Stable reason that a definition could not compile into a complete program.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -139,6 +141,10 @@ pub enum ProgramKind {
 /// Shared runtime capability compiled from card IR.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum Capability {
+    /// Play a land through the main-phase special action.
+    LandPlay,
+    /// Register and execute a fixed-output mana ability.
+    ManaAbility,
     /// Gain life.
     GainLife,
     /// Lose life.
@@ -166,6 +172,8 @@ impl Capability {
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
+            Self::LandPlay => "land_play",
+            Self::ManaAbility => "mana_ability",
             Self::GainLife => "gain_life",
             Self::LoseLife => "lose_life",
             Self::DrawCards => "draw_cards",
@@ -177,6 +185,43 @@ impl Capability {
             Self::CounterStackEntry => "counter_stack_entry",
             Self::MoveZone => "move_zone",
         }
+    }
+}
+
+/// One completely compiled fixed-output mana ability.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ActivatedAbilityProgram {
+    cost: ActivationCost,
+    produces: ManaPool,
+}
+
+impl ActivatedAbilityProgram {
+    /// Returns the activation cost before binding a source object.
+    #[must_use]
+    pub const fn cost(self) -> ActivationCost {
+        self.cost
+    }
+
+    /// Returns the deterministic mana output.
+    #[must_use]
+    pub const fn produces(self) -> ManaPool {
+        self.produces
+    }
+
+    /// Binds this program to one controller and battlefield source.
+    #[must_use]
+    pub const fn bind(self, controller: PlayerId, source: ObjectId) -> ActivatedAbilityDefinition {
+        ActivatedAbilityDefinition::new(
+            controller,
+            Some(source),
+            ActivationTiming::Instant,
+            self.cost,
+            ActivatedAbilityEffect::AddMana {
+                player: AbilityPlayer::Controller,
+                mana: self.produces,
+            },
+        )
+        .as_mana_ability()
     }
 }
 
@@ -291,6 +336,7 @@ pub struct CardProgram {
     base_object: BaseObjectCharacteristics,
     target_requirements: Vec<TargetRequirement>,
     effects: Vec<EffectProgram>,
+    activated_abilities: Vec<ActivatedAbilityProgram>,
 }
 
 impl CardProgram {
@@ -342,12 +388,23 @@ impl CardProgram {
         &self.effects
     }
 
+    /// Returns completely compiled activated abilities in printed order.
+    #[must_use]
+    pub fn activated_abilities(&self) -> &[ActivatedAbilityProgram] {
+        &self.activated_abilities
+    }
+
     /// Returns all compiled capabilities in source execution order.
     #[must_use]
     pub fn capabilities(&self) -> Vec<Capability> {
         let mut capabilities = Vec::with_capacity(self.effects.len() + 1);
-        if self.kind == ProgramKind::Permanent {
-            capabilities.push(Capability::PermanentSpell);
+        match self.kind {
+            ProgramKind::Permanent => capabilities.push(Capability::PermanentSpell),
+            ProgramKind::Land => capabilities.push(Capability::LandPlay),
+            ProgramKind::Instant | ProgramKind::Sorcery => {}
+        }
+        if !self.activated_abilities.is_empty() {
+            capabilities.push(Capability::ManaAbility);
         }
         capabilities.extend(self.effects.iter().map(EffectProgram::capability));
         capabilities
@@ -397,31 +454,47 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
     let (mana_cost, exact_payment) = compile_mana_cost(&face.mana_cost.symbols)?;
     let base_object = compile_base_object(&face.type_line.card_types, &face.mana_cost.symbols)?;
     let mut compiler = ProgramCompiler::default();
-    match face.abilities.as_slice() {
-        [] if kind == ProgramKind::Permanent => {}
-        [ability]
-            if ability.kind == AbilityKind::Spell
-                && ability.costs.is_empty()
-                && ability.event.is_none()
-                && ability.condition.is_none()
-                && ability.timing.is_none()
-                && !ability.mana_ability =>
-        {
-            compile_effect(
-                &ability.effect,
-                "card.faces[0].abilities[0].effect",
-                &mut compiler,
-            )?;
-        }
-        abilities => {
-            return Err(CompileDiagnostic::new(
-                CompileDiagnosticCode::AbilityShape,
-                "card.faces[0].abilities",
-                format!(
-                    "expected an ability-free permanent or one unconditional spell ability, found {} ability record(s)",
-                    abilities.len()
-                ),
-            ));
+    let mut activated_abilities =
+        compile_intrinsic_basic_mana_ability(&face.type_line.supertypes, &face.type_line.subtypes)?
+            .into_iter()
+            .collect::<Vec<_>>();
+    let mut spell_abilities = 0_usize;
+    for (index, ability) in face.abilities.iter().enumerate() {
+        let path = format!("card.faces[0].abilities[{index}]");
+        match ability.kind {
+            AbilityKind::Spell
+                if matches!(kind, ProgramKind::Instant | ProgramKind::Sorcery)
+                    && ability.costs.is_empty()
+                    && ability.event.is_none()
+                    && ability.condition.is_none()
+                    && ability.timing.is_none()
+                    && !ability.mana_ability =>
+            {
+                spell_abilities = spell_abilities.saturating_add(1);
+                if spell_abilities > 1 {
+                    return Err(CompileDiagnostic::new(
+                        CompileDiagnosticCode::AbilityShape,
+                        path,
+                        "multiple spell abilities are not compiled",
+                    ));
+                }
+                compile_effect(&ability.effect, &format!("{path}.effect"), &mut compiler)?;
+            }
+            AbilityKind::Activated
+                if matches!(kind, ProgramKind::Permanent | ProgramKind::Land) =>
+            {
+                activated_abilities.push(compile_fixed_mana_ability(ability, &path)?);
+            }
+            _ => {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::AbilityShape,
+                    path,
+                    format!(
+                        "ability kind {:?} is not compiled for {kind:?}",
+                        ability.kind
+                    ),
+                ));
+            }
         }
     }
     if compiler.effects.len() > MAX_EFFECTS {
@@ -434,7 +507,17 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
             ),
         ));
     }
-    if compiler.effects.is_empty() && !matches!(kind, ProgramKind::Permanent) {
+    if activated_abilities.len() > MAX_ACTIVATED_ABILITIES {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::ProgramBounds,
+            "card.faces[0].abilities",
+            format!(
+                "compiled {} activated abilities; maximum is {MAX_ACTIVATED_ABILITIES}",
+                activated_abilities.len()
+            ),
+        ));
+    }
+    if compiler.effects.is_empty() && matches!(kind, ProgramKind::Instant | ProgramKind::Sorcery) {
         return Err(CompileDiagnostic::new(
             CompileDiagnosticCode::AbilityShape,
             "card.faces[0].abilities[0].effect",
@@ -454,6 +537,7 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
             .map(|target| target.requirement)
             .collect(),
         effects: compiler.effects,
+        activated_abilities,
     })
 }
 
@@ -466,6 +550,147 @@ struct ProgramCompiler {
 struct CompiledTarget {
     selector: Expression,
     requirement: TargetRequirement,
+}
+
+fn compile_intrinsic_basic_mana_ability(
+    supertypes: &[Supertype],
+    subtypes: &[String],
+) -> Result<Option<ActivatedAbilityProgram>, CompileDiagnostic> {
+    if !supertypes.contains(&Supertype::Basic) {
+        return Ok(None);
+    }
+    let mut outputs = subtypes
+        .iter()
+        .filter_map(|subtype| match subtype.as_str() {
+            "Plains" => Some(ManaKind::White),
+            "Island" => Some(ManaKind::Blue),
+            "Swamp" => Some(ManaKind::Black),
+            "Mountain" => Some(ManaKind::Red),
+            "Forest" => Some(ManaKind::Green),
+            _ => None,
+        });
+    let Some(kind) = outputs.next() else {
+        return Ok(None);
+    };
+    if outputs.next().is_some() {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::AbilityShape,
+            "card.faces[0].types",
+            "multiple intrinsic basic-land mana abilities require an explicit choice",
+        ));
+    }
+    Ok(Some(ActivatedAbilityProgram {
+        cost: ActivationCost::new(ManaCost::new(0, 0, 0, 0, 0, 0)).with_tap_source(),
+        produces: ManaPool::of(kind, 1),
+    }))
+}
+
+fn compile_fixed_mana_ability(
+    ability: &AbilityDefinition,
+    path: &str,
+) -> Result<ActivatedAbilityProgram, CompileDiagnostic> {
+    if !ability.mana_ability
+        || ability.event.is_some()
+        || ability.condition.is_some()
+        || ability.timing.is_some()
+    {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::AbilityShape,
+            path,
+            "activated mana ability must be unconditional and marked mana_ability",
+        ));
+    }
+    let [Expression::Call {
+        operation: Operation::TapSelf,
+        arguments,
+    }] = ability.costs.as_slice()
+    else {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::AbilityShape,
+            format!("{path}.costs"),
+            "fixed mana ability currently requires exactly tap_self()",
+        ));
+    };
+    if !arguments.is_empty() {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::AbilityShape,
+            format!("{path}.costs[0]"),
+            "tap_self does not accept arguments",
+        ));
+    }
+    let Expression::Call {
+        operation: Operation::AddMana,
+        arguments,
+    } = &ability.effect
+    else {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectOperation,
+            format!("{path}.effect"),
+            "activated ability is not one fixed add_mana operation",
+        ));
+    };
+    let [Expression::Text(mana), player] = arguments.as_slice() else {
+        return Err(effect_arity(
+            &format!("{path}.effect"),
+            &Operation::AddMana,
+            "one fixed mana string and you()",
+        ));
+    };
+    if !matches!(
+        player,
+        Expression::Call {
+            operation: Operation::You,
+            arguments,
+        } if arguments.is_empty()
+    ) {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::PlayerSelector,
+            format!("{path}.effect.player"),
+            "fixed mana ability must add mana to you()",
+        ));
+    }
+    Ok(ActivatedAbilityProgram {
+        cost: ActivationCost::new(ManaCost::new(0, 0, 0, 0, 0, 0)).with_tap_source(),
+        produces: compile_fixed_mana_output(mana, &format!("{path}.effect.mana"))?,
+    })
+}
+
+fn compile_fixed_mana_output(value: &str, path: &str) -> Result<ManaPool, CompileDiagnostic> {
+    let (count, symbol) = if let Some((count, symbol)) = value.split_once(" x ") {
+        let count = count.parse::<u32>().map_err(|_| {
+            CompileDiagnostic::new(
+                CompileDiagnosticCode::EffectArguments,
+                path,
+                format!("mana multiplier '{count}' is not a u32"),
+            )
+        })?;
+        (count, symbol)
+    } else {
+        (1, value)
+    };
+    if count == 0 {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectArguments,
+            path,
+            "fixed mana output must be positive",
+        ));
+    }
+    let kind = match symbol {
+        "{W}" => ManaKind::White,
+        "{U}" => ManaKind::Blue,
+        "{B}" => ManaKind::Black,
+        "{R}" => ManaKind::Red,
+        "{G}" => ManaKind::Green,
+        "{C}" => ManaKind::Colorless,
+        _ => {
+            return Err(CompileDiagnostic::new(
+                CompileDiagnosticCode::EffectArguments,
+                path,
+                format!("mana output '{value}' requires an explicit runtime choice"),
+            ));
+        }
+    };
+    Ok(ManaPool::of(kind, count))
 }
 
 fn compile_program_kind(card_types: &[CardType]) -> Result<ProgramKind, CompileDiagnostic> {
@@ -1820,12 +2045,13 @@ pub fn execute_program(
 #[cfg(test)]
 mod tests {
     use super::{
-        compile_card_program, execute_program, CompileDiagnosticCode, ExecutionBindings,
-        ExecutionDiagnosticCode,
+        compile_card_program, execute_program, Capability, CompileDiagnosticCode,
+        ExecutionBindings, ExecutionDiagnosticCode, ProgramKind,
     };
     use forge_core::{
         apply, Action, BaseCreatureCharacteristics, BaseObjectCharacteristics, CardId, GameState,
-        ObjectColors, ObjectTypes, Outcome, StackObjectKind, TargetChoice, ZoneId, ZoneKind,
+        ManaKind, ManaPool, ObjectColors, ObjectTypes, Outcome, StackObjectKind, TargetChoice,
+        ZoneId, ZoneKind,
     };
 
     const SWORDS: &str = r#"
@@ -1846,6 +2072,37 @@ card "Swords to Plowshares" {
 "#;
     const COUNTERSPELL: &str =
         include_str!("../../../cards/cp_dsl/definitions/006_counterspell.frs");
+    const PLAINS: &str = r#"
+card "Plains" {
+  id: "bc71ebf6-2056-41f7-be35-b2e5c34afa99"
+  layout: normal
+  status: unverified_playable
+  face "Plains" {
+    cost: ""
+    types: "Basic Land - Plains"
+    oracle: "({T}: Add {W}.)"
+    keywords: []
+  }
+}
+"#;
+    const SOL_RING: &str = r#"
+card "Sol Ring" {
+  id: "6ad8011d-3471-4369-9d68-b264cc027487"
+  layout: normal
+  status: unverified_playable
+  face "Sol Ring" {
+    cost: "{1}"
+    types: "Artifact"
+    oracle: "{T}: Add {C}{C}."
+    keywords: []
+    ability activated {
+      costs: [tap_self()]
+      effect: add_mana("2 x {C}", you())
+      mana_ability: true
+    }
+  }
+}
+"#;
 
     const LIBRARY_PROGRAM: &str = r#"
 card "Interpreter Contract" {
@@ -1949,6 +2206,29 @@ card "Interpreter Contract" {
         assert_eq!(error.code(), CompileDiagnosticCode::EffectOperation);
         assert!(error.path().contains("abilities[0].effect"));
         assert!(error.detail().contains("mill"));
+    }
+
+    #[test]
+    fn basic_land_and_fixed_mana_ability_compile_without_card_branches() {
+        let plains = compile_card_program(&parse("plains.frs", PLAINS))
+            .unwrap_or_else(|error| panic!("unexpected Plains compile error: {error}"));
+        assert_eq!(plains.kind(), ProgramKind::Land);
+        assert_eq!(
+            plains.capabilities(),
+            vec![Capability::LandPlay, Capability::ManaAbility]
+        );
+        assert_eq!(
+            plains.activated_abilities()[0].produces(),
+            ManaPool::of(ManaKind::White, 1)
+        );
+
+        let ring = compile_card_program(&parse("sol_ring.frs", SOL_RING))
+            .unwrap_or_else(|error| panic!("unexpected Sol Ring compile error: {error}"));
+        assert_eq!(ring.kind(), ProgramKind::Permanent);
+        assert_eq!(
+            ring.activated_abilities()[0].produces(),
+            ManaPool::of(ManaKind::Colorless, 2)
+        );
     }
 
     #[test]

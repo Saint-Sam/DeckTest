@@ -4892,6 +4892,7 @@ pub struct PlayerState {
     mulligans_taken: u32,
     opening_hand_kept: bool,
     mana_pool: ManaPool,
+    lands_played_this_turn: u32,
 }
 
 impl PlayerState {
@@ -4907,6 +4908,7 @@ impl PlayerState {
             mulligans_taken: 0,
             opening_hand_kept: false,
             mana_pool: ManaPool::empty(),
+            lands_played_this_turn: 0,
         }
     }
 
@@ -4956,6 +4958,12 @@ impl PlayerState {
     #[must_use]
     pub const fn mana_pool(self) -> ManaPool {
         self.mana_pool
+    }
+
+    /// Returns how many lands this player has played during the current turn.
+    #[must_use]
+    pub const fn lands_played_this_turn(self) -> u32 {
+        self.lands_played_this_turn
     }
 }
 
@@ -5542,6 +5550,12 @@ pub enum StateError {
     InvalidPaymentPlan,
     /// The object cannot be cast from its current zone by that player.
     ObjectNotCastable(ObjectId),
+    /// The object cannot be played as a land from its current zone by that player.
+    ObjectNotPlayableAsLand(ObjectId),
+    /// A land play was attempted outside an active player's empty-stack main phase.
+    InvalidLandPlayTiming,
+    /// The player has used every currently permitted land play this turn.
+    LandPlayLimitReached(PlayerId),
     /// The object is not currently a permanent on the battlefield.
     ObjectNotOnBattlefield(ObjectId),
     /// The requested spell cannot be cast at the current time.
@@ -5878,6 +5892,13 @@ pub enum Action {
         object: ObjectId,
         /// Cast request.
         request: CastSpellRequest,
+    },
+    /// Play a land as a main-phase special action without using the stack.
+    PlayLand {
+        /// Player taking the special action.
+        player: PlayerId,
+        /// Land object in that player's hand.
+        object: ObjectId,
     },
     /// Counter one spell or ability currently on the stack.
     CounterStackEntry {
@@ -6418,6 +6439,10 @@ fn apply_fallback(state: &mut GameState, action: Action) -> Outcome {
             request,
         } => match state.cast_spell(player, object, request) {
             Ok(entry) => Outcome::StackEntryAdded(entry),
+            Err(error) => Outcome::Failed(error),
+        },
+        Action::PlayLand { player, object } => match state.play_land(player, object) {
+            Ok(()) => Outcome::Applied,
             Err(error) => Outcome::Failed(error),
         },
         Action::CounterStackEntry { entry } => match state.counter_stack_entry(entry) {
@@ -9386,6 +9411,9 @@ impl GameState {
         self.cleanup_iteration = 0;
         self.attackers_declared_this_combat = false;
         self.loyalty_activations_this_turn.clear();
+        for player in &mut self.players {
+            player.lands_played_this_turn = 0;
+        }
         self.reset_turn_events();
         self.emit_event(GameEvent::TurnStarted {
             turn: self.turn_number,
@@ -9515,6 +9543,36 @@ impl GameState {
         });
         self.after_priority_action(player, true)?;
         Ok(id)
+    }
+
+    /// Plays one land from the active player's hand as a main-phase special action.
+    fn play_land(&mut self, player: PlayerId, object: ObjectId) -> Result<(), StateError> {
+        self.require_player(player)?;
+        self.require_priority_player(player)?;
+        if self.active_player != Some(player)
+            || !matches!(
+                self.current_step,
+                Some(Step::PrecombatMain | Step::PostcombatMain)
+            )
+            || !self.stack_entries.is_empty()
+        {
+            return Err(StateError::InvalidLandPlayTiming);
+        }
+        if self.object_zone(object) != Some(ZoneId::new(Some(player), ZoneKind::Hand))
+            || !self.object_characteristics(object)?.types().land()
+        {
+            return Err(StateError::ObjectNotPlayableAsLand(object));
+        }
+        if self.players[player.index()].lands_played_this_turn >= 1 {
+            return Err(StateError::LandPlayLimitReached(player));
+        }
+
+        self.move_object(object, ZoneId::new(None, ZoneKind::Battlefield))?;
+        self.players[player.index()].lands_played_this_turn = self.players[player.index()]
+            .lands_played_this_turn
+            .checked_add(1)
+            .ok_or(StateError::TurnNumberOverflow)?;
+        self.after_priority_action(player, true)
     }
 
     /// Puts a spell object on the stack for the current priority player.
@@ -10744,6 +10802,7 @@ impl GameState {
             bytes.write_u32(player.mulligans_taken);
             bytes.write_bool(player.opening_hand_kept);
             bytes.write_mana_pool(player.mana_pool);
+            bytes.write_u32(player.lands_played_this_turn);
         }
         bytes.write_u32(self.turn_order.len() as u32);
         for player in &self.turn_order {
@@ -10885,6 +10944,7 @@ impl GameState {
             hash.write_u32(player.mulligans_taken);
             hash.write_bool(player.opening_hand_kept);
             hash.write_mana_pool(player.mana_pool);
+            hash.write_u32(player.lands_played_this_turn);
         }
         hash.write_u32(self.turn_order.len() as u32);
         for player in &self.turn_order {
@@ -17661,6 +17721,97 @@ mod tests {
             Err(StateError::InvalidPaymentPlan)
         );
         assert_eq!(state.canonical_bytes(), before);
+    }
+
+    #[test]
+    fn play_land_enforces_timing_type_and_once_per_turn_limit() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let hand = ZoneId::new(Some(active), ZoneKind::Hand);
+        let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+        let first = state
+            .create_object(CardId::new(9_401), active, active, hand)
+            .unwrap_or_else(|error| panic!("unexpected first land create error: {error:?}"));
+        let second = state
+            .create_object(CardId::new(9_402), active, active, hand)
+            .unwrap_or_else(|error| panic!("unexpected second land create error: {error:?}"));
+        let spell = state
+            .create_object(CardId::new(9_403), active, active, hand)
+            .unwrap_or_else(|error| panic!("unexpected spell create error: {error:?}"));
+        for land in [first, second] {
+            assert_eq!(
+                apply(
+                    &mut state,
+                    Action::SetBaseObjectCharacteristics {
+                        object: land,
+                        base: BaseObjectCharacteristics::new(
+                            ObjectTypes::none().with_land(),
+                            ObjectColors::none(),
+                        ),
+                    },
+                ),
+                Outcome::Applied
+            );
+        }
+        start_upkeep(&mut state, active);
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::PlayLand {
+                    player: active,
+                    object: first,
+                },
+            ),
+            Outcome::Failed(StateError::InvalidLandPlayTiming)
+        );
+        while state.current_step() != Some(Step::PrecombatMain) {
+            state
+                .advance_step()
+                .unwrap_or_else(|error| panic!("unexpected advance error: {error:?}"));
+        }
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::PlayLand {
+                    player: active,
+                    object: spell,
+                },
+            ),
+            Outcome::Failed(StateError::ObjectNotPlayableAsLand(spell))
+        );
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::PlayLand {
+                    player: active,
+                    object: first,
+                },
+            ),
+            Outcome::Applied
+        );
+        assert_eq!(state.object_zone(first), Some(battlefield));
+        assert_eq!(state.players()[active.index()].lands_played_this_turn(), 1);
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::PlayLand {
+                    player: active,
+                    object: second,
+                },
+            ),
+            Outcome::Failed(StateError::LandPlayLimitReached(active))
+        );
+        assert_eq!(state.object_zone(second), Some(hand));
+        assert_eq!(
+            state
+                .validate_zone_conservation()
+                .map(|value| value.object_count()),
+            Ok(4)
+        );
+        assert_eq!(
+            state.deterministic_hash(),
+            state.deterministic_hash_streaming()
+        );
     }
 
     #[test]

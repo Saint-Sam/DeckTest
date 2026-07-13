@@ -1,0 +1,11 @@
+card "Runtime Plains" {
+  id: "forge:runtime:plains"
+  layout: normal
+  status: unverified_playable
+  face "Runtime Plains" {
+    cost: ""
+    types: "Basic Land - Plains"
+    oracle: "({T}: Add {W}.)"
+    keywords: []
+  }
+}
