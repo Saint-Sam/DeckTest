@@ -8,9 +8,9 @@
 use forge_carddef::CardDefinition;
 use forge_cards::runtime::{
     bind_activated_effect_actions, bind_program_actions, bind_triggered_ability_actions,
-    compile_card_program, ActivatedEffectProgram, AlternateCostCondition, AmountProgram,
-    CardProgram, ChosenDestination, CompileDiagnostic, CompileDiagnosticCode, EffectProgram,
-    ExecutionBindings, PlayerBinding, ProgramKind, SpellAdditionalCostProgram,
+    compile_card_program, ActivatedEffectProgram, AlternateCostCondition, AlternateCostKind,
+    AmountProgram, CardProgram, ChosenDestination, CompileDiagnostic, CompileDiagnosticCode,
+    EffectProgram, ExecutionBindings, PlayerBinding, ProgramKind, SpellAdditionalCostProgram,
     TriggeredEventProgram,
 };
 use forge_core::{
@@ -808,6 +808,13 @@ fn execute_smoke(
         )?;
     }
     synthesize_alternate_cost_conditions(&mut execution, &compiled.program, caster, base_card_id)?;
+    let alternate_cost = compiled
+        .program
+        .alternate_costs()
+        .iter()
+        .copied()
+        .find(|cost| cost.is_available(&execution.state, caster, Some(spell)));
+    let alternate_kind = alternate_cost.map(|cost| cost.kind());
     let mut registered_triggers = Vec::with_capacity(compiled.program.triggered_abilities().len());
     for (index, ability) in compiled.program.triggered_abilities().iter().enumerate() {
         if ability.event() != TriggeredEventProgram::SourceEnters {
@@ -863,9 +870,25 @@ fn execute_smoke(
         }
     }
 
+    if alternate_kind == Some(AlternateCostKind::Overload) {
+        for copy in 0..2_u32 {
+            synthesize_targets(
+                &mut execution,
+                compiled.program.target_requirements(),
+                caster,
+                opponent,
+                base_card_id
+                    .wrapping_add(30_000)
+                    .wrapping_add(copy.saturating_mul(100)),
+                &format!("setup.overload_object[{copy}]"),
+            )?;
+        }
+    }
     let targets = synthesize_targets(
         &mut execution,
-        compiled.program.target_requirements(),
+        compiled
+            .program
+            .target_requirements_for_alternate(alternate_kind),
         caster,
         opponent,
         base_card_id,
@@ -887,12 +910,6 @@ fn execute_smoke(
             opponent,
             base_card_id,
         )?;
-        let alternate_cost = compiled
-            .program
-            .alternate_costs()
-            .iter()
-            .copied()
-            .find(|cost| cost.is_available(&execution.state, caster, Some(spell)));
         let (cast_cost, exact_payment) = alternate_cost.map_or_else(
             || {
                 (
@@ -926,7 +943,10 @@ fn execute_smoke(
             })?;
         let mut request = CastSpellRequest::new(stack_kind, timing, cast_cost, payment)
             .with_targets(
-                compiled.program.target_requirements().to_vec(),
+                compiled
+                    .program
+                    .target_requirements_for_alternate(alternate_kind)
+                    .to_vec(),
                 targets.clone(),
             );
         if smoke_flashback {
@@ -1166,6 +1186,7 @@ fn execute_smoke(
         object_choices.clone(),
         caster,
         opponent,
+        alternate_kind,
         &mut hand_delta,
         "effect",
     )?;
@@ -1948,6 +1969,7 @@ fn execute_pending_triggers(
             object_choices.clone(),
             caster,
             opponent,
+            None,
             hand_delta,
             &format!("trigger[{ability_index}].effect"),
         )?;
@@ -2090,6 +2112,7 @@ fn execute_activated_effects(
             object_choices.clone(),
             caster,
             opponent,
+            None,
             hand_delta,
             &format!("{phase}.effect"),
         )?
@@ -2244,6 +2267,7 @@ fn prepare_effect_bindings_and_hand_delta(
     object_choices: Vec<Vec<ObjectId>>,
     caster: PlayerId,
     opponent: PlayerId,
+    alternate_kind: Option<AlternateCostKind>,
     hand_delta: &mut [i64; PLAYER_COUNT],
     phase: &str,
 ) -> Result<ExecutionBindings, RuntimeSmokeFailure> {
@@ -2251,6 +2275,9 @@ fn prepare_effect_bindings_and_hand_delta(
         .with_targets(targets)
         .with_object_choices(object_choices.clone())
         .with_optional_effect_choices(vec![true; optional_choice_count]);
+    if let Some(kind) = alternate_kind {
+        bindings = bindings.with_alternate_cost(kind);
+    }
     for (index, effect) in effects.iter().enumerate() {
         match effect {
             EffectProgram::DrawCards { players, count } => {
@@ -2306,8 +2333,49 @@ fn prepare_effect_bindings_and_hand_delta(
                 );
             }
             EffectProgram::MoveTargetObject {
-                target, from, to, ..
+                target,
+                from,
+                to,
+                overload_predicate,
             } => {
+                if bindings.alternate_cost() == Some(AlternateCostKind::Overload) {
+                    let predicate = overload_predicate.ok_or_else(|| {
+                        RuntimeSmokeFailure::new(
+                            RuntimeSmokeFailureCode::UnexpectedOutcome,
+                            format!("{phase}[{index}]"),
+                            "overload move has no each-object predicate",
+                        )
+                    })?;
+                    let objects =
+                        state
+                            .zone_objects(ZoneId::new(None, *from))
+                            .ok_or_else(|| {
+                                RuntimeSmokeFailure::new(
+                                    RuntimeSmokeFailureCode::UnexpectedOutcome,
+                                    format!("{phase}[{index}]"),
+                                    "overload source zone is unavailable",
+                                )
+                            })?;
+                    for object in objects.iter().copied().filter(|object| {
+                        state.object_matches_target_predicate(caster, predicate, *object)
+                    }) {
+                        let owner = state
+                            .object(object)
+                            .ok_or_else(|| {
+                                RuntimeSmokeFailure::new(
+                                    RuntimeSmokeFailureCode::UnexpectedOutcome,
+                                    format!("{phase}[{index}]"),
+                                    "overload object is unknown",
+                                )
+                            })?
+                            .owner();
+                        let player = usize::from(owner == opponent);
+                        if *to == ZoneKind::Hand {
+                            hand_delta[player] = hand_delta[player].saturating_add(1);
+                        }
+                    }
+                    continue;
+                }
                 let Some(TargetChoice::Object(object)) = bindings.targets().get(*target) else {
                     return Err(RuntimeSmokeFailure::new(
                         RuntimeSmokeFailureCode::UnexpectedOutcome,
@@ -3291,6 +3359,25 @@ card "Krosan Grip" {
   }
 }
 "#;
+    const CYCLONIC_RIFT: &str = r#"
+card "Cyclonic Rift" {
+  id: "d75b9c82-1b49-4c3e-a1b5-aeef57d6644b"
+  layout: normal
+  status: unverified_playable
+  face "Cyclonic Rift" {
+    cost: "{1}{U}"
+    types: "Instant"
+    oracle: "Return target nonland permanent you don't control to its owner's hand. Overload {6}{U}."
+    keywords: [overload]
+    ability static {
+      effect: continuous(source(), alternate_cost(source(), mana_cost("{6}{U}")))
+    }
+    ability spell {
+      effect: return_to_hand(target(permanents(and(not(type_is("land")), not(controlled_by(you()))))))
+    }
+  }
+}
+"#;
 
     #[test]
     fn supported_life_spell_executes_and_reaches_owner_graveyard() {
@@ -3473,6 +3560,25 @@ card "Krosan Grip" {
             [
                 RuntimeSmokeCapability::SplitSecond,
                 RuntimeSmokeCapability::DestroyPermanent,
+            ]
+        );
+        assert_eq!(pass.effect_actions(), 1);
+        assert_eq!(pass.destination(), "owner_graveyard");
+    }
+
+    #[test]
+    fn cyclonic_rift_executes_the_overload_each_object_replacement() {
+        let definition = parse("cyclonic_rift.frs", CYCLONIC_RIFT);
+        let report = run_translated_card_runtime_smoke(&definition);
+        let RuntimeSmokeResult::Passed(pass) = report.result() else {
+            panic!("expected pass, found {:?}", report.result());
+        };
+        assert_eq!(
+            pass.capabilities(),
+            [
+                RuntimeSmokeCapability::AlternateCost,
+                RuntimeSmokeCapability::Overload,
+                RuntimeSmokeCapability::MoveZone,
             ]
         );
         assert_eq!(pass.effect_actions(), 1);

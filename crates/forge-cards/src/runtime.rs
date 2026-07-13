@@ -201,6 +201,8 @@ pub enum Capability {
     CombatRestriction,
     /// Offer a typed alternate casting cost under a closed condition.
     AlternateCost,
+    /// Replace targeted spell text with the compiled each-object form.
+    Overload,
     /// Prevent spell casts and non-mana activations while this spell is on the stack.
     SplitSecond,
 }
@@ -236,6 +238,7 @@ impl Capability {
             Self::AddCounters => "add_counters",
             Self::CombatRestriction => "combat_restriction",
             Self::AlternateCost => "alternate_cost",
+            Self::Overload => "overload",
             Self::SplitSecond => "split_second",
         }
     }
@@ -577,6 +580,8 @@ pub enum EffectProgram {
         from: ZoneKind,
         /// Destination zone.
         to: ZoneKind,
+        /// Closed each-object selector used only by an overload cast.
+        overload_predicate: Option<ObjectTargetPredicate>,
     },
     /// Create one or more exact registered token templates.
     CreateTokens {
@@ -768,17 +773,37 @@ pub enum AlternateCostCondition {
     ControllerControlsCommander,
     /// The spell object is in its controller's graveyard and is cast with flashback.
     SourceInControllerGraveyard,
+    /// The spell object is in its controller's hand.
+    SourceInControllerHand,
+}
+
+/// Rule meaning attached to one alternate casting cost.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AlternateCostKind {
+    /// Commander-presence conditional cost.
+    Commander,
+    /// Graveyard flashback cost.
+    Flashback,
+    /// Target-to-each overload cost.
+    Overload,
 }
 
 /// One completely compiled conditional alternate casting cost.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct AlternateCastCostProgram {
+    kind: AlternateCostKind,
     condition: AlternateCostCondition,
     mana_cost: ManaCost,
     exact_payment: ManaPool,
 }
 
 impl AlternateCastCostProgram {
+    /// Returns the rule meaning of this alternate cost.
+    #[must_use]
+    pub const fn kind(self) -> AlternateCostKind {
+        self.kind
+    }
+
     /// Returns the condition that makes this alternate cost available.
     #[must_use]
     pub const fn condition(self) -> AlternateCostCondition {
@@ -821,6 +846,13 @@ impl AlternateCastCostProgram {
                     .is_some_and(|record| record.owner() == controller)
                     && state.object_zone(source)
                         == Some(ZoneId::new(Some(controller), ZoneKind::Graveyard))
+            }),
+            AlternateCostCondition::SourceInControllerHand => source.is_some_and(|source| {
+                state
+                    .object(source)
+                    .is_some_and(|record| record.owner() == controller)
+                    && state.object_zone(source)
+                        == Some(ZoneId::new(Some(controller), ZoneKind::Hand))
             }),
         }
     }
@@ -1123,6 +1155,7 @@ pub struct CardProgram {
     optional_effect_groups: Vec<OptionalEffectGroup>,
     additional_costs: Vec<SpellAdditionalCostProgram>,
     alternate_costs: Vec<AlternateCastCostProgram>,
+    overload: bool,
     split_second: bool,
     activated_abilities: Vec<ActivatedAbilityProgram>,
     activated_effects: Vec<ActivatedEffectProgram>,
@@ -1179,6 +1212,19 @@ impl CardProgram {
         &self.target_requirements
     }
 
+    /// Returns target slots for the selected casting mode.
+    #[must_use]
+    pub fn target_requirements_for_alternate(
+        &self,
+        alternate: Option<AlternateCostKind>,
+    ) -> &[TargetRequirement] {
+        if alternate == Some(AlternateCostKind::Overload) && self.overload {
+            &[]
+        } else {
+            &self.target_requirements
+        }
+    }
+
     /// Returns explicit hidden-zone choice slots in announcement order.
     #[must_use]
     pub fn object_choice_requirements(&self) -> &[ObjectChoiceRequirement] {
@@ -1207,6 +1253,12 @@ impl CardProgram {
     #[must_use]
     pub fn alternate_costs(&self) -> &[AlternateCastCostProgram] {
         &self.alternate_costs
+    }
+
+    /// Returns true when this spell has a complete overload lowering.
+    #[must_use]
+    pub const fn overload(&self) -> bool {
+        self.overload
     }
 
     /// Returns true when this spell carries split second on the stack.
@@ -1259,6 +1311,9 @@ impl CardProgram {
                 .iter()
                 .map(|_| Capability::AlternateCost),
         );
+        if self.overload {
+            capabilities.push(Capability::Overload);
+        }
         if self.split_second {
             capabilities.push(Capability::SplitSecond);
         }
@@ -1347,6 +1402,33 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
         .keywords
         .iter()
         .any(|keyword| keyword.as_str() == "flashback");
+    let overload_count = face
+        .keywords
+        .iter()
+        .filter(|keyword| keyword.as_str() == "overload")
+        .count();
+    if overload_count > 1 || (overload_count == 1 && has_flashback_keyword) {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::KeywordSemantics,
+            "card.faces[0].keywords",
+            "exactly one supported intrinsic alternate-cost keyword is allowed",
+        ));
+    }
+    let overload = overload_count == 1;
+    if overload && !matches!(kind, ProgramKind::Instant | ProgramKind::Sorcery) {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::KeywordSemantics,
+            "card.faces[0].keywords",
+            "overload is valid only on instant or sorcery spells",
+        ));
+    }
+    let alternate_keyword = if has_flashback_keyword {
+        Some(AlternateCostKind::Flashback)
+    } else if overload {
+        Some(AlternateCostKind::Overload)
+    } else {
+        None
+    };
     let split_second_count = face
         .keywords
         .iter()
@@ -1370,7 +1452,7 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
     let intrinsic_keywords = face
         .keywords
         .iter()
-        .filter(|keyword| !matches!(keyword.as_str(), "flashback" | "split_second"))
+        .filter(|keyword| !matches!(keyword.as_str(), "flashback" | "overload" | "split_second"))
         .cloned()
         .collect::<Vec<_>>();
     let base_creature = compile_base_creature(
@@ -1434,7 +1516,7 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
                 alternate_costs.push(compile_spell_alternate_cost(
                     ability,
                     &path,
-                    has_flashback_keyword,
+                    alternate_keyword,
                 )?);
             }
             _ => {
@@ -1463,12 +1545,38 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
     if has_flashback_keyword
         && !alternate_costs
             .iter()
-            .any(|cost| cost.condition == AlternateCostCondition::SourceInControllerGraveyard)
+            .any(|cost| cost.kind == AlternateCostKind::Flashback)
     {
         return Err(CompileDiagnostic::new(
             CompileDiagnosticCode::KeywordSemantics,
             "card.faces[0].keywords",
             "flashback requires an exact source-bound graveyard alternate cost",
+        ));
+    }
+    if overload
+        && !alternate_costs
+            .iter()
+            .any(|cost| cost.kind == AlternateCostKind::Overload)
+    {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::KeywordSemantics,
+            "card.faces[0].keywords",
+            "overload requires an exact source-bound hand alternate cost",
+        ));
+    }
+    if overload
+        && !matches!(
+            compiler.effects.as_slice(),
+            [EffectProgram::MoveTargetObject {
+                overload_predicate: Some(_),
+                ..
+            }]
+        )
+    {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::KeywordSemantics,
+            "card.faces[0].abilities",
+            "overload currently requires one exact target-to-each object move",
         ));
     }
     let compiled_effect_count = triggered_abilities
@@ -1540,6 +1648,7 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
         optional_effect_groups: compiler.optional_effect_groups,
         additional_costs,
         alternate_costs,
+        overload,
         split_second,
         activated_abilities,
         activated_effects,
@@ -1601,7 +1710,7 @@ fn compile_triggered_ability(
 fn compile_spell_alternate_cost(
     ability: &AbilityDefinition,
     path: &str,
-    has_flashback_keyword: bool,
+    alternate_keyword: Option<AlternateCostKind>,
 ) -> Result<AlternateCastCostProgram, CompileDiagnostic> {
     if !ability.costs.is_empty()
         || ability.event.is_some()
@@ -1615,7 +1724,7 @@ fn compile_spell_alternate_cost(
             "spell alternate-cost ability must have no costs, event, condition, timing, or mana flag",
         ));
     }
-    let (condition, alternate_cost, source_selector) = match &ability.effect {
+    let (kind, condition, alternate_cost, source_selector) = match &ability.effect {
         Expression::Call {
             operation: Operation::WhileCondition,
             arguments,
@@ -1635,6 +1744,7 @@ fn compile_spell_alternate_cost(
                 ));
             }
             (
+                AlternateCostKind::Commander,
                 AlternateCostCondition::ControllerControlsCommander,
                 alternate_cost,
                 false,
@@ -1643,7 +1753,7 @@ fn compile_spell_alternate_cost(
         Expression::Call {
             operation: Operation::Continuous,
             arguments,
-        } if has_flashback_keyword => {
+        } if alternate_keyword.is_some() => {
             let [source, alternate_cost] = arguments.as_slice() else {
                 return Err(effect_arity(
                     &format!("{path}.effect"),
@@ -1655,20 +1765,28 @@ fn compile_spell_alternate_cost(
                 return Err(CompileDiagnostic::new(
                     CompileDiagnosticCode::EffectArguments,
                     format!("{path}.effect.source"),
-                    "flashback alternate cost must be bound to source()",
+                    "intrinsic alternate cost must be bound to source()",
                 ));
             }
-            (
-                AlternateCostCondition::SourceInControllerGraveyard,
-                alternate_cost,
-                true,
-            )
+            let kind = alternate_keyword.expect("guarded intrinsic alternate cost");
+            let condition = match kind {
+                AlternateCostKind::Flashback => AlternateCostCondition::SourceInControllerGraveyard,
+                AlternateCostKind::Overload => AlternateCostCondition::SourceInControllerHand,
+                AlternateCostKind::Commander => {
+                    return Err(CompileDiagnostic::new(
+                        CompileDiagnosticCode::EffectArguments,
+                        format!("{path}.effect"),
+                        "commander alternate cost requires a closed while_condition",
+                    ));
+                }
+            };
+            (kind, condition, alternate_cost, true)
         }
         _ => {
             return Err(CompileDiagnostic::new(
                 CompileDiagnosticCode::AbilityShape,
                 format!("{path}.effect"),
-                "spell static ability must be a closed conditional or flashback alternate cost",
+                "spell static ability must be a closed conditional or intrinsic alternate cost",
             ));
         }
     };
@@ -1723,6 +1841,7 @@ fn compile_spell_alternate_cost(
     let (mana_cost, exact_payment) =
         compile_mana_cost_text(value, &format!("{path}.effect.alternate_cost.cost"))?;
     Ok(AlternateCastCostProgram {
+        kind,
         condition,
         mana_cost,
         exact_payment,
@@ -3533,9 +3652,40 @@ fn compile_effect(
             let from = compile_zone_kind(from, &format!("{path}.from"))?;
             let to = compile_zone_kind(to, &format!("{path}.to"))?;
             let target = compile_object_target(target, &format!("{path}.target"), compiler)?;
-            compiler
-                .effects
-                .push(EffectProgram::MoveTargetObject { target, from, to });
+            compiler.effects.push(EffectProgram::MoveTargetObject {
+                target,
+                from,
+                to,
+                overload_predicate: None,
+            });
+            Ok(())
+        }
+        Operation::ReturnToHand => {
+            let [target_expression] = arguments.as_slice() else {
+                return Err(effect_arity(
+                    path,
+                    operation,
+                    "one permanent target selector",
+                ));
+            };
+            let selector = target_selector(target_expression, &format!("{path}.target"))?;
+            let selector_spec = compile_object_selector(selector, &format!("{path}.target"))?;
+            if selector_spec.kind != TargetKind::Permanent {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::EffectArguments,
+                    format!("{path}.target"),
+                    "return_to_hand requires a battlefield permanent selector",
+                ));
+            }
+            let overload_predicate = object_predicate_from_spec(selector_spec);
+            let target =
+                compile_object_target(target_expression, &format!("{path}.target"), compiler)?;
+            compiler.effects.push(EffectProgram::MoveTargetObject {
+                target,
+                from: ZoneKind::Battlefield,
+                to: ZoneKind::Hand,
+                overload_predicate: Some(overload_predicate),
+            });
             Ok(())
         }
         Operation::CreateToken => {
@@ -5041,6 +5191,36 @@ fn compile_object_predicate(
                 spec.exclude_source = true;
                 return Ok(());
             }
+            if let Expression::Call {
+                operation: relationship_operation @ (Operation::OwnedBy | Operation::ControlledBy),
+                arguments,
+            } = predicate
+            {
+                let [selector] = arguments.as_slice() else {
+                    return Err(effect_arity(
+                        path,
+                        relationship_operation,
+                        "one player selector",
+                    ));
+                };
+                let relationship = match compile_target_relationship(selector, path)? {
+                    TargetControllerPredicate::You => TargetControllerPredicate::Opponent,
+                    TargetControllerPredicate::Opponent => TargetControllerPredicate::You,
+                    TargetControllerPredicate::Any | TargetControllerPredicate::Player(_) => {
+                        return Err(CompileDiagnostic::new(
+                            CompileDiagnosticCode::EffectArguments,
+                            path,
+                            "negated relationship requires you() or opponent()",
+                        ));
+                    }
+                };
+                if *relationship_operation == Operation::OwnedBy {
+                    spec.owner = relationship;
+                } else {
+                    spec.controller = Some(relationship);
+                }
+                return Ok(());
+            }
             let Expression::Call {
                 operation: Operation::TypeIs,
                 arguments,
@@ -5049,7 +5229,7 @@ fn compile_object_predicate(
                 return Err(CompileDiagnostic::new(
                     CompileDiagnosticCode::EffectArguments,
                     path,
-                    "only not(type_is(...)) and not(equals(any(), source())) are compiled",
+                    "only closed type, source, owner, and controller negations are compiled",
                 ));
             };
             let [value] = arguments.as_slice() else {
@@ -5414,6 +5594,7 @@ fn compile_zone_kind(expression: &Expression, path: &str) -> Result<ZoneKind, Co
 pub struct ExecutionBindings {
     controller: PlayerId,
     source: Option<ObjectId>,
+    alternate_cost: Option<AlternateCostKind>,
     opponents: Vec<PlayerId>,
     targets: Vec<TargetChoice>,
     object_choices: Vec<Vec<ObjectId>>,
@@ -5428,6 +5609,7 @@ impl ExecutionBindings {
         Self {
             controller,
             source: None,
+            alternate_cost: None,
             opponents,
             targets: Vec::new(),
             object_choices: Vec::new(),
@@ -5440,6 +5622,13 @@ impl ExecutionBindings {
     #[must_use]
     pub const fn with_source(mut self, source: ObjectId) -> Self {
         self.source = Some(source);
+        self
+    }
+
+    /// Supplies the alternate-cost rule selected during casting.
+    #[must_use]
+    pub const fn with_alternate_cost(mut self, kind: AlternateCostKind) -> Self {
+        self.alternate_cost = Some(kind);
         self
     }
 
@@ -5480,6 +5669,12 @@ impl ExecutionBindings {
     #[must_use]
     pub const fn controller(&self) -> PlayerId {
         self.controller
+    }
+
+    /// Returns the selected alternate-cost rule, if any.
+    #[must_use]
+    pub const fn alternate_cost(&self) -> Option<AlternateCostKind> {
+        self.alternate_cost
     }
 
     /// Returns opponents in deterministic execution order.
@@ -5658,9 +5853,19 @@ pub fn bind_program_actions(
     program: &CardProgram,
     bindings: &ExecutionBindings,
 ) -> Result<Vec<BoundAction>, ExecutionDiagnostic> {
+    if let Some(kind) = bindings.alternate_cost {
+        if !program.alternate_costs.iter().any(|cost| cost.kind == kind) {
+            return Err(ExecutionDiagnostic::new(
+                ExecutionDiagnosticCode::InvalidChoice,
+                None,
+                format!("alternate cost {kind:?} is not available on this program"),
+            ));
+        }
+    }
+    let target_requirements = program.target_requirements_for_alternate(bindings.alternate_cost);
     bind_effect_actions(
         state,
-        &program.target_requirements,
+        target_requirements,
         &program.object_choice_requirements,
         &program.effects,
         &program.optional_effect_groups,
@@ -5865,50 +6070,83 @@ fn bind_effect_actions(
                     },
                 });
             }
-            EffectProgram::MoveTargetObject { target, from, to } => {
-                let object = resolve_object_target(bindings, *target, effect_index)?;
-                let current = state.object_zone(object).ok_or_else(|| {
-                    ExecutionDiagnostic::new(
-                        ExecutionDiagnosticCode::InvalidChoice,
-                        Some(effect_index),
-                        format!("target object {object:?} has no zone"),
-                    )
-                })?;
-                if current.kind() != *from {
-                    return Err(ExecutionDiagnostic::new(
-                        ExecutionDiagnosticCode::InvalidChoice,
-                        Some(effect_index),
-                        format!(
-                            "target object is in {:?}, expected {from:?}",
-                            current.kind()
-                        ),
-                    ));
-                }
-                let owner = state
-                    .object(object)
-                    .ok_or_else(|| {
+            EffectProgram::MoveTargetObject {
+                target,
+                from,
+                to,
+                overload_predicate,
+            } => {
+                let objects = if bindings.alternate_cost == Some(AlternateCostKind::Overload) {
+                    let predicate = overload_predicate.ok_or_else(|| {
                         ExecutionDiagnostic::new(
                             ExecutionDiagnosticCode::InvalidChoice,
                             Some(effect_index),
-                            format!("target object {object:?} is unknown"),
+                            "selected overload has no compiled each-object selector",
                         )
-                    })?
-                    .owner();
-                let destination_owner = match to {
-                    ZoneKind::Library | ZoneKind::Hand | ZoneKind::Graveyard => Some(owner),
-                    ZoneKind::Battlefield
-                    | ZoneKind::Exile
-                    | ZoneKind::Stack
-                    | ZoneKind::Command
-                    | ZoneKind::Ceased => None,
+                    })?;
+                    state
+                        .zone_objects(ZoneId::new(None, *from))
+                        .ok_or_else(|| {
+                            ExecutionDiagnostic::new(
+                                ExecutionDiagnosticCode::MissingBinding,
+                                Some(effect_index),
+                                format!("source zone {from:?} is unavailable"),
+                            )
+                        })?
+                        .iter()
+                        .copied()
+                        .filter(|object| {
+                            state.object_matches_target_predicate(
+                                bindings.controller,
+                                predicate,
+                                *object,
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                } else {
+                    vec![resolve_object_target(bindings, *target, effect_index)?]
                 };
-                actions.push(BoundAction {
-                    effect_index,
-                    action: Action::MoveObject {
-                        object,
-                        to: ZoneId::new(destination_owner, *to),
-                    },
-                });
+                for object in objects {
+                    let current = state.object_zone(object).ok_or_else(|| {
+                        ExecutionDiagnostic::new(
+                            ExecutionDiagnosticCode::InvalidChoice,
+                            Some(effect_index),
+                            format!("object {object:?} has no zone"),
+                        )
+                    })?;
+                    if current.kind() != *from {
+                        return Err(ExecutionDiagnostic::new(
+                            ExecutionDiagnosticCode::InvalidChoice,
+                            Some(effect_index),
+                            format!("object is in {:?}, expected {from:?}", current.kind()),
+                        ));
+                    }
+                    let owner = state
+                        .object(object)
+                        .ok_or_else(|| {
+                            ExecutionDiagnostic::new(
+                                ExecutionDiagnosticCode::InvalidChoice,
+                                Some(effect_index),
+                                format!("object {object:?} is unknown"),
+                            )
+                        })?
+                        .owner();
+                    let destination_owner = match to {
+                        ZoneKind::Library | ZoneKind::Hand | ZoneKind::Graveyard => Some(owner),
+                        ZoneKind::Battlefield
+                        | ZoneKind::Exile
+                        | ZoneKind::Stack
+                        | ZoneKind::Command
+                        | ZoneKind::Ceased => None,
+                    };
+                    actions.push(BoundAction {
+                        effect_index,
+                        action: Action::MoveObject {
+                            object,
+                            to: ZoneId::new(destination_owner, *to),
+                        },
+                    });
+                }
             }
             EffectProgram::CreateTokens {
                 card,
@@ -6519,8 +6757,8 @@ pub fn execute_program(
 #[cfg(test)]
 mod tests {
     use super::{
-        compile_card_program, execute_program, AlternateCostCondition, Capability,
-        CompileDiagnosticCode, ExecutionBindings, ExecutionDiagnosticCode, ProgramKind,
+        compile_card_program, execute_program, AlternateCostCondition, AlternateCostKind,
+        Capability, CompileDiagnosticCode, ExecutionBindings, ExecutionDiagnosticCode, ProgramKind,
     };
     use forge_core::{
         apply, Action, ActivationCondition, BaseCreatureCharacteristics, BaseObjectCharacteristics,
@@ -6645,6 +6883,25 @@ card "Krosan Grip" {
     keywords: [split_second]
     ability spell {
       effect: destroy(target(all(permanents(type_is("artifact")), permanents(type_is("enchantment")))))
+    }
+  }
+}
+"#;
+    const CYCLONIC_RIFT: &str = r#"
+card "Cyclonic Rift" {
+  id: "d75b9c82-1b49-4c3e-a1b5-aeef57d6644b"
+  layout: normal
+  status: unverified_playable
+  face "Cyclonic Rift" {
+    cost: "{1}{U}"
+    types: "Instant"
+    oracle: "Return target nonland permanent you don't control to its owner's hand. Overload {6}{U}."
+    keywords: [overload]
+    ability static {
+      effect: continuous(source(), alternate_cost(source(), mana_cost("{6}{U}")))
+    }
+    ability spell {
+      effect: return_to_hand(target(permanents(and(not(type_is("land")), not(controlled_by(you()))))))
     }
   }
 }
@@ -7679,6 +7936,84 @@ card "Interpreter Contract" {
         let invalid = KROSAN_GRIP.replace("types: \"Instant\"", "types: \"Artifact\"");
         let error = compile_card_program(&parse("invalid_split_second.frs", &invalid)).unwrap_err();
         assert_eq!(error.code(), CompileDiagnosticCode::KeywordSemantics);
+    }
+
+    #[test]
+    fn overload_replaces_target_with_each_matching_opponent_permanent() {
+        let program = compile_card_program(&parse("cyclonic_rift.frs", CYCLONIC_RIFT))
+            .unwrap_or_else(|error| panic!("unexpected compile error: {error}"));
+        assert!(program.overload());
+        assert_eq!(
+            program.capabilities(),
+            vec![
+                Capability::AlternateCost,
+                Capability::Overload,
+                Capability::MoveZone,
+            ]
+        );
+        let [alternate] = program.alternate_costs() else {
+            panic!("expected one overload cost");
+        };
+        assert_eq!(alternate.kind(), AlternateCostKind::Overload);
+        assert_eq!(
+            alternate.condition(),
+            AlternateCostCondition::SourceInControllerHand
+        );
+        assert_eq!(alternate.mana_cost(), ManaCost::new(0, 1, 0, 0, 0, 6));
+
+        let mut state = GameState::new();
+        let caster = add_player(&mut state);
+        let opponent = add_player(&mut state);
+        let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+        let source = create_object(
+            &mut state,
+            CardId::new(2_300),
+            caster,
+            ZoneId::new(Some(caster), ZoneKind::Hand),
+        );
+        assert!(alternate.is_available(&state, caster, Some(source)));
+        let first = create_object(&mut state, CardId::new(2_301), opponent, battlefield);
+        let second = create_object(&mut state, CardId::new(2_302), opponent, battlefield);
+        let friendly = create_object(&mut state, CardId::new(2_303), caster, battlefield);
+        let land = create_object(&mut state, CardId::new(2_304), opponent, battlefield);
+        for object in [first, second, friendly] {
+            assert_eq!(
+                apply(
+                    &mut state,
+                    Action::SetBaseObjectCharacteristics {
+                        object,
+                        base: BaseObjectCharacteristics::new(
+                            ObjectTypes::none().with_artifact(),
+                            ObjectColors::none(),
+                        ),
+                    },
+                ),
+                Outcome::Applied
+            );
+        }
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::SetBaseObjectCharacteristics {
+                    object: land,
+                    base: BaseObjectCharacteristics::new(
+                        ObjectTypes::none().with_land(),
+                        ObjectColors::none(),
+                    ),
+                },
+            ),
+            Outcome::Applied
+        );
+        let bindings = ExecutionBindings::new(caster, vec![opponent])
+            .with_alternate_cost(AlternateCostKind::Overload);
+        let trace = execute_program(&mut state, &program, &bindings)
+            .unwrap_or_else(|error| panic!("unexpected overload execution error: {error}"));
+        assert_eq!(trace.records().len(), 2);
+        let opponent_hand = ZoneId::new(Some(opponent), ZoneKind::Hand);
+        assert_eq!(state.object_zone(first), Some(opponent_hand));
+        assert_eq!(state.object_zone(second), Some(opponent_hand));
+        assert_eq!(state.object_zone(friendly), Some(battlefield));
+        assert_eq!(state.object_zone(land), Some(battlefield));
     }
 
     fn parse(path: &str, source: &str) -> forge_carddef::CardDefinition {
