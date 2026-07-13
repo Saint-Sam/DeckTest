@@ -3,8 +3,8 @@
 use forge_cards::runtime::{
     bind_activated_effect_actions, bind_program_actions, bind_triggered_ability_actions,
     compile_card_program, execute_program, ActivatedAbilityProgram, ActivatedEffectProgram,
-    AlternateCostCondition, CardProgram, EffectProgram, ExecutionBindings, ExecutionDiagnosticCode,
-    PlayerBinding, StaticAbilityProgram, TriggeredEventProgram,
+    AlternateCostCondition, AlternateCostKind, CardProgram, EffectProgram, ExecutionBindings,
+    ExecutionDiagnosticCode, PlayerBinding, StaticAbilityProgram, TriggeredEventProgram,
 };
 use forge_core::{
     apply, auto_payment_plan, AbilityPlayer, Action, ActivatedAbilityDefinition,
@@ -1889,6 +1889,833 @@ fn split_second_probe(program: &CardProgram) -> Option<serde_json::Value> {
     }))
 }
 
+struct OverloadFixture {
+    state: GameState,
+    controller: forge_core::PlayerId,
+    opponents: [forge_core::PlayerId; 2],
+    source: forge_core::ObjectId,
+    eligible: [forge_core::ObjectId; 3],
+    friendly_nonland: forge_core::ObjectId,
+    opponent_land: forge_core::ObjectId,
+}
+
+fn create_overload_fixture(program: &CardProgram, salt: u32) -> Option<OverloadFixture> {
+    let mut state = GameState::new();
+    let controller = match apply(&mut state, Action::AddPlayer) {
+        Outcome::PlayerAdded(player) => player,
+        _ => return None,
+    };
+    let first_opponent = match apply(&mut state, Action::AddPlayer) {
+        Outcome::PlayerAdded(player) => player,
+        _ => return None,
+    };
+    let second_opponent = match apply(&mut state, Action::AddPlayer) {
+        Outcome::PlayerAdded(player) => player,
+        _ => return None,
+    };
+    let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+    let source = create_probe_object(
+        &mut state,
+        salt,
+        controller,
+        controller,
+        ZoneId::new(Some(controller), ZoneKind::Hand),
+        program.base_object(),
+        program.base_creature(),
+    )?;
+    let first = create_probe_object(
+        &mut state,
+        salt.wrapping_add(1),
+        first_opponent,
+        first_opponent,
+        battlefield,
+        BaseObjectCharacteristics::new(ObjectTypes::none().with_artifact(), ObjectColors::none()),
+        None,
+    )?;
+    let second = create_probe_object(
+        &mut state,
+        salt.wrapping_add(2),
+        second_opponent,
+        second_opponent,
+        battlefield,
+        BaseObjectCharacteristics::new(
+            ObjectTypes::none().with_enchantment(),
+            ObjectColors::none(),
+        ),
+        None,
+    )?;
+    let stolen = create_probe_object(
+        &mut state,
+        salt.wrapping_add(3),
+        controller,
+        first_opponent,
+        battlefield,
+        BaseObjectCharacteristics::new(ObjectTypes::none().with_artifact(), ObjectColors::none()),
+        None,
+    )?;
+    let friendly_nonland = create_probe_object(
+        &mut state,
+        salt.wrapping_add(4),
+        controller,
+        controller,
+        battlefield,
+        BaseObjectCharacteristics::new(ObjectTypes::none().with_artifact(), ObjectColors::none()),
+        None,
+    )?;
+    let opponent_land = create_probe_object(
+        &mut state,
+        salt.wrapping_add(5),
+        second_opponent,
+        second_opponent,
+        battlefield,
+        BaseObjectCharacteristics::new(ObjectTypes::none().with_land(), ObjectColors::none()),
+        None,
+    )?;
+    Some(OverloadFixture {
+        state,
+        controller,
+        opponents: [first_opponent, second_opponent],
+        source,
+        eligible: [first, second, stolen],
+        friendly_nonland,
+        opponent_land,
+    })
+}
+
+fn overload_probe(program: &CardProgram) -> Option<serde_json::Value> {
+    if !program.overload() {
+        return None;
+    }
+    let alternate = program
+        .alternate_costs()
+        .iter()
+        .copied()
+        .find(|cost| cost.kind() == AlternateCostKind::Overload)?;
+    let requirement = *program.target_requirements().first()?;
+
+    let mut ordinary = create_overload_fixture(program, 9_660_000)?;
+    let controller_hand = ZoneId::new(Some(ordinary.controller), ZoneKind::Hand);
+    let controller_graveyard = ZoneId::new(Some(ordinary.controller), ZoneKind::Graveyard);
+    let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+    let available_in_hand =
+        alternate.is_available(&ordinary.state, ordinary.controller, Some(ordinary.source));
+    let moved_outside_hand = matches!(
+        apply(
+            &mut ordinary.state,
+            Action::MoveObject {
+                object: ordinary.source,
+                to: controller_graveyard,
+            },
+        ),
+        Outcome::Applied
+    );
+    let unavailable_outside_hand = moved_outside_hand
+        && !alternate.is_available(&ordinary.state, ordinary.controller, Some(ordinary.source));
+    let returned_to_hand = matches!(
+        apply(
+            &mut ordinary.state,
+            Action::MoveObject {
+                object: ordinary.source,
+                to: controller_hand,
+            },
+        ),
+        Outcome::Applied
+    );
+    let available_after_return_to_hand = returned_to_hand
+        && alternate.is_available(&ordinary.state, ordinary.controller, Some(ordinary.source));
+    let ordinary_target = TargetChoice::Object(ordinary.eligible[0]);
+    let friendly_target = TargetChoice::Object(ordinary.friendly_nonland);
+    let land_target = TargetChoice::Object(ordinary.opponent_land);
+    let opponent_nonland_target_accepted = ordinary.state.can_target(
+        ordinary.controller,
+        Some(ordinary.source),
+        requirement,
+        ordinary_target,
+    );
+    let controller_nonland_target_rejected = !ordinary.state.can_target(
+        ordinary.controller,
+        Some(ordinary.source),
+        requirement,
+        friendly_target,
+    );
+    let opponent_land_target_rejected = !ordinary.state.can_target(
+        ordinary.controller,
+        Some(ordinary.source),
+        requirement,
+        land_target,
+    );
+    let ordinary_binding_without_target_rejected = bind_program_actions(
+        &ordinary.state,
+        program,
+        &ExecutionBindings::new(ordinary.controller, ordinary.opponents.to_vec())
+            .with_source(ordinary.source),
+    )
+    .is_err();
+    let ordinary_friendly_binding_rejected = bind_program_actions(
+        &ordinary.state,
+        program,
+        &ExecutionBindings::new(ordinary.controller, ordinary.opponents.to_vec())
+            .with_source(ordinary.source)
+            .with_targets(vec![friendly_target]),
+    )
+    .is_err();
+    let ordinary_land_binding_rejected = bind_program_actions(
+        &ordinary.state,
+        program,
+        &ExecutionBindings::new(ordinary.controller, ordinary.opponents.to_vec())
+            .with_source(ordinary.source)
+            .with_targets(vec![land_target]),
+    )
+    .is_err();
+    let ordinary_actions = bind_program_actions(
+        &ordinary.state,
+        program,
+        &ExecutionBindings::new(ordinary.controller, ordinary.opponents.to_vec())
+            .with_source(ordinary.source)
+            .with_targets(vec![ordinary_target]),
+    )
+    .ok()?;
+    let ordinary_action_exact = matches!(
+        ordinary_actions.as_slice(),
+        [bound]
+            if matches!(
+                bound.action(),
+                Action::MoveObject { object, to }
+                    if *object == ordinary.eligible[0]
+                        && *to == ZoneId::new(Some(ordinary.opponents[0]), ZoneKind::Hand)
+            )
+    );
+    let ordinary_priority_ready = prepare_stack_priority(&mut ordinary.state, ordinary.controller);
+    let ordinary_generic = program.mana_cost().generic_total().ok()?;
+    let ordinary_pool = program
+        .mana_cost()
+        .colored_pool()
+        .checked_add(ManaPool::of(ManaKind::Colorless, ordinary_generic))?;
+    let ordinary_funded = matches!(
+        apply(
+            &mut ordinary.state,
+            Action::AddManaToPool {
+                player: ordinary.controller,
+                mana: ordinary_pool,
+            },
+        ),
+        Outcome::Applied
+    );
+    let ordinary_payment = auto_payment_plan(ordinary_pool, program.mana_cost())
+        .ok()
+        .flatten()?;
+    let before_missing_target_cast = ordinary.state.deterministic_hash();
+    let ordinary_cast_without_target_rejected_before_mutation =
+        matches!(
+            apply(
+                &mut ordinary.state,
+                Action::CastSpell {
+                    player: ordinary.controller,
+                    object: ordinary.source,
+                    request: CastSpellRequest::new(
+                        StackObjectKind::InstantSpell,
+                        SpellTiming::Instant,
+                        program.mana_cost(),
+                        ordinary_payment,
+                    )
+                    .with_targets(vec![requirement], Vec::new()),
+                },
+            ),
+            Outcome::Failed(_)
+        ) && ordinary.state.deterministic_hash() == before_missing_target_cast;
+    let ordinary_entry = match apply(
+        &mut ordinary.state,
+        Action::CastSpell {
+            player: ordinary.controller,
+            object: ordinary.source,
+            request: CastSpellRequest::new(
+                StackObjectKind::InstantSpell,
+                SpellTiming::Instant,
+                program.mana_cost(),
+                ordinary_payment,
+            )
+            .with_targets(vec![requirement], vec![ordinary_target]),
+        },
+    ) {
+        Outcome::StackEntryAdded(entry) => entry,
+        outcome => {
+            return Some(json!({
+                "setup_succeeded": false,
+                "phase": "ordinary_cast",
+                "outcome": format!("{outcome:?}"),
+            }))
+        }
+    };
+    let ordinary_source_on_stack =
+        ordinary.state.object_zone(ordinary.source) == Some(ZoneId::new(None, ZoneKind::Stack));
+    let ordinary_stack_target_exact = ordinary
+        .state
+        .stack_entries()
+        .iter()
+        .find(|entry| entry.id() == ordinary_entry)
+        .is_some_and(|entry| {
+            entry.targets().len() == 1 && entry.targets()[0].choice() == ordinary_target
+        });
+    let ordinary_cost_consumed =
+        ordinary.state.mana_pool(ordinary.controller).ok() == Some(ManaPool::empty());
+    let ordinary_stack_resolved = resolve_expected_stack_entry(&mut ordinary.state, ordinary_entry);
+    let ordinary_source_moved_to_graveyard =
+        ordinary.state.object_zone(ordinary.source) == Some(controller_graveyard);
+    let ordinary_action_applied = ordinary_actions.iter().all(|bound| {
+        matches!(
+            apply(&mut ordinary.state, bound.action().clone()),
+            Outcome::Applied
+        )
+    });
+    let ordinary_target_returned_to_owner_hand = ordinary.state.object_zone(ordinary.eligible[0])
+        == Some(ZoneId::new(Some(ordinary.opponents[0]), ZoneKind::Hand));
+    let ordinary_other_opponent_nonlands_unchanged = ordinary
+        .eligible
+        .iter()
+        .skip(1)
+        .all(|object| ordinary.state.object_zone(*object) == Some(battlefield));
+    let ordinary_friendly_and_land_unchanged =
+        ordinary.state.object_zone(ordinary.friendly_nonland) == Some(battlefield)
+            && ordinary.state.object_zone(ordinary.opponent_land) == Some(battlefield);
+
+    let mut overloaded = create_overload_fixture(program, 9_661_000)?;
+    let overload_available_in_hand = alternate.is_available(
+        &overloaded.state,
+        overloaded.controller,
+        Some(overloaded.source),
+    );
+    let overload_priority_ready =
+        prepare_stack_priority(&mut overloaded.state, overloaded.controller);
+    let overload_funded = matches!(
+        apply(
+            &mut overloaded.state,
+            Action::AddManaToPool {
+                player: overloaded.controller,
+                mana: alternate.exact_payment(),
+            },
+        ),
+        Outcome::Applied
+    );
+    let overload_payment = auto_payment_plan(alternate.exact_payment(), alternate.mana_cost())
+        .ok()
+        .flatten()?;
+    let overload_entry = match apply(
+        &mut overloaded.state,
+        Action::CastSpell {
+            player: overloaded.controller,
+            object: overloaded.source,
+            request: CastSpellRequest::new(
+                StackObjectKind::InstantSpell,
+                SpellTiming::Instant,
+                alternate.mana_cost(),
+                overload_payment,
+            )
+            .with_targets(
+                program
+                    .target_requirements_for_alternate(Some(AlternateCostKind::Overload))
+                    .to_vec(),
+                Vec::new(),
+            ),
+        },
+    ) {
+        Outcome::StackEntryAdded(entry) => entry,
+        outcome => {
+            return Some(json!({
+                "setup_succeeded": false,
+                "phase": "overload_cast",
+                "outcome": format!("{outcome:?}"),
+            }))
+        }
+    };
+    let overload_cast_without_targets_succeeded =
+        overloaded.state.object_zone(overloaded.source) == Some(ZoneId::new(None, ZoneKind::Stack));
+    let overload_stack_has_no_targets = overloaded
+        .state
+        .stack_entries()
+        .iter()
+        .find(|entry| entry.id() == overload_entry)
+        .is_some_and(|entry| entry.targets().is_empty());
+    let overload_cost_consumed =
+        overloaded.state.mana_pool(overloaded.controller).ok() == Some(ManaPool::empty());
+    let overload_stack_resolved =
+        resolve_expected_stack_entry(&mut overloaded.state, overload_entry);
+    let overload_source_moved_to_graveyard = overloaded.state.object_zone(overloaded.source)
+        == Some(ZoneId::new(
+            Some(overloaded.controller),
+            ZoneKind::Graveyard,
+        ));
+    let overload_explicit_target_rejected = bind_program_actions(
+        &overloaded.state,
+        program,
+        &ExecutionBindings::new(overloaded.controller, overloaded.opponents.to_vec())
+            .with_source(overloaded.source)
+            .with_alternate_cost(AlternateCostKind::Overload)
+            .with_targets(vec![TargetChoice::Object(overloaded.eligible[0])]),
+    )
+    .is_err();
+    let overload_actions = bind_program_actions(
+        &overloaded.state,
+        program,
+        &ExecutionBindings::new(overloaded.controller, overloaded.opponents.to_vec())
+            .with_source(overloaded.source)
+            .with_alternate_cost(AlternateCostKind::Overload),
+    )
+    .ok()?;
+    let expected_overload_moves = [
+        (
+            overloaded.eligible[0],
+            ZoneId::new(Some(overloaded.opponents[0]), ZoneKind::Hand),
+        ),
+        (
+            overloaded.eligible[1],
+            ZoneId::new(Some(overloaded.opponents[1]), ZoneKind::Hand),
+        ),
+        (
+            overloaded.eligible[2],
+            ZoneId::new(Some(overloaded.controller), ZoneKind::Hand),
+        ),
+    ];
+    let overload_actions_exact = overload_actions.iter().zip(expected_overload_moves).all(
+        |(bound, (expected_object, expected_zone))| {
+            matches!(
+                bound.action(),
+                Action::MoveObject { object, to }
+                    if *object == expected_object && *to == expected_zone
+            )
+        },
+    ) && overload_actions.len() == expected_overload_moves.len();
+    let overload_actions_applied = overload_actions.iter().all(|bound| {
+        matches!(
+            apply(&mut overloaded.state, bound.action().clone()),
+            Outcome::Applied
+        )
+    });
+    let overload_each_opponent_nonland_returned =
+        overloaded.state.object_zone(overloaded.eligible[0])
+            == Some(ZoneId::new(Some(overloaded.opponents[0]), ZoneKind::Hand))
+            && overloaded.state.object_zone(overloaded.eligible[1])
+                == Some(ZoneId::new(Some(overloaded.opponents[1]), ZoneKind::Hand));
+    let overload_stolen_permanent_returned_to_owner =
+        overloaded.state.object_zone(overloaded.eligible[2])
+            == Some(ZoneId::new(Some(overloaded.controller), ZoneKind::Hand));
+    let overload_friendly_nonland_unchanged =
+        overloaded.state.object_zone(overloaded.friendly_nonland) == Some(battlefield);
+    let overload_opponent_land_unchanged =
+        overloaded.state.object_zone(overloaded.opponent_land) == Some(battlefield);
+
+    let contract = json!({
+        "overload_compiled": program.overload(),
+        "alternate_cost_count": program.alternate_costs().len(),
+        "alternate_kind_is_overload": alternate.kind() == AlternateCostKind::Overload,
+        "condition_is_source_in_controller_hand": matches!(
+            alternate.condition(),
+            AlternateCostCondition::SourceInControllerHand
+        ),
+        "printed_generic_mana": ordinary_generic,
+        "printed_blue_mana": program.mana_cost().colored_pool().get(ManaKind::Blue),
+        "overload_generic_mana": alternate.mana_cost().generic_total().ok(),
+        "overload_blue_mana": alternate.mana_cost().colored_pool().get(ManaKind::Blue),
+        "overload_exact_payment_total": alternate.exact_payment().total(),
+        "available_in_hand": available_in_hand,
+        "unavailable_outside_hand": unavailable_outside_hand,
+        "available_after_return_to_hand": available_after_return_to_hand,
+        "ordinary_target_slot_count": program.target_requirements_for_alternate(None).len(),
+        "overload_target_slot_count": program
+            .target_requirements_for_alternate(Some(AlternateCostKind::Overload))
+            .len(),
+        "opponent_nonland_target_accepted": opponent_nonland_target_accepted,
+        "controller_nonland_target_rejected": controller_nonland_target_rejected,
+        "opponent_land_target_rejected": opponent_land_target_rejected,
+    });
+    let ordinary_result = json!({
+        "binding_without_target_rejected": ordinary_binding_without_target_rejected,
+        "friendly_binding_rejected": ordinary_friendly_binding_rejected,
+        "land_binding_rejected": ordinary_land_binding_rejected,
+        "bound_action_count": ordinary_actions.len(),
+        "action_exact": ordinary_action_exact,
+        "cast_without_target_rejected_before_mutation":
+            ordinary_cast_without_target_rejected_before_mutation,
+        "cast_payment_total": ordinary_payment.paid().total(),
+        "source_on_stack": ordinary_source_on_stack,
+        "stack_target_exact": ordinary_stack_target_exact,
+        "cost_consumed": ordinary_cost_consumed,
+        "stack_resolved": ordinary_stack_resolved,
+        "source_moved_to_graveyard": ordinary_source_moved_to_graveyard,
+        "action_applied": ordinary_action_applied,
+        "target_returned_to_owner_hand": ordinary_target_returned_to_owner_hand,
+        "other_opponent_nonlands_unchanged": ordinary_other_opponent_nonlands_unchanged,
+        "friendly_and_land_unchanged": ordinary_friendly_and_land_unchanged,
+    });
+    let overload_result = json!({
+        "available_in_hand": overload_available_in_hand,
+        "cast_payment_total": overload_payment.paid().total(),
+        "cast_without_targets_succeeded": overload_cast_without_targets_succeeded,
+        "stack_has_no_targets": overload_stack_has_no_targets,
+        "cost_consumed": overload_cost_consumed,
+        "stack_resolved": overload_stack_resolved,
+        "source_moved_to_graveyard": overload_source_moved_to_graveyard,
+        "explicit_target_rejected": overload_explicit_target_rejected,
+        "bound_action_count": overload_actions.len(),
+        "actions_exact": overload_actions_exact,
+        "actions_applied": overload_actions_applied,
+        "each_opponent_nonland_returned": overload_each_opponent_nonland_returned,
+        "stolen_permanent_returned_to_owner": overload_stolen_permanent_returned_to_owner,
+        "friendly_nonland_unchanged": overload_friendly_nonland_unchanged,
+        "opponent_land_unchanged": overload_opponent_land_unchanged,
+    });
+    Some(json!({
+        "setup_succeeded": ordinary_priority_ready
+            && ordinary_funded
+            && overload_priority_ready
+            && overload_funded,
+        "contract": contract,
+        "ordinary": ordinary_result,
+        "overload": overload_result,
+    }))
+}
+
+struct EvokeFixture {
+    state: GameState,
+    controller: forge_core::PlayerId,
+    opponent: forge_core::PlayerId,
+    source: forge_core::ObjectId,
+}
+
+fn create_evoke_fixture(program: &CardProgram, salt: u32) -> Option<EvokeFixture> {
+    let mut state = GameState::new();
+    let controller = match apply(&mut state, Action::AddPlayer) {
+        Outcome::PlayerAdded(player) => player,
+        _ => return None,
+    };
+    let opponent = match apply(&mut state, Action::AddPlayer) {
+        Outcome::PlayerAdded(player) => player,
+        _ => return None,
+    };
+    let source = create_probe_object(
+        &mut state,
+        salt,
+        controller,
+        controller,
+        ZoneId::new(Some(controller), ZoneKind::Hand),
+        program.base_object(),
+        program.base_creature(),
+    )?;
+    for offset in 1..=4 {
+        if !matches!(
+            apply(
+                &mut state,
+                Action::CreateObject {
+                    card: CardId::new(salt.wrapping_add(offset)),
+                    owner: controller,
+                    controller,
+                    zone: ZoneId::new(Some(controller), ZoneKind::Library),
+                },
+            ),
+            Outcome::ObjectCreated(_)
+        ) {
+            return None;
+        }
+    }
+    Some(EvokeFixture {
+        state,
+        controller,
+        opponent,
+        source,
+    })
+}
+
+fn evoke_probe(program: &CardProgram) -> Option<serde_json::Value> {
+    let alternate = program
+        .alternate_costs()
+        .iter()
+        .copied()
+        .find(|cost| cost.kind() == AlternateCostKind::Evoke)?;
+    let [draw_trigger, sacrifice_trigger] = program.triggered_abilities() else {
+        return Some(json!({"setup_succeeded": false}));
+    };
+    let draw_trigger_is_unconditional = draw_trigger.required_alternate_cost().is_none();
+    let sacrifice_trigger_requires_evoke =
+        sacrifice_trigger.required_alternate_cost() == Some(AlternateCostKind::Evoke);
+    let both_triggers_are_source_enters = draw_trigger.event()
+        == TriggeredEventProgram::SourceEnters
+        && sacrifice_trigger.event() == TriggeredEventProgram::SourceEnters;
+    let normal_applicable_trigger_count = program
+        .triggered_abilities()
+        .iter()
+        .filter(|ability| ability.required_alternate_cost().is_none())
+        .count();
+    let evoke_applicable_trigger_count = program
+        .triggered_abilities()
+        .iter()
+        .filter(|ability| {
+            ability
+                .required_alternate_cost()
+                .is_none_or(|required| required == AlternateCostKind::Evoke)
+        })
+        .count();
+
+    let mut normal = create_evoke_fixture(program, 9_670_000)?;
+    let normal_cast_window_ready = advance_to_precombat_main(&mut normal.state, normal.controller);
+    let printed_generic = program.mana_cost().generic_total().ok()?;
+    let printed_pool = program
+        .mana_cost()
+        .colored_pool()
+        .checked_add(ManaPool::of(ManaKind::Colorless, printed_generic))?;
+    let normal_funded = matches!(
+        apply(
+            &mut normal.state,
+            Action::AddManaToPool {
+                player: normal.controller,
+                mana: printed_pool,
+            },
+        ),
+        Outcome::Applied
+    );
+    let normal_payment = auto_payment_plan(printed_pool, program.mana_cost())
+        .ok()
+        .flatten()?;
+    let normal_entry = match apply(
+        &mut normal.state,
+        Action::CastSpell {
+            player: normal.controller,
+            object: normal.source,
+            request: CastSpellRequest::new(
+                StackObjectKind::PermanentSpell,
+                SpellTiming::Sorcery,
+                program.mana_cost(),
+                normal_payment,
+            ),
+        },
+    ) {
+        Outcome::StackEntryAdded(entry) => entry,
+        outcome => {
+            return Some(json!({
+                "setup_succeeded": false,
+                "phase": "normal_cast",
+                "outcome": format!("{outcome:?}"),
+            }))
+        }
+    };
+    let normal_source_on_stack =
+        normal.state.object_zone(normal.source) == Some(ZoneId::new(None, ZoneKind::Stack));
+    let normal_cost_consumed =
+        normal.state.mana_pool(normal.controller).ok() == Some(ManaPool::empty());
+    let normal_stack_resolved = resolve_expected_stack_entry(&mut normal.state, normal_entry);
+    let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+    let normal_source_entered_battlefield =
+        normal.state.object_zone(normal.source) == Some(battlefield);
+    let normal_draw_actions = bind_triggered_ability_actions(
+        &normal.state,
+        draw_trigger,
+        &ExecutionBindings::new(normal.controller, vec![normal.opponent])
+            .with_source(normal.source),
+    )
+    .ok()?;
+    let normal_draw_action_exact = matches!(
+        normal_draw_actions.as_slice(),
+        [bound]
+            if matches!(
+                bound.action(),
+                Action::DrawCards { player, count }
+                    if *player == normal.controller && *count == 2
+            )
+    );
+    let normal_hand = ZoneId::new(Some(normal.controller), ZoneKind::Hand);
+    let normal_hand_before_draw = normal
+        .state
+        .zone_objects(normal_hand)
+        .map_or(0, <[forge_core::ObjectId]>::len);
+    let normal_draw_action_applied = normal_draw_actions.iter().all(|bound| {
+        matches!(
+            apply(&mut normal.state, bound.action().clone()),
+            Outcome::Applied
+        )
+    });
+    let normal_hand_after_draw = normal
+        .state
+        .zone_objects(normal_hand)
+        .map_or(0, <[forge_core::ObjectId]>::len);
+    let normal_exactly_two_drawn = normal_draw_action_applied
+        && normal_hand_after_draw == normal_hand_before_draw.saturating_add(2);
+    let normal_source_remained_battlefield_after_draw =
+        normal.state.object_zone(normal.source) == Some(battlefield);
+    let normal_evoke_trigger_excluded = normal_applicable_trigger_count == 1
+        && sacrifice_trigger.required_alternate_cost() == Some(AlternateCostKind::Evoke);
+
+    let mut evoked = create_evoke_fixture(program, 9_671_000)?;
+    let evoke_available_in_hand =
+        alternate.is_available(&evoked.state, evoked.controller, Some(evoked.source));
+    let evoke_cast_window_ready = advance_to_precombat_main(&mut evoked.state, evoked.controller);
+    let evoke_funded = matches!(
+        apply(
+            &mut evoked.state,
+            Action::AddManaToPool {
+                player: evoked.controller,
+                mana: alternate.exact_payment(),
+            },
+        ),
+        Outcome::Applied
+    );
+    let evoke_payment = auto_payment_plan(alternate.exact_payment(), alternate.mana_cost())
+        .ok()
+        .flatten()?;
+    let evoke_entry = match apply(
+        &mut evoked.state,
+        Action::CastSpell {
+            player: evoked.controller,
+            object: evoked.source,
+            request: CastSpellRequest::new(
+                StackObjectKind::PermanentSpell,
+                SpellTiming::Sorcery,
+                alternate.mana_cost(),
+                evoke_payment,
+            ),
+        },
+    ) {
+        Outcome::StackEntryAdded(entry) => entry,
+        outcome => {
+            return Some(json!({
+                "setup_succeeded": false,
+                "phase": "evoke_cast",
+                "outcome": format!("{outcome:?}"),
+            }))
+        }
+    };
+    let evoke_source_on_stack =
+        evoked.state.object_zone(evoked.source) == Some(ZoneId::new(None, ZoneKind::Stack));
+    let evoke_cost_consumed =
+        evoked.state.mana_pool(evoked.controller).ok() == Some(ManaPool::empty());
+    let evoke_stack_resolved = resolve_expected_stack_entry(&mut evoked.state, evoke_entry);
+    let evoke_source_entered_before_triggers =
+        evoked.state.object_zone(evoked.source) == Some(battlefield);
+    let evoke_bindings =
+        ExecutionBindings::new(evoked.controller, vec![evoked.opponent]).with_source(evoked.source);
+    let evoke_draw_actions =
+        bind_triggered_ability_actions(&evoked.state, draw_trigger, &evoke_bindings).ok()?;
+    let evoke_sacrifice_actions =
+        bind_triggered_ability_actions(&evoked.state, sacrifice_trigger, &evoke_bindings).ok()?;
+    let evoke_draw_action_exact = matches!(
+        evoke_draw_actions.as_slice(),
+        [bound]
+            if matches!(
+                bound.action(),
+                Action::DrawCards { player, count }
+                    if *player == evoked.controller && *count == 2
+            )
+    );
+    let evoke_graveyard = ZoneId::new(Some(evoked.controller), ZoneKind::Graveyard);
+    let evoke_sacrifice_action_exact = matches!(
+        evoke_sacrifice_actions.as_slice(),
+        [bound]
+            if matches!(
+                bound.action(),
+                Action::MoveObject { object, to }
+                    if *object == evoked.source && *to == evoke_graveyard
+            )
+    );
+    let before_missing_source = evoked.state.deterministic_hash();
+    let evoke_missing_source_rejected_without_mutation = bind_triggered_ability_actions(
+        &evoked.state,
+        sacrifice_trigger,
+        &ExecutionBindings::new(evoked.controller, vec![evoked.opponent]),
+    )
+    .is_err()
+        && evoked.state.deterministic_hash() == before_missing_source;
+    let evoke_hand = ZoneId::new(Some(evoked.controller), ZoneKind::Hand);
+    let evoke_hand_before_draw = evoked
+        .state
+        .zone_objects(evoke_hand)
+        .map_or(0, <[forge_core::ObjectId]>::len);
+    let evoke_draw_action_applied = evoke_draw_actions.iter().all(|bound| {
+        matches!(
+            apply(&mut evoked.state, bound.action().clone()),
+            Outcome::Applied
+        )
+    });
+    let evoke_hand_after_draw = evoked
+        .state
+        .zone_objects(evoke_hand)
+        .map_or(0, <[forge_core::ObjectId]>::len);
+    let evoke_exactly_two_drawn = evoke_draw_action_applied
+        && evoke_hand_after_draw == evoke_hand_before_draw.saturating_add(2);
+    let evoke_source_remained_battlefield_after_draw =
+        evoked.state.object_zone(evoked.source) == Some(battlefield);
+    let evoke_sacrifice_action_applied = evoke_sacrifice_actions.iter().all(|bound| {
+        matches!(
+            apply(&mut evoked.state, bound.action().clone()),
+            Outcome::Applied
+        )
+    });
+    let evoke_source_moved_to_owner_graveyard =
+        evoked.state.object_zone(evoked.source) == Some(evoke_graveyard);
+    let evoke_draw_then_sacrificed = evoke_exactly_two_drawn
+        && evoke_source_remained_battlefield_after_draw
+        && evoke_sacrifice_action_applied
+        && evoke_source_moved_to_owner_graveyard;
+
+    let contract = json!({
+        "alternate_cost_count": program.alternate_costs().len(),
+        "alternate_kind_is_evoke": alternate.kind() == AlternateCostKind::Evoke,
+        "condition_is_source_in_controller_hand": matches!(
+            alternate.condition(),
+            AlternateCostCondition::SourceInControllerHand
+        ),
+        "trigger_count": program.triggered_abilities().len(),
+        "draw_trigger_is_unconditional": draw_trigger_is_unconditional,
+        "sacrifice_trigger_requires_evoke": sacrifice_trigger_requires_evoke,
+        "both_triggers_are_source_enters": both_triggers_are_source_enters,
+        "printed_generic_mana": printed_generic,
+        "printed_blue_mana": program.mana_cost().colored_pool().get(ManaKind::Blue),
+        "printed_payment_total": printed_pool.total(),
+        "evoke_generic_mana": alternate.mana_cost().generic_total().ok(),
+        "evoke_blue_mana": alternate.mana_cost().colored_pool().get(ManaKind::Blue),
+        "evoke_exact_payment_total": alternate.exact_payment().total(),
+        "evoke_available_in_hand": evoke_available_in_hand,
+        "normal_applicable_trigger_count": normal_applicable_trigger_count,
+        "evoke_applicable_trigger_count": evoke_applicable_trigger_count,
+    });
+    let normal_result = json!({
+        "cast_window_ready": normal_cast_window_ready,
+        "cast_payment_total": normal_payment.paid().total(),
+        "source_on_stack": normal_source_on_stack,
+        "cost_consumed": normal_cost_consumed,
+        "stack_resolved": normal_stack_resolved,
+        "source_entered_battlefield": normal_source_entered_battlefield,
+        "draw_bound_action_count": normal_draw_actions.len(),
+        "draw_action_exact": normal_draw_action_exact,
+        "draw_action_applied": normal_draw_action_applied,
+        "exactly_two_drawn": normal_exactly_two_drawn,
+        "source_remained_battlefield_after_draw": normal_source_remained_battlefield_after_draw,
+        "evoke_trigger_excluded": normal_evoke_trigger_excluded,
+    });
+    let evoke_result = json!({
+        "cast_window_ready": evoke_cast_window_ready,
+        "cast_payment_total": evoke_payment.paid().total(),
+        "source_on_stack": evoke_source_on_stack,
+        "cost_consumed": evoke_cost_consumed,
+        "stack_resolved": evoke_stack_resolved,
+        "source_entered_before_triggers": evoke_source_entered_before_triggers,
+        "draw_bound_action_count": evoke_draw_actions.len(),
+        "sacrifice_bound_action_count": evoke_sacrifice_actions.len(),
+        "draw_action_exact": evoke_draw_action_exact,
+        "sacrifice_action_exact": evoke_sacrifice_action_exact,
+        "missing_source_rejected_without_mutation":
+            evoke_missing_source_rejected_without_mutation,
+        "draw_action_applied": evoke_draw_action_applied,
+        "exactly_two_drawn": evoke_exactly_two_drawn,
+        "source_remained_battlefield_after_draw": evoke_source_remained_battlefield_after_draw,
+        "sacrifice_action_applied": evoke_sacrifice_action_applied,
+        "source_moved_to_owner_graveyard": evoke_source_moved_to_owner_graveyard,
+        "draw_then_sacrificed": evoke_draw_then_sacrificed,
+    });
+    Some(json!({
+        "setup_succeeded": normal_funded && evoke_funded,
+        "contract": contract,
+        "normal": normal_result,
+        "evoke": evoke_result,
+    }))
+}
+
 fn noncreature_counter_probe(program: &CardProgram) -> Option<serde_json::Value> {
     if program.alternate_costs().is_empty()
         || !program
@@ -2428,6 +3255,8 @@ fn semantic_probe(program: &CardProgram) -> serde_json::Value {
         "commander_alternate_cost": commander_alternate_cost_probe(program),
         "flashback_looting": flashback_looting_probe(program),
         "split_second": split_second_probe(program),
+        "overload": overload_probe(program),
+        "evoke": evoke_probe(program),
         "noncreature_counter": noncreature_counter_probe(program),
         "temporary_creature_protection": temporary_creature_protection_probe(program),
     })

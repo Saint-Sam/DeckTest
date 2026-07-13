@@ -737,18 +737,24 @@
       "translated_source_sha256": "16c02c750d0992fc5a7213c86be461ab2663f5a41dfd7733ba9ccbcf10c7c163"
     },
     {
-      "blockers": [
-        {
-          "code": "T3_5_UNSUPPORTED_KEYWORD_SEMANTICS",
-          "detail": "card.faces[0].keywords: 1 noncreature keyword(s) require runtime lowering"
-        }
-      ],
       "card_name": "Cyclonic Rift",
+      "claim_boundary": "Focused compiled-program validation covers the ordinary {1}{U} targeted mode and the {6}{U} overload replacement as distinct cast and binding paths, including closed target legality, exact costs, fail-before-mutation target enforcement, multiple opponents, exclusions for controller-owned nonlands and opponent lands, and owner-hand destinations.",
+      "expected_behavior": "Ordinarily return exactly one targeted nonland permanent not controlled by the caster; when overloaded, use no targets and return every nonland permanent controlled by either opponent to its owner's hand while leaving the caster's permanents and opponent lands unchanged.",
       "expected_runtime": {
-        "code": "unsupported_keyword_semantics",
-        "detail": "card.faces[0].keywords: 1 noncreature keyword(s) require runtime lowering",
-        "detail_sha256": "f948efa21fb38f29327bce749d47abd386d7addbb7fc79376fece432f78fc999",
-        "disposition": "unsupported_setup"
+        "capabilities": [
+          "alternate_cost",
+          "overload",
+          "move_zone"
+        ],
+        "destination": "owner_graveyard",
+        "disposition": "passed",
+        "effect_actions": 1,
+        "final_hash": "13955676016907358862",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 37
       },
       "freeze_rank": 17,
       "legacy_source_path": "c/cyclonic_rift.txt",
@@ -756,7 +762,27 @@
       "oracle_id": "d75b9c82-1b49-4c3e-a1b5-aeef57d6644b",
       "oracle_text": "Return target nonland permanent you don't control to its owner's hand.\nOverload {6}{U} (You may cast this spell for its overload cost. If you do, change its text by replacing all instances of \"target\" with \"each.\")",
       "scenario_id": "T3.6-017",
-      "status": "blocked_runtime",
+      "semantic_atoms": [
+        {
+          "condition": "source_in_controller_hand",
+          "cost": "{6}{U}",
+          "kind": "overload",
+          "op": "overload_cost"
+        },
+        {
+          "op": "overload",
+          "replace": "target",
+          "selector": "nonland_permanents_opponents_control",
+          "with": "each"
+        },
+        {
+          "from": "battlefield",
+          "mode": "ordinary_target_or_overload_each",
+          "op": "move_zone",
+          "to": "owner_hand"
+        }
+      ],
+      "status": "semantic_case_ready",
       "stratum": "targeted_permanent_interaction",
       "translated_path": "c/cyclonic_rift.frs",
       "translated_source_sha256": "cf16768c8a2e209d5d7c55293f4dc737b2bccf87937ad3ca9dee8c4c7926635b"
@@ -3438,18 +3464,25 @@
       "translated_source_sha256": "16f16663117ac2f949b33bb0f8fc57e749073a2de6db938886a02ecac55bbd58"
     },
     {
-      "blockers": [
-        {
-          "code": "T3_5_UNSUPPORTED_KEYWORD_SEMANTICS",
-          "detail": "card.faces[0].keywords[0]: keyword `evoke` requires runtime lowering"
-        }
-      ],
       "card_name": "Mulldrifter",
+      "claim_boundary": "Focused compiled-program validation covers the normal {4}{U} permanent cast and the {2}{U} evoke cast as distinct trigger selections: the enter draw trigger is unconditional, while the source sacrifice trigger is gated to evoke. Both paths use real stack resolution and exact production actions.",
+      "expected_behavior": "A normal cast resolves Mulldrifter to the battlefield, draws exactly two cards, and leaves it there. An evoke cast resolves it to the battlefield, draws exactly two cards, then applies the evoke-only source sacrifice to move it to its owner's graveyard.",
       "expected_runtime": {
-        "code": "unsupported_keyword_semantics",
-        "detail": "card.faces[0].keywords[0]: keyword `evoke` requires runtime lowering",
-        "detail_sha256": "8abef61fbf5071d6fc58784e80da7914348bb17a159896b9182ea1e57ce8c355",
-        "disposition": "unsupported_setup"
+        "capabilities": [
+          "permanent_spell",
+          "alternate_cost",
+          "draw_cards",
+          "sacrifice_permanent"
+        ],
+        "destination": "owner_graveyard",
+        "disposition": "passed",
+        "effect_actions": 2,
+        "final_hash": "114057789229898003",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 48
       },
       "freeze_rank": 76,
       "legacy_source_path": "m/mulldrifter.txt",
@@ -3457,7 +3490,35 @@
       "oracle_id": "24d0f5e7-0d9e-4b76-900e-a7274e80312d",
       "oracle_text": "Flying\nWhen Mulldrifter enters, draw two cards.\nEvoke {2}{U} (You may cast this spell for its evoke cost. If you do, it's sacrificed when it enters.)",
       "scenario_id": "T3.6-076",
-      "status": "blocked_runtime",
+      "semantic_atoms": [
+        {
+          "normal_destination": "battlefield",
+          "op": "resolve_permanent",
+          "subtypes": [
+            "Elemental"
+          ],
+          "type_line": "Creature - Elemental"
+        },
+        {
+          "condition": "source_in_controller_hand",
+          "cost": "{2}{U}",
+          "kind": "evoke",
+          "op": "evoke_cost"
+        },
+        {
+          "count": 2,
+          "op": "draw_cards",
+          "player": "controller",
+          "trigger": "source_enters"
+        },
+        {
+          "destination": "owner_graveyard",
+          "op": "sacrifice_permanent",
+          "subject": "source",
+          "trigger": "evoke_source_enters"
+        }
+      ],
+      "status": "semantic_case_ready",
       "stratum": "triggered_synergies",
       "translated_path": "m/mulldrifter.frs",
       "translated_source_sha256": "b416b41cea2b35a00f9bcb5e53f5337ea1e4402dbe21c1d4c63ea232693af064"
@@ -4558,13 +4619,13 @@
   ],
   "claim_boundary": "Only semantic_case_ready entries can be promoted by a passing replay and any required card-specific semantic probe. Runtime-smoke success alone never promotes a known gap.",
   "generated_at": "2026-07-13",
-  "payload_sha256": "f794515f41aaf8898176ae8f38d66082a94eeaaef9c9ea949d6df0272eb19213",
-  "product_source_commit": "74312eb720924fb5651539de63976a53c3f03eef",
+  "payload_sha256": "b35b1c12d76eea0dc04046ef244e3fa0e49d16cd9134cb2ee5b728a289be3416",
+  "product_source_commit": "d16ed0274371efafb123d6371a5a6a65653cd20d",
   "schema_version": 2,
   "summary": {
-    "blocked_runtime": 7,
+    "blocked_runtime": 5,
     "blocked_semantic_gap": 20,
     "candidate_count": 100,
-    "semantic_case_ready": 73
+    "semantic_case_ready": 75
   }
 }

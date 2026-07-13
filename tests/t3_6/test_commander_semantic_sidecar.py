@@ -75,6 +75,8 @@ def observed_from_cases(cases: dict) -> list[dict]:
                 ),
                 "flashback_looting": SEMANTICS.expected_flashback_looting_probe(case),
                 "split_second": SEMANTICS.expected_split_second_probe(case),
+                "overload": SEMANTICS.expected_overload_probe(case),
+                "evoke": SEMANTICS.expected_evoke_probe(case),
                 "noncreature_counter": (
                     SEMANTICS.expected_noncreature_counter_probe(case)
                 ),
@@ -115,9 +117,9 @@ class CommanderSemanticSidecarTests(unittest.TestCase):
             self.cases["summary"],
             {
                 "candidate_count": 100,
-                "semantic_case_ready": 73,
+                "semantic_case_ready": 75,
                 "blocked_semantic_gap": 20,
-                "blocked_runtime": 7,
+                "blocked_runtime": 5,
             },
         )
 
@@ -373,6 +375,58 @@ class CommanderSemanticSidecarTests(unittest.TestCase):
             "ordinary_cast_available_after_resolution"
         ] = False
         with self.assertRaisesRegex(ValueError, "split-second semantic probe changed"):
+            SEMANTICS.verify_observed(self.cases, observed)
+
+    def test_cyclonic_rift_ordinary_mode_requires_one_target(self) -> None:
+        observed = observed_from_cases(self.cases)
+        rift_index = next(
+            index
+            for index, case in enumerate(self.cases["cases"])
+            if case["card_name"] == "Cyclonic Rift"
+        )
+        observed[rift_index]["semantic_probe"]["overload"]["ordinary"][
+            "cast_without_target_rejected_before_mutation"
+        ] = False
+        with self.assertRaisesRegex(ValueError, "overload semantic probe changed"):
+            SEMANTICS.verify_observed(self.cases, observed)
+
+    def test_cyclonic_rift_overload_moves_only_opponent_nonlands(self) -> None:
+        observed = observed_from_cases(self.cases)
+        rift_index = next(
+            index
+            for index, case in enumerate(self.cases["cases"])
+            if case["card_name"] == "Cyclonic Rift"
+        )
+        observed[rift_index]["semantic_probe"]["overload"]["overload"][
+            "friendly_nonland_unchanged"
+        ] = False
+        with self.assertRaisesRegex(ValueError, "overload semantic probe changed"):
+            SEMANTICS.verify_observed(self.cases, observed)
+
+    def test_mulldrifter_normal_cast_keeps_the_source(self) -> None:
+        observed = observed_from_cases(self.cases)
+        mulldrifter_index = next(
+            index
+            for index, case in enumerate(self.cases["cases"])
+            if case["card_name"] == "Mulldrifter"
+        )
+        observed[mulldrifter_index]["semantic_probe"]["evoke"]["normal"][
+            "source_remained_battlefield_after_draw"
+        ] = False
+        with self.assertRaisesRegex(ValueError, "evoke semantic probe changed"):
+            SEMANTICS.verify_observed(self.cases, observed)
+
+    def test_mulldrifter_evoke_draws_before_source_sacrifice(self) -> None:
+        observed = observed_from_cases(self.cases)
+        mulldrifter_index = next(
+            index
+            for index, case in enumerate(self.cases["cases"])
+            if case["card_name"] == "Mulldrifter"
+        )
+        observed[mulldrifter_index]["semantic_probe"]["evoke"]["evoke"][
+            "draw_then_sacrificed"
+        ] = False
+        with self.assertRaisesRegex(ValueError, "evoke semantic probe changed"):
             SEMANTICS.verify_observed(self.cases, observed)
 
     def test_incremental_report_keeps_checkpoint_open(self) -> None:

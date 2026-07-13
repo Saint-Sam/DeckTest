@@ -50,6 +50,10 @@ ATOM_CAPABILITIES = {
     "combat_restriction": "combat_restriction",
     "alternate_cost": "alternate_cost",
     "flashback": "alternate_cost",
+    "overload_cost": "alternate_cost",
+    "evoke_cost": "alternate_cost",
+    "overload": "overload",
+    "sacrifice_permanent": "sacrifice_permanent",
     "split_second": "split_second",
 }
 SEMANTIC_BLOCKER_CODES = {
@@ -903,6 +907,189 @@ def expected_split_second_probe(case: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
+def expected_overload_probe(case: dict[str, Any]) -> dict[str, Any] | None:
+    atoms = case.get("semantic_atoms", [])
+    costs = [atom for atom in atoms if atom.get("op") == "overload_cost"]
+    if not costs:
+        return None
+    overload = [atom for atom in atoms if atom.get("op") == "overload"]
+    moves = [atom for atom in atoms if atom.get("op") == "move_zone"]
+    if costs != [
+        {
+            "condition": "source_in_controller_hand",
+            "cost": "{6}{U}",
+            "kind": "overload",
+            "op": "overload_cost",
+        }
+    ] or overload != [
+        {
+            "op": "overload",
+            "replace": "target",
+            "selector": "nonland_permanents_opponents_control",
+            "with": "each",
+        }
+    ] or moves != [
+        {
+            "from": "battlefield",
+            "mode": "ordinary_target_or_overload_each",
+            "op": "move_zone",
+            "to": "owner_hand",
+        }
+    ]:
+        raise ValueError(f"{case['scenario_id']}: invalid overload expectation")
+    return {
+        "setup_succeeded": True,
+        "contract": {
+            "overload_compiled": True,
+            "alternate_cost_count": 1,
+            "alternate_kind_is_overload": True,
+            "condition_is_source_in_controller_hand": True,
+            "printed_generic_mana": 1,
+            "printed_blue_mana": 1,
+            "overload_generic_mana": 6,
+            "overload_blue_mana": 1,
+            "overload_exact_payment_total": 7,
+            "available_in_hand": True,
+            "unavailable_outside_hand": True,
+            "available_after_return_to_hand": True,
+            "ordinary_target_slot_count": 1,
+            "overload_target_slot_count": 0,
+            "opponent_nonland_target_accepted": True,
+            "controller_nonland_target_rejected": True,
+            "opponent_land_target_rejected": True,
+        },
+        "ordinary": {
+            "binding_without_target_rejected": True,
+            "friendly_binding_rejected": True,
+            "land_binding_rejected": True,
+            "bound_action_count": 1,
+            "action_exact": True,
+            "cast_without_target_rejected_before_mutation": True,
+            "cast_payment_total": 2,
+            "source_on_stack": True,
+            "stack_target_exact": True,
+            "cost_consumed": True,
+            "stack_resolved": True,
+            "source_moved_to_graveyard": True,
+            "action_applied": True,
+            "target_returned_to_owner_hand": True,
+            "other_opponent_nonlands_unchanged": True,
+            "friendly_and_land_unchanged": True,
+        },
+        "overload": {
+            "available_in_hand": True,
+            "cast_payment_total": 7,
+            "cast_without_targets_succeeded": True,
+            "stack_has_no_targets": True,
+            "cost_consumed": True,
+            "stack_resolved": True,
+            "source_moved_to_graveyard": True,
+            "explicit_target_rejected": True,
+            "bound_action_count": 3,
+            "actions_exact": True,
+            "actions_applied": True,
+            "each_opponent_nonland_returned": True,
+            "stolen_permanent_returned_to_owner": True,
+            "friendly_nonland_unchanged": True,
+            "opponent_land_unchanged": True,
+        },
+    }
+
+
+def expected_evoke_probe(case: dict[str, Any]) -> dict[str, Any] | None:
+    atoms = case.get("semantic_atoms", [])
+    costs = [atom for atom in atoms if atom.get("op") == "evoke_cost"]
+    if not costs:
+        return None
+    permanents = [atom for atom in atoms if atom.get("op") == "resolve_permanent"]
+    draws = [atom for atom in atoms if atom.get("op") == "draw_cards"]
+    sacrifices = [atom for atom in atoms if atom.get("op") == "sacrifice_permanent"]
+    if permanents != [
+        {
+            "normal_destination": "battlefield",
+            "op": "resolve_permanent",
+            "subtypes": ["Elemental"],
+            "type_line": "Creature - Elemental",
+        }
+    ] or costs != [
+        {
+            "condition": "source_in_controller_hand",
+            "cost": "{2}{U}",
+            "kind": "evoke",
+            "op": "evoke_cost",
+        }
+    ] or draws != [
+        {
+            "count": 2,
+            "op": "draw_cards",
+            "player": "controller",
+            "trigger": "source_enters",
+        }
+    ] or sacrifices != [
+        {
+            "destination": "owner_graveyard",
+            "op": "sacrifice_permanent",
+            "subject": "source",
+            "trigger": "evoke_source_enters",
+        }
+    ]:
+        raise ValueError(f"{case['scenario_id']}: invalid evoke expectation")
+    return {
+        "setup_succeeded": True,
+        "contract": {
+            "alternate_cost_count": 1,
+            "alternate_kind_is_evoke": True,
+            "condition_is_source_in_controller_hand": True,
+            "trigger_count": 2,
+            "draw_trigger_is_unconditional": True,
+            "sacrifice_trigger_requires_evoke": True,
+            "both_triggers_are_source_enters": True,
+            "printed_generic_mana": 4,
+            "printed_blue_mana": 1,
+            "printed_payment_total": 5,
+            "evoke_generic_mana": 2,
+            "evoke_blue_mana": 1,
+            "evoke_exact_payment_total": 3,
+            "evoke_available_in_hand": True,
+            "normal_applicable_trigger_count": 1,
+            "evoke_applicable_trigger_count": 2,
+        },
+        "normal": {
+            "cast_window_ready": True,
+            "cast_payment_total": 5,
+            "source_on_stack": True,
+            "cost_consumed": True,
+            "stack_resolved": True,
+            "source_entered_battlefield": True,
+            "draw_bound_action_count": 1,
+            "draw_action_exact": True,
+            "draw_action_applied": True,
+            "exactly_two_drawn": True,
+            "source_remained_battlefield_after_draw": True,
+            "evoke_trigger_excluded": True,
+        },
+        "evoke": {
+            "cast_window_ready": True,
+            "cast_payment_total": 3,
+            "source_on_stack": True,
+            "cost_consumed": True,
+            "stack_resolved": True,
+            "source_entered_before_triggers": True,
+            "draw_bound_action_count": 1,
+            "sacrifice_bound_action_count": 1,
+            "draw_action_exact": True,
+            "sacrifice_action_exact": True,
+            "missing_source_rejected_without_mutation": True,
+            "draw_action_applied": True,
+            "exactly_two_drawn": True,
+            "source_remained_battlefield_after_draw": True,
+            "sacrifice_action_applied": True,
+            "source_moved_to_owner_graveyard": True,
+            "draw_then_sacrificed": True,
+        },
+    }
+
+
 def verify_semantic_probe(case: dict[str, Any], actual: dict[str, Any]) -> None:
     if case.get("status") != "semantic_case_ready":
         return
@@ -1030,6 +1217,14 @@ def verify_semantic_probe(case: dict[str, Any], actual: dict[str, Any]) -> None:
     split_second = expected_split_second_probe(case)
     if split_second is not None and probe.get("split_second") != split_second:
         raise ValueError(f"{case['scenario_id']}: split-second semantic probe changed")
+
+    overload = expected_overload_probe(case)
+    if overload is not None and probe.get("overload") != overload:
+        raise ValueError(f"{case['scenario_id']}: overload semantic probe changed")
+
+    evoke = expected_evoke_probe(case)
+    if evoke is not None and probe.get("evoke") != evoke:
+        raise ValueError(f"{case['scenario_id']}: evoke semantic probe changed")
 
 
 def aggregate_translated_hash(cases: dict[str, Any]) -> str:

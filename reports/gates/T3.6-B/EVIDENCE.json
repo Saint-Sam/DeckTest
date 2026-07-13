@@ -2,23 +2,18 @@
   "artifacts": {
     "runner": {
       "path": "tools/run_t3_6_commander_semantics.py",
-      "sha256": "4dbce1dbbab1f2b16781823b8e37178fccd0acc953ccd93714f88c88f01cc3ca"
+      "sha256": "090fde26d08812e06660cc97e8e4ba2517ef30ec3afb1fb9625efdc914553f50"
     },
     "runtime_probe": {
       "path": "tests/t3_6/runtime_probe.rs",
-      "sha256": "3ba40ef5cee354a64f824a9d85a6803fe1c18675520d1b42a853a382dd82a13a"
+      "sha256": "44f8c1aee2298d63b5a8f3b2c1b2f947ba0d1fb8285cedeb22189fb01b76b387"
     },
     "semantic_cases": {
       "path": "tests/t3_6/commander_semantic_cases.json",
-      "sha256": "5c640be14f74723ebf0d4c79ef589e684e74a35c42fbce1f77950c5525d3a28f"
+      "sha256": "167513fa4419eae700b17f9196f2eff9bcc6ded6f6438012cfd8c779215b6678"
     }
   },
   "blocked_runtime": [
-    {
-      "card_name": "Cyclonic Rift",
-      "reason_code": "unsupported_keyword_semantics",
-      "scenario_id": "T3.6-017"
-    },
     {
       "card_name": "Boros Charm",
       "reason_code": "unsupported_effect_operation",
@@ -28,11 +23,6 @@
       "card_name": "Reconnaissance Mission",
       "reason_code": "unsupported_keyword_semantics",
       "scenario_id": "T3.6-066"
-    },
-    {
-      "card_name": "Mulldrifter",
-      "reason_code": "unsupported_keyword_semantics",
-      "scenario_id": "T3.6-076"
     },
     {
       "card_name": "Bala Ged Recovery",
@@ -196,12 +186,12 @@
   ],
   "checkpoint": {
     "id": "CP-CARD-SEMANTICS-100",
-    "remaining": 27,
+    "remaining": 25,
     "required": 100,
-    "semantic_verified": 73,
+    "semantic_verified": 75,
     "status": "in_progress"
   },
-  "claim_boundary": "73 identities have one card-specific expected production path and exact deterministic replay. The other 27 remain reason-coded and are not semantic_verified; CP-CARD-SEMANTICS-100 remains open.",
+  "claim_boundary": "75 identities have one card-specific expected production path and exact deterministic replay. The other 25 remain reason-coded and are not semantic_verified; CP-CARD-SEMANTICS-100 remains open.",
   "constraints": {
     "github_actions_used": false,
     "installs_performed": false,
@@ -216,7 +206,7 @@
   },
   "generated_at": "2026-07-13",
   "measured": {
-    "blocked_runtime": 7,
+    "blocked_runtime": 5,
     "blocked_semantic_gap": 20,
     "frozen_candidates": 100,
     "production_failures": 0,
@@ -224,22 +214,22 @@
       "unsupported_ability_shape": 1,
       "unsupported_card_layout": 1,
       "unsupported_effect_operation": 2,
-      "unsupported_keyword_semantics": 3
+      "unsupported_keyword_semantics": 1
     },
-    "runtime_smoke_passed": 93,
+    "runtime_smoke_passed": 95,
     "semantic_blocker_reason_counts": {
       "COPY_TRIGGER_EVENT_MISSING": 1,
       "REGENERATION_PROHIBITION_MISSING": 4,
       "REVEAL_KNOWLEDGE_EVENT_MISSING": 6,
       "TOKEN_SUBTYPE_STATE_MISSING": 11
     },
-    "semantic_verified": 73
+    "semantic_verified": 75
   },
   "product_binding": {
     "candidate_payload_sha256": "901a08efac2e4eaefc3c2adba3fa23515709595efcde30e43032f24112552e0b",
-    "observed_replay_sha256": "75c323457b7b4d2c732ff5693a16fedb4f867e0c7a0ae29752f7b1f75968b83b",
-    "runtime_source_commit": "74312eb720924fb5651539de63976a53c3f03eef",
-    "semantic_cases_payload_sha256": "f794515f41aaf8898176ae8f38d66082a94eeaaef9c9ea949d6df0272eb19213",
+    "observed_replay_sha256": "1cf87d4f2577ade276ffc1bc677a3095167cc0d89aaaaf7fb1c6a3c434a340b0",
+    "runtime_source_commit": "d16ed0274371efafb123d6371a5a6a65653cd20d",
+    "semantic_cases_payload_sha256": "b35b1c12d76eea0dc04046ef244e3fa0e49d16cd9134cb2ee5b728a289be3416",
     "translated_definitions_aggregate_sha256": "9e09956bdd16d34c77905dcbf53fea2b9f31164b7049c3a30424dc7109801fb0"
   },
   "schema_version": 2,
@@ -355,6 +345,14 @@
       "oracle_id": "3407fe41-fdd3-4119-8f70-4bc4590a379f",
       "scenario_id": "T3.6-016",
       "stratum": "stack_interaction_and_protection"
+    },
+    {
+      "card_name": "Cyclonic Rift",
+      "final_hash": "13955676016907358862",
+      "freeze_rank": 17,
+      "oracle_id": "d75b9c82-1b49-4c3e-a1b5-aeef57d6644b",
+      "scenario_id": "T3.6-017",
+      "stratum": "targeted_permanent_interaction"
     },
     {
       "card_name": "Rampant Growth",
@@ -725,6 +723,14 @@
       "stratum": "card_flow"
     },
     {
+      "card_name": "Mulldrifter",
+      "final_hash": "114057789229898003",
+      "freeze_rank": 76,
+      "oracle_id": "24d0f5e7-0d9e-4b76-900e-a7274e80312d",
+      "scenario_id": "T3.6-076",
+      "stratum": "triggered_synergies"
+    },
+    {
       "card_name": "Cloudblazer",
       "final_hash": "14992304440545294507",
       "freeze_rank": 77,
@@ -834,7 +840,7 @@
   "verification": [
     {
       "command": "CARGO_NET_OFFLINE=true python3 tools/run_t3_6_commander_semantics.py --translated-root target/translated-cards --cargo-target-dir target --report reports/gates/T3.6-B/EVIDENCE.json",
-      "result": "PASS; two exact production replays, 73 semantic outcomes matched, 20 semantic gaps and 7 runtime blockers remained fail-closed"
+      "result": "PASS; two exact production replays, 75 semantic outcomes matched, 20 semantic gaps and 5 runtime blockers remained fail-closed"
     }
   ],
   "verification_mode": "local_only"
