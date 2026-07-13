@@ -1249,6 +1249,9 @@ operations! {
     PersistentMana => ("persistent_mana", Effect, 1, Some(1)),
     ManaSpentAmount => ("mana_spent_amount", Value, 0, Some(1)),
     RemoveAllCounters => ("remove_all_counters", Effect, 1, Some(1)),
+    RememberedLkiMatching => ("remembered_lki_matching", Selector, 1, Some(1)),
+    ColorCount => ("color_count", Value, 1, Some(1)),
+    CannotTargetFrom => ("cannot_target_from", Effect, 3, Some(3)),
 }
 
 impl Operation {
@@ -2452,6 +2455,13 @@ impl Operation {
             Self::PersistentMana => Some(Effect),
             Self::ManaSpentAmount => Some(Text),
             Self::RemoveAllCounters => Some(Selector),
+            Self::RememberedLkiMatching => Some(Predicate),
+            Self::ColorCount => Some(Selector),
+            Self::CannotTargetFrom => match index {
+                0 | 1 => Some(Selector),
+                2 => Some(Text),
+                _ => None,
+            },
             Self::ChooseNumber => match index {
                 0 => Some(Selector),
                 1 | 2 => Some(Number),
@@ -2842,6 +2852,9 @@ mod tests {
         assert_eq!(Operation::PersistentMana as u32, 449);
         assert_eq!(Operation::ManaSpentAmount as u32, 450);
         assert_eq!(Operation::RemoveAllCounters as u32, 451);
+        assert_eq!(Operation::RememberedLkiMatching as u32, 452);
+        assert_eq!(Operation::ColorCount as u32, 453);
+        assert_eq!(Operation::CannotTargetFrom as u32, 454);
 
         let config = bincode::config::standard()
             .with_fixed_int_encoding()

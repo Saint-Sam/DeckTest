@@ -3143,6 +3143,18 @@ fn condition_defined_presence_selector(
             Operation::Triggered,
             vec![condition_defined_collection(presence, present)?],
         )),
+        "RememberedLKI" | "DelayTriggerRememberedLKI" => {
+            let collection = condition_defined_collection(presence, present)?;
+            let Expression::Call {
+                operation: Operation::Cards | Operation::Permanents,
+                mut arguments,
+            } = collection
+            else {
+                return Err(unsupported_value("ConditionPresent", present));
+            };
+            let predicate = arguments.pop().unwrap_or(Expression::Boolean(true));
+            Ok(call(Operation::RememberedLkiMatching, vec![predicate]))
+        }
         _ => Err(unsupported_value("ConditionDefined", defined)),
     }
 }
@@ -3699,6 +3711,7 @@ fn resolve_value_svar_inner(
             &field.value,
         ),
         Some("Remembered") => map_remembered_value(name, &field.value),
+        Some("RememberedLKI") => map_remembered_lki_value(name, &field.value),
         Some("SVar") => map_svar_arithmetic(name, &field.value, context, stack),
         Some("Number") => map_number_value(name, &field.value, context, stack),
         _ => Err(diagnostic(
@@ -3868,6 +3881,24 @@ fn map_remembered_value(name: &str, value: &str) -> Result<Expression, MappingDi
         _ => Err(diagnostic(
             "UNSUPPORTED_VALUE_SVAR",
             &format!("value SVar `{name}` remembered value `{value}` has no exact lowering"),
+        )),
+    }
+}
+
+fn map_remembered_lki_value(name: &str, value: &str) -> Result<Expression, MappingDiagnostic> {
+    let remembered = call(Operation::RememberedLki, vec![]);
+    match value {
+        "CardPower" => Ok(call(Operation::Power, vec![remembered])),
+        "CardToughness" => Ok(call(Operation::Toughness, vec![remembered])),
+        "CardManaCost" => Ok(call(Operation::ManaValue, vec![remembered])),
+        "CardNumColors" => Ok(call(Operation::ColorCount, vec![remembered])),
+        "CardCounters.ALL" => Ok(call(
+            Operation::Aggregate,
+            vec![remembered, Expression::Text("sum_all_counters".to_string())],
+        )),
+        _ => Err(diagnostic(
+            "UNSUPPORTED_VALUE_SVAR",
+            &format!("value SVar `{name}` remembered-LKI value `{value}` has no exact lowering"),
         )),
     }
 }
@@ -13163,7 +13194,7 @@ fn map_cant_target(
     p: &BTreeMap<String, String>,
 ) -> Result<MappedLegacyAbility, MappingDiagnostic> {
     require_selector_one_of(selector, &["Mode", "ST"])?;
-    reject_unknown(p, &["ValidTarget", "ValidSA", "Description"])?;
+    reject_unknown(p, &["ValidTarget", "ValidSource", "ValidSA", "Description"])?;
     let valid_sa = p
         .get("ValidSA")
         .map(String::as_str)
@@ -13171,16 +13202,23 @@ fn map_cant_target(
     if !matches!(valid_sa, "Spell" | "Ability" | "SpellAbility") {
         return Err(unsupported_value("ValidSA", valid_sa));
     }
-    Ok(static_mapped(
-        api,
+    let target = affected_selector(required(p, "ValidTarget")?)?;
+    let expression = if let Some(source) = p.get("ValidSource") {
         call(
-            Operation::CannotTarget,
+            Operation::CannotTargetFrom,
             vec![
-                affected_selector(required(p, "ValidTarget")?)?,
+                target,
+                affected_selector(source)?,
                 Expression::Text(valid_sa.to_ascii_lowercase()),
             ],
-        ),
-    ))
+        )
+    } else {
+        call(
+            Operation::CannotTarget,
+            vec![target, Expression::Text(valid_sa.to_ascii_lowercase())],
+        )
+    };
+    Ok(static_mapped(api, expression))
 }
 
 fn map_cant_attack_unless(
@@ -13951,6 +13989,9 @@ fn map_play_permission_effect(
         Some("Remembered" | "RememberedCard") => {
             call(Operation::Remembered, vec![call(Operation::Any, vec![])])
         }
+        Some("RememberedLKI" | "DelayTriggerRememberedLKI") => {
+            call(Operation::RememberedLki, vec![])
+        }
         None => call(Operation::Remembered, vec![call(Operation::Any, vec![])]),
         Some(value) => return Err(unsupported_value("RememberObjects", value)),
     };
@@ -14221,6 +14262,7 @@ fn effect_remembered_selector(
             "Remembered" | "RememberedCard" => {
                 call(Operation::Remembered, vec![call(Operation::Any, vec![])])
             }
+            "RememberedLKI" | "DelayTriggerRememberedLKI" => call(Operation::RememberedLki, vec![]),
             "TriggeredCard" | "TriggeredCardLKICopy" => call(Operation::Triggered, vec![]),
             "Equipped" => call(
                 Operation::EquippedObject,
@@ -22993,6 +23035,48 @@ mod tests {
             "A:DB$ ChangeZoneAll | ChangeType$ Land.YouOwn | Origin$ Graveyard | Destination$ Hand | Tapped$ True"
         )
         .is_err());
+
+        for (value, operation) in [
+            ("CardPower", Operation::Power),
+            ("CardToughness", Operation::Toughness),
+            ("CardManaCost", Operation::ManaValue),
+            ("CardNumColors", Operation::ColorCount),
+            ("CardCounters.ALL", Operation::Aggregate),
+        ] {
+            let script = format!("A:DB$ Draw | NumCards$ X\nSVar:X:RememberedLKI${value}\n");
+            let mapped = map_script_root(&script).unwrap_or_else(|error| {
+                panic!("remembered-LKI value should map: {}", error.message)
+            });
+            assert!(expression_contains_operation(&mapped.expression, operation));
+        }
+
+        let lki_condition = map_line(
+            "A:DB$ Draw | ConditionDefined$ RememberedLKI | ConditionPresent$ Creature.White | ConditionCompare$ GE1",
+        )
+        .unwrap_or_else(|error| panic!("remembered-LKI condition should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &lki_condition.expression,
+            Operation::RememberedLkiMatching
+        ));
+
+        let source_restriction = map_line(
+            "S:Mode$ CantTarget | ValidTarget$ Permanent.YouCtrl | ValidSource$ Card.Blue+OppCtrl | ValidSA$ Spell",
+        )
+        .unwrap_or_else(|error| panic!("source target restriction should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &source_restriction.expression,
+            Operation::CannotTargetFrom
+        ));
+
+        let remembered_lki_effect = map_script_root(concat!(
+            "A:DB$ Effect | RememberObjects$ RememberedLKI | StaticAbilities$ STPlay | Duration$ Permanent\n",
+            "SVar:STPlay:Mode$ Continuous | Affected$ Card.IsRemembered | AffectedZone$ Exile | MayPlay$ True\n",
+        ))
+        .unwrap_or_else(|error| panic!("remembered-LKI effect should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &remembered_lki_effect.expression,
+            Operation::RememberedLki
+        ));
 
         let reveal = map_line(
             "A:SP$ Reveal | Defined$ You | RevealValid$ Card.Blue | AnyNumber$ True | RememberRevealed$ True",
