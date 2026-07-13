@@ -3280,7 +3280,7 @@ fn condition_defined_collection(
     if matches!(
         presence,
         Expression::Call {
-            operation: Operation::Cards | Operation::Permanents,
+            operation: Operation::Cards | Operation::Permanents | Operation::All,
             ..
         }
     ) {
@@ -18725,6 +18725,9 @@ fn type_or_subtype_predicate(
 }
 
 pub(crate) fn affected_selector(value: &str) -> Result<Expression, MappingDiagnostic> {
+    if value == "Card.ChosenCardStrict,Emblem.ChosenCard" {
+        return Ok(call(Operation::Chosen, vec![call(Operation::Any, vec![])]));
+    }
     let mut selectors = Vec::new();
     for branch in value.split(',') {
         selectors.push(affected_selector_branch(branch)?);
@@ -19523,8 +19526,8 @@ fn relative_path(root: &Path, path: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        audit_legacy_mappings, collect_script_mapping_blockers, map_legacy_ability,
-        map_legacy_ability_in_context, map_script_abilities, MappingContext,
+        affected_selector, audit_legacy_mappings, collect_script_mapping_blockers,
+        map_legacy_ability, map_legacy_ability_in_context, map_script_abilities, MappingContext,
     };
     use crate::legacy::{parse_legacy_script, LegacyLineKind};
     use forge_carddef::{Expression, Operation};
@@ -19868,12 +19871,18 @@ mod tests {
         .is_err());
 
         let card_or_emblem = map_line(
-            "A:DB$ Draw | NumCards$ 1 | ConditionPresent$ Card,Emblem | ConditionCompare$ GE1",
+            "A:DB$ Draw | NumCards$ 1 | ConditionDefined$ ChosenCard | ConditionPresent$ Card,Emblem | ConditionCompare$ GE1",
         )
         .unwrap_or_else(|error| panic!("card-or-emblem presence should map: {}", error.message));
         assert!(expression_contains_operation(
             &card_or_emblem.expression,
             Operation::Emblems
+        ));
+        let chosen_source = affected_selector("Card.ChosenCardStrict,Emblem.ChosenCard")
+            .unwrap_or_else(|error| panic!("chosen source should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &chosen_source,
+            Operation::Chosen
         ));
 
         let dig = map_line(
