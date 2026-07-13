@@ -1256,6 +1256,7 @@ operations! {
     AdditionalBlocks => ("additional_blocks", Effect, 2, Some(2)),
     DistinctNames => ("distinct_names", Selector, 1, Some(1)),
     Emblems => ("emblems", Selector, 0, Some(0)),
+    CounterSpellTo => ("counter_spell_to", Effect, 2, Some(2)),
 }
 
 impl Operation {
@@ -2474,6 +2475,11 @@ impl Operation {
                 _ => None,
             },
             Self::DistinctNames => Some(Selector),
+            Self::CounterSpellTo => match index {
+                0 => Some(Selector),
+                1 => Some(Text),
+                _ => None,
+            },
             Self::ChooseNumber => match index {
                 0 => Some(Selector),
                 1 | 2 => Some(Number),
@@ -2871,6 +2877,7 @@ mod tests {
         assert_eq!(Operation::AdditionalBlocks as u32, 456);
         assert_eq!(Operation::DistinctNames as u32, 457);
         assert_eq!(Operation::Emblems as u32, 458);
+        assert_eq!(Operation::CounterSpellTo as u32, 459);
 
         let config = bincode::config::standard()
             .with_fixed_int_encoding()

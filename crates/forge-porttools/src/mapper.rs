@@ -13531,15 +13531,11 @@ fn map_counter_spell(
             "Counter requires TargetType or a closed Defined stack selector",
         ));
     }
-    if parameters
-        .get("Destination")
-        .is_some_and(|destination| destination != "Graveyard")
-    {
-        return Err(unsupported_value(
-            "Destination",
-            required(parameters, "Destination")?,
-        ));
-    }
+    let destination = match parameters.get("Destination").map(String::as_str) {
+        None | Some("Graveyard") => None,
+        Some("Exile") => Some("exile"),
+        Some(value) => return Err(unsupported_value("Destination", value)),
+    };
     if parameters.contains_key("Defined") && parameters.contains_key("ValidTgts") {
         return Err(diagnostic(
             "UNSUPPORTED_SELECTOR",
@@ -13553,7 +13549,14 @@ fn map_counter_spell(
             vec![spell_selector(required(parameters, "ValidTgts")?)?],
         ),
     };
-    let expression = call(Operation::CounterSpell, vec![target]);
+    let expression = if let Some(destination) = destination {
+        call(
+            Operation::CounterSpellTo,
+            vec![target, Expression::Text(destination.to_string())],
+        )
+    } else {
+        call(Operation::CounterSpell, vec![target])
+    };
     let expression = apply_remembered_result(
         expression,
         parameters,
@@ -19959,6 +19962,14 @@ mod tests {
                 .unwrap_or_else(|error| panic!("power aggregation should map: {}", error.message));
             assert!(expression_contains_operation(&mapped.expression, operation));
         }
+        let exile_counter = map_line(
+            "A:SP$ Counter | TargetType$ Spell | ValidTgts$ Card.nonCreature | Destination$ Exile",
+        )
+        .unwrap_or_else(|error| panic!("exiling counterspell should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &exile_counter.expression,
+            Operation::CounterSpellTo
+        ));
 
         let dig = map_line(
             "A:SP$ Dig | DigNum$ 2 | ChangeNum$ 1 | Optional$ True | SpellDescription$ Dig.",
