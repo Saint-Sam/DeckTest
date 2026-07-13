@@ -1804,6 +1804,7 @@ pub struct BaseObjectCharacteristics {
     basic_land_types: BasicLandTypes,
     subtypes: ObjectSubtypes,
     mana_value: u32,
+    printed_mana_symbols: ManaPool,
 }
 
 impl BaseObjectCharacteristics {
@@ -1817,6 +1818,7 @@ impl BaseObjectCharacteristics {
             basic_land_types: BasicLandTypes::none(),
             subtypes: ObjectSubtypes::none(),
             mana_value: 0,
+            printed_mana_symbols: ManaPool::empty(),
         }
     }
 
@@ -1845,6 +1847,13 @@ impl BaseObjectCharacteristics {
     #[must_use]
     pub const fn with_mana_value(mut self, mana_value: u32) -> Self {
         self.mana_value = mana_value;
+        self
+    }
+
+    /// Sets W/U/B/R/G printed mana-symbol counts used by devotion.
+    #[must_use]
+    pub const fn with_printed_mana_symbols(mut self, symbols: ManaPool) -> Self {
+        self.printed_mana_symbols = symbols;
         self
     }
 
@@ -1882,6 +1891,12 @@ impl BaseObjectCharacteristics {
     #[must_use]
     pub const fn mana_value(self) -> u32 {
         self.mana_value
+    }
+
+    /// Returns W/U/B/R/G printed mana-symbol counts used by devotion.
+    #[must_use]
+    pub const fn printed_mana_symbols(self) -> ManaPool {
+        self.printed_mana_symbols
     }
 }
 
@@ -2868,6 +2883,13 @@ pub enum TriggerCondition {
         /// Player selector interpreted relative to the trigger controller.
         player: TriggerPlayerFilter,
     },
+    /// Match a permanent entering the battlefield with a closed predicate.
+    PermanentEnteredBattlefield {
+        /// Entering permanent predicate interpreted relative to the trigger controller.
+        predicate: ObjectTargetPredicate,
+        /// Whether the registered trigger source itself is excluded.
+        exclude_source: bool,
+    },
 }
 
 impl TriggerCondition {
@@ -2887,6 +2909,7 @@ impl TriggerCondition {
             Self::StackEntryAdded { .. } => GameEventKind::StackEntryAdded,
             Self::CombatDamageToPlayer { .. } => GameEventKind::CombatDamageDealt,
             Self::PlayerDrewCard { .. } => GameEventKind::CardDrawn,
+            Self::PermanentEnteredBattlefield { .. } => GameEventKind::ObjectMoved,
         }
     }
 
@@ -2904,6 +2927,7 @@ impl TriggerCondition {
             Self::StackEntryAdded { .. } => 9,
             Self::CombatDamageToPlayer { .. } => 10,
             Self::PlayerDrewCard { .. } => 11,
+            Self::PermanentEnteredBattlefield { .. } => 12,
         }
     }
 }
@@ -4923,6 +4947,29 @@ impl ContinuousEffectDuration {
     }
 }
 
+/// Closed live predicate controlling whether a continuous effect applies.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum ContinuousEffectCondition {
+    /// The continuous effect always applies while its duration remains active.
+    Always,
+    /// The effect applies while its controller's devotion to one color is below a threshold.
+    ControllerDevotionLessThan {
+        /// Colored mana symbol counted for devotion.
+        color: ManaKind,
+        /// Exclusive upper bound.
+        threshold: u32,
+    },
+}
+
+impl ContinuousEffectCondition {
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::Always => 0,
+            Self::ControllerDevotionLessThan { .. } => 1,
+        }
+    }
+}
+
 /// Declarative continuous-effect definition consumed by the CR 613 layer engine.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct ContinuousEffectDefinition {
@@ -4931,6 +4978,7 @@ pub struct ContinuousEffectDefinition {
     target: ContinuousEffectTarget,
     operation: ContinuousEffectOperation,
     duration: ContinuousEffectDuration,
+    condition: ContinuousEffectCondition,
     timestamp: u64,
     dependencies: Vec<ContinuousEffectId>,
 }
@@ -4949,6 +4997,7 @@ impl ContinuousEffectDefinition {
             target,
             operation,
             duration: ContinuousEffectDuration::Persistent,
+            condition: ContinuousEffectCondition::Always,
             timestamp: 0,
             dependencies: Vec::new(),
         }
@@ -4965,6 +5014,13 @@ impl ContinuousEffectDefinition {
     #[must_use]
     pub const fn with_duration(mut self, duration: ContinuousEffectDuration) -> Self {
         self.duration = duration;
+        self
+    }
+
+    /// Returns this definition with a closed live applicability predicate.
+    #[must_use]
+    pub const fn with_condition(mut self, condition: ContinuousEffectCondition) -> Self {
+        self.condition = condition;
         self
     }
 
@@ -5010,6 +5066,12 @@ impl ContinuousEffectDefinition {
     #[must_use]
     pub const fn duration(&self) -> ContinuousEffectDuration {
         self.duration
+    }
+
+    /// Returns the live applicability predicate.
+    #[must_use]
+    pub const fn condition(&self) -> ContinuousEffectCondition {
+        self.condition
     }
 
     /// Returns the CR timestamp. Zero means registration order assigns it.
@@ -10915,6 +10977,19 @@ impl GameState {
                 matches!(event, GameEvent::CardDrawn { player: event_player, .. }
                     if self.trigger_player_matches(definition, player, event_player))
             }
+            TriggerCondition::PermanentEnteredBattlefield {
+                predicate,
+                exclude_source,
+            } => {
+                matches!(event, GameEvent::ObjectMoved { object, to, .. }
+                if to == ZoneId::new(None, ZoneKind::Battlefield)
+                    && (!exclude_source || definition.source() != Some(object))
+                    && self.object_matches_target_predicate(
+                        definition.controller(),
+                        predicate,
+                        object,
+                    ))
+            }
         }
     }
 
@@ -12850,6 +12925,35 @@ impl GameState {
         Ok(self.object_characteristics(object)?.controller())
     }
 
+    /// Returns devotion to one colored mana kind among permanents a player controls.
+    pub fn controller_devotion(
+        &self,
+        controller: PlayerId,
+        color: ManaKind,
+    ) -> Result<u32, StateError> {
+        self.require_player(controller)?;
+        if color == ManaKind::Colorless {
+            return Ok(0);
+        }
+        let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+        let mut devotion = 0_u32;
+        for object in self.zone_objects(battlefield).unwrap_or_default() {
+            let characteristics =
+                self.object_characteristics_before_layer(*object, ContinuousEffectLayer::Type)?;
+            if characteristics.controller() != controller {
+                continue;
+            }
+            let symbols = self
+                .objects
+                .get(*object)
+                .ok_or(StateError::UnknownObject(*object))?
+                .base_object()
+                .printed_mana_symbols();
+            devotion = devotion.saturating_add(symbols.get(color));
+        }
+        Ok(devotion)
+    }
+
     /// Computes current creature characteristics through the CR 613 layer system.
     pub fn creature_characteristics(
         &self,
@@ -12897,6 +13001,9 @@ impl GameState {
         object: ObjectId,
     ) -> bool {
         let definition = &subscription.definition;
+        if !self.continuous_effect_condition_matches(definition) {
+            return false;
+        }
         if definition.duration() == ContinuousEffectDuration::WhileSourceOnBattlefield
             && definition.source().is_none_or(|source| {
                 self.object_zone(source) != Some(ZoneId::new(None, ZoneKind::Battlefield))
@@ -12931,6 +13038,15 @@ impl GameState {
                 .and_then(|source| self.objects.get(source))
                 .and_then(ObjectRecord::attached_to)
                 .is_some_and(|attached| attached == object),
+        }
+    }
+
+    fn continuous_effect_condition_matches(&self, definition: &ContinuousEffectDefinition) -> bool {
+        match definition.condition() {
+            ContinuousEffectCondition::Always => true,
+            ContinuousEffectCondition::ControllerDevotionLessThan { color, threshold } => self
+                .controller_devotion(definition.controller(), color)
+                .is_ok_and(|devotion| devotion < threshold),
         }
     }
 
@@ -14703,6 +14819,7 @@ impl Fnva64 {
         self.write_basic_land_types(base.basic_land_types());
         self.write_object_subtypes(base.subtypes());
         self.write_u32(base.mana_value());
+        self.write_mana_pool(base.printed_mana_symbols());
     }
 
     fn write_base_creature_characteristics(&mut self, base: BaseCreatureCharacteristics) {
@@ -14986,6 +15103,13 @@ impl Fnva64 {
             }
             TriggerCondition::PlayerDrewCard { player } => {
                 self.write_trigger_player_filter(player);
+            }
+            TriggerCondition::PermanentEnteredBattlefield {
+                predicate,
+                exclude_source,
+            } => {
+                self.write_object_target_predicate(predicate);
+                self.write_bool(exclude_source);
             }
         }
     }
@@ -15343,6 +15467,17 @@ impl Fnva64 {
         self.write_u32(definition.dependencies.len() as u32);
         for dependency in &definition.dependencies {
             self.write_u32(dependency.0);
+        }
+        self.write_continuous_effect_condition(definition.condition());
+    }
+
+    fn write_continuous_effect_condition(&mut self, condition: ContinuousEffectCondition) {
+        self.write_u8(condition.canonical_code());
+        if let ContinuousEffectCondition::ControllerDevotionLessThan { color, threshold } =
+            condition
+        {
+            self.write_u8(color.index() as u8);
+            self.write_u32(threshold);
         }
     }
 
@@ -16058,6 +16193,7 @@ impl CanonicalBytes {
         self.write_basic_land_types(base.basic_land_types());
         self.write_object_subtypes(base.subtypes());
         self.write_u32(base.mana_value());
+        self.write_mana_pool(base.printed_mana_symbols());
     }
 
     fn write_base_creature_characteristics(&mut self, base: BaseCreatureCharacteristics) {
@@ -16310,6 +16446,13 @@ impl CanonicalBytes {
             }
             TriggerCondition::PlayerDrewCard { player } => {
                 self.write_trigger_player_filter(player);
+            }
+            TriggerCondition::PermanentEnteredBattlefield {
+                predicate,
+                exclude_source,
+            } => {
+                self.write_object_target_predicate(predicate);
+                self.write_bool(exclude_source);
             }
         }
     }
@@ -16667,6 +16810,17 @@ impl CanonicalBytes {
         self.write_u32(definition.dependencies.len() as u32);
         for dependency in &definition.dependencies {
             self.write_u32(dependency.0);
+        }
+        self.write_continuous_effect_condition(definition.condition());
+    }
+
+    fn write_continuous_effect_condition(&mut self, condition: ContinuousEffectCondition) {
+        self.write_u8(condition.canonical_code());
+        if let ContinuousEffectCondition::ControllerDevotionLessThan { color, threshold } =
+            condition
+        {
+            self.write_u8(color.index() as u8);
+            self.write_u32(threshold);
         }
     }
 
@@ -17231,9 +17385,10 @@ mod tests {
         ActivationCondition, ActivationCost, ActivationTiming, AttackDeclaration,
         BaseCreatureCharacteristics, BaseObjectCharacteristics, BasicLandTypes, BlockDeclaration,
         CardId, CastSpellRequest, CombatDamageAssignment, CombatDamageAssignmentRequest,
-        CombatDamageStepKind, CombatDamageTarget, ContinuousEffectDefinition,
-        ContinuousEffectDuration, ContinuousEffectId, ContinuousEffectOperation,
-        ContinuousEffectTarget, CostModifierDefinition, CostModifierOperation, CostModifierScope,
+        CombatDamageStepKind, CombatDamageTarget, ContinuousEffectCondition,
+        ContinuousEffectDefinition, ContinuousEffectDuration, ContinuousEffectId,
+        ContinuousEffectOperation, ContinuousEffectTarget, CostModifierDefinition,
+        CostModifierOperation, CostModifierScope,
         CreatureCharacteristics, CreatureKeywords, EffectDuration, EventReplayError, GameEvent,
         GameOutcome, GameState, ManaCost, ManaKind, ManaPool, ManaSource, ObjectColors,
         ObjectSubtype, ObjectSubtypes, ObjectSupertypes, ObjectTargetPredicate, ObjectTypes,
@@ -18444,6 +18599,84 @@ mod tests {
             assert_eq!(
                 state.deterministic_hash(),
                 state.deterministic_hash_streaming()
+            );
+        }
+
+        #[test]
+        fn devotion_condition_tracks_printed_symbols_and_toggles_type_removal() {
+            let mut state = GameState::new();
+            let controller = state.add_player();
+            let source = battlefield_creature(
+                &mut state,
+                controller,
+                2_420,
+                6,
+                5,
+                CreatureKeywords::none(),
+            );
+            state
+                .set_base_object_characteristics(
+                    source,
+                    BaseObjectCharacteristics::new(
+                        ObjectTypes::none().with_creature().with_enchantment(),
+                        ObjectColors::none().with_red(),
+                    )
+                    .with_printed_mana_symbols(ManaPool::of(ManaKind::Red, 1)),
+                )
+                .unwrap_or_else(|error| panic!("unexpected source setup error: {error:?}"));
+            register_continuous(
+                &mut state,
+                ContinuousEffectDefinition::new(
+                    controller,
+                    ContinuousEffectTarget::Object(source),
+                    ContinuousEffectOperation::RemoveTypes {
+                        types: ObjectTypes::none().with_creature(),
+                    },
+                )
+                .with_source(source)
+                .with_duration(ContinuousEffectDuration::WhileSourceOnBattlefield)
+                .with_condition(
+                    ContinuousEffectCondition::ControllerDevotionLessThan {
+                        color: ManaKind::Red,
+                        threshold: 5,
+                    },
+                ),
+            );
+
+            assert_eq!(state.controller_devotion(controller, ManaKind::Red), Ok(1));
+            assert_eq!(
+                state.creature_characteristics(source),
+                Err(StateError::NotACreature(source))
+            );
+
+            let anchor = state
+                .create_object(
+                    CardId::new(2_421),
+                    controller,
+                    controller,
+                    ZoneId::new(None, ZoneKind::Battlefield),
+                )
+                .unwrap_or_else(|error| panic!("unexpected anchor create error: {error:?}"));
+            state
+                .set_base_object_characteristics(
+                    anchor,
+                    BaseObjectCharacteristics::new(
+                        ObjectTypes::none().with_enchantment(),
+                        ObjectColors::none().with_red(),
+                    )
+                    .with_printed_mana_symbols(ManaPool::of(ManaKind::Red, 4)),
+                )
+                .unwrap_or_else(|error| panic!("unexpected anchor setup error: {error:?}"));
+            assert_eq!(state.controller_devotion(controller, ManaKind::Red), Ok(5));
+            assert!(state.creature_characteristics(source).is_ok());
+
+            state
+                .move_object(anchor, ZoneId::new(Some(controller), ZoneKind::Graveyard))
+                .unwrap_or_else(|error| panic!("unexpected anchor move error: {error:?}"));
+            assert_eq!(state.controller_devotion(controller, ManaKind::Red), Ok(1));
+            assert_eq!(
+                state.creature_characteristics(source),
+                Err(StateError::NotACreature(source))
             );
         }
     }

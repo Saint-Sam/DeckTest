@@ -531,6 +531,9 @@ fn compile_life_totals(
             EffectProgram::LoseLife { players, amount } => {
                 (&mut losses, *players, smoke_amount(*amount)?)
             }
+            EffectProgram::DealDamageToPlayers { players, amount } => {
+                (&mut losses, *players, smoke_amount(*amount)?)
+            }
             EffectProgram::DealDamageToTarget { .. }
             | EffectProgram::DrawCards { .. }
             | EffectProgram::DiscardHands { .. }
@@ -632,6 +635,7 @@ fn compile_library_reserve(
             EffectProgram::GainLife { .. }
             | EffectProgram::LoseLife { .. }
             | EffectProgram::DealDamageToTarget { .. }
+            | EffectProgram::DealDamageToPlayers { .. }
             | EffectProgram::DiscardHands { .. }
             | EffectProgram::ShuffleLibrary { .. }
             | EffectProgram::DestroyPermanent { .. }
@@ -1165,6 +1169,13 @@ fn execute_smoke(
             }
         }
     }
+    verify_devotion_static_abilities(
+        &mut execution,
+        &compiled.program,
+        spell,
+        caster,
+        base_card_id,
+    )?;
 
     let initial_hand_sizes = [
         hand_size(&execution.state, caster)?,
@@ -1608,7 +1619,8 @@ fn setup_dynamic_amount_state(
         let amounts = match effect {
             EffectProgram::GainLife { amount, .. }
             | EffectProgram::LoseLife { amount, .. }
-            | EffectProgram::DealDamageToTarget { amount, .. } => [Some(*amount), None],
+            | EffectProgram::DealDamageToTarget { amount, .. }
+            | EffectProgram::DealDamageToPlayers { amount, .. } => [Some(*amount), None],
             EffectProgram::DrawCards { count, .. }
             | EffectProgram::Scry { count, .. }
             | EffectProgram::CreateTokens { count, .. } => [Some(*count), None],
@@ -1868,6 +1880,67 @@ fn execute_turn_triggers(
     hand_delta: &mut [i64; PLAYER_COUNT],
 ) -> Result<(), RuntimeSmokeFailure> {
     let starting_turn = execution.state.turn_number();
+    let permanent_enter_count = program
+        .triggered_abilities()
+        .iter()
+        .filter(|ability| {
+            matches!(
+                ability.event(),
+                TriggeredEventProgram::ControllerPermanentEnters { .. }
+            )
+        })
+        .count();
+    if permanent_enter_count != 0 {
+        let entrant = expect_object(execution.dispatch(
+            "trigger.permanent_enters.create",
+            Action::CreateObject {
+                card: CardId::new(base_card_id.wrapping_add(915_000)),
+                owner: caster,
+                controller: caster,
+                zone: ZoneId::new(Some(caster), ZoneKind::Hand),
+            },
+        )?)?;
+        execution.dispatch(
+            "trigger.permanent_enters.characteristics",
+            Action::SetBaseObjectCharacteristics {
+                object: entrant,
+                base: BaseObjectCharacteristics::new(
+                    ObjectTypes::none().with_creature(),
+                    ObjectColors::none().with_red(),
+                ),
+            },
+        )?;
+        execution.dispatch(
+            "trigger.permanent_enters.creature",
+            Action::SetBaseCreatureCharacteristics {
+                object: entrant,
+                base: BaseCreatureCharacteristics::new(1, 1),
+            },
+        )?;
+        let outcome = execution.dispatch(
+            "trigger.permanent_enters.move",
+            Action::MoveObject {
+                object: entrant,
+                to: ZoneId::new(None, ZoneKind::Battlefield),
+            },
+        )?;
+        if !matches!(outcome, Outcome::Applied) {
+            return Err(unexpected_outcome("trigger.permanent_enters.move", outcome));
+        }
+        execute_pending_triggers(
+            execution,
+            program,
+            registered,
+            permanent_enter_count,
+            "trigger.permanent_enters",
+            caster,
+            opponent,
+            base_card_id.wrapping_add(916_000),
+            Some(source),
+            None,
+            hand_delta,
+        )?;
+    }
     let upkeep_count = program
         .triggered_abilities()
         .iter()
@@ -2399,6 +2472,104 @@ fn execute_pending_triggers(
     Ok(())
 }
 
+fn verify_devotion_static_abilities(
+    execution: &mut Execution,
+    program: &CardProgram,
+    source: ObjectId,
+    caster: PlayerId,
+    base_card_id: u32,
+) -> Result<(), RuntimeSmokeFailure> {
+    for (index, ability) in program.static_abilities().iter().enumerate() {
+        let forge_cards::runtime::StaticAbilityProgram::DevotionSourceTypeRemoval {
+            color,
+            threshold,
+            types,
+        } = ability
+        else {
+            continue;
+        };
+        let low = execution
+            .state
+            .object_characteristics(source)
+            .map_err(|error| {
+                RuntimeSmokeFailure::new(
+                    RuntimeSmokeFailureCode::UnexpectedOutcome,
+                    format!("static[{index}].devotion.low"),
+                    format!("source characteristics failed: {error:?}"),
+                )
+            })?;
+        if low.types().intersects(*types) {
+            return Err(RuntimeSmokeFailure::new(
+                RuntimeSmokeFailureCode::UnexpectedOutcome,
+                format!("static[{index}].devotion.low"),
+                "conditional type removal did not apply below the devotion threshold",
+            ));
+        }
+        let anchor = expect_object(execution.dispatch(
+            &format!("static[{index}].devotion.anchor"),
+            Action::CreateObject {
+                card: CardId::new(base_card_id.wrapping_add(905_000 + index as u32)),
+                owner: caster,
+                controller: caster,
+                zone: ZoneId::new(None, ZoneKind::Battlefield),
+            },
+        )?)?;
+        execution.dispatch(
+            &format!("static[{index}].devotion.anchor_characteristics"),
+            Action::SetBaseObjectCharacteristics {
+                object: anchor,
+                base: BaseObjectCharacteristics::new(
+                    ObjectTypes::none().with_enchantment(),
+                    ObjectColors::none(),
+                )
+                .with_printed_mana_symbols(ManaPool::of(*color, *threshold)),
+            },
+        )?;
+        let high = execution
+            .state
+            .object_characteristics(source)
+            .map_err(|error| {
+                RuntimeSmokeFailure::new(
+                    RuntimeSmokeFailureCode::UnexpectedOutcome,
+                    format!("static[{index}].devotion.high"),
+                    format!("source characteristics failed: {error:?}"),
+                )
+            })?;
+        if !high.types().contains_all(*types) {
+            return Err(RuntimeSmokeFailure::new(
+                RuntimeSmokeFailureCode::UnexpectedOutcome,
+                format!("static[{index}].devotion.high"),
+                "conditional type removal remained active at the devotion threshold",
+            ));
+        }
+        execution.dispatch(
+            &format!("static[{index}].devotion.remove_anchor"),
+            Action::MoveObject {
+                object: anchor,
+                to: ZoneId::new(Some(caster), ZoneKind::Graveyard),
+            },
+        )?;
+        let low_again = execution
+            .state
+            .object_characteristics(source)
+            .map_err(|error| {
+                RuntimeSmokeFailure::new(
+                    RuntimeSmokeFailureCode::UnexpectedOutcome,
+                    format!("static[{index}].devotion.low_again"),
+                    format!("source characteristics failed: {error:?}"),
+                )
+            })?;
+        if low_again.types().intersects(*types) {
+            return Err(RuntimeSmokeFailure::new(
+                RuntimeSmokeFailureCode::UnexpectedOutcome,
+                format!("static[{index}].devotion.low_again"),
+                "conditional type removal did not resume after devotion fell",
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn setup_activated_effect_sources(
     execution: &mut Execution,
     program: &CardProgram,
@@ -2805,6 +2976,7 @@ fn prepare_effect_bindings_and_hand_delta(
             EffectProgram::GainLife { .. }
             | EffectProgram::LoseLife { .. }
             | EffectProgram::DealDamageToTarget { .. }
+            | EffectProgram::DealDamageToPlayers { .. }
             | EffectProgram::ShuffleLibrary { .. }
             | EffectProgram::DestroyPermanent { .. }
             | EffectProgram::ExileObject { .. }
@@ -3640,6 +3812,8 @@ mod tests {
         include_str!("../tests/fixtures/runtime_smoke/reconnaissance_mission.frs");
     const SMOTHERING_TITHE: &str =
         include_str!("../tests/fixtures/runtime_smoke/smothering_tithe.frs");
+    const PURPHOROS: &str =
+        include_str!("../tests/fixtures/runtime_smoke/purphoros_god_of_the_forge.frs");
     const CREATURE_MANA_SOURCE: &str = r#"
 card "Creature Mana Source" {
   id: "forge:testkit:runtime:creature-mana"
@@ -4094,6 +4268,23 @@ card "Mulldrifter" {
         );
         assert_eq!(pass.effect_actions(), 1);
         assert_eq!(pass.destination(), "battlefield");
+    }
+
+    #[test]
+    fn purphoros_toggles_devotion_executes_enter_damage_and_activated_pump() {
+        let definition = parse("purphoros.frs", PURPHOROS);
+        let report = run_translated_card_runtime_smoke(&definition);
+        let RuntimeSmokeResult::Passed(pass) = report.result() else {
+            panic!("expected pass, found {:?}", report.result());
+        };
+        assert_eq!(pass.final_life_totals(), [20, 18]);
+        assert_eq!(pass.destination(), "battlefield");
+        assert!(pass
+            .capabilities()
+            .contains(&RuntimeSmokeCapability::ModifyCharacteristics));
+        assert!(pass
+            .capabilities()
+            .contains(&RuntimeSmokeCapability::DealDamage));
     }
 
     #[test]

@@ -1,0 +1,24 @@
+card "Purphoros, God of the Forge" {
+  id: "4fdbbec2-e921-4b63-958d-f9ba1e417197"
+  layout: normal
+  status: unverified_playable
+  face "Purphoros, God of the Forge" {
+    cost: "{3}{R}"
+    types: "Legendary Enchantment Creature - God"
+    oracle: "Indestructible. As long as your devotion to red is less than five, Purphoros isn't a creature. Whenever another creature you control enters, Purphoros deals 2 damage to each opponent. {2}{R}: Creatures you control get +1/+0 until end of turn."
+    power: "6"
+    toughness: "5"
+    keywords: [indestructible]
+    ability static {
+      effect: while_condition(less_than(devotion(you(), "red"), 5), continuous(source(), remove_type(any(), "Creature")))
+    }
+    ability triggered {
+      event: event_enters(permanents(and(type_is("creature"), not(equals(any(), source())), controlled_by(you()))))
+      effect: deal_damage(opponent(), 2)
+    }
+    ability activated {
+      costs: [mana_cost("{2}{R}")]
+      effect: modify_pt(permanents(and(type_is("creature"), controlled_by(you()))), 1, 0, "until_end_of_turn")
+    }
+  }
+}

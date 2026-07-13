@@ -13,10 +13,10 @@ use forge_core::{
     apply, auto_payment_plan, AbilityPlayer, Action, ActivatedAbilityDefinition,
     ActivatedAbilityEffect, ActivationCondition, ActivationCost, ActivationTiming,
     BaseCreatureCharacteristics, BaseObjectCharacteristics, BasicLandTypes, CardId,
-    CombatDamageTarget, CombatRestriction, CombatRestrictionSubject, ContinuousEffectDefinition,
-    ContinuousEffectDuration, ContinuousEffectOperation, ContinuousEffectTarget,
-    CostModifierDefinition, CostModifierOperation, CostModifierScope, CounterKind,
-    CreatureKeywords, GameState, ManaCost, ManaKind, ManaPool, ObjectColors, ObjectId,
+    CombatDamageTarget, CombatRestriction, CombatRestrictionSubject, ContinuousEffectCondition,
+    ContinuousEffectDefinition, ContinuousEffectDuration, ContinuousEffectOperation,
+    ContinuousEffectTarget, CostModifierDefinition, CostModifierOperation, CostModifierScope,
+    CounterKind, CreatureKeywords, GameState, ManaCost, ManaKind, ManaPool, ObjectColors, ObjectId,
     ObjectSubtype, ObjectSubtypes, ObjectSupertypes, ObjectTargetPredicate, ObjectTypes, Outcome,
     PlayerId, PlayerRule, PlayerRuleSubject, PlayerTargetPredicate, RestrictionDefinition,
     RestrictionEffect, StackEntryId, TargetChoice, TargetControllerPredicate, TargetKind,
@@ -556,6 +556,13 @@ pub enum EffectProgram {
         /// Damage amount.
         amount: AmountProgram,
     },
+    /// Deal noncombat damage to a resolved player set without targeting.
+    DealDamageToPlayers {
+        /// Affected players.
+        players: PlayerBinding,
+        /// Damage amount.
+        amount: AmountProgram,
+    },
     /// Draw cards.
     DrawCards {
         /// Drawing players.
@@ -752,6 +759,13 @@ pub enum TriggeredEventProgram {
     ControllerPermanentDealsCombatDamageToPlayer(ObjectTargetPredicate),
     /// An opponent of this source's controller draws a card.
     OpponentDrawsCard,
+    /// Another matching permanent controlled by this source's controller enters.
+    ControllerPermanentEnters {
+        /// Closed entering-permanent predicate.
+        predicate: ObjectTargetPredicate,
+        /// Whether the source itself is excluded.
+        exclude_source: bool,
+    },
 }
 
 /// One completely compiled non-mana activated ability.
@@ -826,6 +840,15 @@ pub enum StaticAbilityProgram {
     SourceCombatRestriction {
         /// Closed combat restriction.
         restriction: CombatRestriction,
+    },
+    /// Remove types from the source while controller devotion remains below a threshold.
+    DevotionSourceTypeRemoval {
+        /// Colored mana symbol counted for devotion.
+        color: ManaKind,
+        /// Exclusive devotion threshold.
+        threshold: u32,
+        /// Types removed while the condition is true.
+        types: ObjectTypes,
     },
 }
 
@@ -1104,6 +1127,25 @@ impl StaticAbilityProgram {
                     .with_source(source),
                 }]
             }
+            Self::DevotionSourceTypeRemoval {
+                color,
+                threshold,
+                types,
+            } => vec![Action::RegisterContinuousEffect {
+                definition: ContinuousEffectDefinition::new(
+                    controller,
+                    ContinuousEffectTarget::Object(source),
+                    ContinuousEffectOperation::RemoveTypes { types: *types },
+                )
+                .with_source(source)
+                .with_duration(ContinuousEffectDuration::WhileSourceOnBattlefield)
+                .with_condition(
+                    ContinuousEffectCondition::ControllerDevotionLessThan {
+                        color: *color,
+                        threshold: *threshold,
+                    },
+                ),
+            }],
         }
     }
 
@@ -1119,6 +1161,7 @@ impl StaticAbilityProgram {
                 restrictions,
             } => operations.len().saturating_add(restrictions.len()),
             Self::SourceCombatRestriction { .. } => 1,
+            Self::DevotionSourceTypeRemoval { .. } => 1,
         }
     }
 }
@@ -1156,6 +1199,13 @@ impl TriggeredAbilityProgram {
             }
             TriggeredEventProgram::OpponentDrawsCard => TriggerCondition::PlayerDrewCard {
                 player: TriggerPlayerFilter::OpponentOfController,
+            },
+            TriggeredEventProgram::ControllerPermanentEnters {
+                predicate,
+                exclude_source,
+            } => TriggerCondition::PermanentEnteredBattlefield {
+                predicate,
+                exclude_source,
             },
         };
         TriggerDefinition::new(controller, condition).with_source(source)
@@ -1251,6 +1301,7 @@ impl EffectProgram {
             Self::GainLife { .. } => Capability::GainLife,
             Self::LoseLife { .. } => Capability::LoseLife,
             Self::DealDamageToTarget { .. } => Capability::DealDamage,
+            Self::DealDamageToPlayers { .. } => Capability::DealDamage,
             Self::DrawCards { .. } => Capability::DrawCards,
             Self::DiscardHands { .. } => Capability::DiscardCards,
             Self::Scry { .. } => Capability::Scry,
@@ -1498,6 +1549,9 @@ impl CardProgram {
                 }
                 StaticAbilityProgram::SourceCombatRestriction { .. } => {
                     capabilities.push(Capability::CombatRestriction);
+                }
+                StaticAbilityProgram::DevotionSourceTypeRemoval { .. } => {
+                    capabilities.push(Capability::ModifyCharacteristics);
                 }
             }
         }
@@ -2285,6 +2339,15 @@ fn compile_static_ability(
             "static continuous ability must have no costs, event, condition, timing, or mana flag",
         ));
     }
+    if matches!(
+        &ability.effect,
+        Expression::Call {
+            operation: Operation::WhileCondition,
+            ..
+        }
+    ) {
+        return compile_devotion_source_type_removal(&ability.effect, &format!("{path}.effect"));
+    }
     let Expression::Call {
         operation: Operation::Continuous,
         arguments,
@@ -2458,6 +2521,156 @@ fn compile_static_ability(
         predicate,
         exclude_source,
         operations,
+    })
+}
+
+fn compile_devotion_source_type_removal(
+    expression: &Expression,
+    path: &str,
+) -> Result<StaticAbilityProgram, CompileDiagnostic> {
+    let Expression::Call {
+        operation: Operation::WhileCondition,
+        arguments,
+    } = expression
+    else {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectOperation,
+            path,
+            "conditional static ability is not while_condition(...) ",
+        ));
+    };
+    let [condition, continuous] = arguments.as_slice() else {
+        return Err(effect_arity(
+            path,
+            &Operation::WhileCondition,
+            "devotion comparison and one continuous source operation",
+        ));
+    };
+    let Expression::Call {
+        operation: Operation::LessThan,
+        arguments: comparison,
+    } = condition
+    else {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectArguments,
+            format!("{path}.condition"),
+            "conditional type removal requires less_than(devotion(...), threshold)",
+        ));
+    };
+    let [devotion, Expression::Integer(threshold)] = comparison.as_slice() else {
+        return Err(effect_arity(
+            &format!("{path}.condition"),
+            &Operation::LessThan,
+            "devotion(you(), color) and a positive threshold",
+        ));
+    };
+    let threshold = u32::try_from(*threshold).map_err(|_| {
+        CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectAmount,
+            format!("{path}.condition.threshold"),
+            "devotion threshold is outside the u32 range",
+        )
+    })?;
+    if threshold == 0 {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectAmount,
+            format!("{path}.condition.threshold"),
+            "devotion threshold must be positive",
+        ));
+    }
+    let Expression::Call {
+        operation: Operation::Devotion,
+        arguments: devotion_arguments,
+    } = devotion
+    else {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectArguments,
+            format!("{path}.condition.devotion"),
+            "condition requires devotion(you(), color)",
+        ));
+    };
+    let [player, Expression::Text(color)] = devotion_arguments.as_slice() else {
+        return Err(effect_arity(
+            &format!("{path}.condition.devotion"),
+            &Operation::Devotion,
+            "you() and one color name",
+        ));
+    };
+    if !is_you_selector(player) {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::PlayerSelector,
+            format!("{path}.condition.devotion.player"),
+            "devotion condition currently requires you()",
+        ));
+    }
+    let color = match color.as_str() {
+        "white" => ManaKind::White,
+        "blue" => ManaKind::Blue,
+        "black" => ManaKind::Black,
+        "red" => ManaKind::Red,
+        "green" => ManaKind::Green,
+        unsupported => {
+            return Err(CompileDiagnostic::new(
+                CompileDiagnosticCode::EffectArguments,
+                format!("{path}.condition.devotion.color"),
+                format!("devotion color `{unsupported}` is not represented"),
+            ));
+        }
+    };
+    let Expression::Call {
+        operation: Operation::Continuous,
+        arguments: continuous_arguments,
+    } = continuous
+    else {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectOperation,
+            format!("{path}.effect"),
+            "devotion condition must wrap continuous(source(), remove_type(...))",
+        ));
+    };
+    let [source, removal] = continuous_arguments.as_slice() else {
+        return Err(effect_arity(
+            &format!("{path}.effect"),
+            &Operation::Continuous,
+            "source() and remove_type(any(), type)",
+        ));
+    };
+    if !is_source_selector(source) {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectArguments,
+            format!("{path}.effect.source"),
+            "devotion type removal must affect source()",
+        ));
+    }
+    let Expression::Call {
+        operation: Operation::RemoveType,
+        arguments: removal_arguments,
+    } = removal
+    else {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectOperation,
+            format!("{path}.effect.operation"),
+            "devotion continuous effect must be remove_type(any(), type)",
+        ));
+    };
+    let [subject, Expression::Text(removed)] = removal_arguments.as_slice() else {
+        return Err(effect_arity(
+            &format!("{path}.effect.operation"),
+            &Operation::RemoveType,
+            "any() and one represented type",
+        ));
+    };
+    if !is_any_selector(subject) || removed != "Creature" {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectArguments,
+            format!("{path}.effect.operation"),
+            "devotion type removal currently requires remove_type(any(), \"Creature\")",
+        ));
+    }
+    Ok(StaticAbilityProgram::DevotionSourceTypeRemoval {
+        color,
+        threshold,
+        types: ObjectTypes::none().with_creature(),
     })
 }
 
@@ -2676,21 +2889,32 @@ fn compile_trigger_event(
 
     match operation {
         Operation::EventEnters => {
-            let [Expression::Call {
-                operation: Operation::Source,
-                arguments: source_arguments,
-            }] = arguments.as_slice()
-            else {
-                return Err(effect_arity(path, operation, "source()"));
-            };
-            if !source_arguments.is_empty() {
+            let [entering] = arguments.as_slice() else {
                 return Err(effect_arity(
-                    &format!("{path}.source"),
-                    &Operation::Source,
-                    "no arguments",
+                    path,
+                    operation,
+                    "source() or one closed permanent selector",
+                ));
+            };
+            if is_source_selector(entering) {
+                return Ok(TriggeredEventProgram::SourceEnters);
+            }
+            let spec = compile_object_selector(entering, &format!("{path}.permanent"))?;
+            if spec.kind != TargetKind::Permanent
+                || spec.controller != Some(TargetControllerPredicate::You)
+                || !spec.required_types.creature()
+                || !spec.exclude_source
+            {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::AbilityShape,
+                    format!("{path}.permanent"),
+                    "enter trigger requires another creature permanent controlled by you()",
                 ));
             }
-            Ok(TriggeredEventProgram::SourceEnters)
+            Ok(TriggeredEventProgram::ControllerPermanentEnters {
+                predicate: object_predicate_from_spec(spec),
+                exclude_source: true,
+            })
         }
         Operation::EventAttacks => {
             let [attacker] = arguments.as_slice() else {
@@ -3790,14 +4014,30 @@ fn compile_base_object(
         };
     }
     let mut colors = ObjectColors::none();
+    let mut printed_symbols = [0_u32; 5];
     for symbol in mana_symbols {
         if let ManaSymbol::Color(color) = symbol {
             colors = match color {
-                Color::White => colors.with_white(),
-                Color::Blue => colors.with_blue(),
-                Color::Black => colors.with_black(),
-                Color::Red => colors.with_red(),
-                Color::Green => colors.with_green(),
+                Color::White => {
+                    printed_symbols[0] = printed_symbols[0].saturating_add(1);
+                    colors.with_white()
+                }
+                Color::Blue => {
+                    printed_symbols[1] = printed_symbols[1].saturating_add(1);
+                    colors.with_blue()
+                }
+                Color::Black => {
+                    printed_symbols[2] = printed_symbols[2].saturating_add(1);
+                    colors.with_black()
+                }
+                Color::Red => {
+                    printed_symbols[3] = printed_symbols[3].saturating_add(1);
+                    colors.with_red()
+                }
+                Color::Green => {
+                    printed_symbols[4] = printed_symbols[4].saturating_add(1);
+                    colors.with_green()
+                }
             };
         }
     }
@@ -3845,7 +4085,15 @@ fn compile_base_object(
         .with_supertypes(runtime_supertypes)
         .with_basic_land_types(basic_land_types)
         .with_subtypes(runtime_subtypes)
-        .with_mana_value(mana_value))
+        .with_mana_value(mana_value)
+        .with_printed_mana_symbols(ManaPool::new(
+            printed_symbols[0],
+            printed_symbols[1],
+            printed_symbols[2],
+            printed_symbols[3],
+            printed_symbols[4],
+            0,
+        )))
 }
 
 fn compile_printed_mana_value(symbols: &[ManaSymbol]) -> Result<u32, CompileDiagnostic> {
@@ -4005,11 +4253,24 @@ fn compile_effect(
             let [target, amount] = arguments.as_slice() else {
                 return Err(effect_arity(path, operation, "target and amount"));
             };
-            let target = compile_damage_target(target, &format!("{path}.target"), compiler)?;
             let amount = compile_amount(amount, &format!("{path}.amount"), compiler)?;
-            compiler
-                .effects
-                .push(EffectProgram::DealDamageToTarget { target, amount });
+            if matches!(
+                target,
+                Expression::Call {
+                    operation: Operation::You | Operation::Opponent | Operation::Any,
+                    ..
+                }
+            ) {
+                let players = compile_player_binding(target, &format!("{path}.players"), compiler)?;
+                compiler
+                    .effects
+                    .push(EffectProgram::DealDamageToPlayers { players, amount });
+            } else {
+                let target = compile_damage_target(target, &format!("{path}.target"), compiler)?;
+                compiler
+                    .effects
+                    .push(EffectProgram::DealDamageToTarget { target, amount });
+            }
             Ok(())
         }
         Operation::Draw | Operation::Scry => {
@@ -6742,6 +7003,19 @@ fn bind_effect_actions(
                     },
                 });
             }
+            EffectProgram::DealDamageToPlayers { players, amount } => {
+                let amount = resolve_amount(state, *amount, bindings, effect_index)?;
+                for player in resolve_players(state, *players, bindings, effect_index)? {
+                    actions.push(BoundAction {
+                        effect_index,
+                        action: Action::DealDamage {
+                            source: bindings.source,
+                            target: CombatDamageTarget::Player(player),
+                            amount,
+                        },
+                    });
+                }
+            }
             EffectProgram::DrawCards { players, count } => {
                 let count = resolve_amount(state, *count, bindings, effect_index)?;
                 for player in resolve_players(state, *players, bindings, effect_index)? {
@@ -7584,7 +7858,7 @@ mod tests {
         bind_triggered_ability_actions, compile_card_program, execute_program,
         AlternateCostCondition, AlternateCostKind, Capability, CompileDiagnosticCode,
         ExecutionBindings, ExecutionDiagnosticCode, PlayerBinding, ProgramKind,
-        TriggeredEventProgram,
+        StaticAbilityProgram, TriggeredEventProgram,
     };
     use forge_core::{
         apply, Action, ActivationCondition, BaseCreatureCharacteristics, BaseObjectCharacteristics,
@@ -7948,6 +8222,33 @@ card "Smothering Tithe" {
     ability triggered {
       event: event_draw(opponent())
       effect: unless_paid(create_token("c_a_treasure_sac", 1, you()), controller_of(triggered()), mana_cost("{2}"))
+    }
+  }
+}
+"#;
+
+    const PURPHOROS: &str = r#"
+card "Purphoros, God of the Forge" {
+  id: "4fdbbec2-e921-4b63-958d-f9ba1e417197"
+  layout: normal
+  status: unverified_playable
+  face "Purphoros, God of the Forge" {
+    cost: "{3}{R}"
+    types: "Legendary Enchantment Creature - God"
+    oracle: "Purphoros contract fixture."
+    power: "6"
+    toughness: "5"
+    keywords: [indestructible]
+    ability static {
+      effect: while_condition(less_than(devotion(you(), "red"), 5), continuous(source(), remove_type(any(), "Creature")))
+    }
+    ability triggered {
+      event: event_enters(permanents(and(type_is("creature"), not(equals(any(), source())), controlled_by(you()))))
+      effect: deal_damage(opponent(), 2)
+    }
+    ability activated {
+      costs: [mana_cost("{2}{R}")]
+      effect: modify_pt(permanents(and(type_is("creature"), controlled_by(you()))), 1, 0, "until_end_of_turn")
     }
   }
 }
@@ -9060,6 +9361,96 @@ card "Smothering Tithe" {
             pay[0].action(),
             Action::PayMana { player, cost, .. }
                 if *player == opponent && *cost == ManaCost::new(0, 0, 0, 0, 0, 2)
+        ));
+    }
+
+    #[test]
+    fn purphoros_compiles_live_devotion_enter_trigger_and_player_damage() {
+        let program = compile_card_program(&parse("purphoros.frs", PURPHOROS))
+            .unwrap_or_else(|error| panic!("unexpected compile error: {error}"));
+        assert_eq!(
+            program
+                .base_object()
+                .printed_mana_symbols()
+                .get(ManaKind::Red),
+            1
+        );
+        let [static_ability] = program.static_abilities() else {
+            panic!("expected one devotion ability");
+        };
+        assert!(matches!(
+            static_ability,
+            StaticAbilityProgram::DevotionSourceTypeRemoval {
+                color: ManaKind::Red,
+                threshold: 5,
+                types,
+            } if *types == ObjectTypes::none().with_creature()
+        ));
+        let [trigger] = program.triggered_abilities() else {
+            panic!("expected one enter trigger");
+        };
+        assert!(matches!(
+            trigger.event(),
+            TriggeredEventProgram::ControllerPermanentEnters {
+                exclude_source: true,
+                ..
+            }
+        ));
+
+        let mut state = GameState::new();
+        let controller = add_player(&mut state);
+        let opponent = add_player(&mut state);
+        let source = create_object(
+            &mut state,
+            CardId::new(2_500),
+            controller,
+            ZoneId::new(None, ZoneKind::Battlefield),
+        );
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::SetBaseObjectCharacteristics {
+                    object: source,
+                    base: program.base_object(),
+                },
+            ),
+            Outcome::Applied
+        );
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::SetBaseCreatureCharacteristics {
+                    object: source,
+                    base: program.base_creature().expect("creature base"),
+                },
+            ),
+            Outcome::Applied
+        );
+        for action in static_ability.bind_actions(controller, source) {
+            assert!(matches!(
+                apply(&mut state, action),
+                Outcome::ContinuousEffectRegistered(_)
+            ));
+        }
+        assert_eq!(
+            state.creature_characteristics(source),
+            Err(forge_core::StateError::NotACreature(source))
+        );
+
+        let actions = bind_triggered_ability_actions(
+            &state,
+            trigger,
+            &ExecutionBindings::new(controller, vec![opponent]).with_source(source),
+        )
+        .unwrap_or_else(|error| panic!("unexpected trigger binding error: {error}"));
+        assert_eq!(actions.len(), 1);
+        assert!(matches!(
+            actions[0].action(),
+            Action::DealDamage {
+                source: Some(bound_source),
+                target: forge_core::CombatDamageTarget::Player(player),
+                amount: 2,
+            } if *bound_source == source && *player == opponent
         ));
     }
 
