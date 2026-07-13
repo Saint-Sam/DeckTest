@@ -4334,6 +4334,24 @@ fn map_count_value(name: &str, value: &str) -> Result<Expression, MappingDiagnos
         ));
     }
     if let Some(valid) = value.strip_prefix("Valid ") {
+        if let Some(selector) = valid.strip_suffix("$DifferentCardPower") {
+            return Ok(call(
+                Operation::DistinctCount,
+                vec![
+                    affected_selector(selector)?,
+                    Expression::Text("power".to_string()),
+                ],
+            ));
+        }
+        if let Some(selector) = valid.strip_suffix("$CardPower") {
+            return Ok(call(
+                Operation::Aggregate,
+                vec![
+                    affected_selector(selector)?,
+                    Expression::Text("sum_power".to_string()),
+                ],
+            ));
+        }
         if let Some(selector) = valid.strip_suffix("$GreatestCardPower") {
             return Ok(call(
                 Operation::Aggregate,
@@ -19928,6 +19946,18 @@ mod tests {
                     error.message
                 )
             });
+        }
+        for (count, operation) in [
+            (
+                "Valid Creature.YouCtrl$DifferentCardPower",
+                Operation::DistinctCount,
+            ),
+            ("Valid Creature.YouCtrl$CardPower", Operation::Aggregate),
+        ] {
+            let script = format!("A:DB$ Draw | NumCards$ X\nSVar:X:Count${count}\n");
+            let mapped = map_script_root(&script)
+                .unwrap_or_else(|error| panic!("power aggregation should map: {}", error.message));
+            assert!(expression_contains_operation(&mapped.expression, operation));
         }
 
         let dig = map_line(
