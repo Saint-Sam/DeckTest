@@ -1657,6 +1657,11 @@ fn map_with_context_unconditioned(
                     | "Remembered"
                     | "TriggeredTarget"
                     | "TriggeredCardController"
+                    | "TriggeredDefendingPlayer"
+                    | "TriggeredPlayer"
+                    | "TriggeredSourceController"
+                    | "NonTriggeredCardController"
+                    | "ParentTarget"
             ) =>
         {
             Some(format!("defined_controller:{}", value.to_ascii_lowercase()))
@@ -2621,7 +2626,13 @@ fn extract_presence_condition(
                 presence_selector(present)?
             }
         }
-        None | Some("Battlefield") => presence_selector(present)?,
+        None | Some("Battlefield") => {
+            if let Some(defined) = parameters.get("PresentDefined") {
+                condition_defined_presence_selector(defined, present)?
+            } else {
+                presence_selector(present)?
+            }
+        }
         Some(zone @ ("Graveyard" | "Hand" | "Exile" | "Library")) => {
             card_selector_in_zone(present, &zone.to_ascii_lowercase())?
         }
@@ -2648,6 +2659,7 @@ fn extract_presence_condition(
             field.key.as_deref(),
             Some(
                 "IsPresent"
+                    | "PresentDefined"
                     | "PresentCompare"
                     | "PresentZone"
                     | "ConditionPresent"
@@ -7455,6 +7467,19 @@ fn zone_event_selector(value: &str, origin: &str) -> Result<Expression, MappingD
                 vec![
                     call(Operation::Any, vec![]),
                     call(Operation::Source, vec![]),
+                ],
+            )],
+        ),
+        Expression::Call {
+            operation: Operation::EnchantedObject,
+            arguments,
+        } => call(
+            Operation::Cards,
+            vec![call(
+                Operation::Equals,
+                vec![
+                    call(Operation::Any, vec![]),
+                    call(Operation::EnchantedObject, arguments),
                 ],
             )],
         ),
@@ -14161,6 +14186,7 @@ fn map_linked_static_effect(
         None | Some("EndOfTurn") | Some("UntilEndOfTurn") => "until_end_of_turn",
         Some("Permanent") => "permanent",
         Some("UntilYourNextTurn") => "until_your_next_turn",
+        Some("UntilEndOfCombat") => "until_end_of_combat",
         Some("UntilHostLeavesPlay") => "until_host_leaves_play",
         Some("UntilHostLeavesPlayOrEOT") => "until_host_leaves_play_or_eot",
         Some("UntilTheEndOfYourNextTurn") => "until_end_of_your_next_turn",
@@ -14385,6 +14411,7 @@ fn map_trigger_effect(
         (None, None | Some("EndOfTurn") | Some("UntilEndOfTurn")) => "until_end_of_turn",
         (None, Some("Permanent")) => "permanent",
         (None, Some("UntilYourNextTurn")) => "until_your_next_turn",
+        (None, Some("UntilEndOfCombat")) => "until_end_of_combat",
         (None, Some("UntilTheEndOfYourNextTurn")) => "until_end_of_your_next_turn",
         (None, Some("UntilUntaps")) => "until_source_untaps",
         (None, Some("UntilTheEndOfYourNextUntap")) => "until_end_of_your_next_untap",
@@ -14860,6 +14887,17 @@ fn map_animate_with_effects(
                     expression,
                     Expression::Text("until_source_untaps".to_string()),
                 ],
+            );
+        }
+        Some(value @ ("UntilYourNextTurn" | "UntilEndOfCombat")) => {
+            let duration = match value {
+                "UntilYourNextTurn" => "until_your_next_turn",
+                "UntilEndOfCombat" => "until_end_of_combat",
+                _ => unreachable!("closed duration branch"),
+            };
+            expression = call(
+                Operation::ApplyDuration,
+                vec![expression, Expression::Text(duration.to_string())],
             );
         }
         Some("AsLongAsControl") => {
@@ -15926,6 +15964,17 @@ fn map_clone(
     match parameters.get("Duration").map(String::as_str) {
         None | Some("Permanent") => {}
         Some("UntilEndOfTurn") => effect = call(Operation::UntilEndOfTurn, vec![effect]),
+        Some(value @ ("UntilYourNextTurn" | "UntilEndOfCombat")) => {
+            let duration = match value {
+                "UntilYourNextTurn" => "until_your_next_turn",
+                "UntilEndOfCombat" => "until_end_of_combat",
+                _ => unreachable!("closed duration branch"),
+            };
+            effect = call(
+                Operation::ApplyDuration,
+                vec![effect, Expression::Text(duration.to_string())],
+            );
+        }
         Some(value) => return Err(unsupported_value("Duration", value)),
     }
     if let Some(types) = parameters.get("AddTypes") {
@@ -17254,6 +17303,17 @@ fn map_animate_all_with_effects(
                 ],
             );
         }
+        Some(value @ ("UntilYourNextTurn" | "UntilEndOfCombat")) => {
+            let duration = match value {
+                "UntilYourNextTurn" => "until_your_next_turn",
+                "UntilEndOfCombat" => "until_end_of_combat",
+                _ => unreachable!("closed duration branch"),
+            };
+            expression = call(
+                Operation::ApplyDuration,
+                vec![expression, Expression::Text(duration.to_string())],
+            );
+        }
         Some("AsLongAsControl") => {
             expression = call(
                 Operation::ApplyDuration,
@@ -18296,7 +18356,13 @@ fn player_selector(
     }
     parameters
         .get("Defined")
-        .map(|value| defined_player_selector(value))
+        .map(|value| match value.as_str() {
+            "Remembered" => Ok(call(
+                Operation::Remembered,
+                vec![call(Operation::Any, vec![])],
+            )),
+            value => defined_player_selector(value),
+        })
         .unwrap_or_else(|| Ok(default_selector(default)))
 }
 
@@ -19267,6 +19333,7 @@ fn pump_duration(
     match parameters.get("Duration").map(String::as_str) {
         None | Some("UntilEndOfTurn") => Ok(Some("until_end_of_turn")),
         Some("UntilYourNextTurn") => Ok(Some("until_your_next_turn")),
+        Some("UntilEndOfCombat") => Ok(Some("until_end_of_combat")),
         Some("AsLongAsControl") => Ok(Some("while_source_controlled")),
         Some("UntilUntaps") => Ok(Some("until_source_untaps")),
         Some("Permanent") => Ok(None),
@@ -20622,6 +20689,31 @@ mod tests {
             Operation::GrantTriggeredAbility
         ));
 
+        for line in [
+            "A:DB$ Animate | Defined$ Self | Power$ 3 | Toughness$ 3 | Duration$ UntilYourNextTurn",
+            "A:DB$ AnimateAll | ValidCards$ Creature.YouCtrl | Power$ 2 | Toughness$ 2 | Duration$ UntilEndOfCombat",
+            "A:DB$ Clone | Defined$ Self | Duration$ UntilYourNextTurn",
+        ] {
+            let duration = map_line(line).unwrap_or_else(|error| {
+                panic!("closed named duration should map: {}", error.message)
+            });
+            assert!(expression_contains_operation(
+                &duration.expression,
+                Operation::ApplyDuration
+            ));
+        }
+
+        let enchanted = map_script_root(concat!(
+            "T:Mode$ ChangesZone | Origin$ Battlefield | Destination$ Graveyard | ValidCard$ Card.EnchantedBy | Execute$ TrigDraw\n",
+            "SVar:TrigDraw:DB$ Draw | Defined$ You | NumCards$ 1\n",
+        ))
+        .unwrap_or_else(|error| {
+            panic!("enchanted-object zone trigger should map: {}", error.message)
+        });
+        assert!(enchanted.event.as_ref().is_some_and(|event| {
+            expression_contains_operation(event, Operation::EnchantedObject)
+        }));
+
         let perpetual = map_script_root(concat!(
             "Name:Perpetual Trigger\n",
             "A:SP$ AnimateAll | ValidCards$ Creature.YouCtrl | Triggers$ TrigUpkeep | Duration$ Perpetual | SpellDescription$ Grant perpetually.\n",
@@ -21004,7 +21096,15 @@ mod tests {
             Operation::TargetGroup
         ));
 
-        for controller in ["TriggeredTarget", "TriggeredCardController"] {
+        for controller in [
+            "TriggeredTarget",
+            "TriggeredCardController",
+            "TriggeredDefendingPlayer",
+            "TriggeredPlayer",
+            "TriggeredSourceController",
+            "NonTriggeredCardController",
+            "ParentTarget",
+        ] {
             let grouped = map_script_root(&format!(
                 "A:DB$ Destroy | ValidTgts$ Creature | TargetsWithDefinedController$ {controller}"
             ))
@@ -21019,6 +21119,15 @@ mod tests {
                 Operation::TargetGroup
             ));
         }
+
+        let remembered_player = map_line("A:DB$ GainLife | Defined$ Remembered | LifeAmount$ 1")
+            .unwrap_or_else(|error| {
+                panic!("remembered player selector should map: {}", error.message)
+            });
+        assert!(expression_contains_operation(
+            &remembered_player.expression,
+            Operation::Remembered
+        ));
 
         let alone = map_script_root(concat!(
             "T:Mode$ Attacks | ValidCard$ Creature.YouCtrl | Alone$ True | Execute$ DBPump\n",
@@ -24374,6 +24483,18 @@ mod tests {
                 ..
             }
         ));
+
+        let source_bound = map_script_root(concat!(
+            "T:Mode$ Phase | Phase$ Upkeep | ValidPlayer$ You | PresentDefined$ Self | IsPresent$ Card.tapped | Execute$ TrigDraw\n",
+            "SVar:TrigDraw:DB$ Draw | Defined$ You | NumCards$ 1\n",
+        ))
+        .unwrap_or_else(|error| {
+            panic!("source-bound presence trigger should map: {}", error.message)
+        });
+        assert!(source_bound
+            .event
+            .as_ref()
+            .is_some_and(|event| { expression_contains_operation(event, Operation::Source) }));
 
         let unsupported = map_line(
             "A:AB$ Draw | IsPresent$ Card.Self | PresentCompare$ EQX | SpellDescription$ Draw.",
