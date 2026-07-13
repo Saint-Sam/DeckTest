@@ -2667,6 +2667,13 @@ fn extract_legacy_conditions(
             _ => return Err(unsupported_value("OpponentTurn", value)),
         }
     }
+    if let Some(value) = parameters.get("ConditionPlayerTurn") {
+        conditions.push(match value.as_str() {
+            "True" => legacy_named_condition("PlayerTurn")?,
+            "False" => legacy_named_condition("NotPlayerTurn")?,
+            _ => return Err(unsupported_value("ConditionPlayerTurn", value)),
+        });
+    }
     if let Some(value) = parameters.get("Revolt") {
         match value.as_str() {
             "True" => conditions.push(call(Operation::RevoltOccurred, vec![])),
@@ -2715,6 +2722,7 @@ fn extract_legacy_conditions(
                     | "ConditionSVarCompare"
                     | "ActivatorThisTurnCast"
                     | "OpponentTurn"
+                    | "ConditionPlayerTurn"
                     | "Revolt"
                     | "Delirium"
                     | "ConditionManaSpent"
@@ -9237,13 +9245,9 @@ fn map_pump(
     let affected = pump_object_selector(parameters)?;
     let mut modifications = Vec::new();
     if parameters.contains_key("NumAtt") || parameters.contains_key("NumDef") {
-        let power = optional_signed_integer(parameters, "NumAtt")?.unwrap_or(0);
-        let toughness = optional_signed_integer(parameters, "NumDef")?.unwrap_or(0);
-        let mut arguments = vec![
-            affected.clone(),
-            Expression::Integer(power),
-            Expression::Integer(toughness),
-        ];
+        let power = pump_delta(parameters, "NumAtt", &affected, Operation::Power)?;
+        let toughness = pump_delta(parameters, "NumDef", &affected, Operation::Toughness)?;
+        let mut arguments = vec![affected.clone(), power, toughness];
         if let Some(duration) = duration {
             arguments.push(Expression::Text(duration.to_string()));
         }
@@ -9477,13 +9481,9 @@ fn map_pump_all(
         scope_collection_to_defined_player(affected, parameters, Operation::ControlledBy)?;
     let mut effects = Vec::new();
     if parameters.contains_key("NumAtt") || parameters.contains_key("NumDef") {
-        let power = optional_signed_integer(parameters, "NumAtt")?.unwrap_or(0);
-        let toughness = optional_signed_integer(parameters, "NumDef")?.unwrap_or(0);
-        let mut arguments = vec![
-            affected.clone(),
-            Expression::Integer(power),
-            Expression::Integer(toughness),
-        ];
+        let power = pump_delta(parameters, "NumAtt", &affected, Operation::Power)?;
+        let toughness = pump_delta(parameters, "NumDef", &affected, Operation::Toughness)?;
+        let mut arguments = vec![affected.clone(), power, toughness];
         if let Some(duration) = duration {
             arguments.push(Expression::Text(duration.to_string()));
         }
@@ -9778,9 +9778,16 @@ fn map_object_effect(
             "AILogic",
             "ETB",
             "NoRegen",
+            "Zone",
             "RememberDestroyed",
         ],
     )?;
+    if parameters
+        .get("Zone")
+        .is_some_and(|zone| zone != "Battlefield")
+    {
+        return Err(unsupported_value("Zone", required(parameters, "Zone")?));
+    }
     if let Some(etb) = parameters.get("ETB") {
         if operation != Operation::Tap || etb != "True" {
             return Err(unsupported_value("ETB", etb));
@@ -11683,12 +11690,19 @@ fn map_destroy_all(
             "ValidCards",
             "ValidTgts",
             "NoRegen",
+            "Zone",
             "RememberDestroyed",
             "SpellDescription",
             "StackDescription",
             "AILogic",
         ],
     )?;
+    if parameters
+        .get("Zone")
+        .is_some_and(|zone| zone != "Battlefield")
+    {
+        return Err(unsupported_value("Zone", required(parameters, "Zone")?));
+    }
     let affected = scope_collection_to_target_player(
         valid_cards_selector(required(parameters, "ValidCards")?)?,
         parameters,
@@ -13597,6 +13611,7 @@ fn map_change_zone_all(
             "ValidTgts",
             "Defined",
             "GainControl",
+            "Tapped",
             "SpellDescription",
             "StackDescription",
             "ValidDescription",
@@ -13701,12 +13716,25 @@ fn map_change_zone_all(
                 expression,
                 call(
                     Operation::ChangeControl,
-                    vec![control_target, call(Operation::You, vec![])],
+                    vec![control_target.clone(), call(Operation::You, vec![])],
                 ),
             ],
         )
     } else {
         expression
+    };
+    let expression = match parameters.get("Tapped").map(String::as_str) {
+        None => expression,
+        Some("True") if destination == "Battlefield" => {
+            sequence(expression, call(Operation::Tap, vec![control_target]))
+        }
+        Some("True") => {
+            return Err(diagnostic(
+                "UNSUPPORTED_PARAMETER",
+                "ChangeZoneAll Tapped requires Destination$ Battlefield",
+            ));
+        }
+        Some(value) => return Err(unsupported_value("Tapped", value)),
     };
     let expression = match parameters.get("Shuffle").map(String::as_str) {
         None => expression,
@@ -16763,6 +16791,7 @@ fn map_animate_all_with_effects(
             "RemoveKeywords",
             "RemoveAllAbilities",
             "Duration",
+            "Zone",
             "SpellDescription",
             "StackDescription",
             "IsCurse",
@@ -16891,6 +16920,15 @@ fn map_animate_all_with_effects(
         effects.push(call(Operation::BindTargets, vec![affected.clone()]));
     }
     let mut expression = combine_effects(effects, "simple AnimateAll has no typed changes")?;
+    if let Some(zones) = parameters.get("Zone") {
+        let mut arguments = vec![affected.clone(), expression];
+        arguments.extend(
+            normalize_zone_list("Zone", zones)?
+                .into_iter()
+                .map(Expression::Text),
+        );
+        expression = call(Operation::ApplyInZones, arguments);
+    }
     match parameters.get("Duration").map(String::as_str) {
         None | Some("EOT") | Some("EndOfTurn") | Some("UntilEndOfTurn") => {
             expression = call(Operation::UntilEndOfTurn, vec![expression]);
@@ -18858,6 +18896,22 @@ fn pump_duration(
         Some("UntilUntaps") => Ok(Some("until_source_untaps")),
         Some("Permanent") => Ok(None),
         Some(value) => Err(unsupported_value("Duration", value)),
+    }
+}
+
+fn pump_delta(
+    parameters: &BTreeMap<String, String>,
+    key: &str,
+    affected: &Expression,
+    characteristic: Operation,
+) -> Result<Expression, MappingDiagnostic> {
+    match parameters.get(key).map(String::as_str) {
+        None => Ok(Expression::Integer(0)),
+        Some("Double") => Ok(call(characteristic, vec![affected.clone()])),
+        Some(value) => value
+            .parse::<i64>()
+            .map(Expression::Integer)
+            .map_err(|_| unsupported_value(key, value)),
     }
 }
 
@@ -22890,6 +22944,55 @@ mod tests {
             &move_all.expression,
             Operation::MoveCounter
         ));
+
+        for turn in ["True", "False"] {
+            let conditioned = map_line(&format!(
+                "A:DB$ Scry | ScryNum$ 2 | ConditionPlayerTurn$ {turn}"
+            ))
+            .unwrap_or_else(|error| panic!("player-turn condition should map: {}", error.message));
+            assert!(expression_contains_operation(
+                &conditioned.expression,
+                Operation::WhileCondition
+            ));
+        }
+        assert!(map_line("A:DB$ Scry | ScryNum$ 2 | ConditionPlayerTurn$ Maybe").is_err());
+
+        let doubled = map_line("A:DB$ Pump | ValidTgts$ Creature | NumAtt$ Double")
+            .unwrap_or_else(|error| panic!("double-power pump should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &doubled.expression,
+            Operation::Power
+        ));
+
+        let zoned_animation = map_line(
+            "A:DB$ AnimateAll | ValidCards$ Creature.YouOwn | Zone$ Hand | Keywords$ Flying | Duration$ Perpetual",
+        )
+        .unwrap_or_else(|error| panic!("zoned animation should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &zoned_animation.expression,
+            Operation::ApplyInZones
+        ));
+
+        let zoned_destroy = map_line("A:DB$ DestroyAll | ValidCards$ Creature | Zone$ Battlefield")
+            .unwrap_or_else(|error| panic!("battlefield destroy should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &zoned_destroy.expression,
+            Operation::Destroy
+        ));
+        assert!(map_line("A:DB$ DestroyAll | ValidCards$ Creature | Zone$ Graveyard").is_err());
+
+        let tapped_move = map_line(
+            "A:DB$ ChangeZoneAll | ChangeType$ Land.YouOwn | Origin$ Graveyard | Destination$ Battlefield | Tapped$ True",
+        )
+        .unwrap_or_else(|error| panic!("tapped mass move should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &tapped_move.expression,
+            Operation::Tap
+        ));
+        assert!(map_line(
+            "A:DB$ ChangeZoneAll | ChangeType$ Land.YouOwn | Origin$ Graveyard | Destination$ Hand | Tapped$ True"
+        )
+        .is_err());
 
         let reveal = map_line(
             "A:SP$ Reveal | Defined$ You | RevealValid$ Card.Blue | AnyNumber$ True | RememberRevealed$ True",

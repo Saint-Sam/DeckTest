@@ -765,7 +765,7 @@ mod tests {
                 "K:Ward:2:Open\n",
                 "A:SP$ PlannerProbe | Valid$ Card | SubAbility$ Extra | SpellDescription$ Probe.\n",
                 "SVar:Extra:DB$ Effect | StaticAbilities$ KWPump | SubAbility$ Tail\n",
-                "SVar:Tail:DB$ Draw | Defined$ You | ConditionPlayerTurn$ True\n",
+                "SVar:Tail:DB$ Draw | Defined$ You | ConditionPlayerTurn$ Maybe\n",
                 "SVar:X:Count$Valid Creature.YouCtrl\n",
             ),
         )
