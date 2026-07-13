@@ -3642,23 +3642,34 @@ fn map_dynamic_ability(
 
     let mut mapped = map_legacy_ability(prefix, &placeholder_expression)?;
     for (spec, replacement) in replacements {
-        let replaced = replace_operation_argument(
+        let mut replaced = replace_operation_argument(
             &mut mapped.expression,
             spec.operation,
             spec.argument,
             &replacement,
         );
-        let replaced = if spec.operation == Operation::AddMana && spec.key == "Amount" {
-            replaced
-                + replace_operation_argument(
-                    &mut mapped.expression,
-                    Operation::AddRestrictedMana,
-                    3,
-                    &replacement,
-                )
-        } else {
-            replaced
-        };
+        if spec.operation == Operation::AddMana && spec.key == "Amount" {
+            replaced += replace_operation_argument(
+                &mut mapped.expression,
+                Operation::AddRestrictedMana,
+                3,
+                &replacement,
+            );
+        }
+        if spec.key == "ChangeNum" {
+            replaced += replace_operation_argument(
+                &mut mapped.expression,
+                Operation::ChooseObjects,
+                1,
+                &replacement,
+            );
+            replaced += replace_operation_argument(
+                &mut mapped.expression,
+                Operation::MoveZone,
+                2,
+                &replacement,
+            );
+        }
         if replaced == 0 {
             return Err(diagnostic(
                 "DYNAMIC_LOWERING_MISMATCH",
@@ -4070,6 +4081,12 @@ fn map_opponent_count_value(name: &str, value: &str) -> Result<Expression, Mappi
             vec![affected_selector(valid)?],
         ));
     }
+    if value == "HighestCounters.Poison" {
+        return Ok(call(
+            Operation::PlayerAggregate,
+            vec![Expression::Text("max_opponent_poison_counters".to_string())],
+        ));
+    }
     Err(diagnostic(
         "UNSUPPORTED_VALUE_SVAR",
         &format!("value SVar `{name}` opponent count `{value}` has no exact lowering"),
@@ -4226,6 +4243,15 @@ fn map_count_value(name: &str, value: &str) -> Result<Expression, MappingDiagnos
             vec![
                 call(Operation::You, vec![]),
                 Expression::Text("life_gained_this_turn".to_string()),
+            ],
+        ));
+    }
+    if value == "YouDrewThisTurn" {
+        return Ok(call(
+            Operation::HistoryCount,
+            vec![
+                call(Operation::You, vec![]),
+                Expression::Text("cards_drawn_this_turn".to_string()),
             ],
         ));
     }
@@ -4984,13 +5010,14 @@ fn map_replacement_amount(
     } else {
         return resolve_value_svar(value, context);
     };
-    let (name, operation) = expression
-        .split_once('/')
-        .ok_or_else(|| unsupported_value("VarValue", value))?;
+    let (name, operation) = expression.split_once('/').unwrap_or((expression, ""));
     let current = call(
         Operation::ReplacementValue,
         vec![Expression::Text(name.to_ascii_lowercase())],
     );
+    if operation.is_empty() {
+        return Ok(current);
+    }
     if operation == "Twice" {
         return Ok(call(
             Operation::ScaleValue,
@@ -11277,6 +11304,35 @@ fn map_change_zone(
                 Expression::Text(destination.to_string()),
                 Expression::Integer(amount),
             ],
+        )
+    } else if (closed_origin || origin == "Battlefield")
+        && origin != "All"
+        && parameters.contains_key("ChangeNum")
+        && parameters.contains_key("ChangeType")
+        && !parameters.contains_key("ValidTgts")
+    {
+        let amount = Expression::Integer(positive_integer(
+            required(parameters, "ChangeNum")?,
+            "ChangeNum",
+        )?);
+        sequence(
+            call(
+                Operation::ChooseObjects,
+                vec![
+                    affected,
+                    amount,
+                    call(Operation::You, vec![]),
+                    Expression::Text("up_to".to_string()),
+                ],
+            ),
+            call(
+                Operation::MoveZoneFrom,
+                vec![
+                    call(Operation::EffectResult, vec![]),
+                    Expression::Text(origin.to_ascii_lowercase()),
+                    Expression::Text(destination.to_string()),
+                ],
+            ),
         )
     } else if closed_origin && origin != "All" {
         call(
@@ -18284,6 +18340,12 @@ fn defined_selector(value: &str) -> Result<Expression, MappingDiagnostic> {
         }
         "TriggeredActivator" => Ok(call(Operation::TriggeredActivator, vec![])),
         "TriggeredDefendingPlayer" => Ok(call(Operation::TriggeredDefendingPlayer, vec![])),
+        "TriggeredSourceController" | "NonTriggeredCardController" => Ok(call(
+            Operation::ControllerOf,
+            vec![call(Operation::Triggered, vec![])],
+        )),
+        "ChosenPlayer" => Ok(call(Operation::Chosen, vec![call(Operation::Any, vec![])])),
+        "Player.Other" => Ok(call(Operation::Opponent, vec![])),
         "TargetedController" => Ok(call(
             Operation::ControllerOf,
             vec![call(Operation::Target, vec![call(Operation::Any, vec![])])],
@@ -18356,6 +18418,12 @@ fn defined_player_selector(value: &str) -> Result<Expression, MappingDiagnostic>
                 vec![call(Operation::Source, vec![])],
             )],
         )),
+        "TriggeredSourceController" | "NonTriggeredCardController" => Ok(call(
+            Operation::ControllerOf,
+            vec![call(Operation::Triggered, vec![])],
+        )),
+        "ChosenPlayer" => Ok(call(Operation::Chosen, vec![call(Operation::Any, vec![])])),
+        "Player.Other" => Ok(call(Operation::Opponent, vec![])),
         _ => Err(unsupported_value("Defined", value)),
     }
 }
@@ -19685,6 +19753,42 @@ mod tests {
             "A:DB$ GainLife | Defined$ You | LifeAmount$ 2 | OptionalDecider$ Opponent"
         )
         .is_err());
+
+        let selected_move = map_script_root(concat!(
+            "A:DB$ ChangeZone | Origin$ Battlefield | Destination$ Exile | ChangeType$ Creature.YouCtrl | ChangeNum$ X\n",
+            "SVar:X:Count$Valid Creature.YouCtrl\n",
+        ))
+        .unwrap_or_else(|error| panic!("dynamic zone selection should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &selected_move.expression,
+            Operation::ChooseObjects
+        ));
+        assert!(expression_contains_operation(
+            &selected_move.expression,
+            Operation::Count
+        ));
+
+        for (svar, operation) in [
+            ("Count$YouDrewThisTurn", Operation::HistoryCount),
+            (
+                "PlayerCountOpponents$HighestCounters.Poison",
+                Operation::PlayerAggregate,
+            ),
+        ] {
+            let script = format!("A:DB$ Draw | NumCards$ X\nSVar:X:{svar}\n");
+            let mapped = map_script_root(&script)
+                .unwrap_or_else(|error| panic!("history count should map: {}", error.message));
+            assert!(expression_contains_operation(&mapped.expression, operation));
+        }
+
+        let replacement = map_script_root(
+            "A:DB$ ReplaceEffect | VarName$ DamageAmount | VarValue$ X\nSVar:X:ReplaceCount$DamageAmount\n",
+        )
+        .unwrap_or_else(|error| panic!("identity replacement count should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &replacement.expression,
+            Operation::ReplacementValue
+        ));
 
         let dig = map_line(
             "A:SP$ Dig | DigNum$ 2 | ChangeNum$ 1 | Optional$ True | SpellDescription$ Dig.",
