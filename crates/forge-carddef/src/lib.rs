@@ -1100,6 +1100,35 @@ operations! {
     ChoosePlayer => ("choose_player", Effect, 5, Some(5)),
     PlayerChooseEffect => ("player_choose_effect", Effect, 7, None),
     SeekLibrary => ("seek_library", Effect, 5, Some(5)),
+    ReplacementValue => ("replacement_value", Value, 1, Some(1)),
+    ScaleValue => ("scale_value", Value, 2, Some(2)),
+    AddValue => ("add_value", Value, 2, Some(2)),
+    UpdateReplacementAmount => ("update_replacement_amount", Effect, 2, Some(2)),
+    CloneCharacteristics => ("clone_characteristics", Effect, 2, Some(2)),
+    TriggeredAttacker => ("triggered_attacker", Selector, 0, Some(0)),
+    TriggeredBlocker => ("triggered_blocker", Selector, 0, Some(0)),
+    RememberOn => ("remember_on", Effect, 2, Some(2)),
+    BranchEffect => ("branch_effect", Effect, 3, Some(3)),
+    FlipCoin => ("flip_coin", Effect, 5, Some(5)),
+    GrantSVar => ("grant_svar", Effect, 3, Some(3)),
+    RegisterDelayedTriggerRemembering => ("register_delayed_trigger_remembering", Effect, 3, Some(4)),
+    EventImmediate => ("event_immediate", Event, 0, Some(0)),
+    EventController => ("event_controller", Event, 2, Some(2)),
+    ForEachImprinted => ("for_each_imprinted", Effect, 2, Some(2)),
+    OrderByPlayer => ("order_by_player", Selector, 2, Some(2)),
+    BatchEvents => ("batch_events", Effect, 2, Some(2)),
+    Imprinted => ("imprinted", Selector, 1, Some(1)),
+    Bolster => ("bolster", Effect, 2, Some(2)),
+    Support => ("support", Effect, 2, Some(2)),
+    Adapt => ("adapt", Effect, 2, Some(2)),
+    Monstrosity => ("monstrosity", Effect, 2, Some(2)),
+    CopyTriggeredCounters => ("copy_triggered_counters", Effect, 2, Some(3)),
+    LookPermission => ("look_permission", Effect, 3, Some(3)),
+    PlayFromZone => ("play_from_zone", Effect, 3, Some(3)),
+    EventChaosEnsues => ("event_chaos_ensues", Event, 0, Some(0)),
+    EventSetInMotion => ("event_set_in_motion", Event, 1, Some(1)),
+    ChooseCardName => ("choose_card_name", Effect, 3, Some(4)),
+    PutCreatedAttacking => ("put_created_attacking", Effect, 2, Some(2)),
 }
 
 impl Operation {
@@ -1176,6 +1205,8 @@ impl Operation {
             | Self::Source
             | Self::EffectResult
             | Self::RememberedLki
+            | Self::TriggeredAttacker
+            | Self::TriggeredBlocker
             | Self::ParentTarget
             | Self::TriggeredPlayer
             | Self::TriggeredTarget
@@ -1882,6 +1913,93 @@ impl Operation {
                 3 | 4 => Some(Boolean),
                 _ => None,
             },
+            Self::ReplacementValue => Some(Text),
+            Self::ScaleValue | Self::AddValue => match index {
+                0 => Some(Value),
+                1 => Some(Number),
+                _ => None,
+            },
+            Self::UpdateReplacementAmount => match index {
+                0 => Some(Text),
+                1 => Some(Value),
+                _ => None,
+            },
+            Self::CloneCharacteristics => Some(Selector),
+            Self::RememberOn => Some(Selector),
+            Self::BranchEffect => match index {
+                0 => Some(Predicate),
+                1 | 2 => Some(Effect),
+                _ => None,
+            },
+            Self::FlipCoin => match index {
+                0 => Some(Selector),
+                1 => Some(Number),
+                2 | 3 => Some(Effect),
+                4 => Some(Text),
+                _ => None,
+            },
+            Self::GrantSVar => match index {
+                0 => Some(Selector),
+                1 | 2 => Some(Text),
+                _ => None,
+            },
+            Self::RegisterDelayedTriggerRemembering => match index {
+                0 => Some(Event),
+                1 => Some(Effect),
+                2 => Some(Selector),
+                3 => Some(Text),
+                _ => None,
+            },
+            Self::EventImmediate => None,
+            Self::EventController => match index {
+                0 => Some(Event),
+                1 => Some(Selector),
+                _ => None,
+            },
+            Self::ForEachImprinted => match index {
+                0 => Some(Selector),
+                1 => Some(Effect),
+                _ => None,
+            },
+            Self::OrderByPlayer => Some(Selector),
+            Self::BatchEvents => match index {
+                0 => Some(Effect),
+                1 => Some(Text),
+                _ => None,
+            },
+            Self::Imprinted => Some(Selector),
+            Self::Bolster | Self::Support | Self::Adapt | Self::Monstrosity => match index {
+                0 => Some(Selector),
+                1 => Some(Number),
+                _ => None,
+            },
+            Self::CopyTriggeredCounters => match index {
+                0 | 1 => Some(Selector),
+                2 => Some(Number),
+                _ => None,
+            },
+            Self::LookPermission => match index {
+                0 | 1 => Some(Selector),
+                2 => Some(Text),
+                _ => None,
+            },
+            Self::PlayFromZone => match index {
+                0 | 1 => Some(Selector),
+                2 => Some(Text),
+                _ => None,
+            },
+            Self::EventChaosEnsues => None,
+            Self::EventSetInMotion => Some(Selector),
+            Self::ChooseCardName => match index {
+                0 | 1 => Some(Selector),
+                2 | 3 => Some(Text),
+                _ => None,
+            },
+            Self::PutCreatedAttacking => match index {
+                0 => Some(Effect),
+                1 => Some(Selector),
+                _ => None,
+            },
             Self::TimingAll => None,
         }
     }
@@ -2117,6 +2235,35 @@ mod tests {
         assert_eq!(Operation::ChoosePlayer as u32, 300);
         assert_eq!(Operation::PlayerChooseEffect as u32, 301);
         assert_eq!(Operation::SeekLibrary as u32, 302);
+        assert_eq!(Operation::ReplacementValue as u32, 303);
+        assert_eq!(Operation::ScaleValue as u32, 304);
+        assert_eq!(Operation::AddValue as u32, 305);
+        assert_eq!(Operation::UpdateReplacementAmount as u32, 306);
+        assert_eq!(Operation::CloneCharacteristics as u32, 307);
+        assert_eq!(Operation::TriggeredAttacker as u32, 308);
+        assert_eq!(Operation::TriggeredBlocker as u32, 309);
+        assert_eq!(Operation::RememberOn as u32, 310);
+        assert_eq!(Operation::BranchEffect as u32, 311);
+        assert_eq!(Operation::FlipCoin as u32, 312);
+        assert_eq!(Operation::GrantSVar as u32, 313);
+        assert_eq!(Operation::RegisterDelayedTriggerRemembering as u32, 314);
+        assert_eq!(Operation::EventImmediate as u32, 315);
+        assert_eq!(Operation::EventController as u32, 316);
+        assert_eq!(Operation::ForEachImprinted as u32, 317);
+        assert_eq!(Operation::OrderByPlayer as u32, 318);
+        assert_eq!(Operation::BatchEvents as u32, 319);
+        assert_eq!(Operation::Imprinted as u32, 320);
+        assert_eq!(Operation::Bolster as u32, 321);
+        assert_eq!(Operation::Support as u32, 322);
+        assert_eq!(Operation::Adapt as u32, 323);
+        assert_eq!(Operation::Monstrosity as u32, 324);
+        assert_eq!(Operation::CopyTriggeredCounters as u32, 325);
+        assert_eq!(Operation::LookPermission as u32, 326);
+        assert_eq!(Operation::PlayFromZone as u32, 327);
+        assert_eq!(Operation::EventChaosEnsues as u32, 328);
+        assert_eq!(Operation::EventSetInMotion as u32, 329);
+        assert_eq!(Operation::ChooseCardName as u32, 330);
+        assert_eq!(Operation::PutCreatedAttacking as u32, 331);
 
         let config = bincode::config::standard()
             .with_fixed_int_encoding()
