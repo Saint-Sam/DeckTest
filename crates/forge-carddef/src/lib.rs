@@ -1255,6 +1255,7 @@ operations! {
     TopOfLibrary => ("top_of_library", Selector, 1, Some(1)),
     AdditionalBlocks => ("additional_blocks", Effect, 2, Some(2)),
     DistinctNames => ("distinct_names", Selector, 1, Some(1)),
+    Emblems => ("emblems", Selector, 0, Some(0)),
 }
 
 impl Operation {
@@ -1331,6 +1332,7 @@ impl Operation {
         match self {
             Self::All => Some(Selector),
             Self::Any
+            | Self::Emblems
             | Self::You
             | Self::Source
             | Self::EffectResult
@@ -2868,6 +2870,7 @@ mod tests {
         assert_eq!(Operation::TopOfLibrary as u32, 455);
         assert_eq!(Operation::AdditionalBlocks as u32, 456);
         assert_eq!(Operation::DistinctNames as u32, 457);
+        assert_eq!(Operation::Emblems as u32, 458);
 
         let config = bincode::config::standard()
             .with_fixed_int_encoding()

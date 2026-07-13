@@ -3133,6 +3133,15 @@ fn apply_legacy_condition(
 }
 
 fn presence_selector(value: &str) -> Result<Expression, MappingDiagnostic> {
+    if value == "Card,Emblem" {
+        return Ok(call(
+            Operation::All,
+            vec![
+                call(Operation::Cards, vec![]),
+                call(Operation::Emblems, vec![]),
+            ],
+        ));
+    }
     if value == "Card.IsCommander+YouCtrl" {
         return Ok(call(
             Operation::Permanents,
@@ -19857,6 +19866,15 @@ mod tests {
             "A:SP$ ChangeZone | Origin$ Library | Destination$ Hand | ChangeType$ Creature | DifferentNames$ False"
         )
         .is_err());
+
+        let card_or_emblem = map_line(
+            "A:DB$ Draw | NumCards$ 1 | ConditionPresent$ Card,Emblem | ConditionCompare$ GE1",
+        )
+        .unwrap_or_else(|error| panic!("card-or-emblem presence should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &card_or_emblem.expression,
+            Operation::Emblems
+        ));
 
         let dig = map_line(
             "A:SP$ Dig | DigNum$ 2 | ChangeNum$ 1 | Optional$ True | SpellDescription$ Dig.",
