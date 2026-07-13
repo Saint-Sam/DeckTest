@@ -3219,6 +3219,7 @@ pub struct CastSpellRequest {
     flash: bool,
     kicker: Option<ManaCost>,
     flashback: Option<ManaCost>,
+    split_second: bool,
     target_requirements: Vec<TargetRequirement>,
     target_choices: Vec<TargetChoice>,
 }
@@ -3240,6 +3241,7 @@ impl CastSpellRequest {
             flash: false,
             kicker: None,
             flashback: None,
+            split_second: false,
             target_requirements: Vec::new(),
             target_choices: Vec::new(),
         }
@@ -3275,6 +3277,13 @@ impl CastSpellRequest {
     #[must_use]
     pub const fn with_flashback(mut self, cost: ManaCost) -> Self {
         self.flashback = Some(cost);
+        self
+    }
+
+    /// Marks this spell as having split second while it remains on the stack.
+    #[must_use]
+    pub const fn with_split_second(mut self) -> Self {
+        self.split_second = true;
         self
     }
 
@@ -3318,6 +3327,12 @@ impl CastSpellRequest {
     #[must_use]
     pub const fn flashback(&self) -> Option<ManaCost> {
         self.flashback
+    }
+
+    /// Returns true when this spell has split second.
+    #[must_use]
+    pub const fn split_second(&self) -> bool {
+        self.split_second
     }
 
     /// Returns true when this spell was kicked.
@@ -3970,6 +3985,7 @@ pub struct StackEntry {
     copy_info: Option<StackCopyInfo>,
     kicked: bool,
     flashback: bool,
+    split_second: bool,
 }
 
 impl StackEntry {
@@ -4038,6 +4054,12 @@ impl StackEntry {
     pub const fn flashback(&self) -> bool {
         self.flashback
     }
+
+    /// Returns true when this spell entry has split second.
+    #[must_use]
+    pub const fn split_second(&self) -> bool {
+        self.split_second
+    }
 }
 
 /// Record of a stack object that resolved.
@@ -4057,6 +4079,7 @@ pub struct ResolutionRecord {
     copy_info: Option<StackCopyInfo>,
     kicked: bool,
     flashback: bool,
+    split_second: bool,
 }
 
 impl ResolutionRecord {
@@ -4131,6 +4154,12 @@ impl ResolutionRecord {
     pub const fn flashback(&self) -> bool {
         self.flashback
     }
+
+    /// Returns true when the resolved spell had split second.
+    #[must_use]
+    pub const fn split_second(&self) -> bool {
+        self.split_second
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -4145,6 +4174,7 @@ struct StackEntryRequest {
     copy_info: Option<StackCopyInfo>,
     kicked: bool,
     flashback: bool,
+    split_second: bool,
 }
 
 /// Combat-relevant static keywords tracked by the T1.6 kernel.
@@ -6239,6 +6269,8 @@ pub enum StateError {
     ObjectNotOnBattlefield(ObjectId),
     /// The requested spell cannot be cast at the current time.
     InvalidSpellTiming,
+    /// Split second currently forbids casting spells or activating non-mana abilities.
+    SplitSecondActionForbidden,
     /// Target requirements and selected targets have different lengths.
     TargetCountMismatch {
         /// Number of target slots required by the spell.
@@ -9689,6 +9721,9 @@ impl GameState {
             return Err(StateError::ActivationConditionNotMet(ability));
         }
         if !definition.is_mana_ability() {
+            if self.split_second_on_stack() {
+                return Err(StateError::SplitSecondActionForbidden);
+            }
             self.require_priority_player(player)?;
             if !self.can_activate_with_timing(player, definition.timing()) {
                 return Err(StateError::InvalidSpellTiming);
@@ -9735,6 +9770,7 @@ impl GameState {
                 copy_info: None,
                 kicked: false,
                 flashback: false,
+                split_second: false,
             });
             self.after_priority_action(player, true)?;
             Ok(Some(id))
@@ -10410,6 +10446,9 @@ impl GameState {
         object: ObjectId,
         request: CastSpellRequest,
     ) -> Result<StackEntryId, StateError> {
+        if self.split_second_on_stack() {
+            return Err(StateError::SplitSecondActionForbidden);
+        }
         self.require_priority_player(player)?;
         self.require_player(player)?;
         let record = self
@@ -10472,9 +10511,14 @@ impl GameState {
             copy_info: None,
             kicked: request.kicked(),
             flashback: request.flashback().is_some(),
+            split_second: request.split_second(),
         });
         self.after_priority_action(player, true)?;
         Ok(id)
+    }
+
+    fn split_second_on_stack(&self) -> bool {
+        self.stack_entries.iter().any(StackEntry::split_second)
     }
 
     /// Plays one land from the active player's hand as a main-phase special action.
@@ -10543,6 +10587,7 @@ impl GameState {
             copy_info: None,
             kicked: false,
             flashback: false,
+            split_second: false,
         });
         self.after_priority_action(player, hold_priority)?;
         Ok(id)
@@ -10568,6 +10613,7 @@ impl GameState {
             copy_info: None,
             kicked: false,
             flashback: false,
+            split_second: false,
         });
         self.after_priority_action(player, hold_priority)?;
         Ok(id)
@@ -10602,6 +10648,7 @@ impl GameState {
                         copy_info: None,
                         kicked: false,
                         flashback: false,
+                        split_second: false,
                     }));
                 }
             }
@@ -10664,6 +10711,7 @@ impl GameState {
                         copy_info: None,
                         kicked: false,
                         flashback: false,
+                        split_second: false,
                     });
                     self.emit_event_without_triggers(GameEvent::TriggeredAbilityPutOnStack {
                         trigger: trigger.trigger(),
@@ -11602,6 +11650,7 @@ impl GameState {
             copy_info: Some(StackCopyInfo::new(source.id(), source.object())),
             kicked: source.kicked(),
             flashback: source.flashback(),
+            split_second: source.split_second(),
         });
         self.emit_event(GameEvent::StackEntryCopied {
             source: entry,
@@ -13858,6 +13907,7 @@ impl GameState {
             copy_info,
             kicked,
             flashback,
+            split_second,
         } = request;
         let id = StackEntryId(self.next_stack_entry);
         self.next_stack_entry = self.next_stack_entry.saturating_add(1);
@@ -13873,6 +13923,7 @@ impl GameState {
             copy_info,
             kicked,
             flashback,
+            split_second,
         });
         self.emit_event(GameEvent::StackEntryAdded {
             entry: id,
@@ -13965,6 +14016,7 @@ impl GameState {
             copy_info: entry.copy_info(),
             kicked: entry.kicked(),
             flashback: entry.flashback(),
+            split_second: entry.split_second(),
         });
         self.emit_event(GameEvent::StackEntryResolved {
             entry: entry.id(),
@@ -14013,6 +14065,7 @@ impl GameState {
             copy_info: entry.copy_info(),
             kicked: entry.kicked(),
             flashback: entry.flashback(),
+            split_second: entry.split_second(),
         });
         self.emit_event(GameEvent::StackEntryResolved {
             entry: entry.id(),
@@ -15219,6 +15272,7 @@ impl Fnva64 {
         self.write_optional_stack_copy_info(entry.copy_info);
         self.write_bool(entry.kicked);
         self.write_bool(entry.flashback);
+        self.write_bool(entry.split_second);
     }
 
     fn write_resolution_record(&mut self, record: &ResolutionRecord) {
@@ -15240,6 +15294,7 @@ impl Fnva64 {
         self.write_optional_stack_copy_info(record.copy_info);
         self.write_bool(record.kicked);
         self.write_bool(record.flashback);
+        self.write_bool(record.split_second);
     }
 
     fn write_event_record(&mut self, record: EventRecord) {
@@ -16524,6 +16579,7 @@ impl CanonicalBytes {
         self.write_optional_stack_copy_info(entry.copy_info);
         self.write_bool(entry.kicked);
         self.write_bool(entry.flashback);
+        self.write_bool(entry.split_second);
     }
 
     fn write_resolution_record(&mut self, record: &ResolutionRecord) {
@@ -16545,6 +16601,7 @@ impl CanonicalBytes {
         self.write_optional_stack_copy_info(record.copy_info);
         self.write_bool(record.kicked);
         self.write_bool(record.flashback);
+        self.write_bool(record.split_second);
     }
 
     fn write_event_record(&mut self, record: EventRecord) {
@@ -19378,6 +19435,109 @@ mod tests {
         );
         assert_eq!(stack_entry.targets()[0].original_zone(), Some(battlefield));
         assert_eq!(stack_entry.payment(), Some(payment));
+    }
+
+    #[test]
+    fn split_second_blocks_spells_and_non_mana_abilities_but_allows_mana_abilities() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let responder = state.add_player();
+        let active_hand = ZoneId::new(Some(active), ZoneKind::Hand);
+        let responder_hand = ZoneId::new(Some(responder), ZoneKind::Hand);
+        let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+        let split_spell = state
+            .create_object(CardId::new(9_210), active, active, active_hand)
+            .unwrap_or_else(|error| panic!("unexpected split spell create error: {error:?}"));
+        let follow_up_spell = state
+            .create_object(CardId::new(9_211), active, active, active_hand)
+            .unwrap_or_else(|error| panic!("unexpected follow-up create error: {error:?}"));
+        let blocked_spell = state
+            .create_object(CardId::new(9_212), responder, responder, responder_hand)
+            .unwrap_or_else(|error| panic!("unexpected blocked spell create error: {error:?}"));
+        let non_mana_source = state
+            .create_object(CardId::new(9_213), responder, responder, battlefield)
+            .unwrap_or_else(|error| panic!("unexpected non-mana source error: {error:?}"));
+        let mana_source = state
+            .create_object(CardId::new(9_214), responder, responder, battlefield)
+            .unwrap_or_else(|error| panic!("unexpected mana source error: {error:?}"));
+        let zero = ManaCost::new(0, 0, 0, 0, 0, 0);
+        let non_mana_ability = state
+            .register_activated_ability(ActivatedAbilityDefinition::new(
+                responder,
+                Some(non_mana_source),
+                ActivationTiming::Instant,
+                ActivationCost::new(zero),
+                ActivatedAbilityEffect::GainLife {
+                    player: AbilityPlayer::Controller,
+                    amount: 1,
+                },
+            ))
+            .unwrap_or_else(|error| panic!("unexpected non-mana ability error: {error:?}"));
+        let mana_ability = state
+            .register_activated_ability(
+                ActivatedAbilityDefinition::new(
+                    responder,
+                    Some(mana_source),
+                    ActivationTiming::Instant,
+                    ActivationCost::new(zero).with_tap_source(),
+                    ActivatedAbilityEffect::AddMana {
+                        player: AbilityPlayer::Controller,
+                        mana: ManaPool::of(ManaKind::Green, 1),
+                    },
+                )
+                .as_mana_ability(),
+            )
+            .unwrap_or_else(|error| panic!("unexpected mana ability error: {error:?}"));
+        start_upkeep(&mut state, active);
+
+        let split_entry = state
+            .cast_spell(
+                active,
+                split_spell,
+                CastSpellRequest::new(
+                    StackObjectKind::InstantSpell,
+                    SpellTiming::Instant,
+                    zero,
+                    zero_payment(zero),
+                )
+                .with_split_second(),
+            )
+            .unwrap_or_else(|error| panic!("unexpected split-second cast error: {error:?}"));
+        assert!(state.stack_top().is_some_and(|entry| entry.split_second()));
+        assert_eq!(
+            state.pass_priority(active),
+            Ok(PriorityOutcome::PassedTo(responder))
+        );
+        let ordinary_request = CastSpellRequest::new(
+            StackObjectKind::InstantSpell,
+            SpellTiming::Instant,
+            zero,
+            zero_payment(zero),
+        );
+        assert_eq!(
+            state.cast_spell(responder, blocked_spell, ordinary_request.clone()),
+            Err(StateError::SplitSecondActionForbidden)
+        );
+        assert_eq!(
+            state.activate_ability(responder, non_mana_ability, zero_payment(zero)),
+            Err(StateError::SplitSecondActionForbidden)
+        );
+        assert_eq!(
+            state.activate_ability(responder, mana_ability, zero_payment(zero)),
+            Ok(None)
+        );
+        assert_eq!(
+            state.mana_pool(responder),
+            Ok(ManaPool::of(ManaKind::Green, 1))
+        );
+        assert_eq!(
+            state.pass_priority(responder),
+            Ok(PriorityOutcome::Resolved(split_entry))
+        );
+        assert!(state.resolution_log()[0].split_second());
+        state
+            .cast_spell(active, follow_up_spell, ordinary_request)
+            .unwrap_or_else(|error| panic!("unexpected post-resolution cast error: {error:?}"));
     }
 
     #[test]

@@ -201,6 +201,8 @@ pub enum Capability {
     CombatRestriction,
     /// Offer a typed alternate casting cost under a closed condition.
     AlternateCost,
+    /// Prevent spell casts and non-mana activations while this spell is on the stack.
+    SplitSecond,
 }
 
 impl Capability {
@@ -234,6 +236,7 @@ impl Capability {
             Self::AddCounters => "add_counters",
             Self::CombatRestriction => "combat_restriction",
             Self::AlternateCost => "alternate_cost",
+            Self::SplitSecond => "split_second",
         }
     }
 }
@@ -1120,6 +1123,7 @@ pub struct CardProgram {
     optional_effect_groups: Vec<OptionalEffectGroup>,
     additional_costs: Vec<SpellAdditionalCostProgram>,
     alternate_costs: Vec<AlternateCastCostProgram>,
+    split_second: bool,
     activated_abilities: Vec<ActivatedAbilityProgram>,
     activated_effects: Vec<ActivatedEffectProgram>,
     triggered_abilities: Vec<TriggeredAbilityProgram>,
@@ -1205,6 +1209,12 @@ impl CardProgram {
         &self.alternate_costs
     }
 
+    /// Returns true when this spell carries split second on the stack.
+    #[must_use]
+    pub const fn split_second(&self) -> bool {
+        self.split_second
+    }
+
     /// Returns completely compiled activated abilities in printed order.
     #[must_use]
     pub fn activated_abilities(&self) -> &[ActivatedAbilityProgram] {
@@ -1249,6 +1259,9 @@ impl CardProgram {
                 .iter()
                 .map(|_| Capability::AlternateCost),
         );
+        if self.split_second {
+            capabilities.push(Capability::SplitSecond);
+        }
         for ability in &self.static_abilities {
             match ability {
                 StaticAbilityProgram::Continuous { operations, .. } => capabilities
@@ -1334,10 +1347,30 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
         .keywords
         .iter()
         .any(|keyword| keyword.as_str() == "flashback");
+    let split_second_count = face
+        .keywords
+        .iter()
+        .filter(|keyword| keyword.as_str() == "split_second")
+        .count();
+    if split_second_count > 1 {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::KeywordSemantics,
+            "card.faces[0].keywords",
+            "split_second must appear exactly once when present",
+        ));
+    }
+    let split_second = split_second_count == 1;
+    if split_second && !matches!(kind, ProgramKind::Instant | ProgramKind::Sorcery) {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::KeywordSemantics,
+            "card.faces[0].keywords",
+            "split_second is valid only on instant or sorcery spells",
+        ));
+    }
     let intrinsic_keywords = face
         .keywords
         .iter()
-        .filter(|keyword| keyword.as_str() != "flashback")
+        .filter(|keyword| !matches!(keyword.as_str(), "flashback" | "split_second"))
         .cloned()
         .collect::<Vec<_>>();
     let base_creature = compile_base_creature(
@@ -1507,6 +1540,7 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
         optional_effect_groups: compiler.optional_effect_groups,
         additional_costs,
         alternate_costs,
+        split_second,
         activated_abilities,
         activated_effects,
         triggered_abilities,
@@ -6599,6 +6633,22 @@ card "Faithless Looting" {
   }
 }
 "#;
+    const KROSAN_GRIP: &str = r#"
+card "Krosan Grip" {
+  id: "3e39224c-72ce-4ecc-aa17-12c071ea1f3e"
+  layout: normal
+  status: unverified_playable
+  face "Krosan Grip" {
+    cost: "{2}{G}"
+    types: "Instant"
+    oracle: "Split second. Destroy target artifact or enchantment."
+    keywords: [split_second]
+    ability spell {
+      effect: destroy(target(all(permanents(type_is("artifact")), permanents(type_is("enchantment")))))
+    }
+  }
+}
+"#;
     const TEMPLE_OF_THE_FALSE_GOD: &str = r#"
 card "Temple of the False God" {
   id: "cfdd5dc6-593e-495a-8cfe-3a56b3c4c7df"
@@ -7613,6 +7663,22 @@ card "Interpreter Contract" {
                 .map(<[forge_core::ObjectId]>::len),
             Some(2)
         );
+    }
+
+    #[test]
+    fn split_second_is_compiled_only_as_a_stack_rule_on_spells() {
+        let program = compile_card_program(&parse("krosan_grip.frs", KROSAN_GRIP))
+            .unwrap_or_else(|error| panic!("unexpected compile error: {error}"));
+        assert!(program.split_second());
+        assert_eq!(
+            program.capabilities(),
+            vec![Capability::SplitSecond, Capability::DestroyPermanent]
+        );
+        assert_eq!(program.target_requirements().len(), 1);
+
+        let invalid = KROSAN_GRIP.replace("types: \"Instant\"", "types: \"Artifact\"");
+        let error = compile_card_program(&parse("invalid_split_second.frs", &invalid)).unwrap_err();
+        assert_eq!(error.code(), CompileDiagnosticCode::KeywordSemantics);
     }
 
     fn parse(path: &str, source: &str) -> forge_carddef::CardDefinition {

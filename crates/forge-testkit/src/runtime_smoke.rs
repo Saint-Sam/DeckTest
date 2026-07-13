@@ -932,6 +932,9 @@ fn execute_smoke(
         if smoke_flashback {
             request = request.with_flashback(cast_cost);
         }
+        if compiled.program.split_second() {
+            request = request.with_split_second();
+        }
         let cast = execution.dispatch(
             "cast.cast_spell",
             Action::CastSpell {
@@ -944,6 +947,19 @@ fn execute_smoke(
             Outcome::StackEntryAdded(entry) => entry,
             other => return Err(unexpected_outcome("cast.cast_spell", other)),
         };
+        if compiled.program.split_second()
+            && !execution
+                .state
+                .stack_entries()
+                .iter()
+                .any(|entry| entry.id() == stack_entry && entry.split_second())
+        {
+            return Err(RuntimeSmokeFailure::new(
+                RuntimeSmokeFailureCode::InvariantViolation,
+                "cast.split_second",
+                "compiled split-second spell lost its stack rule",
+            ));
+        }
         assert_zone(
             &execution.state,
             spell,
@@ -3259,6 +3275,22 @@ card "Heroic Intervention" {
   }
 }
 "#;
+    const KROSAN_GRIP: &str = r#"
+card "Krosan Grip" {
+  id: "3e39224c-72ce-4ecc-aa17-12c071ea1f3e"
+  layout: normal
+  status: unverified_playable
+  face "Krosan Grip" {
+    cost: "{2}{G}"
+    types: "Instant"
+    oracle: "Split second. Destroy target artifact or enchantment."
+    keywords: [split_second]
+    ability spell {
+      effect: destroy(target(all(permanents(type_is("artifact")), permanents(type_is("enchantment")))))
+    }
+  }
+}
+"#;
 
     #[test]
     fn supported_life_spell_executes_and_reaches_owner_graveyard() {
@@ -3426,6 +3458,24 @@ card "Heroic Intervention" {
             ]
         );
         assert!(pass.effect_actions() >= 2);
+        assert_eq!(pass.destination(), "owner_graveyard");
+    }
+
+    #[test]
+    fn krosan_grip_executes_with_split_second_on_the_stack() {
+        let definition = parse("krosan_grip.frs", KROSAN_GRIP);
+        let report = run_translated_card_runtime_smoke(&definition);
+        let RuntimeSmokeResult::Passed(pass) = report.result() else {
+            panic!("expected pass, found {:?}", report.result());
+        };
+        assert_eq!(
+            pass.capabilities(),
+            [
+                RuntimeSmokeCapability::SplitSecond,
+                RuntimeSmokeCapability::DestroyPermanent,
+            ]
+        );
+        assert_eq!(pass.effect_actions(), 1);
         assert_eq!(pass.destination(), "owner_graveyard");
     }
 
