@@ -1253,6 +1253,7 @@ operations! {
     ColorCount => ("color_count", Value, 1, Some(1)),
     CannotTargetFrom => ("cannot_target_from", Effect, 3, Some(3)),
     TopOfLibrary => ("top_of_library", Selector, 1, Some(1)),
+    AdditionalBlocks => ("additional_blocks", Effect, 2, Some(2)),
 }
 
 impl Operation {
@@ -2464,6 +2465,11 @@ impl Operation {
                 _ => None,
             },
             Self::TopOfLibrary => Some(Selector),
+            Self::AdditionalBlocks => match index {
+                0 => Some(Selector),
+                1 => Some(Number),
+                _ => None,
+            },
             Self::ChooseNumber => match index {
                 0 => Some(Selector),
                 1 | 2 => Some(Number),
@@ -2858,6 +2864,7 @@ mod tests {
         assert_eq!(Operation::ColorCount as u32, 453);
         assert_eq!(Operation::CannotTargetFrom as u32, 454);
         assert_eq!(Operation::TopOfLibrary as u32, 455);
+        assert_eq!(Operation::AdditionalBlocks as u32, 456);
 
         let config = bincode::config::standard()
             .with_fixed_int_encoding()

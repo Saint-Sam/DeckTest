@@ -9387,6 +9387,7 @@ fn map_pump(
             "NumDef",
             "KW",
             "KWChoice",
+            "CanBlockAmount",
             "Duration",
             "AtEOT",
             "RememberObjects",
@@ -9425,6 +9426,15 @@ fn map_pump(
         parameters.get("KW"),
         duration,
     )?;
+    if let Some(amount) = parameters.get("CanBlockAmount") {
+        modifications.push(call(
+            Operation::AdditionalBlocks,
+            vec![
+                affected.clone(),
+                Expression::Integer(positive_integer(amount, "CanBlockAmount")?),
+            ],
+        ));
+    }
     if let Some(keywords) = parameters.get("KWChoice") {
         let mut choices = Vec::new();
         for keyword in keywords.split(',').map(str::trim) {
@@ -10271,6 +10281,7 @@ fn map_continuous_with_effects(
             "AdjustLandPlays",
             "SetPower",
             "SetToughness",
+            "CanBlockAmount",
             "AddType",
             "RemoveType",
             "RemoveCardTypes",
@@ -10498,6 +10509,18 @@ fn map_continuous_with_effects(
                 call(Operation::Any, vec![]),
                 Expression::Integer(power),
                 Expression::Integer(toughness),
+            ],
+        ));
+    }
+    if let Some(amount) = parameters.get("CanBlockAmount") {
+        if affected_player {
+            return Err(unsupported_value("Affected", "You"));
+        }
+        effects.push(call(
+            Operation::AdditionalBlocks,
+            vec![
+                call(Operation::Any, vec![]),
+                Expression::Integer(positive_integer(amount, "CanBlockAmount")?),
             ],
         ));
     }
@@ -19789,6 +19812,23 @@ mod tests {
             &replacement.expression,
             Operation::ReplacementValue
         ));
+
+        for line in [
+            "A:DB$ Pump | Defined$ Targeted | NumAtt$ +2 | CanBlockAmount$ 1",
+            "S:Mode$ Continuous | Affected$ Creature.YouCtrl | CanBlockAmount$ 2",
+        ] {
+            let mapped = map_line(line).unwrap_or_else(|error| {
+                panic!("additional blocking should map: {}", error.message)
+            });
+            assert!(expression_contains_operation(
+                &mapped.expression,
+                Operation::AdditionalBlocks
+            ));
+        }
+        assert!(
+            map_line("S:Mode$ Continuous | Affected$ Creature.YouCtrl | CanBlockAmount$ All")
+                .is_err()
+        );
 
         let dig = map_line(
             "A:SP$ Dig | DigNum$ 2 | ChangeNum$ 1 | Optional$ True | SpellDescription$ Dig.",
