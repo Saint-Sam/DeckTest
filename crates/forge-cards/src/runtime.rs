@@ -12,11 +12,13 @@ use forge_carddef::{
 use forge_core::{
     apply, AbilityPlayer, Action, ActivatedAbilityDefinition, ActivatedAbilityEffect,
     ActivationCost, ActivationTiming, BaseCreatureCharacteristics, BaseObjectCharacteristics,
-    BasicLandTypes, CardId, CreatureKeywords, GameState, ManaCost, ManaKind, ManaPool,
-    ObjectColors, ObjectId, ObjectSubtype, ObjectSubtypes, ObjectSupertypes, ObjectTargetPredicate,
-    ObjectTypes, Outcome, PlayerId, PlayerTargetPredicate, StackEntryId, TargetChoice,
-    TargetControllerPredicate, TargetKind, TargetRequirement, TriggerCondition, TriggerDefinition,
-    TriggerObjectFilter, TriggerPlayerFilter, TriggerZoneFilter, ZoneId, ZoneKind,
+    BasicLandTypes, CardId, ContinuousEffectDefinition, ContinuousEffectDuration,
+    ContinuousEffectOperation, ContinuousEffectTarget, CreatureKeywords, GameState, ManaCost,
+    ManaKind, ManaPool, ObjectColors, ObjectId, ObjectSubtype, ObjectSubtypes,
+    ObjectSupertypes, ObjectTargetPredicate, ObjectTypes, Outcome, PlayerId,
+    PlayerTargetPredicate, StackEntryId, TargetChoice, TargetControllerPredicate, TargetKind,
+    TargetRequirement, TriggerCondition, TriggerDefinition, TriggerObjectFilter,
+    TriggerPlayerFilter, TriggerZoneFilter, ZoneId, ZoneKind,
 };
 use std::{collections::BTreeMap, error::Error, fmt};
 
@@ -178,6 +180,8 @@ pub enum Capability {
     SearchLibrary,
     /// Tap one or more explicit objects.
     TapObject,
+    /// Apply a typed continuous characteristic change.
+    ModifyCharacteristics,
 }
 
 impl Capability {
@@ -202,6 +206,7 @@ impl Capability {
             Self::CreateToken => "create_token",
             Self::SearchLibrary => "search_library",
             Self::TapObject => "tap_object",
+            Self::ModifyCharacteristics => "modify_characteristics",
         }
     }
 }
@@ -211,6 +216,7 @@ impl Capability {
 pub struct ActivatedAbilityProgram {
     cost: ActivationCost,
     outputs: ManaOutputChoices,
+    damage_to_controller: u32,
 }
 
 /// Closed legal mana outputs for one compiled mana ability.
@@ -268,19 +274,34 @@ impl ActivatedAbilityProgram {
         self.outputs
     }
 
+    /// Returns noncombat damage dealt to the controller on resolution.
+    #[must_use]
+    pub const fn damage_to_controller(self) -> u32 {
+        self.damage_to_controller
+    }
+
     /// Binds this program to one controller and battlefield source.
     #[must_use]
     pub fn bind(self, controller: PlayerId, source: ObjectId) -> ActivatedAbilityDefinition {
         let output = self.outputs.deterministic_smoke_output();
+        let effect = if self.damage_to_controller == 0 {
+            ActivatedAbilityEffect::AddMana {
+                player: AbilityPlayer::Controller,
+                mana: output,
+            }
+        } else {
+            ActivatedAbilityEffect::AddManaAndDealDamage {
+                player: AbilityPlayer::Controller,
+                mana: output,
+                amount: self.damage_to_controller,
+            }
+        };
         ActivatedAbilityDefinition::new(
             controller,
             Some(source),
             ActivationTiming::Instant,
             self.cost,
-            ActivatedAbilityEffect::AddMana {
-                player: AbilityPlayer::Controller,
-                mana: output,
-            },
+            effect,
         )
         .as_mana_ability()
     }
@@ -296,15 +317,24 @@ impl ActivatedAbilityProgram {
         if !self.outputs.contains(output) {
             return None;
         }
+        let effect = if self.damage_to_controller == 0 {
+            ActivatedAbilityEffect::AddMana {
+                player: AbilityPlayer::Controller,
+                mana: output,
+            }
+        } else {
+            ActivatedAbilityEffect::AddManaAndDealDamage {
+                player: AbilityPlayer::Controller,
+                mana: output,
+                amount: self.damage_to_controller,
+            }
+        };
         ActivatedAbilityDefinition::new(
             controller,
             Some(source),
             ActivationTiming::Instant,
             self.cost,
-            ActivatedAbilityEffect::AddMana {
-                player: AbilityPlayer::Controller,
-                mana: output,
-            },
+            effect,
         )
         .as_mana_ability()
         .into()
@@ -337,6 +367,15 @@ pub enum AmountProgram {
     PowerOfTargetObject(usize),
     /// Current number of battlefield permanents matching a closed predicate.
     CountPermanents(ObjectTargetPredicate),
+}
+
+/// One closed object set resolved when an effect is bound to a game state.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ObjectSetProgram {
+    /// One announced object target slot.
+    Target(usize),
+    /// Every current battlefield permanent matching a closed predicate.
+    Battlefield(ObjectTargetPredicate),
 }
 
 /// One explicit hidden-zone object choice exposed by a compiled program.
@@ -521,6 +560,26 @@ pub enum EffectProgram {
     TapChosenObjects {
         /// Object-choice slot.
         choice: usize,
+    },
+    /// Modify current power and toughness until a represented duration ends.
+    ModifyPowerToughness {
+        /// Objects affected when the effect resolves.
+        objects: ObjectSetProgram,
+        /// Power delta.
+        power: AmountProgram,
+        /// Toughness delta.
+        toughness: AmountProgram,
+        /// Exact continuous-effect duration.
+        duration: ContinuousEffectDuration,
+    },
+    /// Grant represented creature keywords until a represented duration ends.
+    GrantKeywords {
+        /// Objects affected when the effect resolves.
+        objects: ObjectSetProgram,
+        /// Keywords granted.
+        keywords: CreatureKeywords,
+        /// Exact continuous-effect duration.
+        duration: ContinuousEffectDuration,
     },
 }
 
@@ -724,6 +783,9 @@ impl EffectProgram {
             Self::SearchLibrary { .. } => Capability::SearchLibrary,
             Self::MoveChosenObjects { .. } => Capability::MoveZone,
             Self::TapChosenObjects { .. } => Capability::TapObject,
+            Self::ModifyPowerToughness { .. } | Self::GrantKeywords { .. } => {
+                Capability::ModifyCharacteristics
+            }
         }
     }
 }
@@ -1318,6 +1380,7 @@ fn compile_intrinsic_basic_mana_ability(
     Ok(Some(ActivatedAbilityProgram {
         cost: ActivationCost::new(ManaCost::new(0, 0, 0, 0, 0, 0)).with_tap_source(),
         outputs: ManaOutputChoices::from_options(&[ManaPool::of(kind, 1)]),
+        damage_to_controller: 0,
     }))
 }
 
@@ -1354,15 +1417,79 @@ fn compile_fixed_mana_ability(
             "tap_self does not accept arguments",
         ));
     }
+    let (add_mana, damage_to_controller) = match &ability.effect {
+        Expression::Call {
+            operation: Operation::AddMana,
+            ..
+        } => (&ability.effect, 0),
+        Expression::Call {
+            operation: Operation::Sequence,
+            arguments,
+        } => {
+            let [add_mana, damage] = arguments.as_slice() else {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::EffectArguments,
+                    format!("{path}.effect"),
+                    "mana-ability sequence requires add_mana followed by controller damage",
+                ));
+            };
+            let Expression::Call {
+                operation: Operation::DealDamage,
+                arguments,
+            } = damage
+            else {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::EffectOperation,
+                    format!("{path}.effect.sequence[1]"),
+                    "mana-ability sequence must end with deal_damage(you(), amount)",
+                ));
+            };
+            let [player, Expression::Integer(amount)] = arguments.as_slice() else {
+                return Err(effect_arity(
+                    &format!("{path}.effect.sequence[1]"),
+                    &Operation::DealDamage,
+                    "you() and one literal amount",
+                ));
+            };
+            if !matches!(
+                player,
+                Expression::Call {
+                    operation: Operation::You,
+                    arguments,
+                } if arguments.is_empty()
+            ) {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::PlayerSelector,
+                    format!("{path}.effect.sequence[1].player"),
+                    "mana-ability damage must be dealt to you()",
+                ));
+            }
+            let amount = u32::try_from(*amount).map_err(|_| {
+                CompileDiagnostic::new(
+                    CompileDiagnosticCode::EffectAmount,
+                    format!("{path}.effect.sequence[1].amount"),
+                    "mana-ability damage is outside the u32 action range",
+                )
+            })?;
+            (add_mana, amount)
+        }
+        _ => {
+            return Err(CompileDiagnostic::new(
+                CompileDiagnosticCode::EffectOperation,
+                format!("{path}.effect"),
+                "activated mana ability is neither fixed add_mana nor add_mana plus damage",
+            ));
+        }
+    };
     let Expression::Call {
         operation: Operation::AddMana,
         arguments,
-    } = &ability.effect
+    } = add_mana
     else {
         return Err(CompileDiagnostic::new(
             CompileDiagnosticCode::EffectOperation,
             format!("{path}.effect"),
-            "activated ability is not one fixed add_mana operation",
+            "mana-ability sequence must begin with add_mana",
         ));
     };
     let [Expression::Text(mana), player] = arguments.as_slice() else {
@@ -1388,6 +1515,7 @@ fn compile_fixed_mana_ability(
     Ok(ActivatedAbilityProgram {
         cost: ActivationCost::new(ManaCost::new(0, 0, 0, 0, 0, 0)).with_tap_source(),
         outputs: compile_mana_outputs(mana, &format!("{path}.effect.mana"))?,
+        damage_to_controller,
     })
 }
 
@@ -2263,6 +2391,56 @@ fn compile_effect(
                 .push(EffectProgram::TapChosenObjects { choice });
             Ok(())
         }
+        Operation::ModifyPt => {
+            let [objects, power, toughness, duration] = arguments.as_slice() else {
+                return Err(effect_arity(
+                    path,
+                    operation,
+                    "object set, power delta, toughness delta, and duration",
+                ));
+            };
+            let objects = compile_effect_object_set(
+                objects,
+                &format!("{path}.objects"),
+                compiler,
+                true,
+            )?;
+            let power = compile_amount(power, &format!("{path}.power"), compiler)?;
+            let toughness =
+                compile_amount(toughness, &format!("{path}.toughness"), compiler)?;
+            let duration = compile_effect_duration(duration, &format!("{path}.duration"))?;
+            compiler.effects.push(EffectProgram::ModifyPowerToughness {
+                objects,
+                power,
+                toughness,
+                duration,
+            });
+            Ok(())
+        }
+        Operation::GrantKeyword => {
+            let [objects, keyword, duration] = arguments.as_slice() else {
+                return Err(effect_arity(
+                    path,
+                    operation,
+                    "object set, represented creature keyword, and duration",
+                ));
+            };
+            let objects = compile_effect_object_set(
+                objects,
+                &format!("{path}.objects"),
+                compiler,
+                true,
+            )?;
+            let keywords =
+                compile_granted_creature_keyword(keyword, &format!("{path}.keyword"))?;
+            let duration = compile_effect_duration(duration, &format!("{path}.duration"))?;
+            compiler.effects.push(EffectProgram::GrantKeywords {
+                objects,
+                keywords,
+                duration,
+            });
+            Ok(())
+        }
         unsupported => Err(CompileDiagnostic::new(
             CompileDiagnosticCode::EffectOperation,
             path,
@@ -2312,6 +2490,7 @@ fn compile_token_template(
                     ManaPool::of(ManaKind::Red, 1),
                     ManaPool::of(ManaKind::Green, 1),
                 ]),
+                damage_to_controller: 0,
             }),
         });
     }
@@ -3686,6 +3865,118 @@ fn compile_object_subtype(
     })
 }
 
+fn compile_effect_object_set(
+    expression: &Expression,
+    path: &str,
+    compiler: &mut ProgramCompiler,
+    require_creature: bool,
+) -> Result<ObjectSetProgram, CompileDiagnostic> {
+    let is_target = matches!(
+        expression,
+        Expression::Call {
+            operation: Operation::Target,
+            ..
+        }
+    );
+    let selector = if is_target {
+        target_selector(expression, path)?
+    } else {
+        expression
+    };
+    let spec = compile_object_selector(selector, path)?;
+    if spec.kind != TargetKind::Permanent {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectArguments,
+            path,
+            "continuous characteristic changes require battlefield permanents",
+        ));
+    }
+    if require_creature && !spec.required_types.creature() {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectArguments,
+            path,
+            "the current keyword and power/toughness model requires a creature-only selector",
+        ));
+    }
+    if is_target {
+        return Ok(ObjectSetProgram::Target(compile_object_target(
+            expression, path, compiler,
+        )?));
+    }
+    Ok(ObjectSetProgram::Battlefield(object_predicate_from_spec(spec)))
+}
+
+fn object_predicate_from_spec(spec: ObjectSelectorSpec) -> ObjectTargetPredicate {
+    let mut predicate = ObjectTargetPredicate::any()
+        .with_owner(spec.owner)
+        .with_required_types(spec.required_types)
+        .with_required_any_types(spec.required_any_types)
+        .with_forbidden_types(spec.forbidden_types)
+        .with_required_subtypes(spec.required_subtypes);
+    if let Some(controller) = spec.controller {
+        predicate = predicate.with_controller(controller);
+    }
+    if let Some(minimum) = spec.minimum_mana_value {
+        predicate = predicate.with_minimum_mana_value(minimum);
+    }
+    if let Some(maximum) = spec.maximum_mana_value {
+        predicate = predicate.with_maximum_mana_value(maximum);
+    }
+    predicate
+}
+
+fn compile_effect_duration(
+    expression: &Expression,
+    path: &str,
+) -> Result<ContinuousEffectDuration, CompileDiagnostic> {
+    let Expression::Text(duration) = expression else {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectArguments,
+            path,
+            "continuous-effect duration is not text",
+        ));
+    };
+    match duration.as_str() {
+        "until_end_of_turn" => Ok(ContinuousEffectDuration::UntilEndOfTurn),
+        _ => Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectArguments,
+            path,
+            format!("continuous-effect duration `{duration}` is not compiled"),
+        )),
+    }
+}
+
+fn compile_granted_creature_keyword(
+    expression: &Expression,
+    path: &str,
+) -> Result<CreatureKeywords, CompileDiagnostic> {
+    let Expression::Text(keyword) = expression else {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectArguments,
+            path,
+            "granted keyword is not text",
+        ));
+    };
+    match keyword.as_str() {
+        "deathtouch" => Ok(CreatureKeywords::none().with_deathtouch()),
+        "double_strike" => Ok(CreatureKeywords::none().with_double_strike()),
+        "first_strike" => Ok(CreatureKeywords::none().with_first_strike()),
+        "flying" => Ok(CreatureKeywords::none().with_flying()),
+        "haste" => Ok(CreatureKeywords::none().with_haste()),
+        "indestructible" => Ok(CreatureKeywords::none().with_indestructible()),
+        "lifelink" => Ok(CreatureKeywords::none().with_lifelink()),
+        "menace" => Ok(CreatureKeywords::none().with_menace()),
+        "reach" => Ok(CreatureKeywords::none().with_reach()),
+        "trample" => Ok(CreatureKeywords::none().with_trample()),
+        "vigilance" => Ok(CreatureKeywords::none().with_vigilance()),
+        _ => Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::KeywordSemantics,
+            path,
+            format!("granted keyword `{keyword}` has no exact creature-keyword lowering"),
+        )),
+    }
+}
+
 fn compile_zone_kind(expression: &Expression, path: &str) -> Result<ZoneKind, CompileDiagnostic> {
     let Expression::Text(value) = expression else {
         return Err(CompileDiagnostic::new(
@@ -4304,6 +4595,76 @@ fn bind_effect_actions(
                     });
                 }
             }
+            EffectProgram::ModifyPowerToughness {
+                objects,
+                power,
+                toughness,
+                duration,
+            } => {
+                let power = i32::try_from(resolve_amount(
+                    state,
+                    *power,
+                    bindings,
+                    effect_index,
+                )?)
+                .map_err(|_| {
+                    ExecutionDiagnostic::new(
+                        ExecutionDiagnosticCode::InvalidChoice,
+                        Some(effect_index),
+                        "resolved power delta exceeds i32",
+                    )
+                })?;
+                let toughness = i32::try_from(resolve_amount(
+                    state,
+                    *toughness,
+                    bindings,
+                    effect_index,
+                )?)
+                .map_err(|_| {
+                    ExecutionDiagnostic::new(
+                        ExecutionDiagnosticCode::InvalidChoice,
+                        Some(effect_index),
+                        "resolved toughness delta exceeds i32",
+                    )
+                })?;
+                for object in resolve_object_set(state, *objects, bindings, effect_index)? {
+                    actions.push(BoundAction {
+                        effect_index,
+                        action: Action::RegisterContinuousEffect {
+                            definition: ContinuousEffectDefinition::new(
+                                bindings.controller,
+                                ContinuousEffectTarget::Object(object),
+                                ContinuousEffectOperation::ModifyPowerToughness {
+                                    power,
+                                    toughness,
+                                },
+                            )
+                            .with_duration(*duration),
+                        },
+                    });
+                }
+            }
+            EffectProgram::GrantKeywords {
+                objects,
+                keywords,
+                duration,
+            } => {
+                for object in resolve_object_set(state, *objects, bindings, effect_index)? {
+                    actions.push(BoundAction {
+                        effect_index,
+                        action: Action::RegisterContinuousEffect {
+                            definition: ContinuousEffectDefinition::new(
+                                bindings.controller,
+                                ContinuousEffectTarget::Object(object),
+                                ContinuousEffectOperation::AddKeywords {
+                                    keywords: *keywords,
+                                },
+                            )
+                            .with_duration(*duration),
+                        },
+                    });
+                }
+            }
         }
     }
     Ok(actions)
@@ -4557,6 +4918,41 @@ fn resolve_amount(
                     "matching permanent count exceeds u32",
                 )
             })
+        }
+    }
+}
+
+fn resolve_object_set(
+    state: &GameState,
+    objects: ObjectSetProgram,
+    bindings: &ExecutionBindings,
+    effect_index: usize,
+) -> Result<Vec<ObjectId>, ExecutionDiagnostic> {
+    match objects {
+        ObjectSetProgram::Target(target) => {
+            Ok(vec![resolve_object_target(bindings, target, effect_index)?])
+        }
+        ObjectSetProgram::Battlefield(predicate) => {
+            let battlefield = state
+                .zone_objects(ZoneId::new(None, ZoneKind::Battlefield))
+                .ok_or_else(|| {
+                    ExecutionDiagnostic::new(
+                        ExecutionDiagnosticCode::MissingBinding,
+                        Some(effect_index),
+                        "battlefield zone is unavailable",
+                    )
+                })?;
+            Ok(battlefield
+                .iter()
+                .copied()
+                .filter(|object| {
+                    state.object_matches_target_predicate(
+                        bindings.controller,
+                        predicate,
+                        *object,
+                    )
+                })
+                .collect())
         }
     }
 }

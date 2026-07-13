@@ -231,7 +231,9 @@ impl ManaPool {
             .ok_or(PaymentError::InsufficientMana)
     }
 
-    fn checked_add(self, other: Self) -> Option<Self> {
+    /// Returns the component-wise sum, or none if any mana component overflows.
+    #[must_use]
+    pub fn checked_add(self, other: Self) -> Option<Self> {
         let mut amounts = [0_u32; MANA_KIND_COUNT];
         for (index, amount) in amounts.iter_mut().enumerate() {
             *amount = self.amounts[index].checked_add(other.amounts[index])?;
@@ -2214,6 +2216,8 @@ pub enum GameEventKind {
     ObjectAttached,
     /// Base printed card types and colors were set.
     BaseObjectCharacteristicsSet,
+    /// Noncombat damage was dealt after replacement effects.
+    NoncombatDamageDealt,
 }
 
 impl GameEventKind {
@@ -2287,6 +2291,7 @@ impl GameEventKind {
             Self::LibraryManipulated => 65,
             Self::ObjectAttached => 66,
             Self::BaseObjectCharacteristicsSet => 67,
+            Self::NoncombatDamageDealt => 68,
         }
     }
 }
@@ -3554,6 +3559,15 @@ pub enum ActivatedAbilityEffect {
         /// Life amount to lose.
         amount: u32,
     },
+    /// Add mana, then deal noncombat damage to the selected player.
+    AddManaAndDealDamage {
+        /// Player receiving mana and damage.
+        player: AbilityPlayer,
+        /// Mana to add.
+        mana: ManaPool,
+        /// Damage amount.
+        amount: u32,
+    },
 }
 
 impl ActivatedAbilityEffect {
@@ -3562,13 +3576,17 @@ impl ActivatedAbilityEffect {
             Self::AddMana { .. } => 0,
             Self::GainLife { .. } => 1,
             Self::LoseLife { .. } => 2,
+            Self::AddManaAndDealDamage { .. } => 3,
         }
     }
 
     /// Returns true if this is a mana-producing effect.
     #[must_use]
     pub const fn is_mana_effect(self) -> bool {
-        matches!(self, Self::AddMana { .. })
+        matches!(
+            self,
+            Self::AddMana { .. } | Self::AddManaAndDealDamage { .. }
+        )
     }
 }
 
@@ -4710,12 +4728,15 @@ impl ContinuousEffectOperation {
 pub enum ContinuousEffectDuration {
     /// The effect remains until explicitly absent from state.
     Persistent,
+    /// The effect expires during the next cleanup step under CR 514.2.
+    UntilEndOfTurn,
 }
 
 impl ContinuousEffectDuration {
     const fn canonical_code(self) -> u8 {
         match self {
             Self::Persistent => 0,
+            Self::UntilEndOfTurn => 1,
         }
     }
 }
@@ -4755,6 +4776,13 @@ impl ContinuousEffectDefinition {
     #[must_use]
     pub const fn with_source(mut self, source: ObjectId) -> Self {
         self.source = Some(source);
+        self
+    }
+
+    /// Returns this definition with an explicit duration.
+    #[must_use]
+    pub const fn with_duration(mut self, duration: ContinuousEffectDuration) -> Self {
+        self.duration = duration;
         self
     }
 
@@ -6413,6 +6441,15 @@ pub enum Action {
         /// Damage amount to mark.
         amount: u32,
     },
+    /// Deal noncombat damage through the production replacement pipeline.
+    DealDamage {
+        /// Damage source, when represented.
+        source: Option<ObjectId>,
+        /// Player or object receiving damage.
+        target: CombatDamageTarget,
+        /// Damage amount before replacement effects.
+        amount: u32,
+    },
     /// Check state-based actions to a fixpoint.
     CheckStateBasedActions,
     /// Start a turn for the chosen active player.
@@ -6971,6 +7008,14 @@ fn apply_fallback(state: &mut GameState, action: Action) -> Outcome {
                 Err(error) => Outcome::Failed(error),
             }
         }
+        Action::DealDamage {
+            source,
+            target,
+            amount,
+        } => match state.deal_noncombat_damage(source, target, amount) {
+            Ok(()) => Outcome::Applied,
+            Err(error) => Outcome::Failed(error),
+        },
         Action::CheckStateBasedActions => match state.check_state_based_actions() {
             Ok(report) => Outcome::StateBasedActions(report),
             Err(error) => Outcome::Failed(error),
@@ -7719,6 +7764,15 @@ pub enum GameEvent {
         /// New base characteristics.
         base: BaseObjectCharacteristics,
     },
+    /// Noncombat damage was dealt after all replacement effects.
+    NoncombatDamageDealt {
+        /// Damage source, when the effect has a represented source object.
+        source: Option<ObjectId>,
+        /// Player or object that received damage.
+        target: CombatDamageTarget,
+        /// Final damage amount dealt.
+        amount: u32,
+    },
 }
 
 impl GameEvent {
@@ -7792,6 +7846,7 @@ impl GameEvent {
             Self::LibraryManipulated { .. } => 65,
             Self::ObjectAttached { .. } => 66,
             Self::BaseObjectCharacteristicsSet { .. } => 67,
+            Self::NoncombatDamageDealt { .. } => 68,
         }
     }
 
@@ -7879,6 +7934,7 @@ impl GameEvent {
             Self::BaseObjectCharacteristicsSet { .. } => {
                 GameEventKind::BaseObjectCharacteristicsSet
             }
+            Self::NoncombatDamageDealt { .. } => GameEventKind::NoncombatDamageDealt,
         }
     }
 }
@@ -9605,6 +9661,19 @@ impl GameState {
                 let target = self.resolve_ability_player(player, target)?;
                 self.lose_life(target, amount)?;
             }
+            ActivatedAbilityEffect::AddManaAndDealDamage {
+                player: target,
+                mana,
+                amount,
+            } => {
+                let target = self.resolve_ability_player(player, target)?;
+                self.add_mana_to_pool(target, mana)?;
+                self.deal_noncombat_damage(
+                    definition.source(),
+                    CombatDamageTarget::Player(target),
+                    amount,
+                )?;
+            }
         }
         self.emit_event(GameEvent::ActivatedAbilityResolved {
             ability,
@@ -9700,6 +9769,92 @@ impl GameState {
             return Ok(());
         }
         self.mark_damage_on_object_unreplaced(object, replaced.amount)
+    }
+
+    fn deal_noncombat_damage(
+        &mut self,
+        source: Option<ObjectId>,
+        target: CombatDamageTarget,
+        amount: u32,
+    ) -> Result<(), StateError> {
+        if let Some(source) = source {
+            self.objects
+                .get(source)
+                .ok_or(StateError::UnknownObject(source))?;
+        }
+        match target {
+            CombatDamageTarget::Player(player) => self.require_player(player)?,
+            CombatDamageTarget::Object(object) => {
+                self.objects
+                    .get(object)
+                    .ok_or(StateError::UnknownObject(object))?;
+            }
+        }
+        let replaced = self.apply_damage_replacement_effects(DamageReplacementEvent {
+            source,
+            target,
+            amount,
+            combat: false,
+        })?;
+        if replaced.amount == 0 {
+            return Ok(());
+        }
+
+        match replaced.target {
+            CombatDamageTarget::Player(player) => self.lose_life(player, replaced.amount)?,
+            CombatDamageTarget::Object(object) => {
+                let characteristics = self.object_characteristics(object)?;
+                let mut represented = false;
+                if characteristics.types().creature() {
+                    self.mark_damage_on_object_unreplaced(object, replaced.amount)?;
+                    represented = true;
+                    if source.is_some_and(|source| {
+                        self.creature_characteristics(source)
+                            .is_ok_and(|source| source.keywords().deathtouch())
+                    }) {
+                        self.objects
+                            .get_mut(object)
+                            .ok_or(StateError::UnknownObject(object))?
+                            .deathtouch_damage_marked = true;
+                    }
+                }
+                if characteristics.types().planeswalker() {
+                    let delta = i32::try_from(replaced.amount)
+                        .map_err(|_| StateError::LifeTotalOverflow)?;
+                    let record = self
+                        .objects
+                        .get_mut(object)
+                        .ok_or(StateError::UnknownObject(object))?;
+                    let loyalty = record.loyalty().ok_or(StateError::InsufficientLoyalty(object))?;
+                    let next = loyalty.saturating_sub(delta);
+                    record.loyalty = Some(next);
+                    self.emit_event(GameEvent::ObjectLoyaltySet {
+                        object,
+                        loyalty: Some(next),
+                    });
+                    represented = true;
+                }
+                if !represented {
+                    return Err(StateError::NotACreature(object));
+                }
+            }
+        }
+
+        if let Some(source) = source {
+            if self
+                .creature_characteristics(source)
+                .is_ok_and(|source| source.keywords().lifelink())
+            {
+                let controller = self.object_controller(source)?;
+                self.gain_life(controller, replaced.amount)?;
+            }
+        }
+        self.emit_event(GameEvent::NoncombatDamageDealt {
+            source,
+            target: replaced.target,
+            amount: replaced.amount,
+        });
+        Ok(())
     }
 
     fn mark_damage_on_object_unreplaced(
@@ -13099,6 +13254,17 @@ impl GameState {
         }
     }
 
+    /// Returns whether an object satisfies one closed target predicate for a player.
+    #[must_use]
+    pub fn object_matches_target_predicate(
+        &self,
+        player: PlayerId,
+        predicate: ObjectTargetPredicate,
+        object: ObjectId,
+    ) -> bool {
+        self.object_target_predicate_matches(player, predicate, object)
+    }
+
     fn object_target_predicate_matches(
         &self,
         player: PlayerId,
@@ -13512,8 +13678,11 @@ impl GameState {
     fn perform_cleanup_actions(&mut self) -> Result<CleanupReport, StateError> {
         let active = self.active_player.ok_or(StateError::TurnNotStarted)?;
         let discarded = self.discard_to_max_hand_size(active)?;
-        let expired_until_end_of_turn =
-            self.expire_duration_markers(EffectDuration::UntilEndOfTurn) as u32;
+        let expired_until_end_of_turn = (self
+            .expire_duration_markers(EffectDuration::UntilEndOfTurn)
+            .saturating_add(self.expire_continuous_effects(
+                ContinuousEffectDuration::UntilEndOfTurn,
+            ))) as u32;
         let expired_this_turn = self.expire_duration_markers(EffectDuration::ThisTurn) as u32;
         Ok(CleanupReport {
             discarded,
@@ -13823,6 +13992,13 @@ impl GameState {
             });
         }
         count
+    }
+
+    fn expire_continuous_effects(&mut self, duration: ContinuousEffectDuration) -> usize {
+        let before = self.continuous_effects.len();
+        self.continuous_effects
+            .retain(|effect| effect.definition.duration() != duration);
+        before - self.continuous_effects.len()
     }
 
     fn require_player(&self, id: PlayerId) -> Result<(), StateError> {
@@ -14332,6 +14508,15 @@ impl Fnva64 {
             ActivatedAbilityEffect::GainLife { player, amount }
             | ActivatedAbilityEffect::LoseLife { player, amount } => {
                 self.write_ability_player(player);
+                self.write_u32(amount);
+            }
+            ActivatedAbilityEffect::AddManaAndDealDamage {
+                player,
+                mana,
+                amount,
+            } => {
+                self.write_ability_player(player);
+                self.write_mana_pool(mana);
                 self.write_u32(amount);
             }
         }
@@ -15050,6 +15235,15 @@ impl Fnva64 {
             GameEvent::BaseObjectCharacteristicsSet { object, base } => {
                 self.write_u32(object.0);
                 self.write_base_object_characteristics(base);
+            }
+            GameEvent::NoncombatDamageDealt {
+                source,
+                target,
+                amount,
+            } => {
+                self.write_optional_object(source);
+                self.write_combat_damage_target(target);
+                self.write_u32(amount);
             }
         }
     }
@@ -15578,6 +15772,15 @@ impl CanonicalBytes {
                 self.write_ability_player(player);
                 self.write_u32(amount);
             }
+            ActivatedAbilityEffect::AddManaAndDealDamage {
+                player,
+                mana,
+                amount,
+            } => {
+                self.write_ability_player(player);
+                self.write_mana_pool(mana);
+                self.write_u32(amount);
+            }
         }
     }
 
@@ -16294,6 +16497,15 @@ impl CanonicalBytes {
             GameEvent::BaseObjectCharacteristicsSet { object, base } => {
                 self.write_u32(object.0);
                 self.write_base_object_characteristics(base);
+            }
+            GameEvent::NoncombatDamageDealt {
+                source,
+                target,
+                amount,
+            } => {
+                self.write_optional_object(source);
+                self.write_combat_damage_target(target);
+                self.write_u32(amount);
             }
         }
     }

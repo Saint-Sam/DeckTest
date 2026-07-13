@@ -397,6 +397,13 @@ fn compile_smoke(definition: &CardDefinition) -> Result<CompiledSmoke, RuntimeSm
         .iter()
         .map(|ability| u64::from(ability.pay_life()))
         .try_fold(0_u64, u64::checked_add)
+        .and_then(|total| {
+            program
+                .activated_abilities()
+                .iter()
+                .map(|ability| u64::from(ability.damage_to_controller()))
+                .try_fold(total, u64::checked_add)
+        })
         .ok_or_else(|| {
             RuntimeSmokeUnsupported::new(
                 UnsupportedSetupCode::SetupBounds,
@@ -486,7 +493,9 @@ fn compile_life_totals(
             | EffectProgram::CreateTokens { .. }
             | EffectProgram::SearchLibrary { .. }
             | EffectProgram::MoveChosenObjects { .. }
-            | EffectProgram::TapChosenObjects { .. } => continue,
+            | EffectProgram::TapChosenObjects { .. }
+            | EffectProgram::ModifyPowerToughness { .. }
+            | EffectProgram::GrantKeywords { .. } => continue,
         };
         for (player, selected) in smoke_player_mask(players).into_iter().enumerate() {
             if selected {
@@ -575,7 +584,9 @@ fn compile_library_reserve(
             | EffectProgram::CreateTokens { .. }
             | EffectProgram::SearchLibrary { .. }
             | EffectProgram::MoveChosenObjects { .. }
-            | EffectProgram::TapChosenObjects { .. } => {}
+            | EffectProgram::TapChosenObjects { .. }
+            | EffectProgram::ModifyPowerToughness { .. }
+            | EffectProgram::GrantKeywords { .. } => {}
         }
     }
     let mut reserve = [0_u32; PLAYER_COUNT];
@@ -1017,18 +1028,36 @@ fn execute_smoke(
         };
         registered_abilities.push(id);
     }
-    if let Some((id, program)) = registered_abilities
-        .first()
+    for (index, (id, program)) in registered_abilities
+        .iter()
         .copied()
-        .zip(compiled.program.activated_abilities().first().copied())
+        .zip(compiled.program.activated_abilities().iter().copied())
+        .enumerate()
     {
+        if index > 0 {
+            execution.dispatch(
+                &format!("ability[{index}].reset_tap"),
+                Action::SetObjectTapped {
+                    object: spell,
+                    tapped: false,
+                },
+            )?;
+        }
+        let before = execution.state.players()[caster.index()].mana_pool();
         activate_mana_ability(&mut execution, caster, id, program.cost().mana())?;
         let actual = execution.state.players()[caster.index()].mana_pool();
-        if actual != program.produces() {
+        let expected = before.checked_add(program.produces()).ok_or_else(|| {
+            RuntimeSmokeFailure::new(
+                RuntimeSmokeFailureCode::UnexpectedOutcome,
+                "ability.assert_mana",
+                "expected mana pool overflowed",
+            )
+        })?;
+        if actual != expected {
             return Err(RuntimeSmokeFailure::new(
                 RuntimeSmokeFailureCode::UnexpectedOutcome,
                 "ability.assert_mana",
-                format!("expected {:?}, found {actual:?}", program.produces()),
+                format!("expected {expected:?}, found {actual:?}"),
             ));
         }
     }
@@ -1252,13 +1281,16 @@ fn setup_dynamic_amount_state(
         );
     let mut predicates = Vec::new();
     for effect in effects {
-        let amount = match effect {
+        let amounts = match effect {
             EffectProgram::GainLife { amount, .. } | EffectProgram::LoseLife { amount, .. } => {
-                Some(*amount)
+                [Some(*amount), None]
             }
             EffectProgram::DrawCards { count, .. }
             | EffectProgram::Scry { count, .. }
-            | EffectProgram::CreateTokens { count, .. } => Some(*count),
+            | EffectProgram::CreateTokens { count, .. } => [Some(*count), None],
+            EffectProgram::ModifyPowerToughness {
+                power, toughness, ..
+            } => [Some(*power), Some(*toughness)],
             EffectProgram::DiscardHands { .. }
             | EffectProgram::ShuffleLibrary { .. }
             | EffectProgram::DestroyPermanent { .. }
@@ -1267,11 +1299,14 @@ fn setup_dynamic_amount_state(
             | EffectProgram::MoveTargetObject { .. }
             | EffectProgram::SearchLibrary { .. }
             | EffectProgram::MoveChosenObjects { .. }
-            | EffectProgram::TapChosenObjects { .. } => None,
+            | EffectProgram::TapChosenObjects { .. }
+            | EffectProgram::GrantKeywords { .. } => [None, None],
         };
-        if let Some(AmountProgram::CountPermanents(predicate)) = amount {
-            if !predicates.contains(&predicate) {
-                predicates.push(predicate);
+        for amount in amounts.into_iter().flatten() {
+            if let AmountProgram::CountPermanents(predicate) = amount {
+                if !predicates.contains(&predicate) {
+                    predicates.push(predicate);
+                }
             }
         }
     }
@@ -2032,7 +2067,9 @@ fn prepare_effect_bindings_and_hand_delta(
             | EffectProgram::CreateTokens { .. }
             | EffectProgram::SearchLibrary { .. }
             | EffectProgram::MoveChosenObjects { .. }
-            | EffectProgram::TapChosenObjects { .. } => {}
+            | EffectProgram::TapChosenObjects { .. }
+            | EffectProgram::ModifyPowerToughness { .. }
+            | EffectProgram::GrantKeywords { .. } => {}
         }
     }
     Ok(bindings)
