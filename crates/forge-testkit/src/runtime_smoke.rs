@@ -498,7 +498,8 @@ fn compile_life_totals(
             | EffectProgram::TapChosenObjects { .. }
             | EffectProgram::ModifyPowerToughness { .. }
             | EffectProgram::GrantKeywords { .. }
-            | EffectProgram::AttachSourceToTarget { .. } => continue,
+            | EffectProgram::AttachSourceToTarget { .. }
+            | EffectProgram::AddCountersToSource { .. } => continue,
         };
         for (player, selected) in smoke_player_mask(players).into_iter().enumerate() {
             if selected {
@@ -590,7 +591,8 @@ fn compile_library_reserve(
             | EffectProgram::TapChosenObjects { .. }
             | EffectProgram::ModifyPowerToughness { .. }
             | EffectProgram::GrantKeywords { .. }
-            | EffectProgram::AttachSourceToTarget { .. } => {}
+            | EffectProgram::AttachSourceToTarget { .. }
+            | EffectProgram::AddCountersToSource { .. } => {}
         }
     }
     let mut reserve = [0_u32; PLAYER_COUNT];
@@ -1340,7 +1342,8 @@ fn setup_dynamic_amount_state(
             | EffectProgram::MoveChosenObjects { .. }
             | EffectProgram::TapChosenObjects { .. }
             | EffectProgram::GrantKeywords { .. }
-            | EffectProgram::AttachSourceToTarget { .. } => [None, None],
+            | EffectProgram::AttachSourceToTarget { .. }
+            | EffectProgram::AddCountersToSource { .. } => [None, None],
         };
         for amount in amounts.into_iter().flatten() {
             if let AmountProgram::CountPermanents(predicate) = amount {
@@ -2031,6 +2034,35 @@ fn execute_activated_effects(
                 },
             )?;
         }
+        if let Some((predicate, count)) = ability.sacrifice_cost() {
+            for object_index in 0..count {
+                let object = synthesize_object_target(
+                    execution,
+                    TargetKind::Permanent,
+                    TargetPredicate::Object(predicate),
+                    caster,
+                    opponent,
+                    base_card_id
+                        .wrapping_add(1_200_000)
+                        .wrapping_add((index as u32).saturating_mul(1_000)),
+                    object_index as usize,
+                    &format!("setup.{phase}.sacrifice"),
+                )?;
+                execution.dispatch(
+                    &format!("{phase}.sacrifice[{object_index}]"),
+                    Action::MoveObject {
+                        object,
+                        to: ZoneId::new(Some(caster), ZoneKind::Graveyard),
+                    },
+                )?;
+                assert_zone(
+                    &execution.state,
+                    object,
+                    ZoneId::new(Some(caster), ZoneKind::Graveyard),
+                    &format!("{phase}.sacrifice_destination[{object_index}]"),
+                )?;
+            }
+        }
         if ability.tap_source() {
             execution.dispatch(
                 &format!("{phase}.tap_source"),
@@ -2193,7 +2225,8 @@ fn prepare_effect_bindings_and_hand_delta(
             | EffectProgram::TapChosenObjects { .. }
             | EffectProgram::ModifyPowerToughness { .. }
             | EffectProgram::GrantKeywords { .. }
-            | EffectProgram::AttachSourceToTarget { .. } => {}
+            | EffectProgram::AttachSourceToTarget { .. }
+            | EffectProgram::AddCountersToSource { .. } => {}
         }
     }
     Ok(bindings)

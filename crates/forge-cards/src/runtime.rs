@@ -12,15 +12,16 @@ use forge_carddef::{
 use forge_core::{
     apply, AbilityPlayer, Action, ActivatedAbilityDefinition, ActivatedAbilityEffect,
     ActivationCondition, ActivationCost, ActivationTiming, BaseCreatureCharacteristics,
-    BaseObjectCharacteristics, BasicLandTypes, CardId, ContinuousEffectDefinition,
-    ContinuousEffectDuration, ContinuousEffectOperation, ContinuousEffectTarget,
-    CostModifierDefinition, CostModifierOperation, CostModifierScope, CreatureKeywords, GameState,
-    ManaCost, ManaKind, ManaPool, ObjectColors, ObjectId, ObjectSubtype, ObjectSubtypes,
-    ObjectSupertypes, ObjectTargetPredicate, ObjectTypes, Outcome, PlayerId, PlayerRule,
-    PlayerRuleSubject, PlayerTargetPredicate, RestrictionDefinition, RestrictionEffect,
-    StackEntryId, TargetChoice, TargetControllerPredicate, TargetKind, TargetRequirement,
-    TargetRestriction, TargetRestrictionSubject, TriggerCondition, TriggerDefinition,
-    TriggerObjectFilter, TriggerPlayerFilter, TriggerZoneFilter, ZoneId, ZoneKind,
+    BaseObjectCharacteristics, BasicLandTypes, CardId, CombatRestriction, CombatRestrictionSubject,
+    ContinuousEffectDefinition, ContinuousEffectDuration, ContinuousEffectOperation,
+    ContinuousEffectTarget, CostModifierDefinition, CostModifierOperation, CostModifierScope,
+    CounterKind, CreatureKeywords, GameState, ManaCost, ManaKind, ManaPool, ObjectColors, ObjectId,
+    ObjectSubtype, ObjectSubtypes, ObjectSupertypes, ObjectTargetPredicate, ObjectTypes, Outcome,
+    PlayerId, PlayerRule, PlayerRuleSubject, PlayerTargetPredicate, RestrictionDefinition,
+    RestrictionEffect, StackEntryId, TargetChoice, TargetControllerPredicate, TargetKind,
+    TargetRequirement, TargetRestriction, TargetRestrictionSubject, TriggerCondition,
+    TriggerDefinition, TriggerObjectFilter, TriggerPlayerFilter, TriggerZoneFilter, ZoneId,
+    ZoneKind,
 };
 use std::{collections::BTreeMap, error::Error, fmt};
 
@@ -192,6 +193,10 @@ pub enum Capability {
     AttachObject,
     /// Apply a typed targeting restriction to an object.
     TargetingRestriction,
+    /// Add typed counters to an object.
+    AddCounters,
+    /// Apply a typed combat declaration restriction.
+    CombatRestriction,
 }
 
 impl Capability {
@@ -221,6 +226,8 @@ impl Capability {
             Self::ModifyPlayerRules => "modify_player_rules",
             Self::AttachObject => "attach_object",
             Self::TargetingRestriction => "targeting_restriction",
+            Self::AddCounters => "add_counters",
+            Self::CombatRestriction => "combat_restriction",
         }
     }
 }
@@ -612,6 +619,13 @@ pub enum EffectProgram {
         /// Object target slot.
         target: usize,
     },
+    /// Add counters to the executing ability's source.
+    AddCountersToSource {
+        /// Counter kind.
+        kind: CounterKind,
+        /// Counter amount.
+        amount: u32,
+    },
 }
 
 /// One completely compiled triggered ability.
@@ -647,6 +661,7 @@ pub struct ActivatedEffectProgram {
     tap_source: bool,
     sacrifice_source: bool,
     pay_life: u32,
+    sacrifice_cost: Option<(ObjectTargetPredicate, u32)>,
     timing: ActivationTiming,
     target_requirements: Vec<TargetRequirement>,
     object_choice_requirements: Vec<ObjectChoiceRequirement>,
@@ -684,6 +699,11 @@ pub enum StaticAbilityProgram {
         operations: Vec<ContinuousEffectOperation>,
         /// Targeting restrictions following the current attachment.
         restrictions: Vec<TargetRestriction>,
+    },
+    /// A combat declaration restriction on the source itself.
+    SourceCombatRestriction {
+        /// Closed combat restriction.
+        restriction: CombatRestriction,
     },
 }
 
@@ -735,6 +755,12 @@ impl ActivatedEffectProgram {
         self.pay_life
     }
 
+    /// Returns an optional matching-permanent sacrifice cost.
+    #[must_use]
+    pub const fn sacrifice_cost(&self) -> Option<(ObjectTargetPredicate, u32)> {
+        self.sacrifice_cost
+    }
+
     /// Returns the activation timing restriction.
     #[must_use]
     pub const fn timing(&self) -> ActivationTiming {
@@ -768,9 +794,13 @@ impl ActivatedEffectProgram {
     /// Returns whether execution requires the actual battlefield source object.
     #[must_use]
     pub fn uses_source_object(&self) -> bool {
-        self.effects
-            .iter()
-            .any(|effect| matches!(effect, EffectProgram::AttachSourceToTarget { .. }))
+        self.effects.iter().any(|effect| {
+            matches!(
+                effect,
+                EffectProgram::AttachSourceToTarget { .. }
+                    | EffectProgram::AddCountersToSource { .. }
+            )
+        })
     }
 }
 
@@ -846,6 +876,18 @@ impl StaticAbilityProgram {
                     }
                 }))
                 .collect(),
+            Self::SourceCombatRestriction { restriction } => {
+                vec![Action::RegisterRestriction {
+                    definition: RestrictionDefinition::new(
+                        controller,
+                        RestrictionEffect::Combat {
+                            subject: CombatRestrictionSubject::Object(source),
+                            restriction: *restriction,
+                        },
+                    )
+                    .with_source(source),
+                }]
+            }
         }
     }
 
@@ -860,6 +902,7 @@ impl StaticAbilityProgram {
                 operations,
                 restrictions,
             } => operations.len().saturating_add(restrictions.len()),
+            Self::SourceCombatRestriction { .. } => 1,
         }
     }
 }
@@ -954,6 +997,7 @@ impl EffectProgram {
                 Capability::ModifyCharacteristics
             }
             Self::AttachSourceToTarget { .. } => Capability::AttachObject,
+            Self::AddCountersToSource { .. } => Capability::AddCounters,
         }
     }
 }
@@ -1112,6 +1156,9 @@ impl CardProgram {
                             .iter()
                             .map(|_| Capability::TargetingRestriction),
                     );
+                }
+                StaticAbilityProgram::SourceCombatRestriction { .. } => {
+                    capabilities.push(Capability::CombatRestriction);
                 }
             }
         }
@@ -1435,6 +1482,36 @@ fn compile_static_ability(
         }
         return Ok(StaticAbilityProgram::PlayerRule {
             rule: PlayerRule::NoMaximumHandSize,
+        });
+    }
+    if is_source_selector(selector) {
+        let Expression::Call {
+            operation: Operation::CannotBlock,
+            arguments,
+        } = effect
+        else {
+            return Err(CompileDiagnostic::new(
+                CompileDiagnosticCode::EffectOperation,
+                format!("{path}.effect.operation"),
+                "source-bound static effects currently require cannot_block(any())",
+            ));
+        };
+        let [subject] = arguments.as_slice() else {
+            return Err(effect_arity(
+                &format!("{path}.effect.operation"),
+                &Operation::CannotBlock,
+                "any()",
+            ));
+        };
+        if !is_any_selector(subject) {
+            return Err(CompileDiagnostic::new(
+                CompileDiagnosticCode::EffectArguments,
+                format!("{path}.effect.operation.subject"),
+                "source combat restriction must apply to any() selected source",
+            ));
+        }
+        return Ok(StaticAbilityProgram::SourceCombatRestriction {
+            restriction: CombatRestriction::CannotBlock,
         });
     }
     if is_equipped_object_of_source(selector) {
@@ -2358,6 +2435,7 @@ fn compile_activated_effect(
     let mut tap_source = false;
     let mut sacrifice_source = false;
     let mut pay_life = 0_u32;
+    let mut sacrifice_cost = None;
     for (index, cost) in ability.costs.iter().enumerate() {
         let cost_path = format!("{path}.costs[{index}]");
         let Expression::Call {
@@ -2392,6 +2470,42 @@ fn compile_activated_effect(
             Operation::TapSelf if arguments.is_empty() && !tap_source => tap_source = true,
             Operation::SacrificeSelf if arguments.is_empty() && !sacrifice_source => {
                 sacrifice_source = true;
+            }
+            Operation::Sacrifice => {
+                let [selector, count] = arguments.as_slice() else {
+                    return Err(effect_arity(
+                        &cost_path,
+                        operation,
+                        "one controlled permanent selector and literal count",
+                    ));
+                };
+                if sacrifice_cost.is_some() {
+                    return Err(CompileDiagnostic::new(
+                        CompileDiagnosticCode::AbilityShape,
+                        cost_path,
+                        "activation repeats its matching-permanent sacrifice cost",
+                    ));
+                }
+                let spec = compile_object_selector(selector, &format!("{cost_path}.selector"))?;
+                if spec.kind != TargetKind::Permanent
+                    || spec.controller != Some(TargetControllerPredicate::You)
+                    || spec.exclude_source
+                {
+                    return Err(CompileDiagnostic::new(
+                        CompileDiagnosticCode::AbilityShape,
+                        format!("{cost_path}.selector"),
+                        "sacrifice cost requires a closed permanent predicate controlled by you()",
+                    ));
+                }
+                sacrifice_cost = Some((
+                    object_predicate_from_spec(spec),
+                    compile_bounded_positive_literal(
+                        count,
+                        &format!("{cost_path}.count"),
+                        MAX_EFFECTS as u32,
+                        "sacrifice count",
+                    )?,
+                ));
             }
             Operation::PayLife => {
                 let [Expression::Integer(amount)] = arguments.as_slice() else {
@@ -2445,6 +2559,7 @@ fn compile_activated_effect(
         tap_source,
         sacrifice_source,
         pay_life,
+        sacrifice_cost,
         timing,
         target_requirements: compiler
             .targets
@@ -2918,6 +3033,44 @@ fn compile_effect(
             compiler
                 .effects
                 .push(EffectProgram::AttachSourceToTarget { target });
+            Ok(())
+        }
+        Operation::AddCounter => {
+            let [source, Expression::Text(kind), amount] = arguments.as_slice() else {
+                return Err(effect_arity(
+                    path,
+                    operation,
+                    "source(), one represented counter kind, and literal amount",
+                ));
+            };
+            if !is_source_selector(source) {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::EffectArguments,
+                    format!("{path}.source"),
+                    "source-bound counter effect must use source()",
+                ));
+            }
+            let kind = match kind.as_str() {
+                "p1p1" => CounterKind::PlusOnePlusOne,
+                "m1m1" => CounterKind::MinusOneMinusOne,
+                "loyalty" => CounterKind::Loyalty,
+                unsupported => {
+                    return Err(CompileDiagnostic::new(
+                        CompileDiagnosticCode::EffectArguments,
+                        format!("{path}.kind"),
+                        format!("counter kind `{unsupported}` has no exact runtime lowering"),
+                    ));
+                }
+            };
+            let amount = compile_bounded_positive_literal(
+                amount,
+                &format!("{path}.amount"),
+                MAX_EFFECTS as u32,
+                "counter amount",
+            )?;
+            compiler
+                .effects
+                .push(EffectProgram::AddCountersToSource { kind, amount });
             Ok(())
         }
         Operation::CounterSpell => {
@@ -5449,6 +5602,23 @@ fn bind_effect_actions(
                     },
                 });
             }
+            EffectProgram::AddCountersToSource { kind, amount } => {
+                let source = bindings.source.ok_or_else(|| {
+                    ExecutionDiagnostic::new(
+                        ExecutionDiagnosticCode::MissingBinding,
+                        Some(effect_index),
+                        "source-bound counter effect has no source object",
+                    )
+                })?;
+                actions.push(BoundAction {
+                    effect_index,
+                    action: Action::AddObjectCounters {
+                        object: source,
+                        kind: *kind,
+                        amount: *amount,
+                    },
+                });
+            }
         }
     }
     Ok(actions)
@@ -5895,6 +6065,28 @@ card "Reliquary Tower" {
   }
 }
 "#;
+    const CARRION_FEEDER: &str = r#"
+card "Carrion Feeder" {
+  id: "a1cc5e37-b09a-4b7f-afd5-77c1c35aa425"
+  layout: normal
+  status: unverified_playable
+  face "Carrion Feeder" {
+    cost: "{B}"
+    types: "Creature - Zombie"
+    oracle: "Carrion Feeder can't block. Sacrifice a creature: Put a +1/+1 counter on Carrion Feeder."
+    power: "1"
+    toughness: "1"
+    keywords: []
+    ability static {
+      effect: continuous(source(), cannot_block(any()))
+    }
+    ability activated {
+      costs: [sacrifice(permanents(and(type_is("creature"), controlled_by(you()))), 1)]
+      effect: add_counter(source(), "p1p1", 1)
+    }
+  }
+}
+"#;
     const BIRDS_OF_PARADISE: &str = r#"
 card "Birds of Paradise" {
   id: "d3a0b660-358c-41bd-9cd2-41fbf3491b1a"
@@ -6147,6 +6339,29 @@ card "Interpreter Contract" {
         assert!(tower
             .capabilities()
             .contains(&Capability::ModifyPlayerRules));
+    }
+
+    #[test]
+    fn source_bound_counter_activation_compiles_with_real_sacrifice_cost() {
+        let feeder = compile_card_program(&parse("carrion_feeder.frs", CARRION_FEEDER))
+            .unwrap_or_else(|error| panic!("unexpected Carrion Feeder compile error: {error}"));
+        assert_eq!(
+            feeder.capabilities(),
+            vec![
+                Capability::PermanentSpell,
+                Capability::ActivatedAbility,
+                Capability::CombatRestriction,
+                Capability::AddCounters,
+            ]
+        );
+        let ability = &feeder.activated_effects()[0];
+        assert!(ability.uses_source_object());
+        let (predicate, count) = ability
+            .sacrifice_cost()
+            .unwrap_or_else(|| panic!("Carrion Feeder must retain its sacrifice cost"));
+        assert_eq!(count, 1);
+        assert!(predicate.required_types().creature());
+        assert_eq!(predicate.controller(), TargetControllerPredicate::You);
     }
 
     #[test]
