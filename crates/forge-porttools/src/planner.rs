@@ -763,7 +763,7 @@ mod tests {
             concat!(
                 "Name:Planner Fixture\n",
                 "K:Ward:2:Open\n",
-                "A:SP$ Reveal | Valid$ Card | SubAbility$ Extra | SpellDescription$ Reveal.\n",
+                "A:SP$ PlannerProbe | Valid$ Card | SubAbility$ Extra | SpellDescription$ Probe.\n",
                 "SVar:Extra:DB$ Effect | StaticAbilities$ KWPump | SubAbility$ Tail\n",
                 "SVar:Tail:DB$ Draw | Defined$ You | ConditionPlayerTurn$ True\n",
                 "SVar:X:Count$Valid Creature.YouCtrl\n",
@@ -777,7 +777,9 @@ mod tests {
             .iter()
             .map(|blocker| blocker.family.clone())
             .collect::<BTreeSet<_>>();
-        assert!(families.iter().any(|family| family.contains("A:Reveal")));
+        assert!(families
+            .iter()
+            .any(|family| family.contains("A:PlannerProbe")));
         assert!(families
             .iter()
             .any(|family| family.contains("StaticAbilities")));

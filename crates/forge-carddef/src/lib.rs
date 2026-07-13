@@ -1177,6 +1177,47 @@ operations! {
     EventResolvedLimit => ("event_resolved_limit", Event, 3, Some(3)),
     CopyCountersFrom => ("copy_counters_from", Effect, 2, Some(3)),
     DiscardMatching => ("discard_matching", Effect, 3, Some(4)),
+    Goad => ("goad", Effect, 1, Some(2)),
+    CreatedPower => ("created_power", Effect, 2, Some(2)),
+    CreatedToughness => ("created_toughness", Effect, 2, Some(2)),
+    ImprintResult => ("imprint_result", Effect, 1, Some(1)),
+    RememberLkiResult => ("remember_lki_result", Effect, 1, Some(1)),
+    EventStateCheck => ("event_state_check", Event, 0, Some(0)),
+    ChooseNumber => ("choose_number", Effect, 3, Some(4)),
+    NoEffect => ("no_effect", Effect, 0, Some(0)),
+    ChooseSource => ("choose_source", Effect, 2, Some(2)),
+    GrantActivatedToEffect => ("grant_activated_to_effect", Effect, 3, None),
+    PhaseOut => ("phase_out", Effect, 1, Some(1)),
+    EventTapsForMana => ("event_taps_for_mana", Event, 2, Some(3)),
+    AccumulateDamage => ("accumulate_damage", Effect, 1, Some(1)),
+    ResolveDamageMap => ("resolve_damage_map", Effect, 0, Some(0)),
+    RepeatLoop => ("repeat_loop", Effect, 4, Some(4)),
+    AddExtraPhase => ("add_extra_phase", Effect, 4, Some(4)),
+    CurrentPhaseIs => ("current_phase_is", Predicate, 1, Some(1)),
+    BeforeFirstPostcombatMainEnd => ("before_first_postcombat_main_end", Predicate, 0, Some(0)),
+    StoreSVar => ("store_svar", Effect, 2, Some(2)),
+    MultiplyCounters => ("multiply_counters", Effect, 2, Some(3)),
+    RingTemptsYou => ("ring_tempts_you", Effect, 1, Some(1)),
+    LoseGame => ("lose_game", Effect, 1, Some(1)),
+    DraftFromSpellbook => ("draft_from_spellbook", Effect, 3, None),
+    CannotActivate => ("cannot_activate", Effect, 4, Some(4)),
+    CanAttackWithDefender => ("can_attack_with_defender", Effect, 1, Some(1)),
+    NonactivePlayer => ("nonactive_player", Selector, 0, Some(0)),
+    EventCreateToken => ("event_create_token", Event, 3, Some(3)),
+    EventAddCounter => ("event_add_counter", Event, 4, Some(4)),
+    EventAbilityCast => ("event_ability_cast", Event, 4, Some(4)),
+    EventLandPlayed => ("event_land_played", Event, 1, Some(1)),
+    ChangeTargets => ("change_targets", Effect, 2, Some(2)),
+    EventCrankContraption => ("event_crank_contraption", Event, 1, Some(1)),
+    EventPlaneswalkedTo => ("event_planeswalked_to", Event, 1, Some(1)),
+    EventUntapped => ("event_untapped", Event, 1, Some(1)),
+    Manifest => ("manifest", Effect, 2, Some(2)),
+    ManifestDread => ("manifest_dread", Effect, 1, Some(1)),
+    AddPoison => ("add_poison", Effect, 2, Some(2)),
+    CannotGainLife => ("cannot_gain_life", Effect, 1, Some(1)),
+    ManaConvert => ("mana_convert", Effect, 5, Some(5)),
+    ExchangeControl => ("exchange_control", Effect, 1, Some(1)),
+    Incubate => ("incubate", Effect, 2, Some(2)),
 }
 
 impl Operation {
@@ -1199,7 +1240,7 @@ impl Operation {
             Self::AlternateCost => Some((1, Cost)),
             Self::UnlessPaid => Some((2, Cost)),
             Self::PayToApply => Some((2, Cost)),
-            Self::GrantActivatedAbility => Some((3, Cost)),
+            Self::GrantActivatedAbility | Self::GrantActivatedToEffect => Some((3, Cost)),
             Self::RollDiceTable => Some((4, Effect)),
             Self::ApplyInZones => Some((2, Text)),
             Self::PlayerChooseEffect => Some((5, Effect)),
@@ -1227,6 +1268,7 @@ impl Operation {
                 Some((1, ArgumentKind::Text))
             }
             Self::TimingAll => Some((0, Timing)),
+            Self::DraftFromSpellbook => Some((2, Text)),
             _ => None,
         }
     }
@@ -2183,6 +2225,117 @@ impl Operation {
                 3 => Some(Number),
                 _ => None,
             },
+            Self::Goad => match index {
+                0 => Some(Selector),
+                1 => Some(Text),
+                _ => None,
+            },
+            Self::CreatedPower | Self::CreatedToughness => match index {
+                0 => Some(Effect),
+                1 => Some(Number),
+                _ => None,
+            },
+            Self::ImprintResult | Self::RememberLkiResult => Some(Effect),
+            Self::EventStateCheck => None,
+            Self::NoEffect => None,
+            Self::ChooseSource => match index {
+                0 | 1 => Some(Selector),
+                _ => None,
+            },
+            Self::GrantActivatedToEffect => match index {
+                0 | 1 => Some(Effect),
+                2 => Some(Timing),
+                _ => Some(Cost),
+            },
+            Self::PhaseOut => Some(Selector),
+            Self::EventTapsForMana => match index {
+                0 | 1 => Some(Selector),
+                2 => Some(Text),
+                _ => None,
+            },
+            Self::AccumulateDamage => Some(Effect),
+            Self::ResolveDamageMap => None,
+            Self::RepeatLoop => match index {
+                0 => Some(Effect),
+                1 => Some(Predicate),
+                2 => Some(Selector),
+                3 => Some(Number),
+                _ => None,
+            },
+            Self::AddExtraPhase => match index {
+                0..=2 => Some(Text),
+                3 => Some(Number),
+                _ => None,
+            },
+            Self::CurrentPhaseIs => Some(Text),
+            Self::BeforeFirstPostcombatMainEnd => None,
+            Self::StoreSVar => match index {
+                0 => Some(Text),
+                1 => Some(Value),
+                _ => None,
+            },
+            Self::MultiplyCounters => match index {
+                0 => Some(Selector),
+                1 => Some(Number),
+                2 => Some(Text),
+                _ => None,
+            },
+            Self::RingTemptsYou | Self::LoseGame => Some(Selector),
+            Self::DraftFromSpellbook => match index {
+                0 => Some(Selector),
+                1 => Some(Number),
+                _ => Some(Text),
+            },
+            Self::CannotActivate => match index {
+                0 | 1 => Some(Selector),
+                2 | 3 => Some(Text),
+                _ => None,
+            },
+            Self::CanAttackWithDefender => Some(Selector),
+            Self::NonactivePlayer => None,
+            Self::EventCreateToken => match index {
+                0 | 1 => Some(Selector),
+                2 => Some(Text),
+                _ => None,
+            },
+            Self::EventAddCounter => match index {
+                0 | 1 => Some(Selector),
+                2 | 3 => Some(Text),
+                _ => None,
+            },
+            Self::EventAbilityCast => match index {
+                0 | 1 => Some(Selector),
+                2 | 3 => Some(Text),
+                _ => None,
+            },
+            Self::EventLandPlayed => Some(Selector),
+            Self::ChangeTargets => match index {
+                0 => Some(Selector),
+                1 => Some(Text),
+                _ => None,
+            },
+            Self::EventCrankContraption
+            | Self::EventPlaneswalkedTo
+            | Self::EventUntapped
+            | Self::ManifestDread
+            | Self::CannotGainLife
+            | Self::ExchangeControl => Some(Selector),
+            Self::Manifest | Self::AddPoison | Self::Incubate => match index {
+                0 => Some(Selector),
+                1 => Some(Number),
+                _ => None,
+            },
+            Self::ManaConvert => match index {
+                0 | 1 => Some(Selector),
+                2..=4 => Some(Text),
+                _ => None,
+            },
+            Self::ChooseNumber => match index {
+                0 => Some(Selector),
+                1 | 2 => Some(Number),
+                3 => Some(Text),
+                _ => None,
+            },
             Self::TimingAll => None,
         }
     }
@@ -2495,6 +2648,47 @@ mod tests {
         assert_eq!(Operation::EventResolvedLimit as u32, 377);
         assert_eq!(Operation::CopyCountersFrom as u32, 378);
         assert_eq!(Operation::DiscardMatching as u32, 379);
+        assert_eq!(Operation::Goad as u32, 380);
+        assert_eq!(Operation::CreatedPower as u32, 381);
+        assert_eq!(Operation::CreatedToughness as u32, 382);
+        assert_eq!(Operation::ImprintResult as u32, 383);
+        assert_eq!(Operation::RememberLkiResult as u32, 384);
+        assert_eq!(Operation::EventStateCheck as u32, 385);
+        assert_eq!(Operation::ChooseNumber as u32, 386);
+        assert_eq!(Operation::NoEffect as u32, 387);
+        assert_eq!(Operation::ChooseSource as u32, 388);
+        assert_eq!(Operation::GrantActivatedToEffect as u32, 389);
+        assert_eq!(Operation::PhaseOut as u32, 390);
+        assert_eq!(Operation::EventTapsForMana as u32, 391);
+        assert_eq!(Operation::AccumulateDamage as u32, 392);
+        assert_eq!(Operation::ResolveDamageMap as u32, 393);
+        assert_eq!(Operation::RepeatLoop as u32, 394);
+        assert_eq!(Operation::AddExtraPhase as u32, 395);
+        assert_eq!(Operation::CurrentPhaseIs as u32, 396);
+        assert_eq!(Operation::BeforeFirstPostcombatMainEnd as u32, 397);
+        assert_eq!(Operation::StoreSVar as u32, 398);
+        assert_eq!(Operation::MultiplyCounters as u32, 399);
+        assert_eq!(Operation::RingTemptsYou as u32, 400);
+        assert_eq!(Operation::LoseGame as u32, 401);
+        assert_eq!(Operation::DraftFromSpellbook as u32, 402);
+        assert_eq!(Operation::CannotActivate as u32, 403);
+        assert_eq!(Operation::CanAttackWithDefender as u32, 404);
+        assert_eq!(Operation::NonactivePlayer as u32, 405);
+        assert_eq!(Operation::EventCreateToken as u32, 406);
+        assert_eq!(Operation::EventAddCounter as u32, 407);
+        assert_eq!(Operation::EventAbilityCast as u32, 408);
+        assert_eq!(Operation::EventLandPlayed as u32, 409);
+        assert_eq!(Operation::ChangeTargets as u32, 410);
+        assert_eq!(Operation::EventCrankContraption as u32, 411);
+        assert_eq!(Operation::EventPlaneswalkedTo as u32, 412);
+        assert_eq!(Operation::EventUntapped as u32, 413);
+        assert_eq!(Operation::Manifest as u32, 414);
+        assert_eq!(Operation::ManifestDread as u32, 415);
+        assert_eq!(Operation::AddPoison as u32, 416);
+        assert_eq!(Operation::CannotGainLife as u32, 417);
+        assert_eq!(Operation::ManaConvert as u32, 418);
+        assert_eq!(Operation::ExchangeControl as u32, 419);
+        assert_eq!(Operation::Incubate as u32, 420);
 
         let config = bincode::config::standard()
             .with_fixed_int_encoding()
