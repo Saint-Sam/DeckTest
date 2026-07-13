@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-13T01:13:41Z",
+  "task": "T3.3",
+  "batch": "trigger memory and routing, repeat families, named counter mechanics, permissions, variant events, card naming, attacking tokens, and dynamic mana-value selectors",
+  "technical_result": "pass",
+  "product_binding": {
+    "exact_product_commit": "c166a4bd4403b33d5bbeec4b9c48128afa6f0a34",
+    "exact_product_tree": "d39202bfab867dbe1ad9afc9492f48d8cca00009"
+  },
+  "source_binding": {
+    "legacy_forge_commit": "1f0a3e0815822d8f58f798e0304b33d4534248b1",
+    "translation_fingerprint": "bf7b5c81943ff5b3d8644a596c5a3066"
+  },
+  "verification_environment": {
+    "local_only": true,
+    "github_actions_used": false,
+    "network_attempted": false,
+    "install_performed": false,
+    "worker_ceiling": 24,
+    "shared_cargo_cache": true
+  },
+  "coverage_delta": {
+    "before": {
+      "complete_scripts": 16173,
+      "mapped_ability_uses": 25745,
+      "owner_priority_complete": 229
+    },
+    "after": {
+      "complete_scripts": 16552,
+      "total_scripts": 33290,
+      "complete_script_percent": 49.72063682787624,
+      "mapped_ability_uses": 26649,
+      "total_ability_uses": 43649,
+      "mapped_ability_percent": 61.05294508465257,
+      "owner_priority_complete": 232,
+      "owner_priority_requested": 365,
+      "quarantined_scripts": 16738,
+      "quarantined_ability_uses": 17000
+    },
+    "gain": {
+      "complete_scripts": 379,
+      "mapped_ability_uses": 904,
+      "owner_priority_complete": 3
+    }
+  },
+  "line_coverage": {
+    "covered": 35383,
+    "count": 43583,
+    "percent": 81.18532455315146,
+    "floor_percent": 80,
+    "raw_report_sha256": "0e25c00f135d2271b91edd43fa3dc492611bba550a5beaacf5853316e4b93967"
+  },
+  "planner": {
+    "analyzed_scripts": 33290,
+    "scripts_with_confirmed_blockers": 15506,
+    "confirmed_observations": 26477,
+    "unique_blocker_families": 6037,
+    "linked_root_fanout": 27043
+  },
+  "checkpoint_gates": {
+    "full_workspace_tests": true,
+    "clippy_warnings_denied": true,
+    "compiler_roundtrips": true,
+    "database_validation": true,
+    "oracle_subsets_passed": true,
+    "nightmare_suite_passed": true,
+    "arena_smoke_passed": true,
+    "deterministic_parallel_replay": true,
+    "deterministic_blocker_plan_replay": true
+  },
+  "notes": [
+    "The exact 24-worker checkpoint completed locally in 218 seconds without GitHub Actions.",
+    "New mappings use typed append-only operations and preserve fail-closed handling for unapproved shapes.",
+    "T3.3 remains active because the 60% complete-script floor is not reached."
+  ]
+}
