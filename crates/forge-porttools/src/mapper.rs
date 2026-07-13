@@ -8013,6 +8013,7 @@ fn map_mana(
             "Produced",
             "Amount",
             "RestrictValid",
+            "PersistentMana",
             "Defined",
             "ValidTgts",
             "SpellDescription",
@@ -8021,7 +8022,7 @@ fn map_mana(
     let produced = required(parameters, "Produced")?;
     let amount = optional_positive_integer(parameters, "Amount")?.unwrap_or(1);
     let player = player_selector(parameters, DefaultSelector::You)?;
-    let expression = if let Some(restriction) = parameters.get("RestrictValid") {
+    let mut expression = if let Some(restriction) = parameters.get("RestrictValid") {
         call(
             Operation::AddRestrictedMana,
             vec![
@@ -8037,6 +8038,9 @@ fn map_mana(
             vec![Expression::Text(normalize_mana(produced, amount)?), player],
         )
     };
+    if closed_true_flag(parameters, "PersistentMana")? {
+        expression = call(Operation::PersistentMana, vec![expression]);
+    }
     Ok(MappedLegacyAbility {
         prefix,
         api: api.to_string(),
@@ -22733,6 +22737,14 @@ mod tests {
             .costs
             .iter()
             .any(|cost| expression_contains_operation(cost, Operation::PayEnergyCost)));
+
+        let persistent = map_line("A:DB$ Mana | Produced$ R | Amount$ 2 | PersistentMana$ True")
+            .unwrap_or_else(|error| panic!("persistent mana should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &persistent.expression,
+            Operation::PersistentMana
+        ));
+        assert!(map_line("A:DB$ Mana | Produced$ R | PersistentMana$ False").is_err());
 
         let reveal = map_line(
             "A:SP$ Reveal | Defined$ You | RevealValid$ Card.Blue | AnyNumber$ True | RememberRevealed$ True",
