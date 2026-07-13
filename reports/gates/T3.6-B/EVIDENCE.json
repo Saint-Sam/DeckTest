@@ -2,28 +2,18 @@
   "artifacts": {
     "runner": {
       "path": "tools/run_t3_6_commander_semantics.py",
-      "sha256": "c37456113a73fd051525a4754b598b1df696a62e2f317c272450414002b8cefd"
+      "sha256": "8712712ffe8312dcf0cbe90c7905761303811986f19999bb97b1d7a7d0b5e8cb"
     },
     "runtime_probe": {
       "path": "tests/t3_6/runtime_probe.rs",
-      "sha256": "1602b5e67f46e10d12e782bc5e74138ea37e0d649be8866c0d51327c1e4697ad"
+      "sha256": "e6f56d459bfffc20f59f5a5d8a79337fcdf69572e9468f6a4e47218b5265ad88"
     },
     "semantic_cases": {
       "path": "tests/t3_6/commander_semantic_cases.json",
-      "sha256": "9832bd316e6a5d7fd1c6eca8874a1512b032c0481c2326ca9612aa5e8fb23569"
+      "sha256": "66aef709ff4cbba36adc083ca71c1d21cfe44e6554ed8b122bbd21c74671755d"
     }
   },
   "blocked_runtime": [
-    {
-      "card_name": "Swiftfoot Boots",
-      "reason_code": "unsupported_keyword_semantics",
-      "scenario_id": "T3.6-010"
-    },
-    {
-      "card_name": "Lightning Greaves",
-      "reason_code": "unsupported_keyword_semantics",
-      "scenario_id": "T3.6-011"
-    },
     {
       "card_name": "Cyclonic Rift",
       "reason_code": "unsupported_keyword_semantics",
@@ -55,11 +45,6 @@
       "scenario_id": "T3.6-060"
     },
     {
-      "card_name": "Sword of the Animist",
-      "reason_code": "unsupported_keyword_semantics",
-      "scenario_id": "T3.6-065"
-    },
-    {
       "card_name": "Reconnaissance Mission",
       "reason_code": "unsupported_keyword_semantics",
       "scenario_id": "T3.6-066"
@@ -88,11 +73,6 @@
       "card_name": "Purphoros, God of the Forge",
       "reason_code": "unsupported_effect_operation",
       "scenario_id": "T3.6-098"
-    },
-    {
-      "card_name": "Carrion Feeder",
-      "reason_code": "unsupported_effect_arguments",
-      "scenario_id": "T3.6-099"
     }
   ],
   "blocked_semantic_gap": [
@@ -241,12 +221,12 @@
   ],
   "checkpoint": {
     "id": "CP-CARD-SEMANTICS-100",
-    "remaining": 36,
+    "remaining": 32,
     "required": 100,
-    "semantic_verified": 64,
+    "semantic_verified": 68,
     "status": "in_progress"
   },
-  "claim_boundary": "64 identities have one card-specific expected production path and exact deterministic replay. The other 36 remain reason-coded and are not semantic_verified; CP-CARD-SEMANTICS-100 remains open.",
+  "claim_boundary": "68 identities have one card-specific expected production path and exact deterministic replay. The other 32 remain reason-coded and are not semantic_verified; CP-CARD-SEMANTICS-100 remains open.",
   "constraints": {
     "github_actions_used": false,
     "installs_performed": false,
@@ -261,31 +241,31 @@
   },
   "generated_at": "2026-07-13",
   "measured": {
-    "blocked_runtime": 16,
+    "blocked_runtime": 12,
     "blocked_semantic_gap": 20,
     "frozen_candidates": 100,
     "production_failures": 0,
     "runtime_blocker_reason_counts": {
       "unsupported_ability_shape": 3,
       "unsupported_card_layout": 1,
-      "unsupported_effect_arguments": 2,
+      "unsupported_effect_arguments": 1,
       "unsupported_effect_operation": 2,
-      "unsupported_keyword_semantics": 8
+      "unsupported_keyword_semantics": 5
     },
-    "runtime_smoke_passed": 84,
+    "runtime_smoke_passed": 88,
     "semantic_blocker_reason_counts": {
       "COPY_TRIGGER_EVENT_MISSING": 1,
       "REGENERATION_PROHIBITION_MISSING": 4,
       "REVEAL_KNOWLEDGE_EVENT_MISSING": 6,
       "TOKEN_SUBTYPE_STATE_MISSING": 11
     },
-    "semantic_verified": 64
+    "semantic_verified": 68
   },
   "product_binding": {
     "candidate_payload_sha256": "901a08efac2e4eaefc3c2adba3fa23515709595efcde30e43032f24112552e0b",
-    "observed_replay_sha256": "3374c30735b443478f92da48b2122f2d3486101f79d147faf430d53333cce83d",
-    "runtime_source_commit": "9c9d97ff8725e7d4b38e52bb92d7feb9080ca113",
-    "semantic_cases_payload_sha256": "98d434171b1e705f7fc8a3d15cba81f59344a9f90dc19bffeb065d1a4a3d8924",
+    "observed_replay_sha256": "ca8b651ee77d22626a6077c3cd43d8f1b2ab56b9285e0ab0947176994d771fed",
+    "runtime_source_commit": "deb1547006fe4665d3b8c4c6b072c5889971f532",
+    "semantic_cases_payload_sha256": "ca386cb47b3a32280d15c3b09f1c17b079b697d7591c15cb0bc41e4a69a81004",
     "translated_definitions_aggregate_sha256": "9e09956bdd16d34c77905dcbf53fea2b9f31164b7049c3a30424dc7109801fb0"
   },
   "schema_version": 2,
@@ -360,6 +340,22 @@
       "freeze_rank": 9,
       "oracle_id": "9965d9c5-2ebf-4a6c-930e-55c5890979be",
       "scenario_id": "T3.6-009",
+      "stratum": "continuous_combat_and_costs"
+    },
+    {
+      "card_name": "Swiftfoot Boots",
+      "final_hash": "17343426485281010121",
+      "freeze_rank": 10,
+      "oracle_id": "c8b143ad-43ec-4e0d-a440-e348daa31391",
+      "scenario_id": "T3.6-010",
+      "stratum": "stack_interaction_and_protection"
+    },
+    {
+      "card_name": "Lightning Greaves",
+      "final_hash": "17194523036364943123",
+      "freeze_rank": 11,
+      "oracle_id": "ca204b66-8d0c-431a-8d34-282f7c2d17da",
+      "scenario_id": "T3.6-011",
       "stratum": "continuous_combat_and_costs"
     },
     {
@@ -675,6 +671,14 @@
       "stratum": "triggered_synergies"
     },
     {
+      "card_name": "Sword of the Animist",
+      "final_hash": "14000570846894602531",
+      "freeze_rank": 65,
+      "oracle_id": "d79cbc61-6c15-48ea-bbba-3cffb819ccba",
+      "scenario_id": "T3.6-065",
+      "stratum": "triggered_synergies"
+    },
+    {
       "card_name": "Beast Whisperer",
       "final_hash": "1383743251051582234",
       "freeze_rank": 67,
@@ -795,6 +799,14 @@
       "stratum": "continuous_combat_and_costs"
     },
     {
+      "card_name": "Carrion Feeder",
+      "final_hash": "14502260374801811923",
+      "freeze_rank": 99,
+      "oracle_id": "a1cc5e37-b09a-4b7f-afd5-77c1c35aa425",
+      "scenario_id": "T3.6-099",
+      "stratum": "continuous_combat_and_costs"
+    },
+    {
       "card_name": "Craterhoof Behemoth",
       "final_hash": "15012946979314124079",
       "freeze_rank": 100,
@@ -808,7 +820,7 @@
   "verification": [
     {
       "command": "CARGO_NET_OFFLINE=true python3 tools/run_t3_6_commander_semantics.py --translated-root target/translated-cards --cargo-target-dir target --report reports/gates/T3.6-B/EVIDENCE.json",
-      "result": "PASS; two exact production replays, 64 semantic outcomes matched, 20 semantic gaps and 16 runtime blockers remained fail-closed"
+      "result": "PASS; two exact production replays, 68 semantic outcomes matched, 20 semantic gaps and 12 runtime blockers remained fail-closed"
     }
   ],
   "verification_mode": "local_only"

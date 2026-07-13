@@ -65,6 +65,8 @@ def observed_from_cases(cases: dict) -> list[dict]:
                     )
                     else None
                 ),
+                "equipment": SEMANTICS.expected_equipment_probe(case),
+                "sacrifice_counter": SEMANTICS.expected_sacrifice_counter_probe(case),
             }
         else:
             entry.update(
@@ -99,9 +101,9 @@ class CommanderSemanticSidecarTests(unittest.TestCase):
             self.cases["summary"],
             {
                 "candidate_count": 100,
-                "semantic_case_ready": 64,
+                "semantic_case_ready": 68,
                 "blocked_semantic_gap": 20,
-                "blocked_runtime": 16,
+                "blocked_runtime": 12,
             },
         )
 
@@ -208,6 +210,45 @@ class CommanderSemanticSidecarTests(unittest.TestCase):
             "expired_off_battlefield"
         ] = False
         with self.assertRaisesRegex(ValueError, "did not remain source-bound"):
+            SEMANTICS.verify_observed(self.cases, observed)
+
+    def test_equipment_probe_requires_live_protection_and_reattachment(self) -> None:
+        observed = observed_from_cases(self.cases)
+        equipment_index = next(
+            index
+            for index, case in enumerate(self.cases["cases"])
+            if case["card_name"] == "Swiftfoot Boots"
+        )
+        observed[equipment_index]["semantic_probe"]["equipment"]["first_attachment"][
+            "opponent_targetable"
+        ] = True
+        with self.assertRaisesRegex(ValueError, "equipment semantic probe changed"):
+            SEMANTICS.verify_observed(self.cases, observed)
+
+    def test_equipment_attack_probe_requires_basic_land_move_and_tap(self) -> None:
+        observed = observed_from_cases(self.cases)
+        sword_index = next(
+            index
+            for index, case in enumerate(self.cases["cases"])
+            if case["card_name"] == "Sword of the Animist"
+        )
+        observed[sword_index]["semantic_probe"]["equipment"][
+            "attached_attack_trigger"
+        ]["basic_land_tapped"] = False
+        with self.assertRaisesRegex(ValueError, "equipment semantic probe changed"):
+            SEMANTICS.verify_observed(self.cases, observed)
+
+    def test_sacrifice_counter_probe_requires_real_cost_and_source_counter(self) -> None:
+        observed = observed_from_cases(self.cases)
+        feeder_index = next(
+            index
+            for index, case in enumerate(self.cases["cases"])
+            if case["card_name"] == "Carrion Feeder"
+        )
+        observed[feeder_index]["semantic_probe"]["sacrifice_counter"][
+            "source_bound_counter_action"
+        ] = False
+        with self.assertRaisesRegex(ValueError, "sacrifice-counter semantic probe changed"):
             SEMANTICS.verify_observed(self.cases, observed)
 
     def test_incremental_report_keeps_checkpoint_open(self) -> None:

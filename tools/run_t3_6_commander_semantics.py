@@ -43,6 +43,10 @@ ATOM_CAPABILITIES = {
     "modify_characteristics": "modify_characteristics",
     "modify_player_rules": "modify_player_rules",
     "reduce_spell_cost": "reduce_spell_cost",
+    "attach_object": "attach_object",
+    "targeting_restriction": "targeting_restriction",
+    "add_counters": "add_counters",
+    "combat_restriction": "combat_restriction",
 }
 SEMANTIC_BLOCKER_CODES = {
     "COPY_TRIGGER_EVENT_MISSING",
@@ -388,6 +392,242 @@ def expected_base_subtypes(case: dict[str, Any]) -> list[str] | None:
     return None
 
 
+def expected_equipment_probe(case: dict[str, Any]) -> dict[str, Any] | None:
+    atoms = case.get("semantic_atoms", [])
+    equip_atoms = [
+        atom
+        for atom in atoms
+        if atom.get("op") == "activate_ability" and atom.get("ability") == "equip"
+    ]
+    if not equip_atoms:
+        return None
+    if len(equip_atoms) != 1:
+        raise ValueError(f"{case['scenario_id']}: equipment case needs exactly one equip atom")
+    equip = equip_atoms[0]
+    generic_cost = equip.get("generic_mana_cost")
+    if (
+        not isinstance(generic_cost, int)
+        or generic_cost < 0
+        or equip.get("timing") != "sorcery"
+        or equip.get("target") != "creature_you_control"
+    ):
+        raise ValueError(f"{case['scenario_id']}: invalid equip activation expectation")
+
+    modifiers = [
+        atom
+        for atom in atoms
+        if atom.get("op") == "modify_characteristics"
+        and atom.get("subject") == "equipped_creature"
+    ]
+    attachments = [atom for atom in atoms if atom.get("op") == "attach_object"]
+    restrictions = [atom for atom in atoms if atom.get("op") == "targeting_restriction"]
+    if len(modifiers) != 1 or attachments != [
+        {"attachment": "source", "op": "attach_object", "target": "chosen_creature"}
+    ]:
+        raise ValueError(f"{case['scenario_id']}: incomplete equipment attachment expectation")
+    if len(restrictions) > 1:
+        raise ValueError(f"{case['scenario_id']}: equipment has multiple protection expectations")
+    modifier = modifiers[0]
+    power_delta = modifier.get("power_delta", 0)
+    toughness_delta = modifier.get("toughness_delta", 0)
+    granted = modifier.get("grant_keywords", [])
+    if (
+        not isinstance(power_delta, int)
+        or not isinstance(toughness_delta, int)
+        or not isinstance(granted, list)
+        or not all(isinstance(value, str) for value in granted)
+        or modifier.get("duration") != "while_source_on_battlefield"
+    ):
+        raise ValueError(f"{case['scenario_id']}: invalid attached characteristic expectation")
+    restriction = None
+    if restrictions:
+        restriction_atom = restrictions[0]
+        restriction = restriction_atom.get("restriction")
+        if restriction not in {"hexproof", "shroud"} or restriction_atom != {
+            "duration": "while_source_on_battlefield",
+            "op": "targeting_restriction",
+            "restriction": restriction,
+            "subject": "equipped_creature",
+        }:
+            raise ValueError(f"{case['scenario_id']}: invalid equipment protection expectation")
+
+    controller_targetable = restriction != "shroud"
+    opponent_targetable = restriction is None
+    attached_snapshot = {
+        "power": 2 + power_delta,
+        "toughness": 2 + toughness_delta,
+        "haste": "haste" in granted,
+        "controller_targetable": controller_targetable,
+        "opponent_targetable": opponent_targetable,
+    }
+    base_snapshot = {
+        "power": 2,
+        "toughness": 2,
+        "haste": False,
+        "controller_targetable": True,
+        "opponent_targetable": True,
+    }
+
+    attack_searches = [
+        atom
+        for atom in atoms
+        if atom.get("op") == "search_library"
+        and atom.get("trigger") == "equipped_creature_attacks"
+    ]
+    attack_trigger = None
+    if attack_searches:
+        if attack_searches != [
+            {
+                "filter": "basic_land",
+                "maximum": 1,
+                "op": "search_library",
+                "optional": True,
+                "player": "source_controller",
+                "trigger": "equipped_creature_attacks",
+            }
+        ]:
+            raise ValueError(f"{case['scenario_id']}: invalid attached attack search expectation")
+        required_followups = [
+            {
+                "chosen": "search_result",
+                "destination": "battlefield",
+                "op": "move_zone",
+            },
+            {"chosen": "search_result", "op": "tap_object"},
+            {"op": "shuffle_library", "player": "source_controller"},
+        ]
+        for expected in required_followups:
+            if expected not in atoms:
+                raise ValueError(
+                    f"{case['scenario_id']}: attached attack search is missing {expected['op']}"
+                )
+        attack_trigger = {
+            "count": 1,
+            "source_bound_condition": True,
+            "registered": True,
+            "choice_slots": 1,
+            "optional_choices": 1,
+            "nonbasic_choice_rejected": True,
+            "basic_choice_bound": True,
+            "bound_action_count": 3,
+            "move_action_present": True,
+            "tap_action_present": True,
+            "shuffle_action_present": True,
+            "all_actions_applied": True,
+            "basic_land_moved_to_battlefield": True,
+            "basic_land_tapped": True,
+            "nonbasic_land_remained_in_library": True,
+        }
+
+    return {
+        "setup_succeeded": True,
+        "equip_ability_count": 1,
+        "generic_mana_cost": generic_cost,
+        "colored_mana_cost": 0,
+        "exact_payment_total": generic_cost,
+        "timing": "sorcery",
+        "target_slots": 1,
+        "optional_choices": 0,
+        "static_registration_count": 1 + len(restrictions),
+        "static_registered": True,
+        "controlled_creature_target_bound": True,
+        "opponent_creature_target_rejected": True,
+        "noncreature_target_rejected": True,
+        "source_bound_attach_actions": True,
+        "payments_consumed": True,
+        "attached_to_first": True,
+        "first_attachment": attached_snapshot,
+        "attached_to_second": True,
+        "first_after_reattachment": base_snapshot,
+        "second_after_reattachment": attached_snapshot,
+        "attached_attack_trigger": attack_trigger,
+        "source_moved_to_graveyard": True,
+        "second_after_expiration": base_snapshot,
+    }
+
+
+def expected_sacrifice_counter_probe(case: dict[str, Any]) -> dict[str, Any] | None:
+    atoms = case.get("semantic_atoms", [])
+    activations = [
+        atom
+        for atom in atoms
+        if atom.get("op") == "activate_ability"
+        and atom.get("ability") == "sacrifice_for_counter"
+    ]
+    if not activations:
+        return None
+    if len(activations) != 1:
+        raise ValueError(f"{case['scenario_id']}: expected one sacrifice activation")
+    activation = activations[0]
+    if activation != {
+        "ability": "sacrifice_for_counter",
+        "cost": {
+            "count": 1,
+            "kind": "sacrifice",
+            "predicate": "creature_you_control",
+        },
+        "op": "activate_ability",
+        "timing": "instant",
+    }:
+        raise ValueError(f"{case['scenario_id']}: invalid sacrifice activation expectation")
+    restrictions = [atom for atom in atoms if atom.get("op") == "combat_restriction"]
+    counters = [atom for atom in atoms if atom.get("op") == "add_counters"]
+    if restrictions != [
+        {
+            "duration": "while_source_on_battlefield",
+            "op": "combat_restriction",
+            "restriction": "cannot_block",
+            "subject": "source",
+        }
+    ] or counters != [
+        {
+            "amount": 1,
+            "counter": "+1/+1",
+            "object": "source",
+            "op": "add_counters",
+        }
+    ]:
+        raise ValueError(f"{case['scenario_id']}: incomplete Carrion Feeder expectation")
+    permanent = next(
+        (atom for atom in atoms if atom.get("op") == "resolve_permanent"), None
+    )
+    if not isinstance(permanent, dict):
+        raise ValueError(f"{case['scenario_id']}: source characteristics are missing")
+    power = permanent.get("power")
+    toughness = permanent.get("toughness")
+    if not isinstance(power, int) or not isinstance(toughness, int):
+        raise ValueError(f"{case['scenario_id']}: invalid source characteristics")
+    return {
+        "setup_succeeded": True,
+        "ability_count": 1,
+        "generic_mana_cost": 0,
+        "colored_mana_cost": 0,
+        "timing": "instant",
+        "target_slots": 0,
+        "object_choice_slots": 0,
+        "optional_choices": 0,
+        "sacrifice_count": 1,
+        "sacrifice_requires_creature": True,
+        "sacrifice_requires_controller": True,
+        "fodder_matches": True,
+        "opponent_creature_rejected": True,
+        "noncreature_rejected": True,
+        "fodder_sacrificed": True,
+        "source_remained_battlefield": True,
+        "source_bound_counter_action": True,
+        "counter_action_applied": True,
+        "plus_one_counters": 1,
+        "power_after_counter": power + 1,
+        "toughness_after_counter": toughness + 1,
+        "combat_setup_succeeded": True,
+        "could_block_before_restriction": True,
+        "static_registration_count": 1,
+        "restriction_registered": True,
+        "source_bound_cannot_block_definition": True,
+        "can_block_after_restriction": False,
+    }
+
+
 def verify_semantic_probe(case: dict[str, Any], actual: dict[str, Any]) -> None:
     if case.get("status") != "semantic_case_ready":
         return
@@ -465,6 +705,14 @@ def verify_semantic_probe(case: dict[str, Any], actual: dict[str, Any]) -> None:
             raise ValueError(
                 f"{case['scenario_id']}: no-maximum-hand-size rule did not remain source-bound"
             )
+
+    equipment = expected_equipment_probe(case)
+    if equipment is not None and probe.get("equipment") != equipment:
+        raise ValueError(f"{case['scenario_id']}: equipment semantic probe changed")
+
+    sacrifice_counter = expected_sacrifice_counter_probe(case)
+    if sacrifice_counter is not None and probe.get("sacrifice_counter") != sacrifice_counter:
+        raise ValueError(f"{case['scenario_id']}: sacrifice-counter semantic probe changed")
 
 
 def aggregate_translated_hash(cases: dict[str, Any]) -> str:

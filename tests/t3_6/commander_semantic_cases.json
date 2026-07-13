@@ -419,18 +419,26 @@
       "translated_source_sha256": "039260a50d38c95bc7f8b659d3286df4e3cdbd30bbeb5e5a4da9eba1d92fec39"
     },
     {
-      "blockers": [
-        {
-          "code": "T3_5_UNSUPPORTED_KEYWORD_SEMANTICS",
-          "detail": "card.faces[0].keywords: 1 noncreature keyword(s) require runtime lowering"
-        }
-      ],
       "card_name": "Swiftfoot Boots",
+      "claim_boundary": "one deterministic card-specific production path plus focused equip, live attachment, protection, reattachment, and expiration validation",
+      "expected_behavior": "Resolve Swiftfoot Boots, pay {1} to equip a controlled creature, grant that creature haste and hexproof, then prove both effects follow reattachment and expire when the Equipment leaves the battlefield.",
       "expected_runtime": {
-        "code": "unsupported_keyword_semantics",
-        "detail": "card.faces[0].keywords: 1 noncreature keyword(s) require runtime lowering",
-        "detail_sha256": "f948efa21fb38f29327bce749d47abd386d7addbb7fc79376fece432f78fc999",
-        "disposition": "unsupported_setup"
+        "capabilities": [
+          "permanent_spell",
+          "activated_ability",
+          "modify_characteristics",
+          "targeting_restriction",
+          "attach_object"
+        ],
+        "destination": "battlefield",
+        "disposition": "passed",
+        "effect_actions": 3,
+        "final_hash": "17343426485281010121",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 48
       },
       "freeze_rank": 10,
       "legacy_source_path": "s/swiftfoot_boots.txt",
@@ -438,24 +446,68 @@
       "oracle_id": "c8b143ad-43ec-4e0d-a440-e348daa31391",
       "oracle_text": "Equipped creature has hexproof and haste.\nEquip {1}",
       "scenario_id": "T3.6-010",
-      "status": "blocked_runtime",
+      "semantic_atoms": [
+        {
+          "destination": "battlefield",
+          "op": "resolve_permanent",
+          "subtypes": [
+            "Equipment"
+          ],
+          "type_line": "Artifact - Equipment"
+        },
+        {
+          "ability": "equip",
+          "generic_mana_cost": 1,
+          "op": "activate_ability",
+          "target": "creature_you_control",
+          "timing": "sorcery"
+        },
+        {
+          "duration": "while_source_on_battlefield",
+          "grant_keywords": [
+            "haste"
+          ],
+          "op": "modify_characteristics",
+          "subject": "equipped_creature"
+        },
+        {
+          "duration": "while_source_on_battlefield",
+          "op": "targeting_restriction",
+          "restriction": "hexproof",
+          "subject": "equipped_creature"
+        },
+        {
+          "attachment": "source",
+          "op": "attach_object",
+          "target": "chosen_creature"
+        }
+      ],
+      "status": "semantic_case_ready",
       "stratum": "stack_interaction_and_protection",
       "translated_path": "s/swiftfoot_boots.frs",
       "translated_source_sha256": "99b402fe8fa6541d734753b21a513be87f4296c9a9957d6bc3a5ddec0dd40c92"
     },
     {
-      "blockers": [
-        {
-          "code": "T3_5_UNSUPPORTED_KEYWORD_SEMANTICS",
-          "detail": "card.faces[0].keywords: 1 noncreature keyword(s) require runtime lowering"
-        }
-      ],
       "card_name": "Lightning Greaves",
+      "claim_boundary": "one deterministic card-specific production path plus focused equip, live attachment, protection, reattachment, and expiration validation",
+      "expected_behavior": "Resolve Lightning Greaves, pay {0} to equip a controlled creature, grant that creature haste and shroud, then prove both effects follow reattachment and expire when the Equipment leaves the battlefield.",
       "expected_runtime": {
-        "code": "unsupported_keyword_semantics",
-        "detail": "card.faces[0].keywords: 1 noncreature keyword(s) require runtime lowering",
-        "detail_sha256": "f948efa21fb38f29327bce749d47abd386d7addbb7fc79376fece432f78fc999",
-        "disposition": "unsupported_setup"
+        "capabilities": [
+          "permanent_spell",
+          "activated_ability",
+          "modify_characteristics",
+          "targeting_restriction",
+          "attach_object"
+        ],
+        "destination": "battlefield",
+        "disposition": "passed",
+        "effect_actions": 3,
+        "final_hash": "17194523036364943123",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 46
       },
       "freeze_rank": 11,
       "legacy_source_path": "l/lightning_greaves.txt",
@@ -463,7 +515,43 @@
       "oracle_id": "ca204b66-8d0c-431a-8d34-282f7c2d17da",
       "oracle_text": "Equipped creature has haste and shroud. (It can't be the target of spells or abilities.)\nEquip {0}",
       "scenario_id": "T3.6-011",
-      "status": "blocked_runtime",
+      "semantic_atoms": [
+        {
+          "destination": "battlefield",
+          "op": "resolve_permanent",
+          "subtypes": [
+            "Equipment"
+          ],
+          "type_line": "Artifact - Equipment"
+        },
+        {
+          "ability": "equip",
+          "generic_mana_cost": 0,
+          "op": "activate_ability",
+          "target": "creature_you_control",
+          "timing": "sorcery"
+        },
+        {
+          "duration": "while_source_on_battlefield",
+          "grant_keywords": [
+            "haste"
+          ],
+          "op": "modify_characteristics",
+          "subject": "equipped_creature"
+        },
+        {
+          "duration": "while_source_on_battlefield",
+          "op": "targeting_restriction",
+          "restriction": "shroud",
+          "subject": "equipped_creature"
+        },
+        {
+          "attachment": "source",
+          "op": "attach_object",
+          "target": "chosen_creature"
+        }
+      ],
+      "status": "semantic_case_ready",
       "stratum": "continuous_combat_and_costs",
       "translated_path": "l/lightning_greaves.frs",
       "translated_source_sha256": "6244e84bef0a91b849e1148c94b8a8cb6606dbbb09e607562db90ad442d1f793"
@@ -2800,18 +2888,29 @@
       "translated_source_sha256": "1ed816a130542328a17bcca08d9d60d38ada457b42f28ed2f329ac817d786f08"
     },
     {
-      "blockers": [
-        {
-          "code": "T3_5_UNSUPPORTED_KEYWORD_SEMANTICS",
-          "detail": "card.faces[0].keywords: 1 noncreature keyword(s) require runtime lowering"
-        }
-      ],
       "card_name": "Sword of the Animist",
+      "claim_boundary": "one deterministic card-specific production path plus focused equip, live attachment, reattachment, source-bound attack trigger, and exact basic-land search validation",
+      "expected_behavior": "Resolve Sword of the Animist, pay {2} to equip a controlled creature, apply +1/+1 only to the currently equipped creature, then attack with it to select a real basic land, move that land to the battlefield tapped, and shuffle while rejecting a nonbasic choice.",
       "expected_runtime": {
-        "code": "unsupported_keyword_semantics",
-        "detail": "card.faces[0].keywords: 1 noncreature keyword(s) require runtime lowering",
-        "detail_sha256": "f948efa21fb38f29327bce749d47abd386d7addbb7fc79376fece432f78fc999",
-        "disposition": "unsupported_setup"
+        "capabilities": [
+          "permanent_spell",
+          "activated_ability",
+          "modify_characteristics",
+          "attach_object",
+          "search_library",
+          "move_zone",
+          "tap_object",
+          "shuffle_library"
+        ],
+        "destination": "battlefield",
+        "disposition": "passed",
+        "effect_actions": 6,
+        "final_hash": "14000570846894602531",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 99
       },
       "freeze_rank": 65,
       "legacy_source_path": "s/sword_of_the_animist.txt",
@@ -2819,7 +2918,60 @@
       "oracle_id": "d79cbc61-6c15-48ea-bbba-3cffb819ccba",
       "oracle_text": "Equipped creature gets +1/+1.\nWhenever equipped creature attacks, you may search your library for a basic land card, put it onto the battlefield tapped, then shuffle.\nEquip {2}",
       "scenario_id": "T3.6-065",
-      "status": "blocked_runtime",
+      "semantic_atoms": [
+        {
+          "destination": "battlefield",
+          "op": "resolve_permanent",
+          "subtypes": [
+            "Equipment"
+          ],
+          "supertypes": [
+            "Legendary"
+          ],
+          "type_line": "Legendary Artifact - Equipment"
+        },
+        {
+          "ability": "equip",
+          "generic_mana_cost": 2,
+          "op": "activate_ability",
+          "target": "creature_you_control",
+          "timing": "sorcery"
+        },
+        {
+          "duration": "while_source_on_battlefield",
+          "op": "modify_characteristics",
+          "power_delta": 1,
+          "subject": "equipped_creature",
+          "toughness_delta": 1
+        },
+        {
+          "attachment": "source",
+          "op": "attach_object",
+          "target": "chosen_creature"
+        },
+        {
+          "filter": "basic_land",
+          "maximum": 1,
+          "op": "search_library",
+          "optional": true,
+          "player": "source_controller",
+          "trigger": "equipped_creature_attacks"
+        },
+        {
+          "chosen": "search_result",
+          "destination": "battlefield",
+          "op": "move_zone"
+        },
+        {
+          "chosen": "search_result",
+          "op": "tap_object"
+        },
+        {
+          "op": "shuffle_library",
+          "player": "source_controller"
+        }
+      ],
+      "status": "semantic_case_ready",
       "stratum": "triggered_synergies",
       "translated_path": "s/sword_of_the_animist.frs",
       "translated_source_sha256": "4fb53457a5a44f9c343355c22d991c7f63e32b4276a1d8b8fc28e15b14f4b75b"
@@ -4178,18 +4330,25 @@
       "translated_source_sha256": "140aca105aa426e63217a37d56b44cca1a3e5ad06b8a8ea341bfa36a015c1d14"
     },
     {
-      "blockers": [
-        {
-          "code": "T3_5_UNSUPPORTED_EFFECT_ARGUMENTS",
-          "detail": "card.faces[0].abilities[0].effect.selector: unsupported object target selector `source`"
-        }
-      ],
       "card_name": "Carrion Feeder",
+      "claim_boundary": "one deterministic card-specific production path plus focused sacrifice-cost, source-counter, derived P/T, and live combat-restriction validation",
+      "expected_behavior": "Resolve Carrion Feeder, verify it could otherwise block, sacrifice a matching controlled creature while leaving Carrion Feeder on the battlefield, add one +1/+1 counter to the actual source, derive 2/2, and enforce the source-bound cannot-block restriction.",
       "expected_runtime": {
-        "code": "unsupported_effect_arguments",
-        "detail": "card.faces[0].abilities[0].effect.selector: unsupported object target selector `source`",
-        "detail_sha256": "4d6e3019893411905d36e4ead4bd6800659597adfbb7cd99e8596e722db371d4",
-        "disposition": "unsupported_setup"
+        "capabilities": [
+          "permanent_spell",
+          "activated_ability",
+          "combat_restriction",
+          "add_counters"
+        ],
+        "destination": "battlefield",
+        "disposition": "passed",
+        "effect_actions": 2,
+        "final_hash": "14502260374801811923",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 47
       },
       "freeze_rank": 99,
       "legacy_source_path": "c/carrion_feeder.txt",
@@ -4197,7 +4356,41 @@
       "oracle_id": "a1cc5e37-b09a-4b7f-afd5-77c1c35aa425",
       "oracle_text": "Carrion Feeder can't block.\nSacrifice a creature: Put a +1/+1 counter on Carrion Feeder.",
       "scenario_id": "T3.6-099",
-      "status": "blocked_runtime",
+      "semantic_atoms": [
+        {
+          "destination": "battlefield",
+          "op": "resolve_permanent",
+          "power": 1,
+          "subtypes": [
+            "Zombie"
+          ],
+          "toughness": 1,
+          "type_line": "Creature - Zombie"
+        },
+        {
+          "ability": "sacrifice_for_counter",
+          "cost": {
+            "count": 1,
+            "kind": "sacrifice",
+            "predicate": "creature_you_control"
+          },
+          "op": "activate_ability",
+          "timing": "instant"
+        },
+        {
+          "duration": "while_source_on_battlefield",
+          "op": "combat_restriction",
+          "restriction": "cannot_block",
+          "subject": "source"
+        },
+        {
+          "amount": 1,
+          "counter": "+1/+1",
+          "object": "source",
+          "op": "add_counters"
+        }
+      ],
+      "status": "semantic_case_ready",
       "stratum": "continuous_combat_and_costs",
       "translated_path": "c/carrion_feeder.frs",
       "translated_source_sha256": "643d27142bc84c8856b404b39a8659292d868bdf05332f4940399fd8b4b02076"
@@ -4264,13 +4457,13 @@
   ],
   "claim_boundary": "Only semantic_case_ready entries can be promoted by a passing replay and any required card-specific semantic probe. Runtime-smoke success alone never promotes a known gap.",
   "generated_at": "2026-07-13",
-  "payload_sha256": "98d434171b1e705f7fc8a3d15cba81f59344a9f90dc19bffeb065d1a4a3d8924",
-  "product_source_commit": "9c9d97ff8725e7d4b38e52bb92d7feb9080ca113",
+  "payload_sha256": "ca386cb47b3a32280d15c3b09f1c17b079b697d7591c15cb0bc41e4a69a81004",
+  "product_source_commit": "deb1547006fe4665d3b8c4c6b072c5889971f532",
   "schema_version": 2,
   "summary": {
-    "blocked_runtime": 16,
+    "blocked_runtime": 12,
     "blocked_semantic_gap": 20,
     "candidate_count": 100,
-    "semantic_case_ready": 64
+    "semantic_case_ready": 68
   }
 }
