@@ -18838,6 +18838,13 @@ fn affected_selector_branch(value: &str) -> Result<Expression, MappingDiagnostic
                         ],
                     )],
                 ),
+                "Self" => call(
+                    Operation::Equals,
+                    vec![
+                        call(Operation::Any, vec![]),
+                        call(Operation::Source, vec![]),
+                    ],
+                ),
                 "Artifact" | "Battle" | "Creature" | "Enchantment" | "Instant" | "Land"
                 | "Planeswalker" | "Sorcery" => call(
                     Operation::TypeIs,
@@ -18898,13 +18905,37 @@ fn affected_selector_branch(value: &str) -> Result<Expression, MappingDiagnostic
                         vec![Expression::Text("flying".to_string())],
                     )],
                 ),
-                "attacking" | "blocking" | "tapped" | "IsSaddled" => call(
+                "attacking"
+                | "blocking"
+                | "tapped"
+                | "equipped"
+                | "wasCastByYou"
+                | "wasCastFromYourHandByYou"
+                | "IsSaddled" => call(
                     Operation::DesignationIs,
                     vec![Expression::Text(if modifier == "IsSaddled" {
                         "saddled".to_string()
+                    } else if modifier == "wasCastByYou" {
+                        "cast_by_you".to_string()
+                    } else if modifier == "wasCastFromYourHandByYou" {
+                        "cast_from_your_hand_by_you".to_string()
                     } else {
                         modifier.to_string()
                     })],
+                ),
+                "untapped" => call(
+                    Operation::Not,
+                    vec![call(
+                        Operation::DesignationIs,
+                        vec![Expression::Text("tapped".to_string())],
+                    )],
+                ),
+                "!wasCastFromYourHand" => call(
+                    Operation::Not,
+                    vec![call(
+                        Operation::DesignationIs,
+                        vec![Expression::Text("cast_from_your_hand".to_string())],
+                    )],
                 ),
                 "ThisTurnEnteredFrom_Battlefield" => call(
                     Operation::DesignationIs,
@@ -19884,6 +19915,20 @@ mod tests {
             &chosen_source,
             Operation::Chosen
         ));
+        for selector in [
+            "Card.Self+wasCastByYou",
+            "Card.wasCastFromYourHandByYou+Self",
+            "Card.!wasCastFromYourHand",
+            "Card.Self+untapped",
+            "Creature.YouCtrl+equipped",
+        ] {
+            affected_selector(selector).unwrap_or_else(|error| {
+                panic!(
+                    "closed history/designation selector should map: {}",
+                    error.message
+                )
+            });
+        }
 
         let dig = map_line(
             "A:SP$ Dig | DigNum$ 2 | ChangeNum$ 1 | Optional$ True | SpellDescription$ Dig.",
