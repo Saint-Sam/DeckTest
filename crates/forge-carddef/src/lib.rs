@@ -1241,6 +1241,10 @@ operations! {
     OptionalAttackCost => ("optional_attack_cost", Effect, 3, None),
     ExertCost => ("exert_cost", Cost, 1, Some(1)),
     RememberDrawn => ("remember_drawn", Effect, 2, Some(2)),
+    ApplyDuration => ("apply_duration", Effect, 2, Some(2)),
+    AddColor => ("add_color", Effect, 2, None),
+    PlayPermissionIgnoreColor => ("play_permission_ignore_color", Effect, 1, Some(1)),
+    PayEnergyCost => ("pay_energy_cost", Cost, 1, Some(1)),
 }
 
 impl Operation {
@@ -1294,6 +1298,7 @@ impl Operation {
             Self::DraftFromSpellbook => Some((2, Text)),
             Self::OptionalCastingCost | Self::AttackUnlessPaid => Some((2, Cost)),
             Self::OptionalAttackCost => Some((2, Cost)),
+            Self::AddColor => Some((1, Text)),
             _ => None,
         }
     }
@@ -2423,6 +2428,17 @@ impl Operation {
                 1 => Some(Text),
                 _ => None,
             },
+            Self::ApplyDuration => match index {
+                0 => Some(Effect),
+                1 => Some(Text),
+                _ => None,
+            },
+            Self::AddColor => match index {
+                0 => Some(Selector),
+                _ => Some(Text),
+            },
+            Self::PlayPermissionIgnoreColor => Some(Effect),
+            Self::PayEnergyCost => Some(Number),
             Self::ChooseNumber => match index {
                 0 => Some(Selector),
                 1 | 2 => Some(Number),
@@ -2805,6 +2821,10 @@ mod tests {
         assert_eq!(Operation::OptionalAttackCost as u32, 441);
         assert_eq!(Operation::ExertCost as u32, 442);
         assert_eq!(Operation::RememberDrawn as u32, 443);
+        assert_eq!(Operation::ApplyDuration as u32, 444);
+        assert_eq!(Operation::AddColor as u32, 445);
+        assert_eq!(Operation::PlayPermissionIgnoreColor as u32, 446);
+        assert_eq!(Operation::PayEnergyCost as u32, 447);
 
         let config = bincode::config::standard()
             .with_fixed_int_encoding()

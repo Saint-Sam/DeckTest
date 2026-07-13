@@ -9400,6 +9400,7 @@ fn map_debuff(
     let duration = match parameters.get("Duration").map(String::as_str) {
         None | Some("UntilEndOfTurn") => Some("until_end_of_turn"),
         Some("UntilYourNextTurn") => Some("until_your_next_turn"),
+        Some("UntilUntaps") => Some("until_source_untaps"),
         Some("Permanent") => None,
         Some(value) => return Err(unsupported_value("Duration", value)),
     };
@@ -9971,6 +9972,7 @@ fn map_continuous_with_effects(
             "EffectZone",
             "MayPlay",
             "MayPlayIgnoreType",
+            "MayPlayIgnoreColor",
             "MayPlayWithoutManaCost",
             "MayPlayLimit",
             "MayPlayPlayer",
@@ -9996,6 +9998,7 @@ fn map_continuous_with_effects(
         let affected = affected_selector(affected_value)?;
         let without_mana_cost = closed_true_flag(parameters, "MayPlayWithoutManaCost")?;
         let ignore_type = closed_true_flag(parameters, "MayPlayIgnoreType")?;
+        let ignore_color = closed_true_flag(parameters, "MayPlayIgnoreColor")?;
         let play_limit = parameters
             .get("MayPlayLimit")
             .map(|value| {
@@ -10012,33 +10015,37 @@ fn map_continuous_with_effects(
             Some("ActivePlayer") | Some("Player") => call(Operation::Any, vec![]),
             Some(value) => return Err(unsupported_value("MayPlayPlayer", value)),
         };
-        let mut play_permission = if without_mana_cost || ignore_type || play_limit != 0 {
-            call(
-                Operation::PlayPermissionRules,
-                vec![
-                    affected.clone(),
-                    permission_player.clone(),
-                    Expression::Text(zone.to_string()),
-                    Expression::Boolean(without_mana_cost),
-                    Expression::Boolean(ignore_type),
-                    Expression::Integer(play_limit),
-                ],
-            )
-        } else if zone == "exile" {
-            call(
-                Operation::PlayExiled,
-                vec![affected.clone(), permission_player.clone()],
-            )
-        } else {
-            call(
-                Operation::PlayFromZone,
-                vec![
-                    affected.clone(),
-                    permission_player,
-                    Expression::Text(zone.to_string()),
-                ],
-            )
-        };
+        let mut play_permission =
+            if without_mana_cost || ignore_type || ignore_color || play_limit != 0 {
+                call(
+                    Operation::PlayPermissionRules,
+                    vec![
+                        affected.clone(),
+                        permission_player.clone(),
+                        Expression::Text(zone.to_string()),
+                        Expression::Boolean(without_mana_cost),
+                        Expression::Boolean(ignore_type),
+                        Expression::Integer(play_limit),
+                    ],
+                )
+            } else if zone == "exile" {
+                call(
+                    Operation::PlayExiled,
+                    vec![affected.clone(), permission_player.clone()],
+                )
+            } else {
+                call(
+                    Operation::PlayFromZone,
+                    vec![
+                        affected.clone(),
+                        permission_player,
+                        Expression::Text(zone.to_string()),
+                    ],
+                )
+            };
+        if ignore_color {
+            play_permission = call(Operation::PlayPermissionIgnoreColor, vec![play_permission]);
+        }
         if let Some(raise_cost) = parameters.get("RaiseCost") {
             let costs = parse_simple_cost(Some(raise_cost))?;
             let cost = match costs.len() {
@@ -13920,6 +13927,7 @@ fn map_trigger_effect(
         (None, Some("Permanent")) => "permanent",
         (None, Some("UntilYourNextTurn")) => "until_your_next_turn",
         (None, Some("UntilTheEndOfYourNextTurn")) => "until_end_of_your_next_turn",
+        (None, Some("UntilUntaps")) => "until_source_untaps",
         (None, Some(value)) => return Err(unsupported_value("Duration", value)),
     };
     let mut effects = Vec::new();
@@ -14332,16 +14340,14 @@ fn map_animate_with_effects(
         }
     }
     if let Some(colors) = parameters.get("Colors") {
-        if parameters.get("OverwriteColors").map(String::as_str) != Some("True") {
-            return Err(diagnostic(
-                "UNSUPPORTED_PARAMETER",
-                "Animate Colors requires OverwriteColors$ True",
-            ));
-        }
         let colors = parse_animate_colors(colors)?;
         let mut arguments = vec![affected.clone()];
         arguments.extend(colors.into_iter().map(Expression::Text));
-        effects.push(call(Operation::SetColor, arguments));
+        match parameters.get("OverwriteColors").map(String::as_str) {
+            None | Some("False") => effects.push(call(Operation::AddColor, arguments)),
+            Some("True") => effects.push(call(Operation::SetColor, arguments)),
+            Some(value) => return Err(unsupported_value("OverwriteColors", value)),
+        }
     } else if parameters.contains_key("OverwriteColors") {
         return Err(diagnostic(
             "MISSING_PARAMETER",
@@ -14384,6 +14390,15 @@ fn map_animate_with_effects(
         Some("Permanent") => {}
         Some("Perpetual") => {
             expression = call(Operation::Perpetual, vec![expression]);
+        }
+        Some("UntilUntaps") => {
+            expression = call(
+                Operation::ApplyDuration,
+                vec![
+                    expression,
+                    Expression::Text("until_source_untaps".to_string()),
+                ],
+            );
         }
         Some(value) => return Err(unsupported_value("Duration", value)),
     }
@@ -16665,19 +16680,17 @@ fn map_animate_all_with_effects(
         }
     }
     if let Some(colors) = parameters.get("Colors") {
-        if parameters.get("OverwriteColors").map(String::as_str) != Some("True") {
-            return Err(diagnostic(
-                "UNSUPPORTED_PARAMETER",
-                "AnimateAll Colors requires OverwriteColors$ True",
-            ));
-        }
         let mut arguments = vec![affected.clone()];
         arguments.extend(
             parse_animate_colors(colors)?
                 .into_iter()
                 .map(Expression::Text),
         );
-        effects.push(call(Operation::SetColor, arguments));
+        match parameters.get("OverwriteColors").map(String::as_str) {
+            None | Some("False") => effects.push(call(Operation::AddColor, arguments)),
+            Some("True") => effects.push(call(Operation::SetColor, arguments)),
+            Some(value) => return Err(unsupported_value("OverwriteColors", value)),
+        }
     } else if parameters.contains_key("OverwriteColors") {
         return Err(diagnostic(
             "MISSING_PARAMETER",
@@ -16723,6 +16736,15 @@ fn map_animate_all_with_effects(
         Some("Permanent") => {}
         Some("Perpetual") => {
             expression = call(Operation::Perpetual, vec![expression]);
+        }
+        Some("UntilUntaps") => {
+            expression = call(
+                Operation::ApplyDuration,
+                vec![
+                    expression,
+                    Expression::Text("until_source_untaps".to_string()),
+                ],
+            );
         }
         Some(value) => return Err(unsupported_value("Duration", value)),
     }
@@ -16784,6 +16806,12 @@ fn map_cleanup(
 }
 
 fn parse_animate_colors(value: &str) -> Result<Vec<String>, MappingDiagnostic> {
+    if value == "All" {
+        return Ok(["white", "blue", "black", "red", "green"]
+            .into_iter()
+            .map(str::to_string)
+            .collect());
+    }
     let colors = value.split(',').map(str::trim).collect::<Vec<_>>();
     if colors.is_empty()
         || colors.len() > 2
@@ -17271,6 +17299,11 @@ fn parse_cost_with_controller(
         } else if let Some(payload) = cost_payload(&token, "PayLife") {
             costs.push(call(
                 Operation::PayLife,
+                vec![Expression::Integer(positive_integer(payload, "Cost")?)],
+            ));
+        } else if let Some(payload) = cost_payload(&token, "PayEnergy") {
+            costs.push(call(
+                Operation::PayEnergyCost,
                 vec![Expression::Integer(positive_integer(payload, "Cost")?)],
             ));
         } else if let Some(payload) = cost_payload(&token, "Draw") {
@@ -18658,6 +18691,7 @@ fn pump_duration(
     match parameters.get("Duration").map(String::as_str) {
         None | Some("UntilEndOfTurn") => Ok(Some("until_end_of_turn")),
         Some("UntilYourNextTurn") => Ok(Some("until_your_next_turn")),
+        Some("UntilUntaps") => Ok(Some("until_source_untaps")),
         Some("Permanent") => Ok(None),
         Some(value) => Err(unsupported_value("Duration", value)),
     }
@@ -18673,6 +18707,17 @@ fn append_keyword_grants(
         return Ok(());
     };
     for keyword in keywords.split(" & ") {
+        if keyword == "HIDDEN CARDNAME's power and toughness are switched" {
+            let mut effect = call(Operation::SwitchPt, vec![affected.clone()]);
+            if let Some(duration) = duration {
+                effect = call(
+                    Operation::ApplyDuration,
+                    vec![effect, Expression::Text(duration.to_string())],
+                );
+            }
+            effects.push(effect);
+            continue;
+        }
         let restrictions = match keyword {
             "HIDDEN CARDNAME can't attack." => Some([Operation::CannotAttack].as_slice()),
             "HIDDEN CARDNAME can't block." => Some([Operation::CannotBlock].as_slice()),
@@ -22567,6 +22612,58 @@ mod tests {
         }
         assert!(map_line("A:DB$ Draw | RememberDrawn$ Unknown").is_err());
 
+        let tapped_duration = map_line(
+            "A:AB$ Pump | Cost$ 2 T | ValidTgts$ Creature | NumAtt$ +2 | Duration$ UntilUntaps",
+        )
+        .unwrap_or_else(|error| panic!("source-tapped pump should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &tapped_duration.expression,
+            Operation::ModifyPt
+        ));
+
+        let animated = map_line(
+            "A:AB$ Animate | Cost$ 1 U T | ValidTgts$ Artifact.YouCtrl | Power$ 4 | Toughness$ 4 | Types$ Creature | Duration$ UntilUntaps",
+        )
+        .unwrap_or_else(|error| panic!("source-tapped animate should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &animated.expression,
+            Operation::ApplyDuration
+        ));
+
+        let switched = map_line(
+            "A:SP$ Pump | ValidTgts$ Creature | KW$ HIDDEN CARDNAME's power and toughness are switched",
+        )
+        .unwrap_or_else(|error| panic!("switched PT should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &switched.expression,
+            Operation::SwitchPt
+        ));
+
+        for colors in ["Blue", "All"] {
+            let additive = map_line(&format!("A:AB$ Animate | Defined$ Self | Colors$ {colors}"))
+                .unwrap_or_else(|error| panic!("additive color should map: {}", error.message));
+            assert!(expression_contains_operation(
+                &additive.expression,
+                Operation::AddColor
+            ));
+        }
+
+        let flexible_mana = map_line(
+            "S:Mode$ Continuous | Affected$ Card.IsRemembered | AffectedZone$ Exile | MayPlay$ True | MayPlayIgnoreColor$ True",
+        )
+        .unwrap_or_else(|error| panic!("color-flexible permission should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &flexible_mana.expression,
+            Operation::PlayPermissionIgnoreColor
+        ));
+
+        let energy = map_line("A:AB$ Draw | Cost$ PayEnergy<2>")
+            .unwrap_or_else(|error| panic!("energy cost should map: {}", error.message));
+        assert!(energy
+            .costs
+            .iter()
+            .any(|cost| expression_contains_operation(cost, Operation::PayEnergyCost)));
+
         let reveal = map_line(
             "A:SP$ Reveal | Defined$ You | RevealValid$ Card.Blue | AnyNumber$ True | RememberRevealed$ True",
         )
@@ -23664,10 +23761,19 @@ mod tests {
             "A:SP$ Draw | Defined$ You | ActivationZone$ Sideboard | SpellDescription$ Draw.",
             "A:SP$ Draw | Defined$ You | UnlessPayer$ You | SpellDescription$ Draw.",
             "A:SP$ Draw | Defined$ You | UnlessCost$ Y | UnlessPayer$ You | SpellDescription$ Draw.",
-            "A:SP$ Draw | Defined$ You | UnlessCost$ PayEnergy<2> | UnlessPayer$ You | SpellDescription$ Draw.",
+            "A:SP$ Draw | Defined$ You | UnlessCost$ PayEnergy<X> | UnlessPayer$ You | SpellDescription$ Draw.",
         ] {
             assert!(map_line(line).is_err(), "open timing/unless form must quarantine");
         }
+
+        let energy_unless = map_line(
+            "A:SP$ Draw | Defined$ You | UnlessCost$ PayEnergy<2> | UnlessPayer$ You | SpellDescription$ Draw.",
+        )
+        .unwrap_or_else(|error| panic!("energy unless-cost should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &energy_unless.expression,
+            Operation::PayEnergyCost
+        ));
     }
 
     #[test]
