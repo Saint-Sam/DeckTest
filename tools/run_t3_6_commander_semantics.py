@@ -27,8 +27,11 @@ ATOM_CAPABILITIES = {
     "resolve_permanent": "permanent_spell",
     "activate_mana": "mana_ability",
     "activate_ability": "activated_ability",
+    "cycling": "cycling",
     "gain_life": "gain_life",
     "lose_life": "lose_life",
+    "choose_mode": "choose_mode",
+    "deal_damage": "deal_damage",
     "draw_cards": "draw_cards",
     "scry": "scry",
     "shuffle_library": "shuffle_library",
@@ -1090,6 +1093,195 @@ def expected_evoke_probe(case: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
+def expected_boros_charm_probe(case: dict[str, Any]) -> dict[str, Any] | None:
+    atoms = case.get("semantic_atoms", [])
+    choose_modes = [atom for atom in atoms if atom.get("op") == "choose_mode"]
+    if not choose_modes:
+        return None
+    damage = [atom for atom in atoms if atom.get("op") == "deal_damage"]
+    indestructible = [atom for atom in atoms if atom.get("op") == "indestructible"]
+    characteristic_changes = [
+        atom for atom in atoms if atom.get("op") == "modify_characteristics"
+    ]
+    if choose_modes != [
+        {
+            "op": "choose_mode",
+            "mode_count": 3,
+            "selection": "exactly_one",
+            "fail_closed": True,
+        }
+    ]:
+        raise ValueError(f"{case['scenario_id']}: invalid modal-choice expectation")
+    if damage != [
+        {
+            "op": "deal_damage",
+            "mode": 0,
+            "amount": 4,
+            "target": "player_or_planeswalker",
+        }
+    ]:
+        raise ValueError(f"{case['scenario_id']}: invalid damage-mode expectation")
+    if indestructible != [
+        {
+            "op": "indestructible",
+            "mode": 1,
+            "subject": "permanents_you_control",
+            "duration": "until_end_of_turn",
+        }
+    ]:
+        raise ValueError(f"{case['scenario_id']}: invalid indestructible-mode expectation")
+    if characteristic_changes != [
+        {
+            "op": "modify_characteristics",
+            "mode": 2,
+            "subject": "target_creature",
+            "keywords": ["double_strike"],
+            "duration": "until_end_of_turn",
+        }
+    ]:
+        raise ValueError(f"{case['scenario_id']}: invalid double-strike-mode expectation")
+    return {
+        "setup_succeeded": True,
+        "contract": {
+            "mode_count": 3,
+            "target_counts": [1, 0, 1],
+            "modes_have_no_object_choices": True,
+            "modes_have_no_optional_choices": True,
+            "damage_program_exact": True,
+            "indestructible_program_exact": True,
+            "double_strike_program_exact": True,
+            "no_mode_rejected_before_mutation": True,
+            "out_of_range_mode_rejected_before_mutation": True,
+            "targetless_mode_rejects_extra_target": True,
+        },
+        "damage": {
+            "requirement_is_player_or_permanent": True,
+            "player_target_accepted": True,
+            "player_bound_action_exact": True,
+            "player_action_applied": True,
+            "opponent_life_after_damage": 16,
+            "planeswalker_target_accepted": True,
+            "planeswalker_bound_action_exact": True,
+            "planeswalker_action_applied": True,
+            "planeswalker_loyalty_after_damage": 3,
+            "nonplaneswalker_permanent_rejected_before_mutation": True,
+        },
+        "indestructible": {
+            "bound_action_count": 2,
+            "bound_actions_are_restrictions": True,
+            "all_actions_applied": True,
+            "controlled_creature_protected": True,
+            "controlled_artifact_protected": True,
+            "opponent_creature_unprotected": True,
+            "opponent_artifact_unprotected": True,
+            "protected_creature_survived_lethal_damage": True,
+            "protected_artifact_survived_destroy": True,
+            "opponent_artifact_destroyed": True,
+        },
+        "double_strike": {
+            "controlled_creature_target_accepted": True,
+            "opponent_creature_target_accepted": True,
+            "noncreature_target_rejected_before_mutation": True,
+            "bound_action_count": 1,
+            "bound_action_is_continuous_effect": True,
+            "all_actions_applied": True,
+            "opponent_creature_has_double_strike": True,
+        },
+        "cleanup": {
+            "reached": True,
+            "expired_until_end_of_turn": 3,
+            "restrictions_removed": True,
+            "continuous_effects_removed": True,
+            "double_strike_expired": True,
+            "controlled_creature_destroyed_after_cleanup": True,
+            "controlled_artifact_destroyed_after_cleanup": True,
+        },
+    }
+
+
+def expected_reconnaissance_mission_probe(
+    case: dict[str, Any],
+) -> dict[str, Any] | None:
+    atoms = case.get("semantic_atoms", [])
+    cycling = [atom for atom in atoms if atom.get("op") == "cycling"]
+    if not cycling:
+        return None
+    permanents = [atom for atom in atoms if atom.get("op") == "resolve_permanent"]
+    draws = [atom for atom in atoms if atom.get("op") == "draw_cards"]
+    if permanents != [
+        {
+            "op": "resolve_permanent",
+            "destination": "battlefield",
+        }
+    ]:
+        raise ValueError(f"{case['scenario_id']}: invalid permanent expectation")
+    if cycling != [
+        {
+            "op": "cycling",
+            "cost": "{2}",
+            "from": "controller_hand",
+            "discard": "source_to_owner_graveyard",
+            "draw": 1,
+        }
+    ]:
+        raise ValueError(f"{case['scenario_id']}: invalid cycling expectation")
+    if draws != [
+        {
+            "op": "draw_cards",
+            "count": 1,
+            "player": "source_controller",
+            "trigger": "controlled_creature_combat_damage_to_player",
+            "optional": True,
+        }
+    ]:
+        raise ValueError(f"{case['scenario_id']}: invalid combat-draw expectation")
+    return {
+        "setup_succeeded": True,
+        "contract": {
+            "cycling_present": True,
+            "cycling_cost_exact": True,
+            "trigger_count": 1,
+            "trigger_event_exact": True,
+            "trigger_effect_exact": True,
+            "trigger_choice_contract_exact": True,
+        },
+        "cycling": {
+            "priority_ready": True,
+            "generic_mana_cost": 2,
+            "exact_payment_total": 2,
+            "wrong_zone_rejected_before_mutation": True,
+            "unfunded_rejected_before_mutation": True,
+            "funded": True,
+            "action_applied": True,
+            "payment_consumed": True,
+            "source_discarded_to_owner_graveyard": True,
+            "drew_exactly_one": True,
+        },
+        "combat_trigger": {
+            "definition_exact": True,
+            "registered": True,
+            "combat_window_ready": True,
+            "attacker_declared": True,
+            "blockers_step_reached": True,
+            "no_blockers_declared": True,
+            "combat_damage_step_reached": True,
+            "combat_damage_assigned": True,
+            "opponent_life_after_damage": 19,
+            "pending_trigger_exact": True,
+            "put_on_stack": True,
+        },
+        "optional_draw": {
+            "missing_choice_rejected_before_mutation": True,
+            "decline_emits_no_actions_or_draw": True,
+            "accept_bound_action_count": 1,
+            "accept_draw_action_exact": True,
+            "trigger_stack_resolved": True,
+            "draw_action_applied": True,
+            "drew_exactly_one": True,
+        },
+    }
+
+
 def verify_semantic_probe(case: dict[str, Any], actual: dict[str, Any]) -> None:
     if case.get("status") != "semantic_case_ready":
         return
@@ -1225,6 +1417,19 @@ def verify_semantic_probe(case: dict[str, Any], actual: dict[str, Any]) -> None:
     evoke = expected_evoke_probe(case)
     if evoke is not None and probe.get("evoke") != evoke:
         raise ValueError(f"{case['scenario_id']}: evoke semantic probe changed")
+
+    boros_charm = expected_boros_charm_probe(case)
+    if boros_charm is not None and probe.get("boros_charm") != boros_charm:
+        raise ValueError(f"{case['scenario_id']}: Boros Charm semantic probe changed")
+
+    reconnaissance_mission = expected_reconnaissance_mission_probe(case)
+    if (
+        reconnaissance_mission is not None
+        and probe.get("reconnaissance_mission") != reconnaissance_mission
+    ):
+        raise ValueError(
+            f"{case['scenario_id']}: Reconnaissance Mission semantic probe changed"
+        )
 
 
 def aggregate_translated_hash(cases: dict[str, Any]) -> str:

@@ -2694,18 +2694,25 @@
       "translated_source_sha256": "1060d9f61514a1ac5e14325738f2cacbe74f8c07ca7324ed9a93dde480a0189d"
     },
     {
-      "blockers": [
-        {
-          "code": "T3_5_UNSUPPORTED_EFFECT_OPERATION",
-          "detail": "card.faces[0].abilities[0].effect: effect operation `choose_one` has no complete runtime lowering"
-        }
-      ],
       "card_name": "Boros Charm",
+      "claim_boundary": "Focused compiled-program validation covers exact-one fail-closed mode selection, legal target classes, production damage to a player and planeswalker, controlled-permanent indestructibility, targeted double strike for either controller's creature, and cleanup expiration; no broader modal or combat behavior is claimed.",
+      "expected_behavior": "Announce exactly one of three modes. Prove the damage mode deals 4 to either a player or planeswalker and rejects other permanents, the indestructible mode protects every controlled permanent but no opposing permanent from destruction and lethal damage, and the double-strike mode accepts any creature but no noncreature; temporary effects must expire at cleanup.",
       "expected_runtime": {
-        "code": "unsupported_effect_operation",
-        "detail": "card.faces[0].abilities[0].effect: effect operation `choose_one` has no complete runtime lowering",
-        "detail_sha256": "0eb16937eda99fe3a35a682d413d78dca08ddb65b59ce298eb4e9221f507b641",
-        "disposition": "unsupported_setup"
+        "capabilities": [
+          "choose_mode",
+          "deal_damage",
+          "indestructible",
+          "modify_characteristics"
+        ],
+        "destination": "owner_graveyard",
+        "disposition": "passed",
+        "effect_actions": 0,
+        "final_hash": "2521574961267670872",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 31
       },
       "freeze_rank": 59,
       "legacy_source_path": "b/boros_charm.txt",
@@ -2713,7 +2720,36 @@
       "oracle_id": "2679d0dd-ba30-4a1c-b6a0-b3ac6c790496",
       "oracle_text": "Choose one \u2014\n\u2022 Boros Charm deals 4 damage to target player or planeswalker.\n\u2022 Permanents you control gain indestructible until end of turn.\n\u2022 Target creature gains double strike until end of turn.",
       "scenario_id": "T3.6-059",
-      "status": "blocked_runtime",
+      "semantic_atoms": [
+        {
+          "fail_closed": true,
+          "mode_count": 3,
+          "op": "choose_mode",
+          "selection": "exactly_one"
+        },
+        {
+          "amount": 4,
+          "mode": 0,
+          "op": "deal_damage",
+          "target": "player_or_planeswalker"
+        },
+        {
+          "duration": "until_end_of_turn",
+          "mode": 1,
+          "op": "indestructible",
+          "subject": "permanents_you_control"
+        },
+        {
+          "duration": "until_end_of_turn",
+          "keywords": [
+            "double_strike"
+          ],
+          "mode": 2,
+          "op": "modify_characteristics",
+          "subject": "target_creature"
+        }
+      ],
+      "status": "semantic_case_ready",
       "stratum": "continuous_combat_and_costs",
       "translated_path": "b/boros_charm.frs",
       "translated_source_sha256": "2d401fcc0be135d805a52d20f565bac746396883a85c9d368e8ffd161440a0db"
@@ -3078,18 +3114,24 @@
       "translated_source_sha256": "4fb53457a5a44f9c343355c22d991c7f63e32b4276a1d8b8fc28e15b14f4b75b"
     },
     {
-      "blockers": [
-        {
-          "code": "T3_5_UNSUPPORTED_KEYWORD_SEMANTICS",
-          "detail": "card.faces[0].keywords: 1 noncreature keyword(s) require runtime lowering"
-        }
-      ],
       "card_name": "Reconnaissance Mission",
+      "claim_boundary": "Focused compiled-program validation covers fixed {2} cycling from hand through payment, source discard, and one draw, plus a source-bound controlled-creature combat-damage-to-player trigger with explicit decline and draw choices; no broader cycling or damage-trigger family is claimed.",
+      "expected_behavior": "With priority, cycling must reject an unfunded or out-of-zone source before mutation, then consume {2}, move Reconnaissance Mission from hand to its owner's graveyard, and draw exactly one. On the battlefield, combat damage from a controlled creature to a player must queue the source-bound trigger; declining draws nothing, while accepting resolves an exact one-card draw.",
       "expected_runtime": {
-        "code": "unsupported_keyword_semantics",
-        "detail": "card.faces[0].keywords: 1 noncreature keyword(s) require runtime lowering",
-        "detail_sha256": "f948efa21fb38f29327bce749d47abd386d7addbb7fc79376fece432f78fc999",
-        "disposition": "unsupported_setup"
+        "capabilities": [
+          "permanent_spell",
+          "cycling",
+          "draw_cards"
+        ],
+        "destination": "battlefield",
+        "disposition": "passed",
+        "effect_actions": 1,
+        "final_hash": "10391445441408452184",
+        "final_life_totals": [
+          20,
+          19
+        ],
+        "production_actions": 61
       },
       "freeze_rank": 66,
       "legacy_source_path": "r/reconnaissance_mission.txt",
@@ -3097,7 +3139,27 @@
       "oracle_id": "11bf211c-95a3-4e7f-bd08-13f979d54e73",
       "oracle_text": "Whenever a creature you control deals combat damage to a player, you may draw a card.\nCycling {2} ({2}, Discard this card: Draw a card.)",
       "scenario_id": "T3.6-066",
-      "status": "blocked_runtime",
+      "semantic_atoms": [
+        {
+          "destination": "battlefield",
+          "op": "resolve_permanent"
+        },
+        {
+          "cost": "{2}",
+          "discard": "source_to_owner_graveyard",
+          "draw": 1,
+          "from": "controller_hand",
+          "op": "cycling"
+        },
+        {
+          "count": 1,
+          "op": "draw_cards",
+          "optional": true,
+          "player": "source_controller",
+          "trigger": "controlled_creature_combat_damage_to_player"
+        }
+      ],
+      "status": "semantic_case_ready",
       "stratum": "card_flow",
       "translated_path": "r/reconnaissance_mission.frs",
       "translated_source_sha256": "19cef5dad9567997746a83c60e961effb5579d4c80b6c3ee9bdc4775a70e90e7"
@@ -4619,13 +4681,13 @@
   ],
   "claim_boundary": "Only semantic_case_ready entries can be promoted by a passing replay and any required card-specific semantic probe. Runtime-smoke success alone never promotes a known gap.",
   "generated_at": "2026-07-13",
-  "payload_sha256": "b35b1c12d76eea0dc04046ef244e3fa0e49d16cd9134cb2ee5b728a289be3416",
-  "product_source_commit": "d16ed0274371efafb123d6371a5a6a65653cd20d",
+  "payload_sha256": "0835a2dd98f8749d9f39dcf14b540b95db635111439bc6a3f1d4ce89cb992005",
+  "product_source_commit": "f2ab09e6728c09ea101ee58834bb4045ceef1386",
   "schema_version": 2,
   "summary": {
-    "blocked_runtime": 5,
+    "blocked_runtime": 3,
     "blocked_semantic_gap": 20,
     "candidate_count": 100,
-    "semantic_case_ready": 75
+    "semantic_case_ready": 77
   }
 }

@@ -77,6 +77,10 @@ def observed_from_cases(cases: dict) -> list[dict]:
                 "split_second": SEMANTICS.expected_split_second_probe(case),
                 "overload": SEMANTICS.expected_overload_probe(case),
                 "evoke": SEMANTICS.expected_evoke_probe(case),
+                "boros_charm": SEMANTICS.expected_boros_charm_probe(case),
+                "reconnaissance_mission": (
+                    SEMANTICS.expected_reconnaissance_mission_probe(case)
+                ),
                 "noncreature_counter": (
                     SEMANTICS.expected_noncreature_counter_probe(case)
                 ),
@@ -117,9 +121,9 @@ class CommanderSemanticSidecarTests(unittest.TestCase):
             self.cases["summary"],
             {
                 "candidate_count": 100,
-                "semantic_case_ready": 75,
+                "semantic_case_ready": 77,
                 "blocked_semantic_gap": 20,
-                "blocked_runtime": 5,
+                "blocked_runtime": 3,
             },
         )
 
@@ -427,6 +431,103 @@ class CommanderSemanticSidecarTests(unittest.TestCase):
             "draw_then_sacrificed"
         ] = False
         with self.assertRaisesRegex(ValueError, "evoke semantic probe changed"):
+            SEMANTICS.verify_observed(self.cases, observed)
+
+    def test_boros_charm_requires_one_valid_announced_mode(self) -> None:
+        observed = observed_from_cases(self.cases)
+        charm_index = next(
+            index
+            for index, case in enumerate(self.cases["cases"])
+            if case["card_name"] == "Boros Charm"
+        )
+        observed[charm_index]["semantic_probe"]["boros_charm"]["contract"][
+            "no_mode_rejected_before_mutation"
+        ] = False
+        with self.assertRaisesRegex(ValueError, "Boros Charm semantic probe changed"):
+            SEMANTICS.verify_observed(self.cases, observed)
+
+    def test_boros_charm_damage_mode_covers_player_and_planeswalker(self) -> None:
+        observed = observed_from_cases(self.cases)
+        charm_index = next(
+            index
+            for index, case in enumerate(self.cases["cases"])
+            if case["card_name"] == "Boros Charm"
+        )
+        observed[charm_index]["semantic_probe"]["boros_charm"]["damage"][
+            "planeswalker_loyalty_after_damage"
+        ] = 7
+        with self.assertRaisesRegex(ValueError, "Boros Charm semantic probe changed"):
+            SEMANTICS.verify_observed(self.cases, observed)
+
+    def test_boros_charm_indestructible_covers_controlled_permanents(self) -> None:
+        observed = observed_from_cases(self.cases)
+        charm_index = next(
+            index
+            for index, case in enumerate(self.cases["cases"])
+            if case["card_name"] == "Boros Charm"
+        )
+        observed[charm_index]["semantic_probe"]["boros_charm"]["indestructible"][
+            "protected_artifact_survived_destroy"
+        ] = False
+        with self.assertRaisesRegex(ValueError, "Boros Charm semantic probe changed"):
+            SEMANTICS.verify_observed(self.cases, observed)
+
+    def test_boros_charm_double_strike_targets_any_creature_and_expires(self) -> None:
+        observed = observed_from_cases(self.cases)
+        charm_index = next(
+            index
+            for index, case in enumerate(self.cases["cases"])
+            if case["card_name"] == "Boros Charm"
+        )
+        observed[charm_index]["semantic_probe"]["boros_charm"]["cleanup"][
+            "double_strike_expired"
+        ] = False
+        with self.assertRaisesRegex(ValueError, "Boros Charm semantic probe changed"):
+            SEMANTICS.verify_observed(self.cases, observed)
+
+    def test_reconnaissance_mission_cycling_is_paid_discard_then_draw(self) -> None:
+        observed = observed_from_cases(self.cases)
+        mission_index = next(
+            index
+            for index, case in enumerate(self.cases["cases"])
+            if case["card_name"] == "Reconnaissance Mission"
+        )
+        observed[mission_index]["semantic_probe"]["reconnaissance_mission"][
+            "cycling"
+        ]["payment_consumed"] = False
+        with self.assertRaisesRegex(
+            ValueError, "Reconnaissance Mission semantic probe changed"
+        ):
+            SEMANTICS.verify_observed(self.cases, observed)
+
+    def test_reconnaissance_mission_queues_only_the_typed_combat_trigger(self) -> None:
+        observed = observed_from_cases(self.cases)
+        mission_index = next(
+            index
+            for index, case in enumerate(self.cases["cases"])
+            if case["card_name"] == "Reconnaissance Mission"
+        )
+        observed[mission_index]["semantic_probe"]["reconnaissance_mission"][
+            "combat_trigger"
+        ]["pending_trigger_exact"] = False
+        with self.assertRaisesRegex(
+            ValueError, "Reconnaissance Mission semantic probe changed"
+        ):
+            SEMANTICS.verify_observed(self.cases, observed)
+
+    def test_reconnaissance_mission_optional_draw_supports_decline_and_accept(self) -> None:
+        observed = observed_from_cases(self.cases)
+        mission_index = next(
+            index
+            for index, case in enumerate(self.cases["cases"])
+            if case["card_name"] == "Reconnaissance Mission"
+        )
+        observed[mission_index]["semantic_probe"]["reconnaissance_mission"][
+            "optional_draw"
+        ]["decline_emits_no_actions_or_draw"] = False
+        with self.assertRaisesRegex(
+            ValueError, "Reconnaissance Mission semantic probe changed"
+        ):
             SEMANTICS.verify_observed(self.cases, observed)
 
     def test_incremental_report_keeps_checkpoint_open(self) -> None:

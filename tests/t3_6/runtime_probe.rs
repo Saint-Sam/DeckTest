@@ -3,15 +3,17 @@
 use forge_cards::runtime::{
     bind_activated_effect_actions, bind_program_actions, bind_triggered_ability_actions,
     compile_card_program, execute_program, ActivatedAbilityProgram, ActivatedEffectProgram,
-    AlternateCostCondition, AlternateCostKind, CardProgram, EffectProgram, ExecutionBindings,
-    ExecutionDiagnosticCode, PlayerBinding, StaticAbilityProgram, TriggeredEventProgram,
+    AlternateCostCondition, AlternateCostKind, AmountProgram, CardProgram, EffectProgram,
+    ExecutionBindings, ExecutionDiagnosticCode, ObjectSetProgram, PlayerBinding,
+    StaticAbilityProgram, TriggeredEventProgram,
 };
 use forge_core::{
     apply, auto_payment_plan, AbilityPlayer, Action, ActivatedAbilityDefinition,
     ActivatedAbilityEffect, ActivationCondition, ActivationCost, ActivationTiming,
     AttackDeclaration, BaseCreatureCharacteristics, BaseObjectCharacteristics, BlockDeclaration,
-    CardId, CastSpellRequest, CombatRestriction, CombatRestrictionSubject,
-    ContinuousEffectDuration, CounterKind, GameState, ManaCost, ManaKind, ManaPool, ObjectColors,
+    CardId, CastSpellRequest, CombatDamageAssignment, CombatDamageAssignmentRequest,
+    CombatDamageTarget, CombatRestriction, CombatRestrictionSubject, ContinuousEffectDuration,
+    CounterKind, CreatureKeywords, GameState, ManaCost, ManaKind, ManaPool, ObjectColors,
     ObjectSupertypes, ObjectTargetPredicate, ObjectTypes, Outcome, PlayerRule, PriorityOutcome,
     ResolutionOutcome, RestrictionEffect, SpellTiming, StackObjectKind, StateError, Step,
     TargetChoice, TargetControllerPredicate, TargetKind, TargetRequirement, TargetRestriction,
@@ -3223,6 +3225,785 @@ fn temporary_protection_probe(program: &CardProgram) -> Option<serde_json::Value
     }))
 }
 
+fn boros_charm_probe(program: &CardProgram) -> Option<serde_json::Value> {
+    if program.name() != "Boros Charm" {
+        return None;
+    }
+    let modes = program.spell_modes();
+    if modes.len() != 3 {
+        return Some(json!({
+            "setup_succeeded": false,
+            "observed_mode_count": modes.len(),
+        }));
+    }
+
+    let target_counts = modes
+        .iter()
+        .map(|mode| mode.target_requirements().len())
+        .collect::<Vec<_>>();
+    let modes_have_no_object_choices = modes
+        .iter()
+        .all(|mode| mode.object_choice_requirements().is_empty());
+    let modes_have_no_optional_choices = modes.iter().all(|mode| mode.optional_choice_count() == 0);
+    let damage_program_exact = matches!(
+        modes[0].effects(),
+        [EffectProgram::DealDamageToTarget {
+            target: 0,
+            amount: AmountProgram::Literal(4),
+        }]
+    );
+    let indestructible_program_exact = matches!(
+        modes[1].effects(),
+        [EffectProgram::GrantIndestructible {
+            objects: ObjectSetProgram::Battlefield(predicate),
+            duration: ContinuousEffectDuration::UntilEndOfTurn,
+        }] if predicate.controller() == TargetControllerPredicate::You
+            && predicate.required_types() == ObjectTypes::none()
+    );
+    let double_strike_program_exact = matches!(
+        modes[2].effects(),
+        [EffectProgram::GrantKeywords {
+            objects: ObjectSetProgram::Target(0),
+            keywords,
+            duration: ContinuousEffectDuration::UntilEndOfTurn,
+        }] if *keywords == CreatureKeywords::none().with_double_strike()
+    );
+
+    let mut state = GameState::new();
+    let controller = match apply(&mut state, Action::AddPlayer) {
+        Outcome::PlayerAdded(player) => player,
+        _ => return Some(json!({"setup_succeeded": false})),
+    };
+    let opponent = match apply(&mut state, Action::AddPlayer) {
+        Outcome::PlayerAdded(player) => player,
+        _ => return Some(json!({"setup_succeeded": false})),
+    };
+    let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+    let creature_base =
+        BaseObjectCharacteristics::new(ObjectTypes::none().with_creature(), ObjectColors::none());
+    let controlled_creature = create_probe_object(
+        &mut state,
+        9_660_000,
+        controller,
+        controller,
+        battlefield,
+        creature_base,
+        Some(BaseCreatureCharacteristics::new(2, 2)),
+    )?;
+    let controlled_artifact = create_probe_object(
+        &mut state,
+        9_660_001,
+        controller,
+        controller,
+        battlefield,
+        BaseObjectCharacteristics::new(ObjectTypes::none().with_artifact(), ObjectColors::none()),
+        None,
+    )?;
+    let opponent_creature = create_probe_object(
+        &mut state,
+        9_660_002,
+        opponent,
+        opponent,
+        battlefield,
+        creature_base,
+        Some(BaseCreatureCharacteristics::new(3, 3)),
+    )?;
+    let opponent_artifact = create_probe_object(
+        &mut state,
+        9_660_003,
+        opponent,
+        opponent,
+        battlefield,
+        BaseObjectCharacteristics::new(ObjectTypes::none().with_artifact(), ObjectColors::none()),
+        None,
+    )?;
+    let planeswalker = create_probe_object(
+        &mut state,
+        9_660_004,
+        opponent,
+        opponent,
+        battlefield,
+        BaseObjectCharacteristics::new(
+            ObjectTypes::none().with_planeswalker(),
+            ObjectColors::none(),
+        ),
+        None,
+    )?;
+    if !matches!(
+        apply(
+            &mut state,
+            Action::SetObjectLoyalty {
+                object: planeswalker,
+                loyalty: Some(7),
+            },
+        ),
+        Outcome::Applied
+    ) {
+        return Some(json!({"setup_succeeded": false}));
+    }
+
+    let before_no_mode = state.deterministic_hash();
+    let no_mode_rejected_before_mutation = matches!(
+        bind_program_actions(
+            &state,
+            program,
+            &ExecutionBindings::new(controller, vec![opponent]),
+        ),
+        Err(error) if error.code() == ExecutionDiagnosticCode::MissingChoice
+    ) && state.deterministic_hash() == before_no_mode;
+    let before_invalid_mode = state.deterministic_hash();
+    let out_of_range_mode_rejected_before_mutation = matches!(
+        bind_program_actions(
+            &state,
+            program,
+            &ExecutionBindings::new(controller, vec![opponent]).with_spell_mode(3),
+        ),
+        Err(error) if error.code() == ExecutionDiagnosticCode::MissingChoice
+    ) && state.deterministic_hash()
+        == before_invalid_mode;
+    let before_mode_one_target = state.deterministic_hash();
+    let targetless_mode_rejects_extra_target = matches!(
+        bind_program_actions(
+            &state,
+            program,
+            &ExecutionBindings::new(controller, vec![opponent])
+                .with_spell_mode(1)
+                .with_targets(vec![TargetChoice::Object(controlled_creature)]),
+        ),
+        Err(error) if error.code() == ExecutionDiagnosticCode::InvalidChoice
+    ) && state.deterministic_hash()
+        == before_mode_one_target;
+
+    let damage_requirement_is_player_or_permanent = modes[0]
+        .target_requirements()
+        .first()
+        .is_some_and(|requirement| requirement.kind() == TargetKind::PlayerOrPermanent);
+    let player_actions = bind_program_actions(
+        &state,
+        program,
+        &ExecutionBindings::new(controller, vec![opponent])
+            .with_spell_mode(0)
+            .with_targets(vec![TargetChoice::Player(opponent)]),
+    )
+    .ok()?;
+    let player_target_accepted = player_actions.len() == 1;
+    let player_bound_action_exact = player_actions.len() == 1
+        && matches!(
+            player_actions[0].action(),
+            Action::DealDamage {
+                source: None,
+                target: CombatDamageTarget::Player(player),
+                amount: 4,
+            } if *player == opponent
+        );
+    let player_action_applied = matches!(
+        apply(&mut state, player_actions[0].action().clone()),
+        Outcome::Applied
+    );
+    let opponent_life_after_damage = state.players()[opponent.index()].life();
+
+    let planeswalker_actions = bind_program_actions(
+        &state,
+        program,
+        &ExecutionBindings::new(controller, vec![opponent])
+            .with_spell_mode(0)
+            .with_targets(vec![TargetChoice::Object(planeswalker)]),
+    )
+    .ok()?;
+    let planeswalker_target_accepted = planeswalker_actions.len() == 1;
+    let planeswalker_bound_action_exact = planeswalker_actions.len() == 1
+        && matches!(
+            planeswalker_actions[0].action(),
+            Action::DealDamage {
+                source: None,
+                target: CombatDamageTarget::Object(object),
+                amount: 4,
+            } if *object == planeswalker
+        );
+    let planeswalker_action_applied = matches!(
+        apply(&mut state, planeswalker_actions[0].action().clone()),
+        Outcome::Applied
+    );
+    let planeswalker_loyalty_after_damage = state
+        .object(planeswalker)
+        .and_then(|record| record.loyalty());
+    let before_invalid_damage_target = state.deterministic_hash();
+    let nonplaneswalker_permanent_rejected_before_mutation = matches!(
+        bind_program_actions(
+            &state,
+            program,
+            &ExecutionBindings::new(controller, vec![opponent])
+                .with_spell_mode(0)
+                .with_targets(vec![TargetChoice::Object(opponent_artifact)]),
+        ),
+        Err(error) if error.code() == ExecutionDiagnosticCode::InvalidChoice
+    ) && state.deterministic_hash()
+        == before_invalid_damage_target;
+
+    let indestructible_actions = bind_program_actions(
+        &state,
+        program,
+        &ExecutionBindings::new(controller, vec![opponent]).with_spell_mode(1),
+    )
+    .ok()?;
+    let indestructible_bound_action_count = indestructible_actions.len();
+    let indestructible_actions_are_restrictions = indestructible_actions
+        .iter()
+        .all(|bound| matches!(bound.action(), Action::RegisterRestriction { .. }));
+    let indestructible_actions_applied = indestructible_actions.iter().all(|bound| {
+        matches!(
+            apply(&mut state, bound.action().clone()),
+            Outcome::RestrictionRegistered(_)
+        )
+    });
+    let controlled_creature_protected = has_indestructible_restriction(&state, controlled_creature);
+    let controlled_artifact_protected = has_indestructible_restriction(&state, controlled_artifact);
+    let opponent_creature_unprotected = !has_indestructible_restriction(&state, opponent_creature);
+    let opponent_artifact_unprotected = !has_indestructible_restriction(&state, opponent_artifact);
+
+    let controlled_creature_target_accepted = bind_program_actions(
+        &state,
+        program,
+        &ExecutionBindings::new(controller, vec![opponent])
+            .with_spell_mode(2)
+            .with_targets(vec![TargetChoice::Object(controlled_creature)]),
+    )
+    .is_ok();
+    let double_strike_actions = bind_program_actions(
+        &state,
+        program,
+        &ExecutionBindings::new(controller, vec![opponent])
+            .with_spell_mode(2)
+            .with_targets(vec![TargetChoice::Object(opponent_creature)]),
+    )
+    .ok()?;
+    let opponent_creature_target_accepted = double_strike_actions.len() == 1;
+    let before_noncreature_target = state.deterministic_hash();
+    let noncreature_target_rejected_before_mutation = matches!(
+        bind_program_actions(
+            &state,
+            program,
+            &ExecutionBindings::new(controller, vec![opponent])
+                .with_spell_mode(2)
+                .with_targets(vec![TargetChoice::Object(controlled_artifact)]),
+        ),
+        Err(error) if error.code() == ExecutionDiagnosticCode::InvalidChoice
+    ) && state.deterministic_hash()
+        == before_noncreature_target;
+    let double_strike_bound_action_count = double_strike_actions.len();
+    let double_strike_action_is_continuous_effect = double_strike_actions
+        .iter()
+        .all(|bound| matches!(bound.action(), Action::RegisterContinuousEffect { .. }));
+    let double_strike_actions_applied = double_strike_actions.iter().all(|bound| {
+        matches!(
+            apply(&mut state, bound.action().clone()),
+            Outcome::ContinuousEffectRegistered(_)
+        )
+    });
+    let opponent_creature_has_double_strike = state
+        .creature_characteristics(opponent_creature)
+        .is_ok_and(|characteristics| characteristics.keywords().double_strike());
+
+    let protected_creature_survived_lethal_damage = matches!(
+        apply(
+            &mut state,
+            Action::MarkDamageOnObject {
+                object: controlled_creature,
+                amount: 2,
+            },
+        ),
+        Outcome::Applied
+    ) && matches!(
+        apply(&mut state, Action::CheckStateBasedActions),
+        Outcome::StateBasedActions(report) if report.actions_performed() == 0
+    ) && state.object_zone(controlled_creature)
+        == Some(battlefield);
+    let protected_artifact_survived_destroy = matches!(
+        apply(
+            &mut state,
+            Action::DestroyPermanent {
+                object: controlled_artifact,
+            },
+        ),
+        Outcome::Applied
+    ) && state.object_zone(controlled_artifact)
+        == Some(battlefield);
+    let opponent_artifact_destroyed = matches!(
+        apply(
+            &mut state,
+            Action::DestroyPermanent {
+                object: opponent_artifact,
+            },
+        ),
+        Outcome::Applied
+    ) && state.object_zone(opponent_artifact)
+        == Some(ZoneId::new(Some(opponent), ZoneKind::Graveyard));
+
+    let cleanup_reached = advance_to_cleanup(&mut state, controller);
+    let expired_until_end_of_turn = state.last_cleanup_report().expired_until_end_of_turn();
+    let restrictions_removed = state.restrictions().next().is_none();
+    let continuous_effects_removed = state.continuous_effects().next().is_none();
+    let double_strike_expired = state
+        .creature_characteristics(opponent_creature)
+        .is_ok_and(|characteristics| !characteristics.keywords().double_strike());
+    let controlled_creature_destroyed_after_cleanup = matches!(
+        apply(
+            &mut state,
+            Action::DestroyPermanent {
+                object: controlled_creature,
+            },
+        ),
+        Outcome::Applied
+    ) && state.object_zone(controlled_creature)
+        == Some(ZoneId::new(Some(controller), ZoneKind::Graveyard));
+    let controlled_artifact_destroyed_after_cleanup = matches!(
+        apply(
+            &mut state,
+            Action::DestroyPermanent {
+                object: controlled_artifact,
+            },
+        ),
+        Outcome::Applied
+    ) && state.object_zone(controlled_artifact)
+        == Some(ZoneId::new(Some(controller), ZoneKind::Graveyard));
+
+    Some(json!({
+        "setup_succeeded": true,
+        "contract": {
+            "mode_count": modes.len(),
+            "target_counts": target_counts,
+            "modes_have_no_object_choices": modes_have_no_object_choices,
+            "modes_have_no_optional_choices": modes_have_no_optional_choices,
+            "damage_program_exact": damage_program_exact,
+            "indestructible_program_exact": indestructible_program_exact,
+            "double_strike_program_exact": double_strike_program_exact,
+            "no_mode_rejected_before_mutation": no_mode_rejected_before_mutation,
+            "out_of_range_mode_rejected_before_mutation":
+                out_of_range_mode_rejected_before_mutation,
+            "targetless_mode_rejects_extra_target": targetless_mode_rejects_extra_target,
+        },
+        "damage": {
+            "requirement_is_player_or_permanent": damage_requirement_is_player_or_permanent,
+            "player_target_accepted": player_target_accepted,
+            "player_bound_action_exact": player_bound_action_exact,
+            "player_action_applied": player_action_applied,
+            "opponent_life_after_damage": opponent_life_after_damage,
+            "planeswalker_target_accepted": planeswalker_target_accepted,
+            "planeswalker_bound_action_exact": planeswalker_bound_action_exact,
+            "planeswalker_action_applied": planeswalker_action_applied,
+            "planeswalker_loyalty_after_damage": planeswalker_loyalty_after_damage,
+            "nonplaneswalker_permanent_rejected_before_mutation":
+                nonplaneswalker_permanent_rejected_before_mutation,
+        },
+        "indestructible": {
+            "bound_action_count": indestructible_bound_action_count,
+            "bound_actions_are_restrictions": indestructible_actions_are_restrictions,
+            "all_actions_applied": indestructible_actions_applied,
+            "controlled_creature_protected": controlled_creature_protected,
+            "controlled_artifact_protected": controlled_artifact_protected,
+            "opponent_creature_unprotected": opponent_creature_unprotected,
+            "opponent_artifact_unprotected": opponent_artifact_unprotected,
+            "protected_creature_survived_lethal_damage":
+                protected_creature_survived_lethal_damage,
+            "protected_artifact_survived_destroy": protected_artifact_survived_destroy,
+            "opponent_artifact_destroyed": opponent_artifact_destroyed,
+        },
+        "double_strike": {
+            "controlled_creature_target_accepted": controlled_creature_target_accepted,
+            "opponent_creature_target_accepted": opponent_creature_target_accepted,
+            "noncreature_target_rejected_before_mutation":
+                noncreature_target_rejected_before_mutation,
+            "bound_action_count": double_strike_bound_action_count,
+            "bound_action_is_continuous_effect": double_strike_action_is_continuous_effect,
+            "all_actions_applied": double_strike_actions_applied,
+            "opponent_creature_has_double_strike": opponent_creature_has_double_strike,
+        },
+        "cleanup": {
+            "reached": cleanup_reached,
+            "expired_until_end_of_turn": expired_until_end_of_turn,
+            "restrictions_removed": restrictions_removed,
+            "continuous_effects_removed": continuous_effects_removed,
+            "double_strike_expired": double_strike_expired,
+            "controlled_creature_destroyed_after_cleanup":
+                controlled_creature_destroyed_after_cleanup,
+            "controlled_artifact_destroyed_after_cleanup":
+                controlled_artifact_destroyed_after_cleanup,
+        },
+    }))
+}
+
+fn reconnaissance_mission_probe(program: &CardProgram) -> Option<serde_json::Value> {
+    if program.name() != "Reconnaissance Mission" {
+        return None;
+    }
+    let cycling = program.cycling()?;
+    let [trigger] = program.triggered_abilities() else {
+        return Some(json!({
+            "setup_succeeded": false,
+            "observed_trigger_count": program.triggered_abilities().len(),
+        }));
+    };
+    let cycling_cost = cycling.mana_cost();
+    let cycling_payment = cycling.exact_payment();
+    let cycling_contract_exact = cycling_cost.base_generic() == 2
+        && cycling_cost.colored_pool().total() == 0
+        && cycling_payment.total() == 2;
+    let trigger_event_exact = matches!(
+        trigger.event(),
+        TriggeredEventProgram::ControllerPermanentDealsCombatDamageToPlayer(predicate)
+            if predicate.controller() == TargetControllerPredicate::You
+                && predicate.required_types() == ObjectTypes::none().with_creature()
+    );
+    let trigger_effect_exact = matches!(
+        trigger.effects(),
+        [EffectProgram::DrawCards {
+            players: PlayerBinding::Controller,
+            count: AmountProgram::Literal(1),
+        }]
+    );
+    let trigger_choice_contract_exact = trigger.optional_choice_count() == 1
+        && trigger.target_requirements().is_empty()
+        && trigger.object_choice_requirements().is_empty();
+
+    let mut cycle_state = GameState::new();
+    let cycle_controller = match apply(&mut cycle_state, Action::AddPlayer) {
+        Outcome::PlayerAdded(player) => player,
+        _ => return Some(json!({"setup_succeeded": false})),
+    };
+    let cycle_opponent = match apply(&mut cycle_state, Action::AddPlayer) {
+        Outcome::PlayerAdded(player) => player,
+        _ => return Some(json!({"setup_succeeded": false})),
+    };
+    let hand = ZoneId::new(Some(cycle_controller), ZoneKind::Hand);
+    let graveyard = ZoneId::new(Some(cycle_controller), ZoneKind::Graveyard);
+    let library = ZoneId::new(Some(cycle_controller), ZoneKind::Library);
+    let cycling_source = create_probe_object(
+        &mut cycle_state,
+        9_670_000,
+        cycle_controller,
+        cycle_controller,
+        hand,
+        program.base_object(),
+        program.base_creature(),
+    )?;
+    let wrong_zone_copy = create_probe_object(
+        &mut cycle_state,
+        9_670_001,
+        cycle_controller,
+        cycle_controller,
+        graveyard,
+        program.base_object(),
+        program.base_creature(),
+    )?;
+    let draw_card = create_probe_object(
+        &mut cycle_state,
+        9_670_002,
+        cycle_controller,
+        cycle_controller,
+        library,
+        BaseObjectCharacteristics::new(ObjectTypes::none().with_artifact(), ObjectColors::none()),
+        None,
+    )?;
+    let cycling_priority_ready = matches!(
+        apply(
+            &mut cycle_state,
+            Action::StartTurn {
+                active_player: cycle_controller,
+            },
+        ),
+        Outcome::Applied
+    ) && matches!(
+        apply(&mut cycle_state, Action::AdvanceStep),
+        Outcome::StepAdvanced(Step::Upkeep)
+    ) && cycle_state.priority_player() == Some(cycle_controller);
+    let payment = auto_payment_plan(cycling_payment, cycling_cost)
+        .ok()
+        .flatten()?;
+    let before_wrong_zone = cycle_state.deterministic_hash();
+    let wrong_zone_rejected_before_mutation = matches!(
+        apply(
+            &mut cycle_state,
+            Action::Cycle {
+                player: cycle_controller,
+                object: wrong_zone_copy,
+                cost: cycling_cost,
+                payment,
+            },
+        ),
+        Outcome::Failed(StateError::ObjectNotCastable(object)) if object == wrong_zone_copy
+    ) && cycle_state.deterministic_hash()
+        == before_wrong_zone;
+    let before_unfunded = cycle_state.deterministic_hash();
+    let unfunded_cycle_rejected_before_mutation = matches!(
+        apply(
+            &mut cycle_state,
+            Action::Cycle {
+                player: cycle_controller,
+                object: cycling_source,
+                cost: cycling_cost,
+                payment,
+            },
+        ),
+        Outcome::Failed(StateError::InsufficientMana)
+    ) && cycle_state.deterministic_hash()
+        == before_unfunded;
+    let cycling_funded = matches!(
+        apply(
+            &mut cycle_state,
+            Action::AddManaToPool {
+                player: cycle_controller,
+                mana: cycling_payment,
+            },
+        ),
+        Outcome::Applied
+    );
+    let hand_before_cycle = cycle_state.zone_objects(hand)?.len();
+    let library_before_cycle = cycle_state.zone_objects(library)?.len();
+    let cycling_action_applied = matches!(
+        apply(
+            &mut cycle_state,
+            Action::Cycle {
+                player: cycle_controller,
+                object: cycling_source,
+                cost: cycling_cost,
+                payment,
+            },
+        ),
+        Outcome::Applied
+    );
+    let cycling_source_discarded = cycle_state.object_zone(cycling_source) == Some(graveyard);
+    let cycling_drew_exactly_one = cycle_state.zone_objects(hand)?.len() == hand_before_cycle
+        && cycle_state.zone_objects(library)?.len() + 1 == library_before_cycle
+        && cycle_state.object_zone(draw_card) == Some(hand);
+    let cycling_payment_consumed =
+        cycle_state.mana_pool(cycle_controller).ok() == Some(ManaPool::empty());
+
+    let mut trigger_state = GameState::new();
+    let controller = match apply(&mut trigger_state, Action::AddPlayer) {
+        Outcome::PlayerAdded(player) => player,
+        _ => return Some(json!({"setup_succeeded": false})),
+    };
+    let opponent = match apply(&mut trigger_state, Action::AddPlayer) {
+        Outcome::PlayerAdded(player) => player,
+        _ => return Some(json!({"setup_succeeded": false})),
+    };
+    let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+    let source = create_probe_object(
+        &mut trigger_state,
+        9_670_100,
+        controller,
+        controller,
+        battlefield,
+        program.base_object(),
+        program.base_creature(),
+    )?;
+    let attacker = create_probe_object(
+        &mut trigger_state,
+        9_670_101,
+        controller,
+        controller,
+        battlefield,
+        BaseObjectCharacteristics::new(ObjectTypes::none().with_creature(), ObjectColors::none()),
+        Some(
+            BaseCreatureCharacteristics::new(1, 1)
+                .with_keywords(CreatureKeywords::none().with_haste()),
+        ),
+    )?;
+    let definition = trigger.bind(controller, source);
+    let trigger_definition_exact = definition.source() == Some(source)
+        && matches!(
+            definition.condition(),
+            TriggerCondition::CombatDamageToPlayer { source: predicate }
+                if predicate.controller() == TargetControllerPredicate::You
+                    && predicate.required_types() == ObjectTypes::none().with_creature()
+        );
+    let registered_trigger = match apply(
+        &mut trigger_state,
+        Action::RegisterTriggeredAbility { definition },
+    ) {
+        Outcome::TriggerRegistered(trigger) => Some(trigger),
+        _ => None,
+    };
+    let combat_window_ready = advance_to_declare_attackers(&mut trigger_state, controller);
+    let trigger_draw_card = create_probe_object(
+        &mut trigger_state,
+        9_670_102,
+        controller,
+        controller,
+        ZoneId::new(Some(controller), ZoneKind::Library),
+        BaseObjectCharacteristics::new(ObjectTypes::none().with_artifact(), ObjectColors::none()),
+        None,
+    )?;
+    let attacker_declared = matches!(
+        apply(
+            &mut trigger_state,
+            Action::DeclareAttackers {
+                player: controller,
+                attacks: vec![AttackDeclaration::new(attacker, opponent)],
+            },
+        ),
+        Outcome::Applied
+    );
+    let blockers_step_reached = matches!(
+        apply(&mut trigger_state, Action::AdvanceStep),
+        Outcome::StepAdvanced(Step::DeclareBlockers)
+    );
+    let no_blockers_declared = matches!(
+        apply(
+            &mut trigger_state,
+            Action::DeclareBlockers {
+                defending_player: opponent,
+                blocks: Vec::new(),
+            },
+        ),
+        Outcome::Applied
+    );
+    let combat_damage_step_reached = matches!(
+        apply(&mut trigger_state, Action::AdvanceStep),
+        Outcome::StepAdvanced(Step::CombatDamage)
+    );
+    let combat_damage_assigned = matches!(
+        apply(
+            &mut trigger_state,
+            Action::AssignCombatDamage {
+                assignments: vec![CombatDamageAssignmentRequest::new(
+                    attacker,
+                    vec![CombatDamageAssignment::new(
+                        CombatDamageTarget::Player(opponent),
+                        1,
+                    )],
+                )],
+            },
+        ),
+        Outcome::CombatDamageAssigned(records) if records.len() == 1
+    );
+    let pending_trigger_exact = registered_trigger.is_some_and(|registered| {
+        trigger_state.pending_triggers().len() == 1
+            && trigger_state.pending_triggers()[0].trigger() == registered
+            && trigger_state.pending_triggers()[0].controller() == controller
+            && trigger_state.pending_triggers()[0].source() == Some(source)
+    });
+    let trigger_entries = match apply(
+        &mut trigger_state,
+        Action::PutPendingTriggeredAbilitiesOnStack,
+    ) {
+        Outcome::StackEntriesAdded(entries) => entries,
+        _ => Vec::new(),
+    };
+    let trigger_put_on_stack = registered_trigger.is_some_and(|registered| {
+        trigger_entries.len() == 1
+            && trigger_state.stack_top().is_some_and(|entry| {
+                entry.id() == trigger_entries[0]
+                    && entry.controller() == controller
+                    && entry.trigger() == Some(registered)
+            })
+    });
+    let choice_bindings = |execute| {
+        ExecutionBindings::new(controller, vec![opponent])
+            .with_source(source)
+            .with_optional_effect_choices(vec![execute])
+    };
+    let before_missing_choice = trigger_state.deterministic_hash();
+    let missing_optional_choice_rejected_before_mutation = matches!(
+        bind_triggered_ability_actions(
+            &trigger_state,
+            trigger,
+            &ExecutionBindings::new(controller, vec![opponent]).with_source(source),
+        ),
+        Err(error) if error.code() == ExecutionDiagnosticCode::MissingChoice
+    ) && trigger_state.deterministic_hash()
+        == before_missing_choice;
+    let hand_before_choice = trigger_state
+        .zone_objects(ZoneId::new(Some(controller), ZoneKind::Hand))?
+        .len();
+    let before_decline = trigger_state.deterministic_hash();
+    let declined_actions =
+        bind_triggered_ability_actions(&trigger_state, trigger, &choice_bindings(false)).ok()?;
+    let decline_emits_no_actions = declined_actions.is_empty()
+        && trigger_state.deterministic_hash() == before_decline
+        && trigger_state
+            .zone_objects(ZoneId::new(Some(controller), ZoneKind::Hand))?
+            .len()
+            == hand_before_choice;
+    let accepted_actions =
+        bind_triggered_ability_actions(&trigger_state, trigger, &choice_bindings(true)).ok()?;
+    let accepted_draw_action_exact = accepted_actions.len() == 1
+        && matches!(
+            accepted_actions[0].action(),
+            Action::DrawCards { player, count: 1 } if *player == controller
+        );
+    let trigger_stack_resolved = trigger_entries
+        .first()
+        .is_some_and(|entry| resolve_expected_stack_entry(&mut trigger_state, *entry));
+    let library_before_draw = trigger_state
+        .zone_objects(ZoneId::new(Some(controller), ZoneKind::Library))?
+        .len();
+    let optional_draw_applied = accepted_actions.iter().all(|bound| {
+        matches!(
+            apply(&mut trigger_state, bound.action().clone()),
+            Outcome::Applied
+        )
+    });
+    let optional_draw_exactly_one = trigger_state
+        .zone_objects(ZoneId::new(Some(controller), ZoneKind::Hand))?
+        .len()
+        == hand_before_choice + 1
+        && trigger_state
+            .zone_objects(ZoneId::new(Some(controller), ZoneKind::Library))?
+            .len()
+            + 1
+            == library_before_draw
+        && trigger_state.object_zone(trigger_draw_card)
+            == Some(ZoneId::new(Some(controller), ZoneKind::Hand));
+
+    Some(json!({
+        "setup_succeeded": true,
+        "contract": {
+            "cycling_present": true,
+            "cycling_cost_exact": cycling_contract_exact,
+            "trigger_count": program.triggered_abilities().len(),
+            "trigger_event_exact": trigger_event_exact,
+            "trigger_effect_exact": trigger_effect_exact,
+            "trigger_choice_contract_exact": trigger_choice_contract_exact,
+        },
+        "cycling": {
+            "priority_ready": cycling_priority_ready,
+            "generic_mana_cost": cycling_cost.base_generic(),
+            "exact_payment_total": cycling_payment.total(),
+            "wrong_zone_rejected_before_mutation": wrong_zone_rejected_before_mutation,
+            "unfunded_rejected_before_mutation": unfunded_cycle_rejected_before_mutation,
+            "funded": cycling_funded,
+            "action_applied": cycling_action_applied,
+            "payment_consumed": cycling_payment_consumed,
+            "source_discarded_to_owner_graveyard": cycling_source_discarded,
+            "drew_exactly_one": cycling_drew_exactly_one,
+        },
+        "combat_trigger": {
+            "definition_exact": trigger_definition_exact,
+            "registered": registered_trigger.is_some(),
+            "combat_window_ready": combat_window_ready,
+            "attacker_declared": attacker_declared,
+            "blockers_step_reached": blockers_step_reached,
+            "no_blockers_declared": no_blockers_declared,
+            "combat_damage_step_reached": combat_damage_step_reached,
+            "combat_damage_assigned": combat_damage_assigned,
+            "opponent_life_after_damage": trigger_state.players()[opponent.index()].life(),
+            "pending_trigger_exact": pending_trigger_exact,
+            "put_on_stack": trigger_put_on_stack,
+        },
+        "optional_draw": {
+            "missing_choice_rejected_before_mutation":
+                missing_optional_choice_rejected_before_mutation,
+            "decline_emits_no_actions_or_draw": decline_emits_no_actions,
+            "accept_bound_action_count": accepted_actions.len(),
+            "accept_draw_action_exact": accepted_draw_action_exact,
+            "trigger_stack_resolved": trigger_stack_resolved,
+            "draw_action_applied": optional_draw_applied,
+            "drew_exactly_one": optional_draw_exactly_one,
+        },
+    }))
+}
+
 fn semantic_probe(program: &CardProgram) -> serde_json::Value {
     let base_subtypes = program
         .base_object()
@@ -3257,6 +4038,8 @@ fn semantic_probe(program: &CardProgram) -> serde_json::Value {
         "split_second": split_second_probe(program),
         "overload": overload_probe(program),
         "evoke": evoke_probe(program),
+        "boros_charm": boros_charm_probe(program),
+        "reconnaissance_mission": reconnaissance_mission_probe(program),
         "noncreature_counter": noncreature_counter_probe(program),
         "temporary_creature_protection": temporary_creature_protection_probe(program),
     })
