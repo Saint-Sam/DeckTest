@@ -6,8 +6,10 @@ use crate::{
         LegacyScript,
     },
     mapper::{
-        affected_selector, card_selector_in_zone, map_named_svar_ability, map_script_abilities,
-        parse_simple_cost, resolve_value_svar, valid_target_selector, MappingContext,
+        affected_selector, card_selector_in_zone, map_named_activated_svar_ability,
+        map_named_static_svar_ability, map_named_svar_ability, map_named_trigger_svar_ability,
+        map_script_abilities, parse_simple_cost, resolve_value_svar, valid_target_selector,
+        MappingContext,
     },
 };
 use forge_cardc::{emit_card, is_known_keyword, parse_card_named};
@@ -728,6 +730,136 @@ fn translate_keywords(
         };
         let keyword = name.trim().to_ascii_lowercase().replace(' ', "_");
         let (keyword_id, ability) = match (keyword.as_str(), arguments.as_slice()) {
+            ("class", [level, cost, grant]) => {
+                let level = level.parse::<i64>().map_err(|_| {
+                    (
+                        line.line,
+                        "UNSUPPORTED_KEYWORD".to_string(),
+                        format!("keyword `{name}` class level `{level}` is not an integer"),
+                    )
+                })?;
+                if level < 2 {
+                    return Err((
+                        line.line,
+                        "UNSUPPORTED_KEYWORD".to_string(),
+                        format!("keyword `{name}` class level must be at least 2"),
+                    ));
+                }
+                let (grant_kind, svar_name) = grant.split_once("$ ").ok_or_else(|| {
+                    (
+                        line.line,
+                        "UNSUPPORTED_KEYWORD".to_string(),
+                        format!("keyword `{name}` class grant `{grant}` is malformed"),
+                    )
+                })?;
+                if svar_name.trim().is_empty() {
+                    return Err((
+                        line.line,
+                        "UNSUPPORTED_KEYWORD".to_string(),
+                        format!("keyword `{name}` class grant has no SVar"),
+                    ));
+                }
+                let source = expression_call(Operation::Source, vec![]);
+                let granted = match grant_kind {
+                    "AddTrigger" => {
+                        let linked = map_named_trigger_svar_ability(script, svar_name.trim())
+                            .map_err(|diagnostic| {
+                                (line.line, diagnostic.code, diagnostic.message)
+                            })?;
+                        let event = linked.event.ok_or_else(|| {
+                            (
+                                line.line,
+                                "UNSUPPORTED_LINK".to_string(),
+                                format!("Class trigger SVar `{svar_name}` has no typed event"),
+                            )
+                        })?;
+                        if !linked.costs.is_empty() || linked.timing.is_some() {
+                            return Err((
+                                line.line,
+                                "UNSUPPORTED_LINK".to_string(),
+                                format!("Class trigger SVar `{svar_name}` has costs or timing"),
+                            ));
+                        }
+                        expression_call(
+                            Operation::GrantTriggeredAbility,
+                            vec![source.clone(), event, linked.expression],
+                        )
+                    }
+                    "AddStaticAbility" => {
+                        let linked = map_named_static_svar_ability(script, svar_name.trim())
+                            .map_err(|diagnostic| {
+                                (line.line, diagnostic.code, diagnostic.message)
+                            })?;
+                        if !linked.costs.is_empty()
+                            || linked.event.is_some()
+                            || linked.timing.is_some()
+                        {
+                            return Err((
+                                line.line,
+                                "UNSUPPORTED_LINK".to_string(),
+                                format!("Class static SVar `{svar_name}` is not cost-free"),
+                            ));
+                        }
+                        expression_call(
+                            Operation::GrantStaticAbility,
+                            vec![source.clone(), linked.expression],
+                        )
+                    }
+                    "AddAbility" => {
+                        let linked = map_named_activated_svar_ability(script, svar_name.trim())
+                            .map_err(|diagnostic| {
+                                (line.line, diagnostic.code, diagnostic.message)
+                            })?;
+                        if linked.event.is_some() {
+                            return Err((
+                                line.line,
+                                "UNSUPPORTED_LINK".to_string(),
+                                format!("Class activated SVar `{svar_name}` contains an event"),
+                            ));
+                        }
+                        let mut arguments = vec![
+                            source.clone(),
+                            linked.expression,
+                            linked.timing.unwrap_or_else(|| {
+                                expression_call(Operation::TimingInstant, vec![])
+                            }),
+                        ];
+                        arguments.extend(linked.costs);
+                        expression_call(Operation::GrantActivatedAbility, arguments)
+                    }
+                    value => {
+                        return Err((
+                            line.line,
+                            "UNSUPPORTED_KEYWORD".to_string(),
+                            format!("keyword `{name}` class grant `{value}` is unsupported"),
+                        ));
+                    }
+                };
+                let costs = parse_simple_cost(Some(cost))
+                    .map_err(|diagnostic| (line.line, diagnostic.code, diagnostic.message))?;
+                if costs.is_empty() {
+                    return Err((
+                        line.line,
+                        "MISSING_PARAMETER".to_string(),
+                        format!("keyword `{name}` class level requires a cost"),
+                    ));
+                }
+                (
+                    None,
+                    Some(AbilityDefinition {
+                        kind: AbilityKind::Activated,
+                        costs,
+                        event: None,
+                        condition: None,
+                        timing: Some(expression_call(Operation::TimingSorcery, vec![])),
+                        effect: expression_call(
+                            Operation::ClassLevelUp,
+                            vec![source, Expression::Integer(level), granted],
+                        ),
+                        mana_ability: false,
+                    }),
+                )
+            }
             ("chapter", [max, svar_names]) => {
                 let max = max.parse::<i64>().map_err(|_| {
                     (
@@ -2578,6 +2710,21 @@ mod tests {
     };
     use std::{fs, path::PathBuf};
 
+    fn expression_contains_operation(expression: &Expression, expected: Operation) -> bool {
+        match expression {
+            Expression::Call {
+                operation,
+                arguments,
+            } => {
+                *operation == expected
+                    || arguments
+                        .iter()
+                        .any(|argument| expression_contains_operation(argument, expected))
+            }
+            _ => false,
+        }
+    }
+
     fn fixture_identity(
         id: &str,
         name: &str,
@@ -3344,6 +3491,44 @@ mod tests {
                     operation: actual,
                     ..
                 } if actual == operation
+            ));
+        }
+    }
+
+    #[test]
+    fn desugars_class_levels_with_typed_linked_abilities() {
+        for (script_text, granted) in [
+            (
+                concat!(
+                    "Name:Trigger Class\n",
+                    "K:Class:2:1 U:AddTrigger$ TriggerDraw\n",
+                    "SVar:TriggerDraw:Mode$ Phase | Phase$ End of Turn | ValidPlayer$ You | Execute$ TrigDraw\n",
+                    "SVar:TrigDraw:DB$ Draw | NumCards$ 1\n",
+                ),
+                Operation::GrantTriggeredAbility,
+            ),
+            (
+                concat!(
+                    "Name:Static Class\n",
+                    "K:Class:3:4 W:AddStaticAbility$ StaticFlying\n",
+                    "SVar:StaticFlying:Mode$ Continuous | Affected$ Creature.YouCtrl | AddKeyword$ Flying\n",
+                ),
+                Operation::GrantStaticAbility,
+            ),
+        ] {
+            let script = crate::legacy::parse_legacy_script("fixture.txt", script_text)
+                .unwrap_or_else(|error| panic!("fixture should parse: {error}"));
+            let faces = face_lines(&script);
+            let translated = translate_keywords(&script, &faces[0])
+                .unwrap_or_else(|error| panic!("class should translate: {error:?}"));
+            assert_eq!(translated.abilities.len(), 1);
+            assert!(expression_contains_operation(
+                &translated.abilities[0].effect,
+                Operation::ClassLevelUp
+            ));
+            assert!(expression_contains_operation(
+                &translated.abilities[0].effect,
+                granted
             ));
         }
     }

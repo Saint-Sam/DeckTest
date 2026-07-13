@@ -1245,6 +1245,7 @@ operations! {
     AddColor => ("add_color", Effect, 2, None),
     PlayPermissionIgnoreColor => ("play_permission_ignore_color", Effect, 1, Some(1)),
     PayEnergyCost => ("pay_energy_cost", Cost, 1, Some(1)),
+    ClassLevelUp => ("class_level_up", Effect, 3, Some(3)),
 }
 
 impl Operation {
@@ -2439,6 +2440,12 @@ impl Operation {
             },
             Self::PlayPermissionIgnoreColor => Some(Effect),
             Self::PayEnergyCost => Some(Number),
+            Self::ClassLevelUp => match index {
+                0 => Some(Selector),
+                1 => Some(Number),
+                2 => Some(Effect),
+                _ => None,
+            },
             Self::ChooseNumber => match index {
                 0 => Some(Selector),
                 1 | 2 => Some(Number),
@@ -2825,6 +2832,7 @@ mod tests {
         assert_eq!(Operation::AddColor as u32, 445);
         assert_eq!(Operation::PlayPermissionIgnoreColor as u32, 446);
         assert_eq!(Operation::PayEnergyCost as u32, 447);
+        assert_eq!(Operation::ClassLevelUp as u32, 448);
 
         let config = bincode::config::standard()
             .with_fixed_int_encoding()

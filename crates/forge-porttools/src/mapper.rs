@@ -946,6 +946,61 @@ pub(crate) fn map_named_svar_ability(
     resolve_svar(name, &context, &mut Vec::new())
 }
 
+pub(crate) fn map_named_trigger_svar_ability(
+    script: &crate::legacy::LegacyScript,
+    name: &str,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    let context = MappingContext::from_script(script);
+    resolve_trigger_svar(name, &context, &mut Vec::new())
+}
+
+pub(crate) fn map_named_static_svar_ability(
+    script: &crate::legacy::LegacyScript,
+    name: &str,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    map_named_typed_svar(script, name, "Mode", LegacyAbilityPrefix::Static)
+}
+
+pub(crate) fn map_named_activated_svar_ability(
+    script: &crate::legacy::LegacyScript,
+    name: &str,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    map_named_typed_svar(script, name, "AB", LegacyAbilityPrefix::Activated)
+}
+
+fn map_named_typed_svar(
+    script: &crate::legacy::LegacyScript,
+    name: &str,
+    expected_selector: &str,
+    prefix: LegacyAbilityPrefix,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    let context = MappingContext::from_script(script);
+    if context.duplicate_svars.contains(name) {
+        return Err(diagnostic(
+            "DUPLICATE_SVAR",
+            &format!("SVar `{name}` is declared more than once"),
+        ));
+    }
+    let expression = context.svars.get(name).copied().ok_or_else(|| {
+        diagnostic(
+            "MISSING_SVAR",
+            &format!("referenced SVar `{name}` is not declared"),
+        )
+    })?;
+    if expression
+        .fields
+        .first()
+        .and_then(|field| field.key.as_deref())
+        != Some(expected_selector)
+    {
+        return Err(diagnostic(
+            "UNSUPPORTED_LINK",
+            &format!("SVar `{name}` is not a {expected_selector} ability"),
+        ));
+    }
+    map_with_context(prefix, expression, &context, &mut vec![name.to_string()])
+}
+
 pub(crate) fn map_script_abilities(
     script: &crate::legacy::LegacyScript,
 ) -> Result<Vec<MappedScriptAbility>, ScriptMappingFailure> {
