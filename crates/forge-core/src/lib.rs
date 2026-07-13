@@ -2701,6 +2701,8 @@ pub enum TriggerObjectFilter {
     Source,
     /// One exact object.
     Object(ObjectId),
+    /// The object currently attached to the registered trigger's source.
+    AttachedToSource,
 }
 
 impl TriggerObjectFilter {
@@ -2709,6 +2711,7 @@ impl TriggerObjectFilter {
             Self::Any => 0,
             Self::Source => 1,
             Self::Object(_) => 2,
+            Self::AttachedToSource => 3,
         }
     }
 }
@@ -3343,6 +3346,8 @@ pub enum TargetRestrictionSubject {
     Object(ObjectId),
     /// Every current object.
     AllObjects,
+    /// The object currently attached to the restriction's source.
+    AttachedToSource,
 }
 
 impl TargetRestrictionSubject {
@@ -3350,6 +3355,7 @@ impl TargetRestrictionSubject {
         match self {
             Self::Object(_) => 0,
             Self::AllObjects => 1,
+            Self::AttachedToSource => 2,
         }
     }
 }
@@ -4637,6 +4643,8 @@ pub enum ContinuousEffectTarget {
         /// Optional excluded object, normally the source of an "other" effect.
         excluded: Option<ObjectId>,
     },
+    /// The object currently attached to the continuous effect's source.
+    AttachedToSource,
 }
 
 impl ContinuousEffectTarget {
@@ -4645,6 +4653,7 @@ impl ContinuousEffectTarget {
             Self::Object(_) => 0,
             Self::AllObjects => 1,
             Self::Objects { .. } => 2,
+            Self::AttachedToSource => 3,
         }
     }
 }
@@ -9465,6 +9474,11 @@ impl GameState {
                     }
                 }
                 TargetRestrictionSubject::AllObjects => {}
+                TargetRestrictionSubject::AttachedToSource => {
+                    if definition.source().is_none() {
+                        return Err(StateError::ObjectNotActivatable(ObjectId(0)));
+                    }
+                }
             },
             RestrictionEffect::Combat { subject, .. } => match subject {
                 CombatRestrictionSubject::Object(object) => {
@@ -10796,6 +10810,14 @@ impl GameState {
             TriggerObjectFilter::Any => true,
             TriggerObjectFilter::Source => definition.source() == Some(object),
             TriggerObjectFilter::Object(expected) => object == expected,
+            TriggerObjectFilter::AttachedToSource => definition
+                .source()
+                .filter(|source| {
+                    self.object_zone(*source) == Some(ZoneId::new(None, ZoneKind::Battlefield))
+                })
+                .and_then(|source| self.objects.get(source))
+                .and_then(ObjectRecord::attached_to)
+                .is_some_and(|attached| attached == object),
         }
     }
 
@@ -10969,6 +10991,11 @@ impl GameState {
                 }
             }
             ContinuousEffectTarget::AllObjects | ContinuousEffectTarget::Objects { .. } => {}
+            ContinuousEffectTarget::AttachedToSource => {
+                if definition.source().is_none() {
+                    return Err(StateError::UnknownObject(ObjectId(0)));
+                }
+            }
         }
         if definition.duration() == ContinuousEffectDuration::WhileSourceOnBattlefield
             && definition.source().is_none()
@@ -12762,6 +12789,11 @@ impl GameState {
                     characteristics,
                 )
             }
+            ContinuousEffectTarget::AttachedToSource => definition
+                .source()
+                .and_then(|source| self.objects.get(source))
+                .and_then(ObjectRecord::attached_to)
+                .is_some_and(|attached| attached == object),
         }
     }
 
@@ -13642,19 +13674,25 @@ impl GameState {
             else {
                 return false;
             };
-            self.target_restriction_subject_matches(subject, object)
+            self.target_restriction_subject_matches(subscription.definition, subject, object)
                 && self.target_restriction_blocks(player, source, object, restriction)
         })
     }
 
     fn target_restriction_subject_matches(
         &self,
+        definition: RestrictionDefinition,
         subject: TargetRestrictionSubject,
         object: ObjectId,
     ) -> bool {
         match subject {
             TargetRestrictionSubject::Object(target) => target == object,
             TargetRestrictionSubject::AllObjects => true,
+            TargetRestrictionSubject::AttachedToSource => definition
+                .source()
+                .and_then(|source| self.objects.get(source))
+                .and_then(ObjectRecord::attached_to)
+                .is_some_and(|attached| attached == object),
         }
     }
 
@@ -13693,7 +13731,7 @@ impl GameState {
             else {
                 continue;
             };
-            if self.target_restriction_subject_matches(subject, object) {
+            if self.target_restriction_subject_matches(subscription.definition, subject, object) {
                 cost = Self::add_mana_costs(cost, ward)?;
             }
         }
@@ -15051,7 +15089,7 @@ impl Fnva64 {
         self.write_u8(target.canonical_code());
         match target {
             ContinuousEffectTarget::Object(object) => self.write_u32(object.0),
-            ContinuousEffectTarget::AllObjects => {}
+            ContinuousEffectTarget::AllObjects | ContinuousEffectTarget::AttachedToSource => {}
             ContinuousEffectTarget::Objects {
                 predicate,
                 excluded,
@@ -16354,7 +16392,7 @@ impl CanonicalBytes {
         self.write_u8(target.canonical_code());
         match target {
             ContinuousEffectTarget::Object(object) => self.write_u32(object.0),
-            ContinuousEffectTarget::AllObjects => {}
+            ContinuousEffectTarget::AllObjects | ContinuousEffectTarget::AttachedToSource => {}
             ContinuousEffectTarget::Objects {
                 predicate,
                 excluded,
@@ -16980,9 +17018,10 @@ mod tests {
         ReplacementSourceFilter, ResolutionOutcome, RestrictionDefinition, RestrictionEffect,
         SpellTiming, StackEntryId, StackObjectKind, StateBasedActionKind, StateBasedActionReport,
         StateError, Step, TargetChoice, TargetControllerPredicate, TargetKind, TargetRequirement,
-        TriggerCondition, TriggerDefinition, TriggerInterveningIf, TriggerObjectFilter,
-        TriggerPlayerFilter, TriggerZoneFilter, ZoneConservation, ZoneId, ZoneKind,
-        EVENT_RING_CAPACITY, NORMAL_TURN_STEPS, OPENING_HAND_SIZE, PAYMENT_PLAN_LIMIT,
+        TargetRestriction, TargetRestrictionSubject, TriggerCondition, TriggerDefinition,
+        TriggerInterveningIf, TriggerObjectFilter, TriggerPlayerFilter, TriggerZoneFilter,
+        ZoneConservation, ZoneId, ZoneKind, EVENT_RING_CAPACITY, NORMAL_TURN_STEPS,
+        OPENING_HAND_SIZE, PAYMENT_PLAN_LIMIT,
     };
 
     #[test]
@@ -17928,6 +17967,188 @@ mod tests {
             assert_eq!(
                 state.creature_characteristics(first).map(|c| c.power()),
                 Ok(2)
+            );
+        }
+
+        #[test]
+        fn source_bound_attachment_effects_follow_reattachment_and_expire() {
+            let mut state = GameState::new();
+            let controller = state.add_player();
+            let opponent = state.add_player();
+            let source = state
+                .create_object(
+                    CardId::new(2_411),
+                    controller,
+                    controller,
+                    ZoneId::new(None, ZoneKind::Battlefield),
+                )
+                .unwrap_or_else(|error| panic!("unexpected equipment create error: {error:?}"));
+            state
+                .set_base_object_characteristics(
+                    source,
+                    BaseObjectCharacteristics::new(
+                        ObjectTypes::none().with_artifact(),
+                        ObjectColors::none(),
+                    ),
+                )
+                .unwrap_or_else(|error| {
+                    panic!("unexpected equipment characteristics error: {error:?}")
+                });
+            let first = battlefield_creature(
+                &mut state,
+                controller,
+                2_412,
+                2,
+                2,
+                CreatureKeywords::none(),
+            );
+            let second = battlefield_creature(
+                &mut state,
+                controller,
+                2_413,
+                2,
+                2,
+                CreatureKeywords::none(),
+            );
+            assert_eq!(
+                apply(
+                    &mut state,
+                    Action::AttachObject {
+                        attachment: source,
+                        target: Some(first),
+                    },
+                ),
+                Outcome::Applied
+            );
+            register_continuous(
+                &mut state,
+                ContinuousEffectDefinition::new(
+                    controller,
+                    ContinuousEffectTarget::AttachedToSource,
+                    ContinuousEffectOperation::ModifyPowerToughness {
+                        power: 1,
+                        toughness: 1,
+                    },
+                )
+                .with_source(source)
+                .with_duration(ContinuousEffectDuration::WhileSourceOnBattlefield),
+            );
+            assert!(matches!(
+                apply(
+                    &mut state,
+                    Action::RegisterRestriction {
+                        definition: RestrictionDefinition::new(
+                            controller,
+                            RestrictionEffect::Targeting {
+                                subject: TargetRestrictionSubject::AttachedToSource,
+                                restriction: TargetRestriction::Shroud,
+                            },
+                        )
+                        .with_source(source),
+                    },
+                ),
+                Outcome::RestrictionRegistered(_)
+            ));
+            let trigger = TriggerDefinition::new(
+                controller,
+                TriggerCondition::AttackDeclared {
+                    attacker: TriggerObjectFilter::AttachedToSource,
+                },
+            )
+            .with_source(source);
+            let requirement = [TargetRequirement::new(TargetKind::Permanent)];
+
+            assert_eq!(
+                state.creature_characteristics(first).map(|c| c.power()),
+                Ok(3)
+            );
+            assert_eq!(
+                state.creature_characteristics(second).map(|c| c.power()),
+                Ok(2)
+            );
+            assert!(state
+                .validate_target_choices(
+                    opponent,
+                    None,
+                    &requirement,
+                    &[TargetChoice::Object(first)],
+                )
+                .is_err());
+            assert!(state.trigger_condition_matches(
+                trigger,
+                GameEvent::AttackDeclared {
+                    attacker: first,
+                    defending_player: opponent,
+                },
+            ));
+
+            assert_eq!(
+                apply(
+                    &mut state,
+                    Action::AttachObject {
+                        attachment: source,
+                        target: Some(second),
+                    },
+                ),
+                Outcome::Applied
+            );
+            assert_eq!(
+                state.creature_characteristics(first).map(|c| c.power()),
+                Ok(2)
+            );
+            assert_eq!(
+                state.creature_characteristics(second).map(|c| c.power()),
+                Ok(3)
+            );
+            assert!(state
+                .validate_target_choices(
+                    opponent,
+                    None,
+                    &requirement,
+                    &[TargetChoice::Object(first)],
+                )
+                .is_ok());
+            assert!(state
+                .validate_target_choices(
+                    opponent,
+                    None,
+                    &requirement,
+                    &[TargetChoice::Object(second)],
+                )
+                .is_err());
+            assert!(!state.trigger_condition_matches(
+                trigger,
+                GameEvent::AttackDeclared {
+                    attacker: first,
+                    defending_player: opponent,
+                },
+            ));
+            assert!(state.trigger_condition_matches(
+                trigger,
+                GameEvent::AttackDeclared {
+                    attacker: second,
+                    defending_player: opponent,
+                },
+            ));
+
+            state
+                .move_object(source, ZoneId::new(Some(controller), ZoneKind::Graveyard))
+                .unwrap_or_else(|error| panic!("unexpected equipment move error: {error:?}"));
+            assert_eq!(
+                state.creature_characteristics(second).map(|c| c.power()),
+                Ok(2)
+            );
+            assert!(state
+                .validate_target_choices(
+                    opponent,
+                    None,
+                    &requirement,
+                    &[TargetChoice::Object(second)],
+                )
+                .is_ok());
+            assert_eq!(
+                state.deterministic_hash(),
+                state.deterministic_hash_streaming()
             );
         }
 

@@ -415,7 +415,9 @@ fn compile_smoke(definition: &CardDefinition) -> Result<CompiledSmoke, RuntimeSm
     let needs_later_turn = program.triggered_abilities().iter().any(|ability| {
         matches!(
             ability.event(),
-            TriggeredEventProgram::SourceAttacks | TriggeredEventProgram::ControllerUpkeep
+            TriggeredEventProgram::SourceAttacks
+                | TriggeredEventProgram::AttachedObjectAttacks
+                | TriggeredEventProgram::ControllerUpkeep
         )
     });
     if needs_later_turn
@@ -495,7 +497,8 @@ fn compile_life_totals(
             | EffectProgram::MoveChosenObjects { .. }
             | EffectProgram::TapChosenObjects { .. }
             | EffectProgram::ModifyPowerToughness { .. }
-            | EffectProgram::GrantKeywords { .. } => continue,
+            | EffectProgram::GrantKeywords { .. }
+            | EffectProgram::AttachSourceToTarget { .. } => continue,
         };
         for (player, selected) in smoke_player_mask(players).into_iter().enumerate() {
             if selected {
@@ -586,7 +589,8 @@ fn compile_library_reserve(
             | EffectProgram::MoveChosenObjects { .. }
             | EffectProgram::TapChosenObjects { .. }
             | EffectProgram::ModifyPowerToughness { .. }
-            | EffectProgram::GrantKeywords { .. } => {}
+            | EffectProgram::GrantKeywords { .. }
+            | EffectProgram::AttachSourceToTarget { .. } => {}
         }
     }
     let mut reserve = [0_u32; PLAYER_COUNT];
@@ -1000,8 +1004,13 @@ fn execute_smoke(
         &mut hand_delta,
     )?;
 
-    let activated_effect_sources =
-        setup_activated_effect_sources(&mut execution, &compiled.program, caster, base_card_id)?;
+    let activated_effect_sources = setup_activated_effect_sources(
+        &mut execution,
+        &compiled.program,
+        spell,
+        caster,
+        base_card_id,
+    )?;
     let needs_creature_tap = !compiled.program.activated_abilities().is_empty()
         || compiled
             .program
@@ -1330,7 +1339,8 @@ fn setup_dynamic_amount_state(
             | EffectProgram::SearchLibrary { .. }
             | EffectProgram::MoveChosenObjects { .. }
             | EffectProgram::TapChosenObjects { .. }
-            | EffectProgram::GrantKeywords { .. } => [None, None],
+            | EffectProgram::GrantKeywords { .. }
+            | EffectProgram::AttachSourceToTarget { .. } => [None, None],
         };
         for amount in amounts.into_iter().flatten() {
             if let AmountProgram::CountPermanents(predicate) = amount {
@@ -1599,11 +1609,17 @@ fn execute_turn_triggers(
         )?;
     }
 
-    let attack_count = program
+    let source_attack_count = program
         .triggered_abilities()
         .iter()
         .filter(|ability| ability.event() == TriggeredEventProgram::SourceAttacks)
         .count();
+    let attached_attack_count = program
+        .triggered_abilities()
+        .iter()
+        .filter(|ability| ability.event() == TriggeredEventProgram::AttachedObjectAttacks)
+        .count();
+    let attack_count = source_attack_count.saturating_add(attached_attack_count);
     if attack_count != 0 {
         let before = smoke_hand_sizes(&execution.state, caster, opponent)?;
         advance_to_controller_step(
@@ -1619,11 +1635,31 @@ fn execute_turn_triggers(
             before,
             smoke_hand_sizes(&execution.state, caster, opponent)?,
         );
+        let mut attacks = Vec::with_capacity(2);
+        if source_attack_count != 0 {
+            attacks.push(AttackDeclaration::new(source, opponent));
+        }
+        if attached_attack_count != 0 {
+            let attached = execution
+                .state
+                .object(source)
+                .and_then(|object| object.attached_to())
+                .ok_or_else(|| {
+                    RuntimeSmokeFailure::new(
+                        RuntimeSmokeFailureCode::UnexpectedOutcome,
+                        "trigger.attached_object_attacks.declare",
+                        "trigger source has no attached object after equip activation",
+                    )
+                })?;
+            if !attacks.iter().any(|attack| attack.attacker() == attached) {
+                attacks.push(AttackDeclaration::new(attached, opponent));
+            }
+        }
         let outcome = execution.dispatch(
             "trigger.source_attacks.declare",
             Action::DeclareAttackers {
                 player: caster,
-                attacks: vec![AttackDeclaration::new(source, opponent)],
+                attacks,
             },
         )?;
         if !matches!(outcome, Outcome::Applied) {
@@ -1825,11 +1861,16 @@ fn execute_pending_triggers(
 fn setup_activated_effect_sources(
     execution: &mut Execution,
     program: &CardProgram,
+    primary_source: ObjectId,
     caster: PlayerId,
     base_card_id: u32,
 ) -> Result<Vec<ObjectId>, RuntimeSmokeFailure> {
     let mut sources = Vec::with_capacity(program.activated_effects().len());
-    for index in 0..program.activated_effects().len() {
+    for (index, ability) in program.activated_effects().iter().enumerate() {
+        if ability.uses_source_object() {
+            sources.push(primary_source);
+            continue;
+        }
         let source = expect_object(
             execution.dispatch(
                 &format!("setup.activated[{index}].source"),
@@ -1933,7 +1974,8 @@ fn execute_activated_effects(
             opponent,
             hand_delta,
             &format!("{phase}.effect"),
-        )?;
+        )?
+        .with_source(source);
         let actions = bind_activated_effect_actions(&execution.state, ability, &bindings).map_err(
             |error| {
                 RuntimeSmokeFailure::new(
@@ -2150,7 +2192,8 @@ fn prepare_effect_bindings_and_hand_delta(
             | EffectProgram::MoveChosenObjects { .. }
             | EffectProgram::TapChosenObjects { .. }
             | EffectProgram::ModifyPowerToughness { .. }
-            | EffectProgram::GrantKeywords { .. } => {}
+            | EffectProgram::GrantKeywords { .. }
+            | EffectProgram::AttachSourceToTarget { .. } => {}
         }
     }
     Ok(bindings)
@@ -3033,6 +3076,31 @@ card "Event Trigger Source" {
   }
 }
 "#;
+    const EQUIPMENT_TRIGGER_SOURCE: &str = r#"
+card "Equipment Trigger Source" {
+  id: "forge:testkit:runtime:equipment-trigger"
+  layout: normal
+  status: unverified_playable
+  face "Equipment Trigger Source" {
+    cost: "{2}"
+    types: "Legendary Artifact - Equipment"
+    oracle: "Equipped creature gets +1/+1 and has hexproof. Whenever equipped creature attacks, search for a basic land. Equip {1}."
+    keywords: [equip]
+    ability activated {
+      costs: [mana_cost("{1}")]
+      timing: timing_sorcery()
+      effect: attach(source(), target(permanents(and(type_is("creature"), controlled_by(you())))))
+    }
+    ability static {
+      effect: continuous(equipped_object(source()), sequence(modify_pt(any(), 1, 1), grant_keyword(any(), "hexproof")))
+    }
+    ability triggered {
+      event: event_attacks(equipped_object(source()))
+      effect: choose_up_to(1, sequence(search_library(cards(and(and(type_is("land"), supertype_is("basic")), zone_is("library"))), you(), 1), move_zone(chosen(cards(and(and(type_is("land"), supertype_is("basic")), zone_is("library")))), "battlefield", 1), tap(chosen(cards(and(and(type_is("land"), supertype_is("basic")), zone_is("library"))))), shuffle(you())))
+    }
+  }
+}
+"#;
 
     #[test]
     fn supported_life_spell_executes_and_reaches_owner_graveyard() {
@@ -3157,6 +3225,32 @@ card "Event Trigger Source" {
             ]
         );
         assert_eq!(pass.destination(), "battlefield");
+    }
+
+    #[test]
+    fn equipment_attaches_and_executes_live_layers_and_attack_trigger() {
+        let definition = parse("equipment_trigger_source.frs", EQUIPMENT_TRIGGER_SOURCE);
+        let report = run_translated_card_runtime_smoke(&definition);
+        let RuntimeSmokeResult::Passed(pass) = report.result() else {
+            panic!("expected pass, found {:?}", report.result());
+        };
+        assert_eq!(pass.effect_actions(), 7);
+        assert_eq!(
+            pass.capabilities(),
+            [
+                RuntimeSmokeCapability::PermanentSpell,
+                RuntimeSmokeCapability::ActivatedAbility,
+                RuntimeSmokeCapability::ModifyCharacteristics,
+                RuntimeSmokeCapability::TargetingRestriction,
+                RuntimeSmokeCapability::AttachObject,
+                RuntimeSmokeCapability::SearchLibrary,
+                RuntimeSmokeCapability::MoveZone,
+                RuntimeSmokeCapability::TapObject,
+                RuntimeSmokeCapability::ShuffleLibrary,
+            ]
+        );
+        assert_eq!(pass.destination(), "battlefield");
+        assert_ne!(pass.final_hash(), 0);
     }
 
     #[test]

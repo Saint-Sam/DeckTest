@@ -19,8 +19,8 @@ use forge_core::{
     ObjectSupertypes, ObjectTargetPredicate, ObjectTypes, Outcome, PlayerId, PlayerRule,
     PlayerRuleSubject, PlayerTargetPredicate, RestrictionDefinition, RestrictionEffect,
     StackEntryId, TargetChoice, TargetControllerPredicate, TargetKind, TargetRequirement,
-    TriggerCondition, TriggerDefinition, TriggerObjectFilter, TriggerPlayerFilter,
-    TriggerZoneFilter, ZoneId, ZoneKind,
+    TargetRestriction, TargetRestrictionSubject, TriggerCondition, TriggerDefinition,
+    TriggerObjectFilter, TriggerPlayerFilter, TriggerZoneFilter, ZoneId, ZoneKind,
 };
 use std::{collections::BTreeMap, error::Error, fmt};
 
@@ -188,6 +188,10 @@ pub enum Capability {
     ReduceSpellCost,
     /// Apply a typed continuous player-rule change.
     ModifyPlayerRules,
+    /// Attach one source object to a validated object target.
+    AttachObject,
+    /// Apply a typed targeting restriction to an object.
+    TargetingRestriction,
 }
 
 impl Capability {
@@ -215,6 +219,8 @@ impl Capability {
             Self::ModifyCharacteristics => "modify_characteristics",
             Self::ReduceSpellCost => "reduce_spell_cost",
             Self::ModifyPlayerRules => "modify_player_rules",
+            Self::AttachObject => "attach_object",
+            Self::TargetingRestriction => "targeting_restriction",
         }
     }
 }
@@ -601,6 +607,11 @@ pub enum EffectProgram {
         /// Exact continuous-effect duration.
         duration: ContinuousEffectDuration,
     },
+    /// Attach the executing ability's source to one announced object target.
+    AttachSourceToTarget {
+        /// Object target slot.
+        target: usize,
+    },
 }
 
 /// One completely compiled triggered ability.
@@ -620,6 +631,8 @@ pub enum TriggeredEventProgram {
     SourceEnters,
     /// This creature attacks.
     SourceAttacks,
+    /// The object currently equipped by this source attacks.
+    AttachedObjectAttacks,
     /// This permanent's controller begins their upkeep.
     ControllerUpkeep,
     /// This permanent's controller casts or copies a matching spell.
@@ -664,6 +677,13 @@ pub enum StaticAbilityProgram {
     PlayerRule {
         /// Closed player-level rule change.
         rule: PlayerRule,
+    },
+    /// Live characteristics and targeting restrictions for the attached object.
+    AttachedObject {
+        /// Layer operations following the current attachment.
+        operations: Vec<ContinuousEffectOperation>,
+        /// Targeting restrictions following the current attachment.
+        restrictions: Vec<TargetRestriction>,
     },
 }
 
@@ -744,6 +764,14 @@ impl ActivatedEffectProgram {
     pub fn optional_choice_count(&self) -> usize {
         self.optional_effect_groups.len()
     }
+
+    /// Returns whether execution requires the actual battlefield source object.
+    #[must_use]
+    pub fn uses_source_object(&self) -> bool {
+        self.effects
+            .iter()
+            .any(|effect| matches!(effect, EffectProgram::AttachSourceToTarget { .. }))
+    }
 }
 
 impl StaticAbilityProgram {
@@ -790,6 +818,34 @@ impl StaticAbilityProgram {
                 )
                 .with_source(source),
             }],
+            Self::AttachedObject {
+                operations,
+                restrictions,
+            } => operations
+                .iter()
+                .copied()
+                .map(|operation| Action::RegisterContinuousEffect {
+                    definition: ContinuousEffectDefinition::new(
+                        controller,
+                        ContinuousEffectTarget::AttachedToSource,
+                        operation,
+                    )
+                    .with_source(source)
+                    .with_duration(ContinuousEffectDuration::WhileSourceOnBattlefield),
+                })
+                .chain(restrictions.iter().copied().map(|restriction| {
+                    Action::RegisterRestriction {
+                        definition: RestrictionDefinition::new(
+                            controller,
+                            RestrictionEffect::Targeting {
+                                subject: TargetRestrictionSubject::AttachedToSource,
+                                restriction,
+                            },
+                        )
+                        .with_source(source),
+                    }
+                }))
+                .collect(),
         }
     }
 
@@ -800,6 +856,10 @@ impl StaticAbilityProgram {
             Self::Continuous { operations, .. } => operations.len(),
             Self::SpellCostReduction { .. } => 1,
             Self::PlayerRule { .. } => 1,
+            Self::AttachedObject {
+                operations,
+                restrictions,
+            } => operations.len().saturating_add(restrictions.len()),
         }
     }
 }
@@ -816,6 +876,9 @@ impl TriggeredAbilityProgram {
             },
             TriggeredEventProgram::SourceAttacks => TriggerCondition::AttackDeclared {
                 attacker: TriggerObjectFilter::Source,
+            },
+            TriggeredEventProgram::AttachedObjectAttacks => TriggerCondition::AttackDeclared {
+                attacker: TriggerObjectFilter::AttachedToSource,
             },
             TriggeredEventProgram::ControllerUpkeep => TriggerCondition::StepBeganFor {
                 step: forge_core::Step::Upkeep,
@@ -890,6 +953,7 @@ impl EffectProgram {
             Self::ModifyPowerToughness { .. } | Self::GrantKeywords { .. } => {
                 Capability::ModifyCharacteristics
             }
+            Self::AttachSourceToTarget { .. } => Capability::AttachObject,
         }
     }
 }
@@ -1037,6 +1101,18 @@ impl CardProgram {
                 StaticAbilityProgram::PlayerRule { .. } => {
                     capabilities.push(Capability::ModifyPlayerRules);
                 }
+                StaticAbilityProgram::AttachedObject {
+                    operations,
+                    restrictions,
+                } => {
+                    capabilities
+                        .extend(operations.iter().map(|_| Capability::ModifyCharacteristics));
+                    capabilities.extend(
+                        restrictions
+                            .iter()
+                            .map(|_| Capability::TargetingRestriction),
+                    );
+                }
             }
         }
         capabilities.extend(self.effects.iter().map(EffectProgram::capability));
@@ -1099,6 +1175,10 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
         face.toughness.as_deref(),
         &face.keywords,
     )?;
+    let has_equip_keyword = face
+        .keywords
+        .iter()
+        .any(|keyword| keyword.as_str() == "equip");
     let mut compiler = ProgramCompiler::default();
     let mut activated_abilities =
         compile_intrinsic_basic_mana_ability(&face.type_line.supertypes, &face.type_line.subtypes)?
@@ -1156,6 +1236,17 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
                 ));
             }
         }
+    }
+    if has_equip_keyword
+        && !activated_effects.iter().any(|ability| {
+            ability.timing() == ActivationTiming::Sorcery && ability.uses_source_object()
+        })
+    {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::KeywordSemantics,
+            "card.faces[0].keywords",
+            "equip requires a sorcery-speed source-to-target attachment ability",
+        ));
     }
     let compiled_effect_count = triggered_abilities
         .iter()
@@ -1346,6 +1437,28 @@ fn compile_static_ability(
             rule: PlayerRule::NoMaximumHandSize,
         });
     }
+    if is_equipped_object_of_source(selector) {
+        let mut operations = Vec::new();
+        let mut restrictions = Vec::new();
+        compile_attached_static_operations(
+            effect,
+            &format!("{path}.effect.operation"),
+            &mut operations,
+            &mut restrictions,
+        )?;
+        let operation_count = operations.len().saturating_add(restrictions.len());
+        if operation_count == 0 || operation_count > MAX_EFFECTS {
+            return Err(CompileDiagnostic::new(
+                CompileDiagnosticCode::ProgramBounds,
+                format!("{path}.effect.operation"),
+                format!("attached-object static ability compiled {operation_count} operations"),
+            ));
+        }
+        return Ok(StaticAbilityProgram::AttachedObject {
+            operations,
+            restrictions,
+        });
+    }
     let spec = compile_object_selector(selector, &format!("{path}.effect.selector"))?;
     let kind = spec.kind;
     let exclude_source = spec.exclude_source;
@@ -1514,6 +1627,111 @@ fn compile_static_operations(
     }
 }
 
+fn compile_attached_static_operations(
+    expression: &Expression,
+    path: &str,
+    operations: &mut Vec<ContinuousEffectOperation>,
+    restrictions: &mut Vec<TargetRestriction>,
+) -> Result<(), CompileDiagnostic> {
+    let Expression::Call {
+        operation,
+        arguments,
+    } = expression
+    else {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectArguments,
+            path,
+            "attached-object continuous operation is not a call",
+        ));
+    };
+    match operation {
+        Operation::Sequence => {
+            for (index, operation) in arguments.iter().enumerate() {
+                compile_attached_static_operations(
+                    operation,
+                    &format!("{path}.sequence[{index}]"),
+                    operations,
+                    restrictions,
+                )?;
+            }
+            Ok(())
+        }
+        Operation::ModifyPt => {
+            let [subject, Expression::Integer(power), Expression::Integer(toughness)] =
+                arguments.as_slice()
+            else {
+                return Err(effect_arity(
+                    path,
+                    operation,
+                    "any(), literal power delta, and literal toughness delta",
+                ));
+            };
+            if !is_any_selector(subject) {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::EffectArguments,
+                    format!("{path}.subject"),
+                    "attached-object operation must apply to any() selected object",
+                ));
+            }
+            let power = i32::try_from(*power).map_err(|_| {
+                CompileDiagnostic::new(
+                    CompileDiagnosticCode::EffectAmount,
+                    format!("{path}.power"),
+                    "attached-object power delta does not fit i32",
+                )
+            })?;
+            let toughness = i32::try_from(*toughness).map_err(|_| {
+                CompileDiagnostic::new(
+                    CompileDiagnosticCode::EffectAmount,
+                    format!("{path}.toughness"),
+                    "attached-object toughness delta does not fit i32",
+                )
+            })?;
+            operations.push(ContinuousEffectOperation::ModifyPowerToughness { power, toughness });
+            Ok(())
+        }
+        Operation::GrantKeyword => {
+            let [subject, keyword] = arguments.as_slice() else {
+                return Err(effect_arity(
+                    path,
+                    operation,
+                    "any() and one represented keyword",
+                ));
+            };
+            if !is_any_selector(subject) {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::EffectArguments,
+                    format!("{path}.subject"),
+                    "attached-object operation must apply to any() selected object",
+                ));
+            }
+            match keyword {
+                Expression::Text(value) if value == "shroud" => {
+                    restrictions.push(TargetRestriction::Shroud);
+                }
+                Expression::Text(value) if value == "hexproof" => {
+                    restrictions.push(TargetRestriction::Hexproof);
+                }
+                _ => operations.push(ContinuousEffectOperation::AddKeywords {
+                    keywords: compile_granted_creature_keyword(
+                        keyword,
+                        &format!("{path}.keyword"),
+                    )?,
+                }),
+            }
+            Ok(())
+        }
+        unsupported => Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectOperation,
+            path,
+            format!(
+                "attached-object operation `{}` has no complete runtime lowering",
+                unsupported.as_str()
+            ),
+        )),
+    }
+}
+
 fn compile_trigger_event(
     expression: &Expression,
     path: &str,
@@ -1531,7 +1749,7 @@ fn compile_trigger_event(
     };
 
     match operation {
-        Operation::EventEnters | Operation::EventAttacks => {
+        Operation::EventEnters => {
             let [Expression::Call {
                 operation: Operation::Source,
                 arguments: source_arguments,
@@ -1546,11 +1764,27 @@ fn compile_trigger_event(
                     "no arguments",
                 ));
             }
-            Ok(if matches!(operation, Operation::EventEnters) {
-                TriggeredEventProgram::SourceEnters
+            Ok(TriggeredEventProgram::SourceEnters)
+        }
+        Operation::EventAttacks => {
+            let [attacker] = arguments.as_slice() else {
+                return Err(effect_arity(
+                    path,
+                    operation,
+                    "source() or equipped_object(source())",
+                ));
+            };
+            if is_source_selector(attacker) {
+                Ok(TriggeredEventProgram::SourceAttacks)
+            } else if is_equipped_object_of_source(attacker) {
+                Ok(TriggeredEventProgram::AttachedObjectAttacks)
             } else {
-                TriggeredEventProgram::SourceAttacks
-            })
+                Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::AbilityShape,
+                    format!("{path}.attacker"),
+                    "attack event requires source() or equipped_object(source())",
+                ))
+            }
         }
         Operation::EventUpkeep => {
             let [Expression::Call {
@@ -1633,7 +1867,7 @@ fn compile_base_creature(
     keywords: &[forge_carddef::KeywordId],
 ) -> Result<Option<BaseCreatureCharacteristics>, CompileDiagnostic> {
     if !card_types.contains(&CardType::Creature) {
-        if keywords.is_empty() {
+        if keywords.iter().all(|keyword| keyword.as_str() == "equip") {
             return Ok(None);
         }
         return Err(CompileDiagnostic::new(
@@ -2665,6 +2899,27 @@ fn compile_effect(
             });
             Ok(())
         }
+        Operation::Attach => {
+            let [source, target] = arguments.as_slice() else {
+                return Err(effect_arity(
+                    path,
+                    operation,
+                    "source() and one object target",
+                ));
+            };
+            if !is_source_selector(source) {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::EffectArguments,
+                    format!("{path}.source"),
+                    "attachment source must be source()",
+                ));
+            }
+            let target = compile_object_target(target, &format!("{path}.target"), compiler)?;
+            compiler
+                .effects
+                .push(EffectProgram::AttachSourceToTarget { target });
+            Ok(())
+        }
         Operation::CounterSpell => {
             let ([target] | [target, _]) = arguments.as_slice() else {
                 return Err(effect_arity(path, operation, "one stack target selector"));
@@ -3446,6 +3701,26 @@ fn is_you_selector(expression: &Expression) -> bool {
             operation: Operation::You,
             arguments,
         } if arguments.is_empty()
+    )
+}
+
+fn is_source_selector(expression: &Expression) -> bool {
+    matches!(
+        expression,
+        Expression::Call {
+            operation: Operation::Source,
+            arguments,
+        } if arguments.is_empty()
+    )
+}
+
+fn is_equipped_object_of_source(expression: &Expression) -> bool {
+    matches!(
+        expression,
+        Expression::Call {
+            operation: Operation::EquippedObject,
+            arguments,
+        } if matches!(arguments.as_slice(), [source] if is_source_selector(source))
     )
 }
 
@@ -4498,6 +4773,7 @@ fn compile_zone_kind(expression: &Expression, path: &str) -> Result<ZoneKind, Co
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ExecutionBindings {
     controller: PlayerId,
+    source: Option<ObjectId>,
     opponents: Vec<PlayerId>,
     targets: Vec<TargetChoice>,
     object_choices: Vec<Vec<ObjectId>>,
@@ -4511,12 +4787,20 @@ impl ExecutionBindings {
     pub fn new(controller: PlayerId, opponents: Vec<PlayerId>) -> Self {
         Self {
             controller,
+            source: None,
             opponents,
             targets: Vec::new(),
             object_choices: Vec::new(),
             optional_effect_choices: Vec::new(),
             scry_bottoms: BTreeMap::new(),
         }
+    }
+
+    /// Supplies the source object for source-bound effects.
+    #[must_use]
+    pub const fn with_source(mut self, source: ObjectId) -> Self {
+        self.source = Some(source);
+        self
     }
 
     /// Supplies target choices in compiled announcement order.
@@ -5148,6 +5432,22 @@ fn bind_effect_actions(
                         },
                     });
                 }
+            }
+            EffectProgram::AttachSourceToTarget { target } => {
+                let source = bindings.source.ok_or_else(|| {
+                    ExecutionDiagnostic::new(
+                        ExecutionDiagnosticCode::MissingBinding,
+                        Some(effect_index),
+                        "source-bound attachment has no source object",
+                    )
+                })?;
+                actions.push(BoundAction {
+                    effect_index,
+                    action: Action::AttachObject {
+                        attachment: source,
+                        target: Some(resolve_object_target(bindings, *target, effect_index)?),
+                    },
+                });
             }
         }
     }
