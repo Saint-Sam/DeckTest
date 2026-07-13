@@ -156,6 +156,8 @@ pub enum Capability {
     ManaAbility,
     /// Pay costs and resolve a non-mana activated ability.
     ActivatedAbility,
+    /// Cycle a card from hand through the production cycling action.
+    Cycling,
     /// Gain life.
     GainLife,
     /// Lose life.
@@ -222,6 +224,7 @@ impl Capability {
             Self::LandPlay => "land_play",
             Self::ManaAbility => "mana_ability",
             Self::ActivatedAbility => "activated_ability",
+            Self::Cycling => "cycling",
             Self::GainLife => "gain_life",
             Self::LoseLife => "lose_life",
             Self::DealDamage => "deal_damage",
@@ -713,6 +716,8 @@ pub enum TriggeredEventProgram {
     ControllerUpkeep,
     /// This permanent's controller casts or copies a matching spell.
     ControllerCasts(ObjectTargetPredicate),
+    /// A matching permanent controlled by this source's controller deals combat damage to a player.
+    ControllerPermanentDealsCombatDamageToPlayer(ObjectTargetPredicate),
 }
 
 /// One completely compiled non-mana activated ability.
@@ -729,6 +734,27 @@ pub struct ActivatedEffectProgram {
     object_choice_requirements: Vec<ObjectChoiceRequirement>,
     effects: Vec<EffectProgram>,
     optional_effect_groups: Vec<OptionalEffectGroup>,
+}
+
+/// Exact hand-zone cycling cost compiled from the intrinsic keyword ability.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CyclingProgram {
+    mana_cost: ManaCost,
+    exact_payment: ManaPool,
+}
+
+impl CyclingProgram {
+    /// Returns the exact cycling mana cost.
+    #[must_use]
+    pub const fn mana_cost(self) -> ManaCost {
+        self.mana_cost
+    }
+
+    /// Returns one deterministic exact payment pool for smoke synthesis.
+    #[must_use]
+    pub const fn exact_payment(self) -> ManaPool {
+        self.exact_payment
+    }
 }
 
 /// One source-bound static ability compiled without card branches.
@@ -1091,6 +1117,9 @@ impl TriggeredAbilityProgram {
                     forbidden_types: predicate.forbidden_types(),
                 }
             }
+            TriggeredEventProgram::ControllerPermanentDealsCombatDamageToPlayer(source) => {
+                TriggerCondition::CombatDamageToPlayer { source }
+            }
         };
         TriggerDefinition::new(controller, condition).with_source(source)
     }
@@ -1223,6 +1252,7 @@ pub struct CardProgram {
     alternate_costs: Vec<AlternateCastCostProgram>,
     overload: bool,
     split_second: bool,
+    cycling: Option<CyclingProgram>,
     activated_abilities: Vec<ActivatedAbilityProgram>,
     activated_effects: Vec<ActivatedEffectProgram>,
     triggered_abilities: Vec<TriggeredAbilityProgram>,
@@ -1339,6 +1369,12 @@ impl CardProgram {
         self.split_second
     }
 
+    /// Returns the exact hand-zone cycling program, when present.
+    #[must_use]
+    pub const fn cycling(&self) -> Option<CyclingProgram> {
+        self.cycling
+    }
+
     /// Returns completely compiled activated abilities in printed order.
     #[must_use]
     pub fn activated_abilities(&self) -> &[ActivatedAbilityProgram] {
@@ -1377,6 +1413,9 @@ impl CardProgram {
         }
         if !self.activated_effects.is_empty() {
             capabilities.push(Capability::ActivatedAbility);
+        }
+        if self.cycling.is_some() {
+            capabilities.push(Capability::Cycling);
         }
         capabilities.extend(
             self.alternate_costs
@@ -1553,13 +1592,26 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
             "split_second is valid only on instant or sorcery spells",
         ));
     }
+    let cycling_count = face
+        .keywords
+        .iter()
+        .filter(|keyword| keyword.as_str() == "cycling")
+        .count();
+    if cycling_count > 1 {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::KeywordSemantics,
+            "card.faces[0].keywords",
+            "cycling must appear exactly once when present",
+        ));
+    }
+    let has_cycling_keyword = cycling_count == 1;
     let intrinsic_keywords = face
         .keywords
         .iter()
         .filter(|keyword| {
             !matches!(
                 keyword.as_str(),
-                "evoke" | "flashback" | "overload" | "split_second"
+                "cycling" | "evoke" | "flashback" | "overload" | "split_second"
             )
         })
         .cloned()
@@ -1585,6 +1637,7 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
     let mut additional_costs = Vec::new();
     let mut alternate_costs = Vec::new();
     let mut spell_modes = Vec::new();
+    let mut cycling = None;
     let mut spell_abilities = 0_usize;
     for (index, ability) in face.abilities.iter().enumerate() {
         let path = format!("card.faces[0].abilities[{index}]");
@@ -1622,6 +1675,15 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
             {
                 if ability.mana_ability {
                     activated_abilities.push(compile_fixed_mana_ability(ability, &path)?);
+                } else if has_cycling_keyword && ability_has_discard_source_cost(ability) {
+                    if cycling.is_some() {
+                        return Err(CompileDiagnostic::new(
+                            CompileDiagnosticCode::KeywordSemantics,
+                            path,
+                            "card repeats its intrinsic cycling ability",
+                        ));
+                    }
+                    cycling = Some(compile_cycling_ability(ability, &path)?);
                 } else {
                     activated_effects.push(compile_activated_effect(ability, &path)?);
                 }
@@ -1670,6 +1732,13 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
             CompileDiagnosticCode::KeywordSemantics,
             "card.faces[0].keywords",
             "equip requires a sorcery-speed source-to-target attachment ability",
+        ));
+    }
+    if has_cycling_keyword && cycling.is_none() {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::KeywordSemantics,
+            "card.faces[0].keywords",
+            "cycling requires one exact mana-plus-source-discard draw ability",
         ));
     }
     if has_flashback_keyword
@@ -1811,6 +1880,7 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
         alternate_costs,
         overload,
         split_second,
+        cycling,
         activated_abilities,
         activated_effects,
         triggered_abilities,
@@ -2604,6 +2674,39 @@ fn compile_trigger_event(
             }
             Ok(TriggeredEventProgram::ControllerCasts(predicate))
         }
+        Operation::EventDamage => {
+            let [source, target, Expression::Text(mode)] = arguments.as_slice() else {
+                return Err(effect_arity(
+                    path,
+                    operation,
+                    "matching permanent source, any(), and \"combat\"",
+                ));
+            };
+            if mode != "combat" || !is_any_selector(target) {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::AbilityShape,
+                    path,
+                    "combat-damage trigger requires any player target and exact combat mode",
+                ));
+            }
+            let spec = compile_object_selector(source, &format!("{path}.source"))?;
+            if spec.kind != TargetKind::Permanent
+                || spec.controller != Some(TargetControllerPredicate::You)
+                || !spec.required_types.creature()
+                || spec.exclude_source
+            {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::AbilityShape,
+                    format!("{path}.source"),
+                    "combat-damage trigger requires a creature permanent controlled by you()",
+                ));
+            }
+            Ok(
+                TriggeredEventProgram::ControllerPermanentDealsCombatDamageToPlayer(
+                    object_predicate_from_spec(spec),
+                ),
+            )
+        }
         unsupported => Err(CompileDiagnostic::new(
             CompileDiagnosticCode::AbilityShape,
             path,
@@ -3305,6 +3408,97 @@ fn compile_activated_effect(
             .collect(),
         effects: compiler.effects,
         optional_effect_groups: compiler.optional_effect_groups,
+    })
+}
+
+fn ability_has_discard_source_cost(ability: &AbilityDefinition) -> bool {
+    ability.costs.iter().any(|cost| {
+        matches!(
+            cost,
+            Expression::Call {
+                operation: Operation::DiscardCost,
+                ..
+            }
+        )
+    })
+}
+
+fn compile_cycling_ability(
+    ability: &AbilityDefinition,
+    path: &str,
+) -> Result<CyclingProgram, CompileDiagnostic> {
+    if ability.event.is_some()
+        || ability.condition.is_some()
+        || ability.timing.is_some()
+        || ability.mana_ability
+    {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::AbilityShape,
+            path,
+            "cycling ability cannot carry an event, condition, timing, or mana flag",
+        ));
+    }
+    let [mana, discard] = ability.costs.as_slice() else {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::AbilityShape,
+            format!("{path}.costs"),
+            "cycling requires exactly mana_cost(...) followed by discard_cost(1, source())",
+        ));
+    };
+    let Expression::Call {
+        operation: Operation::ManaCost,
+        arguments: mana_arguments,
+    } = mana
+    else {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::AbilityShape,
+            format!("{path}.costs[0]"),
+            "cycling first cost must be mana_cost(...) ",
+        ));
+    };
+    let [Expression::Text(mana)] = mana_arguments.as_slice() else {
+        return Err(effect_arity(
+            &format!("{path}.costs[0]"),
+            &Operation::ManaCost,
+            "one fixed mana-cost string",
+        ));
+    };
+    let (mana_cost, exact_payment) = compile_mana_cost_text(mana, &format!("{path}.costs[0]"))?;
+    let Expression::Call {
+        operation: Operation::DiscardCost,
+        arguments: discard_arguments,
+    } = discard
+    else {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::AbilityShape,
+            format!("{path}.costs[1]"),
+            "cycling second cost must be discard_cost(1, source())",
+        ));
+    };
+    if !matches!(discard_arguments.as_slice(), [Expression::Integer(1), source] if is_source_selector(source))
+    {
+        return Err(effect_arity(
+            &format!("{path}.costs[1]"),
+            &Operation::DiscardCost,
+            "literal 1 and source()",
+        ));
+    }
+    if !matches!(
+        &ability.effect,
+        Expression::Call {
+            operation: Operation::Draw,
+            arguments,
+        } if matches!(arguments.as_slice(), [Expression::Integer(1), player] if is_you_selector(player))
+    ) {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectArguments,
+            format!("{path}.effect"),
+            "cycling effect must be exactly draw(1, you())",
+        ));
+    }
+    Ok(CyclingProgram {
+        mana_cost,
+        exact_payment,
     })
 }
 

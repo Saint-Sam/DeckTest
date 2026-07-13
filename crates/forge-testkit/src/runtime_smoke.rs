@@ -16,7 +16,8 @@ use forge_cards::runtime::{
 use forge_core::{
     apply, auto_payment_plan, Action, ActivatedAbilityId, ActivationCondition, ActivationTiming,
     AttackDeclaration, BaseCreatureCharacteristics, BaseObjectCharacteristics, BasicLandTypes,
-    CardId, CastSpellRequest, GameOutcome, GameState, ManaPool, ObjectColors, ObjectId,
+    CardId, CastSpellRequest, CombatDamageAssignment, CombatDamageAssignmentRequest,
+    CombatDamageTarget, CreatureKeywords, GameOutcome, GameState, ManaPool, ObjectColors, ObjectId,
     ObjectTypes, Outcome, PlayerId, PlayerTargetPredicate, PriorityOutcome, SpellTiming,
     StackEntryId, StackObjectKind, Step, TargetChoice, TargetControllerPredicate, TargetKind,
     TargetPredicate, TriggerId, ZoneId, ZoneKind,
@@ -433,8 +434,30 @@ fn compile_smoke(definition: &CardDefinition) -> Result<CompiledSmoke, RuntimeSm
                 "cumulative activation life cost overflowed",
             )
         })?;
-    let (initial_life, expected_life) = compile_life_totals(&all_effects, activation_life_cost)?;
+    let (initial_life, mut expected_life) =
+        compile_life_totals(&all_effects, activation_life_cost)?;
+    if program.triggered_abilities().iter().any(|ability| {
+        matches!(
+            ability.event(),
+            TriggeredEventProgram::ControllerPermanentDealsCombatDamageToPlayer(_)
+        )
+    }) {
+        expected_life[1] = expected_life[1].checked_sub(1).ok_or_else(|| {
+            RuntimeSmokeUnsupported::new(
+                UnsupportedSetupCode::SetupBounds,
+                "combat-damage smoke life underflowed",
+            )
+        })?;
+    }
     let mut library_reserve = compile_library_reserve(&all_effects)?;
+    if program.cycling().is_some() {
+        library_reserve[0] = library_reserve[0].checked_add(1).ok_or_else(|| {
+            RuntimeSmokeUnsupported::new(
+                UnsupportedSetupCode::SetupBounds,
+                "cycling draw reserve overflowed",
+            )
+        })?;
+    }
     let needs_later_turn = program.triggered_abilities().iter().any(|ability| {
         matches!(
             ability.event(),
@@ -904,6 +927,65 @@ fn execute_smoke(
                 ),
             ));
         }
+    }
+
+    if let Some(cycling) = compiled.program.cycling() {
+        let cycling_copy = expect_object(execution.dispatch(
+            "cycling.create_copy",
+            Action::CreateObject {
+                card: CardId::new(base_card_id.wrapping_add(29_000)),
+                owner: caster,
+                controller: caster,
+                zone: ZoneId::new(Some(caster), ZoneKind::Hand),
+            },
+        )?)?;
+        execution.dispatch(
+            "cycling.characteristics",
+            Action::SetBaseObjectCharacteristics {
+                object: cycling_copy,
+                base: compiled.program.base_object(),
+            },
+        )?;
+        execution.dispatch(
+            "cycling.add_mana",
+            Action::AddManaToPool {
+                player: caster,
+                mana: cycling.exact_payment(),
+            },
+        )?;
+        let payment = auto_payment_plan(cycling.exact_payment(), cycling.mana_cost())
+            .map_err(|error| {
+                RuntimeSmokeFailure::new(
+                    RuntimeSmokeFailureCode::UnexpectedOutcome,
+                    "cycling.payment",
+                    format!("payment planner failed: {error:?}"),
+                )
+            })?
+            .ok_or_else(|| {
+                RuntimeSmokeFailure::new(
+                    RuntimeSmokeFailureCode::UnexpectedOutcome,
+                    "cycling.payment",
+                    "exact synthesized mana did not produce a cycling payment",
+                )
+            })?;
+        let outcome = execution.dispatch(
+            "cycling.execute",
+            Action::Cycle {
+                player: caster,
+                object: cycling_copy,
+                cost: cycling.mana_cost(),
+                payment,
+            },
+        )?;
+        if !matches!(outcome, Outcome::Applied) {
+            return Err(unexpected_outcome("cycling.execute", outcome));
+        }
+        assert_zone(
+            &execution.state,
+            cycling_copy,
+            ZoneId::new(Some(caster), ZoneKind::Graveyard),
+            "cycling.destination",
+        )?;
     }
 
     if alternate_kind == Some(AlternateCostKind::Overload) {
@@ -1874,6 +1956,136 @@ fn execute_turn_triggers(
             caster,
             opponent,
             base_card_id.wrapping_add(930_000),
+            Some(source),
+            hand_delta,
+        )?;
+    }
+
+    let combat_damage_count = program
+        .triggered_abilities()
+        .iter()
+        .filter(|ability| {
+            matches!(
+                ability.event(),
+                TriggeredEventProgram::ControllerPermanentDealsCombatDamageToPlayer(_)
+            )
+        })
+        .count();
+    if combat_damage_count != 0 {
+        if attack_count != 0 {
+            return Err(RuntimeSmokeFailure::new(
+                RuntimeSmokeFailureCode::UnexpectedOutcome,
+                "trigger.combat_damage.setup",
+                "combined attack and combat-damage trigger smoke is not synthesized",
+            ));
+        }
+        let attacker = expect_object(execution.dispatch(
+            "trigger.combat_damage.create_attacker",
+            Action::CreateObject {
+                card: CardId::new(base_card_id.wrapping_add(940_000)),
+                owner: caster,
+                controller: caster,
+                zone: ZoneId::new(None, ZoneKind::Battlefield),
+            },
+        )?)?;
+        execution.dispatch(
+            "trigger.combat_damage.attacker_types",
+            Action::SetBaseObjectCharacteristics {
+                object: attacker,
+                base: BaseObjectCharacteristics::new(
+                    ObjectTypes::none().with_creature(),
+                    ObjectColors::none().with_blue(),
+                ),
+            },
+        )?;
+        execution.dispatch(
+            "trigger.combat_damage.attacker_stats",
+            Action::SetBaseCreatureCharacteristics {
+                object: attacker,
+                base: BaseCreatureCharacteristics::new(1, 1)
+                    .with_keywords(CreatureKeywords::none().with_haste()),
+            },
+        )?;
+        let before = smoke_hand_sizes(&execution.state, caster, opponent)?;
+        advance_to_controller_step(
+            execution,
+            caster,
+            Step::DeclareAttackers,
+            starting_turn,
+            false,
+            "trigger.combat_damage.wait",
+        )?;
+        record_hand_size_change(
+            hand_delta,
+            before,
+            smoke_hand_sizes(&execution.state, caster, opponent)?,
+        );
+        let outcome = execution.dispatch(
+            "trigger.combat_damage.declare_attacker",
+            Action::DeclareAttackers {
+                player: caster,
+                attacks: vec![AttackDeclaration::new(attacker, opponent)],
+            },
+        )?;
+        if !matches!(outcome, Outcome::Applied) {
+            return Err(unexpected_outcome(
+                "trigger.combat_damage.declare_attacker",
+                outcome,
+            ));
+        }
+        finish_empty_stack_step(execution, "trigger.combat_damage.finish_attackers")?;
+        if execution.state.current_step() != Some(Step::DeclareBlockers) {
+            return Err(RuntimeSmokeFailure::new(
+                RuntimeSmokeFailureCode::UnexpectedOutcome,
+                "trigger.combat_damage.blockers",
+                "combat did not advance to declare blockers",
+            ));
+        }
+        let outcome = execution.dispatch(
+            "trigger.combat_damage.declare_no_blockers",
+            Action::DeclareBlockers {
+                defending_player: opponent,
+                blocks: Vec::new(),
+            },
+        )?;
+        if !matches!(outcome, Outcome::Applied) {
+            return Err(unexpected_outcome(
+                "trigger.combat_damage.declare_no_blockers",
+                outcome,
+            ));
+        }
+        finish_empty_stack_step(execution, "trigger.combat_damage.finish_blockers")?;
+        if execution.state.current_step() != Some(Step::CombatDamage) {
+            return Err(RuntimeSmokeFailure::new(
+                RuntimeSmokeFailureCode::UnexpectedOutcome,
+                "trigger.combat_damage.damage_step",
+                "combat did not advance to the damage step",
+            ));
+        }
+        let outcome = execution.dispatch(
+            "trigger.combat_damage.assign",
+            Action::AssignCombatDamage {
+                assignments: vec![CombatDamageAssignmentRequest::new(
+                    attacker,
+                    vec![CombatDamageAssignment::new(
+                        CombatDamageTarget::Player(opponent),
+                        1,
+                    )],
+                )],
+            },
+        )?;
+        if !matches!(outcome, Outcome::CombatDamageAssigned(_)) {
+            return Err(unexpected_outcome("trigger.combat_damage.assign", outcome));
+        }
+        execute_pending_triggers(
+            execution,
+            program,
+            registered,
+            combat_damage_count,
+            "trigger.combat_damage",
+            caster,
+            opponent,
+            base_card_id.wrapping_add(950_000),
             Some(source),
             hand_delta,
         )?;
@@ -3298,6 +3510,8 @@ mod tests {
         include_str!("../tests/fixtures/runtime_smoke/supported_permanent_spell.frs");
     const BASIC_LAND: &str =
         include_str!("../tests/fixtures/runtime_smoke/supported_basic_land.frs");
+    const RECONNAISSANCE_MISSION: &str =
+        include_str!("../tests/fixtures/runtime_smoke/reconnaissance_mission.frs");
     const CREATURE_MANA_SOURCE: &str = r#"
 card "Creature Mana Source" {
   id: "forge:testkit:runtime:creature-mana"
@@ -3714,6 +3928,26 @@ card "Mulldrifter" {
                 RuntimeSmokeCapability::DrawCards,
             ]
         );
+    }
+
+    #[test]
+    fn reconnaissance_mission_cycles_and_triggers_on_combat_damage() {
+        let definition = parse("reconnaissance_mission.frs", RECONNAISSANCE_MISSION);
+        let report = run_translated_card_runtime_smoke(&definition);
+        let RuntimeSmokeResult::Passed(pass) = report.result() else {
+            panic!("expected pass, found {:?}", report.result());
+        };
+        assert_eq!(
+            pass.capabilities(),
+            [
+                RuntimeSmokeCapability::PermanentSpell,
+                RuntimeSmokeCapability::Cycling,
+                RuntimeSmokeCapability::DrawCards,
+            ]
+        );
+        assert_eq!(pass.effect_actions(), 1);
+        assert_eq!(pass.final_life_totals(), [20, 19]);
+        assert_eq!(pass.destination(), "battlefield");
     }
 
     #[test]

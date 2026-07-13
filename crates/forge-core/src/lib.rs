@@ -2855,6 +2855,11 @@ pub enum TriggerCondition {
         /// Types the source card must not contain.
         forbidden_types: ObjectTypes,
     },
+    /// Match positive combat damage from a matching permanent to a player.
+    CombatDamageToPlayer {
+        /// Source predicate interpreted relative to the trigger controller.
+        source: ObjectTargetPredicate,
+    },
 }
 
 impl TriggerCondition {
@@ -2872,6 +2877,7 @@ impl TriggerCondition {
             Self::AttackDeclared { .. } => GameEventKind::AttackDeclared,
             Self::StepBeganFor { .. } => GameEventKind::StepBegan,
             Self::StackEntryAdded { .. } => GameEventKind::StackEntryAdded,
+            Self::CombatDamageToPlayer { .. } => GameEventKind::CombatDamageDealt,
         }
     }
 
@@ -2887,6 +2893,7 @@ impl TriggerCondition {
             Self::AttackDeclared { .. } => 7,
             Self::StepBeganFor { .. } => 8,
             Self::StackEntryAdded { .. } => 9,
+            Self::CombatDamageToPlayer { .. } => 10,
         }
     }
 }
@@ -10875,6 +10882,16 @@ impl GameState {
                         || characteristics.types().intersects(required_any_types))
                     && !characteristics.types().intersects(forbidden_types)
             }
+            TriggerCondition::CombatDamageToPlayer { source } => {
+                matches!(event, GameEvent::CombatDamageDealt { record }
+                if matches!(record.target(), CombatDamageTarget::Player(_))
+                    && record.amount() > 0
+                    && self.object_matches_target_predicate(
+                        definition.controller(),
+                        source,
+                        record.source(),
+                    ))
+            }
         }
     }
 
@@ -14939,6 +14956,9 @@ impl Fnva64 {
                 self.write_object_types(required_any_types);
                 self.write_object_types(forbidden_types);
             }
+            TriggerCondition::CombatDamageToPlayer { source } => {
+                self.write_object_target_predicate(source);
+            }
         }
     }
 
@@ -16252,6 +16272,9 @@ impl CanonicalBytes {
                 self.write_object_types(required_types);
                 self.write_object_types(required_any_types);
                 self.write_object_types(forbidden_types);
+            }
+            TriggerCondition::CombatDamageToPlayer { source } => {
+                self.write_object_target_predicate(source);
             }
         }
     }

@@ -1,0 +1,19 @@
+card "Reconnaissance Mission" {
+  id: "forge:testkit:runtime:reconnaissance-mission"
+  layout: normal
+  status: unverified_playable
+  face "Reconnaissance Mission" {
+    cost: "{2}{U}{U}"
+    types: "Enchantment"
+    oracle: "Whenever a creature you control deals combat damage to a player, you may draw a card. Cycling {2}."
+    keywords: [cycling]
+    ability activated {
+      costs: [mana_cost("{2}"), discard_cost(1, source())]
+      effect: draw(1, you())
+    }
+    ability triggered {
+      event: event_damage(permanents(and(type_is("creature"), controlled_by(you()))), any(), "combat")
+      effect: choose_up_to(1, draw(1, you()))
+    }
+  }
+}
