@@ -31,6 +31,21 @@ def observed_from_cases(cases: dict) -> list[dict]:
         }
         if expected["disposition"] == "passed":
             entry.update(expected)
+            mana = []
+            for expectation in SEMANTICS.expected_mana_abilities(case):
+                mana.append(
+                    {
+                        **expectation,
+                        "replayed_outputs": expectation["legal_outputs"],
+                        "all_outputs_replayed": True,
+                    }
+                )
+            entry["semantic_probe"] = {
+                "base_subtypes": SEMANTICS.expected_base_subtypes(case) or [],
+                "mana_abilities": mana,
+                "token_mana_abilities": [],
+                "token_subtypes": [],
+            }
         else:
             entry.update(
                 {
@@ -64,9 +79,9 @@ class CommanderSemanticSidecarTests(unittest.TestCase):
             self.cases["summary"],
             {
                 "candidate_count": 100,
-                "semantic_case_ready": 34,
-                "blocked_semantic_gap": 24,
-                "blocked_runtime": 42,
+                "semantic_case_ready": 60,
+                "blocked_semantic_gap": 20,
+                "blocked_runtime": 20,
             },
         )
 
@@ -84,7 +99,7 @@ class CommanderSemanticSidecarTests(unittest.TestCase):
                 self.assertGreater(len(atom), 1)
                 derived.append(SEMANTICS.ATOM_CAPABILITIES[atom["op"]])
             self.assertEqual(derived, case["expected_runtime"]["capabilities"])
-        self.assertEqual(ready, 34)
+        self.assertEqual(ready, self.cases["summary"]["semantic_case_ready"])
 
     def test_runtime_smoke_success_does_not_promote_known_semantic_gaps(self) -> None:
         blocked = [
@@ -92,7 +107,7 @@ class CommanderSemanticSidecarTests(unittest.TestCase):
             for case in self.cases["cases"]
             if case["status"] == "blocked_semantic_gap"
         ]
-        self.assertEqual(len(blocked), 24)
+        self.assertEqual(len(blocked), self.cases["summary"]["blocked_semantic_gap"])
         self.assertTrue(
             all(case["expected_runtime"]["disposition"] == "passed" for case in blocked)
         )
@@ -117,13 +132,43 @@ class CommanderSemanticSidecarTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "runtime outcome changed"):
             SEMANTICS.verify_observed(self.cases, tampered)
 
+    def test_card_specific_mana_probe_requires_every_legal_output(self) -> None:
+        observed = observed_from_cases(self.cases)
+        mana_index = next(
+            index
+            for index, case in enumerate(self.cases["cases"])
+            if case["status"] == "semantic_case_ready"
+            and SEMANTICS.expected_mana_abilities(case)
+        )
+        observed[mana_index]["semantic_probe"]["mana_abilities"][0][
+            "all_outputs_replayed"
+        ] = False
+        with self.assertRaisesRegex(ValueError, "mana ability 0 replay failed"):
+            SEMANTICS.verify_observed(self.cases, observed)
+
+    def test_card_specific_subtype_probe_rejects_missing_printed_subtypes(self) -> None:
+        observed = observed_from_cases(self.cases)
+        subtype_index = next(
+            index
+            for index, case in enumerate(self.cases["cases"])
+            if case["status"] == "semantic_case_ready"
+            and SEMANTICS.expected_base_subtypes(case)
+        )
+        observed[subtype_index]["semantic_probe"]["base_subtypes"] = []
+        with self.assertRaisesRegex(ValueError, "printed subtype state changed"):
+            SEMANTICS.verify_observed(self.cases, observed)
+
     def test_incremental_report_keeps_checkpoint_open(self) -> None:
         observed = observed_from_cases(self.cases)
         report = SEMANTICS.build_report(self.cases, observed)
         self.assertEqual(report["checkpoint"]["status"], "in_progress")
-        self.assertEqual(report["checkpoint"]["semantic_verified"], 34)
-        self.assertEqual(report["checkpoint"]["remaining"], 66)
-        self.assertEqual(report["measured"]["runtime_smoke_passed"], 58)
+        verified = self.cases["summary"]["semantic_case_ready"]
+        self.assertEqual(report["checkpoint"]["semantic_verified"], verified)
+        self.assertEqual(report["checkpoint"]["remaining"], 100 - verified)
+        self.assertEqual(
+            report["measured"]["runtime_smoke_passed"],
+            verified + self.cases["summary"]["blocked_semantic_gap"],
+        )
 
 
 if __name__ == "__main__":

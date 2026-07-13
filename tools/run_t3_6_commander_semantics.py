@@ -39,8 +39,11 @@ ATOM_CAPABILITIES = {
     "create_token": "create_token",
     "search_library": "search_library",
     "tap_object": "tap_object",
+    "discard_cards": "discard_cards",
+    "modify_characteristics": "modify_characteristics",
 }
 SEMANTIC_BLOCKER_CODES = {
+    "COPY_TRIGGER_EVENT_MISSING",
     "GENERAL_SUBTYPE_STATE_MISSING",
     "MANA_CHOICE_PATHS_NOT_CARD_SPECIFICALLY_REPLAYED",
     "REGENERATION_PROHIBITION_MISSING",
@@ -250,6 +253,8 @@ def build_probe(cargo_target_dir: Path) -> Path:
                     "",
                     "[dependencies]",
                     f"forge-cardc = {{ path = {json.dumps(str(ROOT / 'crates/forge-cardc'))} }}",
+                    f"forge-cards = {{ path = {json.dumps(str(ROOT / 'crates/forge-cards'))} }}",
+                    f"forge-core = {{ path = {json.dumps(str(ROOT / 'crates/forge-core'))} }}",
                     f"forge-testkit = {{ path = {json.dumps(str(ROOT / 'crates/forge-testkit'))} }}",
                     'serde_json = "=1.0.150"',
                     "",
@@ -328,6 +333,92 @@ def verify_observed(cases: dict[str, Any], observed: list[dict[str, Any]]) -> No
                 raise ValueError(
                     f"{scenario_id}: runtime blocker changed\nexpected={expected}\nactual={actual_projection}"
                 )
+        verify_semantic_probe(case, actual)
+
+
+def expected_mana_abilities(case: dict[str, Any]) -> list[dict[str, Any]]:
+    expected: list[dict[str, Any]] = []
+    for atom in case.get("semantic_atoms", []):
+        if atom.get("op") != "activate_mana":
+            continue
+        groups = atom.get("abilities")
+        if groups is None:
+            groups = [atom]
+        if not isinstance(groups, list):
+            raise ValueError(f"{case['scenario_id']}: mana abilities must be a list")
+        for group in groups:
+            outputs = group.get("legal_outputs") if isinstance(group, dict) else None
+            damage = group.get("damage_to_controller", 0) if isinstance(group, dict) else None
+            if (
+                not isinstance(outputs, list)
+                or not outputs
+                or not all(isinstance(value, str) for value in outputs)
+                or not isinstance(damage, int)
+                or damage < 0
+            ):
+                raise ValueError(
+                    f"{case['scenario_id']}: invalid card-specific mana replay expectation"
+                )
+            expected.append(
+                {
+                    "legal_outputs": outputs,
+                    "damage_to_controller": damage,
+                }
+            )
+    return expected
+
+
+def expected_base_subtypes(case: dict[str, Any]) -> list[str] | None:
+    for atom in case.get("semantic_atoms", []):
+        if atom.get("op") not in {"play_land", "resolve_permanent"}:
+            continue
+        subtypes = atom.get("subtypes")
+        if subtypes is None:
+            continue
+        if not isinstance(subtypes, list) or not all(
+            isinstance(value, str) and value for value in subtypes
+        ):
+            raise ValueError(f"{case['scenario_id']}: invalid subtype expectation")
+        return sorted(value.casefold() for value in subtypes)
+    return None
+
+
+def verify_semantic_probe(case: dict[str, Any], actual: dict[str, Any]) -> None:
+    if case.get("status") != "semantic_case_ready":
+        return
+    probe = actual.get("semantic_probe")
+    if not isinstance(probe, dict):
+        raise ValueError(f"{case['scenario_id']}: semantic probe is missing")
+
+    expected_mana = expected_mana_abilities(case)
+    if expected_mana:
+        observed_mana = probe.get("mana_abilities")
+        if not isinstance(observed_mana, list) or len(observed_mana) != len(expected_mana):
+            raise ValueError(f"{case['scenario_id']}: mana ability count changed")
+        for index, (expected, observed) in enumerate(zip(expected_mana, observed_mana)):
+            projection = {
+                "legal_outputs": observed.get("legal_outputs") if isinstance(observed, dict) else None,
+                "damage_to_controller": (
+                    observed.get("damage_to_controller") if isinstance(observed, dict) else None
+                ),
+            }
+            if projection != expected or observed.get("replayed_outputs") != expected["legal_outputs"]:
+                raise ValueError(
+                    f"{case['scenario_id']}: mana ability {index} did not replay every legal output"
+                )
+            if observed.get("all_outputs_replayed") is not True:
+                raise ValueError(
+                    f"{case['scenario_id']}: mana ability {index} replay failed"
+                )
+
+    expected_subtypes = expected_base_subtypes(case)
+    if expected_subtypes is not None:
+        observed_subtypes = probe.get("base_subtypes")
+        if not isinstance(observed_subtypes, list) or sorted(observed_subtypes) != expected_subtypes:
+            raise ValueError(
+                f"{case['scenario_id']}: printed subtype state changed; "
+                f"expected={expected_subtypes}, actual={observed_subtypes}"
+            )
 
 
 def aggregate_translated_hash(cases: dict[str, Any]) -> str:
@@ -376,15 +467,19 @@ def build_report(cases: dict[str, Any], observed: list[dict[str, Any]]) -> dict[
         for blocker in case["blockers"]
     )
     runtime_reason_counts = Counter(item["reason_code"] for item in runtime_blocked)
+    runtime_passed = sum(
+        case["expected_runtime"]["disposition"] == "passed" for case in cases["cases"]
+    )
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "generated_at": "2026-07-13",
         "task": "T3.6-B",
         "status": "pass_incremental_semantic_slice",
         "verification_mode": "local_only",
         "claim_boundary": (
-            "34 identities have one card-specific expected production path and exact deterministic replay. "
-            "The other 66 remain reason-coded and are not semantic_verified; CP-CARD-SEMANTICS-100 remains open."
+            f"{len(verified)} identities have one card-specific expected production path and exact "
+            f"deterministic replay. The other {100 - len(verified)} remain reason-coded and are not "
+            "semantic_verified; CP-CARD-SEMANTICS-100 remains open."
         ),
         "checkpoint": {
             "id": "CP-CARD-SEMANTICS-100",
@@ -416,7 +511,7 @@ def build_report(cases: dict[str, Any], observed: list[dict[str, Any]]) -> dict[
         },
         "measured": {
             "frozen_candidates": 100,
-            "runtime_smoke_passed": 58,
+            "runtime_smoke_passed": runtime_passed,
             "semantic_verified": len(verified),
             "blocked_semantic_gap": len(semantic_blocked),
             "blocked_runtime": len(runtime_blocked),
@@ -440,8 +535,9 @@ def build_report(cases: dict[str, Any], observed: list[dict[str, Any]]) -> dict[
                     "--report reports/gates/T3.6-B/EVIDENCE.json"
                 ),
                 "result": (
-                    "PASS; two exact production replays, 34 semantic outcomes matched, "
-                    "24 semantic gaps and 42 runtime blockers remained fail-closed"
+                    f"PASS; two exact production replays, {len(verified)} semantic outcomes matched, "
+                    f"{len(semantic_blocked)} semantic gaps and {len(runtime_blocked)} runtime "
+                    "blockers remained fail-closed"
                 ),
             }
         ],
