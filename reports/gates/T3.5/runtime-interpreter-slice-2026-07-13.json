@@ -1,0 +1,121 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-13",
+  "task": "T3.5",
+  "slice": "data-driven-card-runtime-interpreter",
+  "status": "pass_incremental_slice",
+  "claim_boundary": "This proves the listed capability runtime path through production actions. It does not close T3.5, semantically verify any card, or claim general rules completeness.",
+  "source_binding": "The interpreter source, ADR, specification, and this evidence record are committed together.",
+  "architecture": {
+    "decision": "docs/adr/0013-data-driven-card-runtime-interpreter.md",
+    "owner": "forge-cards::runtime",
+    "kernel": "forge-core",
+    "scenario_driver": "forge-testkit",
+    "runtime_oracle_text_parsing": false,
+    "card_name_branches": false,
+    "all_mutations_use_typed_actions": true,
+    "complete_binding_before_mutation": true,
+    "unsupported_behavior": "fail_closed"
+  },
+  "supported_capabilities": [
+    "permanent_spell",
+    "gain_life",
+    "lose_life",
+    "draw_cards",
+    "scry",
+    "shuffle_library",
+    "destroy_permanent",
+    "exile_object",
+    "counter_stack_entry",
+    "move_zone"
+  ],
+  "translated_corpus": {
+    "source": "target/translated-cards",
+    "report": "target/t3_5_runtime_interpreter_audit.json",
+    "report_sha256": "0e7538b56e76cc0e42aa72012a3fe6d36d38cf99401649aaf920957871242509",
+    "total": 20082,
+    "passed": 515,
+    "unsupported_setup": 19567,
+    "failed": 0,
+    "prior_baseline_passed": 379,
+    "net_new_passed": 136,
+    "capability_counts": {
+      "permanent_spell": 342,
+      "destroy_permanent": 72,
+      "draw_cards": 51,
+      "gain_life": 39,
+      "lose_life": 23,
+      "move_zone": 21,
+      "exile_object": 18,
+      "scry": 16,
+      "counter_stack_entry": 8
+    }
+  },
+  "frozen_semantic_100": {
+    "manifest": "assets/t3_6_commander_semantic_candidates.json",
+    "runtime_smoke_passed": 17,
+    "unsupported_setup": 82,
+    "failed": 0,
+    "unmatched_identity": 1,
+    "unmatched_name": "Bala Ged Recovery",
+    "semantic_verified": 0,
+    "leading_blockers": {
+      "ability_shape": 43,
+      "effect_operation": 17,
+      "keyword": 17,
+      "effect_arguments": 5
+    },
+    "passing_examples": [
+      "Swords to Plowshares",
+      "Counterspell",
+      "Read the Bones",
+      "Night's Whisper",
+      "Sign in Blood",
+      "Harmonize",
+      "Preordain",
+      "Opt",
+      "Nature's Claim",
+      "Anguished Unmaking",
+      "Utter End",
+      "Mortify",
+      "Putrefy",
+      "Terminate",
+      "Bedevil",
+      "Vindicate",
+      "Regrowth"
+    ]
+  },
+  "focused_verification": [
+    {
+      "command": "cargo test --offline --workspace",
+      "result": "pass: all workspace unit, integration, and doc tests"
+    },
+    {
+      "command": "cargo test --offline -p forge-core -p forge-cards -p forge-testkit",
+      "result": "pass: forge-core 96, forge-cards 10, forge-testkit 28 across library and binary targets; doc tests pass"
+    },
+    {
+      "command": "cargo clippy --offline -p forge-core -p forge-cards -p forge-testkit --all-targets -- -D warnings",
+      "result": "pass"
+    },
+    {
+      "command": "cargo fmt --all -- --check and git diff --check",
+      "result": "pass"
+    },
+    {
+      "command": "target/debug/forge-testkit runtime-smoke target/translated-cards --report target/t3_5_runtime_interpreter_audit.json --quiet",
+      "result": "expected exit 2 because unsupported definitions remain; 515 passed, 19567 unsupported, 0 failed"
+    }
+  ],
+  "constraints": {
+    "local_only": true,
+    "network_used": false,
+    "installs_performed": false,
+    "github_actions_used": false,
+    "push_performed": false
+  },
+  "continuation": {
+    "status": "in_progress",
+    "next": "Implement vertical capabilities required by the frozen semantic set and four-deck pod, then run card-specific T3.6 oracles and deterministic replay."
+  }
+}

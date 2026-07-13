@@ -1429,6 +1429,37 @@ pub struct ObjectTypes {
     sorcery: bool,
 }
 
+/// Printed type and color characteristics shared by every card object.
+///
+/// Power, toughness, and combat keywords remain in
+/// [`BaseCreatureCharacteristics`]. Keeping these records separate lets the
+/// runtime represent noncreature permanents without inventing creature data.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct BaseObjectCharacteristics {
+    types: ObjectTypes,
+    colors: ObjectColors,
+}
+
+impl BaseObjectCharacteristics {
+    /// Creates base printed object characteristics.
+    #[must_use]
+    pub const fn new(types: ObjectTypes, colors: ObjectColors) -> Self {
+        Self { types, colors }
+    }
+
+    /// Returns the printed card types.
+    #[must_use]
+    pub const fn types(self) -> ObjectTypes {
+        self.types
+    }
+
+    /// Returns the printed colors.
+    #[must_use]
+    pub const fn colors(self) -> ObjectColors {
+        self.colors
+    }
+}
+
 impl ObjectTypes {
     /// Creates an empty type set.
     #[must_use]
@@ -1570,7 +1601,9 @@ impl ObjectTypes {
         self
     }
 
-    const fn union(mut self, add: Self) -> Self {
+    /// Returns the union of this type set and `add`.
+    #[must_use]
+    pub const fn union(mut self, add: Self) -> Self {
         self.artifact |= add.artifact;
         self.creature |= add.creature;
         self.enchantment |= add.enchantment;
@@ -1756,6 +1789,8 @@ pub enum GameEventKind {
     LibraryManipulated,
     /// An object's attachment pointer changed.
     ObjectAttached,
+    /// Base printed card types and colors were set.
+    BaseObjectCharacteristicsSet,
 }
 
 impl GameEventKind {
@@ -1828,6 +1863,7 @@ impl GameEventKind {
             Self::CommanderColorIdentityValidated => 64,
             Self::LibraryManipulated => 65,
             Self::ObjectAttached => 66,
+            Self::BaseObjectCharacteristicsSet => 67,
         }
     }
 }
@@ -1868,6 +1904,10 @@ pub enum TargetKind {
     Permanent,
     /// An object currently in a specific zone.
     ObjectInZone(ZoneId),
+    /// A spell or ability currently on the stack.
+    StackEntry,
+    /// An object in this zone kind, regardless of which player owns the zone.
+    ObjectInZoneKind(ZoneKind),
 }
 
 impl TargetKind {
@@ -1876,6 +1916,8 @@ impl TargetKind {
             Self::Player => 0,
             Self::Permanent => 1,
             Self::ObjectInZone(_) => 2,
+            Self::StackEntry => 3,
+            Self::ObjectInZoneKind(_) => 4,
         }
     }
 }
@@ -1908,7 +1950,9 @@ impl TargetControllerPredicate {
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct ObjectTargetPredicate {
     controller: TargetControllerPredicate,
+    owner: TargetControllerPredicate,
     required_types: ObjectTypes,
+    required_any_types: ObjectTypes,
     forbidden_types: ObjectTypes,
     required_colors: ObjectColors,
     forbidden_colors: ObjectColors,
@@ -1922,7 +1966,9 @@ impl ObjectTargetPredicate {
     pub const fn any() -> Self {
         Self {
             controller: TargetControllerPredicate::Any,
+            owner: TargetControllerPredicate::Any,
             required_types: ObjectTypes::none(),
+            required_any_types: ObjectTypes::none(),
             forbidden_types: ObjectTypes::none(),
             required_colors: ObjectColors::none(),
             forbidden_colors: ObjectColors::none(),
@@ -1938,10 +1984,24 @@ impl ObjectTargetPredicate {
         self
     }
 
+    /// Returns this predicate constrained to one owner relationship.
+    #[must_use]
+    pub const fn with_owner(mut self, owner: TargetControllerPredicate) -> Self {
+        self.owner = owner;
+        self
+    }
+
     /// Returns this predicate with additional required object types.
     #[must_use]
     pub const fn with_required_types(mut self, types: ObjectTypes) -> Self {
         self.required_types = types;
+        self
+    }
+
+    /// Returns this predicate requiring at least one listed object type.
+    #[must_use]
+    pub const fn with_required_any_types(mut self, types: ObjectTypes) -> Self {
+        self.required_any_types = types;
         self
     }
 
@@ -1978,6 +2038,36 @@ impl ObjectTargetPredicate {
     pub const fn with_forbidden_keywords(mut self, keywords: CreatureKeywords) -> Self {
         self.forbidden_keywords = keywords;
         self
+    }
+
+    /// Returns the controller relationship constraint.
+    #[must_use]
+    pub const fn controller(self) -> TargetControllerPredicate {
+        self.controller
+    }
+
+    /// Returns the owner relationship constraint.
+    #[must_use]
+    pub const fn owner(self) -> TargetControllerPredicate {
+        self.owner
+    }
+
+    /// Returns types that must all be present.
+    #[must_use]
+    pub const fn required_types(self) -> ObjectTypes {
+        self.required_types
+    }
+
+    /// Returns types of which at least one must be present.
+    #[must_use]
+    pub const fn required_any_types(self) -> ObjectTypes {
+        self.required_any_types
+    }
+
+    /// Returns forbidden types.
+    #[must_use]
+    pub const fn forbidden_types(self) -> ObjectTypes {
+        self.forbidden_types
     }
 }
 
@@ -2077,6 +2167,8 @@ pub enum TargetChoice {
     Player(PlayerId),
     /// A targeted game object.
     Object(ObjectId),
+    /// A targeted spell or ability on the stack.
+    StackEntry(StackEntryId),
 }
 
 impl TargetChoice {
@@ -2084,6 +2176,7 @@ impl TargetChoice {
         match self {
             Self::Player(_) => 0,
             Self::Object(_) => 1,
+            Self::StackEntry(_) => 2,
         }
     }
 }
@@ -3224,6 +3317,8 @@ pub enum ResolutionOutcome {
     Resolved,
     /// The entry had targets and all of them were illegal on resolution.
     CounteredOnResolution,
+    /// The entry was countered by a resolving spell or ability.
+    CounteredBySpell,
 }
 
 impl ResolutionOutcome {
@@ -3231,6 +3326,7 @@ impl ResolutionOutcome {
         match self {
             Self::Resolved => 0,
             Self::CounteredOnResolution => 1,
+            Self::CounteredBySpell => 2,
         }
     }
 }
@@ -4871,6 +4967,7 @@ pub struct ObjectRecord {
     owner: PlayerId,
     controller: PlayerId,
     tapped: bool,
+    base_object: BaseObjectCharacteristics,
     base_creature: Option<BaseCreatureCharacteristics>,
     damage_marked: u32,
     deathtouch_damage_marked: bool,
@@ -4913,6 +5010,12 @@ impl ObjectRecord {
     #[must_use]
     pub const fn tapped(self) -> bool {
         self.tapped
+    }
+
+    /// Returns base printed card types and colors.
+    #[must_use]
+    pub const fn base_object(self) -> BaseObjectCharacteristics {
+        self.base_object
     }
 
     /// Returns base printed creature characteristics, if this object is a creature.
@@ -5050,6 +5153,7 @@ impl ObjectArena {
             owner,
             controller,
             tapped: false,
+            base_object: BaseObjectCharacteristics::new(ObjectTypes::none(), ObjectColors::none()),
             base_creature: None,
             damage_marked: 0,
             deathtouch_damage_marked: false,
@@ -5438,6 +5542,8 @@ pub enum StateError {
     InvalidPaymentPlan,
     /// The object cannot be cast from its current zone by that player.
     ObjectNotCastable(ObjectId),
+    /// The object is not currently a permanent on the battlefield.
+    ObjectNotOnBattlefield(ObjectId),
     /// The requested spell cannot be cast at the current time.
     InvalidSpellTiming,
     /// Target requirements and selected targets have different lengths.
@@ -5552,6 +5658,18 @@ pub enum Action {
         player: PlayerId,
         /// Life amount to gain.
         amount: u32,
+    },
+    /// Draw cards from a player's library into that player's hand.
+    DrawCards {
+        /// Player drawing cards.
+        player: PlayerId,
+        /// Number of cards to draw.
+        count: u32,
+    },
+    /// Shuffle a player's library using the deterministic game RNG.
+    ShuffleLibrary {
+        /// Player whose library is shuffled.
+        player: PlayerId,
     },
     /// Add poison counters to a player.
     AddPoisonCounters {
@@ -5705,6 +5823,13 @@ pub enum Action {
         /// Mana payment selected for the effective activation cost.
         payment: PaymentPlan,
     },
+    /// Set base printed card types and colors for one object.
+    SetBaseObjectCharacteristics {
+        /// Object to update.
+        object: ObjectId,
+        /// Base printed characteristics to set.
+        base: BaseObjectCharacteristics,
+    },
     /// Set T1 base printed creature characteristics for one object.
     SetBaseCreatureCharacteristics {
         /// Object to update.
@@ -5753,6 +5878,16 @@ pub enum Action {
         object: ObjectId,
         /// Cast request.
         request: CastSpellRequest,
+    },
+    /// Counter one spell or ability currently on the stack.
+    CounterStackEntry {
+        /// Stack entry to counter.
+        entry: StackEntryId,
+    },
+    /// Destroy one permanent, respecting current indestructible characteristics.
+    DestroyPermanent {
+        /// Permanent to destroy.
+        object: ObjectId,
     },
     /// Put a spell object on the stack through the low-level T1 stack helper.
     PutSpellOnStack {
@@ -6093,6 +6228,16 @@ fn apply_fallback(state: &mut GameState, action: Action) -> Outcome {
             Ok(()) => Outcome::Applied,
             Err(error) => Outcome::Failed(error),
         },
+        Action::DrawCards { player, count } => match state.draw_cards(player, count) {
+            Ok(()) => Outcome::Applied,
+            Err(error) => Outcome::Failed(error),
+        },
+        Action::ShuffleLibrary { player } => {
+            match state.shuffle_zone(ZoneId::new(Some(player), ZoneKind::Library)) {
+                Ok(()) => Outcome::Applied,
+                Err(error) => Outcome::Failed(error),
+            }
+        }
         Action::AddPoisonCounters { player, amount } => {
             match state.add_poison_counters(player, amount) {
                 Ok(()) => Outcome::Applied,
@@ -6224,6 +6369,12 @@ fn apply_fallback(state: &mut GameState, action: Action) -> Outcome {
             Ok(None) => Outcome::Applied,
             Err(error) => Outcome::Failed(error),
         },
+        Action::SetBaseObjectCharacteristics { object, base } => {
+            match state.set_base_object_characteristics(object, base) {
+                Ok(()) => Outcome::Applied,
+                Err(error) => Outcome::Failed(error),
+            }
+        }
         Action::SetBaseCreatureCharacteristics { object, base } => {
             match state.set_base_creature_characteristics(object, base) {
                 Ok(()) => Outcome::Applied,
@@ -6267,6 +6418,14 @@ fn apply_fallback(state: &mut GameState, action: Action) -> Outcome {
             request,
         } => match state.cast_spell(player, object, request) {
             Ok(entry) => Outcome::StackEntryAdded(entry),
+            Err(error) => Outcome::Failed(error),
+        },
+        Action::CounterStackEntry { entry } => match state.counter_stack_entry(entry) {
+            Ok(()) => Outcome::Applied,
+            Err(error) => Outcome::Failed(error),
+        },
+        Action::DestroyPermanent { object } => match state.destroy_permanent(object) {
+            Ok(()) => Outcome::Applied,
             Err(error) => Outcome::Failed(error),
         },
         Action::PutSpellOnStack {
@@ -6976,6 +7135,13 @@ pub enum GameEvent {
         /// New attachment target, if any.
         target: Option<ObjectId>,
     },
+    /// Base printed card types and colors were set.
+    BaseObjectCharacteristicsSet {
+        /// Updated object.
+        object: ObjectId,
+        /// New base characteristics.
+        base: BaseObjectCharacteristics,
+    },
 }
 
 impl GameEvent {
@@ -7048,6 +7214,7 @@ impl GameEvent {
             Self::CommanderColorIdentityValidated { .. } => 64,
             Self::LibraryManipulated { .. } => 65,
             Self::ObjectAttached { .. } => 66,
+            Self::BaseObjectCharacteristicsSet { .. } => 67,
         }
     }
 
@@ -7132,6 +7299,9 @@ impl GameEvent {
             }
             Self::LibraryManipulated { .. } => GameEventKind::LibraryManipulated,
             Self::ObjectAttached { .. } => GameEventKind::ObjectAttached,
+            Self::BaseObjectCharacteristicsSet { .. } => {
+                GameEventKind::BaseObjectCharacteristicsSet
+            }
         }
     }
 }
@@ -8881,6 +9051,21 @@ impl GameState {
         Ok(resolved)
     }
 
+    /// Sets base printed card types and colors for one object.
+    fn set_base_object_characteristics(
+        &mut self,
+        object: ObjectId,
+        base: BaseObjectCharacteristics,
+    ) -> Result<(), StateError> {
+        let record = self
+            .objects
+            .get_mut(object)
+            .ok_or(StateError::UnknownObject(object))?;
+        record.base_object = base;
+        self.emit_event(GameEvent::BaseObjectCharacteristicsSet { object, base });
+        Ok(())
+    }
+
     /// Sets or replaces base printed creature characteristics for one object.
     fn set_base_creature_characteristics(
         &mut self,
@@ -10320,6 +10505,7 @@ impl GameState {
                 .ok_or(StateError::UnknownObject(object))?;
             record.token = token;
             record.copy_source = Some(source);
+            record.base_object = source_record.base_object();
             record.base_creature = source_record.base_creature();
         }
         if token {
@@ -10334,6 +10520,10 @@ impl GameState {
             object,
             source,
             token,
+        });
+        self.emit_event(GameEvent::BaseObjectCharacteristicsSet {
+            object,
+            base: source_record.base_object(),
         });
         if let Some(base) = source_record.base_creature() {
             self.emit_event(GameEvent::BaseCreatureCharacteristicsSet { object, base });
@@ -10567,6 +10757,7 @@ impl GameState {
             bytes.write_u32(object.owner.0);
             bytes.write_u32(object.controller.0);
             bytes.write_bool(object.tapped);
+            bytes.write_base_object_characteristics(object.base_object());
             bytes.write_optional_base_creature_characteristics(object.base_creature());
             bytes.write_u32(object.damage_marked);
             bytes.write_bool(object.deathtouch_damage_marked);
@@ -10707,6 +10898,7 @@ impl GameState {
             hash.write_u32(object.owner.0);
             hash.write_u32(object.controller.0);
             hash.write_bool(object.tapped);
+            hash.write_base_object_characteristics(object.base_object());
             hash.write_optional_base_creature_characteristics(object.base_creature());
             hash.write_u32(object.damage_marked);
             hash.write_bool(object.deathtouch_damage_marked);
@@ -11416,13 +11608,16 @@ impl GameState {
             .base_creature()
             .map(BaseCreatureCharacteristics::derived);
         let base_types = if base_creature.is_some() {
-            ObjectTypes::none().with_creature()
+            record
+                .base_object()
+                .types()
+                .union(ObjectTypes::none().with_creature())
         } else {
-            ObjectTypes::none()
+            record.base_object().types()
         };
         let mut characteristics = ObjectCharacteristics::new(
             record.controller(),
-            ObjectColors::none(),
+            record.base_object().colors(),
             base_types,
             base_creature,
         );
@@ -12118,6 +12313,18 @@ impl GameState {
         self.target_ward_cost(choice)
     }
 
+    /// Validates a complete ordered target binding without mutating state.
+    pub fn validate_target_choices(
+        &self,
+        player: PlayerId,
+        source: Option<ObjectId>,
+        requirements: &[TargetRequirement],
+        choices: &[TargetChoice],
+    ) -> Result<(), StateError> {
+        self.capture_target_snapshots(player, source, requirements, choices)
+            .map(|_| ())
+    }
+
     fn capture_target_snapshots(
         &self,
         player: PlayerId,
@@ -12144,7 +12351,7 @@ impl GameState {
                 choice: *choice,
                 original_zone: match choice {
                     TargetChoice::Object(object) => self.object_zone(*object),
-                    TargetChoice::Player(_) => None,
+                    TargetChoice::Player(_) | TargetChoice::StackEntry(_) => None,
                 },
                 ward_cost: self.target_ward_cost(*choice)?,
             });
@@ -12175,10 +12382,21 @@ impl GameState {
             (TargetKind::ObjectInZone(zone), TargetChoice::Object(object)) => {
                 self.object_zone(object) == Some(zone)
             }
-            (TargetKind::Player, TargetChoice::Object(_))
-            | (TargetKind::Permanent | TargetKind::ObjectInZone(_), TargetChoice::Player(_)) => {
-                false
-            }
+            (TargetKind::ObjectInZoneKind(kind), TargetChoice::Object(object)) => self
+                .object_zone(object)
+                .is_some_and(|zone| zone.kind() == kind),
+            (TargetKind::StackEntry, TargetChoice::StackEntry(entry)) => self
+                .stack_entries
+                .iter()
+                .any(|candidate| candidate.id() == entry),
+            (TargetKind::Player, TargetChoice::Object(_) | TargetChoice::StackEntry(_))
+            | (
+                TargetKind::Permanent
+                | TargetKind::ObjectInZone(_)
+                | TargetKind::ObjectInZoneKind(_),
+                TargetChoice::Player(_) | TargetChoice::StackEntry(_),
+            )
+            | (TargetKind::StackEntry, TargetChoice::Player(_) | TargetChoice::Object(_)) => false,
         }
     }
 
@@ -12196,8 +12414,10 @@ impl GameState {
             (TargetPredicate::Object(predicate), TargetChoice::Object(object)) => {
                 self.object_target_predicate_matches(player, predicate, object)
             }
-            (TargetPredicate::Player(_), TargetChoice::Object(_))
-            | (TargetPredicate::Object(_), TargetChoice::Player(_)) => false,
+            (TargetPredicate::Player(_), TargetChoice::Object(_) | TargetChoice::StackEntry(_))
+            | (TargetPredicate::Object(_), TargetChoice::Player(_) | TargetChoice::StackEntry(_)) => {
+                false
+            }
         }
     }
 
@@ -12233,9 +12453,19 @@ impl GameState {
         ) {
             return false;
         }
+        let Some(record) = self.objects.get(object) else {
+            return false;
+        };
+        if !self.controller_predicate_matches(player, predicate.owner, record.owner()) {
+            return false;
+        }
         if !characteristics
             .types()
             .contains_all(predicate.required_types)
+            || (predicate.required_any_types != ObjectTypes::none()
+                && !characteristics
+                    .types()
+                    .intersects(predicate.required_any_types))
             || characteristics
                 .types()
                 .intersects(predicate.forbidden_types)
@@ -12372,6 +12602,19 @@ impl GameState {
                         snapshot.choice,
                     )
             }
+            TargetChoice::StackEntry(entry) => {
+                snapshot.requirement.kind() == TargetKind::StackEntry
+                    && self
+                        .stack_entries
+                        .iter()
+                        .any(|candidate| candidate.id() == entry)
+                    && self.is_target_legal_at_cast(
+                        controller,
+                        source,
+                        snapshot.requirement,
+                        snapshot.choice,
+                    )
+            }
         }
     }
 
@@ -12440,7 +12683,7 @@ impl GameState {
         let entry = self.stack_entries.pop().ok_or(StateError::EmptyStack)?;
         if let Some(object) = entry.object() {
             let destination = match outcome {
-                ResolutionOutcome::CounteredOnResolution => {
+                ResolutionOutcome::CounteredOnResolution | ResolutionOutcome::CounteredBySpell => {
                     let owner = self
                         .objects
                         .get(object)
@@ -12500,6 +12743,73 @@ impl GameState {
             outcome,
         });
         Ok(entry.id())
+    }
+
+    fn counter_stack_entry(&mut self, entry_id: StackEntryId) -> Result<(), StateError> {
+        let index = self
+            .stack_entries
+            .iter()
+            .position(|entry| entry.id() == entry_id)
+            .ok_or(StateError::UnknownStackEntry(entry_id))?;
+        let entry = self.stack_entries[index].clone();
+        if let Some(object) = entry.object() {
+            if self.object_zone(object) != Some(ZoneId::new(None, ZoneKind::Stack)) {
+                return Err(StateError::StackObjectNotOnStack(object));
+            }
+        }
+
+        let entry = self.stack_entries.remove(index);
+        if let Some(object) = entry.object() {
+            let owner = self
+                .objects
+                .get(object)
+                .ok_or(StateError::UnknownObject(object))?
+                .owner();
+            let destination = if entry.flashback() {
+                ZoneId::new(None, ZoneKind::Exile)
+            } else {
+                ZoneId::new(Some(owner), ZoneKind::Graveyard)
+            };
+            self.move_object(object, destination)?;
+        }
+        self.resolution_log.push(ResolutionRecord {
+            stack_entry: entry.id(),
+            controller: entry.controller(),
+            object: entry.object(),
+            trigger: entry.trigger(),
+            activated_ability: entry.activated_ability(),
+            kind: entry.kind(),
+            targets: entry.targets().to_vec(),
+            legal_targets: vec![true; entry.targets().len()],
+            outcome: ResolutionOutcome::CounteredBySpell,
+            copy_info: entry.copy_info(),
+            kicked: entry.kicked(),
+            flashback: entry.flashback(),
+        });
+        self.emit_event(GameEvent::StackEntryResolved {
+            entry: entry.id(),
+            outcome: ResolutionOutcome::CounteredBySpell,
+        });
+        Ok(())
+    }
+
+    fn destroy_permanent(&mut self, object: ObjectId) -> Result<(), StateError> {
+        if self.object_zone(object) != Some(ZoneId::new(None, ZoneKind::Battlefield)) {
+            return Err(StateError::ObjectNotOnBattlefield(object));
+        }
+        let characteristics = self.object_characteristics(object)?;
+        if characteristics
+            .creature()
+            .is_some_and(|creature| creature.keywords().indestructible())
+        {
+            return Ok(());
+        }
+        let owner = self
+            .objects
+            .get(object)
+            .ok_or(StateError::UnknownObject(object))?
+            .owner();
+        self.move_object(object, ZoneId::new(Some(owner), ZoneKind::Graveyard))
     }
 
     fn map_payment_error(error: PaymentError) -> StateError {
@@ -12958,6 +13268,11 @@ impl Fnva64 {
         self.write_u8(types.canonical_bits());
     }
 
+    fn write_base_object_characteristics(&mut self, base: BaseObjectCharacteristics) {
+        self.write_object_types(base.types());
+        self.write_object_colors(base.colors());
+    }
+
     fn write_base_creature_characteristics(&mut self, base: BaseCreatureCharacteristics) {
         self.write_i32(base.power);
         self.write_i32(base.toughness);
@@ -13042,8 +13357,10 @@ impl Fnva64 {
 
     fn write_target_kind(&mut self, kind: TargetKind) {
         self.write_u8(kind.canonical_code());
-        if let TargetKind::ObjectInZone(zone) = kind {
-            self.write_zone_id(zone);
+        match kind {
+            TargetKind::ObjectInZone(zone) => self.write_zone_id(zone),
+            TargetKind::ObjectInZoneKind(kind) => self.write_u8(kind.canonical_code()),
+            TargetKind::Player | TargetKind::Permanent | TargetKind::StackEntry => {}
         }
     }
 
@@ -13056,7 +13373,9 @@ impl Fnva64 {
 
     fn write_object_target_predicate(&mut self, predicate: ObjectTargetPredicate) {
         self.write_target_controller_predicate(predicate.controller);
+        self.write_target_controller_predicate(predicate.owner);
         self.write_object_types(predicate.required_types);
+        self.write_object_types(predicate.required_any_types);
         self.write_object_types(predicate.forbidden_types);
         self.write_object_colors(predicate.required_colors);
         self.write_object_colors(predicate.forbidden_colors);
@@ -13090,6 +13409,7 @@ impl Fnva64 {
         match choice {
             TargetChoice::Player(player) => self.write_u32(player.0),
             TargetChoice::Object(object) => self.write_u32(object.0),
+            TargetChoice::StackEntry(entry) => self.write_u32(entry.0),
         }
     }
 
@@ -13964,6 +14284,10 @@ impl Fnva64 {
             GameEvent::ObjectAttached { attachment, target } => {
                 self.write_u32(attachment.0);
                 self.write_optional_object(target);
+            }
+            GameEvent::BaseObjectCharacteristicsSet { object, base } => {
+                self.write_u32(object.0);
+                self.write_base_object_characteristics(base);
             }
         }
     }
@@ -14166,6 +14490,11 @@ impl CanonicalBytes {
         self.write_u8(types.canonical_bits());
     }
 
+    fn write_base_object_characteristics(&mut self, base: BaseObjectCharacteristics) {
+        self.write_object_types(base.types());
+        self.write_object_colors(base.colors());
+    }
+
     fn write_base_creature_characteristics(&mut self, base: BaseCreatureCharacteristics) {
         self.write_i32(base.power);
         self.write_i32(base.toughness);
@@ -14219,8 +14548,10 @@ impl CanonicalBytes {
 
     fn write_target_kind(&mut self, kind: TargetKind) {
         self.write_u8(kind.canonical_code());
-        if let TargetKind::ObjectInZone(zone) = kind {
-            self.write_zone_id(zone);
+        match kind {
+            TargetKind::ObjectInZone(zone) => self.write_zone_id(zone),
+            TargetKind::ObjectInZoneKind(kind) => self.write_u8(kind.canonical_code()),
+            TargetKind::Player | TargetKind::Permanent | TargetKind::StackEntry => {}
         }
     }
 
@@ -14233,7 +14564,9 @@ impl CanonicalBytes {
 
     fn write_object_target_predicate(&mut self, predicate: ObjectTargetPredicate) {
         self.write_target_controller_predicate(predicate.controller);
+        self.write_target_controller_predicate(predicate.owner);
         self.write_object_types(predicate.required_types);
+        self.write_object_types(predicate.required_any_types);
         self.write_object_types(predicate.forbidden_types);
         self.write_object_colors(predicate.required_colors);
         self.write_object_colors(predicate.forbidden_colors);
@@ -14267,6 +14600,7 @@ impl CanonicalBytes {
         match choice {
             TargetChoice::Player(player) => self.write_u32(player.0),
             TargetChoice::Object(object) => self.write_u32(object.0),
+            TargetChoice::StackEntry(entry) => self.write_u32(entry.0),
         }
     }
 
@@ -15142,6 +15476,10 @@ impl CanonicalBytes {
                 self.write_u32(attachment.0);
                 self.write_optional_object(target);
             }
+            GameEvent::BaseObjectCharacteristicsSet { object, base } => {
+                self.write_u32(object.0);
+                self.write_base_object_characteristics(base);
+            }
         }
     }
 
@@ -15214,9 +15552,10 @@ mod tests {
         apply, auto_payment_plan, crate_ready, enumerate_auto_tap_payment_plans,
         enumerate_payment_plans, legal_actions, state_based_action_table, validate_payment_plan,
         AbilityPlayer, Action, ActivatedAbilityDefinition, ActivatedAbilityEffect, ActivationCost,
-        ActivationTiming, AttackDeclaration, BaseCreatureCharacteristics, BlockDeclaration, CardId,
-        CastSpellRequest, CombatDamageAssignment, CombatDamageAssignmentRequest,
-        CombatDamageStepKind, CombatDamageTarget, ContinuousEffectDefinition, ContinuousEffectId,
+        ActivationTiming, AttackDeclaration, BaseCreatureCharacteristics,
+        BaseObjectCharacteristics, BlockDeclaration, CardId, CastSpellRequest,
+        CombatDamageAssignment, CombatDamageAssignmentRequest, CombatDamageStepKind,
+        CombatDamageTarget, ContinuousEffectDefinition, ContinuousEffectId,
         ContinuousEffectOperation, ContinuousEffectTarget, CostModifierDefinition,
         CostModifierOperation, CostModifierScope, CreatureCharacteristics, CreatureKeywords,
         EffectDuration, EventReplayError, GameEvent, GameOutcome, GameState, ManaCost, ManaKind,
@@ -16175,7 +16514,21 @@ mod tests {
         };
         let base = BaseCreatureCharacteristics::new(2, 0)
             .with_keywords(CreatureKeywords::none().with_vigilance());
+        let base_object = BaseObjectCharacteristics::new(
+            ObjectTypes::none().with_artifact().with_creature(),
+            ObjectColors::none().with_blue(),
+        );
 
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::SetBaseObjectCharacteristics {
+                    object,
+                    base: base_object,
+                },
+            ),
+            Outcome::Applied
+        );
         assert_eq!(
             apply(
                 &mut state,
@@ -16190,6 +16543,19 @@ mod tests {
                 .and_then(|record| record.base_creature()),
             Some(base)
         );
+        assert_eq!(
+            state
+                .objects()
+                .get(object)
+                .map(|record| record.base_object()),
+            Some(base_object)
+        );
+        let characteristics = state
+            .object_characteristics(object)
+            .unwrap_or_else(|error| panic!("unexpected object characteristics: {error:?}"));
+        assert!(characteristics.types().artifact());
+        assert!(characteristics.types().creature());
+        assert!(characteristics.colors().blue());
         assert_eq!(
             state.creature_characteristics(object),
             Ok(CreatureCharacteristics::new(2, 0)
@@ -16768,6 +17134,74 @@ mod tests {
     }
 
     #[test]
+    fn draw_cards_action_moves_library_cards_to_hand() {
+        let mut state = GameState::new();
+        let player = add_player_action(&mut state);
+        let library = ZoneId::new(Some(player), ZoneKind::Library);
+        let hand = ZoneId::new(Some(player), ZoneKind::Hand);
+        seed_library_cards(&mut state, player, 8_100, 4);
+        let expected = state
+            .zone(library)
+            .unwrap_or_else(|| panic!("library zone missing"))
+            .objects()[2..]
+            .iter()
+            .rev()
+            .copied()
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            apply(&mut state, Action::DrawCards { player, count: 2 }),
+            Outcome::Applied
+        );
+        assert_eq!(
+            state
+                .zone(hand)
+                .unwrap_or_else(|| panic!("hand zone missing"))
+                .objects(),
+            expected.as_slice()
+        );
+        assert_eq!(
+            state
+                .zone(library)
+                .unwrap_or_else(|| panic!("library zone missing"))
+                .objects()
+                .len(),
+            2
+        );
+        assert_eq!(
+            state.validate_zone_conservation(),
+            Ok(ZoneConservation { object_count: 4 })
+        );
+    }
+
+    #[test]
+    fn shuffle_library_action_is_seeded_and_deterministic() {
+        let mut left = GameState::new();
+        let player = add_player_action(&mut left);
+        seed_library_cards(&mut left, player, 8_200, 12);
+        assert_eq!(
+            apply(&mut left, Action::SetSeed { seed: 0x5eed }),
+            Outcome::Applied
+        );
+        let mut right = left.clone();
+
+        assert_eq!(
+            apply(&mut left, Action::ShuffleLibrary { player }),
+            Outcome::Applied
+        );
+        assert_eq!(
+            apply(&mut right, Action::ShuffleLibrary { player }),
+            Outcome::Applied
+        );
+        assert_eq!(left.canonical_bytes(), right.canonical_bytes());
+        assert_eq!(left.deterministic_hash(), right.deterministic_hash());
+        assert_eq!(
+            left.validate_zone_conservation(),
+            Ok(ZoneConservation { object_count: 12 })
+        );
+    }
+
+    #[test]
     fn deterministic_hash_is_canonical_and_sensitive_to_ordered_state() {
         let mut left = GameState::new();
         let left_player = left.add_player();
@@ -17099,6 +17533,61 @@ mod tests {
         );
         assert_eq!(stack_entry.targets()[0].original_zone(), Some(battlefield));
         assert_eq!(stack_entry.payment(), Some(payment));
+    }
+
+    #[test]
+    fn stack_entry_target_is_captured_and_revalidated() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let responder = state.add_player();
+        let active_hand = ZoneId::new(Some(active), ZoneKind::Hand);
+        let responder_hand = ZoneId::new(Some(responder), ZoneKind::Hand);
+        let target_spell = state
+            .create_object(CardId::new(9_200), active, active, active_hand)
+            .unwrap_or_else(|error| panic!("unexpected target spell create error: {error:?}"));
+        let counter_spell = state
+            .create_object(CardId::new(9_201), responder, responder, responder_hand)
+            .unwrap_or_else(|error| panic!("unexpected counter spell create error: {error:?}"));
+        start_upkeep(&mut state, active);
+        let target_entry = state
+            .put_spell_on_stack(active, target_spell, StackObjectKind::InstantSpell, true)
+            .unwrap_or_else(|error| panic!("unexpected target stack error: {error:?}"));
+        state
+            .pass_priority(active)
+            .unwrap_or_else(|error| panic!("unexpected priority pass error: {error:?}"));
+        let cost = ManaCost::new(0, 0, 0, 0, 0, 0);
+        let request = CastSpellRequest::new(
+            StackObjectKind::InstantSpell,
+            SpellTiming::Instant,
+            cost,
+            zero_payment(cost),
+        )
+        .with_targets(
+            vec![TargetRequirement::new(TargetKind::StackEntry)],
+            vec![TargetChoice::StackEntry(target_entry)],
+        );
+
+        let counter_entry = state
+            .cast_spell(responder, counter_spell, request)
+            .unwrap_or_else(|error| panic!("unexpected counter cast error: {error:?}"));
+        let stack_entry = state
+            .stack_top()
+            .unwrap_or_else(|| panic!("missing counter stack entry"));
+        assert_eq!(stack_entry.id(), counter_entry);
+        assert_eq!(
+            stack_entry.targets()[0].choice(),
+            TargetChoice::StackEntry(target_entry)
+        );
+        assert_eq!(stack_entry.targets()[0].original_zone(), None);
+
+        state
+            .counter_stack_entry(target_entry)
+            .unwrap_or_else(|error| panic!("unexpected target counter error: {error:?}"));
+        assert!(!state.is_target_still_legal(
+            responder,
+            Some(counter_spell),
+            stack_entry.targets()[0],
+        ));
     }
 
     #[test]
@@ -18968,6 +19457,55 @@ mod tests {
             .collect();
         assert_eq!(resolved, vec![third_entry, second_entry, first_entry]);
         assert!(state.stack_entries().is_empty());
+    }
+
+    #[test]
+    fn counter_stack_entry_moves_spell_and_records_distinct_outcome() {
+        let mut state = GameState::new();
+        let caster = state.add_player();
+        let _responder = state.add_player();
+        let caster_hand = ZoneId::new(Some(caster), ZoneKind::Hand);
+        let target = state
+            .create_object(CardId::new(9_100), caster, caster, caster_hand)
+            .unwrap_or_else(|error| panic!("unexpected target create error: {error:?}"));
+        start_upkeep(&mut state, caster);
+        let target_entry = state
+            .put_spell_on_stack(caster, target, StackObjectKind::InstantSpell, true)
+            .unwrap_or_else(|error| panic!("unexpected target stack error: {error:?}"));
+
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::CounterStackEntry {
+                    entry: target_entry,
+                },
+            ),
+            Outcome::Applied
+        );
+        assert_eq!(
+            state.object_zone(target),
+            Some(ZoneId::new(Some(caster), ZoneKind::Graveyard))
+        );
+        assert!(state.stack_entries().is_empty());
+        assert_eq!(state.resolution_log().len(), 1);
+        assert_eq!(state.resolution_log()[0].stack_entry(), target_entry);
+        assert_eq!(
+            state.resolution_log()[0].outcome(),
+            ResolutionOutcome::CounteredBySpell
+        );
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::CounterStackEntry {
+                    entry: target_entry,
+                },
+            ),
+            Outcome::Failed(StateError::UnknownStackEntry(target_entry))
+        );
+        assert_eq!(
+            state.validate_zone_conservation(),
+            Ok(ZoneConservation { object_count: 2 })
+        );
     }
 
     #[test]

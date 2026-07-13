@@ -6,20 +6,24 @@
 //! returned as data with stable reason codes; they are never counted as
 //! passing smoke.
 
-use forge_carddef::{
-    AbilityKind, CardClassification, CardDefinition, CardLayout, CardType, Color, Expression,
-    ManaSymbol, Operation,
+use forge_carddef::CardDefinition;
+use forge_cards::runtime::{
+    bind_program_actions, compile_card_program, AmountProgram, CardProgram, CompileDiagnostic,
+    CompileDiagnosticCode, EffectProgram, ExecutionBindings, PlayerBinding, ProgramKind,
 };
 use forge_core::{
-    apply, auto_payment_plan, Action, CardId, CastSpellRequest, GameOutcome, GameState, ManaCost,
-    ManaPool, Outcome, PlayerId, PriorityOutcome, SpellTiming, StackEntryId, StackObjectKind, Step,
-    ZoneId, ZoneKind,
+    apply, auto_payment_plan, Action, BaseCreatureCharacteristics, BaseObjectCharacteristics,
+    CardId, CastSpellRequest, GameOutcome, GameState, ObjectColors, ObjectId, ObjectTypes, Outcome,
+    PlayerId, PlayerTargetPredicate, PriorityOutcome, SpellTiming, StackEntryId, StackObjectKind,
+    Step, TargetChoice, TargetControllerPredicate, TargetKind, TargetPredicate, ZoneId, ZoneKind,
 };
+
+/// Capability executed through the shared card runtime interpreter.
+pub use forge_cards::runtime::Capability as RuntimeSmokeCapability;
 
 const PLAYER_COUNT: usize = 2;
 const DEFAULT_LIFE: u64 = 20;
 const LIFE_SANITY_LIMIT: u64 = 1_000_000;
-const MAX_EFFECT_ACTIONS: usize = 64;
 const OPENING_HAND_SIZE: u32 = 7;
 
 /// Top-level outcome category for one translated-card runtime smoke attempt.
@@ -45,26 +49,6 @@ impl RuntimeSmokeDisposition {
     }
 }
 
-/// Capability executed by this first runtime-smoke slice.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum RuntimeSmokeCapability {
-    /// Life gain lowered to [`Action::GainLife`].
-    GainLife,
-    /// Life loss lowered to [`Action::LoseLife`].
-    LoseLife,
-}
-
-impl RuntimeSmokeCapability {
-    /// Returns the stable capability name.
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::GainLife => "gain_life",
-            Self::LoseLife => "lose_life",
-        }
-    }
-}
-
 /// Stable reason that setup synthesis was not supported.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum UnsupportedSetupCode {
@@ -86,7 +70,7 @@ pub enum UnsupportedSetupCode {
     EffectOperation,
     /// A supported effect has an unsupported argument shape.
     EffectArguments,
-    /// A life amount is dynamic, negative, or outside the production action range.
+    /// An effect amount is dynamic, negative, or outside the production action range.
     EffectAmount,
     /// A player selector cannot be bound by the two-player synthesizer.
     PlayerSelector,
@@ -128,6 +112,8 @@ pub enum RuntimeSmokeFailureCode {
     ZoneDestinationMismatch,
     /// A life capability produced an unexpected total.
     LifeTotalMismatch,
+    /// A draw capability produced an unexpected hand size.
+    HandSizeMismatch,
 }
 
 impl RuntimeSmokeFailureCode {
@@ -140,6 +126,7 @@ impl RuntimeSmokeFailureCode {
             Self::InvariantViolation => "invariant_violation",
             Self::ZoneDestinationMismatch => "zone_destination_mismatch",
             Self::LifeTotalMismatch => "life_total_mismatch",
+            Self::HandSizeMismatch => "hand_size_mismatch",
         }
     }
 }
@@ -152,6 +139,7 @@ pub struct RuntimeSmokePass {
     production_actions: usize,
     final_life_totals: [i32; PLAYER_COUNT],
     final_hash: u64,
+    destination: &'static str,
 }
 
 impl RuntimeSmokePass {
@@ -188,7 +176,7 @@ impl RuntimeSmokePass {
     /// Returns the asserted translated-spell destination.
     #[must_use]
     pub const fn destination(&self) -> &'static str {
-        "owner_graveyard"
+        self.destination
     }
 }
 
@@ -337,284 +325,117 @@ pub fn run_translated_card_runtime_smoke(definition: &CardDefinition) -> Runtime
     }
 }
 
-#[derive(Clone, Copy)]
-enum CompiledSpellKind {
-    Instant,
-    Sorcery,
+struct CompiledSmoke {
+    program: CardProgram,
+    lifecycle: SmokeSpellKind,
+    initial_life: [i32; PLAYER_COUNT],
+    expected_life: [i32; PLAYER_COUNT],
+    library_reserve: [u32; PLAYER_COUNT],
 }
 
-impl CompiledSpellKind {
+#[derive(Clone, Copy)]
+enum SmokeSpellKind {
+    Instant,
+    Sorcery,
+    Permanent,
+}
+
+impl SmokeSpellKind {
     const fn stack_kind(self) -> StackObjectKind {
         match self {
             Self::Instant => StackObjectKind::InstantSpell,
             Self::Sorcery => StackObjectKind::SorcerySpell,
+            Self::Permanent => StackObjectKind::PermanentSpell,
         }
     }
 
     const fn timing(self) -> SpellTiming {
         match self {
             Self::Instant => SpellTiming::Instant,
-            Self::Sorcery => SpellTiming::Sorcery,
+            Self::Sorcery | Self::Permanent => SpellTiming::Sorcery,
         }
     }
-}
 
-#[derive(Clone, Copy)]
-struct CompiledLifeEffect {
-    capability: RuntimeSmokeCapability,
-    player: usize,
-    amount: u32,
-}
-
-struct CompiledSmoke {
-    kind: CompiledSpellKind,
-    cost: ManaCost,
-    mana: ManaPool,
-    effects: Vec<CompiledLifeEffect>,
-    initial_life: [i32; PLAYER_COUNT],
-    expected_life: [i32; PLAYER_COUNT],
+    const fn destination(self, owner: PlayerId) -> (ZoneId, &'static str) {
+        match self {
+            Self::Instant | Self::Sorcery => (
+                ZoneId::new(Some(owner), ZoneKind::Graveyard),
+                "owner_graveyard",
+            ),
+            Self::Permanent => (ZoneId::new(None, ZoneKind::Battlefield), "battlefield"),
+        }
+    }
 }
 
 fn compile_smoke(definition: &CardDefinition) -> Result<CompiledSmoke, RuntimeSmokeUnsupported> {
-    if !matches!(
-        definition.status,
-        CardClassification::VerifiedPlayable | CardClassification::UnverifiedPlayable
-    ) {
-        return Err(RuntimeSmokeUnsupported::new(
-            UnsupportedSetupCode::CardNotPlayable,
-            format!("card classification is {:?}", definition.status),
-        ));
-    }
-    if definition.layout != CardLayout::Normal {
-        return Err(RuntimeSmokeUnsupported::new(
-            UnsupportedSetupCode::CardLayout,
-            format!("layout {:?} is outside the first slice", definition.layout),
-        ));
-    }
-    let [face] = definition.faces.as_slice() else {
-        return Err(RuntimeSmokeUnsupported::new(
-            UnsupportedSetupCode::FaceCount,
-            format!("expected one face, found {}", definition.faces.len()),
-        ));
-    };
-    let kind = match face.type_line.card_types.as_slice() {
-        [CardType::Instant] => CompiledSpellKind::Instant,
-        [CardType::Sorcery] => CompiledSpellKind::Sorcery,
-        card_types => {
+    let program = compile_card_program(definition).map_err(map_compile_diagnostic)?;
+    let lifecycle = match program.kind() {
+        ProgramKind::Instant => SmokeSpellKind::Instant,
+        ProgramKind::Sorcery => SmokeSpellKind::Sorcery,
+        ProgramKind::Permanent => SmokeSpellKind::Permanent,
+        ProgramKind::Land => {
             return Err(RuntimeSmokeUnsupported::new(
                 UnsupportedSetupCode::CardType,
-                format!("unsupported top-level card types: {card_types:?}"),
+                "land programs require the play-land lifecycle, which is not yet synthesized",
             ))
         }
     };
-    if !face.keywords.is_empty() {
-        return Err(RuntimeSmokeUnsupported::new(
-            UnsupportedSetupCode::KeywordSemantics,
-            format!("face has {} keyword(s)", face.keywords.len()),
-        ));
-    }
-    let [ability] = face.abilities.as_slice() else {
-        return Err(RuntimeSmokeUnsupported::new(
-            UnsupportedSetupCode::AbilityShape,
-            format!("expected one spell ability, found {}", face.abilities.len()),
-        ));
-    };
-    if ability.kind != AbilityKind::Spell
-        || !ability.costs.is_empty()
-        || ability.event.is_some()
-        || ability.condition.is_some()
-        || ability.timing.is_some()
-        || ability.mana_ability
-    {
-        return Err(RuntimeSmokeUnsupported::new(
-            UnsupportedSetupCode::AbilityShape,
-            "spell ability is not unconditional and cost-free",
-        ));
-    }
-
-    let (cost, mana) = compile_mana_cost(&face.mana_cost.symbols)?;
-    let mut effects = Vec::new();
-    compile_effect(&ability.effect, &mut effects)?;
-    if effects.is_empty() || effects.len() > MAX_EFFECT_ACTIONS {
-        return Err(RuntimeSmokeUnsupported::new(
-            UnsupportedSetupCode::SetupBounds,
-            format!(
-                "effect action count {} is outside 1..={MAX_EFFECT_ACTIONS}",
-                effects.len()
-            ),
-        ));
-    }
-    let (initial_life, expected_life) = compile_life_totals(&effects)?;
+    let (initial_life, expected_life) = compile_life_totals(program.effects())?;
+    let library_reserve = compile_library_reserve(program.effects())?;
     Ok(CompiledSmoke {
-        kind,
-        cost,
-        mana,
-        effects,
+        program,
+        lifecycle,
         initial_life,
         expected_life,
+        library_reserve,
     })
 }
 
-fn compile_mana_cost(
-    symbols: &[ManaSymbol],
-) -> Result<(ManaCost, ManaPool), RuntimeSmokeUnsupported> {
-    let mut colored = [0_u32; 5];
-    let mut generic = 0_u32;
-    for symbol in symbols {
-        match symbol {
-            ManaSymbol::Color(color) => {
-                let index = match color {
-                    Color::White => 0,
-                    Color::Blue => 1,
-                    Color::Black => 2,
-                    Color::Red => 3,
-                    Color::Green => 4,
-                };
-                colored[index] = colored[index].checked_add(1).ok_or_else(|| {
-                    RuntimeSmokeUnsupported::new(
-                        UnsupportedSetupCode::SetupBounds,
-                        "colored mana count overflowed",
-                    )
-                })?;
-            }
-            ManaSymbol::Generic(amount) => {
-                generic = generic.checked_add(u32::from(*amount)).ok_or_else(|| {
-                    RuntimeSmokeUnsupported::new(
-                        UnsupportedSetupCode::SetupBounds,
-                        "generic mana count overflowed",
-                    )
-                })?;
-            }
-            unsupported => {
-                return Err(RuntimeSmokeUnsupported::new(
-                    UnsupportedSetupCode::ManaSymbol,
-                    format!("mana symbol {unsupported:?} is not lowered exactly"),
-                ))
-            }
-        }
-    }
-    Ok((
-        ManaCost::new(
-            colored[0], colored[1], colored[2], colored[3], colored[4], generic,
-        ),
-        ManaPool::new(
-            colored[0], colored[1], colored[2], colored[3], colored[4], generic,
-        ),
-    ))
-}
-
-fn compile_effect(
-    expression: &Expression,
-    effects: &mut Vec<CompiledLifeEffect>,
-) -> Result<(), RuntimeSmokeUnsupported> {
-    let Expression::Call {
-        operation,
-        arguments,
-    } = expression
-    else {
-        return Err(RuntimeSmokeUnsupported::new(
-            UnsupportedSetupCode::EffectArguments,
-            "effect root is not an operation call",
-        ));
+fn map_compile_diagnostic(diagnostic: CompileDiagnostic) -> RuntimeSmokeUnsupported {
+    let code = match diagnostic.code() {
+        CompileDiagnosticCode::CardNotPlayable => UnsupportedSetupCode::CardNotPlayable,
+        CompileDiagnosticCode::CardLayout => UnsupportedSetupCode::CardLayout,
+        CompileDiagnosticCode::FaceCount => UnsupportedSetupCode::FaceCount,
+        CompileDiagnosticCode::CardType => UnsupportedSetupCode::CardType,
+        CompileDiagnosticCode::KeywordSemantics => UnsupportedSetupCode::KeywordSemantics,
+        CompileDiagnosticCode::AbilityShape => UnsupportedSetupCode::AbilityShape,
+        CompileDiagnosticCode::ManaSymbol => UnsupportedSetupCode::ManaSymbol,
+        CompileDiagnosticCode::EffectOperation => UnsupportedSetupCode::EffectOperation,
+        CompileDiagnosticCode::EffectArguments => UnsupportedSetupCode::EffectArguments,
+        CompileDiagnosticCode::EffectAmount => UnsupportedSetupCode::EffectAmount,
+        CompileDiagnosticCode::PlayerSelector => UnsupportedSetupCode::PlayerSelector,
+        CompileDiagnosticCode::ProgramBounds => UnsupportedSetupCode::SetupBounds,
     };
-    match operation {
-        Operation::Sequence => {
-            for argument in arguments {
-                compile_effect(argument, effects)?;
-                if effects.len() > MAX_EFFECT_ACTIONS {
-                    return Err(RuntimeSmokeUnsupported::new(
-                        UnsupportedSetupCode::SetupBounds,
-                        format!("effect sequence exceeds {MAX_EFFECT_ACTIONS} actions"),
-                    ));
-                }
-            }
-            Ok(())
-        }
-        Operation::GainLife | Operation::LoseLife => {
-            let [amount, player] = arguments.as_slice() else {
-                return Err(RuntimeSmokeUnsupported::new(
-                    UnsupportedSetupCode::EffectArguments,
-                    format!("{} requires amount and player", operation.as_str()),
-                ));
-            };
-            effects.push(CompiledLifeEffect {
-                capability: if *operation == Operation::GainLife {
-                    RuntimeSmokeCapability::GainLife
-                } else {
-                    RuntimeSmokeCapability::LoseLife
-                },
-                player: compile_player_selector(player)?,
-                amount: compile_life_amount(amount)?,
-            });
-            Ok(())
-        }
-        unsupported => Err(RuntimeSmokeUnsupported::new(
-            UnsupportedSetupCode::EffectOperation,
-            format!(
-                "effect operation `{}` has no first-slice lowering",
-                unsupported.as_str()
-            ),
-        )),
-    }
-}
-
-fn compile_life_amount(expression: &Expression) -> Result<u32, RuntimeSmokeUnsupported> {
-    let Expression::Integer(value) = expression else {
-        return Err(RuntimeSmokeUnsupported::new(
-            UnsupportedSetupCode::EffectAmount,
-            "life amount is not a literal integer",
-        ));
-    };
-    u32::try_from(*value).map_err(|_| {
-        RuntimeSmokeUnsupported::new(
-            UnsupportedSetupCode::EffectAmount,
-            format!("life amount {value} is outside the u32 action range"),
-        )
-    })
-}
-
-fn compile_player_selector(expression: &Expression) -> Result<usize, RuntimeSmokeUnsupported> {
-    let Expression::Call {
-        operation,
-        arguments,
-    } = expression
-    else {
-        return Err(RuntimeSmokeUnsupported::new(
-            UnsupportedSetupCode::PlayerSelector,
-            "player selector is not an operation call",
-        ));
-    };
-    if !arguments.is_empty() {
-        return Err(RuntimeSmokeUnsupported::new(
-            UnsupportedSetupCode::PlayerSelector,
-            format!("player selector `{}` has arguments", operation.as_str()),
-        ));
-    }
-    match operation {
-        Operation::You => Ok(0),
-        Operation::Opponent => Ok(1),
-        unsupported => Err(RuntimeSmokeUnsupported::new(
-            UnsupportedSetupCode::PlayerSelector,
-            format!(
-                "player selector `{}` is not `you()` or `opponent()`",
-                unsupported.as_str()
-            ),
-        )),
-    }
+    RuntimeSmokeUnsupported::new(
+        code,
+        format!("{}: {}", diagnostic.path(), diagnostic.detail()),
+    )
 }
 
 fn compile_life_totals(
-    effects: &[CompiledLifeEffect],
+    effects: &[EffectProgram],
 ) -> Result<([i32; PLAYER_COUNT], [i32; PLAYER_COUNT]), RuntimeSmokeUnsupported> {
     let mut gains = [0_u64; PLAYER_COUNT];
     let mut losses = [0_u64; PLAYER_COUNT];
     for effect in effects {
-        let totals = match effect.capability {
-            RuntimeSmokeCapability::GainLife => &mut gains,
-            RuntimeSmokeCapability::LoseLife => &mut losses,
+        let (totals, players, amount) = match effect {
+            EffectProgram::GainLife { players, amount } => {
+                (&mut gains, *players, smoke_amount(*amount)?)
+            }
+            EffectProgram::LoseLife { players, amount } => {
+                (&mut losses, *players, smoke_amount(*amount)?)
+            }
+            EffectProgram::DrawCards { .. }
+            | EffectProgram::Scry { .. }
+            | EffectProgram::ShuffleLibrary { .. }
+            | EffectProgram::DestroyPermanent { .. }
+            | EffectProgram::ExileObject { .. }
+            | EffectProgram::CounterStackEntry { .. }
+            | EffectProgram::MoveTargetObject { .. } => continue,
         };
-        totals[effect.player] = totals[effect.player]
-            .checked_add(u64::from(effect.amount))
+        let player = smoke_player_index(players);
+        totals[player] = totals[player]
+            .checked_add(u64::from(amount))
             .ok_or_else(|| {
                 RuntimeSmokeUnsupported::new(
                     UnsupportedSetupCode::SetupBounds,
@@ -654,6 +475,66 @@ fn compile_life_totals(
         })?;
     }
     Ok((initial, expected))
+}
+
+fn compile_library_reserve(
+    effects: &[EffectProgram],
+) -> Result<[u32; PLAYER_COUNT], RuntimeSmokeUnsupported> {
+    let mut draws = [0_u32; PLAYER_COUNT];
+    let mut max_inspection = [0_u32; PLAYER_COUNT];
+    for effect in effects {
+        match effect {
+            EffectProgram::DrawCards { players, count } => {
+                let player = smoke_player_index(*players);
+                draws[player] = draws[player]
+                    .checked_add(smoke_amount(*count)?)
+                    .ok_or_else(|| {
+                        RuntimeSmokeUnsupported::new(
+                            UnsupportedSetupCode::SetupBounds,
+                            "cumulative draw count overflowed",
+                        )
+                    })?;
+            }
+            EffectProgram::Scry { players, count } => {
+                let player = smoke_player_index(*players);
+                max_inspection[player] = max_inspection[player].max(smoke_amount(*count)?);
+            }
+            EffectProgram::GainLife { .. }
+            | EffectProgram::LoseLife { .. }
+            | EffectProgram::ShuffleLibrary { .. }
+            | EffectProgram::DestroyPermanent { .. }
+            | EffectProgram::ExileObject { .. }
+            | EffectProgram::CounterStackEntry { .. }
+            | EffectProgram::MoveTargetObject { .. } => {}
+        }
+    }
+    let mut reserve = [0_u32; PLAYER_COUNT];
+    for player in 0..PLAYER_COUNT {
+        reserve[player] = draws[player]
+            .checked_add(max_inspection[player])
+            .ok_or_else(|| {
+                RuntimeSmokeUnsupported::new(
+                    UnsupportedSetupCode::SetupBounds,
+                    "library reserve count overflowed",
+                )
+            })?;
+    }
+    Ok(reserve)
+}
+
+const fn smoke_player_index(binding: PlayerBinding) -> usize {
+    match binding {
+        PlayerBinding::Controller => 0,
+        PlayerBinding::Opponents => 1,
+        PlayerBinding::Target(_) | PlayerBinding::ControllerOfTargetObject(_) => 1,
+    }
+}
+
+fn smoke_amount(amount: AmountProgram) -> Result<u32, RuntimeSmokeUnsupported> {
+    match amount {
+        AmountProgram::Literal(amount) => Ok(amount),
+        AmountProgram::PowerOfTargetObject(_) => Ok(2),
+    }
 }
 
 struct Execution {
@@ -722,9 +603,24 @@ fn execute_smoke(
 
     let base_card_id = stable_card_id(definition.id.as_str());
     for (player_index, player) in players.iter().copied().enumerate() {
-        let draw_step_filler =
-            u32::from(player_index == 0 && matches!(compiled.kind, CompiledSpellKind::Sorcery));
-        for offset in 0..OPENING_HAND_SIZE + draw_step_filler {
+        let draw_step_filler = u32::from(
+            player_index == 0
+                && matches!(
+                    compiled.lifecycle,
+                    SmokeSpellKind::Sorcery | SmokeSpellKind::Permanent
+                ),
+        );
+        let library_size = OPENING_HAND_SIZE
+            .checked_add(draw_step_filler)
+            .and_then(|size| size.checked_add(compiled.library_reserve[player_index]))
+            .ok_or_else(|| {
+                RuntimeSmokeFailure::new(
+                    RuntimeSmokeFailureCode::UnexpectedOutcome,
+                    "setup.library_size",
+                    "synthesized library size overflowed",
+                )
+            })?;
+        for offset in 0..library_size {
             let filler = execution.dispatch(
                 &format!("setup.library[{player_index}][{offset}]"),
                 Action::CreateObject {
@@ -773,6 +669,13 @@ fn execute_smoke(
             zone: ZoneId::new(Some(caster), ZoneKind::Hand),
         },
     )?)?;
+    execution.dispatch(
+        "setup.spell_characteristics",
+        Action::SetBaseObjectCharacteristics {
+            object: spell,
+            base: compiled.program.base_object(),
+        },
+    )?;
 
     let started = execution.dispatch(
         "cast_window.start_turn",
@@ -787,7 +690,10 @@ fn execute_smoke(
     if !matches!(upkeep, Outcome::StepAdvanced(Step::Upkeep)) {
         return Err(unexpected_outcome("cast_window.upkeep", upkeep));
     }
-    if matches!(compiled.kind, CompiledSpellKind::Sorcery) {
+    if matches!(
+        compiled.lifecycle,
+        SmokeSpellKind::Sorcery | SmokeSpellKind::Permanent
+    ) {
         finish_empty_stack_step(&mut execution, "cast_window.finish_upkeep")?;
         if execution.state.current_step() != Some(Step::Draw) {
             return Err(RuntimeSmokeFailure::new(
@@ -809,38 +715,47 @@ fn execute_smoke(
         }
     }
 
+    let targets = synthesize_targets(&mut execution, compiled, caster, opponent, base_card_id)?;
+
     execution.dispatch(
         "cast.add_mana",
         Action::AddManaToPool {
             player: caster,
-            mana: compiled.mana,
+            mana: compiled.program.exact_payment(),
         },
     )?;
-    let payment = auto_payment_plan(compiled.mana, compiled.cost)
-        .map_err(|error| {
-            RuntimeSmokeFailure::new(
-                RuntimeSmokeFailureCode::UnexpectedOutcome,
-                "cast.payment",
-                format!("payment planner failed: {error:?}"),
-            )
-        })?
-        .ok_or_else(|| {
-            RuntimeSmokeFailure::new(
-                RuntimeSmokeFailureCode::UnexpectedOutcome,
-                "cast.payment",
-                "exact synthesized mana did not produce a payment plan",
-            )
-        })?;
+    let payment = auto_payment_plan(
+        compiled.program.exact_payment(),
+        compiled.program.mana_cost(),
+    )
+    .map_err(|error| {
+        RuntimeSmokeFailure::new(
+            RuntimeSmokeFailureCode::UnexpectedOutcome,
+            "cast.payment",
+            format!("payment planner failed: {error:?}"),
+        )
+    })?
+    .ok_or_else(|| {
+        RuntimeSmokeFailure::new(
+            RuntimeSmokeFailureCode::UnexpectedOutcome,
+            "cast.payment",
+            "exact synthesized mana did not produce a payment plan",
+        )
+    })?;
     let cast = execution.dispatch(
         "cast.cast_spell",
         Action::CastSpell {
             player: caster,
             object: spell,
             request: CastSpellRequest::new(
-                compiled.kind.stack_kind(),
-                compiled.kind.timing(),
-                compiled.cost,
+                compiled.lifecycle.stack_kind(),
+                compiled.lifecycle.timing(),
+                compiled.program.mana_cost(),
                 payment,
+            )
+            .with_targets(
+                compiled.program.target_requirements().to_vec(),
+                targets.clone(),
             ),
         },
     )?;
@@ -856,26 +771,90 @@ fn execute_smoke(
     )?;
     resolve_stack_entry(&mut execution, stack_entry)?;
 
-    let graveyard = ZoneId::new(Some(caster), ZoneKind::Graveyard);
+    let (destination, destination_name) = compiled.lifecycle.destination(caster);
     assert_zone(
         &execution.state,
         spell,
-        graveyard,
-        "resolve.graveyard_destination",
+        destination,
+        "resolve.spell_destination",
     )?;
 
-    for (index, effect) in compiled.effects.iter().enumerate() {
-        let action = match effect.capability {
-            RuntimeSmokeCapability::GainLife => Action::GainLife {
-                player: players[effect.player],
-                amount: effect.amount,
-            },
-            RuntimeSmokeCapability::LoseLife => Action::LoseLife {
-                player: players[effect.player],
-                amount: effect.amount,
-            },
-        };
-        execution.dispatch(&format!("effect[{index}]"), action)?;
+    let initial_hand_sizes = [
+        hand_size(&execution.state, caster)?,
+        hand_size(&execution.state, opponent)?,
+    ];
+    let mut hand_delta = [0_i64; PLAYER_COUNT];
+    let mut bindings = ExecutionBindings::new(caster, vec![opponent]).with_targets(targets);
+    for (index, effect) in compiled.program.effects().iter().enumerate() {
+        match effect {
+            EffectProgram::DrawCards { players, count } => {
+                let player = smoke_player_index(*players);
+                let count = match count {
+                    AmountProgram::Literal(count) => *count,
+                    AmountProgram::PowerOfTargetObject(_) => 2,
+                };
+                hand_delta[player] = hand_delta[player].saturating_add(i64::from(count));
+            }
+            EffectProgram::Scry { players, .. } => {
+                let player = match players {
+                    PlayerBinding::Controller => caster,
+                    PlayerBinding::Opponents => opponent,
+                    PlayerBinding::Target(_) | PlayerBinding::ControllerOfTargetObject(_) => {
+                        opponent
+                    }
+                };
+                bindings = bindings.with_scry_bottom(index, player, Vec::new());
+            }
+            EffectProgram::GainLife { .. }
+            | EffectProgram::LoseLife { .. }
+            | EffectProgram::ShuffleLibrary { .. }
+            | EffectProgram::DestroyPermanent { .. }
+            | EffectProgram::ExileObject { .. }
+            | EffectProgram::CounterStackEntry { .. } => {}
+            EffectProgram::MoveTargetObject {
+                target, from, to, ..
+            } => {
+                let Some(TargetChoice::Object(object)) = bindings.targets().get(*target) else {
+                    return Err(RuntimeSmokeFailure::new(
+                        RuntimeSmokeFailureCode::UnexpectedOutcome,
+                        format!("effect[{index}]"),
+                        "move-zone effect target is not an object",
+                    ));
+                };
+                let owner = execution
+                    .state
+                    .object(*object)
+                    .ok_or_else(|| {
+                        RuntimeSmokeFailure::new(
+                            RuntimeSmokeFailureCode::UnexpectedOutcome,
+                            format!("effect[{index}]"),
+                            "move-zone target is unknown",
+                        )
+                    })?
+                    .owner();
+                let player = usize::from(owner == opponent);
+                if *from == ZoneKind::Hand {
+                    hand_delta[player] = hand_delta[player].saturating_sub(1);
+                }
+                if *to == ZoneKind::Hand {
+                    hand_delta[player] = hand_delta[player].saturating_add(1);
+                }
+            }
+        }
+    }
+    let bound_actions = bind_program_actions(&execution.state, &compiled.program, &bindings)
+        .map_err(|error| {
+            RuntimeSmokeFailure::new(
+                RuntimeSmokeFailureCode::UnexpectedOutcome,
+                "effect.bind",
+                error.to_string(),
+            )
+        })?;
+    for bound in bound_actions {
+        execution.dispatch(
+            &format!("effect[{}]", bound.effect_index()),
+            bound.action().clone(),
+        )?;
     }
 
     let final_life_totals = [
@@ -892,10 +871,23 @@ fn execute_smoke(
             ),
         ));
     }
+    for (index, player) in players.iter().copied().enumerate() {
+        let expected = i64::try_from(initial_hand_sizes[index])
+            .unwrap_or(i64::MAX)
+            .saturating_add(hand_delta[index]);
+        let actual = hand_size(&execution.state, player)?;
+        if i64::try_from(actual).unwrap_or(i64::MAX) != expected {
+            return Err(RuntimeSmokeFailure::new(
+                RuntimeSmokeFailureCode::HandSizeMismatch,
+                "assert.final_hand_size",
+                format!("player {index}: expected {expected}, found {actual}"),
+            ));
+        }
+    }
     assert_zone(
         &execution.state,
         spell,
-        graveyard,
+        destination,
         "assert.final_destination",
     )?;
     if execution.state.game_outcome() != GameOutcome::InProgress {
@@ -910,16 +902,220 @@ fn execute_smoke(
     }
 
     Ok(RuntimeSmokePass {
-        capabilities: compiled
-            .effects
-            .iter()
-            .map(|effect| effect.capability)
-            .collect(),
-        effect_actions: compiled.effects.len(),
+        capabilities: compiled.program.capabilities(),
+        effect_actions: compiled.program.effects().len(),
         production_actions: execution.production_actions,
         final_life_totals,
         final_hash: execution.state.deterministic_hash().get(),
+        destination: destination_name,
     })
+}
+
+fn synthesize_targets(
+    execution: &mut Execution,
+    compiled: &CompiledSmoke,
+    caster: PlayerId,
+    opponent: PlayerId,
+    base_card_id: u32,
+) -> Result<Vec<TargetChoice>, RuntimeSmokeFailure> {
+    let mut choices = Vec::with_capacity(compiled.program.target_requirements().len());
+    for (index, requirement) in compiled
+        .program
+        .target_requirements()
+        .iter()
+        .copied()
+        .enumerate()
+    {
+        let choice = match requirement.kind() {
+            TargetKind::Player => {
+                let player = match requirement.predicate() {
+                    TargetPredicate::Any | TargetPredicate::Player(PlayerTargetPredicate::Any) => {
+                        opponent
+                    }
+                    TargetPredicate::Player(PlayerTargetPredicate::You) => caster,
+                    TargetPredicate::Player(PlayerTargetPredicate::Opponent) => opponent,
+                    TargetPredicate::Player(PlayerTargetPredicate::Player(player)) => player,
+                    TargetPredicate::Object(_) => {
+                        return Err(RuntimeSmokeFailure::new(
+                            RuntimeSmokeFailureCode::UnexpectedOutcome,
+                            format!("setup.target[{index}]"),
+                            "player target carries an object predicate",
+                        ));
+                    }
+                };
+                TargetChoice::Player(player)
+            }
+            TargetKind::StackEntry => {
+                let object = expect_object(execution.dispatch(
+                    &format!("setup.target[{index}].stack_object"),
+                    Action::CreateObject {
+                        card: CardId::new(
+                            base_card_id.wrapping_add(50_000).wrapping_add(index as u32),
+                        ),
+                        owner: caster,
+                        controller: caster,
+                        zone: ZoneId::new(Some(caster), ZoneKind::Hand),
+                    },
+                )?)?;
+                execution.dispatch(
+                    &format!("setup.target[{index}].stack_characteristics"),
+                    Action::SetBaseObjectCharacteristics {
+                        object,
+                        base: BaseObjectCharacteristics::new(
+                            ObjectTypes::none().with_instant(),
+                            ObjectColors::none().with_blue(),
+                        ),
+                    },
+                )?;
+                let outcome = execution.dispatch(
+                    &format!("setup.target[{index}].put_on_stack"),
+                    Action::PutSpellOnStack {
+                        player: caster,
+                        object,
+                        kind: StackObjectKind::InstantSpell,
+                        hold_priority: true,
+                    },
+                )?;
+                let Outcome::StackEntryAdded(entry) = outcome else {
+                    return Err(unexpected_outcome("setup.target.stack", outcome));
+                };
+                TargetChoice::StackEntry(entry)
+            }
+            TargetKind::Permanent
+            | TargetKind::ObjectInZone(_)
+            | TargetKind::ObjectInZoneKind(_) => TargetChoice::Object(synthesize_object_target(
+                execution,
+                requirement.kind(),
+                requirement.predicate(),
+                caster,
+                opponent,
+                base_card_id.wrapping_add(40_000).wrapping_add(index as u32),
+                index,
+            )?),
+        };
+        choices.push(choice);
+    }
+    Ok(choices)
+}
+
+fn synthesize_object_target(
+    execution: &mut Execution,
+    kind: TargetKind,
+    predicate: TargetPredicate,
+    caster: PlayerId,
+    opponent: PlayerId,
+    card: u32,
+    index: usize,
+) -> Result<ObjectId, RuntimeSmokeFailure> {
+    let predicate = match predicate {
+        TargetPredicate::Any => None,
+        TargetPredicate::Object(predicate) => Some(predicate),
+        TargetPredicate::Player(_) => {
+            return Err(RuntimeSmokeFailure::new(
+                RuntimeSmokeFailureCode::UnexpectedOutcome,
+                format!("setup.target[{index}]"),
+                "object target carries a player predicate",
+            ));
+        }
+    };
+    let owner = predicate
+        .map(|predicate| smoke_relationship(predicate.owner(), caster, opponent, false))
+        .unwrap_or(opponent);
+    let controller = predicate
+        .map(|predicate| smoke_relationship(predicate.controller(), caster, opponent, false))
+        .unwrap_or(opponent);
+    let zone = match kind {
+        TargetKind::Permanent => ZoneId::new(None, ZoneKind::Battlefield),
+        TargetKind::ObjectInZone(zone) => zone,
+        TargetKind::ObjectInZoneKind(kind) => ZoneId::new(smoke_zone_owner(kind, owner), kind),
+        TargetKind::Player | TargetKind::StackEntry => unreachable!("object target kind checked"),
+    };
+    let object = expect_object(execution.dispatch(
+        &format!("setup.target[{index}].create"),
+        Action::CreateObject {
+            card: CardId::new(card),
+            owner,
+            controller,
+            zone,
+        },
+    )?)?;
+    let mut types = predicate
+        .map(|predicate| predicate.required_types())
+        .unwrap_or(ObjectTypes::none());
+    if let Some(any) = predicate.map(|predicate| predicate.required_any_types()) {
+        types = types.union(pick_one_type(any));
+    }
+    if types == ObjectTypes::none() && kind == TargetKind::Permanent {
+        types = ObjectTypes::none().with_artifact();
+    }
+    execution.dispatch(
+        &format!("setup.target[{index}].characteristics"),
+        Action::SetBaseObjectCharacteristics {
+            object,
+            base: BaseObjectCharacteristics::new(types, ObjectColors::none()),
+        },
+    )?;
+    if types.creature() {
+        execution.dispatch(
+            &format!("setup.target[{index}].creature"),
+            Action::SetBaseCreatureCharacteristics {
+                object,
+                base: BaseCreatureCharacteristics::new(2, 2),
+            },
+        )?;
+    }
+    Ok(object)
+}
+
+const fn smoke_relationship(
+    relationship: TargetControllerPredicate,
+    caster: PlayerId,
+    opponent: PlayerId,
+    prefer_caster: bool,
+) -> PlayerId {
+    match relationship {
+        TargetControllerPredicate::Any => {
+            if prefer_caster {
+                caster
+            } else {
+                opponent
+            }
+        }
+        TargetControllerPredicate::You => caster,
+        TargetControllerPredicate::Opponent => opponent,
+        TargetControllerPredicate::Player(player) => player,
+    }
+}
+
+const fn smoke_zone_owner(kind: ZoneKind, owner: PlayerId) -> Option<PlayerId> {
+    match kind {
+        ZoneKind::Library | ZoneKind::Hand | ZoneKind::Graveyard => Some(owner),
+        ZoneKind::Battlefield
+        | ZoneKind::Exile
+        | ZoneKind::Stack
+        | ZoneKind::Command
+        | ZoneKind::Ceased => None,
+    }
+}
+
+const fn pick_one_type(types: ObjectTypes) -> ObjectTypes {
+    if types.artifact() {
+        ObjectTypes::none().with_artifact()
+    } else if types.creature() {
+        ObjectTypes::none().with_creature()
+    } else if types.enchantment() {
+        ObjectTypes::none().with_enchantment()
+    } else if types.instant() {
+        ObjectTypes::none().with_instant()
+    } else if types.land() {
+        ObjectTypes::none().with_land()
+    } else if types.planeswalker() {
+        ObjectTypes::none().with_planeswalker()
+    } else if types.sorcery() {
+        ObjectTypes::none().with_sorcery()
+    } else {
+        ObjectTypes::none()
+    }
 }
 
 fn finish_empty_stack_step(
@@ -1001,6 +1197,19 @@ fn player_life(state: &GameState, player: PlayerId) -> Result<i32, RuntimeSmokeF
         })
 }
 
+fn hand_size(state: &GameState, player: PlayerId) -> Result<usize, RuntimeSmokeFailure> {
+    state
+        .zone_objects(ZoneId::new(Some(player), ZoneKind::Hand))
+        .map(|objects| objects.len())
+        .ok_or_else(|| {
+            RuntimeSmokeFailure::new(
+                RuntimeSmokeFailureCode::InvariantViolation,
+                "assert.hand_size",
+                format!("player {player:?} hand zone is missing"),
+            )
+        })
+}
+
 fn assert_zone(
     state: &GameState,
     object: forge_core::ObjectId,
@@ -1069,8 +1278,9 @@ mod tests {
 
     const SUPPORTED: &str =
         include_str!("../tests/fixtures/runtime_smoke/supported_life_spell.frs");
-    const UNSUPPORTED: &str =
-        include_str!("../tests/fixtures/runtime_smoke/unsupported_draw_spell.frs");
+    const DRAW: &str = include_str!("../tests/fixtures/runtime_smoke/unsupported_draw_spell.frs");
+    const PERMANENT: &str =
+        include_str!("../tests/fixtures/runtime_smoke/supported_permanent_spell.frs");
 
     #[test]
     fn supported_life_spell_executes_and_reaches_owner_graveyard() {
@@ -1095,8 +1305,55 @@ mod tests {
     }
 
     #[test]
+    fn draw_spell_executes_through_production_action() {
+        let definition = parse("draw_spell.frs", DRAW);
+        let report = run_translated_card_runtime_smoke(&definition);
+        let RuntimeSmokeResult::Passed(pass) = report.result() else {
+            panic!("expected pass, found {:?}", report.result());
+        };
+        assert_eq!(pass.capabilities(), [RuntimeSmokeCapability::DrawCards]);
+    }
+
+    #[test]
+    fn ability_free_permanent_casts_and_resolves_to_battlefield() {
+        let definition = parse("supported_permanent_spell.frs", PERMANENT);
+        let report = run_translated_card_runtime_smoke(&definition);
+        let RuntimeSmokeResult::Passed(pass) = report.result() else {
+            panic!("expected pass, found {:?}", report.result());
+        };
+        assert_eq!(
+            pass.capabilities(),
+            [RuntimeSmokeCapability::PermanentSpell]
+        );
+        assert_eq!(pass.effect_actions(), 0);
+        assert_eq!(pass.destination(), "battlefield");
+    }
+
+    #[test]
+    fn scry_shuffle_and_draw_sequence_executes() {
+        let source = DRAW.replace(
+            "draw(1, you())",
+            "sequence(scry(2, you()), shuffle(you()), draw(1, you()))",
+        );
+        let definition = parse("library_sequence.frs", &source);
+        let report = run_translated_card_runtime_smoke(&definition);
+        let RuntimeSmokeResult::Passed(pass) = report.result() else {
+            panic!("expected pass, found {:?}", report.result());
+        };
+        assert_eq!(
+            pass.capabilities(),
+            [
+                RuntimeSmokeCapability::Scry,
+                RuntimeSmokeCapability::ShuffleLibrary,
+                RuntimeSmokeCapability::DrawCards,
+            ]
+        );
+    }
+
+    #[test]
     fn unsupported_effect_operation_is_reason_coded_and_not_a_pass() {
-        let definition = parse("unsupported_draw_spell.frs", UNSUPPORTED);
+        let source = DRAW.replace("draw(1, you())", "mill(1, you())");
+        let definition = parse("unsupported_mill_spell.frs", &source);
         let report = run_translated_card_runtime_smoke(&definition);
         assert!(!report.passed());
         assert_eq!(
@@ -1108,19 +1365,25 @@ mod tests {
         };
         assert_eq!(unsupported.code(), UnsupportedSetupCode::EffectOperation);
         assert_eq!(unsupported.code().as_str(), "unsupported_effect_operation");
-        assert!(unsupported.detail().contains("draw"));
+        assert!(unsupported.detail().contains("mill"));
     }
 
     #[test]
-    fn unsupported_target_selector_is_distinct_from_supported_life_operation() {
+    fn targeted_player_life_effect_uses_synthesized_legal_target() {
         let targeted = SUPPORTED.replace("you()", "target(any())");
         let definition = parse("targeted_life_spell.frs", &targeted);
         let report = run_translated_card_runtime_smoke(&definition);
-        let RuntimeSmokeResult::UnsupportedSetup(unsupported) = report.result() else {
-            panic!("expected unsupported setup, found {:?}", report.result());
+        let RuntimeSmokeResult::Passed(pass) = report.result() else {
+            panic!("expected pass, found {:?}", report.result());
         };
-        assert_eq!(unsupported.code(), UnsupportedSetupCode::PlayerSelector);
-        assert_eq!(unsupported.code().as_str(), "unsupported_player_selector");
+        assert_eq!(
+            pass.capabilities(),
+            [
+                RuntimeSmokeCapability::GainLife,
+                RuntimeSmokeCapability::LoseLife,
+            ]
+        );
+        assert_eq!(pass.final_life_totals(), [20, 22]);
     }
 
     fn parse(path: &str, source: &str) -> forge_carddef::CardDefinition {

@@ -1,0 +1,11 @@
+card "T3.5 Test Relic" {
+  id: "forge:t3.5:runtime:permanent"
+  layout: normal
+  status: unverified_playable
+  face "T3.5 Test Relic" {
+    cost: "{2}"
+    types: "Artifact"
+    oracle: ""
+    keywords: []
+  }
+}

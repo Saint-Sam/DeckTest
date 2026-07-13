@@ -250,7 +250,9 @@ name = "forge-cards"
 version = "0.0.0"
 dependencies = [
  "bincode",
+ "forge-cardc",
  "forge-carddef",
+ "forge-core",
  "serde_json",
 ]
 
@@ -289,7 +291,9 @@ version = "0.0.0"
 dependencies = [
  "forge-cardc",
  "forge-carddef",
+ "forge-cards",
  "forge-core",
+ "serde_json",
 ]
 
 [[package]]

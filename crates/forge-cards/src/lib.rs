@@ -3,6 +3,9 @@
 
 //! Defensive runtime loading and indexed lookup for compiled Forge card data.
 
+/// Data-driven compilation and execution of validated card definitions.
+pub mod runtime;
+
 use forge_carddef::{
     CardClassification, CardDatabase, CardDefinition, IdentityRecord, PrintingRecord,
     CARD_DATABASE_MAGIC, CARD_DATABASE_SCHEMA_VERSION,

@@ -11,3 +11,4 @@ fuzz/target/
 cards/scryfall/*.json
 __pycache__/
 *.py[cod]
+.private/grand-plan-v2/

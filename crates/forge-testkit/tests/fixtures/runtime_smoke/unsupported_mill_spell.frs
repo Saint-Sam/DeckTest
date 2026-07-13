@@ -1,0 +1,14 @@
+card "T3.5 Unsupported Mill" {
+  id: "forge:t3.5:runtime:mill"
+  layout: normal
+  status: unverified_playable
+  face "T3.5 Unsupported Mill" {
+    cost: "{U}"
+    types: "Instant"
+    oracle: "Target player mills a card."
+    keywords: []
+    ability spell {
+      effect: mill(1, opponent())
+    }
+  }
+}

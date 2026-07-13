@@ -287,14 +287,15 @@
       "verification": "PASS local exact integration product 5ea7d39: 11,382/33,290 complete legacy scripts emitted as canonical .frs (34.1904%), with 21,908 fail-closed file quarantines and compiler roundtrips against 38,306 identities and 113,234 printings. All 365 Owner-priority names resolve and 195/365 emit. The 24-worker materialized pass and 12-worker hash-only replay matched fingerprint ad4f8341306fb321f2759655b86300a9 plus deterministic quarantine and priority reports; the 6-worker and 1-worker blocker plans also matched. The full local checkpoint completed in 132 seconds with a 39-second accelerated core phase and 88-second full-workspace verification, including full workspace tests, clippy -D warnings, compiler/database validation, 235 oracle scenarios plus gated subsets, nightmare/smoke checks, and workspace line coverage 27,840/34,370 (81.0009%), with no GitHub Actions."
     },
     "T3.5": {
-      "status": "in_progress_first_slice_verified",
+      "status": "in_progress_interpreter_slice_verified",
       "branch": "task/T3.5-capability-runtime-smoke",
       "attempts": 0,
       "allocation_percent": 30,
       "source_commit": "0fea82bcfbf6e1fcbacdd8eb56c5912018d3813e",
       "exact_integration_product": "4e53dc59c9af194deea99a7aa4732381b1726172",
-      "verification": "The first bounded capability-smoke slice passed in the exact local product: ordinary one-face instant/sorcery definitions with literal gain_life, lose_life, and sequence effects execute through production setup, casting, priority, zones, and life actions with invariant and deterministic-hash checks. Nourish passed with 31 production actions and owner-graveyard destination. Heroes' Reunion was correctly reason-coded unsupported_player_selector and exited nonzero rather than passing. This is an honest first slice, not a general card interpreter or all-card runtime claim.",
-      "next": "Expand capability execution and setup synthesis while preserving typed unsupported results and exact product evidence."
+      "architecture": "docs/adr/0013-data-driven-card-runtime-interpreter.md",
+      "verification": "The Owner-approved data-driven interpreter architecture is implemented incrementally in forge-cards and all state mutation crosses typed forge-core actions. Focused local offline tests pass (forge-core 96, forge-cards 10, forge-testkit 28 across library and binary targets). The current exact translated corpus audit classifies all 20,082 definitions: 515 pass runtime smoke, 19,567 are typed unsupported, and 0 fail, a gain of 136 genuine executions over the prior 379-card baseline. Seventeen frozen semantic-set cards pass runtime smoke, 82 remain typed unsupported, zero fail, and the Bala Ged Recovery multiface identity remains unmatched. This is capability runtime evidence only; it promotes no card to semantic_verified and does not close T3.5.",
+      "next": "Implement the vertical land/mana, token, search, activated, trigger, and keyword capability families needed by the frozen semantic 100 and four-deck pod, preserving pre-mutation binding, typed unsupported results, and local exact evidence."
     },
     "T3.6": {
       "status": "in_progress_candidate_set_frozen",
