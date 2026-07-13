@@ -16,7 +16,7 @@ use forge_core::{
     ObjectColors, ObjectId, ObjectSupertypes, ObjectTargetPredicate, ObjectTypes, Outcome,
     PlayerId, PlayerTargetPredicate, StackEntryId, TargetChoice, TargetControllerPredicate,
     TargetKind, TargetRequirement, TriggerCondition, TriggerDefinition, TriggerObjectFilter,
-    TriggerZoneFilter, ZoneId, ZoneKind,
+    TriggerPlayerFilter, TriggerZoneFilter, ZoneId, ZoneKind,
 };
 use std::{collections::BTreeMap, error::Error, fmt};
 
@@ -156,6 +156,8 @@ pub enum Capability {
     LoseLife,
     /// Draw cards.
     DrawCards,
+    /// Discard every card from one or more hands.
+    DiscardCards,
     /// Scry and move an explicit subset to the library bottom.
     Scry,
     /// Shuffle a library.
@@ -189,6 +191,7 @@ impl Capability {
             Self::GainLife => "gain_life",
             Self::LoseLife => "lose_life",
             Self::DrawCards => "draw_cards",
+            Self::DiscardCards => "discard_cards",
             Self::Scry => "scry",
             Self::ShuffleLibrary => "shuffle_library",
             Self::PermanentSpell => "permanent_spell",
@@ -315,6 +318,8 @@ pub enum PlayerBinding {
     Controller,
     /// Every supplied opponent of the controller.
     Opponents,
+    /// The controller followed by every supplied opponent.
+    AllPlayers,
     /// One explicit player target slot.
     Target(usize),
     /// The current controller of one explicit object target slot.
@@ -330,6 +335,8 @@ pub enum AmountProgram {
     Literal(u32),
     /// Current power of one object target.
     PowerOfTargetObject(usize),
+    /// Current number of battlefield permanents matching a closed predicate.
+    CountPermanents(ObjectTargetPredicate),
 }
 
 /// One explicit hidden-zone object choice exposed by a compiled program.
@@ -435,6 +442,11 @@ pub enum EffectProgram {
         /// Draw count.
         count: AmountProgram,
     },
+    /// Discard every card from selected players' hands.
+    DiscardHands {
+        /// Players discarding their hands.
+        players: PlayerBinding,
+    },
     /// Scry with an explicit execution-time bottom choice.
     Scry {
         /// Scrying players.
@@ -478,9 +490,11 @@ pub enum EffectProgram {
         /// Token base types and colors.
         base_object: BaseObjectCharacteristics,
         /// Token base creature values.
-        base_creature: BaseCreatureCharacteristics,
+        base_creature: Option<BaseCreatureCharacteristics>,
+        /// Optional fixed-choice mana ability carried by every created token.
+        mana_ability: Option<ActivatedAbilityProgram>,
         /// Number of tokens to create.
-        count: u32,
+        count: AmountProgram,
         /// Token controller and owner.
         players: PlayerBinding,
     },
@@ -506,10 +520,24 @@ pub enum EffectProgram {
 /// One completely compiled triggered ability.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TriggeredAbilityProgram {
+    event: TriggeredEventProgram,
     target_requirements: Vec<TargetRequirement>,
     object_choice_requirements: Vec<ObjectChoiceRequirement>,
     effects: Vec<EffectProgram>,
     optional_effect_groups: Vec<OptionalEffectGroup>,
+}
+
+/// Closed event families supported by a compiled triggered ability.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TriggeredEventProgram {
+    /// This permanent enters the battlefield.
+    SourceEnters,
+    /// This creature attacks.
+    SourceAttacks,
+    /// This permanent's controller begins their upkeep.
+    ControllerUpkeep,
+    /// This permanent's controller casts or copies a matching spell.
+    ControllerCasts(ObjectTargetPredicate),
 }
 
 /// One completely compiled non-mana activated ability.
@@ -525,6 +553,23 @@ pub struct ActivatedEffectProgram {
     object_choice_requirements: Vec<ObjectChoiceRequirement>,
     effects: Vec<EffectProgram>,
     optional_effect_groups: Vec<OptionalEffectGroup>,
+}
+
+/// One completely compiled additional spell cost.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SpellAdditionalCostProgram {
+    /// Discard exactly this many cards from the caster's hand.
+    DiscardCards {
+        /// Number of cards discarded.
+        count: u32,
+    },
+    /// Sacrifice matching permanents controlled by the caster.
+    SacrificePermanents {
+        /// Number of permanents sacrificed.
+        count: u32,
+        /// Closed permanent predicate for every sacrificed object.
+        predicate: ObjectTargetPredicate,
+    },
 }
 
 impl ActivatedEffectProgram {
@@ -593,15 +638,35 @@ impl TriggeredAbilityProgram {
     /// Binds this source-enter trigger to its controller and source object.
     #[must_use]
     pub const fn bind(&self, controller: PlayerId, source: ObjectId) -> TriggerDefinition {
-        TriggerDefinition::new(
-            controller,
-            TriggerCondition::ObjectMoved {
+        let condition = match self.event {
+            TriggeredEventProgram::SourceEnters => TriggerCondition::ObjectMoved {
                 object: TriggerObjectFilter::Source,
                 from: TriggerZoneFilter::Any,
                 to: TriggerZoneFilter::Kind(ZoneKind::Battlefield),
             },
-        )
-        .with_source(source)
+            TriggeredEventProgram::SourceAttacks => TriggerCondition::AttackDeclared {
+                attacker: TriggerObjectFilter::Source,
+            },
+            TriggeredEventProgram::ControllerUpkeep => TriggerCondition::StepBeganFor {
+                step: forge_core::Step::Upkeep,
+                player: TriggerPlayerFilter::Controller,
+            },
+            TriggeredEventProgram::ControllerCasts(predicate) => {
+                TriggerCondition::StackEntryAdded {
+                    controller: TriggerPlayerFilter::Controller,
+                    required_types: predicate.required_types(),
+                    required_any_types: predicate.required_any_types(),
+                    forbidden_types: predicate.forbidden_types(),
+                }
+            }
+        };
+        TriggerDefinition::new(controller, condition).with_source(source)
+    }
+
+    /// Returns the closed event family that queues this trigger.
+    #[must_use]
+    pub const fn event(&self) -> TriggeredEventProgram {
+        self.event
     }
 
     /// Returns target slots chosen when this trigger is put on the stack.
@@ -641,6 +706,7 @@ impl EffectProgram {
             Self::GainLife { .. } => Capability::GainLife,
             Self::LoseLife { .. } => Capability::LoseLife,
             Self::DrawCards { .. } => Capability::DrawCards,
+            Self::DiscardHands { .. } => Capability::DiscardCards,
             Self::Scry { .. } => Capability::Scry,
             Self::ShuffleLibrary { .. } => Capability::ShuffleLibrary,
             Self::DestroyPermanent { .. } => Capability::DestroyPermanent,
@@ -669,6 +735,7 @@ pub struct CardProgram {
     object_choice_requirements: Vec<ObjectChoiceRequirement>,
     effects: Vec<EffectProgram>,
     optional_effect_groups: Vec<OptionalEffectGroup>,
+    additional_costs: Vec<SpellAdditionalCostProgram>,
     activated_abilities: Vec<ActivatedAbilityProgram>,
     activated_effects: Vec<ActivatedEffectProgram>,
     triggered_abilities: Vec<TriggeredAbilityProgram>,
@@ -739,6 +806,12 @@ impl CardProgram {
     #[must_use]
     pub fn optional_choice_count(&self) -> usize {
         self.optional_effect_groups.len()
+    }
+
+    /// Returns additional spell costs in announcement order.
+    #[must_use]
+    pub fn additional_costs(&self) -> &[SpellAdditionalCostProgram] {
+        &self.additional_costs
     }
 
     /// Returns completely compiled activated abilities in printed order.
@@ -839,13 +912,13 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
             .collect::<Vec<_>>();
     let mut activated_effects = Vec::new();
     let mut triggered_abilities = Vec::new();
+    let mut additional_costs = Vec::new();
     let mut spell_abilities = 0_usize;
     for (index, ability) in face.abilities.iter().enumerate() {
         let path = format!("card.faces[0].abilities[{index}]");
         match ability.kind {
             AbilityKind::Spell
                 if matches!(kind, ProgramKind::Instant | ProgramKind::Sorcery)
-                    && ability.costs.is_empty()
                     && ability.event.is_none()
                     && ability.condition.is_none()
                     && ability.timing.is_none()
@@ -859,6 +932,7 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
                         "multiple spell abilities are not compiled",
                     ));
                 }
+                additional_costs = compile_spell_additional_costs(ability, mana_cost, &path)?;
                 compile_effect(&ability.effect, &format!("{path}.effect"), &mut compiler)?;
             }
             AbilityKind::Activated
@@ -871,7 +945,7 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
                 }
             }
             AbilityKind::Triggered if matches!(kind, ProgramKind::Permanent) => {
-                triggered_abilities.push(compile_source_enters_trigger(ability, &path)?);
+                triggered_abilities.push(compile_triggered_ability(ability, &path)?);
             }
             _ => {
                 return Err(CompileDiagnostic::new(
@@ -946,13 +1020,14 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
             .collect(),
         effects: compiler.effects,
         optional_effect_groups: compiler.optional_effect_groups,
+        additional_costs,
         activated_abilities,
         activated_effects,
         triggered_abilities,
     })
 }
 
-fn compile_source_enters_trigger(
+fn compile_triggered_ability(
     ability: &AbilityDefinition,
     path: &str,
 ) -> Result<TriggeredAbilityProgram, CompileDiagnostic> {
@@ -964,38 +1039,17 @@ fn compile_source_enters_trigger(
         return Err(CompileDiagnostic::new(
             CompileDiagnosticCode::AbilityShape,
             path,
-            "source-enter trigger must have no costs, timing, condition, or mana flag",
+            "trigger must have no costs, timing, condition, or mana flag",
         ));
     }
-    let Some(Expression::Call {
-        operation: Operation::EventEnters,
-        arguments,
-    }) = ability.event.as_ref()
-    else {
+    let Some(event_expression) = ability.event.as_ref() else {
         return Err(CompileDiagnostic::new(
             CompileDiagnosticCode::AbilityShape,
             format!("{path}.event"),
-            "only event_enters(source()) is compiled for triggered abilities",
+            "trigger has no event expression",
         ));
     };
-    let [Expression::Call {
-        operation: Operation::Source,
-        arguments: source_arguments,
-    }] = arguments.as_slice()
-    else {
-        return Err(effect_arity(
-            &format!("{path}.event"),
-            &Operation::EventEnters,
-            "source()",
-        ));
-    };
-    if !source_arguments.is_empty() {
-        return Err(effect_arity(
-            &format!("{path}.event.source"),
-            &Operation::Source,
-            "no arguments",
-        ));
-    }
+    let event = compile_trigger_event(event_expression, &format!("{path}.event"))?;
 
     let mut compiler = ProgramCompiler::default();
     compile_effect(&ability.effect, &format!("{path}.effect"), &mut compiler)?;
@@ -1007,6 +1061,7 @@ fn compile_source_enters_trigger(
         ));
     }
     Ok(TriggeredAbilityProgram {
+        event,
         target_requirements: compiler
             .targets
             .into_iter()
@@ -1020,6 +1075,118 @@ fn compile_source_enters_trigger(
         effects: compiler.effects,
         optional_effect_groups: compiler.optional_effect_groups,
     })
+}
+
+fn compile_trigger_event(
+    expression: &Expression,
+    path: &str,
+) -> Result<TriggeredEventProgram, CompileDiagnostic> {
+    let Expression::Call {
+        operation,
+        arguments,
+    } = expression
+    else {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::AbilityShape,
+            path,
+            "trigger event is not an operation call",
+        ));
+    };
+
+    match operation {
+        Operation::EventEnters | Operation::EventAttacks => {
+            let [Expression::Call {
+                operation: Operation::Source,
+                arguments: source_arguments,
+            }] = arguments.as_slice()
+            else {
+                return Err(effect_arity(path, operation, "source()"));
+            };
+            if !source_arguments.is_empty() {
+                return Err(effect_arity(
+                    &format!("{path}.source"),
+                    &Operation::Source,
+                    "no arguments",
+                ));
+            }
+            Ok(if matches!(operation, Operation::EventEnters) {
+                TriggeredEventProgram::SourceEnters
+            } else {
+                TriggeredEventProgram::SourceAttacks
+            })
+        }
+        Operation::EventUpkeep => {
+            let [Expression::Call {
+                operation: Operation::You,
+                arguments: player_arguments,
+            }] = arguments.as_slice()
+            else {
+                return Err(effect_arity(path, operation, "you()"));
+            };
+            if !player_arguments.is_empty() {
+                return Err(effect_arity(
+                    &format!("{path}.player"),
+                    &Operation::You,
+                    "no arguments",
+                ));
+            }
+            Ok(TriggeredEventProgram::ControllerUpkeep)
+        }
+        Operation::EventCast => {
+            let [spells, controller] = arguments.as_slice() else {
+                return Err(effect_arity(
+                    path,
+                    operation,
+                    "spells(...) and you() or \"cast_or_copy:you\"",
+                ));
+            };
+            let Expression::Call {
+                operation: Operation::Spells,
+                arguments: spell_arguments,
+            } = spells
+            else {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::AbilityShape,
+                    format!("{path}.spells"),
+                    "event_cast first argument must be spells(...) ",
+                ));
+            };
+            let predicate = match spell_arguments.as_slice() {
+                [] => ObjectTargetPredicate::any(),
+                [predicate] => compile_stack_spell_predicate(predicate, &format!("{path}.spells"))?,
+                _ => {
+                    return Err(CompileDiagnostic::new(
+                        CompileDiagnosticCode::EffectArguments,
+                        format!("{path}.spells"),
+                        "spells() accepts at most one closed type predicate",
+                    ));
+                }
+            };
+            let controller_is_you = matches!(
+                controller,
+                Expression::Call {
+                    operation: Operation::You,
+                    arguments
+                } if arguments.is_empty()
+            ) || matches!(controller, Expression::Text(value) if value == "cast_or_copy:you");
+            if !controller_is_you {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::PlayerSelector,
+                    format!("{path}.controller"),
+                    "event_cast controller must be you() or exact cast_or_copy:you",
+                ));
+            }
+            Ok(TriggeredEventProgram::ControllerCasts(predicate))
+        }
+        unsupported => Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::AbilityShape,
+            path,
+            format!(
+                "trigger event `{}` has no complete runtime lowering",
+                unsupported.as_str()
+            ),
+        )),
+    }
 }
 
 fn compile_base_creature(
@@ -1213,6 +1380,131 @@ fn compile_fixed_mana_ability(
         cost: ActivationCost::new(ManaCost::new(0, 0, 0, 0, 0, 0)).with_tap_source(),
         outputs: compile_mana_outputs(mana, &format!("{path}.effect.mana"))?,
     })
+}
+
+fn compile_spell_additional_costs(
+    ability: &AbilityDefinition,
+    printed_mana_cost: ManaCost,
+    path: &str,
+) -> Result<Vec<SpellAdditionalCostProgram>, CompileDiagnostic> {
+    let mut compiled = Vec::new();
+    let mut saw_mana_cost = false;
+    for (index, cost) in ability.costs.iter().enumerate() {
+        let cost_path = format!("{path}.costs[{index}]");
+        let Expression::Call {
+            operation,
+            arguments,
+        } = cost
+        else {
+            return Err(CompileDiagnostic::new(
+                CompileDiagnosticCode::AbilityShape,
+                cost_path,
+                "spell cost is not an operation call",
+            ));
+        };
+        match operation {
+            Operation::ManaCost => {
+                if saw_mana_cost {
+                    return Err(CompileDiagnostic::new(
+                        CompileDiagnosticCode::AbilityShape,
+                        cost_path,
+                        "spell repeats its mana cost",
+                    ));
+                }
+                let [Expression::Text(value)] = arguments.as_slice() else {
+                    return Err(effect_arity(
+                        &cost_path,
+                        operation,
+                        "one fixed mana-cost string",
+                    ));
+                };
+                let (ability_cost, _) = compile_mana_cost_text(value, &cost_path)?;
+                if ability_cost != printed_mana_cost {
+                    return Err(CompileDiagnostic::new(
+                        CompileDiagnosticCode::AbilityShape,
+                        cost_path,
+                        "ability mana cost does not match the printed face cost",
+                    ));
+                }
+                saw_mana_cost = true;
+            }
+            Operation::DiscardCost => {
+                let [count, selector] = arguments.as_slice() else {
+                    return Err(effect_arity(
+                        &cost_path,
+                        operation,
+                        "one literal count and cards()",
+                    ));
+                };
+                if !matches!(
+                    selector,
+                    Expression::Call {
+                        operation: Operation::Cards,
+                        arguments,
+                    } if arguments.is_empty()
+                ) {
+                    return Err(CompileDiagnostic::new(
+                        CompileDiagnosticCode::AbilityShape,
+                        format!("{cost_path}.selector"),
+                        "discard cost currently requires unconstrained cards()",
+                    ));
+                }
+                compiled.push(SpellAdditionalCostProgram::DiscardCards {
+                    count: compile_bounded_positive_literal(
+                        count,
+                        &format!("{cost_path}.count"),
+                        MAX_EFFECTS as u32,
+                        "discard count",
+                    )?,
+                });
+            }
+            Operation::Sacrifice => {
+                let [selector, count] = arguments.as_slice() else {
+                    return Err(effect_arity(
+                        &cost_path,
+                        operation,
+                        "one permanent selector and literal count",
+                    ));
+                };
+                let spec = compile_object_selector(selector, &format!("{cost_path}.selector"))?;
+                if spec.kind != TargetKind::Permanent
+                    || spec.controller != Some(TargetControllerPredicate::You)
+                {
+                    return Err(CompileDiagnostic::new(
+                        CompileDiagnosticCode::AbilityShape,
+                        format!("{cost_path}.selector"),
+                        "sacrifice cost requires permanents controlled by you()",
+                    ));
+                }
+                let predicate = ObjectTargetPredicate::any()
+                    .with_owner(spec.owner)
+                    .with_controller(TargetControllerPredicate::You)
+                    .with_required_types(spec.required_types)
+                    .with_required_any_types(spec.required_any_types)
+                    .with_forbidden_types(spec.forbidden_types);
+                compiled.push(SpellAdditionalCostProgram::SacrificePermanents {
+                    count: compile_bounded_positive_literal(
+                        count,
+                        &format!("{cost_path}.count"),
+                        MAX_EFFECTS as u32,
+                        "sacrifice count",
+                    )?,
+                    predicate,
+                });
+            }
+            unsupported => {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::AbilityShape,
+                    cost_path,
+                    format!(
+                        "spell cost `{}` has no complete runtime lowering",
+                        unsupported.as_str()
+                    ),
+                ));
+            }
+        }
+    }
+    Ok(compiled)
 }
 
 fn compile_activated_effect(
@@ -1697,6 +1989,29 @@ fn compile_effect(
             });
             Ok(())
         }
+        Operation::DiscardCards => {
+            let [Expression::Integer(placeholder), players, Expression::Text(mode)] =
+                arguments.as_slice()
+            else {
+                return Err(effect_arity(
+                    path,
+                    operation,
+                    "the canonical hand placeholder, players, and mode",
+                ));
+            };
+            if *placeholder != 1 || mode != "hand" {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::EffectArguments,
+                    path,
+                    "only discard_cards(1, players, \"hand\") is compiled",
+                ));
+            }
+            let players = compile_player_binding(players, &format!("{path}.players"), compiler)?;
+            compiler
+                .effects
+                .push(EffectProgram::DiscardHands { players });
+            Ok(())
+        }
         Operation::Shuffle => {
             let players = match arguments.as_slice() {
                 [] => PlayerBinding::Controller,
@@ -1755,12 +2070,13 @@ fn compile_effect(
                 ));
             };
             let template = compile_token_template(template, &format!("{path}.template"))?;
-            let count = compile_token_count(count, &format!("{path}.count"))?;
+            let count = compile_token_count(count, &format!("{path}.count"), compiler)?;
             let players = compile_player_binding(players, &format!("{path}.players"), compiler)?;
             compiler.effects.push(EffectProgram::CreateTokens {
                 card: template.card,
                 base_object: template.base_object,
                 base_creature: template.base_creature,
+                mana_ability: template.mana_ability,
                 count,
                 players,
             });
@@ -1899,7 +2215,8 @@ fn compile_effect(
 struct TokenTemplate {
     card: CardId,
     base_object: BaseObjectCharacteristics,
-    base_creature: BaseCreatureCharacteristics,
+    base_creature: Option<BaseCreatureCharacteristics>,
+    mana_ability: Option<ActivatedAbilityProgram>,
 }
 
 fn compile_token_template(
@@ -1913,6 +2230,28 @@ fn compile_token_template(
             "token template is not text",
         ));
     };
+    if script == "c_a_treasure_sac" {
+        return Ok(TokenTemplate {
+            card: CardId::new(stable_runtime_id(script)),
+            base_object: BaseObjectCharacteristics::new(
+                ObjectTypes::none().with_artifact(),
+                ObjectColors::none(),
+            ),
+            base_creature: None,
+            mana_ability: Some(ActivatedAbilityProgram {
+                cost: ActivationCost::new(ManaCost::new(0, 0, 0, 0, 0, 0))
+                    .with_tap_source()
+                    .with_sacrifice_source(),
+                outputs: ManaOutputChoices::from_options(&[
+                    ManaPool::of(ManaKind::White, 1),
+                    ManaPool::of(ManaKind::Blue, 1),
+                    ManaPool::of(ManaKind::Black, 1),
+                    ManaPool::of(ManaKind::Red, 1),
+                    ManaPool::of(ManaKind::Green, 1),
+                ]),
+            }),
+        });
+    }
     let (colors, base_creature) = match script.as_str() {
         "g_3_3_beast" | "g_3_3_elephant" | "g_3_3_ape" | "g_3_3_frog_lizard" => (
             ObjectColors::none().with_green(),
@@ -1938,31 +2277,25 @@ fn compile_token_template(
     Ok(TokenTemplate {
         card: CardId::new(stable_runtime_id(script)),
         base_object: BaseObjectCharacteristics::new(ObjectTypes::none().with_creature(), colors),
-        base_creature,
+        base_creature: Some(base_creature),
+        mana_ability: None,
     })
 }
 
-fn compile_token_count(expression: &Expression, path: &str) -> Result<u32, CompileDiagnostic> {
-    let Expression::Integer(count) = expression else {
-        return Err(CompileDiagnostic::new(
-            CompileDiagnosticCode::EffectAmount,
-            path,
-            "token count is not a literal integer",
-        ));
-    };
-    let count = u32::try_from(*count).map_err(|_| {
-        CompileDiagnostic::new(
-            CompileDiagnosticCode::EffectAmount,
-            path,
-            format!("token count {count} is outside the u32 action range"),
-        )
-    })?;
-    if count == 0 || count > MAX_TOKEN_COUNT {
-        return Err(CompileDiagnostic::new(
-            CompileDiagnosticCode::ProgramBounds,
-            path,
-            format!("token count must be in 1..={MAX_TOKEN_COUNT}, found {count}"),
-        ));
+fn compile_token_count(
+    expression: &Expression,
+    path: &str,
+    compiler: &mut ProgramCompiler,
+) -> Result<AmountProgram, CompileDiagnostic> {
+    let count = compile_amount(expression, path, compiler)?;
+    if let AmountProgram::Literal(count) = count {
+        if count == 0 || count > MAX_TOKEN_COUNT {
+            return Err(CompileDiagnostic::new(
+                CompileDiagnosticCode::ProgramBounds,
+                path,
+                format!("token count must be in 1..={MAX_TOKEN_COUNT}, found {count}"),
+            ));
+        }
     }
     Ok(count)
 }
@@ -2085,10 +2418,39 @@ fn compile_amount(
                 compiler,
             )?))
         }
+        Expression::Call {
+            operation: Operation::Count,
+            arguments,
+        } => {
+            let [selector] = arguments.as_slice() else {
+                return Err(effect_arity(
+                    path,
+                    &Operation::Count,
+                    "one permanent selector",
+                ));
+            };
+            let spec = compile_object_selector(selector, &format!("{path}.count"))?;
+            if spec.kind != TargetKind::Permanent {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::EffectAmount,
+                    path,
+                    "count amount currently requires a permanent selector",
+                ));
+            }
+            let mut predicate = ObjectTargetPredicate::any()
+                .with_owner(spec.owner)
+                .with_required_types(spec.required_types)
+                .with_required_any_types(spec.required_any_types)
+                .with_forbidden_types(spec.forbidden_types);
+            if let Some(controller) = spec.controller {
+                predicate = predicate.with_controller(controller);
+            }
+            Ok(AmountProgram::CountPermanents(predicate))
+        }
         _ => Err(CompileDiagnostic::new(
             CompileDiagnosticCode::EffectAmount,
             path,
-            "amount is neither a literal integer nor target power",
+            "amount is neither a literal integer, target power, nor closed permanent count",
         )),
     }
 }
@@ -2112,6 +2474,7 @@ fn compile_player_binding(
     match operation {
         Operation::You if arguments.is_empty() => Ok(PlayerBinding::Controller),
         Operation::Opponent if arguments.is_empty() => Ok(PlayerBinding::Opponents),
+        Operation::Any if arguments.is_empty() => Ok(PlayerBinding::AllPlayers),
         Operation::Target => Ok(PlayerBinding::Target(compile_player_target(
             expression, compiler, path,
         )?)),
@@ -2701,6 +3064,7 @@ fn compile_library_choice_predicate(
     }
 }
 
+#[derive(Clone, Copy)]
 struct ObjectSelectorSpec {
     kind: TargetKind,
     owner: TargetControllerPredicate,
@@ -2893,6 +3257,65 @@ fn compile_object_predicate(
             for (index, predicate) in arguments.iter().enumerate() {
                 compile_object_predicate(predicate, &format!("{path}.and[{index}]"), spec)?;
             }
+            Ok(())
+        }
+        Operation::Or => {
+            if arguments.is_empty() {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::EffectArguments,
+                    path,
+                    "object predicate or() is empty",
+                ));
+            }
+            let mut alternatives = Vec::with_capacity(arguments.len());
+            for (index, predicate) in arguments.iter().enumerate() {
+                let mut alternative = ObjectSelectorSpec::new(spec.kind);
+                compile_object_predicate(
+                    predicate,
+                    &format!("{path}.or[{index}]"),
+                    &mut alternative,
+                )?;
+                alternatives.push(alternative);
+            }
+            let first = alternatives[0];
+            if first.required_types == ObjectTypes::none()
+                || first.required_any_types != ObjectTypes::none()
+                || first.forbidden_types != ObjectTypes::none()
+                || alternatives.iter().any(|alternative| {
+                    alternative.owner != first.owner
+                        || alternative.controller != first.controller
+                        || alternative.required_types == ObjectTypes::none()
+                        || alternative.required_any_types != ObjectTypes::none()
+                        || alternative.forbidden_types != ObjectTypes::none()
+                })
+            {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::EffectArguments,
+                    path,
+                    "object predicate or() requires homogeneous type branches with identical ownership",
+                ));
+            }
+            let mut required_any = ObjectTypes::none();
+            for alternative in alternatives {
+                required_any = required_any.union(alternative.required_types);
+            }
+            if spec.owner != TargetControllerPredicate::Any && spec.owner != first.owner {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::EffectArguments,
+                    path,
+                    "object predicate or() contradicts an outer owner predicate",
+                ));
+            }
+            if spec.controller.is_some() && spec.controller != first.controller {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::EffectArguments,
+                    path,
+                    "object predicate or() contradicts an outer controller predicate",
+                ));
+            }
+            spec.owner = first.owner;
+            spec.controller = first.controller;
+            spec.required_any_types = spec.required_any_types.union(required_any);
             Ok(())
         }
         Operation::TypeIs => {
@@ -3421,6 +3844,27 @@ fn bind_effect_actions(
                     });
                 }
             }
+            EffectProgram::DiscardHands { players } => {
+                for player in resolve_players(state, *players, bindings, effect_index)? {
+                    let hand = ZoneId::new(Some(player), ZoneKind::Hand);
+                    let objects = state.zone_objects(hand).ok_or_else(|| {
+                        ExecutionDiagnostic::new(
+                            ExecutionDiagnosticCode::MissingBinding,
+                            Some(effect_index),
+                            format!("player {player:?} has no hand zone"),
+                        )
+                    })?;
+                    for object in objects {
+                        actions.push(BoundAction {
+                            effect_index,
+                            action: Action::MoveObject {
+                                object: *object,
+                                to: ZoneId::new(Some(player), ZoneKind::Graveyard),
+                            },
+                        });
+                    }
+                }
+            }
             EffectProgram::Scry { players, count } => {
                 let count = resolve_amount(state, *count, bindings, effect_index)?;
                 for player in resolve_players(state, *players, bindings, effect_index)? {
@@ -3542,11 +3986,22 @@ fn bind_effect_actions(
                 card,
                 base_object,
                 base_creature,
+                mana_ability: _,
                 count,
                 players,
             } => {
+                let count = resolve_amount(state, *count, bindings, effect_index)?;
+                if count > MAX_TOKEN_COUNT {
+                    return Err(ExecutionDiagnostic::new(
+                        ExecutionDiagnosticCode::InvalidChoice,
+                        Some(effect_index),
+                        format!(
+                            "resolved token count {count} exceeds the maximum {MAX_TOKEN_COUNT}"
+                        ),
+                    ));
+                }
                 for player in resolve_players(state, *players, bindings, effect_index)? {
-                    for _ in 0..*count {
+                    for _ in 0..count {
                         actions.push(BoundAction {
                             effect_index,
                             action: Action::CreateToken {
@@ -3554,7 +4009,7 @@ fn bind_effect_actions(
                                 owner: player,
                                 controller: player,
                                 base_object: *base_object,
-                                base: Some(*base_creature),
+                                base: *base_creature,
                             },
                         });
                     }
@@ -3762,6 +4217,12 @@ fn resolve_players(
 ) -> Result<Vec<PlayerId>, ExecutionDiagnostic> {
     match binding {
         PlayerBinding::Controller => Ok(vec![bindings.controller]),
+        PlayerBinding::AllPlayers => {
+            let mut players = Vec::with_capacity(bindings.opponents.len().saturating_add(1));
+            players.push(bindings.controller);
+            players.extend(bindings.opponents.iter().copied());
+            Ok(players)
+        }
         PlayerBinding::Opponents if bindings.opponents.is_empty() => Err(ExecutionDiagnostic::new(
             ExecutionDiagnosticCode::MissingBinding,
             Some(effect_index),
@@ -3838,6 +4299,39 @@ fn resolve_amount(
                     ExecutionDiagnosticCode::InvalidChoice,
                     Some(effect_index),
                     format!("target power {power} is negative"),
+                )
+            })
+        }
+        AmountProgram::CountPermanents(predicate) => {
+            let requirement =
+                TargetRequirement::new(TargetKind::Permanent).with_object_predicate(predicate);
+            let battlefield = state
+                .zone_objects(ZoneId::new(None, ZoneKind::Battlefield))
+                .ok_or_else(|| {
+                    ExecutionDiagnostic::new(
+                        ExecutionDiagnosticCode::MissingBinding,
+                        Some(effect_index),
+                        "battlefield zone is unavailable",
+                    )
+                })?;
+            let count = battlefield
+                .iter()
+                .filter(|object| {
+                    state
+                        .validate_target_choices(
+                            bindings.controller,
+                            None,
+                            &[requirement],
+                            &[TargetChoice::Object(**object)],
+                        )
+                        .is_ok()
+                })
+                .count();
+            u32::try_from(count).map_err(|_| {
+                ExecutionDiagnostic::new(
+                    ExecutionDiagnosticCode::InvalidChoice,
+                    Some(effect_index),
+                    "matching permanent count exceeds u32",
                 )
             })
         }

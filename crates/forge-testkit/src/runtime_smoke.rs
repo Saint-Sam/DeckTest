@@ -10,10 +10,10 @@ use forge_cards::runtime::{
     bind_activated_effect_actions, bind_program_actions, bind_triggered_ability_actions,
     compile_card_program, ActivatedEffectProgram, AmountProgram, CardProgram, ChosenDestination,
     CompileDiagnostic, CompileDiagnosticCode, EffectProgram, ExecutionBindings, PlayerBinding,
-    ProgramKind,
+    ProgramKind, SpellAdditionalCostProgram, TriggeredEventProgram,
 };
 use forge_core::{
-    apply, auto_payment_plan, Action, ActivatedAbilityId, ActivationTiming,
+    apply, auto_payment_plan, Action, ActivatedAbilityId, ActivationTiming, AttackDeclaration,
     BaseCreatureCharacteristics, BaseObjectCharacteristics, BasicLandTypes, CardId,
     CastSpellRequest, GameOutcome, GameState, ManaPool, ObjectColors, ObjectId, ObjectTypes,
     Outcome, PlayerId, PlayerTargetPredicate, PriorityOutcome, SpellTiming, StackEntryId,
@@ -405,14 +405,21 @@ fn compile_smoke(definition: &CardDefinition) -> Result<CompiledSmoke, RuntimeSm
         })?;
     let (initial_life, expected_life) = compile_life_totals(&all_effects, activation_life_cost)?;
     let mut library_reserve = compile_library_reserve(&all_effects)?;
-    if program
-        .base_creature()
-        .is_some_and(|base| !base.keywords().haste())
-        && (!program.activated_abilities().is_empty()
-            || program
-                .activated_effects()
-                .iter()
-                .any(ActivatedEffectProgram::tap_source))
+    let needs_later_turn = program.triggered_abilities().iter().any(|ability| {
+        matches!(
+            ability.event(),
+            TriggeredEventProgram::SourceAttacks | TriggeredEventProgram::ControllerUpkeep
+        )
+    });
+    if needs_later_turn
+        || (program
+            .base_creature()
+            .is_some_and(|base| !base.keywords().haste())
+            && (!program.activated_abilities().is_empty()
+                || program
+                    .activated_effects()
+                    .iter()
+                    .any(ActivatedEffectProgram::tap_source)))
     {
         for reserve in &mut library_reserve {
             *reserve = reserve.checked_add(1).ok_or_else(|| {
@@ -469,6 +476,7 @@ fn compile_life_totals(
                 (&mut losses, *players, smoke_amount(*amount)?)
             }
             EffectProgram::DrawCards { .. }
+            | EffectProgram::DiscardHands { .. }
             | EffectProgram::Scry { .. }
             | EffectProgram::ShuffleLibrary { .. }
             | EffectProgram::DestroyPermanent { .. }
@@ -480,15 +488,19 @@ fn compile_life_totals(
             | EffectProgram::MoveChosenObjects { .. }
             | EffectProgram::TapChosenObjects { .. } => continue,
         };
-        let player = smoke_player_index(players);
-        totals[player] = totals[player]
-            .checked_add(u64::from(amount))
-            .ok_or_else(|| {
-                RuntimeSmokeUnsupported::new(
-                    UnsupportedSetupCode::SetupBounds,
-                    "cumulative life delta overflowed",
-                )
-            })?;
+        for (player, selected) in smoke_player_mask(players).into_iter().enumerate() {
+            if selected {
+                totals[player] =
+                    totals[player]
+                        .checked_add(u64::from(amount))
+                        .ok_or_else(|| {
+                            RuntimeSmokeUnsupported::new(
+                                UnsupportedSetupCode::SetupBounds,
+                                "cumulative life delta overflowed",
+                            )
+                        })?;
+            }
+        }
     }
 
     let mut initial = [0_i32; PLAYER_COUNT];
@@ -532,22 +544,29 @@ fn compile_library_reserve(
     for effect in effects {
         match effect {
             EffectProgram::DrawCards { players, count } => {
-                let player = smoke_player_index(*players);
-                draws[player] = draws[player]
-                    .checked_add(smoke_amount(*count)?)
-                    .ok_or_else(|| {
-                        RuntimeSmokeUnsupported::new(
-                            UnsupportedSetupCode::SetupBounds,
-                            "cumulative draw count overflowed",
-                        )
-                    })?;
+                for (player, selected) in smoke_player_mask(*players).into_iter().enumerate() {
+                    if selected {
+                        draws[player] = draws[player]
+                            .checked_add(smoke_amount(*count)?)
+                            .ok_or_else(|| {
+                                RuntimeSmokeUnsupported::new(
+                                    UnsupportedSetupCode::SetupBounds,
+                                    "cumulative draw count overflowed",
+                                )
+                            })?;
+                    }
+                }
             }
             EffectProgram::Scry { players, count } => {
-                let player = smoke_player_index(*players);
-                max_inspection[player] = max_inspection[player].max(smoke_amount(*count)?);
+                for (player, selected) in smoke_player_mask(*players).into_iter().enumerate() {
+                    if selected {
+                        max_inspection[player] = max_inspection[player].max(smoke_amount(*count)?);
+                    }
+                }
             }
             EffectProgram::GainLife { .. }
             | EffectProgram::LoseLife { .. }
+            | EffectProgram::DiscardHands { .. }
             | EffectProgram::ShuffleLibrary { .. }
             | EffectProgram::DestroyPermanent { .. }
             | EffectProgram::ExileObject { .. }
@@ -573,20 +592,34 @@ fn compile_library_reserve(
     Ok(reserve)
 }
 
-const fn smoke_player_index(binding: PlayerBinding) -> usize {
+const fn smoke_player_mask(binding: PlayerBinding) -> [bool; PLAYER_COUNT] {
     match binding {
-        PlayerBinding::Controller => 0,
-        PlayerBinding::Opponents => 1,
+        PlayerBinding::Controller => [true, false],
+        PlayerBinding::Opponents => [false, true],
+        PlayerBinding::AllPlayers => [true, true],
         PlayerBinding::Target(_)
         | PlayerBinding::ControllerOfTargetObject(_)
-        | PlayerBinding::ControllerOfTargetStack(_) => 1,
+        | PlayerBinding::ControllerOfTargetStack(_) => [false, true],
     }
+}
+
+fn smoke_bound_players(
+    binding: PlayerBinding,
+    caster: PlayerId,
+    opponent: PlayerId,
+) -> Vec<PlayerId> {
+    smoke_player_mask(binding)
+        .into_iter()
+        .zip([caster, opponent])
+        .filter_map(|(selected, player)| selected.then_some(player))
+        .collect()
 }
 
 fn smoke_amount(amount: AmountProgram) -> Result<u32, RuntimeSmokeUnsupported> {
     match amount {
         AmountProgram::Literal(amount) => Ok(amount),
         AmountProgram::PowerOfTargetObject(_) => Ok(2),
+        AmountProgram::CountPermanents(_) => Ok(2),
     }
 }
 
@@ -740,6 +773,9 @@ fn execute_smoke(
     }
     let mut registered_triggers = Vec::with_capacity(compiled.program.triggered_abilities().len());
     for (index, ability) in compiled.program.triggered_abilities().iter().enumerate() {
+        if ability.event() != TriggeredEventProgram::SourceEnters {
+            continue;
+        }
         let outcome = execution.dispatch(
             &format!("trigger[{index}].register"),
             Action::RegisterTriggeredAbility {
@@ -807,6 +843,13 @@ fn execute_smoke(
     )?;
 
     if let Some((stack_kind, timing)) = compiled.lifecycle.spell_profile() {
+        pay_spell_additional_costs(
+            &mut execution,
+            &compiled.program,
+            caster,
+            opponent,
+            base_card_id,
+        )?;
         execution.dispatch(
             "cast.add_mana",
             Action::AddManaToPool {
@@ -886,7 +929,40 @@ fn execute_smoke(
         hand_size(&execution.state, opponent)?,
     ];
     let mut hand_delta = [0_i64; PLAYER_COUNT];
-    execute_source_enters_triggers(
+    setup_dynamic_amount_state(
+        &mut execution,
+        &compiled.program,
+        caster,
+        opponent,
+        base_card_id,
+    )?;
+    execute_pending_triggers(
+        &mut execution,
+        &compiled.program,
+        &registered_triggers,
+        registered_triggers.len(),
+        "trigger.source_enters",
+        caster,
+        opponent,
+        base_card_id,
+        &mut hand_delta,
+    )?;
+    for (index, ability) in compiled.program.triggered_abilities().iter().enumerate() {
+        if ability.event() == TriggeredEventProgram::SourceEnters {
+            continue;
+        }
+        let outcome = execution.dispatch(
+            &format!("trigger[{index}].register"),
+            Action::RegisterTriggeredAbility {
+                definition: ability.bind(caster, spell),
+            },
+        )?;
+        let Outcome::TriggerRegistered(trigger) = outcome else {
+            return Err(unexpected_outcome("trigger.register", outcome));
+        };
+        registered_triggers.push((trigger, index));
+    }
+    execute_controller_cast_triggers(
         &mut execution,
         &compiled.program,
         &registered_triggers,
@@ -986,12 +1062,28 @@ fn execute_smoke(
                 error.to_string(),
             )
         })?;
-    dispatch_bound_actions(&mut execution, bound_actions, "effect")?;
+    dispatch_bound_actions(
+        &mut execution,
+        bound_actions,
+        compiled.program.effects(),
+        "effect",
+    )?;
     assert_object_choice_destinations(
         &execution.state,
         compiled.program.effects(),
         &object_choices,
         caster,
+    )?;
+
+    execute_turn_triggers(
+        &mut execution,
+        &compiled.program,
+        &registered_triggers,
+        spell,
+        caster,
+        opponent,
+        base_card_id,
+        &mut hand_delta,
     )?;
 
     let final_life_totals = [
@@ -1060,7 +1152,149 @@ fn execute_smoke(
     })
 }
 
-fn execute_source_enters_triggers(
+fn pay_spell_additional_costs(
+    execution: &mut Execution,
+    program: &CardProgram,
+    caster: PlayerId,
+    opponent: PlayerId,
+    base_card_id: u32,
+) -> Result<(), RuntimeSmokeFailure> {
+    for (cost_index, cost) in program.additional_costs().iter().copied().enumerate() {
+        match cost {
+            SpellAdditionalCostProgram::DiscardCards { count } => {
+                for object_index in 0..count {
+                    let object = expect_object(
+                        execution.dispatch(
+                            &format!("cast.additional[{cost_index}].discard.setup[{object_index}]"),
+                            Action::CreateObject {
+                                card: CardId::new(
+                                    base_card_id
+                                        .wrapping_add(600_000)
+                                        .wrapping_add((cost_index as u32).saturating_mul(1_000))
+                                        .wrapping_add(object_index),
+                                ),
+                                owner: caster,
+                                controller: caster,
+                                zone: ZoneId::new(Some(caster), ZoneKind::Hand),
+                            },
+                        )?,
+                    )?;
+                    execution.dispatch(
+                        &format!("cast.additional[{cost_index}].discard.pay[{object_index}]"),
+                        Action::MoveObject {
+                            object,
+                            to: ZoneId::new(Some(caster), ZoneKind::Graveyard),
+                        },
+                    )?;
+                    assert_zone(
+                        &execution.state,
+                        object,
+                        ZoneId::new(Some(caster), ZoneKind::Graveyard),
+                        "cast.additional.discard_destination",
+                    )?;
+                }
+            }
+            SpellAdditionalCostProgram::SacrificePermanents { count, predicate } => {
+                for object_index in 0..count {
+                    let object = synthesize_object_target(
+                        execution,
+                        TargetKind::Permanent,
+                        TargetPredicate::Object(predicate),
+                        caster,
+                        opponent,
+                        base_card_id
+                            .wrapping_add(700_000)
+                            .wrapping_add((cost_index as u32).saturating_mul(1_000)),
+                        object_index as usize,
+                        &format!("cast.additional[{cost_index}].sacrifice.setup"),
+                    )?;
+                    execution.dispatch(
+                        &format!("cast.additional[{cost_index}].sacrifice.pay[{object_index}]"),
+                        Action::MoveObject {
+                            object,
+                            to: ZoneId::new(Some(caster), ZoneKind::Graveyard),
+                        },
+                    )?;
+                    assert_zone(
+                        &execution.state,
+                        object,
+                        ZoneId::new(Some(caster), ZoneKind::Graveyard),
+                        "cast.additional.sacrifice_destination",
+                    )?;
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn setup_dynamic_amount_state(
+    execution: &mut Execution,
+    program: &CardProgram,
+    caster: PlayerId,
+    opponent: PlayerId,
+    base_card_id: u32,
+) -> Result<(), RuntimeSmokeFailure> {
+    let effects = program
+        .effects()
+        .iter()
+        .chain(
+            program
+                .activated_effects()
+                .iter()
+                .flat_map(|ability| ability.effects()),
+        )
+        .chain(
+            program
+                .triggered_abilities()
+                .iter()
+                .flat_map(|ability| ability.effects()),
+        );
+    let mut predicates = Vec::new();
+    for effect in effects {
+        let amount = match effect {
+            EffectProgram::GainLife { amount, .. } | EffectProgram::LoseLife { amount, .. } => {
+                Some(*amount)
+            }
+            EffectProgram::DrawCards { count, .. }
+            | EffectProgram::Scry { count, .. }
+            | EffectProgram::CreateTokens { count, .. } => Some(*count),
+            EffectProgram::DiscardHands { .. }
+            | EffectProgram::ShuffleLibrary { .. }
+            | EffectProgram::DestroyPermanent { .. }
+            | EffectProgram::ExileObject { .. }
+            | EffectProgram::CounterStackEntry { .. }
+            | EffectProgram::MoveTargetObject { .. }
+            | EffectProgram::SearchLibrary { .. }
+            | EffectProgram::MoveChosenObjects { .. }
+            | EffectProgram::TapChosenObjects { .. } => None,
+        };
+        if let Some(AmountProgram::CountPermanents(predicate)) = amount {
+            if !predicates.contains(&predicate) {
+                predicates.push(predicate);
+            }
+        }
+    }
+    for (predicate_index, predicate) in predicates.into_iter().enumerate() {
+        for object_index in 0..2 {
+            synthesize_object_target(
+                execution,
+                TargetKind::Permanent,
+                TargetPredicate::Object(predicate),
+                caster,
+                opponent,
+                base_card_id
+                    .wrapping_add(800_000)
+                    .wrapping_add((predicate_index as u32).saturating_mul(1_000)),
+                object_index,
+                &format!("setup.dynamic_amount[{predicate_index}]"),
+            )?;
+        }
+    }
+    Ok(())
+}
+
+fn execute_controller_cast_triggers(
     execution: &mut Execution,
     program: &CardProgram,
     registered: &[(TriggerId, usize)],
@@ -1069,29 +1303,322 @@ fn execute_source_enters_triggers(
     base_card_id: u32,
     hand_delta: &mut [i64; PLAYER_COUNT],
 ) -> Result<(), RuntimeSmokeFailure> {
-    if registered.is_empty() {
+    let predicates = program
+        .triggered_abilities()
+        .iter()
+        .filter_map(|ability| match ability.event() {
+            TriggeredEventProgram::ControllerCasts(predicate) => Some(predicate),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    if predicates.is_empty() {
+        return Ok(());
+    }
+
+    let mut types = ObjectTypes::none();
+    let mut forbidden = ObjectTypes::none();
+    for predicate in &predicates {
+        types = types.union(predicate.required_types());
+        forbidden = forbidden.union(predicate.forbidden_types());
+        if predicate.required_any_types() != ObjectTypes::none() {
+            types = types.union(pick_one_type(predicate.required_any_types()));
+        }
+    }
+    if types == ObjectTypes::none() {
+        for candidate in [
+            ObjectTypes::none().with_instant(),
+            ObjectTypes::none().with_sorcery(),
+            ObjectTypes::none().with_creature(),
+            ObjectTypes::none().with_artifact(),
+            ObjectTypes::none().with_enchantment(),
+            ObjectTypes::none().with_planeswalker(),
+        ] {
+            if !candidate.intersects(forbidden) {
+                types = candidate;
+                break;
+            }
+        }
+    }
+    let satisfies_all = predicates.iter().all(|predicate| {
+        types.contains_all(predicate.required_types())
+            && (predicate.required_any_types() == ObjectTypes::none()
+                || types.intersects(predicate.required_any_types()))
+            && !types.intersects(predicate.forbidden_types())
+    });
+    if !satisfies_all || types.land() {
+        return Err(RuntimeSmokeFailure::new(
+            RuntimeSmokeFailureCode::UnexpectedOutcome,
+            "trigger.controller_cast.setup",
+            "cast-trigger predicates have no shared castable type",
+        ));
+    }
+    let categories = usize::from(types.instant())
+        + usize::from(types.sorcery())
+        + usize::from(
+            types.artifact() || types.creature() || types.enchantment() || types.planeswalker(),
+        );
+    if categories != 1 {
+        return Err(RuntimeSmokeFailure::new(
+            RuntimeSmokeFailureCode::UnexpectedOutcome,
+            "trigger.controller_cast.setup",
+            "cast-trigger predicates require incompatible spell categories",
+        ));
+    }
+    let (kind, timing) = if types.instant() {
+        (StackObjectKind::InstantSpell, SpellTiming::Instant)
+    } else if types.sorcery() {
+        (StackObjectKind::SorcerySpell, SpellTiming::Sorcery)
+    } else {
+        (StackObjectKind::PermanentSpell, SpellTiming::Sorcery)
+    };
+
+    let object = expect_object(execution.dispatch(
+        "trigger.controller_cast.create",
+        Action::CreateObject {
+            card: CardId::new(base_card_id.wrapping_add(900_000)),
+            owner: caster,
+            controller: caster,
+            zone: ZoneId::new(Some(caster), ZoneKind::Hand),
+        },
+    )?)?;
+    execution.dispatch(
+        "trigger.controller_cast.characteristics",
+        Action::SetBaseObjectCharacteristics {
+            object,
+            base: BaseObjectCharacteristics::new(types, ObjectColors::none()),
+        },
+    )?;
+    if types.creature() {
+        execution.dispatch(
+            "trigger.controller_cast.creature",
+            Action::SetBaseCreatureCharacteristics {
+                object,
+                base: BaseCreatureCharacteristics::new(2, 2),
+            },
+        )?;
+    }
+    let cost = forge_core::ManaCost::new(0, 0, 0, 0, 0, 0);
+    let payment = auto_payment_plan(ManaPool::empty(), cost)
+        .map_err(|error| {
+            RuntimeSmokeFailure::new(
+                RuntimeSmokeFailureCode::UnexpectedOutcome,
+                "trigger.controller_cast.payment",
+                format!("payment planner failed: {error:?}"),
+            )
+        })?
+        .ok_or_else(|| {
+            RuntimeSmokeFailure::new(
+                RuntimeSmokeFailureCode::UnexpectedOutcome,
+                "trigger.controller_cast.payment",
+                "zero-cost test spell did not produce a payment plan",
+            )
+        })?;
+    let outcome = execution.dispatch(
+        "trigger.controller_cast.cast",
+        Action::CastSpell {
+            player: caster,
+            object,
+            request: CastSpellRequest::new(kind, timing, cost, payment),
+        },
+    )?;
+    let Outcome::StackEntryAdded(test_spell) = outcome else {
+        return Err(unexpected_outcome("trigger.controller_cast.cast", outcome));
+    };
+    execute_pending_triggers(
+        execution,
+        program,
+        registered,
+        predicates.len(),
+        "trigger.controller_cast",
+        caster,
+        opponent,
+        base_card_id.wrapping_add(910_000),
+        hand_delta,
+    )?;
+    resolve_stack_entry(execution, test_spell)?;
+    Ok(())
+}
+
+fn execute_turn_triggers(
+    execution: &mut Execution,
+    program: &CardProgram,
+    registered: &[(TriggerId, usize)],
+    source: ObjectId,
+    caster: PlayerId,
+    opponent: PlayerId,
+    base_card_id: u32,
+    hand_delta: &mut [i64; PLAYER_COUNT],
+) -> Result<(), RuntimeSmokeFailure> {
+    let starting_turn = execution.state.turn_number();
+    let upkeep_count = program
+        .triggered_abilities()
+        .iter()
+        .filter(|ability| ability.event() == TriggeredEventProgram::ControllerUpkeep)
+        .count();
+    if upkeep_count != 0 {
+        let before = smoke_hand_sizes(&execution.state, caster, opponent)?;
+        advance_to_controller_step(
+            execution,
+            caster,
+            Step::Upkeep,
+            starting_turn,
+            true,
+            "trigger.controller_upkeep.wait",
+        )?;
+        record_hand_size_change(
+            hand_delta,
+            before,
+            smoke_hand_sizes(&execution.state, caster, opponent)?,
+        );
+        execute_pending_triggers(
+            execution,
+            program,
+            registered,
+            upkeep_count,
+            "trigger.controller_upkeep",
+            caster,
+            opponent,
+            base_card_id.wrapping_add(920_000),
+            hand_delta,
+        )?;
+    }
+
+    let attack_count = program
+        .triggered_abilities()
+        .iter()
+        .filter(|ability| ability.event() == TriggeredEventProgram::SourceAttacks)
+        .count();
+    if attack_count != 0 {
+        let before = smoke_hand_sizes(&execution.state, caster, opponent)?;
+        advance_to_controller_step(
+            execution,
+            caster,
+            Step::DeclareAttackers,
+            starting_turn,
+            upkeep_count == 0,
+            "trigger.source_attacks.wait",
+        )?;
+        record_hand_size_change(
+            hand_delta,
+            before,
+            smoke_hand_sizes(&execution.state, caster, opponent)?,
+        );
+        let outcome = execution.dispatch(
+            "trigger.source_attacks.declare",
+            Action::DeclareAttackers {
+                player: caster,
+                attacks: vec![AttackDeclaration::new(source, opponent)],
+            },
+        )?;
+        if !matches!(outcome, Outcome::Applied) {
+            return Err(unexpected_outcome(
+                "trigger.source_attacks.declare",
+                outcome,
+            ));
+        }
+        execute_pending_triggers(
+            execution,
+            program,
+            registered,
+            attack_count,
+            "trigger.source_attacks",
+            caster,
+            opponent,
+            base_card_id.wrapping_add(930_000),
+            hand_delta,
+        )?;
+    }
+    Ok(())
+}
+
+fn advance_to_controller_step(
+    execution: &mut Execution,
+    controller: PlayerId,
+    target: Step,
+    starting_turn: u32,
+    require_future_turn: bool,
+    phase: &str,
+) -> Result<(), RuntimeSmokeFailure> {
+    for transition in 0..80 {
+        if execution.state.active_player() == Some(controller)
+            && execution.state.current_step() == Some(target)
+            && (!require_future_turn || execution.state.turn_number() > starting_turn)
+        {
+            return Ok(());
+        }
+        if execution.state.priority_player().is_none() {
+            let outcome = execution.dispatch(
+                &format!("{phase}.advance[{transition}]"),
+                Action::AdvanceStep,
+            )?;
+            if !matches!(outcome, Outcome::StepAdvanced(_)) {
+                return Err(unexpected_outcome(phase, outcome));
+            }
+        } else {
+            finish_empty_stack_step(execution, &format!("{phase}.step[{transition}]"))?;
+        }
+    }
+    Err(RuntimeSmokeFailure::new(
+        RuntimeSmokeFailureCode::UnexpectedOutcome,
+        phase,
+        format!("did not reach controller step {target:?}"),
+    ))
+}
+
+fn smoke_hand_sizes(
+    state: &GameState,
+    caster: PlayerId,
+    opponent: PlayerId,
+) -> Result<[usize; PLAYER_COUNT], RuntimeSmokeFailure> {
+    Ok([hand_size(state, caster)?, hand_size(state, opponent)?])
+}
+
+fn record_hand_size_change(
+    hand_delta: &mut [i64; PLAYER_COUNT],
+    before: [usize; PLAYER_COUNT],
+    after: [usize; PLAYER_COUNT],
+) {
+    for player in 0..PLAYER_COUNT {
+        hand_delta[player] = hand_delta[player].saturating_add(
+            i64::try_from(after[player]).unwrap_or(i64::MAX)
+                - i64::try_from(before[player]).unwrap_or(i64::MAX),
+        );
+    }
+}
+
+fn execute_pending_triggers(
+    execution: &mut Execution,
+    program: &CardProgram,
+    registered: &[(TriggerId, usize)],
+    expected_count: usize,
+    phase: &str,
+    caster: PlayerId,
+    opponent: PlayerId,
+    base_card_id: u32,
+    hand_delta: &mut [i64; PLAYER_COUNT],
+) -> Result<(), RuntimeSmokeFailure> {
+    if expected_count == 0 {
         return Ok(());
     }
     let outcome = execution.dispatch(
-        "trigger.put_pending",
+        &format!("{phase}.put_pending"),
         Action::PutPendingTriggeredAbilitiesOnStack,
     )?;
     let Outcome::StackEntriesAdded(entries) = outcome else {
-        return Err(unexpected_outcome("trigger.put_pending", outcome));
+        return Err(unexpected_outcome(&format!("{phase}.put_pending"), outcome));
     };
-    if entries.len() != registered.len() {
+    if entries.len() != expected_count {
         return Err(RuntimeSmokeFailure::new(
             RuntimeSmokeFailureCode::UnexpectedOutcome,
-            "trigger.put_pending",
+            format!("{phase}.put_pending"),
             format!(
-                "expected {} source-enter trigger(s), found {}",
-                registered.len(),
+                "expected {expected_count} trigger(s), found {}",
                 entries.len()
             ),
         ));
     }
 
-    for resolution_index in 0..registered.len() {
+    for resolution_index in 0..expected_count {
         let stack_entry = execution
             .state
             .stack_entries()
@@ -1099,7 +1626,7 @@ fn execute_source_enters_triggers(
             .ok_or_else(|| {
                 RuntimeSmokeFailure::new(
                     RuntimeSmokeFailureCode::UnexpectedOutcome,
-                    format!("trigger.resolve[{resolution_index}]"),
+                    format!("{phase}.resolve[{resolution_index}]"),
                     "trigger stack entry is missing",
                 )
             })?
@@ -1107,7 +1634,7 @@ fn execute_source_enters_triggers(
         let trigger = stack_entry.trigger().ok_or_else(|| {
             RuntimeSmokeFailure::new(
                 RuntimeSmokeFailureCode::UnexpectedOutcome,
-                format!("trigger.resolve[{resolution_index}]"),
+                format!("{phase}.resolve[{resolution_index}]"),
                 "top stack entry is not a registered trigger",
             )
         })?;
@@ -1119,7 +1646,7 @@ fn execute_source_enters_triggers(
             .ok_or_else(|| {
                 RuntimeSmokeFailure::new(
                     RuntimeSmokeFailureCode::UnexpectedOutcome,
-                    format!("trigger.resolve[{resolution_index}]"),
+                    format!("{phase}.resolve[{resolution_index}]"),
                     "trigger has no compiled card-program binding",
                 )
             })?;
@@ -1166,6 +1693,7 @@ fn execute_source_enters_triggers(
         dispatch_bound_actions(
             execution,
             actions,
+            ability.effects(),
             &format!("trigger[{ability_index}].effect"),
         )?;
         assert_object_choice_destinations(
@@ -1375,7 +1903,12 @@ fn execute_activated_effects(
             return Err(unexpected_outcome("activated.put_on_stack", stack));
         };
         resolve_stack_entry(execution, entry)?;
-        dispatch_bound_actions(execution, actions, &format!("{phase}.effect"))?;
+        dispatch_bound_actions(
+            execution,
+            actions,
+            ability.effects(),
+            &format!("{phase}.effect"),
+        )?;
         assert_object_choice_destinations(
             &execution.state,
             ability.effects(),
@@ -1416,26 +1949,43 @@ fn prepare_effect_bindings_and_hand_delta(
     for (index, effect) in effects.iter().enumerate() {
         match effect {
             EffectProgram::DrawCards { players, count } => {
-                let player = smoke_player_index(*players);
-                hand_delta[player] = hand_delta[player].saturating_add(i64::from(
-                    smoke_amount(*count).map_err(|unsupported| {
-                        RuntimeSmokeFailure::new(
-                            RuntimeSmokeFailureCode::UnexpectedOutcome,
-                            format!("{phase}[{index}]"),
-                            unsupported.detail().to_owned(),
-                        )
-                    })?,
-                ));
+                let count = i64::from(smoke_amount(*count).map_err(|unsupported| {
+                    RuntimeSmokeFailure::new(
+                        RuntimeSmokeFailureCode::UnexpectedOutcome,
+                        format!("{phase}[{index}]"),
+                        unsupported.detail().to_owned(),
+                    )
+                })?);
+                for (player, selected) in smoke_player_mask(*players).into_iter().enumerate() {
+                    if selected {
+                        hand_delta[player] = hand_delta[player].saturating_add(count);
+                    }
+                }
+            }
+            EffectProgram::DiscardHands { players } => {
+                for (player_index, selected) in smoke_player_mask(*players).into_iter().enumerate()
+                {
+                    if !selected {
+                        continue;
+                    }
+                    let player = [caster, opponent][player_index];
+                    let hand = state
+                        .zone_objects(ZoneId::new(Some(player), ZoneKind::Hand))
+                        .ok_or_else(|| {
+                            RuntimeSmokeFailure::new(
+                                RuntimeSmokeFailureCode::UnexpectedOutcome,
+                                format!("{phase}[{index}]"),
+                                "discard player has no hand zone",
+                            )
+                        })?;
+                    hand_delta[player_index] = hand_delta[player_index]
+                        .saturating_sub(i64::try_from(hand.len()).unwrap_or(i64::MAX));
+                }
             }
             EffectProgram::Scry { players, .. } => {
-                let player = match players {
-                    PlayerBinding::Controller => caster,
-                    PlayerBinding::Opponents => opponent,
-                    PlayerBinding::Target(_)
-                    | PlayerBinding::ControllerOfTargetObject(_)
-                    | PlayerBinding::ControllerOfTargetStack(_) => opponent,
-                };
-                bindings = bindings.with_scry_bottom(index, player, Vec::new());
+                for player in smoke_bound_players(*players, caster, opponent) {
+                    bindings = bindings.with_scry_bottom(index, player, Vec::new());
+                }
             }
             EffectProgram::MoveChosenObjects {
                 choice,
@@ -1491,6 +2041,7 @@ fn prepare_effect_bindings_and_hand_delta(
 fn dispatch_bound_actions(
     execution: &mut Execution,
     actions: Vec<forge_cards::runtime::BoundAction>,
+    effects: &[EffectProgram],
     phase: &str,
 ) -> Result<(), RuntimeSmokeFailure> {
     for bound in actions {
@@ -1530,6 +2081,39 @@ fn dispatch_bound_actions(
                     "effect.create_token",
                     format!("created object {object:?} does not match its exact token template"),
                 ));
+            }
+            if let Some(EffectProgram::CreateTokens {
+                mana_ability: Some(program),
+                ..
+            }) = effects.get(bound.effect_index())
+            {
+                for (choice, output) in program
+                    .output_choices()
+                    .options()
+                    .iter()
+                    .copied()
+                    .enumerate()
+                {
+                    let definition = program
+                        .bind_selected(controller, object, output)
+                        .ok_or_else(|| {
+                            RuntimeSmokeFailure::new(
+                                RuntimeSmokeFailureCode::UnexpectedOutcome,
+                                "effect.create_token.ability",
+                                "registered token mana output was rejected by its own program",
+                            )
+                        })?;
+                    let registered = execution.dispatch(
+                        &format!("{phase}[{}].token_ability[{choice}]", bound.effect_index()),
+                        Action::RegisterActivatedAbility { definition },
+                    )?;
+                    if !matches!(registered, Outcome::ActivatedAbilityRegistered(_)) {
+                        return Err(unexpected_outcome(
+                            "effect.create_token.ability",
+                            registered,
+                        ));
+                    }
+                }
             }
         }
     }
@@ -2275,6 +2859,37 @@ card "Activated Effect Source" {
   }
 }
 "#;
+    const EVENT_TRIGGER_SOURCE: &str = r#"
+card "Event Trigger Source" {
+  id: "forge:testkit:runtime:event-triggers"
+  layout: normal
+  status: unverified_playable
+  face "Event Trigger Source" {
+    cost: "{2}{G}"
+    types: "Creature - Scout"
+    oracle: "Runtime event regression fixture."
+    power: "2"
+    toughness: "2"
+    keywords: []
+    ability triggered {
+      event: event_enters(source())
+      effect: draw(1, you())
+    }
+    ability triggered {
+      event: event_cast(spells(type_is("creature")), you())
+      effect: draw(1, you())
+    }
+    ability triggered {
+      event: event_upkeep(you())
+      effect: draw(1, you())
+    }
+    ability triggered {
+      event: event_attacks(source())
+      effect: draw(1, you())
+    }
+  }
+}
+"#;
 
     #[test]
     fn supported_life_spell_executes_and_reaches_owner_graveyard() {
@@ -2377,6 +2992,27 @@ card "Activated Effect Source" {
         );
         assert_eq!(pass.effect_actions(), 2);
         assert_eq!(pass.final_life_totals(), [19, 20]);
+        assert_eq!(pass.destination(), "battlefield");
+    }
+
+    #[test]
+    fn enter_cast_upkeep_and_attack_triggers_execute_once_each() {
+        let definition = parse("event_trigger_source.frs", EVENT_TRIGGER_SOURCE);
+        let report = run_translated_card_runtime_smoke(&definition);
+        let RuntimeSmokeResult::Passed(pass) = report.result() else {
+            panic!("expected pass, found {:?}", report.result());
+        };
+        assert_eq!(pass.effect_actions(), 4);
+        assert_eq!(
+            pass.capabilities(),
+            [
+                RuntimeSmokeCapability::PermanentSpell,
+                RuntimeSmokeCapability::DrawCards,
+                RuntimeSmokeCapability::DrawCards,
+                RuntimeSmokeCapability::DrawCards,
+                RuntimeSmokeCapability::DrawCards,
+            ]
+        );
         assert_eq!(pass.destination(), "battlefield");
     }
 

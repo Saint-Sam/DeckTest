@@ -2613,6 +2613,29 @@ pub enum TriggerCondition {
         /// Optional resolution-outcome filter.
         outcome: Option<ResolutionOutcome>,
     },
+    /// Match an attack declaration by a selected object.
+    AttackDeclared {
+        /// Attacking object selector.
+        attacker: TriggerObjectFilter,
+    },
+    /// Match a step beginning for a selected active player.
+    StepBeganFor {
+        /// Step that must begin.
+        step: Step,
+        /// Required active player.
+        player: TriggerPlayerFilter,
+    },
+    /// Match a newly cast/copied stack object with closed type constraints.
+    StackEntryAdded {
+        /// Required stack-entry controller.
+        controller: TriggerPlayerFilter,
+        /// Types the stack object's source card must contain.
+        required_types: ObjectTypes,
+        /// Type union from which the source card must match at least one.
+        required_any_types: ObjectTypes,
+        /// Types the source card must not contain.
+        forbidden_types: ObjectTypes,
+    },
 }
 
 impl TriggerCondition {
@@ -2627,6 +2650,9 @@ impl TriggerCondition {
             Self::LifeGained { .. } => GameEventKind::LifeGained,
             Self::DamageMarked { .. } => GameEventKind::DamageMarked,
             Self::StackEntryResolved { .. } => GameEventKind::StackEntryResolved,
+            Self::AttackDeclared { .. } => GameEventKind::AttackDeclared,
+            Self::StepBeganFor { .. } => GameEventKind::StepBegan,
+            Self::StackEntryAdded { .. } => GameEventKind::StackEntryAdded,
         }
     }
 
@@ -2639,6 +2665,9 @@ impl TriggerCondition {
             Self::LifeGained { .. } => 4,
             Self::DamageMarked { .. } => 5,
             Self::StackEntryResolved { .. } => 6,
+            Self::AttackDeclared { .. } => 7,
+            Self::StepBeganFor { .. } => 8,
+            Self::StackEntryAdded { .. } => 9,
         }
     }
 }
@@ -10164,6 +10193,39 @@ impl GameState {
                     false
                 }
             }
+            TriggerCondition::AttackDeclared { attacker } => {
+                matches!(event, GameEvent::AttackDeclared { attacker: event_attacker, .. }
+                    if self.trigger_object_matches(definition, attacker, event_attacker))
+            }
+            TriggerCondition::StepBeganFor { step, player } => {
+                matches!(event, GameEvent::StepBegan { step: event_step } if event_step == step)
+                    && self.active_player.is_some_and(|active| {
+                        self.trigger_player_matches(definition, player, active)
+                    })
+            }
+            TriggerCondition::StackEntryAdded {
+                controller,
+                required_types,
+                required_any_types,
+                forbidden_types,
+            } => {
+                let GameEvent::StackEntryAdded {
+                    controller: event_controller,
+                    object: Some(object),
+                    ..
+                } = event
+                else {
+                    return false;
+                };
+                let Ok(characteristics) = self.object_characteristics(object) else {
+                    return false;
+                };
+                self.trigger_player_matches(definition, controller, event_controller)
+                    && characteristics.types().contains_all(required_types)
+                    && (required_any_types == ObjectTypes::none()
+                        || characteristics.types().intersects(required_any_types))
+                    && !characteristics.types().intersects(forbidden_types)
+            }
         }
     }
 
@@ -13952,6 +14014,24 @@ impl Fnva64 {
                     None => self.write_u8(0),
                 }
             }
+            TriggerCondition::AttackDeclared { attacker } => {
+                self.write_trigger_object_filter(attacker);
+            }
+            TriggerCondition::StepBeganFor { step, player } => {
+                self.write_u8(step.canonical_code());
+                self.write_trigger_player_filter(player);
+            }
+            TriggerCondition::StackEntryAdded {
+                controller,
+                required_types,
+                required_any_types,
+                forbidden_types,
+            } => {
+                self.write_trigger_player_filter(controller);
+                self.write_object_types(required_types);
+                self.write_object_types(required_any_types);
+                self.write_object_types(forbidden_types);
+            }
         }
     }
 
@@ -15152,6 +15232,24 @@ impl CanonicalBytes {
                     }
                     None => self.write_u8(0),
                 }
+            }
+            TriggerCondition::AttackDeclared { attacker } => {
+                self.write_trigger_object_filter(attacker);
+            }
+            TriggerCondition::StepBeganFor { step, player } => {
+                self.write_u8(step.canonical_code());
+                self.write_trigger_player_filter(player);
+            }
+            TriggerCondition::StackEntryAdded {
+                controller,
+                required_types,
+                required_any_types,
+                forbidden_types,
+            } => {
+                self.write_trigger_player_filter(controller);
+                self.write_object_types(required_types);
+                self.write_object_types(required_any_types);
+                self.write_object_types(forbidden_types);
             }
         }
     }
