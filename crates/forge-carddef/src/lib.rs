@@ -1247,6 +1247,8 @@ operations! {
     PayEnergyCost => ("pay_energy_cost", Cost, 1, Some(1)),
     ClassLevelUp => ("class_level_up", Effect, 3, Some(3)),
     PersistentMana => ("persistent_mana", Effect, 1, Some(1)),
+    ManaSpentAmount => ("mana_spent_amount", Value, 0, Some(1)),
+    RemoveAllCounters => ("remove_all_counters", Effect, 1, Some(1)),
 }
 
 impl Operation {
@@ -2448,6 +2450,8 @@ impl Operation {
                 _ => None,
             },
             Self::PersistentMana => Some(Effect),
+            Self::ManaSpentAmount => Some(Text),
+            Self::RemoveAllCounters => Some(Selector),
             Self::ChooseNumber => match index {
                 0 => Some(Selector),
                 1 | 2 => Some(Number),
@@ -2836,6 +2840,8 @@ mod tests {
         assert_eq!(Operation::PayEnergyCost as u32, 447);
         assert_eq!(Operation::ClassLevelUp as u32, 448);
         assert_eq!(Operation::PersistentMana as u32, 449);
+        assert_eq!(Operation::ManaSpentAmount as u32, 450);
+        assert_eq!(Operation::RemoveAllCounters as u32, 451);
 
         let config = bincode::config::standard()
             .with_fixed_int_encoding()

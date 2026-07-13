@@ -3989,6 +3989,69 @@ fn map_player_property_value(name: &str, value: &str) -> Result<Expression, Mapp
 }
 
 fn map_count_value(name: &str, value: &str) -> Result<Expression, MappingDiagnostic> {
+    if let Some(operation) = value.strip_prefix("TimesKicked") {
+        let kicked = call(Operation::TimesKicked, vec![]);
+        return match operation {
+            "" => Ok(kicked),
+            "/Twice" => Ok(call(
+                Operation::ScaleValue,
+                vec![kicked, Expression::Integer(2)],
+            )),
+            "/Thrice" => Ok(call(
+                Operation::ScaleValue,
+                vec![kicked, Expression::Integer(3)],
+            )),
+            value if value.starts_with("/Plus.") => Ok(call(
+                Operation::AddValue,
+                vec![
+                    kicked,
+                    Expression::Integer(positive_integer(
+                        value.trim_start_matches("/Plus."),
+                        "TimesKicked",
+                    )?),
+                ],
+            )),
+            value if value.starts_with("/Times.") => Ok(call(
+                Operation::ScaleValue,
+                vec![
+                    kicked,
+                    Expression::Integer(positive_integer(
+                        value.trim_start_matches("/Times."),
+                        "TimesKicked",
+                    )?),
+                ],
+            )),
+            _ => Err(diagnostic(
+                "UNSUPPORTED_VALUE_SVAR",
+                &format!("value SVar `{name}` count `{value}` has no exact lowering"),
+            )),
+        };
+    }
+    if value == "LifeOppsLostThisTurn" {
+        return Ok(call(
+            Operation::HistoryCount,
+            vec![
+                call(Operation::Opponent, vec![]),
+                Expression::Text("life_lost_this_turn".to_string()),
+            ],
+        ));
+    }
+    if let Some(filter) = value.strip_prefix("CastTotalManaSpent") {
+        let filter = filter.trim();
+        if filter.is_empty() {
+            return Ok(call(Operation::ManaSpentAmount, vec![]));
+        }
+        if !matches!(filter, "Snow" | "Treasure" | "Cave" | "Desert") {
+            return Err(diagnostic(
+                "UNSUPPORTED_VALUE_SVAR",
+                &format!("value SVar `{name}` count `{value}` has no exact lowering"),
+            ));
+        }
+        return Ok(call(
+            Operation::ManaSpentAmount,
+            vec![Expression::Text(filter.to_ascii_lowercase())],
+        ));
+    }
     if value == "xPaid" {
         return Ok(call(Operation::PaidX, vec![]));
     }
@@ -4171,6 +4234,9 @@ fn map_characteristic_value(
     selector: Expression,
     value: &str,
 ) -> Result<Expression, MappingDiagnostic> {
+    if value == "CastTotalManaSpent" {
+        return Ok(call(Operation::ManaSpentAmount, vec![]));
+    }
     let operation = match value {
         "CardPower" => Operation::Power,
         "CardToughness" => Operation::Toughness,
@@ -12966,7 +13032,7 @@ fn map_move_counter(
         .map(String::as_str)
         .unwrap_or("1")
     {
-        "Any" => -1,
+        "Any" | "All" => -1,
         value => positive_integer(value, "CounterNum")?,
     };
     mapped_direct(
@@ -15939,7 +16005,29 @@ fn map_remove_counter(
             "AILogic",
         ],
     )?;
-    let amount = positive_integer(required(parameters, "CounterNum")?, "CounterNum")?;
+    let counter_type = required(parameters, "CounterType")?;
+    let amount = parameters
+        .get("CounterNum")
+        .map(String::as_str)
+        .unwrap_or(if counter_type == "All" { "All" } else { "1" });
+    if counter_type == "All" {
+        if amount != "All" {
+            return Err(unsupported_value("CounterNum", amount));
+        }
+        return mapped_direct(
+            prefix,
+            api,
+            parameters,
+            call(
+                Operation::RemoveAllCounters,
+                vec![object_selector(parameters, DefaultSelector::Source)?],
+            ),
+        );
+    }
+    let amount = match amount {
+        "All" => -1,
+        value => positive_integer(value, "CounterNum")?,
+    };
     mapped_direct(
         prefix,
         api,
@@ -15948,7 +16036,7 @@ fn map_remove_counter(
             Operation::RemoveCounters,
             vec![
                 object_selector(parameters, DefaultSelector::Source)?,
-                Expression::Text(required(parameters, "CounterType")?.to_ascii_lowercase()),
+                Expression::Text(counter_type.to_ascii_lowercase()),
                 Expression::Integer(amount),
             ],
         ),
@@ -17600,6 +17688,8 @@ fn normalize_mana(value: &str, amount: i64) -> Result<String, MappingDiagnostic>
         "any_color".to_string()
     } else if value == "Combo ColorIdentity" {
         "command_color_identity".to_string()
+    } else if value == "Combo Any" {
+        "any_combination_of_colors".to_string()
     } else if let Some(colors) = value.strip_prefix("Combo ") {
         let choices = colors
             .split_whitespace()
@@ -22745,6 +22835,61 @@ mod tests {
             Operation::PersistentMana
         ));
         assert!(map_line("A:DB$ Mana | Produced$ R | PersistentMana$ False").is_err());
+
+        let combo = map_line("A:AB$ Mana | Produced$ Combo Any | Amount$ 5")
+            .unwrap_or_else(|error| panic!("combo-any mana should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &combo.expression,
+            Operation::AddMana
+        ));
+
+        for (count, operation) in [
+            ("TimesKicked", Operation::TimesKicked),
+            ("TimesKicked/Plus.1", Operation::AddValue),
+            ("TimesKicked/Times.3", Operation::ScaleValue),
+            ("TimesKicked/Twice", Operation::ScaleValue),
+            ("TimesKicked/Thrice", Operation::ScaleValue),
+        ] {
+            let script = format!("A:DB$ Draw | NumCards$ X\nSVar:X:Count${count}\n");
+            let kicked = map_script_root(&script)
+                .unwrap_or_else(|error| panic!("times-kicked value should map: {}", error.message));
+            assert!(expression_contains_operation(&kicked.expression, operation));
+        }
+
+        for (count, operation) in [
+            ("LifeOppsLostThisTurn", Operation::HistoryCount),
+            ("CastTotalManaSpent", Operation::ManaSpentAmount),
+            ("CastTotalManaSpent Snow", Operation::ManaSpentAmount),
+            ("CastTotalManaSpent Treasure", Operation::ManaSpentAmount),
+        ] {
+            let script = format!("A:DB$ Draw | NumCards$ X\nSVar:X:Count${count}\n");
+            let mapped = map_script_root(&script).unwrap_or_else(|error| {
+                panic!("history/mana-spent value should map: {}", error.message)
+            });
+            assert!(expression_contains_operation(&mapped.expression, operation));
+        }
+        assert!(map_script_root(
+            "A:DB$ Draw | NumCards$ X\nSVar:X:Count$CastTotalManaSpent Unknown\n"
+        )
+        .is_err());
+
+        let remove_all = map_line(
+            "A:DB$ RemoveCounter | ValidTgts$ Permanent | CounterType$ All | CounterNum$ All",
+        )
+        .unwrap_or_else(|error| panic!("remove-all counters should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &remove_all.expression,
+            Operation::RemoveAllCounters
+        ));
+
+        let move_all = map_line(
+            "A:SP$ MoveCounter | ValidTgts$ Creature | CounterType$ All | CounterNum$ All",
+        )
+        .unwrap_or_else(|error| panic!("move-all counters should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &move_all.expression,
+            Operation::MoveCounter
+        ));
 
         let reveal = map_line(
             "A:SP$ Reveal | Defined$ You | RevealValid$ Card.Blue | AnyNumber$ True | RememberRevealed$ True",
