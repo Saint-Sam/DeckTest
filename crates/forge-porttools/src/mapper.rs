@@ -1806,6 +1806,32 @@ fn map_with_context_unconditioned(
     } else {
         None
     };
+    let created_power = if matches!(api, "Clone" | "CopyPermanent") {
+        parameter_map
+            .get("SetPower")
+            .map(|value| {
+                value
+                    .parse::<i64>()
+                    .map(Expression::Integer)
+                    .map_or_else(|_| resolve_value_svar(value, context), Ok)
+            })
+            .transpose()?
+    } else {
+        None
+    };
+    let created_toughness = if matches!(api, "Clone" | "CopyPermanent") {
+        parameter_map
+            .get("SetToughness")
+            .map(|value| {
+                value
+                    .parse::<i64>()
+                    .map(Expression::Integer)
+                    .map_or_else(|_| resolve_value_svar(value, context), Ok)
+            })
+            .transpose()?
+    } else {
+        None
+    };
     let imprint_result = if matches!(
         api,
         "ChangeZone" | "ChangeZoneAll" | "Dig" | "Mill" | "Seek"
@@ -2099,6 +2125,8 @@ fn map_with_context_unconditioned(
         || nonlegendary_copy
         || token_power.is_some()
         || token_toughness.is_some()
+        || created_power.is_some()
+        || created_toughness.is_some()
         || imprint_result
         || remember_lki_result
         || accumulate_damage
@@ -2142,6 +2170,8 @@ fn map_with_context_unconditioned(
                 && (!nonlegendary_copy || field.key.as_deref() != Some("NonLegendary"))
                 && (token_power.is_none() || field.key.as_deref() != Some("TokenPower"))
                 && (token_toughness.is_none() || field.key.as_deref() != Some("TokenToughness"))
+                && (created_power.is_none() || field.key.as_deref() != Some("SetPower"))
+                && (created_toughness.is_none() || field.key.as_deref() != Some("SetToughness"))
                 && (!imprint_result || field.key.as_deref() != Some("Imprint"))
                 && (!remember_lki_result || field.key.as_deref() != Some("RememberLKI"))
                 && (!accumulate_damage || field.key.as_deref() != Some("DamageMap"))
@@ -2306,6 +2336,15 @@ fn map_with_context_unconditioned(
         mapped.expression = call(Operation::CreatedPower, vec![mapped.expression, power]);
     }
     if let Some(toughness) = token_toughness {
+        mapped.expression = call(
+            Operation::CreatedToughness,
+            vec![mapped.expression, toughness],
+        );
+    }
+    if let Some(power) = created_power {
+        mapped.expression = call(Operation::CreatedPower, vec![mapped.expression, power]);
+    }
+    if let Some(toughness) = created_toughness {
         mapped.expression = call(
             Operation::CreatedToughness,
             vec![mapped.expression, toughness],
@@ -2674,6 +2713,69 @@ fn extract_legacy_conditions(
             _ => return Err(unsupported_value("ConditionPlayerTurn", value)),
         });
     }
+    if let Some(value) = parameters.get("CheckDefinedPlayer") {
+        conditions.push(match value.as_str() {
+            "You.isMonarch" => call(
+                Operation::DesignationIs,
+                vec![Expression::Text("you_are_monarch".to_string())],
+            ),
+            "Opponent.isMonarch" => call(
+                Operation::DesignationIs,
+                vec![Expression::Text("opponent_is_monarch".to_string())],
+            ),
+            "You.hasInitiative" => call(
+                Operation::DesignationIs,
+                vec![Expression::Text("you_have_initiative".to_string())],
+            ),
+            "You.committedCrimeThisTurn" => call(
+                Operation::GreaterThan,
+                vec![
+                    call(
+                        Operation::HistoryCount,
+                        vec![
+                            call(Operation::You, vec![]),
+                            Expression::Text("committed_crime_this_turn".to_string()),
+                        ],
+                    ),
+                    Expression::Integer(0),
+                ],
+            ),
+            _ => return Err(unsupported_value("CheckDefinedPlayer", value)),
+        });
+    }
+    if let Some(value) = parameters.get("WerewolfTransformCondition") {
+        if value != "True" {
+            return Err(unsupported_value("WerewolfTransformCondition", value));
+        }
+        conditions.push(call(
+            Operation::Equals,
+            vec![
+                call(
+                    Operation::HistoryCount,
+                    vec![
+                        call(Operation::Spells, vec![]),
+                        Expression::Text("cast_last_turn".to_string()),
+                    ],
+                ),
+                Expression::Integer(0),
+            ],
+        ));
+    }
+    if let Some(value) = parameters.get("WerewolfUntransformCondition") {
+        if value != "True" {
+            return Err(unsupported_value("WerewolfUntransformCondition", value));
+        }
+        conditions.push(call(
+            Operation::GreaterThan,
+            vec![
+                call(
+                    Operation::PlayerAggregate,
+                    vec![Expression::Text("max_spells_cast_last_turn".to_string())],
+                ),
+                Expression::Integer(1),
+            ],
+        ));
+    }
     if let Some(value) = parameters.get("Revolt") {
         match value.as_str() {
             "True" => conditions.push(call(Operation::RevoltOccurred, vec![])),
@@ -2723,6 +2825,9 @@ fn extract_legacy_conditions(
                     | "ActivatorThisTurnCast"
                     | "OpponentTurn"
                     | "ConditionPlayerTurn"
+                    | "CheckDefinedPlayer"
+                    | "WerewolfTransformCondition"
+                    | "WerewolfUntransformCondition"
                     | "Revolt"
                     | "Delirium"
                     | "ConditionManaSpent"
@@ -15518,6 +15623,8 @@ fn map_copy_permanent(
             "AttachedTo",
             "RememberTokens",
             "AtEOT",
+            "SetPower",
+            "SetToughness",
             "TgtPrompt",
             "SpellDescription",
             "StackDescription",
@@ -18969,6 +19076,24 @@ fn append_keyword_grants(
     for keyword in keywords.split(" & ") {
         if keyword == "HIDDEN CARDNAME's power and toughness are switched" {
             let mut effect = call(Operation::SwitchPt, vec![affected.clone()]);
+            if let Some(duration) = duration {
+                effect = call(
+                    Operation::ApplyDuration,
+                    vec![effect, Expression::Text(duration.to_string())],
+                );
+            }
+            effects.push(effect);
+            continue;
+        }
+        if let Some(cost) = keyword.strip_prefix("Ward:") {
+            let amount = cost
+                .parse::<i64>()
+                .ok()
+                .filter(|amount| (1..=20).contains(amount))
+                .ok_or_else(|| unsupported_value("AddKeyword", keyword))?;
+            let mut arguments = vec![affected.clone()];
+            arguments.extend(parse_simple_cost(Some(&amount.to_string()))?);
+            let mut effect = call(Operation::WardCost, arguments);
             if let Some(duration) = duration {
                 effect = call(
                     Operation::ApplyDuration,
@@ -22998,6 +23123,70 @@ mod tests {
             ));
         }
         assert!(map_line("A:DB$ Scry | ScryNum$ 2 | ConditionPlayerTurn$ Maybe").is_err());
+
+        for (condition, operation) in [
+            ("You.isMonarch", Operation::DesignationIs),
+            ("Opponent.isMonarch", Operation::DesignationIs),
+            ("You.hasInitiative", Operation::DesignationIs),
+            ("You.committedCrimeThisTurn", Operation::HistoryCount),
+        ] {
+            let script = format!(
+                "T:Mode$ Phase | Phase$ End of Turn | ValidPlayer$ You | CheckDefinedPlayer$ {condition} | Execute$ TrigDraw\nSVar:TrigDraw:DB$ Draw | NumCards$ 1\n"
+            );
+            let mapped = map_script_root(&script).unwrap_or_else(|error| {
+                panic!("defined-player condition should map: {}", error.message)
+            });
+            assert!(expression_contains_operation(&mapped.expression, operation));
+        }
+        assert!(map_script_root(concat!(
+            "T:Mode$ Phase | Phase$ End of Turn | ValidPlayer$ You | CheckDefinedPlayer$ You.unknownDesignation | Execute$ TrigDraw\n",
+            "SVar:TrigDraw:DB$ Draw | NumCards$ 1\n",
+        ))
+        .is_err());
+
+        for (key, operation) in [
+            ("WerewolfTransformCondition", Operation::HistoryCount),
+            ("WerewolfUntransformCondition", Operation::PlayerAggregate),
+        ] {
+            let script = format!(
+                "T:Mode$ Phase | Phase$ Upkeep | {key}$ True | Execute$ TrigTransform\nSVar:TrigTransform:DB$ SetState | Defined$ Self | Mode$ Transform\n"
+            );
+            let mapped = map_script_root(&script).unwrap_or_else(|error| {
+                panic!("closed werewolf condition should map: {}", error.message)
+            });
+            assert!(expression_contains_operation(&mapped.expression, operation));
+            let invalid = script.replace("$ True", "$ False");
+            assert!(map_script_root(&invalid).is_err());
+        }
+
+        for ward in ["Ward:1", "Ward:2", "Ward:4"] {
+            let mapped = map_line(&format!(
+                "A:SP$ Pump | ValidTgts$ Creature | KW$ {ward} | Duration$ UntilEndOfTurn"
+            ))
+            .unwrap_or_else(|error| panic!("numeric ward should map: {}", error.message));
+            assert!(expression_contains_operation(
+                &mapped.expression,
+                Operation::WardCost
+            ));
+        }
+        assert!(map_line("A:SP$ Pump | ValidTgts$ Creature | KW$ Ward:X").is_err());
+
+        let sized_copy = map_script_root(
+            "A:SP$ CopyPermanent | ValidTgts$ Permanent.nonAura+YouCtrl | SetPower$ 0 | SetToughness$ 0\n",
+        )
+        .unwrap_or_else(|error| panic!("sized permanent copy should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &sized_copy.expression,
+            Operation::CreatedPower
+        ));
+        assert!(expression_contains_operation(
+            &sized_copy.expression,
+            Operation::CreatedToughness
+        ));
+        assert!(map_script_root(
+            "A:SP$ CopyPermanent | ValidTgts$ Permanent | SetPower$ MissingValue\n"
+        )
+        .is_err());
 
         let doubled = map_line("A:DB$ Pump | ValidTgts$ Creature | NumAtt$ Double")
             .unwrap_or_else(|error| panic!("double-power pump should map: {}", error.message));
