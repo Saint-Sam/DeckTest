@@ -3489,6 +3489,11 @@ pub enum RestrictionEffect {
         /// Rule change to apply.
         rule: PlayerRule,
     },
+    /// One exact permanent cannot be destroyed.
+    Indestructible {
+        /// Permanent protected from destruction.
+        object: ObjectId,
+    },
 }
 
 impl RestrictionEffect {
@@ -3497,6 +3502,7 @@ impl RestrictionEffect {
             Self::Targeting { .. } => 0,
             Self::Combat { .. } => 1,
             Self::PlayerRule { .. } => 2,
+            Self::Indestructible { .. } => 3,
         }
     }
 }
@@ -3507,6 +3513,7 @@ pub struct RestrictionDefinition {
     controller: PlayerId,
     source: Option<ObjectId>,
     effect: RestrictionEffect,
+    duration: ContinuousEffectDuration,
 }
 
 impl RestrictionDefinition {
@@ -3517,6 +3524,7 @@ impl RestrictionDefinition {
             controller,
             source: None,
             effect,
+            duration: ContinuousEffectDuration::Persistent,
         }
     }
 
@@ -3524,6 +3532,13 @@ impl RestrictionDefinition {
     #[must_use]
     pub const fn with_source(mut self, source: ObjectId) -> Self {
         self.source = Some(source);
+        self
+    }
+
+    /// Returns this restriction with an explicit duration.
+    #[must_use]
+    pub const fn with_duration(mut self, duration: ContinuousEffectDuration) -> Self {
+        self.duration = duration;
         self
     }
 
@@ -3543,6 +3558,12 @@ impl RestrictionDefinition {
     #[must_use]
     pub const fn effect(self) -> RestrictionEffect {
         self.effect
+    }
+
+    /// Returns the restriction duration.
+    #[must_use]
+    pub const fn duration(self) -> ContinuousEffectDuration {
+        self.duration
     }
 }
 
@@ -9497,6 +9518,11 @@ impl GameState {
                     }
                 }
             },
+            RestrictionEffect::Indestructible { object } => {
+                if self.objects.get(object).is_none() {
+                    return Err(StateError::UnknownObject(object));
+                }
+            }
         }
         let id = RestrictionId(self.next_restriction);
         self.next_restriction = self.next_restriction.saturating_add(1);
@@ -13176,14 +13202,14 @@ impl GameState {
                 StateBasedActionKind::CreatureZeroOrLessToughness => creature.toughness() <= 0,
                 StateBasedActionKind::CreatureLethalDamage => {
                     creature.toughness() > 0
-                        && !creature.keywords().indestructible()
+                        && !self.object_is_indestructible(object.id())
                         && object.damage_marked() > 0
                         && object.damage_marked()
                             >= u32::try_from(creature.toughness()).unwrap_or(u32::MAX)
                 }
                 StateBasedActionKind::CreatureDeathtouchDamage => {
                     creature.toughness() > 0
-                        && !creature.keywords().indestructible()
+                        && !self.object_is_indestructible(object.id())
                         && object.deathtouch_damage_marked()
                 }
                 _ => false,
@@ -13744,6 +13770,21 @@ impl GameState {
         })
     }
 
+    fn object_is_indestructible(&self, object: ObjectId) -> bool {
+        self.object_characteristics(object)
+            .ok()
+            .and_then(ObjectCharacteristics::creature)
+            .is_some_and(|creature| creature.keywords().indestructible())
+            || self.restrictions.iter().any(|subscription| {
+                self.restriction_source_is_active(subscription.definition)
+                    && matches!(
+                        subscription.definition.effect(),
+                        RestrictionEffect::Indestructible { object: protected }
+                            if protected == object
+                    )
+            })
+    }
+
     fn player_rule_subject_matches(
         &self,
         definition: RestrictionDefinition,
@@ -13984,11 +14025,7 @@ impl GameState {
         if self.object_zone(object) != Some(ZoneId::new(None, ZoneKind::Battlefield)) {
             return Err(StateError::ObjectNotOnBattlefield(object));
         }
-        let characteristics = self.object_characteristics(object)?;
-        if characteristics
-            .creature()
-            .is_some_and(|creature| creature.keywords().indestructible())
-        {
+        if self.object_is_indestructible(object) {
             return Ok(());
         }
         let owner = self
@@ -14025,7 +14062,9 @@ impl GameState {
             .expire_duration_markers(EffectDuration::UntilEndOfTurn)
             .saturating_add(
                 self.expire_continuous_effects(ContinuousEffectDuration::UntilEndOfTurn),
-            )) as u32;
+            )
+            .saturating_add(self.expire_restrictions(ContinuousEffectDuration::UntilEndOfTurn)))
+            as u32;
         let expired_this_turn = self.expire_duration_markers(EffectDuration::ThisTurn) as u32;
         Ok(CleanupReport {
             discarded,
@@ -14341,6 +14380,13 @@ impl GameState {
         self.continuous_effects
             .retain(|effect| effect.definition.duration() != duration);
         before - self.continuous_effects.len()
+    }
+
+    fn expire_restrictions(&mut self, duration: ContinuousEffectDuration) -> usize {
+        let before = self.restrictions.len();
+        self.restrictions
+            .retain(|restriction| restriction.definition.duration() != duration);
+        before - self.restrictions.len()
     }
 
     fn require_player(&self, id: PlayerId) -> Result<(), StateError> {
@@ -15004,6 +15050,7 @@ impl Fnva64 {
                 self.write_player_rule_subject(subject);
                 self.write_player_rule(rule);
             }
+            RestrictionEffect::Indestructible { object } => self.write_u32(object.0),
         }
     }
 
@@ -15011,6 +15058,7 @@ impl Fnva64 {
         self.write_u32(definition.controller.0);
         self.write_optional_object(definition.source);
         self.write_restriction_effect(definition.effect);
+        self.write_u8(definition.duration.canonical_code());
     }
 
     fn write_restriction_subscription(&mut self, subscription: RestrictionSubscription) {
@@ -16307,6 +16355,7 @@ impl CanonicalBytes {
                 self.write_player_rule_subject(subject);
                 self.write_player_rule(rule);
             }
+            RestrictionEffect::Indestructible { object } => self.write_u32(object.0),
         }
     }
 
@@ -16314,6 +16363,7 @@ impl CanonicalBytes {
         self.write_u32(definition.controller.0);
         self.write_optional_object(definition.source);
         self.write_restriction_effect(definition.effect);
+        self.write_u8(definition.duration.canonical_code());
     }
 
     fn write_restriction_subscription(&mut self, subscription: RestrictionSubscription) {
@@ -20850,6 +20900,143 @@ mod tests {
         assert_eq!(state.duration_marker_count(EffectDuration::ThisTurn), 0);
         assert_eq!(state.last_cleanup_report().expired_until_end_of_turn(), 1);
         assert_eq!(state.last_cleanup_report().expired_this_turn(), 1);
+    }
+
+    #[test]
+    fn temporary_hexproof_and_indestructible_apply_to_objects_and_expire() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let opponent = state.add_player();
+        ensure_library_card(&mut state, active);
+        let artifact = state
+            .create_object(
+                CardId::new(26_100),
+                active,
+                active,
+                ZoneId::new(None, ZoneKind::Battlefield),
+            )
+            .unwrap_or_else(|error| panic!("unexpected artifact create error: {error:?}"));
+        state
+            .set_base_object_characteristics(
+                artifact,
+                BaseObjectCharacteristics::new(
+                    ObjectTypes::none().with_artifact(),
+                    ObjectColors::none(),
+                ),
+            )
+            .unwrap_or_else(|error| panic!("unexpected artifact characteristics error: {error:?}"));
+        let creature =
+            battlefield_creature(&mut state, active, 26_101, 2, 2, CreatureKeywords::none());
+        for definition in [
+            RestrictionDefinition::new(
+                active,
+                RestrictionEffect::Targeting {
+                    subject: TargetRestrictionSubject::Object(creature),
+                    restriction: TargetRestriction::Hexproof,
+                },
+            ),
+            RestrictionDefinition::new(
+                active,
+                RestrictionEffect::Indestructible { object: artifact },
+            ),
+            RestrictionDefinition::new(
+                active,
+                RestrictionEffect::Indestructible { object: creature },
+            ),
+        ] {
+            state
+                .register_restriction(
+                    definition.with_duration(ContinuousEffectDuration::UntilEndOfTurn),
+                )
+                .unwrap_or_else(|error| {
+                    panic!("unexpected temporary restriction error: {error:?}")
+                });
+        }
+
+        let requirements = [TargetRequirement::new(TargetKind::Permanent)];
+        assert!(state
+            .validate_target_choices(
+                opponent,
+                None,
+                &requirements,
+                &[TargetChoice::Object(creature)],
+            )
+            .is_err());
+        assert!(state
+            .validate_target_choices(
+                active,
+                None,
+                &requirements,
+                &[TargetChoice::Object(creature)],
+            )
+            .is_ok());
+        assert_eq!(
+            apply(&mut state, Action::DestroyPermanent { object: artifact }),
+            Outcome::Applied
+        );
+        assert_eq!(
+            state.object_zone(artifact),
+            Some(ZoneId::new(None, ZoneKind::Battlefield))
+        );
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::MarkDamageOnObject {
+                    object: creature,
+                    amount: 2,
+                },
+            ),
+            Outcome::Applied
+        );
+        assert!(matches!(
+            apply(&mut state, Action::CheckStateBasedActions),
+            Outcome::StateBasedActions(report) if report.actions_performed() == 0
+        ));
+
+        state
+            .start_turn(active)
+            .unwrap_or_else(|error| panic!("unexpected start error: {error:?}"));
+        while state.current_step() != Some(Step::Cleanup) {
+            state
+                .advance_step()
+                .unwrap_or_else(|error| panic!("unexpected cleanup walk error: {error:?}"));
+        }
+        assert_eq!(state.last_cleanup_report().expired_until_end_of_turn(), 3);
+        assert_eq!(state.restrictions().count(), 0);
+        assert!(state
+            .validate_target_choices(
+                opponent,
+                None,
+                &requirements,
+                &[TargetChoice::Object(creature)],
+            )
+            .is_ok());
+        assert_eq!(
+            apply(&mut state, Action::DestroyPermanent { object: artifact }),
+            Outcome::Applied
+        );
+        assert_eq!(
+            state.object_zone(artifact),
+            Some(ZoneId::new(Some(active), ZoneKind::Graveyard))
+        );
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::MarkDamageOnObject {
+                    object: creature,
+                    amount: 2,
+                },
+            ),
+            Outcome::Applied
+        );
+        assert!(matches!(
+            apply(&mut state, Action::CheckStateBasedActions),
+            Outcome::StateBasedActions(report) if report.actions_performed() == 1
+        ));
+        assert_eq!(
+            state.object_zone(creature),
+            Some(ZoneId::new(Some(active), ZoneKind::Graveyard))
+        );
     }
 
     #[test]

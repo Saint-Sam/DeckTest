@@ -498,6 +498,8 @@ fn compile_life_totals(
             | EffectProgram::TapChosenObjects { .. }
             | EffectProgram::ModifyPowerToughness { .. }
             | EffectProgram::GrantKeywords { .. }
+            | EffectProgram::GrantTargetingRestriction { .. }
+            | EffectProgram::GrantIndestructible { .. }
             | EffectProgram::AttachSourceToTarget { .. }
             | EffectProgram::AddCountersToSource { .. } => continue,
         };
@@ -591,6 +593,8 @@ fn compile_library_reserve(
             | EffectProgram::TapChosenObjects { .. }
             | EffectProgram::ModifyPowerToughness { .. }
             | EffectProgram::GrantKeywords { .. }
+            | EffectProgram::GrantTargetingRestriction { .. }
+            | EffectProgram::GrantIndestructible { .. }
             | EffectProgram::AttachSourceToTarget { .. }
             | EffectProgram::AddCountersToSource { .. } => {}
         }
@@ -1342,6 +1346,8 @@ fn setup_dynamic_amount_state(
             | EffectProgram::MoveChosenObjects { .. }
             | EffectProgram::TapChosenObjects { .. }
             | EffectProgram::GrantKeywords { .. }
+            | EffectProgram::GrantTargetingRestriction { .. }
+            | EffectProgram::GrantIndestructible { .. }
             | EffectProgram::AttachSourceToTarget { .. }
             | EffectProgram::AddCountersToSource { .. } => [None, None],
         };
@@ -2225,6 +2231,8 @@ fn prepare_effect_bindings_and_hand_delta(
             | EffectProgram::TapChosenObjects { .. }
             | EffectProgram::ModifyPowerToughness { .. }
             | EffectProgram::GrantKeywords { .. }
+            | EffectProgram::GrantTargetingRestriction { .. }
+            | EffectProgram::GrantIndestructible { .. }
             | EffectProgram::AttachSourceToTarget { .. }
             | EffectProgram::AddCountersToSource { .. } => {}
         }
@@ -3134,6 +3142,22 @@ card "Equipment Trigger Source" {
   }
 }
 "#;
+    const HEROIC_INTERVENTION: &str = r#"
+card "Heroic Intervention" {
+  id: "24882fa2-3fe9-4c1b-aa3d-0e6488b9db27"
+  layout: normal
+  status: unverified_playable
+  face "Heroic Intervention" {
+    cost: "{1}{G}"
+    types: "Instant"
+    oracle: "Permanents you control gain hexproof and indestructible until end of turn."
+    keywords: []
+    ability spell {
+      effect: sequence(grant_keyword(permanents(controlled_by(you())), "hexproof", "until_end_of_turn"), grant_keyword(permanents(controlled_by(you())), "indestructible", "until_end_of_turn"))
+    }
+  }
+}
+"#;
 
     #[test]
     fn supported_life_spell_executes_and_reaches_owner_graveyard() {
@@ -3284,6 +3308,24 @@ card "Equipment Trigger Source" {
         );
         assert_eq!(pass.destination(), "battlefield");
         assert_ne!(pass.final_hash(), 0);
+    }
+
+    #[test]
+    fn heroic_intervention_executes_object_level_protection() {
+        let definition = parse("heroic_intervention.frs", HEROIC_INTERVENTION);
+        let report = run_translated_card_runtime_smoke(&definition);
+        let RuntimeSmokeResult::Passed(pass) = report.result() else {
+            panic!("expected pass, found {:?}", report.result());
+        };
+        assert_eq!(
+            pass.capabilities(),
+            [
+                RuntimeSmokeCapability::TargetingRestriction,
+                RuntimeSmokeCapability::Indestructible,
+            ]
+        );
+        assert!(pass.effect_actions() >= 2);
+        assert_eq!(pass.destination(), "owner_graveyard");
     }
 
     #[test]

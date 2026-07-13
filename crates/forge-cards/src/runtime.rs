@@ -193,6 +193,8 @@ pub enum Capability {
     AttachObject,
     /// Apply a typed targeting restriction to an object.
     TargetingRestriction,
+    /// Prevent one or more exact permanents from being destroyed.
+    Indestructible,
     /// Add typed counters to an object.
     AddCounters,
     /// Apply a typed combat declaration restriction.
@@ -226,6 +228,7 @@ impl Capability {
             Self::ModifyPlayerRules => "modify_player_rules",
             Self::AttachObject => "attach_object",
             Self::TargetingRestriction => "targeting_restriction",
+            Self::Indestructible => "indestructible",
             Self::AddCounters => "add_counters",
             Self::CombatRestriction => "combat_restriction",
         }
@@ -614,6 +617,22 @@ pub enum EffectProgram {
         /// Exact continuous-effect duration.
         duration: ContinuousEffectDuration,
     },
+    /// Grant an object-level targeting restriction for a represented duration.
+    GrantTargetingRestriction {
+        /// Objects protected when the effect resolves.
+        objects: ObjectSetProgram,
+        /// Exact targeting restriction granted.
+        restriction: TargetRestriction,
+        /// Exact restriction duration.
+        duration: ContinuousEffectDuration,
+    },
+    /// Prevent exact objects from being destroyed for a represented duration.
+    GrantIndestructible {
+        /// Objects protected when the effect resolves.
+        objects: ObjectSetProgram,
+        /// Exact restriction duration.
+        duration: ContinuousEffectDuration,
+    },
     /// Attach the executing ability's source to one announced object target.
     AttachSourceToTarget {
         /// Object target slot.
@@ -996,6 +1015,8 @@ impl EffectProgram {
             Self::ModifyPowerToughness { .. } | Self::GrantKeywords { .. } => {
                 Capability::ModifyCharacteristics
             }
+            Self::GrantTargetingRestriction { .. } => Capability::TargetingRestriction,
+            Self::GrantIndestructible { .. } => Capability::Indestructible,
             Self::AttachSourceToTarget { .. } => Capability::AttachObject,
             Self::AddCountersToSource { .. } => Capability::AddCounters,
         }
@@ -3269,15 +3290,62 @@ fn compile_effect(
                     "object set, represented creature keyword, and duration",
                 ));
             };
-            let objects =
-                compile_effect_object_set(objects, &format!("{path}.objects"), compiler, true)?;
-            let keywords = compile_granted_creature_keyword(keyword, &format!("{path}.keyword"))?;
             let duration = compile_effect_duration(duration, &format!("{path}.duration"))?;
-            compiler.effects.push(EffectProgram::GrantKeywords {
-                objects,
-                keywords,
-                duration,
-            });
+            let Expression::Text(keyword_name) = keyword else {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::EffectArguments,
+                    format!("{path}.keyword"),
+                    "granted keyword is not text",
+                ));
+            };
+            match keyword_name.as_str() {
+                "hexproof" | "shroud" => {
+                    let objects = compile_effect_object_set(
+                        objects,
+                        &format!("{path}.objects"),
+                        compiler,
+                        false,
+                    )?;
+                    let restriction = if keyword_name == "hexproof" {
+                        TargetRestriction::Hexproof
+                    } else {
+                        TargetRestriction::Shroud
+                    };
+                    compiler
+                        .effects
+                        .push(EffectProgram::GrantTargetingRestriction {
+                            objects,
+                            restriction,
+                            duration,
+                        });
+                }
+                "indestructible" => {
+                    let objects = compile_effect_object_set(
+                        objects,
+                        &format!("{path}.objects"),
+                        compiler,
+                        false,
+                    )?;
+                    compiler
+                        .effects
+                        .push(EffectProgram::GrantIndestructible { objects, duration });
+                }
+                _ => {
+                    let objects = compile_effect_object_set(
+                        objects,
+                        &format!("{path}.objects"),
+                        compiler,
+                        true,
+                    )?;
+                    let keywords =
+                        compile_granted_creature_keyword(keyword, &format!("{path}.keyword"))?;
+                    compiler.effects.push(EffectProgram::GrantKeywords {
+                        objects,
+                        keywords,
+                        duration,
+                    });
+                }
+            }
             Ok(())
         }
         unsupported => Err(CompileDiagnostic::new(
@@ -5586,6 +5654,41 @@ fn bind_effect_actions(
                     });
                 }
             }
+            EffectProgram::GrantTargetingRestriction {
+                objects,
+                restriction,
+                duration,
+            } => {
+                for object in resolve_object_set(state, *objects, bindings, effect_index)? {
+                    actions.push(BoundAction {
+                        effect_index,
+                        action: Action::RegisterRestriction {
+                            definition: RestrictionDefinition::new(
+                                bindings.controller,
+                                RestrictionEffect::Targeting {
+                                    subject: TargetRestrictionSubject::Object(object),
+                                    restriction: *restriction,
+                                },
+                            )
+                            .with_duration(*duration),
+                        },
+                    });
+                }
+            }
+            EffectProgram::GrantIndestructible { objects, duration } => {
+                for object in resolve_object_set(state, *objects, bindings, effect_index)? {
+                    actions.push(BoundAction {
+                        effect_index,
+                        action: Action::RegisterRestriction {
+                            definition: RestrictionDefinition::new(
+                                bindings.controller,
+                                RestrictionEffect::Indestructible { object },
+                            )
+                            .with_duration(*duration),
+                        },
+                    });
+                }
+            }
             EffectProgram::AttachSourceToTarget { target } => {
                 let source = bindings.source.ok_or_else(|| {
                     ExecutionDiagnostic::new(
@@ -5973,7 +6076,7 @@ mod tests {
         apply, Action, ActivationCondition, BaseCreatureCharacteristics, BaseObjectCharacteristics,
         BasicLandTypes, CardId, GameState, ManaKind, ManaPool, ObjectColors, ObjectSubtype,
         ObjectSupertypes, ObjectTargetPredicate, ObjectTypes, Outcome, StackObjectKind,
-        TargetChoice, TargetControllerPredicate, ZoneId, ZoneKind,
+        TargetChoice, TargetControllerPredicate, TargetKind, TargetRequirement, ZoneId, ZoneKind,
     };
 
     const SWORDS: &str = r#"
@@ -6021,6 +6124,22 @@ card "Sol Ring" {
       costs: [tap_self()]
       effect: add_mana("2 x {C}", you())
       mana_ability: true
+    }
+  }
+}
+"#;
+    const HEROIC_INTERVENTION: &str = r#"
+card "Heroic Intervention" {
+  id: "24882fa2-3fe9-4c1b-aa3d-0e6488b9db27"
+  layout: normal
+  status: unverified_playable
+  face "Heroic Intervention" {
+    cost: "{1}{G}"
+    types: "Instant"
+    oracle: "Permanents you control gain hexproof and indestructible until end of turn."
+    keywords: []
+    ability spell {
+      effect: sequence(grant_keyword(permanents(controlled_by(you())), "hexproof", "until_end_of_turn"), grant_keyword(permanents(controlled_by(you())), "indestructible", "until_end_of_turn"))
     }
   }
 }
@@ -6798,6 +6917,80 @@ card "Interpreter Contract" {
         let requirement = program.object_choice_requirements()[0];
         let elf = ObjectSubtype::parse("Elf").expect("fixture subtype is valid");
         assert!(requirement.required_subtypes().contains(elf));
+    }
+
+    #[test]
+    fn heroic_intervention_protects_each_controlled_permanent() {
+        let program = compile_card_program(&parse("heroic_intervention.frs", HEROIC_INTERVENTION))
+            .unwrap_or_else(|error| panic!("unexpected compile error: {error}"));
+        assert_eq!(
+            program.capabilities(),
+            vec![Capability::TargetingRestriction, Capability::Indestructible]
+        );
+        let mut state = GameState::new();
+        let caster = add_player(&mut state);
+        let opponent = add_player(&mut state);
+        let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+        let artifact = create_object(&mut state, CardId::new(2_200), caster, battlefield);
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::SetBaseObjectCharacteristics {
+                    object: artifact,
+                    base: BaseObjectCharacteristics::new(
+                        ObjectTypes::none().with_artifact(),
+                        ObjectColors::none(),
+                    ),
+                },
+            ),
+            Outcome::Applied
+        );
+        let creature = create_object(&mut state, CardId::new(2_201), caster, battlefield);
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::SetBaseObjectCharacteristics {
+                    object: creature,
+                    base: BaseObjectCharacteristics::new(
+                        ObjectTypes::none().with_creature(),
+                        ObjectColors::none().with_green(),
+                    ),
+                },
+            ),
+            Outcome::Applied
+        );
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::SetBaseCreatureCharacteristics {
+                    object: creature,
+                    base: BaseCreatureCharacteristics::new(2, 2),
+                },
+            ),
+            Outcome::Applied
+        );
+
+        let trace = execute_program(
+            &mut state,
+            &program,
+            &ExecutionBindings::new(caster, vec![opponent]),
+        )
+        .unwrap_or_else(|error| panic!("unexpected execution error: {error}"));
+        assert_eq!(trace.records().len(), 4);
+        assert_eq!(state.restrictions().count(), 4);
+        assert!(state
+            .validate_target_choices(
+                opponent,
+                None,
+                &[TargetRequirement::new(TargetKind::Permanent)],
+                &[TargetChoice::Object(creature)],
+            )
+            .is_err());
+        assert_eq!(
+            apply(&mut state, Action::DestroyPermanent { object: artifact }),
+            Outcome::Applied
+        );
+        assert_eq!(state.object_zone(artifact), Some(battlefield));
     }
 
     fn parse(path: &str, source: &str) -> forge_carddef::CardDefinition {
