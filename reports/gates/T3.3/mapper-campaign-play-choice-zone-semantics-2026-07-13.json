@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-13T04:47:19Z",
+  "task": "T3.3",
+  "batch": "play permissions, choices, attachment, and active-zone semantics wave",
+  "technical_result": "pass",
+  "product_binding": {
+    "exact_product_commit": "c98d77f8948773b762bbb88772eb1db79a392489",
+    "exact_product_tree": "074b463b415c32dcc0d9fa1f3807ac564b4491b1"
+  },
+  "source_binding": {
+    "legacy_forge_commit": "1f0a3e0815822d8f58f798e0304b33d4534248b1",
+    "translation_fingerprint": "07feab9260809c48c19dd47213e8cc31"
+  },
+  "verification_environment": {
+    "local_only": true,
+    "github_actions_used": false,
+    "network_attempted": false,
+    "install_performed": false,
+    "worker_ceiling": 24,
+    "shared_cargo_cache": true
+  },
+  "coverage_delta": {
+    "before": {"complete_scripts": 17367, "mapped_ability_uses": 28019, "owner_priority_complete": 236},
+    "after": {
+      "complete_scripts": 17770,
+      "total_scripts": 33290,
+      "complete_script_percent": 53.37939321117452,
+      "mapped_ability_uses": 28578,
+      "total_ability_uses": 43649,
+      "mapped_ability_percent": 65.47229031592934,
+      "owner_priority_complete": 251,
+      "owner_priority_requested": 365,
+      "quarantined_scripts": 15520,
+      "quarantined_ability_uses": 15071
+    },
+    "gain": {"complete_scripts": 403, "mapped_ability_uses": 559, "owner_priority_complete": 15}
+  },
+  "line_coverage": {
+    "covered": 37048,
+    "count": 45453,
+    "percent": 81.50837128462368,
+    "floor_percent": 80,
+    "raw_report_sha256": "80566f2af2f21198c62ad0c14896915384ee08fecd154d55ce6e2af7ba860684"
+  },
+  "planner": {
+    "analyzed_scripts": 33290,
+    "scripts_with_confirmed_blockers": 13935,
+    "confirmed_observations": 23110,
+    "unique_blocker_families": 5837,
+    "linked_root_fanout": 23647
+  },
+  "checkpoint_gates": {
+    "full_workspace_tests": true,
+    "clippy_warnings_denied": true,
+    "compiler_roundtrips": true,
+    "database_validation": true,
+    "oracle_subsets_passed": true,
+    "nightmare_suite_passed": true,
+    "arena_smoke_passed": true,
+    "deterministic_parallel_replay": true,
+    "deterministic_blocker_plan_replay": true
+  },
+  "notes": [
+    "The exact 24-worker checkpoint completed locally in 329 seconds without GitHub Actions.",
+    "The wave adds fail-closed typed semantics for governed play permission, dynamic life costs, no-shuffle search, closed multi-zone and stack moves, face-scoped SVars, mana-spent predicates, unfiltered ChooseCard, qualified ValidCards unions, equal-mana Flashback, direct legacy Attach, Pump keyword choices, and graveyard-active static abilities.",
+    "T3.3 remains active because the 60% complete-script floor is not reached."
+  ]
+}
