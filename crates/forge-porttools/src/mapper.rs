@@ -11084,6 +11084,7 @@ fn map_change_zone(
                 | "RememberedLKI"
                 | "DelayTriggerRememberedLKI"
                 | "ChosenCard"
+                | "Targeted"
                 | "Parent"
                 | "ParentTarget"
                 | "TriggeredSpellAbility"
@@ -14379,6 +14380,7 @@ fn map_trigger_effect(
         (None, Some("UntilTheEndOfYourNextTurn")) => "until_end_of_your_next_turn",
         (None, Some("UntilUntaps")) => "until_source_untaps",
         (None, Some("UntilTheEndOfYourNextUntap")) => "until_end_of_your_next_untap",
+        (None, Some("UntilHostLeavesPlayOrEOT")) => "until_host_leaves_play_or_eot",
         (None, Some(value)) => return Err(unsupported_value("Duration", value)),
     };
     let mut effects = Vec::new();
@@ -14849,6 +14851,15 @@ fn map_animate_with_effects(
                 vec![
                     expression,
                     Expression::Text("until_source_untaps".to_string()),
+                ],
+            );
+        }
+        Some("AsLongAsControl") => {
+            expression = call(
+                Operation::ApplyDuration,
+                vec![
+                    expression,
+                    Expression::Text("while_source_controlled".to_string()),
                 ],
             );
         }
@@ -17235,6 +17246,15 @@ fn map_animate_all_with_effects(
                 ],
             );
         }
+        Some("AsLongAsControl") => {
+            expression = call(
+                Operation::ApplyDuration,
+                vec![
+                    expression,
+                    Expression::Text("while_source_controlled".to_string()),
+                ],
+            );
+        }
         Some(value) => return Err(unsupported_value("Duration", value)),
     }
     if let Some(value) = parameters.get("AtEOT") {
@@ -19239,6 +19259,7 @@ fn pump_duration(
     match parameters.get("Duration").map(String::as_str) {
         None | Some("UntilEndOfTurn") => Ok(Some("until_end_of_turn")),
         Some("UntilYourNextTurn") => Ok(Some("until_your_next_turn")),
+        Some("AsLongAsControl") => Ok(Some("while_source_controlled")),
         Some("UntilUntaps") => Ok(Some("until_source_untaps")),
         Some("Permanent") => Ok(None),
         Some(value) => Err(unsupported_value("Duration", value)),
@@ -19754,6 +19775,7 @@ mod tests {
             "A:DB$ ChangeZone | Origin$ Stack | Destination$ Exile | Defined$ ParentTarget",
             "A:DB$ ChangeZone | Origin$ Library | Destination$ Hand | Defined$ Remembered",
             "A:SP$ ChangeZone | Origin$ Graveyard | Destination$ Battlefield | Defined$ ValidGraveyard Creature.YouOwn+ThisTurnEnteredFrom_Battlefield",
+            "A:DB$ ChangeZone | Origin$ Graveyard | Destination$ Hand | Defined$ Targeted",
         ] {
             let mapped = map_line(line).unwrap_or_else(|error| {
                 panic!("closed defined move should map: {}", error.message)
