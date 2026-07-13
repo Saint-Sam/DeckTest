@@ -1648,7 +1648,12 @@ fn map_with_context_unconditioned(
         (None, Some(value))
             if matches!(
                 value.as_str(),
-                "You" | "Opponent" | "TargetedController" | "Remembered"
+                "You"
+                    | "Opponent"
+                    | "TargetedController"
+                    | "Remembered"
+                    | "TriggeredTarget"
+                    | "TriggeredCardController"
             ) =>
         {
             Some(format!("defined_controller:{}", value.to_ascii_lowercase()))
@@ -20995,6 +21000,22 @@ mod tests {
             &grouped.expression,
             Operation::TargetGroup
         ));
+
+        for controller in ["TriggeredTarget", "TriggeredCardController"] {
+            let grouped = map_script_root(&format!(
+                "A:DB$ Destroy | ValidTgts$ Creature | TargetsWithDefinedController$ {controller}"
+            ))
+            .unwrap_or_else(|error| {
+                panic!(
+                    "defined controller target group should map: {}",
+                    error.message
+                )
+            });
+            assert!(expression_contains_operation(
+                &grouped.expression,
+                Operation::TargetGroup
+            ));
+        }
 
         let alone = map_script_root(concat!(
             "T:Mode$ Attacks | ValidCard$ Creature.YouCtrl | Alone$ True | Execute$ DBPump\n",
