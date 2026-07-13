@@ -1214,6 +1214,21 @@ fn map_with_context(
     context: &MappingContext<'_>,
     stack: &mut Vec<String>,
 ) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    let mut normalized = expression.clone();
+    if let Some(value) = normalized
+        .fields
+        .iter()
+        .find(|field| field.key.as_deref() == Some("Secondary"))
+        .map(|field| field.value.as_str())
+    {
+        if value != "True" {
+            return Err(unsupported_value("Secondary", value));
+        }
+        normalized
+            .fields
+            .retain(|field| field.key.as_deref() != Some("Secondary"));
+    }
+    let expression = &normalized;
     let (unconditioned, presence_condition) = extract_presence_condition(expression)?;
     let (unconditioned, legacy_condition, check_on_resolution) =
         extract_legacy_conditions(&unconditioned, context)?;

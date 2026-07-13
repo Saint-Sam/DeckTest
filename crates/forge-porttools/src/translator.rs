@@ -3502,7 +3502,7 @@ mod tests {
                 concat!(
                     "Name:Trigger Class\n",
                     "K:Class:2:1 U:AddTrigger$ TriggerDraw\n",
-                    "SVar:TriggerDraw:Mode$ Phase | Phase$ End of Turn | ValidPlayer$ You | Execute$ TrigDraw\n",
+                    "SVar:TriggerDraw:Mode$ Phase | Phase$ End of Turn | ValidPlayer$ You | Execute$ TrigDraw | Secondary$ True\n",
                     "SVar:TrigDraw:DB$ Draw | NumCards$ 1\n",
                 ),
                 Operation::GrantTriggeredAbility,
