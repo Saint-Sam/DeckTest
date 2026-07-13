@@ -2107,14 +2107,14 @@ fn translate_etb_counter(
             ));
         }
         Err(_) => {
-            let context = MappingContext::from_script(script);
+            let context = MappingContext::from_line(script, line);
             resolve_value_svar(amount, &context)
                 .map_err(|diagnostic| (line, diagnostic.code.to_string(), diagnostic.message))?
         }
     };
     let condition = condition_svar
         .map(|reference| {
-            let context = MappingContext::from_script(script);
+            let context = MappingContext::from_line(script, line);
             resolve_value_svar(reference, &context)
                 .map(|value| {
                     expression_call(Operation::GreaterThan, vec![value, Expression::Integer(0)])

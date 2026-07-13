@@ -1161,6 +1161,8 @@ operations! {
     EventBlocker => ("event_blocker", Event, 2, Some(2)),
     SearchZones => ("search_zones", Effect, 4, Some(4)),
     SacrificeCount => ("sacrifice_count", Effect, 2, Some(2)),
+    PlayPermissionRules => ("play_permission_rules", Effect, 6, Some(6)),
+    ManaSpent => ("mana_spent", Predicate, 1, Some(1)),
 }
 
 impl Operation {
@@ -1851,6 +1853,13 @@ impl Operation {
                 1 | 3 | 4 => Some(Text),
                 _ => None,
             },
+            Self::PlayPermissionRules => match index {
+                0 | 1 => Some(Selector),
+                2 => Some(Text),
+                3 | 4 => Some(Boolean),
+                5 => Some(Number),
+                _ => None,
+            },
             Self::GrantActivatedAbility => match index {
                 0 => Some(Selector),
                 1 => Some(Effect),
@@ -2121,6 +2130,7 @@ impl Operation {
                 1 => Some(Selector),
                 _ => None,
             },
+            Self::ManaSpent => Some(Text),
             Self::TimingAll => None,
         }
     }
@@ -2417,6 +2427,8 @@ mod tests {
         assert_eq!(Operation::EventBlocker as u32, 361);
         assert_eq!(Operation::SearchZones as u32, 362);
         assert_eq!(Operation::SacrificeCount as u32, 363);
+        assert_eq!(Operation::PlayPermissionRules as u32, 364);
+        assert_eq!(Operation::ManaSpent as u32, 365);
 
         let config = bincode::config::standard()
             .with_fixed_int_encoding()

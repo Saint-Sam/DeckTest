@@ -574,9 +574,35 @@ pub(crate) struct MappingContext<'a> {
 
 impl<'a> MappingContext<'a> {
     pub(crate) fn from_script(script: &'a crate::legacy::LegacyScript) -> Self {
+        Self::from_lines(script.lines.iter())
+    }
+
+    pub(crate) fn from_line(script: &'a crate::legacy::LegacyScript, source_line: usize) -> Self {
+        let mut face_start = 0;
+        let mut face_end = usize::MAX;
+        for line in &script.lines {
+            if !matches!(line.kind, LegacyLineKind::Alternate) {
+                continue;
+            }
+            if line.line < source_line {
+                face_start = line.line;
+            } else {
+                face_end = line.line;
+                break;
+            }
+        }
+        Self::from_lines(
+            script
+                .lines
+                .iter()
+                .filter(|line| line.line > face_start && line.line < face_end),
+        )
+    }
+
+    fn from_lines(lines: impl Iterator<Item = &'a crate::legacy::LegacyLine>) -> Self {
         let mut svars = BTreeMap::new();
         let mut duplicate_svars = BTreeSet::new();
-        for line in &script.lines {
+        for line in lines {
             let LegacyLineKind::SVar { name, expression } = &line.kind else {
                 continue;
             };
@@ -768,7 +794,6 @@ pub(crate) fn map_named_svar_ability(
 pub(crate) fn map_script_abilities(
     script: &crate::legacy::LegacyScript,
 ) -> Result<Vec<MappedScriptAbility>, ScriptMappingFailure> {
-    let context = MappingContext::from_script(script);
     let mut mapped = Vec::new();
     for line in &script.lines {
         let LegacyLineKind::Ability { prefix, expression } = &line.kind else {
@@ -782,6 +807,7 @@ pub(crate) fn map_script_abilities(
                 line: line.line,
                 diagnostic: diagnostic("MALFORMED_API", "ability has no typed selector"),
             })?;
+        let context = MappingContext::from_line(script, line.line);
         let ability =
             map_legacy_ability_in_context(*prefix, expression, &context).map_err(|diagnostic| {
                 ScriptMappingFailure {
@@ -1544,11 +1570,23 @@ fn map_with_context_unconditioned(
         })
         .map(|counter| Ok((counter, resolve_value_svar("X", context)?)))
         .transpose()?;
+    let dynamic_pay_life = parameter_map
+        .get("Cost")
+        .filter(|cost| cost.matches("PayLife<X>").count() == 1)
+        .map(|_| resolve_value_svar("X", context))
+        .transpose()?;
     let mut base_expression = expression.clone();
     if dynamic_subcounter.is_some() {
         for field in &mut base_expression.fields {
             if field.key.as_deref() == Some("Cost") {
                 field.value = field.value.replacen("SubCounter<X/", "SubCounter<2/", 1);
+            }
+        }
+    }
+    if dynamic_pay_life.is_some() {
+        for field in &mut base_expression.fields {
+            if field.key.as_deref() == Some("Cost") {
+                field.value = field.value.replacen("PayLife<X>", "PayLife<1>", 1);
             }
         }
     }
@@ -1690,6 +1728,19 @@ fn map_with_context_unconditioned(
             return Err(diagnostic(
                 "DYNAMIC_LOWERING_MISMATCH",
                 "dynamic SubCounter cost did not produce exactly one typed counter-removal cost",
+            ));
+        }
+    }
+    if let Some(amount) = dynamic_pay_life {
+        let replaced = mapped
+            .costs
+            .iter_mut()
+            .map(|cost| replace_operation_argument(cost, Operation::PayLife, 0, &amount))
+            .sum::<usize>();
+        if replaced != 1 {
+            return Err(diagnostic(
+                "DYNAMIC_LOWERING_MISMATCH",
+                "dynamic PayLife cost did not produce exactly one typed life-payment cost",
             ));
         }
     }
@@ -1870,15 +1921,22 @@ fn map_with_context_unconditioned(
             vec![mapped.expression, effect],
         );
     }
-    if prefix == LegacyAbilityPrefix::Static
-        && parameter_map
+    if prefix == LegacyAbilityPrefix::Static {
+        if let Some(zone) = parameter_map
             .get("EffectZone")
-            .is_some_and(|zone| zone == "Command")
-    {
-        mapped.expression = call(
-            Operation::ActiveInZone,
-            vec![mapped.expression, Expression::Text("command".to_string())],
-        );
+            .and_then(|zone| match zone.as_str() {
+                "Command" => Some("command"),
+                "Graveyard" => Some("graveyard"),
+                "Exile" => Some("exile"),
+                "Stack" => Some("stack"),
+                _ => None,
+            })
+        {
+            mapped.expression = call(
+                Operation::ActiveInZone,
+                vec![mapped.expression, Expression::Text(zone.to_string())],
+            );
+        }
     }
     Ok(mapped)
 }
@@ -2055,6 +2113,20 @@ fn extract_legacy_conditions(
             _ => return Err(unsupported_value("Delirium", value)),
         }
     }
+    if let Some(value) = parameters.get("ConditionManaSpent") {
+        let colors = value.split_whitespace().collect::<Vec<_>>();
+        if colors.is_empty()
+            || colors
+                .iter()
+                .any(|color| !matches!(*color, "W" | "U" | "B" | "R" | "G" | "C"))
+        {
+            return Err(unsupported_value("ConditionManaSpent", value));
+        }
+        conditions.push(call(
+            Operation::ManaSpent,
+            vec![Expression::Text(colors.join(""))],
+        ));
+    }
     if conditions.is_empty() {
         if !check_on_resolution {
             let mut unconditioned = expression.clone();
@@ -2079,6 +2151,7 @@ fn extract_legacy_conditions(
                     | "OpponentTurn"
                     | "Revolt"
                     | "Delirium"
+                    | "ConditionManaSpent"
                     | "NoResolvingCheck"
                     | "ConditionDescription"
             )
@@ -7185,6 +7258,7 @@ fn map_pump(
             "NumAtt",
             "NumDef",
             "KW",
+            "KWChoice",
             "Duration",
             "AtEOT",
             "RememberObjects",
@@ -7227,6 +7301,21 @@ fn map_pump(
         parameters.get("KW"),
         duration,
     )?;
+    if let Some(keywords) = parameters.get("KWChoice") {
+        let mut choices = Vec::new();
+        for keyword in keywords.split(',').map(str::trim) {
+            let mut choice = Vec::new();
+            append_keyword_grants(&mut choice, &affected, Some(&keyword.to_string()), duration)?;
+            choices.push(combine_effects(
+                choice,
+                "each Pump KWChoice option must map to a typed effect",
+            )?);
+        }
+        if choices.len() < 2 {
+            return Err(unsupported_value("KWChoice", keywords));
+        }
+        modifications.push(call(Operation::ChooseOne, choices));
+    }
     let mut effects = Vec::new();
     if !modifications.is_empty() {
         let mut modification = combine_effects(modifications, "Pump modifications must map")?;
@@ -8034,6 +8123,10 @@ fn map_continuous_with_effects(
             "AffectedZone",
             "EffectZone",
             "MayPlay",
+            "MayPlayIgnoreType",
+            "MayPlayWithoutManaCost",
+            "MayPlayLimit",
+            "MayPlayPlayer",
             "MayLookAt",
             "CharacteristicDefining",
             "Description",
@@ -8053,17 +8146,47 @@ fn map_continuous_with_effects(
             value => return Err(unsupported_value("AffectedZone", value)),
         };
         let affected = affected_selector(affected_value)?;
-        let play_permission = if zone == "exile" {
+        let without_mana_cost = closed_true_flag(parameters, "MayPlayWithoutManaCost")?;
+        let ignore_type = closed_true_flag(parameters, "MayPlayIgnoreType")?;
+        let play_limit = parameters
+            .get("MayPlayLimit")
+            .map(|value| {
+                value
+                    .parse::<i64>()
+                    .ok()
+                    .filter(|limit| (1..=10).contains(limit))
+                    .ok_or_else(|| unsupported_value("MayPlayLimit", value))
+            })
+            .transpose()?
+            .unwrap_or(0);
+        let permission_player = match parameters.get("MayPlayPlayer").map(String::as_str) {
+            None | Some("You") => call(Operation::You, vec![]),
+            Some("ActivePlayer") | Some("Player") => call(Operation::Any, vec![]),
+            Some(value) => return Err(unsupported_value("MayPlayPlayer", value)),
+        };
+        let play_permission = if without_mana_cost || ignore_type || play_limit != 0 {
+            call(
+                Operation::PlayPermissionRules,
+                vec![
+                    affected.clone(),
+                    permission_player.clone(),
+                    Expression::Text(zone.to_string()),
+                    Expression::Boolean(without_mana_cost),
+                    Expression::Boolean(ignore_type),
+                    Expression::Integer(play_limit),
+                ],
+            )
+        } else if zone == "exile" {
             call(
                 Operation::PlayExiled,
-                vec![affected.clone(), call(Operation::You, vec![])],
+                vec![affected.clone(), permission_player.clone()],
             )
         } else {
             call(
                 Operation::PlayFromZone,
                 vec![
                     affected.clone(),
-                    call(Operation::You, vec![]),
+                    permission_player,
                     Expression::Text(zone.to_string()),
                 ],
             )
@@ -8630,6 +8753,7 @@ fn map_change_zone(
             "TgtPrompt",
             "Origin",
             "OriginAlternative",
+            "NoShuffle",
             "Destination",
             "ChangeType",
             "ChangeTypeDesc",
@@ -8658,6 +8782,12 @@ fn map_change_zone(
         ],
     )?;
     let origin = required(parameters, "Origin")?;
+    let multi_origin = origin == "Graveyard,Exile";
+    if let Some(value) = parameters.get("NoShuffle") {
+        if value != "True" || parameters.contains_key("Shuffle") {
+            return Err(unsupported_value("NoShuffle", value));
+        }
+    }
     if let Some(zones) = parameters.get("TgtZone") {
         let normalized = normalize_zone_list("TgtZone", zones)?;
         if normalized.len() != 1 || normalized[0] != origin.to_ascii_lowercase() {
@@ -8687,7 +8817,9 @@ fn map_change_zone(
                 | "RememberedLKI"
                 | "DelayTriggerRememberedLKI"
                 | "ChosenCard"
+                | "Parent"
                 | "ParentTarget"
+                | "TriggeredSpellAbility"
                 | "TriggeredTarget"
                 | "TriggeredTargetLKICopy"
         )
@@ -8722,7 +8854,7 @@ fn map_change_zone(
     let closed_origin = matches!(
         origin,
         "Library" | "Graveyard" | "Hand" | "Exile" | "Stack" | "Command" | "All"
-    );
+    ) || multi_origin;
     if origin == "Command"
         && parameters
             .get("Defined")
@@ -8740,7 +8872,13 @@ fn map_change_zone(
     {
         return Err(unsupported_value("Origin", origin));
     }
-    let affected = if player_bound {
+    let affected = if multi_origin
+        && parameters.contains_key("ChangeType")
+        && !parameters.contains_key("Defined")
+        && !parameters.contains_key("ValidTgts")
+    {
+        affected_selector(required(parameters, "ChangeType")?)?
+    } else if player_bound {
         let cards = card_selector_in_zone(
             required(parameters, "ChangeType")?,
             &origin.to_ascii_lowercase(),
@@ -8793,7 +8931,31 @@ fn map_change_zone(
         Some(value) => return Err(unsupported_value("GainControl", value)),
     };
     let control_target = affected.clone();
-    let expression = if player_bound {
+    let expression = if multi_origin
+        && parameters.contains_key("ChangeType")
+        && !parameters.contains_key("Defined")
+        && !parameters.contains_key("ValidTgts")
+    {
+        let amount = optional_positive_integer(parameters, "ChangeNum")?.unwrap_or(1);
+        sequence(
+            call(
+                Operation::SearchZones,
+                vec![
+                    affected,
+                    call(Operation::You, vec![]),
+                    Expression::Integer(amount),
+                    Expression::Text("graveyard,exile".to_string()),
+                ],
+            ),
+            call(
+                Operation::MoveZone,
+                vec![
+                    call(Operation::EffectResult, vec![]),
+                    Expression::Text(destination.to_string()),
+                ],
+            ),
+        )
+    } else if player_bound {
         let amount = optional_positive_integer(parameters, "ChangeNum")?.unwrap_or(1);
         call(
             Operation::MoveZone,
@@ -8990,7 +9152,8 @@ fn map_library_search(
             required(parameters, "Destination")?,
         ));
     }
-    let should_shuffle = parameters.get("Shuffle").map(String::as_str) != Some("False");
+    let should_shuffle = !parameters.contains_key("NoShuffle")
+        && parameters.get("Shuffle").map(String::as_str) != Some("False");
     let destination = if destination == "library" {
         match parameters
             .get("LibraryPosition")
@@ -9856,6 +10019,17 @@ fn map_change_zone_all(
             parameters,
             Operation::OwnedBy,
         )?,
+        "Graveyard,Exile" => {
+            let change_type = required(parameters, "ChangeType")?;
+            let cards = call(
+                Operation::All,
+                vec![
+                    card_selector_in_zone(change_type, "graveyard")?,
+                    card_selector_in_zone(change_type, "exile")?,
+                ],
+            );
+            scope_collection_to_target_player(cards, parameters, Operation::OwnedBy)?
+        }
         value => return Err(unsupported_value("Origin", value)),
     };
     let destination = required(parameters, "Destination")?;
@@ -11828,12 +12002,17 @@ fn map_choose_card(
         .get("ChoiceZone")
         .map(String::as_str)
         .unwrap_or("Battlefield");
-    let candidates = match zone {
-        "Battlefield" => affected_selector(required(parameters, "Choices")?)?,
-        "Graveyard" | "Hand" | "Exile" | "Library" => {
-            card_selector_in_zone(required(parameters, "Choices")?, &zone.to_ascii_lowercase())?
+    let choices = parameters.get("Choices").map(String::as_str);
+    let candidates = match (zone, choices) {
+        ("Battlefield", Some(choices)) => affected_selector(choices)?,
+        ("Battlefield", None) => call(Operation::Permanents, vec![]),
+        ("Graveyard" | "Hand" | "Exile" | "Library", Some(choices)) => {
+            card_selector_in_zone(choices, &zone.to_ascii_lowercase())?
         }
-        value => return Err(unsupported_value("ChoiceZone", value)),
+        ("Graveyard" | "Hand" | "Exile" | "Library", None) => {
+            card_selector_in_zone("Card", &zone.to_ascii_lowercase())?
+        }
+        (value, _) => return Err(unsupported_value("ChoiceZone", value)),
     };
     let chooser = player_selector(parameters, DefaultSelector::You)?;
     if let Some(value) = parameters.get("Reveal") {
@@ -12620,16 +12799,26 @@ fn map_attach(
         ));
     }
     if let Some(object) = parameters.get("Object") {
-        let choices = required(parameters, "Choices")?;
-        return mapped_direct(
-            prefix,
-            api,
-            parameters,
+        let attachments = match object.as_str() {
+            "ThisTargetedCard" => call(Operation::Target, vec![call(Operation::Any, vec![])]),
+            value if value.starts_with("Valid ") => affected_selector(&value[6..])?,
+            value => defined_selector(value)?,
+        };
+        let effect = if let Some(choices) = parameters.get("Choices") {
             call(
                 Operation::AttachChoice,
-                vec![defined_selector(object)?, affected_selector(choices)?],
-            ),
-        );
+                vec![attachments, affected_selector(choices)?],
+            )
+        } else {
+            call(
+                Operation::Attach,
+                vec![
+                    attachments,
+                    object_selector(parameters, DefaultSelector::Source)?,
+                ],
+            )
+        };
+        return mapped_direct(prefix, api, parameters, effect);
     }
     if parameters.contains_key("Choices") {
         return Err(diagnostic(
@@ -13931,6 +14120,8 @@ fn defined_selector(value: &str) -> Result<Expression, MappingDiagnostic> {
             vec![call(Operation::Triggered, vec![])],
         )),
         "ParentTarget" => Ok(call(Operation::ParentTarget, vec![])),
+        "Parent" => Ok(call(Operation::ParentStackAbility, vec![])),
+        "TriggeredSpellAbility" => Ok(call(Operation::TriggeredStackAbility, vec![])),
         "TriggeredPlayer" => Ok(call(Operation::TriggeredPlayer, vec![])),
         "TriggeredTarget" | "TriggeredTargetLKICopy" => {
             Ok(call(Operation::TriggeredTarget, vec![]))
@@ -14043,31 +14234,48 @@ pub(crate) fn card_selector_in_zone(
 }
 
 fn valid_cards_selector(value: &str) -> Result<Expression, MappingDiagnostic> {
-    if value == "Permanent" {
-        return Ok(call(Operation::Permanents, vec![]));
-    }
-    let mut predicates = Vec::new();
-    for card_type in value.split(',') {
-        if card_type.is_empty()
-            || card_type.contains(['.', '+', ' '])
-            || !matches!(
-                card_type,
-                "Artifact" | "Battle" | "Creature" | "Enchantment" | "Land" | "Planeswalker"
+    let selector = affected_selector(value).map_err(|_| unsupported_value("ValidCards", value))?;
+    let selector = match selector {
+        Expression::Call {
+            operation: Operation::All,
+            arguments,
+        } => {
+            let mut alternatives = Vec::new();
+            for branch in arguments {
+                let Expression::Call {
+                    operation: Operation::Cards | Operation::Permanents,
+                    arguments,
+                } = branch
+                else {
+                    return Err(unsupported_value("ValidCards", value));
+                };
+                alternatives.push(match arguments.len() {
+                    0 => Expression::Boolean(true),
+                    1 => arguments
+                        .into_iter()
+                        .next()
+                        .unwrap_or(Expression::Boolean(true)),
+                    _ => call(Operation::And, arguments),
+                });
+            }
+            call(
+                Operation::Permanents,
+                vec![call(Operation::Or, alternatives)],
             )
-        {
-            return Err(unsupported_value("ValidCards", value));
         }
-        predicates.push(call(
-            Operation::TypeIs,
-            vec![Expression::Text(card_type.to_ascii_lowercase())],
-        ));
-    }
-    let predicate = match predicates.len() {
-        0 => return Err(unsupported_value("ValidCards", value)),
-        1 => predicates.remove(0),
-        _ => call(Operation::Or, predicates),
+        collection @ Expression::Call {
+            operation: Operation::Cards | Operation::Permanents,
+            ..
+        } => collection,
+        _ => return Err(unsupported_value("ValidCards", value)),
     };
-    Ok(call(Operation::Permanents, vec![predicate]))
+    add_collection_predicate(
+        selector,
+        call(
+            Operation::ZoneIs,
+            vec![Expression::Text("battlefield".to_string())],
+        ),
+    )
 }
 
 fn spell_selector(value: &str) -> Result<Expression, MappingDiagnostic> {
@@ -14606,6 +14814,9 @@ fn closed_keyword_predicate(value: &str) -> Option<Expression> {
 }
 
 fn normalize_simple_keyword(value: &str) -> Result<String, MappingDiagnostic> {
+    if value.trim() == "Flashback" {
+        return Ok("flashback=mana_cost".to_string());
+    }
     let normalized = value.trim().to_ascii_lowercase().replace(' ', "_");
     if matches!(
         normalized.as_str(),
@@ -14623,6 +14834,11 @@ fn normalize_simple_keyword(value: &str) -> Result<String, MappingDiagnostic> {
             | "lifelink"
             | "menace"
             | "prowess"
+            | "protection_from_black"
+            | "protection_from_blue"
+            | "protection_from_green"
+            | "protection_from_red"
+            | "protection_from_white"
             | "reach"
             | "shadow"
             | "shroud"
@@ -14794,7 +15010,10 @@ fn require_static_effect_zone(
     key: &str,
 ) -> Result<(), MappingDiagnostic> {
     if parameters.get(key).map_or(true, |zone| {
-        matches!(zone.as_str(), "Battlefield" | "All" | "Command")
+        matches!(
+            zone.as_str(),
+            "Battlefield" | "All" | "Command" | "Graveyard" | "Exile" | "Stack"
+        )
     }) {
         Ok(())
     } else {
@@ -14824,6 +15043,7 @@ fn is_nonsemantic_metadata(key: &str) -> bool {
         key,
         "AILogic"
             | "AINoRecursiveCheck"
+            | "AIXMax"
             | "AITgts"
             | "CostDesc"
             | "IsCurse"
@@ -14932,7 +15152,7 @@ fn relative_path(root: &Path, path: &Path) -> String {
 mod tests {
     use super::{
         audit_legacy_mappings, collect_script_mapping_blockers, map_legacy_ability,
-        map_legacy_ability_in_context, MappingContext,
+        map_legacy_ability_in_context, map_script_abilities, MappingContext,
     };
     use crate::legacy::{parse_legacy_script, LegacyLineKind};
     use forge_carddef::{Expression, Operation};
@@ -15405,6 +15625,47 @@ mod tests {
         .err()
         .unwrap_or_else(|| panic!("open alternative search zone must quarantine"));
         assert_eq!(open_zone.code, "UNSUPPORTED_VALUE");
+
+        let no_shuffle = map_line(
+            "A:SP$ ChangeZone | Origin$ Library | NoShuffle$ True | Destination$ Hand | ChangeType$ Card | ChangeNum$ 1",
+        )
+        .unwrap_or_else(|error| panic!("closed no-shuffle search should map: {}", error.message));
+        assert!(!expression_contains_operation(
+            &no_shuffle.expression,
+            Operation::Shuffle
+        ));
+
+        for line in [
+            "A:DB$ ChangeZone | Origin$ Stack | Destination$ Exile",
+            "A:DB$ ChangeZone | Defined$ Parent | Origin$ Stack | Destination$ Hand",
+            "A:DB$ ChangeZone | Defined$ TriggeredSpellAbility | Origin$ Stack | Destination$ Library | LibraryPosition$ -1",
+        ] {
+            let mapped = map_line(line).unwrap_or_else(|error| {
+                panic!("closed stack move should map: {}", error.message)
+            });
+            assert!(expression_contains_operation(
+                &mapped.expression,
+                Operation::MoveZoneFrom
+            ));
+        }
+
+        let remembered_zones = map_line(
+            "A:DB$ ChangeZone | Hidden$ True | Origin$ Graveyard,Exile | Destination$ Hand | ChangeType$ Permanent.IsRemembered | ChangeNum$ 1",
+        )
+        .unwrap_or_else(|error| panic!("remembered multi-zone move should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &remembered_zones.expression,
+            Operation::SearchZones
+        ));
+
+        let all_remembered = map_line(
+            "A:DB$ ChangeZoneAll | Origin$ Graveyard,Exile | Destination$ Hand | ChangeType$ Creature.IsRemembered",
+        )
+        .unwrap_or_else(|error| panic!("multi-zone move-all should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &all_remembered.expression,
+            Operation::All
+        ));
     }
 
     #[test]
@@ -16003,6 +16264,27 @@ mod tests {
         assert!(expression_contains_operation(
             &attach.expression,
             Operation::AttachChoice
+        ));
+
+        for line in [
+            "A:DB$ Attach | Object$ TriggeredCardLKICopy | Defined$ Remembered",
+            "A:DB$ Attach | Object$ ThisTargetedCard | Defined$ Self",
+        ] {
+            let mapped = map_line(line).unwrap_or_else(|error| {
+                panic!("direct attachment move should map: {}", error.message)
+            });
+            assert!(expression_contains_operation(
+                &mapped.expression,
+                Operation::Attach
+            ));
+        }
+
+        let keyword_choice =
+            map_line("A:DB$ Pump | Defined$ Self | KWChoice$ Flying,Vigilance,Deathtouch,Lifelink")
+                .unwrap_or_else(|error| panic!("keyword choice should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &keyword_choice.expression,
+            Operation::ChooseOne
         ));
     }
 
@@ -16653,6 +16935,25 @@ mod tests {
         .err()
         .unwrap_or_else(|| panic!("non-true NoRegen must quarantine"));
         assert_eq!(error.code, "UNSUPPORTED_VALUE");
+
+        let flying_only = map_line(
+            "A:SP$ DestroyAll | ValidCards$ Creature.withFlying | SpellDescription$ Destroy flying creatures.",
+        )
+        .unwrap_or_else(|error| panic!("closed qualified ValidCards should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &flying_only.expression,
+            Operation::KeywordIs
+        ));
+
+        let mana_condition =
+            map_line("A:SP$ GainLife | Defined$ You | LifeAmount$ 2 | ConditionManaSpent$ W U")
+                .unwrap_or_else(|error| {
+                    panic!("mana-spent condition should map: {}", error.message)
+                });
+        assert!(expression_contains_operation(
+            &mana_condition.expression,
+            Operation::ManaSpent
+        ));
     }
 
     #[test]
@@ -16675,6 +16976,7 @@ mod tests {
             "S:Mode$ Continuous | Affected$ You | SetMaxHandSize$ Unlimited | Description$ No maximum hand size.",
             "S:Mode$ Continuous | Affected$ Card.Self | AddKeyword$ Flying | EffectZone$ All | Description$ Flying.",
             "S:Mode$ Continuous | Affected$ Instant.YouCtrl,Sorcery.YouCtrl | AffectedZone$ Stack | AddKeyword$ Lifelink | Description$ Spells have lifelink.",
+            "S:Mode$ Continuous | Affected$ Instant.YouOwn,Sorcery.YouOwn | AffectedZone$ Graveyard | AddKeyword$ Flashback | Description$ Cards have flashback equal to mana cost.",
             "S:Mode$ Continuous | Affected$ Creature.OppCtrl | RemoveKeyword$ Trample | CantHaveKeyword$ Trample | Description$ Opposing creatures cannot have trample.",
             "S:Mode$ Continuous | Affected$ You | AdjustLandPlays$ 1 | Description$ Play an additional land.",
             "S:Mode$ Continuous | Affected$ Creature | AddHiddenKeyword$ CARDNAME can't block. | Description$ Creatures cannot block.",
@@ -16729,14 +17031,32 @@ mod tests {
             Operation::LookPermission
         ));
 
+        let governed_play = map_line(
+            "S:Mode$ Continuous | Affected$ Card.IsRemembered | AffectedZone$ Exile | MayPlay$ True | MayPlayIgnoreType$ True | MayPlayWithoutManaCost$ True | MayPlayLimit$ 1 | Description$ Governed play permission.",
+        )
+        .unwrap_or_else(|error| panic!("governed play permission should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &governed_play.expression,
+            Operation::PlayPermissionRules
+        ));
+
+        let graveyard_static = map_script_root(
+            "S:Mode$ Continuous | Affected$ Creature.YouCtrl | EffectZone$ Graveyard | AddKeyword$ Haste | Description$ Creatures you control have haste.",
+        )
+        .unwrap_or_else(|error| panic!("graveyard static should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &graveyard_static.expression,
+            Operation::ActiveInZone
+        ));
+
         for (line, code) in [
             (
                 "S:Mode$ Continuous | Affected$ Card.IsRemembered | AffectedZone$ Battlefield | MayPlay$ True | Description$ Open play zone.",
                 "UNSUPPORTED_VALUE",
             ),
             (
-                "S:Mode$ Continuous | Affected$ Card.IsRemembered | AffectedZone$ Exile | MayPlay$ True | MayPlayIgnoreType$ True | Description$ Open play permission.",
-                "UNSUPPORTED_PARAMETER",
+                "S:Mode$ Continuous | Affected$ Card.IsRemembered | AffectedZone$ Exile | MayPlay$ True | MayPlayLimit$ unlimited | Description$ Open play limit.",
+                "UNSUPPORTED_VALUE",
             ),
         ] {
             let error = map_line(line)
@@ -17632,6 +17952,19 @@ mod tests {
         ));
 
         for line in [
+            "A:DB$ ChooseCard | Defined$ You | Amount$ 1 | Mandatory$ True",
+            "A:DB$ ChooseCard | Defined$ You | Amount$ 1 | ChoiceZone$ Graveyard",
+        ] {
+            let mapped = map_line(line).unwrap_or_else(|error| {
+                panic!("unfiltered legacy choice should map: {}", error.message)
+            });
+            assert!(expression_contains_operation(
+                &mapped.expression,
+                Operation::ChooseObjects
+            ));
+        }
+
+        for line in [
             "A:DB$ ChooseCard | Choices$ Card | ChoiceZone$ Sideboard",
             "A:DB$ ChooseCard | Choices$ Card | Amount$ X",
             "A:DB$ ChooseCard | Choices$ Card | Amount$ 2 | Mandatory$ True | MinAmount$ 0",
@@ -17877,6 +18210,7 @@ mod tests {
         for line in [
             "A:AB$ Mana | Cost$ T SubCounter<X/CHARGE> | Produced$ B | Amount$ X\nSVar:X:Count$xPaid\n",
             "A:AB$ ChooseCard | Cost$ SubCounter<X/LOYALTY> | Choices$ Creature.cmcEQX+ExiledWithSource | ChoiceZone$ Exile\nSVar:X:Count$xPaid\n",
+            "A:SP$ Draw | Cost$ 3 B B PayLife<X> | NumCards$ X\nSVar:X:Count$xPaid\n",
         ] {
             let mapped = map_script_root(line).unwrap_or_else(|error| {
                 panic!("dynamic counter-removal cost should map: {}", error.message)
@@ -19711,6 +20045,33 @@ mod tests {
                 .unwrap_or_else(|| panic!("bad graph must quarantine"));
             assert_eq!(error.code, expected_code);
         }
+
+        let faces = parse_legacy_script(
+            "face-scoped-svars.txt",
+            concat!(
+                "A:SP$ Draw | NumCards$ 1 | SubAbility$ DBTail\n",
+                "SVar:DBTail:DB$ GainLife | LifeAmount$ 1\n",
+                "ALTERNATE\n",
+                "A:SP$ Draw | NumCards$ 1 | SubAbility$ DBTail\n",
+                "SVar:DBTail:DB$ LoseLife | LifeAmount$ 1\n",
+            ),
+        )
+        .unwrap_or_else(|error| panic!("face-scoped fixture should parse: {error}"));
+        let mapped = map_script_abilities(&faces).unwrap_or_else(|error| {
+            panic!(
+                "face-scoped SVars should map at line {}: {}",
+                error.line, error.diagnostic.message
+            )
+        });
+        assert_eq!(mapped.len(), 2);
+        assert!(expression_contains_operation(
+            &mapped[0].ability.expression,
+            Operation::GainLife
+        ));
+        assert!(expression_contains_operation(
+            &mapped[1].ability.expression,
+            Operation::LoseLife
+        ));
     }
 
     #[test]
