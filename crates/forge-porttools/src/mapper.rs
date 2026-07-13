@@ -10996,6 +10996,7 @@ fn map_change_zone(
             "SelectPrompt",
             "Chooser",
             "RememberChanged",
+            "DifferentNames",
             "Duration",
             "AtEOT",
             "WithCountersType",
@@ -11525,7 +11526,10 @@ fn map_library_search(
     } else {
         zone_owner_selector(parameters)?
     };
-    let cards = card_selector_in_zone(required(parameters, "ChangeType")?, "library")?;
+    let mut cards = card_selector_in_zone(required(parameters, "ChangeType")?, "library")?;
+    if closed_true_flag(parameters, "DifferentNames")? {
+        cards = call(Operation::DistinctNames, vec![cards]);
+    }
     let (chosen, search) = if random_selection {
         if parameters.contains_key("OriginAlternative") {
             return Err(diagnostic(
@@ -19829,6 +19833,19 @@ mod tests {
             map_line("S:Mode$ Continuous | Affected$ Creature.YouCtrl | CanBlockAmount$ All")
                 .is_err()
         );
+
+        let distinct_search = map_line(
+            "A:SP$ ChangeZone | Origin$ Library | Destination$ Hand | ChangeType$ Creature | ChangeNum$ 2 | DifferentNames$ True",
+        )
+        .unwrap_or_else(|error| panic!("distinct-name search should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &distinct_search.expression,
+            Operation::DistinctNames
+        ));
+        assert!(map_line(
+            "A:SP$ ChangeZone | Origin$ Library | Destination$ Hand | ChangeType$ Creature | DifferentNames$ False"
+        )
+        .is_err());
 
         let dig = map_line(
             "A:SP$ Dig | DigNum$ 2 | ChangeNum$ 1 | Optional$ True | SpellDescription$ Dig.",

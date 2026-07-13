@@ -1677,6 +1677,30 @@ fn translate_keywords(
                     }),
                 )
             }
+            ("equip", [cost, validity]) | ("equip", [cost, validity, _]) => {
+                let costs = parse_simple_cost(Some(cost))
+                    .map_err(|diagnostic| (line.line, diagnostic.code, diagnostic.message))?;
+                (
+                    Some(keyword.clone()),
+                    Some(AbilityDefinition {
+                        kind: AbilityKind::Activated,
+                        costs,
+                        event: None,
+                        condition: None,
+                        timing: Some(expression_call(Operation::TimingSorcery, vec![])),
+                        effect: expression_call(
+                            Operation::Attach,
+                            vec![
+                                expression_call(Operation::Source, vec![]),
+                                valid_target_selector(validity).map_err(|diagnostic| {
+                                    (line.line, diagnostic.code, diagnostic.message)
+                                })?,
+                            ],
+                        ),
+                        mana_ability: false,
+                    }),
+                )
+            }
             ("enchant", [validity]) | ("enchant", [validity, _]) => (
                 Some(keyword.clone()),
                 Some(AbilityDefinition {
@@ -3093,6 +3117,7 @@ mod tests {
                 "ManaCost:2\n",
                 "Types:Artifact Equipment\n",
                 "K:Equip:3\n",
+                "K:Equip:1:Creature.Legendary+YouCtrl:legendary creature\n",
                 "Oracle:Equip {3}\n",
             ),
         )
@@ -3113,6 +3138,7 @@ mod tests {
         assert!(emitted.contains("keywords: [equip]"));
         assert!(emitted.contains("costs: [mana_cost(\"{3}\")]"));
         assert!(emitted.contains("effect: attach(source(), target(permanents("));
+        assert!(emitted.contains("supertype_is(\"legendary\")"));
         fs::remove_dir_all(&root)
             .unwrap_or_else(|error| panic!("could not remove translator fixture: {error}"));
     }

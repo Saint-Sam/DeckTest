@@ -1254,6 +1254,7 @@ operations! {
     CannotTargetFrom => ("cannot_target_from", Effect, 3, Some(3)),
     TopOfLibrary => ("top_of_library", Selector, 1, Some(1)),
     AdditionalBlocks => ("additional_blocks", Effect, 2, Some(2)),
+    DistinctNames => ("distinct_names", Selector, 1, Some(1)),
 }
 
 impl Operation {
@@ -2470,6 +2471,7 @@ impl Operation {
                 1 => Some(Number),
                 _ => None,
             },
+            Self::DistinctNames => Some(Selector),
             Self::ChooseNumber => match index {
                 0 => Some(Selector),
                 1 | 2 => Some(Number),
@@ -2865,6 +2867,7 @@ mod tests {
         assert_eq!(Operation::CannotTargetFrom as u32, 454);
         assert_eq!(Operation::TopOfLibrary as u32, 455);
         assert_eq!(Operation::AdditionalBlocks as u32, 456);
+        assert_eq!(Operation::DistinctNames as u32, 457);
 
         let config = bincode::config::standard()
             .with_fixed_int_encoding()
