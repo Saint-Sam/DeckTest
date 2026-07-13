@@ -14,11 +14,11 @@ use forge_core::{
     ActivationCost, ActivationTiming, BaseCreatureCharacteristics, BaseObjectCharacteristics,
     BasicLandTypes, CardId, ContinuousEffectDefinition, ContinuousEffectDuration,
     ContinuousEffectOperation, ContinuousEffectTarget, CreatureKeywords, GameState, ManaCost,
-    ManaKind, ManaPool, ObjectColors, ObjectId, ObjectSubtype, ObjectSubtypes,
-    ObjectSupertypes, ObjectTargetPredicate, ObjectTypes, Outcome, PlayerId,
-    PlayerTargetPredicate, StackEntryId, TargetChoice, TargetControllerPredicate, TargetKind,
-    TargetRequirement, TriggerCondition, TriggerDefinition, TriggerObjectFilter,
-    TriggerPlayerFilter, TriggerZoneFilter, ZoneId, ZoneKind,
+    ManaKind, ManaPool, ObjectColors, ObjectId, ObjectSubtype, ObjectSubtypes, ObjectSupertypes,
+    ObjectTargetPredicate, ObjectTypes, Outcome, PlayerId, PlayerTargetPredicate, StackEntryId,
+    TargetChoice, TargetControllerPredicate, TargetKind, TargetRequirement, TriggerCondition,
+    TriggerDefinition, TriggerObjectFilter, TriggerPlayerFilter, TriggerZoneFilter, ZoneId,
+    ZoneKind,
 };
 use std::{collections::BTreeMap, error::Error, fmt};
 
@@ -621,6 +621,14 @@ pub struct ActivatedEffectProgram {
     optional_effect_groups: Vec<OptionalEffectGroup>,
 }
 
+/// One source-bound static continuous ability compiled without card branches.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct StaticAbilityProgram {
+    predicate: ObjectTargetPredicate,
+    exclude_source: bool,
+    operations: Vec<ContinuousEffectOperation>,
+}
+
 /// One completely compiled additional spell cost.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SpellAdditionalCostProgram {
@@ -697,6 +705,32 @@ impl ActivatedEffectProgram {
     #[must_use]
     pub fn optional_choice_count(&self) -> usize {
         self.optional_effect_groups.len()
+    }
+}
+
+impl StaticAbilityProgram {
+    /// Binds this static ability to one battlefield source.
+    #[must_use]
+    pub fn bind(&self, controller: PlayerId, source: ObjectId) -> Vec<ContinuousEffectDefinition> {
+        let target = ContinuousEffectTarget::Objects {
+            predicate: self.predicate,
+            excluded: self.exclude_source.then_some(source),
+        };
+        self.operations
+            .iter()
+            .copied()
+            .map(|operation| {
+                ContinuousEffectDefinition::new(controller, target, operation)
+                    .with_source(source)
+                    .with_duration(ContinuousEffectDuration::WhileSourceOnBattlefield)
+            })
+            .collect()
+    }
+
+    /// Returns the compiled continuous operations in layer order source order.
+    #[must_use]
+    pub fn operations(&self) -> &[ContinuousEffectOperation] {
+        &self.operations
     }
 }
 
@@ -808,6 +842,7 @@ pub struct CardProgram {
     activated_abilities: Vec<ActivatedAbilityProgram>,
     activated_effects: Vec<ActivatedEffectProgram>,
     triggered_abilities: Vec<TriggeredAbilityProgram>,
+    static_abilities: Vec<StaticAbilityProgram>,
 }
 
 impl CardProgram {
@@ -901,6 +936,12 @@ impl CardProgram {
         &self.triggered_abilities
     }
 
+    /// Returns source-bound static continuous abilities in printed order.
+    #[must_use]
+    pub fn static_abilities(&self) -> &[StaticAbilityProgram] {
+        &self.static_abilities
+    }
+
     /// Returns all compiled capabilities in source execution order.
     #[must_use]
     pub fn capabilities(&self) -> Vec<Capability> {
@@ -915,6 +956,14 @@ impl CardProgram {
         }
         if !self.activated_effects.is_empty() {
             capabilities.push(Capability::ActivatedAbility);
+        }
+        for ability in &self.static_abilities {
+            capabilities.extend(
+                ability
+                    .operations()
+                    .iter()
+                    .map(|_| Capability::ModifyCharacteristics),
+            );
         }
         capabilities.extend(self.effects.iter().map(EffectProgram::capability));
         capabilities.extend(
@@ -983,6 +1032,7 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
             .collect::<Vec<_>>();
     let mut activated_effects = Vec::new();
     let mut triggered_abilities = Vec::new();
+    let mut static_abilities = Vec::new();
     let mut additional_costs = Vec::new();
     let mut spell_abilities = 0_usize;
     for (index, ability) in face.abilities.iter().enumerate() {
@@ -1018,6 +1068,9 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
             AbilityKind::Triggered if matches!(kind, ProgramKind::Permanent) => {
                 triggered_abilities.push(compile_triggered_ability(ability, &path)?);
             }
+            AbilityKind::Static if matches!(kind, ProgramKind::Permanent | ProgramKind::Land) => {
+                static_abilities.push(compile_static_ability(ability, &path)?);
+            }
             _ => {
                 return Err(CompileDiagnostic::new(
                     CompileDiagnosticCode::AbilityShape,
@@ -1041,6 +1094,12 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
                 .sum::<usize>(),
         )
         .saturating_add(compiler.effects.len());
+    let compiled_effect_count = compiled_effect_count.saturating_add(
+        static_abilities
+            .iter()
+            .map(|ability: &StaticAbilityProgram| ability.operations.len())
+            .sum::<usize>(),
+    );
     if compiled_effect_count > MAX_EFFECTS {
         return Err(CompileDiagnostic::new(
             CompileDiagnosticCode::ProgramBounds,
@@ -1095,6 +1154,7 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
         activated_abilities,
         activated_effects,
         triggered_abilities,
+        static_abilities,
     })
 }
 
@@ -1146,6 +1206,158 @@ fn compile_triggered_ability(
         effects: compiler.effects,
         optional_effect_groups: compiler.optional_effect_groups,
     })
+}
+
+fn compile_static_ability(
+    ability: &AbilityDefinition,
+    path: &str,
+) -> Result<StaticAbilityProgram, CompileDiagnostic> {
+    if !ability.costs.is_empty()
+        || ability.event.is_some()
+        || ability.condition.is_some()
+        || ability.timing.is_some()
+        || ability.mana_ability
+    {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::AbilityShape,
+            path,
+            "static continuous ability must have no costs, event, condition, timing, or mana flag",
+        ));
+    }
+    let Expression::Call {
+        operation: Operation::Continuous,
+        arguments,
+    } = &ability.effect
+    else {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectOperation,
+            format!("{path}.effect"),
+            "static ability must be rooted in continuous(selector, operation)",
+        ));
+    };
+    let [selector, effect] = arguments.as_slice() else {
+        return Err(effect_arity(
+            &format!("{path}.effect"),
+            &Operation::Continuous,
+            "one permanent selector and one continuous operation",
+        ));
+    };
+    let spec = compile_object_selector(selector, &format!("{path}.effect.selector"))?;
+    if spec.kind != TargetKind::Permanent {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectArguments,
+            format!("{path}.effect.selector"),
+            "source-bound continuous effects require a permanent selector",
+        ));
+    }
+    let exclude_source = spec.exclude_source;
+    let predicate = object_predicate_from_spec(spec);
+    let mut operations = Vec::new();
+    compile_static_operations(effect, &format!("{path}.effect.operation"), &mut operations)?;
+    if operations.is_empty() || operations.len() > MAX_EFFECTS {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::ProgramBounds,
+            format!("{path}.effect.operation"),
+            format!("static ability compiled {} operations", operations.len()),
+        ));
+    }
+    Ok(StaticAbilityProgram {
+        predicate,
+        exclude_source,
+        operations,
+    })
+}
+
+fn compile_static_operations(
+    expression: &Expression,
+    path: &str,
+    operations: &mut Vec<ContinuousEffectOperation>,
+) -> Result<(), CompileDiagnostic> {
+    let Expression::Call {
+        operation,
+        arguments,
+    } = expression
+    else {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectArguments,
+            path,
+            "continuous operation is not a call",
+        ));
+    };
+    match operation {
+        Operation::Sequence => {
+            for (index, operation) in arguments.iter().enumerate() {
+                compile_static_operations(
+                    operation,
+                    &format!("{path}.sequence[{index}]"),
+                    operations,
+                )?;
+            }
+            Ok(())
+        }
+        Operation::ModifyPt => {
+            let [subject, Expression::Integer(power), Expression::Integer(toughness)] =
+                arguments.as_slice()
+            else {
+                return Err(effect_arity(
+                    path,
+                    operation,
+                    "any(), literal power delta, and literal toughness delta",
+                ));
+            };
+            if !is_any_selector(subject) {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::EffectArguments,
+                    format!("{path}.subject"),
+                    "nested continuous operation must apply to any() selected object",
+                ));
+            }
+            let power = i32::try_from(*power).map_err(|_| {
+                CompileDiagnostic::new(
+                    CompileDiagnosticCode::EffectAmount,
+                    format!("{path}.power"),
+                    "static power delta does not fit i32",
+                )
+            })?;
+            let toughness = i32::try_from(*toughness).map_err(|_| {
+                CompileDiagnostic::new(
+                    CompileDiagnosticCode::EffectAmount,
+                    format!("{path}.toughness"),
+                    "static toughness delta does not fit i32",
+                )
+            })?;
+            operations.push(ContinuousEffectOperation::ModifyPowerToughness { power, toughness });
+            Ok(())
+        }
+        Operation::GrantKeyword => {
+            let [subject, keyword] = arguments.as_slice() else {
+                return Err(effect_arity(
+                    path,
+                    operation,
+                    "any() and one represented creature keyword",
+                ));
+            };
+            if !is_any_selector(subject) {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::EffectArguments,
+                    format!("{path}.subject"),
+                    "nested continuous operation must apply to any() selected object",
+                ));
+            }
+            operations.push(ContinuousEffectOperation::AddKeywords {
+                keywords: compile_granted_creature_keyword(keyword, &format!("{path}.keyword"))?,
+            });
+            Ok(())
+        }
+        unsupported => Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectOperation,
+            path,
+            format!(
+                "static continuous operation `{}` has no complete runtime lowering",
+                unsupported.as_str()
+            ),
+        )),
+    }
 }
 
 fn compile_trigger_event(
@@ -2399,15 +2611,10 @@ fn compile_effect(
                     "object set, power delta, toughness delta, and duration",
                 ));
             };
-            let objects = compile_effect_object_set(
-                objects,
-                &format!("{path}.objects"),
-                compiler,
-                true,
-            )?;
+            let objects =
+                compile_effect_object_set(objects, &format!("{path}.objects"), compiler, true)?;
             let power = compile_amount(power, &format!("{path}.power"), compiler)?;
-            let toughness =
-                compile_amount(toughness, &format!("{path}.toughness"), compiler)?;
+            let toughness = compile_amount(toughness, &format!("{path}.toughness"), compiler)?;
             let duration = compile_effect_duration(duration, &format!("{path}.duration"))?;
             compiler.effects.push(EffectProgram::ModifyPowerToughness {
                 objects,
@@ -2425,14 +2632,9 @@ fn compile_effect(
                     "object set, represented creature keyword, and duration",
                 ));
             };
-            let objects = compile_effect_object_set(
-                objects,
-                &format!("{path}.objects"),
-                compiler,
-                true,
-            )?;
-            let keywords =
-                compile_granted_creature_keyword(keyword, &format!("{path}.keyword"))?;
+            let objects =
+                compile_effect_object_set(objects, &format!("{path}.objects"), compiler, true)?;
+            let keywords = compile_granted_creature_keyword(keyword, &format!("{path}.keyword"))?;
             let duration = compile_effect_duration(duration, &format!("{path}.duration"))?;
             compiler.effects.push(EffectProgram::GrantKeywords {
                 objects,
@@ -2943,6 +3145,13 @@ fn compile_object_target(
         }
     }
     let spec = compile_object_selector(selector, path)?;
+    if spec.exclude_source {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectArguments,
+            path,
+            "announced targets cannot use a source-relative exclusion",
+        ));
+    }
     let mut predicate = ObjectTargetPredicate::any()
         .with_owner(spec.owner)
         .with_required_types(spec.required_types)
@@ -3347,6 +3556,7 @@ struct ObjectSelectorSpec {
     required_subtypes: ObjectSubtypes,
     minimum_mana_value: Option<u32>,
     maximum_mana_value: Option<u32>,
+    exclude_source: bool,
 }
 
 impl ObjectSelectorSpec {
@@ -3361,6 +3571,7 @@ impl ObjectSelectorSpec {
             required_subtypes: ObjectSubtypes::none(),
             minimum_mana_value: None,
             maximum_mana_value: None,
+            exclude_source: false,
         }
     }
 }
@@ -3452,6 +3663,7 @@ fn compile_object_selector_union(
             || spec.required_subtypes != ObjectSubtypes::none()
             || spec.minimum_mana_value.is_some()
             || spec.maximum_mana_value.is_some()
+            || spec.exclude_source != first.exclude_source
     }) {
         return Err(CompileDiagnostic::new(
             CompileDiagnosticCode::EffectArguments,
@@ -3480,6 +3692,7 @@ fn compile_object_selector_union(
         required_subtypes: ObjectSubtypes::none(),
         minimum_mana_value: None,
         maximum_mana_value: None,
+        exclude_source: first.exclude_source,
     })
 }
 
@@ -3568,6 +3781,7 @@ fn compile_object_predicate(
                 || first.required_subtypes != ObjectSubtypes::none()
                 || first.minimum_mana_value.is_some()
                 || first.maximum_mana_value.is_some()
+                || first.exclude_source
                 || alternatives.iter().any(|alternative| {
                     alternative.owner != first.owner
                         || alternative.controller != first.controller
@@ -3577,6 +3791,7 @@ fn compile_object_predicate(
                         || alternative.required_subtypes != ObjectSubtypes::none()
                         || alternative.minimum_mana_value.is_some()
                         || alternative.maximum_mana_value.is_some()
+                        || alternative.exclude_source
                 })
             {
                 return Err(CompileDiagnostic::new(
@@ -3635,6 +3850,35 @@ fn compile_object_predicate(
             let [predicate] = arguments.as_slice() else {
                 return Err(effect_arity(path, operation, "one predicate"));
             };
+            if matches!(
+                predicate,
+                Expression::Call {
+                    operation: Operation::Equals,
+                    arguments,
+                } if matches!(
+                    arguments.as_slice(),
+                    [
+                        Expression::Call {
+                            operation: Operation::Any,
+                            arguments: any_arguments,
+                        },
+                        Expression::Call {
+                            operation: Operation::Source,
+                            arguments: source_arguments,
+                        },
+                    ] if any_arguments.is_empty() && source_arguments.is_empty()
+                )
+            ) {
+                if spec.exclude_source {
+                    return Err(CompileDiagnostic::new(
+                        CompileDiagnosticCode::EffectArguments,
+                        path,
+                        "duplicate source exclusion is not compiled",
+                    ));
+                }
+                spec.exclude_source = true;
+                return Ok(());
+            }
             let Expression::Call {
                 operation: Operation::TypeIs,
                 arguments,
@@ -3643,7 +3887,7 @@ fn compile_object_predicate(
                 return Err(CompileDiagnostic::new(
                     CompileDiagnosticCode::EffectArguments,
                     path,
-                    "only not(type_is(...)) is compiled",
+                    "only not(type_is(...)) and not(equals(any(), source())) are compiled",
                 ));
             };
             let [value] = arguments.as_slice() else {
@@ -3903,7 +4147,9 @@ fn compile_effect_object_set(
             expression, path, compiler,
         )?));
     }
-    Ok(ObjectSetProgram::Battlefield(object_predicate_from_spec(spec)))
+    Ok(ObjectSetProgram::Battlefield(object_predicate_from_spec(
+        spec,
+    )))
 }
 
 fn object_predicate_from_spec(spec: ObjectSelectorSpec) -> ObjectTargetPredicate {
@@ -4601,32 +4847,23 @@ fn bind_effect_actions(
                 toughness,
                 duration,
             } => {
-                let power = i32::try_from(resolve_amount(
-                    state,
-                    *power,
-                    bindings,
-                    effect_index,
-                )?)
-                .map_err(|_| {
+                let power = i32::try_from(resolve_amount(state, *power, bindings, effect_index)?)
+                    .map_err(|_| {
                     ExecutionDiagnostic::new(
                         ExecutionDiagnosticCode::InvalidChoice,
                         Some(effect_index),
                         "resolved power delta exceeds i32",
                     )
                 })?;
-                let toughness = i32::try_from(resolve_amount(
-                    state,
-                    *toughness,
-                    bindings,
-                    effect_index,
-                )?)
-                .map_err(|_| {
-                    ExecutionDiagnostic::new(
-                        ExecutionDiagnosticCode::InvalidChoice,
-                        Some(effect_index),
-                        "resolved toughness delta exceeds i32",
-                    )
-                })?;
+                let toughness =
+                    i32::try_from(resolve_amount(state, *toughness, bindings, effect_index)?)
+                        .map_err(|_| {
+                            ExecutionDiagnostic::new(
+                                ExecutionDiagnosticCode::InvalidChoice,
+                                Some(effect_index),
+                                "resolved toughness delta exceeds i32",
+                            )
+                        })?;
                 for object in resolve_object_set(state, *objects, bindings, effect_index)? {
                     actions.push(BoundAction {
                         effect_index,
@@ -4946,11 +5183,7 @@ fn resolve_object_set(
                 .iter()
                 .copied()
                 .filter(|object| {
-                    state.object_matches_target_predicate(
-                        bindings.controller,
-                        predicate,
-                        *object,
-                    )
+                    state.object_matches_target_predicate(bindings.controller, predicate, *object)
                 })
                 .collect())
         }

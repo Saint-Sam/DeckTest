@@ -4551,20 +4551,21 @@ pub enum ContinuousEffectTarget {
     Object(ObjectId),
     /// Every object is affected.
     AllObjects,
+    /// Every object matching a closed predicate, except one optional object.
+    Objects {
+        /// Predicate interpreted relative to the effect controller.
+        predicate: ObjectTargetPredicate,
+        /// Optional excluded object, normally the source of an "other" effect.
+        excluded: Option<ObjectId>,
+    },
 }
 
 impl ContinuousEffectTarget {
-    fn matches(self, object: ObjectId) -> bool {
-        match self {
-            Self::Object(target) => target == object,
-            Self::AllObjects => true,
-        }
-    }
-
     const fn canonical_code(self) -> u8 {
         match self {
             Self::Object(_) => 0,
             Self::AllObjects => 1,
+            Self::Objects { .. } => 2,
         }
     }
 }
@@ -4730,6 +4731,8 @@ pub enum ContinuousEffectDuration {
     Persistent,
     /// The effect expires during the next cleanup step under CR 514.2.
     UntilEndOfTurn,
+    /// The effect applies only while its source remains on the battlefield.
+    WhileSourceOnBattlefield,
 }
 
 impl ContinuousEffectDuration {
@@ -4737,6 +4740,7 @@ impl ContinuousEffectDuration {
         match self {
             Self::Persistent => 0,
             Self::UntilEndOfTurn => 1,
+            Self::WhileSourceOnBattlefield => 2,
         }
     }
 }
@@ -9825,7 +9829,9 @@ impl GameState {
                         .objects
                         .get_mut(object)
                         .ok_or(StateError::UnknownObject(object))?;
-                    let loyalty = record.loyalty().ok_or(StateError::InsufficientLoyalty(object))?;
+                    let loyalty = record
+                        .loyalty()
+                        .ok_or(StateError::InsufficientLoyalty(object))?;
                     let next = loyalty.saturating_sub(delta);
                     record.loyalty = Some(next);
                     self.emit_event(GameEvent::ObjectLoyaltySet {
@@ -10783,7 +10789,12 @@ impl GameState {
                     return Err(StateError::UnknownObject(object));
                 }
             }
-            ContinuousEffectTarget::AllObjects => {}
+            ContinuousEffectTarget::AllObjects | ContinuousEffectTarget::Objects { .. } => {}
+        }
+        if definition.duration() == ContinuousEffectDuration::WhileSourceOnBattlefield
+            && definition.source().is_none()
+        {
+            return Err(StateError::UnknownObject(ObjectId(0)));
         }
         if let ContinuousEffectOperation::CopyBaseCreature { from } = definition.operation() {
             if self.objects.get(from).is_none() {
@@ -12406,6 +12417,24 @@ impl GameState {
         &self,
         object: ObjectId,
     ) -> Result<ObjectCharacteristics, StateError> {
+        let mut characteristics = self.base_object_characteristics(object)?;
+
+        for layer in Self::continuous_effect_layers() {
+            for effect in self.ordered_continuous_effects_for_layer(object, layer) {
+                self.apply_continuous_effect(object, &mut characteristics, effect)?;
+            }
+            if layer == ContinuousEffectLayer::PowerToughnessModify {
+                self.apply_power_toughness_counters(object, &mut characteristics);
+            }
+        }
+
+        Ok(characteristics)
+    }
+
+    fn base_object_characteristics(
+        &self,
+        object: ObjectId,
+    ) -> Result<ObjectCharacteristics, StateError> {
         let record = self
             .objects
             .get(object)
@@ -12421,7 +12450,7 @@ impl GameState {
         } else {
             record.base_object().types()
         };
-        let mut characteristics = ObjectCharacteristics::new(
+        Ok(ObjectCharacteristics::new(
             record.controller(),
             record.base_object().colors(),
             base_types,
@@ -12431,9 +12460,11 @@ impl GameState {
             record.base_object().supertypes(),
             record.base_object().basic_land_types(),
             record.base_object().subtypes(),
-        );
+        ))
+    }
 
-        for layer in [
+    const fn continuous_effect_layers() -> [ContinuousEffectLayer; 10] {
+        [
             ContinuousEffectLayer::Copy,
             ContinuousEffectLayer::Control,
             ContinuousEffectLayer::Text,
@@ -12444,7 +12475,19 @@ impl GameState {
             ContinuousEffectLayer::PowerToughnessSet,
             ContinuousEffectLayer::PowerToughnessModify,
             ContinuousEffectLayer::PowerToughnessSwitch,
-        ] {
+        ]
+    }
+
+    fn object_characteristics_before_layer(
+        &self,
+        object: ObjectId,
+        upper_bound: ContinuousEffectLayer,
+    ) -> Result<ObjectCharacteristics, StateError> {
+        let mut characteristics = self.base_object_characteristics(object)?;
+        for layer in Self::continuous_effect_layers() {
+            if layer >= upper_bound {
+                break;
+            }
             for effect in self.ordered_continuous_effects_for_layer(object, layer) {
                 self.apply_continuous_effect(object, &mut characteristics, effect)?;
             }
@@ -12481,7 +12524,7 @@ impl GameState {
             .iter()
             .filter(|subscription| {
                 subscription.definition.operation().layer() == layer
-                    && subscription.definition.target().matches(object)
+                    && self.continuous_effect_applies_to(subscription, object)
             })
             .collect::<Vec<_>>();
         pending.sort_by_key(|subscription| (subscription.definition.timestamp(), subscription.id));
@@ -12500,6 +12543,44 @@ impl GameState {
             }
         }
         ordered
+    }
+
+    fn continuous_effect_applies_to(
+        &self,
+        subscription: &ContinuousEffectSubscription,
+        object: ObjectId,
+    ) -> bool {
+        let definition = &subscription.definition;
+        if definition.duration() == ContinuousEffectDuration::WhileSourceOnBattlefield
+            && definition.source().is_none_or(|source| {
+                self.object_zone(source) != Some(ZoneId::new(None, ZoneKind::Battlefield))
+            })
+        {
+            return false;
+        }
+        match definition.target() {
+            ContinuousEffectTarget::Object(target) => target == object,
+            ContinuousEffectTarget::AllObjects => true,
+            ContinuousEffectTarget::Objects {
+                predicate,
+                excluded,
+            } => {
+                if excluded == Some(object) {
+                    return false;
+                }
+                let Ok(characteristics) = self
+                    .object_characteristics_before_layer(object, definition.operation().layer())
+                else {
+                    return false;
+                };
+                self.object_target_predicate_matches_characteristics(
+                    definition.controller(),
+                    predicate,
+                    object,
+                    characteristics,
+                )
+            }
+        }
     }
 
     fn apply_continuous_effect(
@@ -13274,6 +13355,21 @@ impl GameState {
         let Ok(characteristics) = self.object_characteristics(object) else {
             return false;
         };
+        self.object_target_predicate_matches_characteristics(
+            player,
+            predicate,
+            object,
+            characteristics,
+        )
+    }
+
+    fn object_target_predicate_matches_characteristics(
+        &self,
+        player: PlayerId,
+        predicate: ObjectTargetPredicate,
+        object: ObjectId,
+        characteristics: ObjectCharacteristics,
+    ) -> bool {
         if !self.controller_predicate_matches(
             player,
             predicate.controller,
@@ -13680,9 +13776,9 @@ impl GameState {
         let discarded = self.discard_to_max_hand_size(active)?;
         let expired_until_end_of_turn = (self
             .expire_duration_markers(EffectDuration::UntilEndOfTurn)
-            .saturating_add(self.expire_continuous_effects(
-                ContinuousEffectDuration::UntilEndOfTurn,
-            ))) as u32;
+            .saturating_add(
+                self.expire_continuous_effects(ContinuousEffectDuration::UntilEndOfTurn),
+            )) as u32;
         let expired_this_turn = self.expire_duration_markers(EffectDuration::ThisTurn) as u32;
         Ok(CleanupReport {
             discarded,
@@ -14712,8 +14808,16 @@ impl Fnva64 {
 
     fn write_continuous_effect_target(&mut self, target: ContinuousEffectTarget) {
         self.write_u8(target.canonical_code());
-        if let ContinuousEffectTarget::Object(object) = target {
-            self.write_u32(object.0);
+        match target {
+            ContinuousEffectTarget::Object(object) => self.write_u32(object.0),
+            ContinuousEffectTarget::AllObjects => {}
+            ContinuousEffectTarget::Objects {
+                predicate,
+                excluded,
+            } => {
+                self.write_object_target_predicate(predicate);
+                self.write_optional_object(excluded);
+            }
         }
     }
 
@@ -15974,8 +16078,16 @@ impl CanonicalBytes {
 
     fn write_continuous_effect_target(&mut self, target: ContinuousEffectTarget) {
         self.write_u8(target.canonical_code());
-        if let ContinuousEffectTarget::Object(object) = target {
-            self.write_u32(object.0);
+        match target {
+            ContinuousEffectTarget::Object(object) => self.write_u32(object.0),
+            ContinuousEffectTarget::AllObjects => {}
+            ContinuousEffectTarget::Objects {
+                predicate,
+                excluded,
+            } => {
+                self.write_object_target_predicate(predicate);
+                self.write_optional_object(excluded);
+            }
         }
     }
 
@@ -16582,16 +16694,17 @@ mod tests {
         ActivationTiming, AttackDeclaration, BaseCreatureCharacteristics,
         BaseObjectCharacteristics, BasicLandTypes, BlockDeclaration, CardId, CastSpellRequest,
         CombatDamageAssignment, CombatDamageAssignmentRequest, CombatDamageStepKind,
-        CombatDamageTarget, ContinuousEffectDefinition, ContinuousEffectId,
-        ContinuousEffectOperation, ContinuousEffectTarget, CostModifierDefinition,
-        CostModifierOperation, CostModifierScope, CreatureCharacteristics, CreatureKeywords,
-        EffectDuration, EventReplayError, GameEvent, GameOutcome, GameState, ManaCost, ManaKind,
-        ManaPool, ManaSource, ObjectColors, ObjectSupertypes, ObjectTypes, ObjectView, Outcome,
-        PaymentError, Phase, PlayerId, PriorityOutcome, ReplacementCondition,
-        ReplacementDamageTargetFilter, ReplacementDefinition, ReplacementDuration,
-        ReplacementEffectId, ReplacementOperation, ReplacementSourceFilter, ResolutionOutcome,
-        SpellTiming, StackEntryId, StackObjectKind, StateBasedActionKind, StateBasedActionReport,
-        StateError, Step, TargetChoice, TargetKind, TargetRequirement, TriggerCondition,
+        CombatDamageTarget, ContinuousEffectDefinition, ContinuousEffectDuration,
+        ContinuousEffectId, ContinuousEffectOperation, ContinuousEffectTarget,
+        CostModifierDefinition, CostModifierOperation, CostModifierScope, CreatureCharacteristics,
+        CreatureKeywords, EffectDuration, EventReplayError, GameEvent, GameOutcome, GameState,
+        ManaCost, ManaKind, ManaPool, ManaSource, ObjectColors, ObjectSupertypes,
+        ObjectTargetPredicate, ObjectTypes, ObjectView, Outcome, PaymentError, Phase, PlayerId,
+        PriorityOutcome, ReplacementCondition, ReplacementDamageTargetFilter,
+        ReplacementDefinition, ReplacementDuration, ReplacementEffectId, ReplacementOperation,
+        ReplacementSourceFilter, ResolutionOutcome, SpellTiming, StackEntryId, StackObjectKind,
+        StateBasedActionKind, StateBasedActionReport, StateError, Step, TargetChoice,
+        TargetControllerPredicate, TargetKind, TargetRequirement, TriggerCondition,
         TriggerDefinition, TriggerInterveningIf, TriggerObjectFilter, TriggerPlayerFilter,
         TriggerZoneFilter, ZoneConservation, ZoneId, ZoneKind, EVENT_RING_CAPACITY,
         NORMAL_TURN_STEPS, OPENING_HAND_SIZE, PAYMENT_PLAN_LIMIT,
@@ -17462,6 +17575,84 @@ mod tests {
                     .get(object)
                     .map(|record| record.controller()),
                 Some(new_controller)
+            );
+        }
+
+        #[test]
+        fn source_bound_predicate_effect_tracks_entrants_and_source_zone() {
+            let mut state = GameState::new();
+            let controller = state.add_player();
+            let opponent = state.add_player();
+            let source = battlefield_creature(
+                &mut state,
+                controller,
+                2_407,
+                2,
+                2,
+                CreatureKeywords::none(),
+            );
+            let first = battlefield_creature(
+                &mut state,
+                controller,
+                2_408,
+                2,
+                2,
+                CreatureKeywords::none(),
+            );
+            let other =
+                battlefield_creature(&mut state, opponent, 2_409, 2, 2, CreatureKeywords::none());
+            let predicate = ObjectTargetPredicate::any()
+                .with_controller(TargetControllerPredicate::You)
+                .with_required_types(ObjectTypes::none().with_creature());
+            register_continuous(
+                &mut state,
+                ContinuousEffectDefinition::new(
+                    controller,
+                    ContinuousEffectTarget::Objects {
+                        predicate,
+                        excluded: Some(source),
+                    },
+                    ContinuousEffectOperation::ModifyPowerToughness {
+                        power: 1,
+                        toughness: 1,
+                    },
+                )
+                .with_source(source)
+                .with_duration(ContinuousEffectDuration::WhileSourceOnBattlefield),
+            );
+
+            assert_eq!(
+                state.creature_characteristics(source).map(|c| c.power()),
+                Ok(2)
+            );
+            assert_eq!(
+                state.creature_characteristics(first).map(|c| c.power()),
+                Ok(3)
+            );
+            assert_eq!(
+                state.creature_characteristics(other).map(|c| c.power()),
+                Ok(2)
+            );
+
+            let entrant = battlefield_creature(
+                &mut state,
+                controller,
+                2_410,
+                2,
+                2,
+                CreatureKeywords::none(),
+            );
+            assert_eq!(
+                state.creature_characteristics(entrant).map(|c| c.power()),
+                Ok(3)
+            );
+
+            state
+                .move_object(source, ZoneId::new(Some(controller), ZoneKind::Graveyard))
+                .unwrap_or_else(|error| panic!("unexpected source move error: {error:?}"));
+            assert_eq!(
+                state.creature_characteristics(first).map(|c| c.power()),
+                Ok(2)
             );
         }
 

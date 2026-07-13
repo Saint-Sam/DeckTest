@@ -934,6 +934,17 @@ fn execute_smoke(
         destination,
         "resolve.spell_destination",
     )?;
+    for (ability_index, ability) in compiled.program.static_abilities().iter().enumerate() {
+        for (operation_index, definition) in ability.bind(caster, spell).into_iter().enumerate() {
+            let outcome = execution.dispatch(
+                &format!("static[{ability_index}].register[{operation_index}]"),
+                Action::RegisterContinuousEffect { definition },
+            )?;
+            if !matches!(outcome, Outcome::ContinuousEffectRegistered(_)) {
+                return Err(unexpected_outcome("static.register", outcome));
+            }
+        }
+    }
 
     let initial_hand_sizes = [
         hand_size(&execution.state, caster)?,
@@ -1173,6 +1184,12 @@ fn execute_smoke(
                 .triggered_abilities()
                 .iter()
                 .map(|ability| ability.effects().len())
+                .sum::<usize>()
+            + compiled
+                .program
+                .static_abilities()
+                .iter()
+                .map(|ability| ability.operations().len())
                 .sum::<usize>(),
         production_actions: execution.production_actions,
         final_life_totals,
