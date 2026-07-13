@@ -1163,6 +1163,20 @@ operations! {
     SacrificeCount => ("sacrifice_count", Effect, 2, Some(2)),
     PlayPermissionRules => ("play_permission_rules", Effect, 6, Some(6)),
     ManaSpent => ("mana_spent", Predicate, 1, Some(1)),
+    CannotAttackTarget => ("cannot_attack_target", Effect, 2, Some(2)),
+    PartySize => ("party_size", Value, 1, Some(1)),
+    ConvergeCount => ("converge_count", Value, 1, Some(1)),
+    SpellAbilityProperty => ("spell_ability_property", Predicate, 1, Some(1)),
+    NonLegendaryCopy => ("nonlegendary_copy", Effect, 1, Some(1)),
+    PlayPermissionAdditionalCost => ("play_permission_additional_cost", Effect, 2, Some(2)),
+    OpponentMaxCount => ("opponent_max_count", Value, 1, Some(1)),
+    DrawCost => ("draw_cost", Cost, 2, Some(2)),
+    CreatedController => ("created_controller", Effect, 2, Some(2)),
+    ChooseExactlyRepeat => ("choose_exactly_repeat", Effect, 3, None),
+    StackTimesKicked => ("stack_times_kicked", Value, 1, Some(1)),
+    EventResolvedLimit => ("event_resolved_limit", Event, 3, Some(3)),
+    CopyCountersFrom => ("copy_counters_from", Effect, 2, Some(3)),
+    DiscardMatching => ("discard_matching", Effect, 3, Some(4)),
 }
 
 impl Operation {
@@ -1178,7 +1192,7 @@ impl Operation {
             Self::Cards | Self::Permanents | Self::Spells => Some((0, PredicateOrText)),
             Self::And | Self::Or => Some((0, Predicate)),
             Self::Sequence | Self::ChooseOne => Some((0, Effect)),
-            Self::ChooseExactly | Self::ChooseUpTo => Some((1, Effect)),
+            Self::ChooseExactly | Self::ChooseUpTo | Self::ChooseExactlyRepeat => Some((1, Effect)),
             Self::ChooseBetween => Some((2, Effect)),
             Self::SearchLibrary => Some((2, Scalar)),
             Self::LayerEffect => Some((3, Integer)),
@@ -1221,7 +1235,7 @@ impl Operation {
     #[must_use]
     pub const fn argument_kind(self, index: usize) -> Option<ArgumentKind> {
         use ArgumentKind::{
-            Boolean, Comparable, Effect, Event, Number, Predicate, PredicateOrText,
+            Boolean, Comparable, Cost, Effect, Event, Number, Predicate, PredicateOrText,
             RememberedValue, Scalar, Selector, SelectorOrEvent, SelectorOrNumber,
             SelectorOrPredicate, SelectorOrText, SelectorTextOrNumber, Text, Timing, Value,
         };
@@ -1298,6 +1312,11 @@ impl Operation {
                 1 => Some(Selector),
                 _ => None,
             },
+            Self::DrawCost => match index {
+                0 => Some(Number),
+                1 => Some(Selector),
+                _ => None,
+            },
             Self::PayLife | Self::LoyaltyCost => Some(Number),
             Self::RemoveCounterCost => match index {
                 0 => Some(Selector),
@@ -1367,7 +1386,7 @@ impl Operation {
                 1 => Some(Text),
                 _ => None,
             },
-            Self::EventLimit => match index {
+            Self::EventLimit | Self::EventResolvedLimit => match index {
                 0 => Some(Event),
                 1 => Some(Selector),
                 2 => Some(Number),
@@ -1387,7 +1406,25 @@ impl Operation {
             Self::CannotBeCountered | Self::EventCounterAttempt => Some(Selector),
 
             Self::Sequence | Self::ChooseOne => Some(Effect),
+            Self::NonLegendaryCopy => Some(Effect),
+            Self::PlayPermissionAdditionalCost => match index {
+                0 => Some(Effect),
+                1 => Some(Cost),
+                _ => None,
+            },
+            Self::CreatedController => match index {
+                0 => Some(Effect),
+                1 => Some(Selector),
+                _ => None,
+            },
             Self::ChooseExactly | Self::ChooseUpTo => {
+                if index == 0 {
+                    Some(Number)
+                } else {
+                    Some(Effect)
+                }
+            }
+            Self::ChooseExactlyRepeat => {
                 if index == 0 {
                     Some(Number)
                 } else {
@@ -1733,6 +1770,7 @@ impl Operation {
                 1 => Some(Predicate),
                 _ => None,
             },
+            Self::CannotAttackTarget => Some(Selector),
             Self::CannotUntap => match index {
                 0 => Some(Selector),
                 1 => Some(Text),
@@ -2130,7 +2168,21 @@ impl Operation {
                 1 => Some(Selector),
                 _ => None,
             },
-            Self::ManaSpent => Some(Text),
+            Self::ManaSpent | Self::SpellAbilityProperty => Some(Text),
+            Self::PartySize | Self::ConvergeCount => Some(Selector),
+            Self::OpponentMaxCount => Some(Selector),
+            Self::StackTimesKicked => Some(Selector),
+            Self::CopyCountersFrom => match index {
+                0 | 1 => Some(Selector),
+                2 => Some(Number),
+                _ => None,
+            },
+            Self::DiscardMatching => match index {
+                0 | 1 => Some(Selector),
+                2 => Some(Text),
+                3 => Some(Number),
+                _ => None,
+            },
             Self::TimingAll => None,
         }
     }
@@ -2429,6 +2481,20 @@ mod tests {
         assert_eq!(Operation::SacrificeCount as u32, 363);
         assert_eq!(Operation::PlayPermissionRules as u32, 364);
         assert_eq!(Operation::ManaSpent as u32, 365);
+        assert_eq!(Operation::CannotAttackTarget as u32, 366);
+        assert_eq!(Operation::PartySize as u32, 367);
+        assert_eq!(Operation::ConvergeCount as u32, 368);
+        assert_eq!(Operation::SpellAbilityProperty as u32, 369);
+        assert_eq!(Operation::NonLegendaryCopy as u32, 370);
+        assert_eq!(Operation::PlayPermissionAdditionalCost as u32, 371);
+        assert_eq!(Operation::OpponentMaxCount as u32, 372);
+        assert_eq!(Operation::DrawCost as u32, 373);
+        assert_eq!(Operation::CreatedController as u32, 374);
+        assert_eq!(Operation::ChooseExactlyRepeat as u32, 375);
+        assert_eq!(Operation::StackTimesKicked as u32, 376);
+        assert_eq!(Operation::EventResolvedLimit as u32, 377);
+        assert_eq!(Operation::CopyCountersFrom as u32, 378);
+        assert_eq!(Operation::DiscardMatching as u32, 379);
 
         let config = bincode::config::standard()
             .with_fixed_int_encoding()
