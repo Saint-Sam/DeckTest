@@ -16,7 +16,8 @@ use forge_core::{
     ContinuousEffectDuration, ContinuousEffectOperation, ContinuousEffectTarget,
     CostModifierDefinition, CostModifierOperation, CostModifierScope, CreatureKeywords, GameState,
     ManaCost, ManaKind, ManaPool, ObjectColors, ObjectId, ObjectSubtype, ObjectSubtypes,
-    ObjectSupertypes, ObjectTargetPredicate, ObjectTypes, Outcome, PlayerId, PlayerTargetPredicate,
+    ObjectSupertypes, ObjectTargetPredicate, ObjectTypes, Outcome, PlayerId, PlayerRule,
+    PlayerRuleSubject, PlayerTargetPredicate, RestrictionDefinition, RestrictionEffect,
     StackEntryId, TargetChoice, TargetControllerPredicate, TargetKind, TargetRequirement,
     TriggerCondition, TriggerDefinition, TriggerObjectFilter, TriggerPlayerFilter,
     TriggerZoneFilter, ZoneId, ZoneKind,
@@ -185,6 +186,8 @@ pub enum Capability {
     ModifyCharacteristics,
     /// Reduce generic mana costs for matching spells.
     ReduceSpellCost,
+    /// Apply a typed continuous player-rule change.
+    ModifyPlayerRules,
 }
 
 impl Capability {
@@ -211,6 +214,7 @@ impl Capability {
             Self::TapObject => "tap_object",
             Self::ModifyCharacteristics => "modify_characteristics",
             Self::ReduceSpellCost => "reduce_spell_cost",
+            Self::ModifyPlayerRules => "modify_player_rules",
         }
     }
 }
@@ -656,6 +660,11 @@ pub enum StaticAbilityProgram {
         /// Generic mana reduction.
         amount: u32,
     },
+    /// A continuous rule change for the current controller of the source.
+    PlayerRule {
+        /// Closed player-level rule change.
+        rule: PlayerRule,
+    },
 }
 
 /// One completely compiled additional spell cost.
@@ -771,6 +780,16 @@ impl StaticAbilityProgram {
                     ),
                 }]
             }
+            Self::PlayerRule { rule } => vec![Action::RegisterRestriction {
+                definition: RestrictionDefinition::new(
+                    controller,
+                    RestrictionEffect::PlayerRule {
+                        subject: PlayerRuleSubject::ControllerOfSource,
+                        rule: *rule,
+                    },
+                )
+                .with_source(source),
+            }],
         }
     }
 
@@ -780,6 +799,7 @@ impl StaticAbilityProgram {
         match self {
             Self::Continuous { operations, .. } => operations.len(),
             Self::SpellCostReduction { .. } => 1,
+            Self::PlayerRule { .. } => 1,
         }
     }
 }
@@ -1013,6 +1033,9 @@ impl CardProgram {
                     .extend(operations.iter().map(|_| Capability::ModifyCharacteristics)),
                 StaticAbilityProgram::SpellCostReduction { .. } => {
                     capabilities.push(Capability::ReduceSpellCost);
+                }
+                StaticAbilityProgram::PlayerRule { .. } => {
+                    capabilities.push(Capability::ModifyPlayerRules);
                 }
             }
         }
@@ -1293,6 +1316,36 @@ fn compile_static_ability(
             "one permanent selector and one continuous operation",
         ));
     };
+    if is_you_selector(selector) {
+        let Expression::Call {
+            operation: Operation::NoMaximumHandSize,
+            arguments,
+        } = effect
+        else {
+            return Err(CompileDiagnostic::new(
+                CompileDiagnosticCode::EffectOperation,
+                format!("{path}.effect.operation"),
+                "player continuous effects currently require no_maximum_hand_size(you())",
+            ));
+        };
+        let [affected] = arguments.as_slice() else {
+            return Err(effect_arity(
+                &format!("{path}.effect.operation"),
+                &Operation::NoMaximumHandSize,
+                "you()",
+            ));
+        };
+        if !is_you_selector(affected) {
+            return Err(CompileDiagnostic::new(
+                CompileDiagnosticCode::PlayerSelector,
+                format!("{path}.effect.operation.player"),
+                "no-maximum-hand-size source and affected player must both be you()",
+            ));
+        }
+        return Ok(StaticAbilityProgram::PlayerRule {
+            rule: PlayerRule::NoMaximumHandSize,
+        });
+    }
     let spec = compile_object_selector(selector, &format!("{path}.effect.selector"))?;
     let kind = spec.kind;
     let exclude_source = spec.exclude_source;
@@ -3381,6 +3434,16 @@ fn is_any_selector(expression: &Expression) -> bool {
         expression,
         Expression::Call {
             operation: Operation::Any,
+            arguments,
+        } if arguments.is_empty()
+    )
+}
+
+fn is_you_selector(expression: &Expression) -> bool {
+    matches!(
+        expression,
+        Expression::Call {
+            operation: Operation::You,
             arguments,
         } if arguments.is_empty()
     )
@@ -5511,6 +5574,27 @@ card "Temple of the False God" {
   }
 }
 "#;
+    const RELIQUARY_TOWER: &str = r#"
+card "Reliquary Tower" {
+  id: "c23e5b80-08d2-4e24-9908-fe2aa4f30f6f"
+  layout: normal
+  status: unverified_playable
+  face "Reliquary Tower" {
+    cost: ""
+    types: "Land"
+    oracle: "You have no maximum hand size.\n{T}: Add {C}."
+    keywords: []
+    ability static {
+      effect: continuous(you(), no_maximum_hand_size(you()))
+    }
+    ability activated {
+      costs: [tap_self()]
+      effect: add_mana("{C}", you())
+      mana_ability: true
+    }
+  }
+}
+"#;
     const BIRDS_OF_PARADISE: &str = r#"
 card "Birds of Paradise" {
   id: "d3a0b660-358c-41bd-9cd2-41fbf3491b1a"
@@ -5752,6 +5836,17 @@ card "Interpreter Contract" {
                 count: 5,
             })
         );
+    }
+
+    #[test]
+    fn source_bound_player_rule_compiles_without_mutating_base_player_state() {
+        let tower = compile_card_program(&parse("reliquary_tower.frs", RELIQUARY_TOWER))
+            .unwrap_or_else(|error| panic!("unexpected Reliquary Tower compile error: {error}"));
+        assert_eq!(tower.kind(), ProgramKind::Land);
+        assert_eq!(tower.static_abilities().len(), 1);
+        assert!(tower
+            .capabilities()
+            .contains(&Capability::ModifyPlayerRules));
     }
 
     #[test]

@@ -3426,6 +3426,39 @@ impl CombatRestriction {
     }
 }
 
+/// Which player a continuous player-rule effect affects.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum PlayerRuleSubject {
+    /// One exact player.
+    Player(PlayerId),
+    /// The current controller of the source permanent.
+    ControllerOfSource,
+}
+
+impl PlayerRuleSubject {
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::Player(_) => 0,
+            Self::ControllerOfSource => 1,
+        }
+    }
+}
+
+/// Closed continuous changes to player-level game rules.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum PlayerRule {
+    /// The affected player does not discard for maximum hand size during cleanup.
+    NoMaximumHandSize,
+}
+
+impl PlayerRule {
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::NoMaximumHandSize => 0,
+        }
+    }
+}
+
 /// A targeting or combat restriction emitted by card IR.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum RestrictionEffect {
@@ -3443,6 +3476,13 @@ pub enum RestrictionEffect {
         /// Combat restriction to apply.
         restriction: CombatRestriction,
     },
+    /// A source-bound continuous player-rule change.
+    PlayerRule {
+        /// Player affected by the rule change.
+        subject: PlayerRuleSubject,
+        /// Rule change to apply.
+        rule: PlayerRule,
+    },
 }
 
 impl RestrictionEffect {
@@ -3450,6 +3490,7 @@ impl RestrictionEffect {
         match self {
             Self::Targeting { .. } => 0,
             Self::Combat { .. } => 1,
+            Self::PlayerRule { .. } => 2,
         }
     }
 }
@@ -8660,6 +8701,29 @@ impl GameState {
         Ok(())
     }
 
+    /// Returns the current maximum hand size, or none when a continuous rule removes it.
+    pub fn effective_max_hand_size(&self, player: PlayerId) -> Result<Option<u32>, StateError> {
+        let base = self
+            .players
+            .get(player.index())
+            .ok_or(StateError::UnknownPlayer(player))?
+            .max_hand_size;
+        let removed = self.restrictions.iter().any(|subscription| {
+            if !self.restriction_source_is_active(subscription.definition) {
+                return false;
+            }
+            let RestrictionEffect::PlayerRule {
+                subject,
+                rule: PlayerRule::NoMaximumHandSize,
+            } = subscription.definition.effect()
+            else {
+                return false;
+            };
+            self.player_rule_subject_matches(subscription.definition, subject, player)
+        });
+        Ok((!removed).then_some(base))
+    }
+
     /// Sets a player's life total.
     fn set_player_life(&mut self, player: PlayerId, life: i32) -> Result<(), StateError> {
         let player_state = self
@@ -9410,6 +9474,14 @@ impl GameState {
                 }
                 CombatRestrictionSubject::ControlledBy(player) => self.require_player(player)?,
                 CombatRestrictionSubject::AllObjects => {}
+            },
+            RestrictionEffect::PlayerRule { subject, .. } => match subject {
+                PlayerRuleSubject::Player(player) => self.require_player(player)?,
+                PlayerRuleSubject::ControllerOfSource => {
+                    if definition.source().is_none() {
+                        return Err(StateError::ObjectNotActivatable(ObjectId(0)));
+                    }
+                }
             },
         }
         let id = RestrictionId(self.next_restriction);
@@ -12153,6 +12225,9 @@ impl GameState {
 
     fn combat_restriction_applies(&self, object: ObjectId, restriction: CombatRestriction) -> bool {
         self.restrictions.iter().any(|subscription| {
+            if !self.restriction_source_is_active(subscription.definition) {
+                return false;
+            }
             let RestrictionEffect::Combat {
                 subject,
                 restriction: active,
@@ -13557,6 +13632,9 @@ impl GameState {
             return false;
         };
         self.restrictions.iter().any(|subscription| {
+            if !self.restriction_source_is_active(subscription.definition) {
+                return false;
+            }
             let RestrictionEffect::Targeting {
                 subject,
                 restriction,
@@ -13605,6 +13683,9 @@ impl GameState {
         };
         let mut cost = ManaCost::new(0, 0, 0, 0, 0, 0);
         for subscription in &self.restrictions {
+            if !self.restriction_source_is_active(subscription.definition) {
+                continue;
+            }
             let RestrictionEffect::Targeting {
                 subject,
                 restriction: TargetRestriction::Ward { cost: ward },
@@ -13617,6 +13698,27 @@ impl GameState {
             }
         }
         Ok(cost)
+    }
+
+    fn restriction_source_is_active(&self, definition: RestrictionDefinition) -> bool {
+        definition.source().is_none_or(|source| {
+            self.object_zone(source) == Some(ZoneId::new(None, ZoneKind::Battlefield))
+        })
+    }
+
+    fn player_rule_subject_matches(
+        &self,
+        definition: RestrictionDefinition,
+        subject: PlayerRuleSubject,
+        player: PlayerId,
+    ) -> bool {
+        match subject {
+            PlayerRuleSubject::Player(expected) => expected == player,
+            PlayerRuleSubject::ControllerOfSource => definition
+                .source()
+                .and_then(|source| self.object_controller(source).ok())
+                .is_some_and(|controller| controller == player),
+        }
     }
 
     fn add_mana_costs(left: ManaCost, right: ManaCost) -> Result<ManaCost, StateError> {
@@ -13895,11 +13997,10 @@ impl GameState {
     }
 
     fn discard_to_max_hand_size(&mut self, player: PlayerId) -> Result<u32, StateError> {
-        let max_hand_size = self
-            .players
-            .get(player.index())
-            .ok_or(StateError::UnknownPlayer(player))?
-            .max_hand_size as usize;
+        let Some(max_hand_size) = self.effective_max_hand_size(player)? else {
+            return Ok(0);
+        };
+        let max_hand_size = max_hand_size as usize;
         let hand = ZoneId::new(Some(player), ZoneKind::Hand);
         let graveyard = ZoneId::new(Some(player), ZoneKind::Graveyard);
         let mut discarded = 0;
@@ -14833,6 +14934,17 @@ impl Fnva64 {
         self.write_u8(restriction.canonical_code());
     }
 
+    fn write_player_rule_subject(&mut self, subject: PlayerRuleSubject) {
+        self.write_u8(subject.canonical_code());
+        if let PlayerRuleSubject::Player(player) = subject {
+            self.write_u32(player.0);
+        }
+    }
+
+    fn write_player_rule(&mut self, rule: PlayerRule) {
+        self.write_u8(rule.canonical_code());
+    }
+
     fn write_restriction_effect(&mut self, effect: RestrictionEffect) {
         self.write_u8(effect.canonical_code());
         match effect {
@@ -14849,6 +14961,10 @@ impl Fnva64 {
             } => {
                 self.write_combat_restriction_subject(subject);
                 self.write_combat_restriction(restriction);
+            }
+            RestrictionEffect::PlayerRule { subject, rule } => {
+                self.write_player_rule_subject(subject);
+                self.write_player_rule(rule);
             }
         }
     }
@@ -16121,6 +16237,17 @@ impl CanonicalBytes {
         self.write_u8(restriction.canonical_code());
     }
 
+    fn write_player_rule_subject(&mut self, subject: PlayerRuleSubject) {
+        self.write_u8(subject.canonical_code());
+        if let PlayerRuleSubject::Player(player) = subject {
+            self.write_u32(player.0);
+        }
+    }
+
+    fn write_player_rule(&mut self, rule: PlayerRule) {
+        self.write_u8(rule.canonical_code());
+    }
+
     fn write_restriction_effect(&mut self, effect: RestrictionEffect) {
         self.write_u8(effect.canonical_code());
         match effect {
@@ -16137,6 +16264,10 @@ impl CanonicalBytes {
             } => {
                 self.write_combat_restriction_subject(subject);
                 self.write_combat_restriction(restriction);
+            }
+            RestrictionEffect::PlayerRule { subject, rule } => {
+                self.write_player_rule_subject(subject);
+                self.write_player_rule(rule);
             }
         }
     }
@@ -16843,9 +16974,10 @@ mod tests {
         CreatureCharacteristics, CreatureKeywords, EffectDuration, EventReplayError, GameEvent,
         GameOutcome, GameState, ManaCost, ManaKind, ManaPool, ManaSource, ObjectColors,
         ObjectSubtype, ObjectSubtypes, ObjectSupertypes, ObjectTargetPredicate, ObjectTypes,
-        ObjectView, Outcome, PaymentError, Phase, PlayerId, PriorityOutcome, ReplacementCondition,
-        ReplacementDamageTargetFilter, ReplacementDefinition, ReplacementDuration,
-        ReplacementEffectId, ReplacementOperation, ReplacementSourceFilter, ResolutionOutcome,
+        ObjectView, Outcome, PaymentError, Phase, PlayerId, PlayerRule, PlayerRuleSubject,
+        PriorityOutcome, ReplacementCondition, ReplacementDamageTargetFilter,
+        ReplacementDefinition, ReplacementDuration, ReplacementEffectId, ReplacementOperation,
+        ReplacementSourceFilter, ResolutionOutcome, RestrictionDefinition, RestrictionEffect,
         SpellTiming, StackEntryId, StackObjectKind, StateBasedActionKind, StateBasedActionReport,
         StateError, Step, TargetChoice, TargetControllerPredicate, TargetKind, TargetRequirement,
         TriggerCondition, TriggerDefinition, TriggerInterveningIf, TriggerObjectFilter,
@@ -20944,6 +21076,53 @@ mod tests {
             .move_object(source, ZoneId::new(Some(active), ZoneKind::Graveyard))
             .unwrap_or_else(|error| panic!("unexpected source move error: {error:?}"));
         assert_eq!(state.effective_spell_cost(active, goblin, base), Ok(base));
+    }
+
+    #[test]
+    fn source_bound_player_rule_tracks_controller_and_expires_off_battlefield() {
+        let mut state = GameState::new();
+        let first = state.add_player();
+        let second = state.add_player();
+        let source = state
+            .create_object(
+                CardId::new(25_300),
+                first,
+                first,
+                ZoneId::new(None, ZoneKind::Battlefield),
+            )
+            .unwrap_or_else(|error| panic!("unexpected source create error: {error:?}"));
+        state
+            .register_restriction(
+                RestrictionDefinition::new(
+                    first,
+                    RestrictionEffect::PlayerRule {
+                        subject: PlayerRuleSubject::ControllerOfSource,
+                        rule: PlayerRule::NoMaximumHandSize,
+                    },
+                )
+                .with_source(source),
+            )
+            .unwrap_or_else(|error| panic!("unexpected player-rule registration error: {error:?}"));
+
+        assert_eq!(state.effective_max_hand_size(first), Ok(None));
+        assert_eq!(state.effective_max_hand_size(second), Ok(Some(7)));
+
+        register_continuous(
+            &mut state,
+            ContinuousEffectDefinition::new(
+                second,
+                ContinuousEffectTarget::Object(source),
+                ContinuousEffectOperation::ChangeController { controller: second },
+            ),
+        );
+        assert_eq!(state.effective_max_hand_size(first), Ok(Some(7)));
+        assert_eq!(state.effective_max_hand_size(second), Ok(None));
+
+        state
+            .move_object(source, ZoneId::new(Some(first), ZoneKind::Graveyard))
+            .unwrap_or_else(|error| panic!("unexpected source move error: {error:?}"));
+        assert_eq!(state.effective_max_hand_size(first), Ok(Some(7)));
+        assert_eq!(state.effective_max_hand_size(second), Ok(Some(7)));
     }
 
     #[test]

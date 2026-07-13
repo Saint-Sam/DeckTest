@@ -943,7 +943,9 @@ fn execute_smoke(
             )?;
             if !matches!(
                 outcome,
-                Outcome::ContinuousEffectRegistered(_) | Outcome::CostModifierRegistered(_)
+                Outcome::ContinuousEffectRegistered(_)
+                    | Outcome::CostModifierRegistered(_)
+                    | Outcome::RestrictionRegistered(_)
             ) {
                 return Err(unexpected_outcome("static.register", outcome));
             }
