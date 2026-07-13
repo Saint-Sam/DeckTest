@@ -440,6 +440,11 @@ const MAPPERS: &[MapperSpec] = &[
     },
     MapperSpec {
         prefix: LegacyAbilityPrefix::Activated,
+        api: "PermanentCreature",
+        mapper: map_permanent_creature,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Activated,
         api: "Counter",
         mapper: map_counter_spell,
     },
@@ -642,6 +647,11 @@ const MAPPERS: &[MapperSpec] = &[
         prefix: LegacyAbilityPrefix::Static,
         api: "MustAttack",
         mapper: map_must_attack,
+    },
+    MapperSpec {
+        prefix: LegacyAbilityPrefix::Static,
+        api: "MustBlock",
+        mapper: map_must_block,
     },
     MapperSpec {
         prefix: LegacyAbilityPrefix::Static,
@@ -1296,6 +1306,16 @@ fn map_with_context_unconditioned(
     }
     if prefix == LegacyAbilityPrefix::Activated && api == "StoreSVar" {
         let mapped = map_store_svar(prefix, selector_key, expression, context, stack)?;
+        return apply_optional_legacy_condition(
+            prefix,
+            selector_key,
+            mapped,
+            condition,
+            check_on_resolution,
+        );
+    }
+    if prefix == LegacyAbilityPrefix::Static && api == "OptionalAttackCost" {
+        let mapped = map_optional_attack_cost(prefix, selector_key, expression, context, stack)?;
         return apply_optional_legacy_condition(
             prefix,
             selector_key,
@@ -8238,24 +8258,39 @@ fn map_draw(
             "NumCards",
             "Defined",
             "ValidTgts",
+            "RememberDrawn",
+            "AILogic",
             "SpellDescription",
             "StackDescription",
         ],
     )?;
     let amount = optional_positive_integer(parameters, "NumCards")?.unwrap_or(1);
+    let draw = call(
+        Operation::Draw,
+        vec![
+            Expression::Integer(amount),
+            player_selector(parameters, DefaultSelector::You)?,
+        ],
+    );
+    let draw = match parameters.get("RememberDrawn").map(String::as_str) {
+        None => draw,
+        Some("True") => call(
+            Operation::RememberDrawn,
+            vec![draw, Expression::Text("actual".to_string())],
+        ),
+        Some("AllReplaced") => call(
+            Operation::RememberDrawn,
+            vec![draw, Expression::Text("including_replacements".to_string())],
+        ),
+        Some(value) => return Err(unsupported_value("RememberDrawn", value)),
+    };
     Ok(MappedLegacyAbility {
         prefix,
         api: api.to_string(),
         costs: parse_simple_cost(parameters.get("Cost"))?,
         event: None,
         timing: None,
-        expression: call(
-            Operation::Draw,
-            vec![
-                Expression::Integer(amount),
-                player_selector(parameters, DefaultSelector::You)?,
-            ],
-        ),
+        expression: draw,
     })
 }
 
@@ -11677,6 +11712,7 @@ fn map_discard(
             "RememberDiscarded",
             "DiscardValid",
             "DiscardValidDesc",
+            "AnyNumber",
         ],
     )?;
     let mode = match required(parameters, "Mode")? {
@@ -11688,7 +11724,30 @@ fn map_discard(
         value => return Err(unsupported_value("Mode", value)),
     };
     let player = player_selector(parameters, DefaultSelector::You)?;
-    let expression = if let Some(valid) = parameters.get("DiscardValid") {
+    let any_number = closed_true_flag(parameters, "AnyNumber")?;
+    if any_number && parameters.contains_key("NumCards") {
+        return Err(diagnostic(
+            "UNSUPPORTED_PARAMETER",
+            "AnyNumber discard cannot include NumCards",
+        ));
+    }
+    if any_number && !matches!(mode, "choose") {
+        return Err(diagnostic(
+            "UNSUPPORTED_VALUE",
+            "AnyNumber discard requires a choose mode",
+        ));
+    }
+    let expression = if any_number {
+        let valid = parameters
+            .get("DiscardValid")
+            .map(String::as_str)
+            .unwrap_or("Card");
+        let cards = add_collection_predicate(
+            card_selector_in_zone(valid, "hand")?,
+            call(Operation::OwnedBy, vec![player.clone()]),
+        )?;
+        call(Operation::DiscardAnyNumber, vec![player, cards])
+    } else if let Some(valid) = parameters.get("DiscardValid") {
         let cards = add_collection_predicate(
             card_selector_in_zone(valid, "hand")?,
             call(Operation::OwnedBy, vec![player.clone()]),
@@ -11719,6 +11778,37 @@ fn map_discard(
     let expression =
         apply_remembered_result(expression, parameters, "RememberDiscarded", "discarded")?;
     mapped_direct(prefix, api, parameters, expression)
+}
+
+fn map_permanent_creature(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector(selector, "SP")?;
+    reject_unknown(
+        parameters,
+        &[
+            "Cost",
+            "SpellDescription",
+            "StackDescription",
+            "AILogic",
+            "AdditionalDesc",
+        ],
+    )?;
+    mapped_direct(
+        prefix,
+        api,
+        parameters,
+        call(
+            Operation::MoveZone,
+            vec![
+                call(Operation::Source, vec![]),
+                Expression::Text("battlefield".to_string()),
+            ],
+        ),
+    )
 }
 
 fn map_reveal(
@@ -15947,6 +16037,92 @@ fn map_must_attack(
     })
 }
 
+fn map_must_block(
+    prefix: LegacyAbilityPrefix,
+    api: &str,
+    selector: &str,
+    parameters: &BTreeMap<String, String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector(selector, "Mode")?;
+    reject_unknown(
+        parameters,
+        &["ValidCreature", "EffectZone", "Description", "Secondary"],
+    )?;
+    require_static_effect_zone(parameters, "EffectZone")?;
+    if parameters
+        .get("Secondary")
+        .is_some_and(|value| value != "True")
+    {
+        return Err(unsupported_value(
+            "Secondary",
+            required(parameters, "Secondary")?,
+        ));
+    }
+    let affected = affected_selector(required(parameters, "ValidCreature")?)?;
+    Ok(MappedLegacyAbility {
+        prefix,
+        api: api.to_string(),
+        costs: Vec::new(),
+        event: None,
+        timing: None,
+        expression: call(
+            Operation::Continuous,
+            vec![
+                affected,
+                call(Operation::MustBlock, vec![call(Operation::Any, vec![])]),
+            ],
+        ),
+    })
+}
+
+fn map_optional_attack_cost(
+    _prefix: LegacyAbilityPrefix,
+    selector: &str,
+    expression: &LegacyExpression,
+    context: &MappingContext<'_>,
+    stack: &mut Vec<String>,
+) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    require_selector(selector, "Mode")?;
+    let parameters = parameters(expression)?;
+    reject_unknown(
+        &parameters,
+        &["ValidCard", "Trigger", "Cost", "Description", "Secondary"],
+    )?;
+    if parameters
+        .get("Secondary")
+        .is_some_and(|value| value != "True")
+    {
+        return Err(unsupported_value(
+            "Secondary",
+            required(&parameters, "Secondary")?,
+        ));
+    }
+    let trigger_name = required(&parameters, "Trigger")?;
+    let linked = resolve_svar(trigger_name, context, stack)?;
+    if !linked.costs.is_empty() || linked.event.is_some() || linked.timing.is_some() {
+        return Err(diagnostic(
+            "UNSUPPORTED_LINK",
+            &format!("OptionalAttackCost SVar `{trigger_name}` must be a cost-free DB effect"),
+        ));
+    }
+    let mut arguments = vec![
+        affected_selector(required(&parameters, "ValidCard")?)?,
+        linked.expression,
+    ];
+    let costs = parse_simple_cost(parameters.get("Cost"))?;
+    if costs.is_empty() {
+        return Err(diagnostic(
+            "MISSING_PARAMETER",
+            "OptionalAttackCost requires Cost",
+        ));
+    }
+    arguments.extend(costs);
+    Ok(static_mapped(
+        "OptionalAttackCost",
+        call(Operation::OptionalAttackCost, arguments),
+    ))
+}
+
 fn map_min_max_blocker(
     prefix: LegacyAbilityPrefix,
     api: &str,
@@ -17172,6 +17348,15 @@ fn parse_cost_with_controller(
                     ],
                 ));
             }
+        } else if let Some(payload) = cost_payload(&token, "Exert") {
+            let (amount, validity) = parse_counted_cost(payload, "Exert")?;
+            if amount != 1 || validity != "CARDNAME" {
+                return Err(unsupported_value("Cost", value));
+            }
+            costs.push(call(
+                Operation::ExertCost,
+                vec![call(Operation::Source, vec![])],
+            ));
         } else {
             return Err(unsupported_value("Cost", value));
         }
@@ -22327,6 +22512,60 @@ mod tests {
             &discard.expression,
             Operation::DiscardMatching
         ));
+
+        let discard_any = map_line(
+            "A:DB$ Discard | Defined$ You | Mode$ TgtChoose | AnyNumber$ True | DiscardValid$ Land | RememberDiscarded$ True",
+        )
+        .unwrap_or_else(|error| panic!("any-number discard should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &discard_any.expression,
+            Operation::DiscardAnyNumber
+        ));
+        assert!(expression_contains_operation(
+            &discard_any.expression,
+            Operation::Remember
+        ));
+        assert!(map_line("A:DB$ Discard | Mode$ Random | AnyNumber$ True").is_err());
+        assert!(
+            map_line("A:DB$ Discard | Mode$ TgtChoose | AnyNumber$ True | NumCards$ 2").is_err()
+        );
+
+        let permanent = map_line("A:SP$ PermanentCreature | Cost$ 2 B B Sac<1/Creature>")
+            .unwrap_or_else(|error| panic!("permanent spell should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &permanent.expression,
+            Operation::MoveZone
+        ));
+        assert!(!permanent.costs.is_empty());
+
+        let must_block = map_line(
+            "S:Mode$ MustBlock | ValidCreature$ Creature.OppCtrl | Description$ Creatures block if able.",
+        )
+        .unwrap_or_else(|error| panic!("must-block rule should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &must_block.expression,
+            Operation::MustBlock
+        ));
+
+        let optional_attack = map_script_root(concat!(
+            "S:Mode$ OptionalAttackCost | ValidCard$ Card.Self | Trigger$ TrigPump | Cost$ Exert<1/CARDNAME>\n",
+            "SVar:TrigPump:DB$ Pump | Defined$ Self | KW$ Flying\n",
+        ))
+        .unwrap_or_else(|error| panic!("optional attack cost should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &optional_attack.expression,
+            Operation::OptionalAttackCost
+        ));
+
+        for mode in ["True", "AllReplaced"] {
+            let draw = map_line(&format!("A:DB$ Draw | NumCards$ 2 | RememberDrawn$ {mode}"))
+                .unwrap_or_else(|error| panic!("remembered draw should map: {}", error.message));
+            assert!(expression_contains_operation(
+                &draw.expression,
+                Operation::RememberDrawn
+            ));
+        }
+        assert!(map_line("A:DB$ Draw | RememberDrawn$ Unknown").is_err());
 
         let reveal = map_line(
             "A:SP$ Reveal | Defined$ You | RevealValid$ Card.Blue | AnyNumber$ True | RememberRevealed$ True",

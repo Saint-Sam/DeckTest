@@ -1236,6 +1236,11 @@ operations! {
     CannotTarget => ("cannot_target", Effect, 2, Some(2)),
     AttackUnlessPaid => ("attack_unless_paid", Effect, 3, None),
     DisablePermanentActions => ("disable_permanent_actions", Effect, 1, Some(1)),
+    DiscardAnyNumber => ("discard_any_number", Effect, 2, Some(2)),
+    MustBlock => ("must_block", Effect, 1, Some(1)),
+    OptionalAttackCost => ("optional_attack_cost", Effect, 3, None),
+    ExertCost => ("exert_cost", Cost, 1, Some(1)),
+    RememberDrawn => ("remember_drawn", Effect, 2, Some(2)),
 }
 
 impl Operation {
@@ -1288,6 +1293,7 @@ impl Operation {
             Self::TimingAll => Some((0, Timing)),
             Self::DraftFromSpellbook => Some((2, Text)),
             Self::OptionalCastingCost | Self::AttackUnlessPaid => Some((2, Cost)),
+            Self::OptionalAttackCost => Some((2, Cost)),
             _ => None,
         }
     }
@@ -2403,7 +2409,20 @@ impl Operation {
                 0 | 1 => Some(Selector),
                 _ => Some(Cost),
             },
-            Self::DisablePermanentActions => Some(Selector),
+            Self::DisablePermanentActions
+            | Self::DiscardAnyNumber
+            | Self::MustBlock
+            | Self::ExertCost => Some(Selector),
+            Self::OptionalAttackCost => match index {
+                0 => Some(Selector),
+                1 => Some(Effect),
+                _ => Some(Cost),
+            },
+            Self::RememberDrawn => match index {
+                0 => Some(Effect),
+                1 => Some(Text),
+                _ => None,
+            },
             Self::ChooseNumber => match index {
                 0 => Some(Selector),
                 1 | 2 => Some(Number),
@@ -2781,6 +2800,11 @@ mod tests {
         assert_eq!(Operation::CannotTarget as u32, 436);
         assert_eq!(Operation::AttackUnlessPaid as u32, 437);
         assert_eq!(Operation::DisablePermanentActions as u32, 438);
+        assert_eq!(Operation::DiscardAnyNumber as u32, 439);
+        assert_eq!(Operation::MustBlock as u32, 440);
+        assert_eq!(Operation::OptionalAttackCost as u32, 441);
+        assert_eq!(Operation::ExertCost as u32, 442);
+        assert_eq!(Operation::RememberDrawn as u32, 443);
 
         let config = bincode::config::standard()
             .with_fixed_int_encoding()
