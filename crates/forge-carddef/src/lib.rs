@@ -1218,6 +1218,19 @@ operations! {
     ManaConvert => ("mana_convert", Effect, 5, Some(5)),
     ExchangeControl => ("exchange_control", Effect, 1, Some(1)),
     Incubate => ("incubate", Effect, 2, Some(2)),
+    ReplaceTokenTable => ("replace_token_table", Effect, 3, Some(3)),
+    ReplaceCounterTable => ("replace_counter_table", Effect, 3, Some(3)),
+    ReplaceDamageAmount => ("replace_damage_amount", Effect, 1, Some(1)),
+    EventAttackersDeclaredOneTarget => ("event_attackers_declared_one_target", Event, 2, Some(2)),
+    EventUnlockDoor => ("event_unlock_door", Event, 3, Some(3)),
+    EventMutates => ("event_mutates", Event, 1, Some(1)),
+    EventExploited => ("event_exploited", Event, 2, Some(2)),
+    EventDiscardedAll => ("event_discarded_all", Event, 1, Some(1)),
+    EventTransformed => ("event_transformed", Event, 1, Some(1)),
+    EventCommitCrime => ("event_commit_crime", Event, 1, Some(1)),
+    Earthbend => ("earthbend", Effect, 2, Some(2)),
+    Discover => ("discover", Effect, 2, Some(2)),
+    MoveCounter => ("move_counter", Effect, 4, Some(4)),
 }
 
 impl Operation {
@@ -2330,6 +2343,41 @@ impl Operation {
                 2..=4 => Some(Text),
                 _ => None,
             },
+            Self::ReplaceTokenTable => match index {
+                0 | 2 => Some(Text),
+                1 => Some(Value),
+                _ => None,
+            },
+            Self::ReplaceCounterTable => match index {
+                0 | 2 => Some(Text),
+                1 => Some(Value),
+                _ => None,
+            },
+            Self::ReplaceDamageAmount => Some(Value),
+            Self::EventAttackersDeclaredOneTarget | Self::EventExploited => match index {
+                0 | 1 => Some(Selector),
+                _ => None,
+            },
+            Self::EventUnlockDoor => match index {
+                0 | 1 => Some(Selector),
+                2 => Some(Text),
+                _ => None,
+            },
+            Self::EventMutates
+            | Self::EventDiscardedAll
+            | Self::EventTransformed
+            | Self::EventCommitCrime => Some(Selector),
+            Self::Earthbend | Self::Discover => match index {
+                0 => Some(Selector),
+                1 => Some(Number),
+                _ => None,
+            },
+            Self::MoveCounter => match index {
+                0 | 1 => Some(Selector),
+                2 => Some(Text),
+                3 => Some(Number),
+                _ => None,
+            },
             Self::ChooseNumber => match index {
                 0 => Some(Selector),
                 1 | 2 => Some(Number),
@@ -2689,6 +2737,19 @@ mod tests {
         assert_eq!(Operation::ManaConvert as u32, 418);
         assert_eq!(Operation::ExchangeControl as u32, 419);
         assert_eq!(Operation::Incubate as u32, 420);
+        assert_eq!(Operation::ReplaceTokenTable as u32, 421);
+        assert_eq!(Operation::ReplaceCounterTable as u32, 422);
+        assert_eq!(Operation::ReplaceDamageAmount as u32, 423);
+        assert_eq!(Operation::EventAttackersDeclaredOneTarget as u32, 424);
+        assert_eq!(Operation::EventUnlockDoor as u32, 425);
+        assert_eq!(Operation::EventMutates as u32, 426);
+        assert_eq!(Operation::EventExploited as u32, 427);
+        assert_eq!(Operation::EventDiscardedAll as u32, 428);
+        assert_eq!(Operation::EventTransformed as u32, 429);
+        assert_eq!(Operation::EventCommitCrime as u32, 430);
+        assert_eq!(Operation::Earthbend as u32, 431);
+        assert_eq!(Operation::Discover as u32, 432);
+        assert_eq!(Operation::MoveCounter as u32, 433);
 
         let config = bincode::config::standard()
             .with_fixed_int_encoding()
