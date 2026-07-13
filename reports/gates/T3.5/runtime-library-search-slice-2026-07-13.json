@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-13",
+  "task": "T3.5",
+  "slice": "canonical-basic-land-characteristics-and-explicit-library-search",
+  "status": "pass_incremental_slice",
+  "claim_boundary": "This proves production runtime execution for the accepted explicit controller-library search grammar and honest Basic/basic-land-type characteristics. It does not close T3.5, support arbitrary creature subtypes, expose an interactive hidden-information prompt, or semantically verify cards.",
+  "source_binding": "The kernel, interpreter, mapper correction, smoke harness, tests, ADR record, specification, plan state, and this evidence record are committed together.",
+  "production_path": [
+    "forge-core stores all five supertypes and all five basic land types in base and effective object characteristics and canonical hashes",
+    "basic land definitions compile exact type lines and intrinsic fixed-output mana abilities without card-name branches",
+    "Operation::SearchLibrary compiles only controller-library searches with a closed type-line selector grammar and a positive bounded maximum",
+    "ExecutionBindings supplies explicit object IDs and validates ownership, library membership, uniqueness, cardinality, and effective type-line predicates before mutation",
+    "chosen objects move through Action::MoveObject, Action::PutObjectOnTopOfLibrary, and Action::SetObjectTapped",
+    "the smoke harness synthesizes a satisfying hidden-zone object, checks exact destination and tapped state, and validates every action, zone, view, and deterministic hash"
+  ],
+  "fail_closed_boundaries": [
+    "unknown non-basic subtypes remain unsupported until the engine carries general subtype characteristics",
+    "mixed or open selector expressions remain unsupported",
+    "non-controller library searches and unsupported destinations remain unsupported",
+    "missing, duplicate, over-limit, out-of-zone, or type-mismatched choices fail before the first effect mutation",
+    "runtime smoke supplies deterministic explicit choices but does not claim an interactive human or AI prompt"
+  ],
+  "translated_examples": [
+    "Rampant Growth",
+    "Farseek",
+    "Nature's Lore",
+    "Three Visits",
+    "Skyshroud Claim",
+    "Mystical Tutor",
+    "Enlightened Tutor",
+    "Worldly Tutor",
+    "Eladamri's Call",
+    "Fabricate"
+  ],
+  "translated_corpus": {
+    "source": "target/translated-cards",
+    "report": "target/t3_5_runtime_search_audit.json",
+    "report_sha256": "870080c867a6ae4d64c09053307ef4d2f2e7b5e23668268bc791ec36ea4b97a9",
+    "total": 20082,
+    "passed": 605,
+    "unsupported_setup": 19477,
+    "failed": 0,
+    "prior_passed": 567,
+    "net_new_passed": 38,
+    "search_library": 36,
+    "shuffle_library": 36,
+    "move_zone": 59,
+    "tap_object": 11
+  },
+  "frozen_semantic_100": {
+    "runtime_smoke_passed": 40,
+    "unsupported_setup": 60,
+    "failed": 0,
+    "newly_passing": [
+      "Rampant Growth",
+      "Farseek",
+      "Nature's Lore",
+      "Three Visits",
+      "Skyshroud Claim",
+      "Mystical Tutor",
+      "Enlightened Tutor",
+      "Worldly Tutor",
+      "Eladamri's Call",
+      "Fabricate"
+    ],
+    "remaining_blockers": {
+      "unsupported_ability_shape": 33,
+      "unsupported_keyword_semantics": 17,
+      "unsupported_effect_operation": 6,
+      "unsupported_effect_arguments": 3,
+      "unsupported_card_layout": 1
+    },
+    "semantic_verified": 0
+  },
+  "verification": [
+    {
+      "command": "cargo test --offline --workspace",
+      "result": "pass: all workspace unit, integration, and doc tests"
+    },
+    {
+      "command": "cargo clippy --offline -p forge-core -p forge-cards -p forge-testkit -p forge-porttools --all-targets -- -D warnings",
+      "result": "pass"
+    },
+    {
+      "command": "target/debug/forge-porttools translate --all --jobs 24",
+      "result": "pass: 20082/33290 emitted with deterministic fingerprint 00982c5339037d598782d094bf0d4c76"
+    },
+    {
+      "command": "target/debug/forge-testkit runtime-smoke target/translated-cards --report target/t3_5_runtime_search_audit.json --quiet",
+      "result": "expected exit 2 because unsupported definitions remain; 605 passed, 19477 unsupported, 0 failed"
+    },
+    {
+      "command": "cargo fmt --all -- --check and git diff --check",
+      "result": "pass"
+    }
+  ],
+  "constraints": {
+    "local_only": true,
+    "network_used": false,
+    "installs_performed": false,
+    "github_actions_used": false,
+    "push_performed": false
+  },
+  "continuation": {
+    "status": "in_progress",
+    "next": "Run card-specific deterministic T3.6 scenarios for runtime-ready identities while extending only the vertical interpreter blockers needed by the frozen set and four-deck pod."
+  }
+}

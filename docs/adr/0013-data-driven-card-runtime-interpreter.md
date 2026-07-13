@@ -154,6 +154,33 @@ moves from 24 to 30 runtime-smoke passes. These remain capability-level smoke
 claims only: token subtype behavior, non-vanilla templates, and card-specific
 semantic expectations remain T3.6 work.
 
+## Type-line and explicit library-choice extension
+
+Basic lands and library search require real object characteristics rather than
+test labels. `forge-core` therefore carries all five closed Magic supertypes
+and the five basic land types in base and effective object characteristics.
+Both sets participate in canonical bytes and deterministic hashes. A compiled
+basic land receives its exact Basic supertype, land type, and intrinsic mana
+ability; runtime predicates inspect those effective characteristics.
+
+The interpreter compiles `search_library` only for a closed selector grammar:
+top-level card types, required supertypes, the five basic land types, negated
+top-level types, and homogeneous type or basic-land-type unions. The caller
+supplies selected object IDs through an explicit choice slot. Before any
+effect action is emitted, execution verifies ownership, library membership,
+cardinality, uniqueness, and every compiled characteristic predicate. Chosen
+objects can then move through production actions to hand or battlefield, be
+placed on top of their existing library, and be tapped when required. Unknown
+subtypes remain unsupported rather than being approximated.
+
+The legacy mapper was also corrected so library selectors such as
+`Instant,Sorcery` lower to top-level type predicates instead of subtype
+predicates. The corrected local corpus executes 605 of 20,082 translated
+definitions, with 19,477 typed unsupported results and zero failures. The
+frozen Commander set moves from 30 to 40 runtime-smoke passes. These are still
+capability-level smoke claims; hidden-information prompts, card-specific
+expected outcomes, and deterministic semantic replays remain T3.6 work.
+
 ## Consequences
 
 - Semantic work becomes reusable product code, so a T3.6 pass proves the path

@@ -7,15 +7,16 @@
 
 use forge_carddef::CardDefinition;
 use forge_cards::runtime::{
-    bind_program_actions, compile_card_program, AmountProgram, CardProgram, CompileDiagnostic,
-    CompileDiagnosticCode, EffectProgram, ExecutionBindings, PlayerBinding, ProgramKind,
+    bind_program_actions, compile_card_program, AmountProgram, CardProgram, ChosenDestination,
+    CompileDiagnostic, CompileDiagnosticCode, EffectProgram, ExecutionBindings, PlayerBinding,
+    ProgramKind,
 };
 use forge_core::{
     apply, auto_payment_plan, Action, ActivatedAbilityId, BaseCreatureCharacteristics,
-    BaseObjectCharacteristics, CardId, CastSpellRequest, GameOutcome, GameState, ManaPool,
-    ObjectColors, ObjectId, ObjectTypes, Outcome, PlayerId, PlayerTargetPredicate, PriorityOutcome,
-    SpellTiming, StackEntryId, StackObjectKind, Step, TargetChoice, TargetControllerPredicate,
-    TargetKind, TargetPredicate, ZoneId, ZoneKind,
+    BaseObjectCharacteristics, BasicLandTypes, CardId, CastSpellRequest, GameOutcome, GameState,
+    ManaPool, ObjectColors, ObjectId, ObjectTypes, Outcome, PlayerId, PlayerTargetPredicate,
+    PriorityOutcome, SpellTiming, StackEntryId, StackObjectKind, Step, TargetChoice,
+    TargetControllerPredicate, TargetKind, TargetPredicate, ZoneId, ZoneKind,
 };
 
 /// Capability executed through the shared card runtime interpreter.
@@ -434,7 +435,10 @@ fn compile_life_totals(
             | EffectProgram::ExileObject { .. }
             | EffectProgram::CounterStackEntry { .. }
             | EffectProgram::MoveTargetObject { .. }
-            | EffectProgram::CreateTokens { .. } => continue,
+            | EffectProgram::CreateTokens { .. }
+            | EffectProgram::SearchLibrary { .. }
+            | EffectProgram::MoveChosenObjects { .. }
+            | EffectProgram::TapChosenObjects { .. } => continue,
         };
         let player = smoke_player_index(players);
         totals[player] = totals[player]
@@ -509,7 +513,10 @@ fn compile_library_reserve(
             | EffectProgram::ExileObject { .. }
             | EffectProgram::CounterStackEntry { .. }
             | EffectProgram::MoveTargetObject { .. }
-            | EffectProgram::CreateTokens { .. } => {}
+            | EffectProgram::CreateTokens { .. }
+            | EffectProgram::SearchLibrary { .. }
+            | EffectProgram::MoveChosenObjects { .. }
+            | EffectProgram::TapChosenObjects { .. } => {}
         }
     }
     let mut reserve = [0_u32; PLAYER_COUNT];
@@ -720,6 +727,8 @@ fn execute_smoke(
     }
 
     let targets = synthesize_targets(&mut execution, compiled, caster, opponent, base_card_id)?;
+    let object_choices =
+        synthesize_object_choices(&mut execution, &compiled.program, caster, base_card_id)?;
 
     if let Some((stack_kind, timing)) = compiled.lifecycle.spell_profile() {
         execution.dispatch(
@@ -836,7 +845,9 @@ fn execute_smoke(
         hand_size(&execution.state, opponent)?,
     ];
     let mut hand_delta = [0_i64; PLAYER_COUNT];
-    let mut bindings = ExecutionBindings::new(caster, vec![opponent]).with_targets(targets);
+    let mut bindings = ExecutionBindings::new(caster, vec![opponent])
+        .with_targets(targets)
+        .with_object_choices(object_choices.clone());
     for (index, effect) in compiled.program.effects().iter().enumerate() {
         match effect {
             EffectProgram::DrawCards { players, count } => {
@@ -863,7 +874,19 @@ fn execute_smoke(
             | EffectProgram::DestroyPermanent { .. }
             | EffectProgram::ExileObject { .. }
             | EffectProgram::CounterStackEntry { .. }
-            | EffectProgram::CreateTokens { .. } => {}
+            | EffectProgram::CreateTokens { .. }
+            | EffectProgram::SearchLibrary { .. }
+            | EffectProgram::TapChosenObjects { .. } => {}
+            EffectProgram::MoveChosenObjects {
+                choice,
+                destination,
+            } => {
+                if *destination == ChosenDestination::Zone(ZoneKind::Hand) {
+                    hand_delta[0] = hand_delta[0].saturating_add(
+                        i64::try_from(object_choices[*choice].len()).unwrap_or(i64::MAX),
+                    );
+                }
+            }
             EffectProgram::MoveTargetObject {
                 target, from, to, ..
             } => {
@@ -943,6 +966,12 @@ fn execute_smoke(
             }
         }
     }
+    assert_object_choice_destinations(
+        &execution.state,
+        &compiled.program,
+        &object_choices,
+        caster,
+    )?;
 
     let final_life_totals = [
         player_life(&execution.state, caster)?,
@@ -996,6 +1025,84 @@ fn execute_smoke(
         final_hash: execution.state.deterministic_hash().get(),
         destination: destination_name,
     })
+}
+
+fn assert_object_choice_destinations(
+    state: &GameState,
+    program: &CardProgram,
+    object_choices: &[Vec<ObjectId>],
+    caster: PlayerId,
+) -> Result<(), RuntimeSmokeFailure> {
+    for (effect_index, effect) in program.effects().iter().enumerate() {
+        if let EffectProgram::TapChosenObjects { choice } = effect {
+            for object in &object_choices[*choice] {
+                if !state
+                    .object(*object)
+                    .is_some_and(forge_core::ObjectRecord::tapped)
+                {
+                    return Err(RuntimeSmokeFailure::new(
+                        RuntimeSmokeFailureCode::UnexpectedOutcome,
+                        format!("assert.choice[{effect_index}].tapped"),
+                        "chosen object is not tapped",
+                    ));
+                }
+            }
+            continue;
+        }
+        let EffectProgram::MoveChosenObjects {
+            choice,
+            destination,
+        } = effect
+        else {
+            continue;
+        };
+        for object in &object_choices[*choice] {
+            match destination {
+                ChosenDestination::Zone(kind) => {
+                    let owner = state.object(*object).ok_or_else(|| {
+                        RuntimeSmokeFailure::new(
+                            RuntimeSmokeFailureCode::UnexpectedOutcome,
+                            format!("assert.choice[{effect_index}]"),
+                            "chosen object is missing",
+                        )
+                    })?;
+                    let zone_owner = match kind {
+                        ZoneKind::Hand | ZoneKind::Library | ZoneKind::Graveyard => {
+                            Some(owner.owner())
+                        }
+                        ZoneKind::Battlefield
+                        | ZoneKind::Exile
+                        | ZoneKind::Stack
+                        | ZoneKind::Command
+                        | ZoneKind::Ceased => None,
+                    };
+                    assert_zone(
+                        state,
+                        *object,
+                        ZoneId::new(zone_owner, *kind),
+                        &format!("assert.choice[{effect_index}]"),
+                    )?;
+                }
+                ChosenDestination::LibraryTop => {
+                    let library = ZoneId::new(Some(caster), ZoneKind::Library);
+                    assert_zone(
+                        state,
+                        *object,
+                        library,
+                        &format!("assert.choice[{effect_index}]"),
+                    )?;
+                    if state.zone_objects(library).and_then(<[ObjectId]>::last) != Some(object) {
+                        return Err(RuntimeSmokeFailure::new(
+                            RuntimeSmokeFailureCode::UnexpectedOutcome,
+                            format!("assert.choice[{effect_index}]"),
+                            "chosen object is not on top of the library",
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 fn synthesize_targets(
@@ -1094,6 +1201,91 @@ fn synthesize_targets(
             )?),
         };
         choices.push(choice);
+    }
+    Ok(choices)
+}
+
+fn synthesize_object_choices(
+    execution: &mut Execution,
+    program: &CardProgram,
+    caster: PlayerId,
+    base_card_id: u32,
+) -> Result<Vec<Vec<ObjectId>>, RuntimeSmokeFailure> {
+    let mut choices = Vec::with_capacity(program.object_choice_requirements().len());
+    for (choice_index, requirement) in program
+        .object_choice_requirements()
+        .iter()
+        .copied()
+        .enumerate()
+    {
+        if requirement.player() != PlayerBinding::Controller
+            || requirement.zone() != ZoneKind::Library
+        {
+            return Err(RuntimeSmokeFailure::new(
+                RuntimeSmokeFailureCode::UnexpectedOutcome,
+                format!("setup.choice[{choice_index}]"),
+                "smoke only synthesizes controller library choices",
+            ));
+        }
+        let mut types = requirement.required_types();
+        if requirement.required_any_types() != ObjectTypes::none() {
+            types = types.union(pick_one_type(requirement.required_any_types()));
+        }
+        let mut basic_land_types = requirement.required_land_types();
+        if requirement.required_any_land_types() != BasicLandTypes::none() {
+            basic_land_types = basic_land_types.union(pick_one_basic_land_type(
+                requirement.required_any_land_types(),
+            ));
+        }
+        if basic_land_types != BasicLandTypes::none() {
+            types = types.union(ObjectTypes::none().with_land());
+        }
+        if types == ObjectTypes::none() || types.intersects(requirement.forbidden_types()) {
+            return Err(RuntimeSmokeFailure::new(
+                RuntimeSmokeFailureCode::UnexpectedOutcome,
+                format!("setup.choice[{choice_index}]"),
+                "choice predicate has no supported satisfying type",
+            ));
+        }
+        let mut selected = Vec::with_capacity(requirement.maximum() as usize);
+        for offset in 0..requirement.maximum() {
+            let object = expect_object(
+                execution.dispatch(
+                    &format!("setup.choice[{choice_index}][{offset}].create"),
+                    Action::CreateObject {
+                        card: CardId::new(
+                            base_card_id
+                                .wrapping_add(60_000)
+                                .wrapping_add((choice_index as u32).saturating_mul(64))
+                                .wrapping_add(offset),
+                        ),
+                        owner: caster,
+                        controller: caster,
+                        zone: ZoneId::new(Some(caster), ZoneKind::Library),
+                    },
+                )?,
+            )?;
+            execution.dispatch(
+                &format!("setup.choice[{choice_index}][{offset}].characteristics"),
+                Action::SetBaseObjectCharacteristics {
+                    object,
+                    base: BaseObjectCharacteristics::new(types, ObjectColors::none())
+                        .with_supertypes(requirement.required_supertypes())
+                        .with_basic_land_types(basic_land_types),
+                },
+            )?;
+            if types.creature() {
+                execution.dispatch(
+                    &format!("setup.choice[{choice_index}][{offset}].creature"),
+                    Action::SetBaseCreatureCharacteristics {
+                        object,
+                        base: BaseCreatureCharacteristics::new(2, 2),
+                    },
+                )?;
+            }
+            selected.push(object);
+        }
+        choices.push(selected);
     }
     Ok(choices)
 }
@@ -1271,6 +1463,22 @@ const fn pick_one_type(types: ObjectTypes) -> ObjectTypes {
         ObjectTypes::none().with_sorcery()
     } else {
         ObjectTypes::none()
+    }
+}
+
+const fn pick_one_basic_land_type(types: BasicLandTypes) -> BasicLandTypes {
+    if types.plains() {
+        BasicLandTypes::none().with_plains()
+    } else if types.island() {
+        BasicLandTypes::none().with_island()
+    } else if types.swamp() {
+        BasicLandTypes::none().with_swamp()
+    } else if types.mountain() {
+        BasicLandTypes::none().with_mountain()
+    } else if types.forest() {
+        BasicLandTypes::none().with_forest()
+    } else {
+        BasicLandTypes::none()
     }
 }
 

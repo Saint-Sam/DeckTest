@@ -1429,6 +1429,252 @@ pub struct ObjectTypes {
     sorcery: bool,
 }
 
+/// Closed Magic supertypes represented by the runtime.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub struct ObjectSupertypes {
+    basic: bool,
+    legendary: bool,
+    ongoing: bool,
+    snow: bool,
+    world: bool,
+}
+
+impl ObjectSupertypes {
+    /// Creates an empty supertype set.
+    #[must_use]
+    pub const fn none() -> Self {
+        Self {
+            basic: false,
+            legendary: false,
+            ongoing: false,
+            snow: false,
+            world: false,
+        }
+    }
+
+    /// Returns this set with Basic enabled.
+    #[must_use]
+    pub const fn with_basic(mut self) -> Self {
+        self.basic = true;
+        self
+    }
+
+    /// Returns this set with Legendary enabled.
+    #[must_use]
+    pub const fn with_legendary(mut self) -> Self {
+        self.legendary = true;
+        self
+    }
+
+    /// Returns this set with Ongoing enabled.
+    #[must_use]
+    pub const fn with_ongoing(mut self) -> Self {
+        self.ongoing = true;
+        self
+    }
+
+    /// Returns this set with Snow enabled.
+    #[must_use]
+    pub const fn with_snow(mut self) -> Self {
+        self.snow = true;
+        self
+    }
+
+    /// Returns this set with World enabled.
+    #[must_use]
+    pub const fn with_world(mut self) -> Self {
+        self.world = true;
+        self
+    }
+
+    /// Returns true if Basic is present.
+    #[must_use]
+    pub const fn basic(self) -> bool {
+        self.basic
+    }
+
+    /// Returns true if Legendary is present.
+    #[must_use]
+    pub const fn legendary(self) -> bool {
+        self.legendary
+    }
+
+    /// Returns true if Ongoing is present.
+    #[must_use]
+    pub const fn ongoing(self) -> bool {
+        self.ongoing
+    }
+
+    /// Returns true if Snow is present.
+    #[must_use]
+    pub const fn snow(self) -> bool {
+        self.snow
+    }
+
+    /// Returns true if World is present.
+    #[must_use]
+    pub const fn world(self) -> bool {
+        self.world
+    }
+
+    /// Returns true if every supertype in `required` is present.
+    #[must_use]
+    pub const fn contains_all(self, required: Self) -> bool {
+        (!required.basic || self.basic)
+            && (!required.legendary || self.legendary)
+            && (!required.ongoing || self.ongoing)
+            && (!required.snow || self.snow)
+            && (!required.world || self.world)
+    }
+
+    /// Returns the union of this set and `add`.
+    #[must_use]
+    pub const fn union(mut self, add: Self) -> Self {
+        self.basic |= add.basic;
+        self.legendary |= add.legendary;
+        self.ongoing |= add.ongoing;
+        self.snow |= add.snow;
+        self.world |= add.world;
+        self
+    }
+
+    const fn canonical_bits(self) -> u8 {
+        (self.basic as u8)
+            | ((self.legendary as u8) << 1)
+            | ((self.ongoing as u8) << 2)
+            | ((self.snow as u8) << 3)
+            | ((self.world as u8) << 4)
+    }
+}
+
+/// The five basic land types represented by the runtime.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub struct BasicLandTypes {
+    plains: bool,
+    island: bool,
+    swamp: bool,
+    mountain: bool,
+    forest: bool,
+}
+
+impl BasicLandTypes {
+    /// Creates an empty basic-land-type set.
+    #[must_use]
+    pub const fn none() -> Self {
+        Self {
+            plains: false,
+            island: false,
+            swamp: false,
+            mountain: false,
+            forest: false,
+        }
+    }
+
+    /// Returns this set with Plains enabled.
+    #[must_use]
+    pub const fn with_plains(mut self) -> Self {
+        self.plains = true;
+        self
+    }
+
+    /// Returns this set with Island enabled.
+    #[must_use]
+    pub const fn with_island(mut self) -> Self {
+        self.island = true;
+        self
+    }
+
+    /// Returns this set with Swamp enabled.
+    #[must_use]
+    pub const fn with_swamp(mut self) -> Self {
+        self.swamp = true;
+        self
+    }
+
+    /// Returns this set with Mountain enabled.
+    #[must_use]
+    pub const fn with_mountain(mut self) -> Self {
+        self.mountain = true;
+        self
+    }
+
+    /// Returns this set with Forest enabled.
+    #[must_use]
+    pub const fn with_forest(mut self) -> Self {
+        self.forest = true;
+        self
+    }
+
+    /// Returns true if Plains is present.
+    #[must_use]
+    pub const fn plains(self) -> bool {
+        self.plains
+    }
+
+    /// Returns true if Island is present.
+    #[must_use]
+    pub const fn island(self) -> bool {
+        self.island
+    }
+
+    /// Returns true if Swamp is present.
+    #[must_use]
+    pub const fn swamp(self) -> bool {
+        self.swamp
+    }
+
+    /// Returns true if Mountain is present.
+    #[must_use]
+    pub const fn mountain(self) -> bool {
+        self.mountain
+    }
+
+    /// Returns true if Forest is present.
+    #[must_use]
+    pub const fn forest(self) -> bool {
+        self.forest
+    }
+
+    /// Returns true if every land type in `required` is present.
+    #[must_use]
+    pub const fn contains_all(self, required: Self) -> bool {
+        (!required.plains || self.plains)
+            && (!required.island || self.island)
+            && (!required.swamp || self.swamp)
+            && (!required.mountain || self.mountain)
+            && (!required.forest || self.forest)
+    }
+
+    /// Returns true if this set and `other` share a land type.
+    #[must_use]
+    pub const fn intersects(self, other: Self) -> bool {
+        (self.plains && other.plains)
+            || (self.island && other.island)
+            || (self.swamp && other.swamp)
+            || (self.mountain && other.mountain)
+            || (self.forest && other.forest)
+    }
+
+    /// Returns the union of this set and `add`.
+    #[must_use]
+    pub const fn union(mut self, add: Self) -> Self {
+        self.plains |= add.plains;
+        self.island |= add.island;
+        self.swamp |= add.swamp;
+        self.mountain |= add.mountain;
+        self.forest |= add.forest;
+        self
+    }
+
+    const fn canonical_bits(self) -> u8 {
+        (self.plains as u8)
+            | ((self.island as u8) << 1)
+            | ((self.swamp as u8) << 2)
+            | ((self.mountain as u8) << 3)
+            | ((self.forest as u8) << 4)
+    }
+}
+
 /// Printed type and color characteristics shared by every card object.
 ///
 /// Power, toughness, and combat keywords remain in
@@ -1438,13 +1684,34 @@ pub struct ObjectTypes {
 pub struct BaseObjectCharacteristics {
     types: ObjectTypes,
     colors: ObjectColors,
+    supertypes: ObjectSupertypes,
+    basic_land_types: BasicLandTypes,
 }
 
 impl BaseObjectCharacteristics {
     /// Creates base printed object characteristics.
     #[must_use]
     pub const fn new(types: ObjectTypes, colors: ObjectColors) -> Self {
-        Self { types, colors }
+        Self {
+            types,
+            colors,
+            supertypes: ObjectSupertypes::none(),
+            basic_land_types: BasicLandTypes::none(),
+        }
+    }
+
+    /// Sets printed supertypes.
+    #[must_use]
+    pub const fn with_supertypes(mut self, supertypes: ObjectSupertypes) -> Self {
+        self.supertypes = supertypes;
+        self
+    }
+
+    /// Sets printed basic land types.
+    #[must_use]
+    pub const fn with_basic_land_types(mut self, land_types: BasicLandTypes) -> Self {
+        self.basic_land_types = land_types;
+        self
     }
 
     /// Returns the printed card types.
@@ -1457,6 +1724,18 @@ impl BaseObjectCharacteristics {
     #[must_use]
     pub const fn colors(self) -> ObjectColors {
         self.colors
+    }
+
+    /// Returns printed supertypes.
+    #[must_use]
+    pub const fn supertypes(self) -> ObjectSupertypes {
+        self.supertypes
+    }
+
+    /// Returns printed basic land types.
+    #[must_use]
+    pub const fn basic_land_types(self) -> BasicLandTypes {
+        self.basic_land_types
     }
 }
 
@@ -1875,6 +2154,8 @@ pub enum LibraryManipulation {
     Scry,
     /// Surveil moved selected cards to the graveyard.
     Surveil,
+    /// A searched-for card was placed on top of its owner's library.
+    TutorToTop,
 }
 
 impl LibraryManipulation {
@@ -1882,6 +2163,7 @@ impl LibraryManipulation {
         match self {
             Self::Scry => 0,
             Self::Surveil => 1,
+            Self::TutorToTop => 2,
         }
     }
 }
@@ -3922,6 +4204,8 @@ pub struct ObjectCharacteristics {
     controller: PlayerId,
     colors: ObjectColors,
     types: ObjectTypes,
+    supertypes: ObjectSupertypes,
+    basic_land_types: BasicLandTypes,
     creature: Option<CreatureCharacteristics>,
     text_marker: u32,
 }
@@ -3939,6 +4223,8 @@ impl ObjectCharacteristics {
             controller,
             colors,
             types,
+            supertypes: ObjectSupertypes::none(),
+            basic_land_types: BasicLandTypes::none(),
             creature,
             text_marker: 0,
         }
@@ -3960,6 +4246,28 @@ impl ObjectCharacteristics {
     #[must_use]
     pub const fn types(self) -> ObjectTypes {
         self.types
+    }
+
+    /// Returns effective supertypes after layer 4.
+    #[must_use]
+    pub const fn supertypes(self) -> ObjectSupertypes {
+        self.supertypes
+    }
+
+    /// Returns effective basic land types after layer 4.
+    #[must_use]
+    pub const fn basic_land_types(self) -> BasicLandTypes {
+        self.basic_land_types
+    }
+
+    const fn with_type_line(
+        mut self,
+        supertypes: ObjectSupertypes,
+        basic_land_types: BasicLandTypes,
+    ) -> Self {
+        self.supertypes = supertypes;
+        self.basic_land_types = basic_land_types;
+        self
     }
 
     /// Returns effective creature characteristics, if this object is a creature.
@@ -5685,6 +5993,13 @@ pub enum Action {
         /// Player whose library is shuffled.
         player: PlayerId,
     },
+    /// Place one object already in a player's library on top of that library.
+    PutObjectOnTopOfLibrary {
+        /// Player whose library contains the object.
+        player: PlayerId,
+        /// Object to place on top.
+        object: ObjectId,
+    },
     /// Add poison counters to a player.
     AddPoisonCounters {
         /// Player receiving counters.
@@ -6257,6 +6572,12 @@ fn apply_fallback(state: &mut GameState, action: Action) -> Outcome {
         },
         Action::ShuffleLibrary { player } => {
             match state.shuffle_zone(ZoneId::new(Some(player), ZoneKind::Library)) {
+                Ok(()) => Outcome::Applied,
+                Err(error) => Outcome::Failed(error),
+            }
+        }
+        Action::PutObjectOnTopOfLibrary { player, object } => {
+            match state.put_object_on_top_of_library(player, object) {
                 Ok(()) => Outcome::Applied,
                 Err(error) => Outcome::Failed(error),
             }
@@ -11689,6 +12010,10 @@ impl GameState {
             record.base_object().colors(),
             base_types,
             base_creature,
+        )
+        .with_type_line(
+            record.base_object().supertypes(),
+            record.base_object().basic_land_types(),
         );
 
         for layer in [
@@ -13042,6 +13367,37 @@ impl GameState {
         Ok(())
     }
 
+    fn put_object_on_top_of_library(
+        &mut self,
+        player: PlayerId,
+        object: ObjectId,
+    ) -> Result<(), StateError> {
+        self.require_player(player)?;
+        let library = ZoneId::new(Some(player), ZoneKind::Library);
+        self.require_zone(library)?;
+        if self.object_zone(object) != Some(library) {
+            return Err(StateError::MissingZoneMembership(object));
+        }
+        let library_index = self
+            .zone_index(library)
+            .ok_or(StateError::UnknownZone(library))?;
+        let zone = &mut Arc::make_mut(&mut self.zones)[library_index];
+        let position = zone
+            .objects
+            .iter()
+            .position(|candidate| *candidate == object)
+            .ok_or(StateError::MissingZoneMembership(object))?;
+        zone.objects_mut().remove(position);
+        zone.objects_mut().push(object);
+        self.emit_event(GameEvent::LibraryManipulated {
+            player,
+            operation: LibraryManipulation::TutorToTop,
+            count: 1,
+            moved: 1,
+        });
+        Ok(())
+    }
+
     fn random_below(&mut self, upper: usize) -> usize {
         debug_assert!(upper > 0);
         let random = self.next_random_u64();
@@ -13343,9 +13699,19 @@ impl Fnva64 {
         self.write_u8(types.canonical_bits());
     }
 
+    fn write_object_supertypes(&mut self, supertypes: ObjectSupertypes) {
+        self.write_u8(supertypes.canonical_bits());
+    }
+
+    fn write_basic_land_types(&mut self, land_types: BasicLandTypes) {
+        self.write_u8(land_types.canonical_bits());
+    }
+
     fn write_base_object_characteristics(&mut self, base: BaseObjectCharacteristics) {
         self.write_object_types(base.types());
         self.write_object_colors(base.colors());
+        self.write_object_supertypes(base.supertypes());
+        self.write_basic_land_types(base.basic_land_types());
     }
 
     fn write_base_creature_characteristics(&mut self, base: BaseCreatureCharacteristics) {
@@ -14565,9 +14931,19 @@ impl CanonicalBytes {
         self.write_u8(types.canonical_bits());
     }
 
+    fn write_object_supertypes(&mut self, supertypes: ObjectSupertypes) {
+        self.write_u8(supertypes.canonical_bits());
+    }
+
+    fn write_basic_land_types(&mut self, land_types: BasicLandTypes) {
+        self.write_u8(land_types.canonical_bits());
+    }
+
     fn write_base_object_characteristics(&mut self, base: BaseObjectCharacteristics) {
         self.write_object_types(base.types());
         self.write_object_colors(base.colors());
+        self.write_object_supertypes(base.supertypes());
+        self.write_basic_land_types(base.basic_land_types());
     }
 
     fn write_base_creature_characteristics(&mut self, base: BaseCreatureCharacteristics) {
@@ -15628,20 +16004,21 @@ mod tests {
         enumerate_payment_plans, legal_actions, state_based_action_table, validate_payment_plan,
         AbilityPlayer, Action, ActivatedAbilityDefinition, ActivatedAbilityEffect, ActivationCost,
         ActivationTiming, AttackDeclaration, BaseCreatureCharacteristics,
-        BaseObjectCharacteristics, BlockDeclaration, CardId, CastSpellRequest,
+        BaseObjectCharacteristics, BasicLandTypes, BlockDeclaration, CardId, CastSpellRequest,
         CombatDamageAssignment, CombatDamageAssignmentRequest, CombatDamageStepKind,
         CombatDamageTarget, ContinuousEffectDefinition, ContinuousEffectId,
         ContinuousEffectOperation, ContinuousEffectTarget, CostModifierDefinition,
         CostModifierOperation, CostModifierScope, CreatureCharacteristics, CreatureKeywords,
         EffectDuration, EventReplayError, GameEvent, GameOutcome, GameState, ManaCost, ManaKind,
-        ManaPool, ManaSource, ObjectColors, ObjectTypes, ObjectView, Outcome, PaymentError, Phase,
-        PlayerId, PriorityOutcome, ReplacementCondition, ReplacementDamageTargetFilter,
-        ReplacementDefinition, ReplacementDuration, ReplacementEffectId, ReplacementOperation,
-        ReplacementSourceFilter, ResolutionOutcome, SpellTiming, StackEntryId, StackObjectKind,
-        StateBasedActionKind, StateBasedActionReport, StateError, Step, TargetChoice, TargetKind,
-        TargetRequirement, TriggerCondition, TriggerDefinition, TriggerInterveningIf,
-        TriggerObjectFilter, TriggerPlayerFilter, TriggerZoneFilter, ZoneConservation, ZoneId,
-        ZoneKind, EVENT_RING_CAPACITY, NORMAL_TURN_STEPS, OPENING_HAND_SIZE, PAYMENT_PLAN_LIMIT,
+        ManaPool, ManaSource, ObjectColors, ObjectSupertypes, ObjectTypes, ObjectView, Outcome,
+        PaymentError, Phase, PlayerId, PriorityOutcome, ReplacementCondition,
+        ReplacementDamageTargetFilter, ReplacementDefinition, ReplacementDuration,
+        ReplacementEffectId, ReplacementOperation, ReplacementSourceFilter, ResolutionOutcome,
+        SpellTiming, StackEntryId, StackObjectKind, StateBasedActionKind, StateBasedActionReport,
+        StateError, Step, TargetChoice, TargetKind, TargetRequirement, TriggerCondition,
+        TriggerDefinition, TriggerInterveningIf, TriggerObjectFilter, TriggerPlayerFilter,
+        TriggerZoneFilter, ZoneConservation, ZoneId, ZoneKind, EVENT_RING_CAPACITY,
+        NORMAL_TURN_STEPS, OPENING_HAND_SIZE, PAYMENT_PLAN_LIMIT,
     };
 
     #[test]
@@ -16660,6 +17037,51 @@ mod tests {
     }
 
     #[test]
+    fn basic_land_type_line_is_derived_and_participates_in_state_hashes() {
+        let mut state = GameState::new();
+        let player = add_player_action(&mut state);
+        let forest = match apply(
+            &mut state,
+            Action::CreateObject {
+                card: CardId::new(702),
+                owner: player,
+                controller: player,
+                zone: ZoneId::new(Some(player), ZoneKind::Hand),
+            },
+        ) {
+            Outcome::ObjectCreated(object) => object,
+            other => panic!("unexpected forest outcome: {other:?}"),
+        };
+        let before = state.deterministic_hash();
+        let base =
+            BaseObjectCharacteristics::new(ObjectTypes::none().with_land(), ObjectColors::none())
+                .with_supertypes(ObjectSupertypes::none().with_basic())
+                .with_basic_land_types(BasicLandTypes::none().with_forest());
+
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::SetBaseObjectCharacteristics {
+                    object: forest,
+                    base,
+                },
+            ),
+            Outcome::Applied
+        );
+        let characteristics = state
+            .object_characteristics(forest)
+            .unwrap_or_else(|error| panic!("unexpected forest characteristics: {error:?}"));
+        assert!(characteristics.types().land());
+        assert!(characteristics.supertypes().basic());
+        assert!(characteristics.basic_land_types().forest());
+        assert_ne!(state.deterministic_hash(), before);
+        assert_eq!(
+            state.deterministic_hash(),
+            state.deterministic_hash_streaming()
+        );
+    }
+
+    #[test]
     fn player_view_hides_opponent_hand_and_library_objects() {
         let mut state = GameState::new();
         let alice = match apply(&mut state, Action::AddPlayer) {
@@ -17242,6 +17664,41 @@ mod tests {
                 .objects()
                 .len(),
             2
+        );
+        assert_eq!(
+            state.validate_zone_conservation(),
+            Ok(ZoneConservation { object_count: 4 })
+        );
+    }
+
+    #[test]
+    fn put_object_on_top_of_library_reorders_without_changing_membership() {
+        let mut state = GameState::new();
+        let player = add_player_action(&mut state);
+        let library = ZoneId::new(Some(player), ZoneKind::Library);
+        seed_library_cards(&mut state, player, 8_150, 4);
+        let selected = state
+            .zone(library)
+            .unwrap_or_else(|| panic!("library zone missing"))
+            .objects()[1];
+
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::PutObjectOnTopOfLibrary {
+                    player,
+                    object: selected,
+                },
+            ),
+            Outcome::Applied
+        );
+        assert_eq!(
+            state
+                .zone(library)
+                .unwrap_or_else(|| panic!("library zone missing"))
+                .objects()
+                .last(),
+            Some(&selected)
         );
         assert_eq!(
             state.validate_zone_conservation(),

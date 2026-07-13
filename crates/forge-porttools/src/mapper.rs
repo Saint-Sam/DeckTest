@@ -19160,7 +19160,14 @@ fn affected_selector_branch(value: &str) -> Result<Expression, MappingDiagnostic
     if base != "Card" && base != "Permanent" {
         let operation = if matches!(
             base,
-            "Artifact" | "Battle" | "Creature" | "Enchantment" | "Land" | "Planeswalker"
+            "Artifact"
+                | "Battle"
+                | "Creature"
+                | "Enchantment"
+                | "Instant"
+                | "Land"
+                | "Planeswalker"
+                | "Sorcery"
         ) {
             Operation::TypeIs
         } else if base
@@ -22749,6 +22756,19 @@ mod tests {
         ] {
             assert_operation(line, operation, 0);
         }
+
+        let typed_library_search = map_line(
+            "A:SP$ ChangeZone | Origin$ Library | Destination$ Library | ChangeType$ Instant,Sorcery | SpellDescription$ Put it on top.",
+        )
+        .unwrap_or_else(|error| panic!("typed library search should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &typed_library_search.expression,
+            Operation::TypeIs
+        ));
+        assert!(!expression_contains_operation(
+            &typed_library_search.expression,
+            Operation::SubtypeIs
+        ));
 
         for line in [
             "A:SP$ ChangeZone | Origin$ Graveyard | Destination$ Hand | Defined$ Self | RememberChanged$ True",

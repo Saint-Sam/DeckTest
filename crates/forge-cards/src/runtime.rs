@@ -12,9 +12,10 @@ use forge_carddef::{
 use forge_core::{
     apply, AbilityPlayer, Action, ActivatedAbilityDefinition, ActivatedAbilityEffect,
     ActivationCost, ActivationTiming, BaseCreatureCharacteristics, BaseObjectCharacteristics,
-    CardId, GameState, ManaCost, ManaKind, ManaPool, ObjectColors, ObjectId, ObjectTargetPredicate,
-    ObjectTypes, Outcome, PlayerId, PlayerTargetPredicate, StackEntryId, TargetChoice,
-    TargetControllerPredicate, TargetKind, TargetRequirement, ZoneId, ZoneKind,
+    BasicLandTypes, CardId, GameState, ManaCost, ManaKind, ManaPool, ObjectColors, ObjectId,
+    ObjectSupertypes, ObjectTargetPredicate, ObjectTypes, Outcome, PlayerId, PlayerTargetPredicate,
+    StackEntryId, TargetChoice, TargetControllerPredicate, TargetKind, TargetRequirement, ZoneId,
+    ZoneKind,
 };
 use std::{collections::BTreeMap, error::Error, fmt};
 
@@ -168,6 +169,10 @@ pub enum Capability {
     MoveZone,
     /// Create one or more exact registered token templates.
     CreateToken,
+    /// Search a library with an explicit validated object choice.
+    SearchLibrary,
+    /// Tap one or more explicit objects.
+    TapObject,
 }
 
 impl Capability {
@@ -188,6 +193,8 @@ impl Capability {
             Self::CounterStackEntry => "counter_stack_entry",
             Self::MoveZone => "move_zone",
             Self::CreateToken => "create_token",
+            Self::SearchLibrary => "search_library",
+            Self::TapObject => "tap_object",
         }
     }
 }
@@ -249,6 +256,85 @@ pub enum AmountProgram {
     Literal(u32),
     /// Current power of one object target.
     PowerOfTargetObject(usize),
+}
+
+/// One explicit hidden-zone object choice exposed by a compiled program.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ObjectChoiceRequirement {
+    player: PlayerBinding,
+    zone: ZoneKind,
+    maximum: u32,
+    required_types: ObjectTypes,
+    required_any_types: ObjectTypes,
+    forbidden_types: ObjectTypes,
+    required_supertypes: ObjectSupertypes,
+    required_land_types: BasicLandTypes,
+    required_any_land_types: BasicLandTypes,
+}
+
+impl ObjectChoiceRequirement {
+    /// Returns the player whose zone is searched.
+    #[must_use]
+    pub const fn player(self) -> PlayerBinding {
+        self.player
+    }
+
+    /// Returns the searched zone kind.
+    #[must_use]
+    pub const fn zone(self) -> ZoneKind {
+        self.zone
+    }
+
+    /// Returns the maximum number of objects that may be chosen.
+    #[must_use]
+    pub const fn maximum(self) -> u32 {
+        self.maximum
+    }
+
+    /// Returns types every chosen object must have.
+    #[must_use]
+    pub const fn required_types(self) -> ObjectTypes {
+        self.required_types
+    }
+
+    /// Returns a type union from which every chosen object must match one.
+    #[must_use]
+    pub const fn required_any_types(self) -> ObjectTypes {
+        self.required_any_types
+    }
+
+    /// Returns types no chosen object may have.
+    #[must_use]
+    pub const fn forbidden_types(self) -> ObjectTypes {
+        self.forbidden_types
+    }
+
+    /// Returns supertypes every chosen object must have.
+    #[must_use]
+    pub const fn required_supertypes(self) -> ObjectSupertypes {
+        self.required_supertypes
+    }
+
+    /// Returns basic land types every chosen object must have.
+    #[must_use]
+    pub const fn required_land_types(self) -> BasicLandTypes {
+        self.required_land_types
+    }
+
+    /// Returns a basic-land-type union from which every chosen object must match one.
+    #[must_use]
+    pub const fn required_any_land_types(self) -> BasicLandTypes {
+        self.required_any_land_types
+    }
+}
+
+/// Destination semantics for objects selected by an explicit choice.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ChosenDestination {
+    /// Move into the ordinary zone.
+    Zone(ZoneKind),
+    /// Reorder an object already in its owner's library onto the top.
+    LibraryTop,
 }
 
 /// One completely compiled effect operation.
@@ -324,6 +410,23 @@ pub enum EffectProgram {
         /// Token controller and owner.
         players: PlayerBinding,
     },
+    /// Validate an explicit library-search choice without mutating state.
+    SearchLibrary {
+        /// Object-choice slot.
+        choice: usize,
+    },
+    /// Move objects selected by a prior explicit choice.
+    MoveChosenObjects {
+        /// Object-choice slot.
+        choice: usize,
+        /// Destination semantics.
+        destination: ChosenDestination,
+    },
+    /// Tap objects selected by a prior explicit choice.
+    TapChosenObjects {
+        /// Object-choice slot.
+        choice: usize,
+    },
 }
 
 impl EffectProgram {
@@ -339,6 +442,9 @@ impl EffectProgram {
             Self::CounterStackEntry { .. } => Capability::CounterStackEntry,
             Self::MoveTargetObject { .. } => Capability::MoveZone,
             Self::CreateTokens { .. } => Capability::CreateToken,
+            Self::SearchLibrary { .. } => Capability::SearchLibrary,
+            Self::MoveChosenObjects { .. } => Capability::MoveZone,
+            Self::TapChosenObjects { .. } => Capability::TapObject,
         }
     }
 }
@@ -353,6 +459,7 @@ pub struct CardProgram {
     exact_payment: ManaPool,
     base_object: BaseObjectCharacteristics,
     target_requirements: Vec<TargetRequirement>,
+    object_choice_requirements: Vec<ObjectChoiceRequirement>,
     effects: Vec<EffectProgram>,
     activated_abilities: Vec<ActivatedAbilityProgram>,
 }
@@ -398,6 +505,12 @@ impl CardProgram {
     #[must_use]
     pub fn target_requirements(&self) -> &[TargetRequirement] {
         &self.target_requirements
+    }
+
+    /// Returns explicit hidden-zone choice slots in announcement order.
+    #[must_use]
+    pub fn object_choice_requirements(&self) -> &[ObjectChoiceRequirement] {
+        &self.object_choice_requirements
     }
 
     /// Returns compiled effect operations in source execution order.
@@ -470,7 +583,12 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
         ));
     }
     let (mana_cost, exact_payment) = compile_mana_cost(&face.mana_cost.symbols)?;
-    let base_object = compile_base_object(&face.type_line.card_types, &face.mana_cost.symbols)?;
+    let base_object = compile_base_object(
+        &face.type_line.supertypes,
+        &face.type_line.card_types,
+        &face.type_line.subtypes,
+        &face.mana_cost.symbols,
+    )?;
     let mut compiler = ProgramCompiler::default();
     let mut activated_abilities =
         compile_intrinsic_basic_mana_ability(&face.type_line.supertypes, &face.type_line.subtypes)?
@@ -554,6 +672,11 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
             .into_iter()
             .map(|target| target.requirement)
             .collect(),
+        object_choice_requirements: compiler
+            .object_choices
+            .into_iter()
+            .map(|choice| choice.requirement)
+            .collect(),
         effects: compiler.effects,
         activated_abilities,
     })
@@ -563,11 +686,17 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
 struct ProgramCompiler {
     effects: Vec<EffectProgram>,
     targets: Vec<CompiledTarget>,
+    object_choices: Vec<CompiledObjectChoice>,
 }
 
 struct CompiledTarget {
     selector: Expression,
     requirement: TargetRequirement,
+}
+
+struct CompiledObjectChoice {
+    selector: Expression,
+    requirement: ObjectChoiceRequirement,
 }
 
 fn compile_intrinsic_basic_mana_ability(
@@ -740,7 +869,9 @@ fn compile_program_kind(card_types: &[CardType]) -> Result<ProgramKind, CompileD
 }
 
 fn compile_base_object(
+    supertypes: &[Supertype],
     card_types: &[CardType],
+    subtypes: &[String],
     mana_symbols: &[ManaSymbol],
 ) -> Result<BaseObjectCharacteristics, CompileDiagnostic> {
     let mut types = ObjectTypes::none();
@@ -774,7 +905,32 @@ fn compile_base_object(
             };
         }
     }
-    Ok(BaseObjectCharacteristics::new(types, colors))
+    let mut runtime_supertypes = ObjectSupertypes::none();
+    for supertype in supertypes {
+        runtime_supertypes = match supertype {
+            Supertype::Basic => runtime_supertypes.with_basic(),
+            Supertype::Legendary => runtime_supertypes.with_legendary(),
+            Supertype::Ongoing => runtime_supertypes.with_ongoing(),
+            Supertype::Snow => runtime_supertypes.with_snow(),
+            Supertype::World => runtime_supertypes.with_world(),
+        };
+    }
+    let mut basic_land_types = BasicLandTypes::none();
+    if types.land() {
+        for subtype in subtypes {
+            basic_land_types = match subtype.to_ascii_lowercase().as_str() {
+                "plains" => basic_land_types.with_plains(),
+                "island" => basic_land_types.with_island(),
+                "swamp" => basic_land_types.with_swamp(),
+                "mountain" => basic_land_types.with_mountain(),
+                "forest" => basic_land_types.with_forest(),
+                _ => basic_land_types,
+            };
+        }
+    }
+    Ok(BaseObjectCharacteristics::new(types, colors)
+        .with_supertypes(runtime_supertypes)
+        .with_basic_land_types(basic_land_types))
 }
 
 fn compile_mana_cost(symbols: &[ManaSymbol]) -> Result<(ManaCost, ManaPool), CompileDiagnostic> {
@@ -951,6 +1107,124 @@ fn compile_effect(
             });
             Ok(())
         }
+        Operation::SearchLibrary => {
+            let [selector, players, count] = arguments.as_slice() else {
+                return Err(effect_arity(
+                    path,
+                    operation,
+                    "library card selector, player selector, and literal maximum",
+                ));
+            };
+            let players = compile_player_binding(players, &format!("{path}.players"), compiler)?;
+            if players != PlayerBinding::Controller {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::PlayerSelector,
+                    format!("{path}.players"),
+                    "the first search slice supports only you()",
+                ));
+            }
+            let maximum = compile_bounded_positive_literal(
+                count,
+                &format!("{path}.maximum"),
+                MAX_EFFECTS as u32,
+                "search maximum",
+            )?;
+            let (
+                required_types,
+                required_any_types,
+                forbidden_types,
+                required_supertypes,
+                required_land_types,
+                required_any_land_types,
+            ) = compile_library_choice_selector(selector, &format!("{path}.selector"))?;
+            let choice = intern_object_choice(
+                compiler,
+                selector,
+                ObjectChoiceRequirement {
+                    player: players,
+                    zone: ZoneKind::Library,
+                    maximum,
+                    required_types,
+                    required_any_types,
+                    forbidden_types,
+                    required_supertypes,
+                    required_land_types,
+                    required_any_land_types,
+                },
+            );
+            compiler
+                .effects
+                .push(EffectProgram::SearchLibrary { choice });
+            Ok(())
+        }
+        Operation::MoveZone => {
+            let [selected, destination, count] = arguments.as_slice() else {
+                return Err(effect_arity(
+                    path,
+                    operation,
+                    "chosen library objects, destination, and literal count",
+                ));
+            };
+            let selector = chosen_selector(selected, &format!("{path}.chosen"))?;
+            let Some(choice) = compiler
+                .object_choices
+                .iter()
+                .position(|candidate| candidate.selector == *selector)
+            else {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::EffectArguments,
+                    format!("{path}.chosen"),
+                    "chosen selector has no preceding compiled search_library choice",
+                ));
+            };
+            let moved = compile_bounded_positive_literal(
+                count,
+                &format!("{path}.count"),
+                MAX_EFFECTS as u32,
+                "chosen move count",
+            )?;
+            if moved != compiler.object_choices[choice].requirement.maximum {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::EffectArguments,
+                    format!("{path}.count"),
+                    "chosen move count must equal the linked search maximum",
+                ));
+            }
+            let destination = compile_chosen_destination(destination, &format!("{path}.to"))?;
+            if destination == ChosenDestination::LibraryTop && moved != 1 {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::EffectArguments,
+                    format!("{path}.count"),
+                    "library_top currently requires exactly one chosen object",
+                ));
+            }
+            compiler.effects.push(EffectProgram::MoveChosenObjects {
+                choice,
+                destination,
+            });
+            Ok(())
+        }
+        Operation::Tap => {
+            let [selected] = arguments.as_slice() else {
+                return Err(effect_arity(path, operation, "one chosen object selector"));
+            };
+            let selector = chosen_selector(selected, &format!("{path}.chosen"))?;
+            let Some(choice) = compiler
+                .object_choices
+                .iter()
+                .position(|candidate| candidate.selector == *selector)
+            else {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::EffectArguments,
+                    format!("{path}.chosen"),
+                    "chosen selector has no preceding compiled search_library choice",
+                ));
+            };
+            compiler
+                .effects
+                .push(EffectProgram::TapChosenObjects { choice });
+            Ok(())
+        }
         unsupported => Err(CompileDiagnostic::new(
             CompileDiagnosticCode::EffectOperation,
             path,
@@ -1024,6 +1298,80 @@ fn compile_token_count(expression: &Expression, path: &str) -> Result<u32, Compi
         ));
     }
     Ok(count)
+}
+
+fn compile_bounded_positive_literal(
+    expression: &Expression,
+    path: &str,
+    maximum: u32,
+    label: &str,
+) -> Result<u32, CompileDiagnostic> {
+    let Expression::Integer(value) = expression else {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectAmount,
+            path,
+            format!("{label} is not a literal integer"),
+        ));
+    };
+    let value = u32::try_from(*value).map_err(|_| {
+        CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectAmount,
+            path,
+            format!("{label} {value} is outside the u32 action range"),
+        )
+    })?;
+    if value == 0 || value > maximum {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::ProgramBounds,
+            path,
+            format!("{label} must be in 1..={maximum}, found {value}"),
+        ));
+    }
+    Ok(value)
+}
+
+fn chosen_selector<'a>(
+    expression: &'a Expression,
+    path: &str,
+) -> Result<&'a Expression, CompileDiagnostic> {
+    let Expression::Call {
+        operation: Operation::Chosen,
+        arguments,
+    } = expression
+    else {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectArguments,
+            path,
+            "library move is not wrapped in chosen(...)[]",
+        ));
+    };
+    let [selector] = arguments.as_slice() else {
+        return Err(effect_arity(path, &Operation::Chosen, "one selector"));
+    };
+    Ok(selector)
+}
+
+fn compile_chosen_destination(
+    expression: &Expression,
+    path: &str,
+) -> Result<ChosenDestination, CompileDiagnostic> {
+    let Expression::Text(destination) = expression else {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectArguments,
+            path,
+            "chosen destination is not text",
+        ));
+    };
+    match destination.to_ascii_lowercase().as_str() {
+        "battlefield" => Ok(ChosenDestination::Zone(ZoneKind::Battlefield)),
+        "hand" => Ok(ChosenDestination::Zone(ZoneKind::Hand)),
+        "library_top" => Ok(ChosenDestination::LibraryTop),
+        _ => Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectArguments,
+            path,
+            format!("chosen destination `{destination}` is not compiled"),
+        )),
+    }
 }
 
 fn stable_runtime_id(value: &str) -> u32 {
@@ -1408,6 +1756,265 @@ fn intern_target(
     Ok(index)
 }
 
+fn intern_object_choice(
+    compiler: &mut ProgramCompiler,
+    selector: &Expression,
+    requirement: ObjectChoiceRequirement,
+) -> usize {
+    if let Some(index) = compiler
+        .object_choices
+        .iter()
+        .position(|choice| choice.selector == *selector && choice.requirement == requirement)
+    {
+        return index;
+    }
+    let index = compiler.object_choices.len();
+    compiler.object_choices.push(CompiledObjectChoice {
+        selector: selector.clone(),
+        requirement,
+    });
+    index
+}
+
+#[derive(Default)]
+struct LibraryChoiceConstraints {
+    required: ObjectTypes,
+    required_any: ObjectTypes,
+    forbidden: ObjectTypes,
+    required_supertypes: ObjectSupertypes,
+    required_land_types: BasicLandTypes,
+    required_any_land_types: BasicLandTypes,
+    library_zone: bool,
+}
+
+fn compile_library_choice_selector(
+    selector: &Expression,
+    path: &str,
+) -> Result<
+    (
+        ObjectTypes,
+        ObjectTypes,
+        ObjectTypes,
+        ObjectSupertypes,
+        BasicLandTypes,
+        BasicLandTypes,
+    ),
+    CompileDiagnostic,
+> {
+    let Expression::Call {
+        operation: Operation::Cards,
+        arguments,
+    } = selector
+    else {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectArguments,
+            path,
+            "library choice selector is not cards(...)[]",
+        ));
+    };
+    let mut constraints = LibraryChoiceConstraints::default();
+    for (index, predicate) in arguments.iter().enumerate() {
+        compile_library_choice_predicate(
+            predicate,
+            &format!("{path}.cards[{index}]"),
+            &mut constraints,
+        )?;
+    }
+    if !constraints.library_zone {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectArguments,
+            path,
+            "library choice requires zone_is(\"library\")",
+        ));
+    }
+    if constraints.required == ObjectTypes::none()
+        && constraints.required_any == ObjectTypes::none()
+        && constraints.required_land_types == BasicLandTypes::none()
+        && constraints.required_any_land_types == BasicLandTypes::none()
+    {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectArguments,
+            path,
+            "library choice requires a closed top-level type predicate",
+        ));
+    }
+    if constraints.required.intersects(constraints.forbidden)
+        || (constraints.required_any != ObjectTypes::none()
+            && constraints.forbidden.contains_all(constraints.required_any))
+    {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectArguments,
+            path,
+            "library choice type constraints are contradictory",
+        ));
+    }
+    Ok((
+        constraints.required,
+        constraints.required_any,
+        constraints.forbidden,
+        constraints.required_supertypes,
+        constraints.required_land_types,
+        constraints.required_any_land_types,
+    ))
+}
+
+fn compile_library_choice_predicate(
+    expression: &Expression,
+    path: &str,
+    constraints: &mut LibraryChoiceConstraints,
+) -> Result<(), CompileDiagnostic> {
+    let Expression::Call {
+        operation,
+        arguments,
+    } = expression
+    else {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectArguments,
+            path,
+            "library choice predicate is not an operation call",
+        ));
+    };
+    match operation {
+        Operation::And => {
+            for (index, predicate) in arguments.iter().enumerate() {
+                compile_library_choice_predicate(
+                    predicate,
+                    &format!("{path}.and[{index}]"),
+                    constraints,
+                )?;
+            }
+            Ok(())
+        }
+        Operation::ZoneIs => {
+            let [zone] = arguments.as_slice() else {
+                return Err(effect_arity(path, operation, "one zone string"));
+            };
+            if compile_zone_kind(zone, path)? != ZoneKind::Library || constraints.library_zone {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::EffectArguments,
+                    path,
+                    "library choice requires exactly one library zone predicate",
+                ));
+            }
+            constraints.library_zone = true;
+            Ok(())
+        }
+        Operation::TypeIs => {
+            let [value] = arguments.as_slice() else {
+                return Err(effect_arity(path, operation, "one type string"));
+            };
+            constraints.required = constraints
+                .required
+                .union(compile_object_type(value, path)?);
+            Ok(())
+        }
+        Operation::SupertypeIs => {
+            let [value] = arguments.as_slice() else {
+                return Err(effect_arity(path, operation, "one supertype string"));
+            };
+            constraints.required_supertypes = constraints
+                .required_supertypes
+                .union(compile_object_supertype(value, path)?);
+            Ok(())
+        }
+        Operation::SubtypeIs => {
+            let [value] = arguments.as_slice() else {
+                return Err(effect_arity(path, operation, "one subtype string"));
+            };
+            constraints.required_land_types = constraints
+                .required_land_types
+                .union(compile_basic_land_type(value, path)?);
+            Ok(())
+        }
+        Operation::Not => {
+            let [predicate] = arguments.as_slice() else {
+                return Err(effect_arity(path, operation, "one predicate"));
+            };
+            let Expression::Call {
+                operation: Operation::TypeIs,
+                arguments,
+            } = predicate
+            else {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::EffectArguments,
+                    path,
+                    "library choice not() only accepts type_is(...)",
+                ));
+            };
+            let [value] = arguments.as_slice() else {
+                return Err(effect_arity(path, &Operation::TypeIs, "one type string"));
+            };
+            constraints.forbidden = constraints
+                .forbidden
+                .union(compile_object_type(value, path)?);
+            Ok(())
+        }
+        Operation::Or => {
+            if arguments.is_empty() {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::EffectArguments,
+                    path,
+                    "library choice or() is empty",
+                ));
+            }
+            let mut top_level_types = None;
+            for (index, predicate) in arguments.iter().enumerate() {
+                let Expression::Call {
+                    operation,
+                    arguments,
+                } = predicate
+                else {
+                    return Err(CompileDiagnostic::new(
+                        CompileDiagnosticCode::EffectArguments,
+                        format!("{path}.or[{index}]"),
+                        "library choice or() only accepts homogeneous type_is(...) or basic-land subtype_is(...) members",
+                    ));
+                };
+                let [value] = arguments.as_slice() else {
+                    return Err(effect_arity(
+                        &format!("{path}.or[{index}]"),
+                        operation,
+                        "one type string",
+                    ));
+                };
+                match operation {
+                    Operation::TypeIs if top_level_types != Some(false) => {
+                        top_level_types = Some(true);
+                        constraints.required_any = constraints
+                            .required_any
+                            .union(compile_object_type(value, &format!("{path}.or[{index}]"))?);
+                    }
+                    Operation::SubtypeIs if top_level_types != Some(true) => {
+                        top_level_types = Some(false);
+                        constraints.required_any_land_types = constraints
+                            .required_any_land_types
+                            .union(compile_basic_land_type(
+                                value,
+                                &format!("{path}.or[{index}]"),
+                            )?);
+                    }
+                    _ => {
+                        return Err(CompileDiagnostic::new(
+                            CompileDiagnosticCode::EffectArguments,
+                            format!("{path}.or[{index}]"),
+                            "library choice type union mixes incompatible predicate families",
+                        ));
+                    }
+                }
+            }
+            Ok(())
+        }
+        _ => Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectArguments,
+            path,
+            format!(
+                "library choice predicate `{}` is not in the closed top-level type grammar",
+                operation.as_str()
+            ),
+        )),
+    }
+}
+
 struct ObjectSelectorSpec {
     kind: TargetKind,
     owner: TargetControllerPredicate,
@@ -1700,6 +2307,56 @@ fn compile_object_type(
     }
 }
 
+fn compile_object_supertype(
+    expression: &Expression,
+    path: &str,
+) -> Result<ObjectSupertypes, CompileDiagnostic> {
+    let Expression::Text(value) = expression else {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectArguments,
+            path,
+            "object supertype is not text",
+        ));
+    };
+    match value.to_ascii_lowercase().as_str() {
+        "basic" => Ok(ObjectSupertypes::none().with_basic()),
+        "legendary" => Ok(ObjectSupertypes::none().with_legendary()),
+        "ongoing" => Ok(ObjectSupertypes::none().with_ongoing()),
+        "snow" => Ok(ObjectSupertypes::none().with_snow()),
+        "world" => Ok(ObjectSupertypes::none().with_world()),
+        _ => Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectArguments,
+            path,
+            format!("object supertype `{value}` is not in the closed runtime set"),
+        )),
+    }
+}
+
+fn compile_basic_land_type(
+    expression: &Expression,
+    path: &str,
+) -> Result<BasicLandTypes, CompileDiagnostic> {
+    let Expression::Text(value) = expression else {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectArguments,
+            path,
+            "basic land type is not text",
+        ));
+    };
+    match value.to_ascii_lowercase().as_str() {
+        "plains" => Ok(BasicLandTypes::none().with_plains()),
+        "island" => Ok(BasicLandTypes::none().with_island()),
+        "swamp" => Ok(BasicLandTypes::none().with_swamp()),
+        "mountain" => Ok(BasicLandTypes::none().with_mountain()),
+        "forest" => Ok(BasicLandTypes::none().with_forest()),
+        _ => Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectArguments,
+            path,
+            format!("subtype `{value}` is not one of the five basic land types"),
+        )),
+    }
+}
+
 fn compile_zone_kind(expression: &Expression, path: &str) -> Result<ZoneKind, CompileDiagnostic> {
     let Expression::Text(value) = expression else {
         return Err(CompileDiagnostic::new(
@@ -1730,6 +2387,7 @@ pub struct ExecutionBindings {
     controller: PlayerId,
     opponents: Vec<PlayerId>,
     targets: Vec<TargetChoice>,
+    object_choices: Vec<Vec<ObjectId>>,
     scry_bottoms: BTreeMap<(usize, PlayerId), Vec<ObjectId>>,
 }
 
@@ -1741,6 +2399,7 @@ impl ExecutionBindings {
             controller,
             opponents,
             targets: Vec::new(),
+            object_choices: Vec::new(),
             scry_bottoms: BTreeMap::new(),
         }
     }
@@ -1749,6 +2408,13 @@ impl ExecutionBindings {
     #[must_use]
     pub fn with_targets(mut self, targets: Vec<TargetChoice>) -> Self {
         self.targets = targets;
+        self
+    }
+
+    /// Supplies explicit hidden-zone object choices in compiled choice order.
+    #[must_use]
+    pub fn with_object_choices(mut self, choices: Vec<Vec<ObjectId>>) -> Self {
+        self.object_choices = choices;
         self
     }
 
@@ -1780,6 +2446,12 @@ impl ExecutionBindings {
     #[must_use]
     pub fn targets(&self) -> &[TargetChoice] {
         &self.targets
+    }
+
+    /// Returns explicit hidden-zone object choices in compiled order.
+    #[must_use]
+    pub fn object_choices(&self) -> &[Vec<ObjectId>] {
+        &self.object_choices
     }
 }
 
@@ -1949,6 +2621,7 @@ pub fn bind_program_actions(
                 format!("kernel rejected target binding: {error:?}"),
             )
         })?;
+    validate_object_choices(state, program, bindings)?;
     let mut actions = Vec::new();
     for (effect_index, effect) in program.effects.iter().enumerate() {
         match effect {
@@ -2118,9 +2791,178 @@ pub fn bind_program_actions(
                     }
                 }
             }
+            EffectProgram::SearchLibrary { .. } => {}
+            EffectProgram::MoveChosenObjects {
+                choice,
+                destination,
+            } => {
+                let selected = bindings.object_choices.get(*choice).ok_or_else(|| {
+                    ExecutionDiagnostic::new(
+                        ExecutionDiagnosticCode::MissingChoice,
+                        Some(effect_index),
+                        format!("no object choice supplied for slot {choice}"),
+                    )
+                })?;
+                for object in selected {
+                    let owner = state
+                        .object(*object)
+                        .ok_or_else(|| {
+                            ExecutionDiagnostic::new(
+                                ExecutionDiagnosticCode::InvalidChoice,
+                                Some(effect_index),
+                                format!("chosen object {object:?} is unknown"),
+                            )
+                        })?
+                        .owner();
+                    let action = match destination {
+                        ChosenDestination::LibraryTop => Action::PutObjectOnTopOfLibrary {
+                            player: owner,
+                            object: *object,
+                        },
+                        ChosenDestination::Zone(kind) => Action::MoveObject {
+                            object: *object,
+                            to: ZoneId::new(
+                                match kind {
+                                    ZoneKind::Hand | ZoneKind::Library | ZoneKind::Graveyard => {
+                                        Some(owner)
+                                    }
+                                    ZoneKind::Battlefield
+                                    | ZoneKind::Exile
+                                    | ZoneKind::Stack
+                                    | ZoneKind::Command
+                                    | ZoneKind::Ceased => None,
+                                },
+                                *kind,
+                            ),
+                        },
+                    };
+                    actions.push(BoundAction {
+                        effect_index,
+                        action,
+                    });
+                }
+            }
+            EffectProgram::TapChosenObjects { choice } => {
+                let selected = bindings.object_choices.get(*choice).ok_or_else(|| {
+                    ExecutionDiagnostic::new(
+                        ExecutionDiagnosticCode::MissingChoice,
+                        Some(effect_index),
+                        format!("no object choice supplied for slot {choice}"),
+                    )
+                })?;
+                for object in selected {
+                    actions.push(BoundAction {
+                        effect_index,
+                        action: Action::SetObjectTapped {
+                            object: *object,
+                            tapped: true,
+                        },
+                    });
+                }
+            }
         }
     }
     Ok(actions)
+}
+
+fn validate_object_choices(
+    state: &GameState,
+    program: &CardProgram,
+    bindings: &ExecutionBindings,
+) -> Result<(), ExecutionDiagnostic> {
+    if program.object_choice_requirements.len() != bindings.object_choices.len() {
+        return Err(ExecutionDiagnostic::new(
+            ExecutionDiagnosticCode::MissingChoice,
+            None,
+            format!(
+                "program requires {} object choice slot(s), found {}",
+                program.object_choice_requirements.len(),
+                bindings.object_choices.len()
+            ),
+        ));
+    }
+    for (choice_index, (requirement, selected)) in program
+        .object_choice_requirements
+        .iter()
+        .zip(&bindings.object_choices)
+        .enumerate()
+    {
+        if selected.len() > requirement.maximum as usize {
+            return Err(ExecutionDiagnostic::new(
+                ExecutionDiagnosticCode::InvalidChoice,
+                None,
+                format!(
+                    "object choice {choice_index} selected {} objects, maximum is {}",
+                    selected.len(),
+                    requirement.maximum
+                ),
+            ));
+        }
+        let player = match requirement.player {
+            PlayerBinding::Controller => bindings.controller,
+            _ => {
+                return Err(ExecutionDiagnostic::new(
+                    ExecutionDiagnosticCode::InvalidChoice,
+                    None,
+                    format!("object choice {choice_index} has an unsupported player binding"),
+                ));
+            }
+        };
+        let zone = ZoneId::new(Some(player), requirement.zone);
+        for (selected_index, object) in selected.iter().copied().enumerate() {
+            if selected[..selected_index].contains(&object)
+                || state.object_zone(object) != Some(zone)
+            {
+                return Err(ExecutionDiagnostic::new(
+                    ExecutionDiagnosticCode::InvalidChoice,
+                    None,
+                    format!(
+                        "object choice {choice_index} contains duplicate or out-of-zone object {object:?}"
+                    ),
+                ));
+            }
+            let characteristics = state.object_characteristics(object).map_err(|error| {
+                ExecutionDiagnostic::new(
+                    ExecutionDiagnosticCode::InvalidChoice,
+                    None,
+                    format!("object choice {choice_index} characteristics failed: {error:?}"),
+                )
+            })?;
+            if !characteristics
+                .types()
+                .contains_all(requirement.required_types)
+                || (requirement.required_any_types != ObjectTypes::none()
+                    && !characteristics
+                        .types()
+                        .intersects(requirement.required_any_types))
+                || characteristics
+                    .types()
+                    .intersects(requirement.forbidden_types)
+                || !characteristics
+                    .supertypes()
+                    .contains_all(requirement.required_supertypes)
+                || !characteristics
+                    .basic_land_types()
+                    .contains_all(requirement.required_land_types)
+                || (requirement.required_any_land_types != BasicLandTypes::none()
+                    && !characteristics
+                        .basic_land_types()
+                        .intersects(requirement.required_any_land_types))
+                || ((requirement.required_land_types != BasicLandTypes::none()
+                    || requirement.required_any_land_types != BasicLandTypes::none())
+                    && !characteristics.types().land())
+            {
+                return Err(ExecutionDiagnostic::new(
+                    ExecutionDiagnosticCode::InvalidChoice,
+                    None,
+                    format!(
+                        "object choice {choice_index} object {object:?} fails its type predicate"
+                    ),
+                ));
+            }
+        }
+    }
+    Ok(())
 }
 
 fn validate_player_bindings(bindings: &ExecutionBindings) -> Result<(), ExecutionDiagnostic> {
@@ -2276,9 +3118,9 @@ mod tests {
         ExecutionBindings, ExecutionDiagnosticCode, ProgramKind,
     };
     use forge_core::{
-        apply, Action, BaseCreatureCharacteristics, BaseObjectCharacteristics, CardId, GameState,
-        ManaKind, ManaPool, ObjectColors, ObjectTypes, Outcome, StackObjectKind, TargetChoice,
-        ZoneId, ZoneKind,
+        apply, Action, BaseCreatureCharacteristics, BaseObjectCharacteristics, BasicLandTypes,
+        CardId, GameState, ManaKind, ManaPool, ObjectColors, ObjectSupertypes, ObjectTypes,
+        Outcome, StackObjectKind, TargetChoice, ZoneId, ZoneKind,
     };
 
     const SWORDS: &str = r#"
@@ -2358,6 +3200,54 @@ card "Negate" {
     keywords: []
     ability spell {
       effect: counter_spell(target(spells(not(type_is("creature")))))
+    }
+  }
+}
+"#;
+    const ELADAMRIS_CALL: &str = r#"
+card "Eladamri's Call" {
+  id: "4acb6612-54e8-428d-acb6-c7259a5ad6a8"
+  layout: normal
+  status: unverified_playable
+  face "Eladamri's Call" {
+    cost: "{G}{W}"
+    types: "Instant"
+    oracle: "Search your library for a creature card, reveal that card, put it into your hand, then shuffle."
+    keywords: []
+    ability spell {
+      effect: sequence(search_library(cards(and(type_is("creature"), zone_is("library"))), you(), 1), move_zone(chosen(cards(and(type_is("creature"), zone_is("library")))), "hand", 1), shuffle(you()))
+    }
+  }
+}
+"#;
+    const ENLIGHTENED_TUTOR: &str = r#"
+card "Enlightened Tutor" {
+  id: "c5229c17-b7be-4b05-b683-f2277edc4849"
+  layout: normal
+  status: unverified_playable
+  face "Enlightened Tutor" {
+    cost: "{W}"
+    types: "Instant"
+    oracle: "Search your library for an artifact or enchantment card, reveal it, then shuffle and put that card on top."
+    keywords: []
+    ability spell {
+      effect: sequence(search_library(cards(and(or(type_is("artifact"), type_is("enchantment")), zone_is("library"))), you(), 1), shuffle(you()), move_zone(chosen(cards(and(or(type_is("artifact"), type_is("enchantment")), zone_is("library")))), "library_top", 1))
+    }
+  }
+}
+"#;
+    const RAMPANT_GROWTH: &str = r#"
+card "Rampant Growth" {
+  id: "8539f295-5d58-4436-a73a-b9277c4c7795"
+  layout: normal
+  status: unverified_playable
+  face "Rampant Growth" {
+    cost: "{1}{G}"
+    types: "Sorcery"
+    oracle: "Search your library for a basic land card, put that card onto the battlefield tapped, then shuffle."
+    keywords: []
+    ability spell {
+      effect: sequence(search_library(cards(and(and(type_is("land"), supertype_is("basic")), zone_is("library"))), you(), 1), move_zone(chosen(cards(and(and(type_is("land"), supertype_is("basic")), zone_is("library")))), "battlefield", 1), tap(chosen(cards(and(and(type_is("land"), supertype_is("basic")), zone_is("library"))))), shuffle(you()))
     }
   }
 }
@@ -2480,6 +3370,8 @@ card "Interpreter Contract" {
             plains.activated_abilities()[0].produces(),
             ManaPool::of(ManaKind::White, 1)
         );
+        assert!(plains.base_object().supertypes().basic());
+        assert!(plains.base_object().basic_land_types().plains());
 
         let ring = compile_card_program(&parse("sol_ring.frs", SOL_RING))
             .unwrap_or_else(|error| panic!("unexpected Sol Ring compile error: {error}"));
@@ -2720,6 +3612,187 @@ card "Interpreter Contract" {
             predicate.required_any_types(),
             ObjectTypes::none().with_instant().with_sorcery()
         );
+    }
+
+    #[test]
+    fn explicit_library_choice_moves_matching_card_to_hand_and_rejects_wrong_type() {
+        let program = compile_card_program(&parse("eladamris_call.frs", ELADAMRIS_CALL))
+            .unwrap_or_else(|error| panic!("unexpected compile error: {error}"));
+        assert_eq!(
+            program.capabilities(),
+            vec![
+                Capability::SearchLibrary,
+                Capability::MoveZone,
+                Capability::ShuffleLibrary
+            ]
+        );
+        let mut state = GameState::new();
+        let caster = add_player(&mut state);
+        let creature = create_object(
+            &mut state,
+            CardId::new(2_005),
+            caster,
+            ZoneId::new(Some(caster), ZoneKind::Library),
+        );
+        let artifact = create_object(
+            &mut state,
+            CardId::new(2_006),
+            caster,
+            ZoneId::new(Some(caster), ZoneKind::Library),
+        );
+        for (object, types) in [
+            (creature, ObjectTypes::none().with_creature()),
+            (artifact, ObjectTypes::none().with_artifact()),
+        ] {
+            assert_eq!(
+                apply(
+                    &mut state,
+                    Action::SetBaseObjectCharacteristics {
+                        object,
+                        base: BaseObjectCharacteristics::new(types, ObjectColors::none()),
+                    },
+                ),
+                Outcome::Applied
+            );
+        }
+
+        let before_invalid = state.deterministic_hash();
+        let invalid = execute_program(
+            &mut state,
+            &program,
+            &ExecutionBindings::new(caster, Vec::new()).with_object_choices(vec![vec![artifact]]),
+        );
+        assert!(invalid.is_err());
+        assert_eq!(state.deterministic_hash(), before_invalid);
+
+        execute_program(
+            &mut state,
+            &program,
+            &ExecutionBindings::new(caster, Vec::new()).with_object_choices(vec![vec![creature]]),
+        )
+        .unwrap_or_else(|error| panic!("unexpected execution error: {error}"));
+        assert_eq!(
+            state.object_zone(creature),
+            Some(ZoneId::new(Some(caster), ZoneKind::Hand))
+        );
+    }
+
+    #[test]
+    fn basic_land_search_rejects_nonbasic_land_and_moves_basic_land_tapped() {
+        let program = compile_card_program(&parse("rampant_growth.frs", RAMPANT_GROWTH))
+            .unwrap_or_else(|error| panic!("unexpected compile error: {error}"));
+        let mut state = GameState::new();
+        let caster = add_player(&mut state);
+        let library = ZoneId::new(Some(caster), ZoneKind::Library);
+        let nonbasic_forest = create_object(&mut state, CardId::new(2_008), caster, library);
+        let basic_forest = create_object(&mut state, CardId::new(2_009), caster, library);
+        for (object, supertypes) in [
+            (nonbasic_forest, ObjectSupertypes::none()),
+            (basic_forest, ObjectSupertypes::none().with_basic()),
+        ] {
+            assert_eq!(
+                apply(
+                    &mut state,
+                    Action::SetBaseObjectCharacteristics {
+                        object,
+                        base: BaseObjectCharacteristics::new(
+                            ObjectTypes::none().with_land(),
+                            ObjectColors::none(),
+                        )
+                        .with_supertypes(supertypes)
+                        .with_basic_land_types(BasicLandTypes::none().with_forest()),
+                    },
+                ),
+                Outcome::Applied
+            );
+        }
+
+        let before_invalid = state.deterministic_hash();
+        assert!(execute_program(
+            &mut state,
+            &program,
+            &ExecutionBindings::new(caster, Vec::new())
+                .with_object_choices(vec![vec![nonbasic_forest]]),
+        )
+        .is_err());
+        assert_eq!(state.deterministic_hash(), before_invalid);
+
+        execute_program(
+            &mut state,
+            &program,
+            &ExecutionBindings::new(caster, Vec::new())
+                .with_object_choices(vec![vec![basic_forest]]),
+        )
+        .unwrap_or_else(|error| panic!("unexpected execution error: {error}"));
+        assert_eq!(
+            state.object_zone(basic_forest),
+            Some(ZoneId::new(None, ZoneKind::Battlefield))
+        );
+        assert!(state
+            .object(basic_forest)
+            .is_some_and(forge_core::ObjectRecord::tapped));
+    }
+
+    #[test]
+    fn tutor_choice_is_repositioned_on_top_after_shuffle() {
+        let program = compile_card_program(&parse("enlightened_tutor.frs", ENLIGHTENED_TUTOR))
+            .unwrap_or_else(|error| panic!("unexpected compile error: {error}"));
+        let mut state = GameState::new();
+        let caster = add_player(&mut state);
+        let selected = create_object(
+            &mut state,
+            CardId::new(2_007),
+            caster,
+            ZoneId::new(Some(caster), ZoneKind::Library),
+        );
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::SetBaseObjectCharacteristics {
+                    object: selected,
+                    base: BaseObjectCharacteristics::new(
+                        ObjectTypes::none().with_artifact(),
+                        ObjectColors::none(),
+                    ),
+                },
+            ),
+            Outcome::Applied
+        );
+        for offset in 0..3 {
+            create_object(
+                &mut state,
+                CardId::new(2_100 + offset),
+                caster,
+                ZoneId::new(Some(caster), ZoneKind::Library),
+            );
+        }
+
+        execute_program(
+            &mut state,
+            &program,
+            &ExecutionBindings::new(caster, Vec::new()).with_object_choices(vec![vec![selected]]),
+        )
+        .unwrap_or_else(|error| panic!("unexpected execution error: {error}"));
+        assert_eq!(
+            state
+                .zone_objects(ZoneId::new(Some(caster), ZoneKind::Library))
+                .and_then(<[forge_core::ObjectId]>::last),
+            Some(&selected)
+        );
+    }
+
+    #[test]
+    fn library_search_subtype_predicate_remains_fail_closed() {
+        let definition = parse(
+            "unsupported_search.frs",
+            &ELADAMRIS_CALL.replace("type_is(\"creature\")", "subtype_is(\"elf\")"),
+        );
+        let error = match compile_card_program(&definition) {
+            Ok(_) => panic!("subtype search must not compile without subtype state"),
+            Err(error) => error,
+        };
+        assert_eq!(error.code(), CompileDiagnosticCode::EffectArguments);
+        assert!(error.detail().contains("five basic land types"));
     }
 
     fn parse(path: &str, source: &str) -> forge_carddef::CardDefinition {
