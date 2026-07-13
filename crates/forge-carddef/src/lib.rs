@@ -1252,6 +1252,7 @@ operations! {
     RememberedLkiMatching => ("remembered_lki_matching", Selector, 1, Some(1)),
     ColorCount => ("color_count", Value, 1, Some(1)),
     CannotTargetFrom => ("cannot_target_from", Effect, 3, Some(3)),
+    TopOfLibrary => ("top_of_library", Selector, 1, Some(1)),
 }
 
 impl Operation {
@@ -2462,6 +2463,7 @@ impl Operation {
                 2 => Some(Text),
                 _ => None,
             },
+            Self::TopOfLibrary => Some(Selector),
             Self::ChooseNumber => match index {
                 0 => Some(Selector),
                 1 | 2 => Some(Number),
@@ -2855,6 +2857,7 @@ mod tests {
         assert_eq!(Operation::RememberedLkiMatching as u32, 452);
         assert_eq!(Operation::ColorCount as u32, 453);
         assert_eq!(Operation::CannotTargetFrom as u32, 454);
+        assert_eq!(Operation::TopOfLibrary as u32, 455);
 
         let config = bincode::config::standard()
             .with_fixed_int_encoding()

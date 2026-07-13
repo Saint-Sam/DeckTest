@@ -5811,9 +5811,7 @@ fn map_delayed_trigger(
         "Phase" => {
             let player = match parameters.get("ValidPlayer").map(String::as_str) {
                 None | Some("Any") | Some("Player") => call(Operation::Any, vec![]),
-                Some("You") => call(Operation::You, vec![]),
-                Some("Opponent" | "Player.Opponent") => call(Operation::Opponent, vec![]),
-                Some(value) => return Err(unsupported_value("ValidPlayer", value)),
+                Some(value) => draw_player_selector(value, "ValidPlayer")?,
             };
             match required(&parameters, "Phase")? {
                 "Upkeep" => call(Operation::EventUpkeep, vec![player]),
@@ -7426,9 +7424,7 @@ fn map_phase_event(parameters: &BTreeMap<String, String>) -> Result<Expression, 
     let phase = required(parameters, "Phase")?;
     let player = match parameters.get("ValidPlayer").map(String::as_str) {
         None | Some("Any") | Some("Player") => call(Operation::Any, vec![]),
-        Some("You") => call(Operation::You, vec![]),
-        Some("Opponent") | Some("Player.Opponent") => call(Operation::Opponent, vec![]),
-        Some(value) => return Err(unsupported_value("ValidPlayer", value)),
+        Some(value) => draw_player_selector(value, "ValidPlayer")?,
     };
     match phase {
         "Upkeep" => Ok(call(Operation::EventUpkeep, vec![player])),
@@ -8033,6 +8029,13 @@ fn draw_player_selector(value: &str, key: &str) -> Result<Expression, MappingDia
         "You" | "Player.You" => Ok(call(Operation::You, vec![])),
         "Opponent" | "Player.Opponent" => Ok(call(Operation::Opponent, vec![])),
         "Player.Chosen" => Ok(call(Operation::Chosen, vec![call(Operation::Any, vec![])])),
+        "Player.EnchantedController" => Ok(call(
+            Operation::ControllerOf,
+            vec![call(
+                Operation::EnchantedObject,
+                vec![call(Operation::Source, vec![])],
+            )],
+        )),
         _ => Err(unsupported_value(key, value)),
     }
 }
@@ -10481,6 +10484,15 @@ fn map_continuous_with_effects(
                         Expression::Text("next_untap_step".to_string()),
                     ],
                 ));
+            } else if let Some(cost) = keyword.strip_prefix("Ward:") {
+                let amount = cost
+                    .parse::<i64>()
+                    .ok()
+                    .filter(|amount| (1..=20).contains(amount))
+                    .ok_or_else(|| unsupported_value("AddKeyword", keyword))?;
+                let mut arguments = vec![call(Operation::Any, vec![])];
+                arguments.extend(parse_simple_cost(Some(&amount.to_string()))?);
+                effects.push(call(Operation::WardCost, arguments));
             } else {
                 effects.push(call(
                     Operation::GrantKeyword,
@@ -10930,6 +10942,7 @@ fn map_change_zone(
             "GainControl",
             "NoLooking",
             "Hidden",
+            "ExileFaceDown",
             "SelectPrompt",
             "Chooser",
             "RememberChanged",
@@ -10995,6 +11008,7 @@ fn map_change_zone(
                 | "TriggeredSpellAbility"
                 | "TriggeredTarget"
                 | "TriggeredTargetLKICopy"
+                | "TopOfLibrary"
         )
     }) && !parameters.contains_key("ValidTgts");
     let defined_graveyard_collection = parameters
@@ -11024,6 +11038,11 @@ fn map_change_zone(
     if let Some(value) = parameters.get("Hidden") {
         if value != "True" {
             return Err(unsupported_value("Hidden", value));
+        }
+    }
+    if let Some(value) = parameters.get("ExileFaceDown") {
+        if value != "True" || parameters.get("Destination").map(String::as_str) != Some("Exile") {
+            return Err(unsupported_value("ExileFaceDown", value));
         }
     }
     if origin == "Library" && !parameters.contains_key("Defined") {
@@ -11606,7 +11625,7 @@ fn preserve_hidden_information(
     parameters: &BTreeMap<String, String>,
     expression: Expression,
 ) -> Expression {
-    if parameters.contains_key("Hidden") {
+    if parameters.contains_key("Hidden") || parameters.contains_key("ExileFaceDown") {
         call(Operation::HiddenInformation, vec![expression])
     } else {
         expression
@@ -14020,6 +14039,7 @@ fn map_linked_static_effect(
         Some("UntilHostLeavesPlay") => "until_host_leaves_play",
         Some("UntilHostLeavesPlayOrEOT") => "until_host_leaves_play_or_eot",
         Some("UntilTheEndOfYourNextTurn") => "until_end_of_your_next_turn",
+        Some("UntilTheEndOfYourNextUntap") => "until_end_of_your_next_untap",
         Some(value) => return Err(unsupported_value("Duration", value)),
     };
     let mut effects = Vec::new();
@@ -16866,6 +16886,7 @@ fn map_reveal_hand(
             "ValidTgts",
             "TgtPrompt",
             "Look",
+            "RememberRevealed",
             "SpellDescription",
             "StackDescription",
             "IsCurse",
@@ -16902,6 +16923,8 @@ fn map_reveal_hand(
         Some("True") => call(Operation::LookAt, vec![hand, call(Operation::You, vec![])]),
         Some(value) => return Err(unsupported_value("Look", value)),
     };
+    let expression =
+        apply_remembered_result(expression, parameters, "RememberRevealed", "revealed")?;
     mapped_direct(prefix, api, parameters, expression)
 }
 
@@ -18270,6 +18293,10 @@ fn defined_selector(value: &str) -> Result<Expression, MappingDiagnostic> {
             vec![call(Operation::Target, vec![call(Operation::Any, vec![])])],
         )),
         "ReplacedCard" => Ok(call(Operation::Triggered, vec![])),
+        "TopOfLibrary" => Ok(call(
+            Operation::TopOfLibrary,
+            vec![call(Operation::You, vec![])],
+        )),
         _ => Err(unsupported_value("Defined", value)),
     }
 }
@@ -18321,6 +18348,13 @@ fn defined_player_selector(value: &str) -> Result<Expression, MappingDiagnostic>
         "Player.IsRemembered" => Ok(call(
             Operation::Remembered,
             vec![call(Operation::Any, vec![])],
+        )),
+        "Player.EnchantedController" | "EnchantedController" => Ok(call(
+            Operation::ControllerOf,
+            vec![call(
+                Operation::EnchantedObject,
+                vec![call(Operation::Source, vec![])],
+            )],
         )),
         _ => Err(unsupported_value("Defined", value)),
     }
@@ -23170,6 +23204,52 @@ mod tests {
             ));
         }
         assert!(map_line("A:SP$ Pump | ValidTgts$ Creature | KW$ Ward:X").is_err());
+
+        let static_ward =
+            map_line("S:Mode$ Continuous | Affected$ Creature.YouCtrl | AddKeyword$ Ward:2")
+                .unwrap_or_else(|error| {
+                    panic!("static numeric ward should map: {}", error.message)
+                });
+        assert!(expression_contains_operation(
+            &static_ward.expression,
+            Operation::WardCost
+        ));
+
+        let remembered_hand =
+            map_line("A:DB$ RevealHand | Defined$ Player.Opponent | RememberRevealed$ True")
+                .unwrap_or_else(|error| {
+                    panic!("remembered hand reveal should map: {}", error.message)
+                });
+        assert!(expression_contains_operation(
+            &remembered_hand.expression,
+            Operation::Remember
+        ));
+
+        let enchanted_turn = map_script_root(concat!(
+            "T:Mode$ Phase | Phase$ Upkeep | ValidPlayer$ Player.EnchantedController | Execute$ TrigDraw\n",
+            "SVar:TrigDraw:DB$ Draw | NumCards$ 1\n",
+        ))
+        .unwrap_or_else(|error| panic!("enchanted controller should map: {}", error.message));
+        assert!(expression_contains_operation(
+            enchanted_turn
+                .event
+                .as_ref()
+                .unwrap_or_else(|| panic!("phase trigger must carry an event")),
+            Operation::EnchantedObject
+        ));
+
+        let face_down = map_line(
+            "A:DB$ ChangeZone | Defined$ TopOfLibrary | Origin$ Library | Destination$ Exile | ExileFaceDown$ True",
+        )
+        .unwrap_or_else(|error| panic!("face-down exile should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &face_down.expression,
+            Operation::HiddenInformation
+        ));
+        assert!(map_line(
+            "A:DB$ ChangeZone | Defined$ TopOfLibrary | Origin$ Library | Destination$ Hand | ExileFaceDown$ True"
+        )
+        .is_err());
 
         let sized_copy = map_script_root(
             "A:SP$ CopyPermanent | ValidTgts$ Permanent.nonAura+YouCtrl | SetPower$ 0 | SetToughness$ 0\n",
