@@ -2,23 +2,18 @@
   "artifacts": {
     "runner": {
       "path": "tools/run_t3_6_commander_semantics.py",
-      "sha256": "8e610edb17757af01b0a03265c54bd75752a336783e4d0e7f752262b417b9c74"
+      "sha256": "c37456113a73fd051525a4754b598b1df696a62e2f317c272450414002b8cefd"
     },
     "runtime_probe": {
       "path": "tests/t3_6/runtime_probe.rs",
-      "sha256": "07b73813ab8a422730e9e56b2b6b1db597c77352d5bc4ddf8bac468467d289a6"
+      "sha256": "1602b5e67f46e10d12e782bc5e74138ea37e0d649be8866c0d51327c1e4697ad"
     },
     "semantic_cases": {
       "path": "tests/t3_6/commander_semantic_cases.json",
-      "sha256": "b26d88aaa87acd8460745c879e4f864cc035b18ec0afa294d0040221b718b124"
+      "sha256": "9832bd316e6a5d7fd1c6eca8874a1512b032c0481c2326ca9612aa5e8fb23569"
     }
   },
   "blocked_runtime": [
-    {
-      "card_name": "Thought Vessel",
-      "reason_code": "unsupported_effect_arguments",
-      "scenario_id": "T3.6-009"
-    },
     {
       "card_name": "Swiftfoot Boots",
       "reason_code": "unsupported_keyword_semantics",
@@ -33,16 +28,6 @@
       "card_name": "Cyclonic Rift",
       "reason_code": "unsupported_keyword_semantics",
       "scenario_id": "T3.6-017"
-    },
-    {
-      "card_name": "Reliquary Tower",
-      "reason_code": "unsupported_effect_arguments",
-      "scenario_id": "T3.6-035"
-    },
-    {
-      "card_name": "Temple of the False God",
-      "reason_code": "unsupported_ability_shape",
-      "scenario_id": "T3.6-036"
     },
     {
       "card_name": "Krosan Grip",
@@ -98,11 +83,6 @@
       "card_name": "Smothering Tithe",
       "reason_code": "unsupported_ability_shape",
       "scenario_id": "T3.6-087"
-    },
-    {
-      "card_name": "Goblin Warchief",
-      "reason_code": "unsupported_effect_arguments",
-      "scenario_id": "T3.6-096"
     },
     {
       "card_name": "Purphoros, God of the Forge",
@@ -261,12 +241,12 @@
   ],
   "checkpoint": {
     "id": "CP-CARD-SEMANTICS-100",
-    "remaining": 40,
+    "remaining": 36,
     "required": 100,
-    "semantic_verified": 60,
+    "semantic_verified": 64,
     "status": "in_progress"
   },
-  "claim_boundary": "60 identities have one card-specific expected production path and exact deterministic replay. The other 40 remain reason-coded and are not semantic_verified; CP-CARD-SEMANTICS-100 remains open.",
+  "claim_boundary": "64 identities have one card-specific expected production path and exact deterministic replay. The other 36 remain reason-coded and are not semantic_verified; CP-CARD-SEMANTICS-100 remains open.",
   "constraints": {
     "github_actions_used": false,
     "installs_performed": false,
@@ -281,38 +261,38 @@
   },
   "generated_at": "2026-07-13",
   "measured": {
-    "blocked_runtime": 20,
+    "blocked_runtime": 16,
     "blocked_semantic_gap": 20,
     "frozen_candidates": 100,
     "production_failures": 0,
     "runtime_blocker_reason_counts": {
-      "unsupported_ability_shape": 4,
+      "unsupported_ability_shape": 3,
       "unsupported_card_layout": 1,
-      "unsupported_effect_arguments": 5,
+      "unsupported_effect_arguments": 2,
       "unsupported_effect_operation": 2,
       "unsupported_keyword_semantics": 8
     },
-    "runtime_smoke_passed": 80,
+    "runtime_smoke_passed": 84,
     "semantic_blocker_reason_counts": {
       "COPY_TRIGGER_EVENT_MISSING": 1,
       "REGENERATION_PROHIBITION_MISSING": 4,
       "REVEAL_KNOWLEDGE_EVENT_MISSING": 6,
       "TOKEN_SUBTYPE_STATE_MISSING": 11
     },
-    "semantic_verified": 60
+    "semantic_verified": 64
   },
   "product_binding": {
     "candidate_payload_sha256": "901a08efac2e4eaefc3c2adba3fa23515709595efcde30e43032f24112552e0b",
-    "observed_replay_sha256": "2ce907cd1fa155c1a88f6b8f11cce6fe596c064daac91a646ab54ddc6a9976d1",
-    "runtime_source_commit": "72ef3a6f18c12d0576126549a4058c0fb89a084a",
-    "semantic_cases_payload_sha256": "df8f0c24050ea905c5fa25694f5514d66a577ca62fa8effdeda9164c8c2f3e14",
+    "observed_replay_sha256": "3374c30735b443478f92da48b2122f2d3486101f79d147faf430d53333cce83d",
+    "runtime_source_commit": "9c9d97ff8725e7d4b38e52bb92d7feb9080ca113",
+    "semantic_cases_payload_sha256": "98d434171b1e705f7fc8a3d15cba81f59344a9f90dc19bffeb065d1a4a3d8924",
     "translated_definitions_aggregate_sha256": "9e09956bdd16d34c77905dcbf53fea2b9f31164b7049c3a30424dc7109801fb0"
   },
   "schema_version": 2,
   "semantic_verified_identities": [
     {
       "card_name": "Plains",
-      "final_hash": "1992860141274073259",
+      "final_hash": "6758316833314695265",
       "freeze_rank": 1,
       "oracle_id": "bc71ebf6-2056-41f7-be35-b2e5c34afa99",
       "scenario_id": "T3.6-001",
@@ -320,7 +300,7 @@
     },
     {
       "card_name": "Island",
-      "final_hash": "9076495368385689508",
+      "final_hash": "4035847514261223716",
       "freeze_rank": 2,
       "oracle_id": "b2c6aa39-2d2a-459c-a555-fb48ba993373",
       "scenario_id": "T3.6-002",
@@ -328,7 +308,7 @@
     },
     {
       "card_name": "Swamp",
-      "final_hash": "12245978438494388954",
+      "final_hash": "5822233288218360398",
       "freeze_rank": 3,
       "oracle_id": "56719f6a-1a6c-4c0a-8d21-18f7d7350b68",
       "scenario_id": "T3.6-003",
@@ -336,7 +316,7 @@
     },
     {
       "card_name": "Mountain",
-      "final_hash": "14966991575986206590",
+      "final_hash": "9320247895146654042",
       "freeze_rank": 4,
       "oracle_id": "a3fb7228-e76b-4e96-a40e-20b5fed75685",
       "scenario_id": "T3.6-004",
@@ -344,7 +324,7 @@
     },
     {
       "card_name": "Forest",
-      "final_hash": "14705748769248762942",
+      "final_hash": "13961685310650314138",
       "freeze_rank": 5,
       "oracle_id": "b34bb2dc-c1af-4d77-b0b3-a0fb342a5fc6",
       "scenario_id": "T3.6-005",
@@ -352,7 +332,7 @@
     },
     {
       "card_name": "Wastes",
-      "final_hash": "7102525066818648446",
+      "final_hash": "4761507496017113946",
       "freeze_rank": 6,
       "oracle_id": "05d24b0c-904a-46b6-b42a-96a4d91a0dd4",
       "scenario_id": "T3.6-006",
@@ -360,7 +340,7 @@
     },
     {
       "card_name": "Sol Ring",
-      "final_hash": "13167157484859581530",
+      "final_hash": "10736175156471362934",
       "freeze_rank": 7,
       "oracle_id": "6ad8011d-3471-4369-9d68-b264cc027487",
       "scenario_id": "T3.6-007",
@@ -368,11 +348,19 @@
     },
     {
       "card_name": "Mind Stone",
-      "final_hash": "9994670315621935238",
+      "final_hash": "3316642912589021956",
       "freeze_rank": 8,
       "oracle_id": "c97361b5-af16-4a7b-af85-a429dbaf4ad2",
       "scenario_id": "T3.6-008",
       "stratum": "card_flow"
+    },
+    {
+      "card_name": "Thought Vessel",
+      "final_hash": "18384593747005322422",
+      "freeze_rank": 9,
+      "oracle_id": "9965d9c5-2ebf-4a6c-930e-55c5890979be",
+      "scenario_id": "T3.6-009",
+      "stratum": "continuous_combat_and_costs"
     },
     {
       "card_name": "Swords to Plowshares",
@@ -440,7 +428,7 @@
     },
     {
       "card_name": "Llanowar Elves",
-      "final_hash": "14021378285150011270",
+      "final_hash": "12908995026950480160",
       "freeze_rank": 23,
       "oracle_id": "68954295-54e3-4303-a6bc-fc4547a4e3a3",
       "scenario_id": "T3.6-023",
@@ -448,7 +436,7 @@
     },
     {
       "card_name": "Elvish Mystic",
-      "final_hash": "12232772764758586502",
+      "final_hash": "5320307283971862560",
       "freeze_rank": 24,
       "oracle_id": "3f3b2c10-21f8-4e13-be83-4ef3fa36e123",
       "scenario_id": "T3.6-024",
@@ -456,7 +444,7 @@
     },
     {
       "card_name": "Birds of Paradise",
-      "final_hash": "13996794433339711696",
+      "final_hash": "5477551285250211390",
       "freeze_rank": 25,
       "oracle_id": "d3a0b660-358c-41bd-9cd2-41fbf3491b1a",
       "scenario_id": "T3.6-025",
@@ -535,8 +523,24 @@
       "stratum": "land_ramp_and_search"
     },
     {
+      "card_name": "Reliquary Tower",
+      "final_hash": "15659756639220051538",
+      "freeze_rank": 35,
+      "oracle_id": "c23e5b80-08d2-4e24-9908-fe2aa4f30f6f",
+      "scenario_id": "T3.6-035",
+      "stratum": "continuous_combat_and_costs"
+    },
+    {
+      "card_name": "Temple of the False God",
+      "final_hash": "8345772288384510836",
+      "freeze_rank": 36,
+      "oracle_id": "cfdd5dc6-593e-495a-8cfe-3a56b3c4c7df",
+      "scenario_id": "T3.6-036",
+      "stratum": "mana_sources"
+    },
+    {
       "card_name": "Talisman of Dominance",
-      "final_hash": "586149887540921532",
+      "final_hash": "4165899379185879856",
       "freeze_rank": 37,
       "oracle_id": "4c0a0448-b9d6-43a0-8549-64066dac63f0",
       "scenario_id": "T3.6-037",
@@ -544,7 +548,7 @@
     },
     {
       "card_name": "Talisman of Progress",
-      "final_hash": "11705375476525845506",
+      "final_hash": "11460197759201535062",
       "freeze_rank": 38,
       "oracle_id": "00e35322-1a9a-41e3-9ce1-359c8eaa3bc7",
       "scenario_id": "T3.6-038",
@@ -552,7 +556,7 @@
     },
     {
       "card_name": "Talisman of Creativity",
-      "final_hash": "12503324059353604762",
+      "final_hash": "13585493412272072238",
       "freeze_rank": 39,
       "oracle_id": "14d2979d-5728-42d7-a027-0eb1f754655d",
       "scenario_id": "T3.6-039",
@@ -783,6 +787,14 @@
       "stratum": "continuous_combat_and_costs"
     },
     {
+      "card_name": "Goblin Warchief",
+      "final_hash": "16452218097578251045",
+      "freeze_rank": 96,
+      "oracle_id": "39882df0-c20f-469d-94ba-1617224e71a1",
+      "scenario_id": "T3.6-096",
+      "stratum": "continuous_combat_and_costs"
+    },
+    {
       "card_name": "Craterhoof Behemoth",
       "final_hash": "15012946979314124079",
       "freeze_rank": 100,
@@ -796,7 +808,7 @@
   "verification": [
     {
       "command": "CARGO_NET_OFFLINE=true python3 tools/run_t3_6_commander_semantics.py --translated-root target/translated-cards --cargo-target-dir target --report reports/gates/T3.6-B/EVIDENCE.json",
-      "result": "PASS; two exact production replays, 60 semantic outcomes matched, 20 semantic gaps and 20 runtime blockers remained fail-closed"
+      "result": "PASS; two exact production replays, 64 semantic outcomes matched, 20 semantic gaps and 16 runtime blockers remained fail-closed"
     }
   ],
   "verification_mode": "local_only"

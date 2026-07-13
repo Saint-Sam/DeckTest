@@ -13,7 +13,7 @@
         "destination": "battlefield",
         "disposition": "passed",
         "effect_actions": 0,
-        "final_hash": "1992860141274073259",
+        "final_hash": "6758316833314695265",
         "final_life_totals": [
           20,
           20
@@ -57,7 +57,7 @@
         "destination": "battlefield",
         "disposition": "passed",
         "effect_actions": 0,
-        "final_hash": "9076495368385689508",
+        "final_hash": "4035847514261223716",
         "final_life_totals": [
           20,
           20
@@ -101,7 +101,7 @@
         "destination": "battlefield",
         "disposition": "passed",
         "effect_actions": 0,
-        "final_hash": "12245978438494388954",
+        "final_hash": "5822233288218360398",
         "final_life_totals": [
           20,
           20
@@ -145,7 +145,7 @@
         "destination": "battlefield",
         "disposition": "passed",
         "effect_actions": 0,
-        "final_hash": "14966991575986206590",
+        "final_hash": "9320247895146654042",
         "final_life_totals": [
           20,
           20
@@ -189,7 +189,7 @@
         "destination": "battlefield",
         "disposition": "passed",
         "effect_actions": 0,
-        "final_hash": "14705748769248762942",
+        "final_hash": "13961685310650314138",
         "final_life_totals": [
           20,
           20
@@ -233,7 +233,7 @@
         "destination": "battlefield",
         "disposition": "passed",
         "effect_actions": 0,
-        "final_hash": "7102525066818648446",
+        "final_hash": "4761507496017113946",
         "final_life_totals": [
           20,
           20
@@ -277,7 +277,7 @@
         "destination": "battlefield",
         "disposition": "passed",
         "effect_actions": 0,
-        "final_hash": "13167157484859581530",
+        "final_hash": "10736175156471362934",
         "final_life_totals": [
           20,
           20
@@ -323,7 +323,7 @@
         "destination": "battlefield",
         "disposition": "passed",
         "effect_actions": 1,
-        "final_hash": "9994670315621935238",
+        "final_hash": "3316642912589021956",
         "final_life_totals": [
           20,
           20
@@ -368,18 +368,24 @@
       "translated_source_sha256": "b7a499ec758127a554348b36f24dfcc72bbbc62669fda166c17faea8c321fbe9"
     },
     {
-      "blockers": [
-        {
-          "code": "T3_5_UNSUPPORTED_EFFECT_ARGUMENTS",
-          "detail": "card.faces[0].abilities[0].effect.selector: unsupported object target selector `you`"
-        }
-      ],
       "card_name": "Thought Vessel",
+      "claim_boundary": "one deterministic card-specific production path plus shared primitive validation",
+      "expected_behavior": "Resolve Thought Vessel, replay its exact {C} mana output, then prove its controller has no maximum hand size only while Thought Vessel remains on the battlefield.",
       "expected_runtime": {
-        "code": "unsupported_effect_arguments",
-        "detail": "card.faces[0].abilities[0].effect.selector: unsupported object target selector `you`",
-        "detail_sha256": "6806cfdc252a233049703e9ac04dc131b7161020e6899e2d9df886ab4e28719a",
-        "disposition": "unsupported_setup"
+        "capabilities": [
+          "permanent_spell",
+          "mana_ability",
+          "modify_player_rules"
+        ],
+        "destination": "battlefield",
+        "disposition": "passed",
+        "effect_actions": 1,
+        "final_hash": "18384593747005322422",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 39
       },
       "freeze_rank": 9,
       "legacy_source_path": "t/thought_vessel.txt",
@@ -387,7 +393,27 @@
       "oracle_id": "9965d9c5-2ebf-4a6c-930e-55c5890979be",
       "oracle_text": "You have no maximum hand size.\n{T}: Add {C}.",
       "scenario_id": "T3.6-009",
-      "status": "blocked_runtime",
+      "semantic_atoms": [
+        {
+          "destination": "battlefield",
+          "op": "resolve_permanent",
+          "type_line": "Artifact"
+        },
+        {
+          "legal_outputs": [
+            "{C}"
+          ],
+          "op": "activate_mana",
+          "tap_source": true
+        },
+        {
+          "duration": "while_source_on_battlefield",
+          "op": "modify_player_rules",
+          "player": "source_controller",
+          "rule": "no_maximum_hand_size"
+        }
+      ],
+      "status": "semantic_case_ready",
       "stratum": "continuous_combat_and_costs",
       "translated_path": "t/thought_vessel.frs",
       "translated_source_sha256": "039260a50d38c95bc7f8b659d3286df4e3cdbd30bbeb5e5a4da9eba1d92fec39"
@@ -935,7 +961,7 @@
         "destination": "battlefield",
         "disposition": "passed",
         "effect_actions": 0,
-        "final_hash": "14021378285150011270",
+        "final_hash": "12908995026950480160",
         "final_life_totals": [
           20,
           20
@@ -983,7 +1009,7 @@
         "destination": "battlefield",
         "disposition": "passed",
         "effect_actions": 0,
-        "final_hash": "12232772764758586502",
+        "final_hash": "5320307283971862560",
         "final_life_totals": [
           20,
           20
@@ -1031,7 +1057,7 @@
         "destination": "battlefield",
         "disposition": "passed",
         "effect_actions": 0,
-        "final_hash": "13996794433339711696",
+        "final_hash": "5477551285250211390",
         "final_life_totals": [
           20,
           20
@@ -1513,18 +1539,24 @@
       "translated_source_sha256": "176211ff5e8a2753d716aaf3a44edc5bc6471a393f8dddb43f12154ad0149fc9"
     },
     {
-      "blockers": [
-        {
-          "code": "T3_5_UNSUPPORTED_EFFECT_ARGUMENTS",
-          "detail": "card.faces[0].abilities[0].effect.selector: unsupported object target selector `you`"
-        }
-      ],
       "card_name": "Reliquary Tower",
+      "claim_boundary": "one deterministic card-specific production path plus shared primitive validation",
+      "expected_behavior": "Play Reliquary Tower, replay its exact {C} mana output, then prove its controller has no maximum hand size only while Reliquary Tower remains on the battlefield.",
       "expected_runtime": {
-        "code": "unsupported_effect_arguments",
-        "detail": "card.faces[0].abilities[0].effect.selector: unsupported object target selector `you`",
-        "detail_sha256": "6806cfdc252a233049703e9ac04dc131b7161020e6899e2d9df886ab4e28719a",
-        "disposition": "unsupported_setup"
+        "capabilities": [
+          "land_play",
+          "mana_ability",
+          "modify_player_rules"
+        ],
+        "destination": "battlefield",
+        "disposition": "passed",
+        "effect_actions": 1,
+        "final_hash": "15659756639220051538",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 36
       },
       "freeze_rank": 35,
       "legacy_source_path": "r/reliquary_tower.txt",
@@ -1532,24 +1564,49 @@
       "oracle_id": "c23e5b80-08d2-4e24-9908-fe2aa4f30f6f",
       "oracle_text": "You have no maximum hand size.\n{T}: Add {C}.",
       "scenario_id": "T3.6-035",
-      "status": "blocked_runtime",
+      "semantic_atoms": [
+        {
+          "destination": "battlefield",
+          "op": "play_land",
+          "type_line": "Land"
+        },
+        {
+          "legal_outputs": [
+            "{C}"
+          ],
+          "op": "activate_mana",
+          "tap_source": true
+        },
+        {
+          "duration": "while_source_on_battlefield",
+          "op": "modify_player_rules",
+          "player": "source_controller",
+          "rule": "no_maximum_hand_size"
+        }
+      ],
+      "status": "semantic_case_ready",
       "stratum": "continuous_combat_and_costs",
       "translated_path": "r/reliquary_tower.frs",
       "translated_source_sha256": "119d0c9fb4e48dd3095d68cfea0383173dc588252ef070cf1affad9d2ab59381"
     },
     {
-      "blockers": [
-        {
-          "code": "T3_5_UNSUPPORTED_ABILITY_SHAPE",
-          "detail": "card.faces[0].abilities[0]: activated mana ability must be unconditional and marked mana_ability"
-        }
-      ],
       "card_name": "Temple of the False God",
+      "claim_boundary": "one deterministic card-specific production path plus shared primitive validation",
+      "expected_behavior": "Play Temple of the False God, prove its mana ability is rejected while its controller has only four lands, then activate it with five lands to add exactly {C}{C}.",
       "expected_runtime": {
-        "code": "unsupported_ability_shape",
-        "detail": "card.faces[0].abilities[0]: activated mana ability must be unconditional and marked mana_ability",
-        "detail_sha256": "69ca33a78b985cd3a4d56f4df6bd1106680cbe467a3394f8ee60a57df8936dec",
-        "disposition": "unsupported_setup"
+        "capabilities": [
+          "land_play",
+          "mana_ability"
+        ],
+        "destination": "battlefield",
+        "disposition": "passed",
+        "effect_actions": 0,
+        "final_hash": "8345772288384510836",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 43
       },
       "freeze_rank": 36,
       "legacy_source_path": "t/temple_of_the_false_god.txt",
@@ -1557,7 +1614,23 @@
       "oracle_id": "cfdd5dc6-593e-495a-8cfe-3a56b3c4c7df",
       "oracle_text": "{T}: Add {C}{C}. Activate only if you control five or more lands.",
       "scenario_id": "T3.6-036",
-      "status": "blocked_runtime",
+      "semantic_atoms": [
+        {
+          "destination": "battlefield",
+          "op": "play_land",
+          "type_line": "Land"
+        },
+        {
+          "condition_selector": "lands controlled by activator",
+          "legal_outputs": [
+            "{C}{C}"
+          ],
+          "minimum_matching_permanents": 5,
+          "op": "activate_mana",
+          "tap_source": true
+        }
+      ],
+      "status": "semantic_case_ready",
       "stratum": "mana_sources",
       "translated_path": "t/temple_of_the_false_god.frs",
       "translated_source_sha256": "96b26124e72d9041d6e5f9f79e2a383fdeed9e090e5b6d3e9737f40741c62cb7"
@@ -1574,7 +1647,7 @@
         "destination": "battlefield",
         "disposition": "passed",
         "effect_actions": 0,
-        "final_hash": "586149887540921532",
+        "final_hash": "4165899379185879856",
         "final_life_totals": [
           19,
           20
@@ -1630,7 +1703,7 @@
         "destination": "battlefield",
         "disposition": "passed",
         "effect_actions": 0,
-        "final_hash": "11705375476525845506",
+        "final_hash": "11460197759201535062",
         "final_life_totals": [
           19,
           20
@@ -1686,7 +1759,7 @@
         "destination": "battlefield",
         "disposition": "passed",
         "effect_actions": 0,
-        "final_hash": "12503324059353604762",
+        "final_hash": "13585493412272072238",
         "final_life_totals": [
           19,
           20
@@ -2346,7 +2419,7 @@
         "destination": "owner_graveyard",
         "disposition": "passed",
         "effect_actions": 2,
-        "final_hash": "13780425729431707831",
+        "final_hash": "6488903988052064625",
         "final_life_totals": [
           20,
           20
@@ -2991,7 +3064,7 @@
         "destination": "owner_graveyard",
         "disposition": "passed",
         "effect_actions": 2,
-        "final_hash": "10169423071399566609",
+        "final_hash": "18005298565464836679",
         "final_life_totals": [
           20,
           20
@@ -3025,7 +3098,7 @@
         "destination": "owner_graveyard",
         "disposition": "passed",
         "effect_actions": 2,
-        "final_hash": "12441419851182133915",
+        "final_hash": "12015408302814349401",
         "final_life_totals": [
           20,
           20
@@ -3059,7 +3132,7 @@
         "destination": "owner_graveyard",
         "disposition": "passed",
         "effect_actions": 2,
-        "final_hash": "10190127681022365529",
+        "final_hash": "5898662865270078305",
         "final_life_totals": [
           20,
           20
@@ -3687,7 +3760,7 @@
         "destination": "battlefield",
         "disposition": "passed",
         "effect_actions": 1,
-        "final_hash": "9259124287079668538",
+        "final_hash": "10566378229509695212",
         "final_life_totals": [
           20,
           20
@@ -3988,18 +4061,24 @@
       "translated_source_sha256": "46c54d0aa9d2321630992a73df794cfabcaee804491b78d5333a0c9a57a05b31"
     },
     {
-      "blockers": [
-        {
-          "code": "T3_5_UNSUPPORTED_EFFECT_ARGUMENTS",
-          "detail": "card.faces[0].abilities[0].effect.selector: unsupported object target selector `spells`"
-        }
-      ],
       "card_name": "Goblin Warchief",
+      "claim_boundary": "one deterministic card-specific production path plus shared primitive validation",
+      "expected_behavior": "Resolve Goblin Warchief with Goblin and Warrior subtypes, then register source-bound effects that reduce Goblin spell costs by {1} and give controlled Goblin permanents haste.",
       "expected_runtime": {
-        "code": "unsupported_effect_arguments",
-        "detail": "card.faces[0].abilities[0].effect.selector: unsupported object target selector `spells`",
-        "detail_sha256": "5f9f464620428b83b9e0afe20c40e3c63d46f154d614f74b596b6f97b24cf6ec",
-        "disposition": "unsupported_setup"
+        "capabilities": [
+          "permanent_spell",
+          "reduce_spell_cost",
+          "modify_characteristics"
+        ],
+        "destination": "battlefield",
+        "disposition": "passed",
+        "effect_actions": 2,
+        "final_hash": "16452218097578251045",
+        "final_life_totals": [
+          20,
+          20
+        ],
+        "production_actions": 39
       },
       "freeze_rank": 96,
       "legacy_source_path": "g/goblin_warchief.txt",
@@ -4007,7 +4086,32 @@
       "oracle_id": "39882df0-c20f-469d-94ba-1617224e71a1",
       "oracle_text": "Goblin spells you cast cost {1} less to cast.\nGoblins you control have haste.",
       "scenario_id": "T3.6-096",
-      "status": "blocked_runtime",
+      "semantic_atoms": [
+        {
+          "destination": "battlefield",
+          "op": "resolve_permanent",
+          "subtypes": [
+            "Goblin",
+            "Warrior"
+          ],
+          "type_line": "Creature - Goblin Warrior"
+        },
+        {
+          "duration": "source_bound",
+          "generic_reduction": 1,
+          "op": "reduce_spell_cost",
+          "spells": "Goblin spells you cast"
+        },
+        {
+          "duration": "source_bound",
+          "grant_keywords": [
+            "haste"
+          ],
+          "objects": "Goblin permanents you control",
+          "op": "modify_characteristics"
+        }
+      ],
+      "status": "semantic_case_ready",
       "stratum": "continuous_combat_and_costs",
       "translated_path": "g/goblin_warchief.frs",
       "translated_source_sha256": "cd218b6fe8633a9d6131aa42516386961b9499ecf0828f7e64133550a34d67d1"
@@ -4160,13 +4264,13 @@
   ],
   "claim_boundary": "Only semantic_case_ready entries can be promoted by a passing replay and any required card-specific semantic probe. Runtime-smoke success alone never promotes a known gap.",
   "generated_at": "2026-07-13",
-  "payload_sha256": "df8f0c24050ea905c5fa25694f5514d66a577ca62fa8effdeda9164c8c2f3e14",
-  "product_source_commit": "72ef3a6f18c12d0576126549a4058c0fb89a084a",
+  "payload_sha256": "98d434171b1e705f7fc8a3d15cba81f59344a9f90dc19bffeb065d1a4a3d8924",
+  "product_source_commit": "9c9d97ff8725e7d4b38e52bb92d7feb9080ca113",
   "schema_version": 2,
   "summary": {
-    "blocked_runtime": 20,
+    "blocked_runtime": 16,
     "blocked_semantic_gap": 20,
     "candidate_count": 100,
-    "semantic_case_ready": 60
+    "semantic_case_ready": 64
   }
 }

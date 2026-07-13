@@ -38,6 +38,11 @@ def observed_from_cases(cases: dict) -> list[dict]:
                         **expectation,
                         "replayed_outputs": expectation["legal_outputs"],
                         "all_outputs_replayed": True,
+                        "condition_rejected_below_threshold": (
+                            True
+                            if expectation["minimum_matching_permanents"] is not None
+                            else None
+                        ),
                     }
                 )
             entry["semantic_probe"] = {
@@ -45,6 +50,21 @@ def observed_from_cases(cases: dict) -> list[dict]:
                 "mana_abilities": mana,
                 "token_mana_abilities": [],
                 "token_subtypes": [],
+                "no_maximum_hand_size": (
+                    {
+                        "setup_succeeded": True,
+                        "registered": True,
+                        "active_for_controller": True,
+                        "opponent_unaffected": True,
+                        "moved_source_to_graveyard": True,
+                        "expired_off_battlefield": True,
+                    }
+                    if any(
+                        atom["op"] == "modify_player_rules"
+                        for atom in case.get("semantic_atoms", [])
+                    )
+                    else None
+                ),
             }
         else:
             entry.update(
@@ -79,9 +99,9 @@ class CommanderSemanticSidecarTests(unittest.TestCase):
             self.cases["summary"],
             {
                 "candidate_count": 100,
-                "semantic_case_ready": 60,
+                "semantic_case_ready": 64,
                 "blocked_semantic_gap": 20,
-                "blocked_runtime": 20,
+                "blocked_runtime": 16,
             },
         )
 
@@ -156,6 +176,38 @@ class CommanderSemanticSidecarTests(unittest.TestCase):
         )
         observed[subtype_index]["semantic_probe"]["base_subtypes"] = []
         with self.assertRaisesRegex(ValueError, "printed subtype state changed"):
+            SEMANTICS.verify_observed(self.cases, observed)
+
+    def test_conditional_mana_probe_requires_fail_closed_threshold(self) -> None:
+        observed = observed_from_cases(self.cases)
+        condition_index = next(
+            index
+            for index, case in enumerate(self.cases["cases"])
+            if any(
+                expectation["minimum_matching_permanents"] is not None
+                for expectation in SEMANTICS.expected_mana_abilities(case)
+            )
+        )
+        observed[condition_index]["semantic_probe"]["mana_abilities"][0][
+            "condition_rejected_below_threshold"
+        ] = False
+        with self.assertRaisesRegex(ValueError, "condition did not fail closed"):
+            SEMANTICS.verify_observed(self.cases, observed)
+
+    def test_source_bound_player_rule_probe_requires_expiration(self) -> None:
+        observed = observed_from_cases(self.cases)
+        rule_index = next(
+            index
+            for index, case in enumerate(self.cases["cases"])
+            if any(
+                atom["op"] == "modify_player_rules"
+                for atom in case.get("semantic_atoms", [])
+            )
+        )
+        observed[rule_index]["semantic_probe"]["no_maximum_hand_size"][
+            "expired_off_battlefield"
+        ] = False
+        with self.assertRaisesRegex(ValueError, "did not remain source-bound"):
             SEMANTICS.verify_observed(self.cases, observed)
 
     def test_incremental_report_keeps_checkpoint_open(self) -> None:

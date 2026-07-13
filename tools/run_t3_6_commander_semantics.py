@@ -41,6 +41,8 @@ ATOM_CAPABILITIES = {
     "tap_object": "tap_object",
     "discard_cards": "discard_cards",
     "modify_characteristics": "modify_characteristics",
+    "modify_player_rules": "modify_player_rules",
+    "reduce_spell_cost": "reduce_spell_cost",
 }
 SEMANTIC_BLOCKER_CODES = {
     "COPY_TRIGGER_EVENT_MISSING",
@@ -363,6 +365,9 @@ def expected_mana_abilities(case: dict[str, Any]) -> list[dict[str, Any]]:
                 {
                     "legal_outputs": outputs,
                     "damage_to_controller": damage,
+                    "minimum_matching_permanents": group.get(
+                        "minimum_matching_permanents"
+                    ),
                 }
             )
     return expected
@@ -401,6 +406,11 @@ def verify_semantic_probe(case: dict[str, Any], actual: dict[str, Any]) -> None:
                 "damage_to_controller": (
                     observed.get("damage_to_controller") if isinstance(observed, dict) else None
                 ),
+                "minimum_matching_permanents": (
+                    observed.get("minimum_matching_permanents")
+                    if isinstance(observed, dict)
+                    else None
+                ),
             }
             if projection != expected or observed.get("replayed_outputs") != expected["legal_outputs"]:
                 raise ValueError(
@@ -410,6 +420,13 @@ def verify_semantic_probe(case: dict[str, Any], actual: dict[str, Any]) -> None:
                 raise ValueError(
                     f"{case['scenario_id']}: mana ability {index} replay failed"
                 )
+            if (
+                expected["minimum_matching_permanents"] is not None
+                and observed.get("condition_rejected_below_threshold") is not True
+            ):
+                raise ValueError(
+                    f"{case['scenario_id']}: mana ability {index} condition did not fail closed"
+                )
 
     expected_subtypes = expected_base_subtypes(case)
     if expected_subtypes is not None:
@@ -418,6 +435,35 @@ def verify_semantic_probe(case: dict[str, Any], actual: dict[str, Any]) -> None:
             raise ValueError(
                 f"{case['scenario_id']}: printed subtype state changed; "
                 f"expected={expected_subtypes}, actual={observed_subtypes}"
+            )
+
+    player_rule_atoms = [
+        atom
+        for atom in case.get("semantic_atoms", [])
+        if atom.get("op") == "modify_player_rules"
+    ]
+    if player_rule_atoms:
+        if player_rule_atoms != [
+            {
+                "op": "modify_player_rules",
+                "player": "source_controller",
+                "rule": "no_maximum_hand_size",
+                "duration": "while_source_on_battlefield",
+            }
+        ]:
+            raise ValueError(f"{case['scenario_id']}: invalid player-rule expectation")
+        rule_probe = probe.get("no_maximum_hand_size")
+        required = {
+            "setup_succeeded": True,
+            "registered": True,
+            "active_for_controller": True,
+            "opponent_unaffected": True,
+            "moved_source_to_graveyard": True,
+            "expired_off_battlefield": True,
+        }
+        if rule_probe != required:
+            raise ValueError(
+                f"{case['scenario_id']}: no-maximum-hand-size rule did not remain source-bound"
             )
 
 
