@@ -845,6 +845,42 @@ fn translate_keywords(
                     Some(translate_etb_extra_counter(line.line, affected)?),
                 )
             }
+            ("etbreplacement", [scope, replacement, choice])
+                if scope == "Copy" && matches!(choice.as_str(), "Optional" | "Mandatory") =>
+            {
+                let linked = map_named_svar_ability(script, replacement)
+                    .map_err(|diagnostic| (line.line, diagnostic.code, diagnostic.message))?;
+                if !linked.costs.is_empty() || linked.event.is_some() || linked.timing.is_some() {
+                    return Err((
+                        line.line,
+                        "UNSUPPORTED_LINK".to_string(),
+                        format!(
+                            "ETBReplacement SVar `{replacement}` must be a cost-free DB effect without nested event or timing"
+                        ),
+                    ));
+                }
+                let effect = if choice == "Optional" {
+                    expression_call(
+                        Operation::ChooseUpTo,
+                        vec![Expression::Integer(1), linked.expression],
+                    )
+                } else {
+                    linked.expression
+                };
+                translated.abilities.push(AbilityDefinition {
+                    kind: AbilityKind::Replacement,
+                    costs: Vec::new(),
+                    event: Some(expression_call(
+                        Operation::EventEnters,
+                        vec![expression_call(Operation::Source, vec![])],
+                    )),
+                    condition: None,
+                    timing: None,
+                    effect,
+                    mana_ability: false,
+                });
+                (None, None)
+            }
             ("etbreplacement", [scope, replacement]) if scope == "Other" => {
                 let linked = map_named_svar_ability(script, replacement)
                     .map_err(|diagnostic| (line.line, diagnostic.code, diagnostic.message))?;
@@ -3423,6 +3459,25 @@ mod tests {
             translated.abilities[0].effect,
             Expression::Call {
                 operation: Operation::ChooseType,
+                ..
+            }
+        ));
+
+        let optional_copy = crate::legacy::parse_legacy_script(
+            "fixture.txt",
+            concat!(
+                "K:ETBReplacement:Copy:DBCopy:Optional\n",
+                "SVar:DBCopy:DB$ Clone | Choices$ Creature | ChoiceZone$ Battlefield\n",
+            ),
+        )
+        .unwrap_or_else(|error| panic!("copy fixture should parse: {error}"));
+        let optional_faces = face_lines(&optional_copy);
+        let optional = translate_keywords(&optional_copy, &optional_faces[0])
+            .unwrap_or_else(|error| panic!("optional copy should translate: {error:?}"));
+        assert!(matches!(
+            optional.abilities[0].effect,
+            Expression::Call {
+                operation: Operation::ChooseUpTo,
                 ..
             }
         ));

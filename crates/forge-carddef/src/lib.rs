@@ -1129,6 +1129,26 @@ operations! {
     EventSetInMotion => ("event_set_in_motion", Event, 1, Some(1)),
     ChooseCardName => ("choose_card_name", Effect, 3, Some(4)),
     PutCreatedAttacking => ("put_created_attacking", Effect, 2, Some(2)),
+    DivideValue => ("divide_value", Value, 3, Some(3)),
+    AbsoluteValue => ("absolute_value", Value, 1, Some(1)),
+    MinimumValue => ("minimum_value", Value, 2, Some(2)),
+    MaximumValue => ("maximum_value", Value, 2, Some(2)),
+    UniqueTarget => ("unique_target", Selector, 1, Some(1)),
+    TargetGroup => ("target_group", Selector, 2, Some(2)),
+    EventAlone => ("event_alone", Event, 1, Some(1)),
+    AttachCreated => ("attach_created", Effect, 2, Some(2)),
+    AttachChoice => ("attach_choice", Effect, 2, Some(2)),
+    StackSource => ("stack_source", Selector, 1, Some(1)),
+    EventSource => ("event_source", Event, 2, Some(2)),
+    ReduceCostBy => ("reduce_cost_by", Cost, 1, Some(1)),
+    EtbEffect => ("etb_effect", Effect, 1, Some(1)),
+    ActiveInZone => ("active_in_zone", Effect, 2, Some(2)),
+    ExileIfDies => ("exile_if_dies", Effect, 2, Some(2)),
+    PowerUpCost => ("power_up_cost", Cost, 0, Some(0)),
+    ReorderMoved => ("reorder_moved", Effect, 1, Some(1)),
+    RepeatEffect => ("repeat_effect", Effect, 2, Some(2)),
+    ExhaustCost => ("exhaust_cost", Cost, 0, Some(0)),
+    RevoltOccurred => ("revolt_occurred", Predicate, 0, Some(0)),
 }
 
 impl Operation {
@@ -2000,6 +2020,52 @@ impl Operation {
                 1 => Some(Selector),
                 _ => None,
             },
+            Self::DivideValue => match index {
+                0 | 1 => Some(Value),
+                2 => Some(Text),
+                _ => None,
+            },
+            Self::AbsoluteValue => Some(Value),
+            Self::MinimumValue | Self::MaximumValue => Some(Value),
+            Self::UniqueTarget => Some(Selector),
+            Self::TargetGroup => match index {
+                0 => Some(Selector),
+                1 => Some(Text),
+                _ => None,
+            },
+            Self::EventAlone => Some(Event),
+            Self::AttachCreated => match index {
+                0 => Some(Effect),
+                1 => Some(Selector),
+                _ => None,
+            },
+            Self::AttachChoice => Some(Selector),
+            Self::StackSource => Some(Text),
+            Self::EventSource => match index {
+                0 => Some(Event),
+                1 => Some(Selector),
+                _ => None,
+            },
+            Self::ReduceCostBy => Some(Value),
+            Self::EtbEffect => Some(Effect),
+            Self::ActiveInZone => match index {
+                0 => Some(Effect),
+                1 => Some(Text),
+                _ => None,
+            },
+            Self::ExileIfDies => match index {
+                0 => Some(Effect),
+                1 => Some(Selector),
+                _ => None,
+            },
+            Self::PowerUpCost => None,
+            Self::ReorderMoved => Some(Effect),
+            Self::RepeatEffect => match index {
+                0 => Some(Value),
+                1 => Some(Effect),
+                _ => None,
+            },
+            Self::ExhaustCost | Self::RevoltOccurred => None,
             Self::TimingAll => None,
         }
     }
@@ -2264,6 +2330,26 @@ mod tests {
         assert_eq!(Operation::EventSetInMotion as u32, 329);
         assert_eq!(Operation::ChooseCardName as u32, 330);
         assert_eq!(Operation::PutCreatedAttacking as u32, 331);
+        assert_eq!(Operation::DivideValue as u32, 332);
+        assert_eq!(Operation::AbsoluteValue as u32, 333);
+        assert_eq!(Operation::MinimumValue as u32, 334);
+        assert_eq!(Operation::MaximumValue as u32, 335);
+        assert_eq!(Operation::UniqueTarget as u32, 336);
+        assert_eq!(Operation::TargetGroup as u32, 337);
+        assert_eq!(Operation::EventAlone as u32, 338);
+        assert_eq!(Operation::AttachCreated as u32, 339);
+        assert_eq!(Operation::AttachChoice as u32, 340);
+        assert_eq!(Operation::StackSource as u32, 341);
+        assert_eq!(Operation::EventSource as u32, 342);
+        assert_eq!(Operation::ReduceCostBy as u32, 343);
+        assert_eq!(Operation::EtbEffect as u32, 344);
+        assert_eq!(Operation::ActiveInZone as u32, 345);
+        assert_eq!(Operation::ExileIfDies as u32, 346);
+        assert_eq!(Operation::PowerUpCost as u32, 347);
+        assert_eq!(Operation::ReorderMoved as u32, 348);
+        assert_eq!(Operation::RepeatEffect as u32, 349);
+        assert_eq!(Operation::ExhaustCost as u32, 350);
+        assert_eq!(Operation::RevoltOccurred as u32, 351);
 
         let config = bincode::config::standard()
             .with_fixed_int_encoding()

@@ -981,6 +981,15 @@ fn map_with_context(
     let (unconditioned, presence_condition) = extract_presence_condition(expression)?;
     let (unconditioned, legacy_condition, check_on_resolution) =
         extract_legacy_conditions(&unconditioned, context)?;
+    let has_switched_unless = unconditioned
+        .fields
+        .iter()
+        .any(|field| field.key.as_deref() == Some("UnlessSwitched"));
+    let (unconditioned, unless_clause) = if has_switched_unless {
+        extract_unless_clause(&unconditioned)?
+    } else {
+        (unconditioned, None)
+    };
     let condition = combine_conditions(
         [presence_condition, legacy_condition]
             .into_iter()
@@ -993,14 +1002,18 @@ fn map_with_context(
             "NoResolvingCheck requires a closed trigger condition",
         ));
     }
-    map_with_context_unconditioned(
+    let mut mapped = map_with_context_unconditioned(
         prefix,
         &unconditioned,
         context,
         stack,
         condition,
         check_on_resolution,
-    )
+    )?;
+    if let Some(unless_clause) = unless_clause {
+        mapped.expression = apply_unless_clause(mapped.expression, unless_clause);
+    }
+    Ok(mapped)
 }
 
 fn map_with_context_unconditioned(
@@ -1292,6 +1305,89 @@ fn map_with_context_unconditioned(
         Some("True") => true,
         Some(value) => return Err(unsupported_value("RememberTargets", value)),
     };
+    let target_unique = closed_true_flag(&parameter_map, "TargetUnique")?;
+    let target_group = match (
+        parameter_map.get("TargetsWithSameController"),
+        parameter_map.get("TargetsWithDefinedController"),
+    ) {
+        (None, None) => None,
+        (Some(value), None) if value == "True" => Some("same_controller".to_string()),
+        (Some(value), None) => return Err(unsupported_value("TargetsWithSameController", value)),
+        (None, Some(value))
+            if matches!(
+                value.as_str(),
+                "You" | "Opponent" | "TargetedController" | "Remembered"
+            ) =>
+        {
+            Some(format!("defined_controller:{}", value.to_ascii_lowercase()))
+        }
+        (None, Some(value)) => {
+            return Err(unsupported_value("TargetsWithDefinedController", value));
+        }
+        (Some(_), Some(_)) => {
+            return Err(diagnostic(
+                "UNSUPPORTED_PARAMETER",
+                "target controller grouping parameters cannot be combined",
+            ));
+        }
+    };
+    let reduce_cost = parameter_map
+        .get("ReduceCost")
+        .map(|value| {
+            if prefix != LegacyAbilityPrefix::Activated {
+                return Err(unsupported_value("ReduceCost", value));
+            }
+            value
+                .parse::<i64>()
+                .ok()
+                .filter(|amount| *amount > 0)
+                .map(Expression::Integer)
+                .map_or_else(|| resolve_value_svar(value, context), Ok)
+        })
+        .transpose()?;
+    let etb_effect = match parameter_map.get("ETB").map(String::as_str) {
+        None => false,
+        Some("True") => true,
+        Some(value) => return Err(unsupported_value("ETB", value)),
+    };
+    let power_up = if prefix == LegacyAbilityPrefix::Activated {
+        closed_true_flag(&parameter_map, "PowerUp")?
+    } else {
+        false
+    };
+    let exhaust = if prefix == LegacyAbilityPrefix::Activated {
+        closed_true_flag(&parameter_map, "Exhaust")?
+    } else {
+        false
+    };
+    let reorder_moved = match parameter_map.get("Reorder").map(String::as_str) {
+        None => false,
+        Some("True")
+            if prefix == LegacyAbilityPrefix::Activated
+                && api == "ChangeZone"
+                && parameter_map
+                    .get("Destination")
+                    .is_some_and(|zone| zone == "Library") =>
+        {
+            true
+        }
+        Some(value) => return Err(unsupported_value("Reorder", value)),
+    };
+    let repeat_effect = if prefix == LegacyAbilityPrefix::Activated && api == "CopySpellAbility" {
+        parameter_map
+            .get("Amount")
+            .map(|value| {
+                value
+                    .parse::<i64>()
+                    .ok()
+                    .filter(|amount| *amount > 0)
+                    .map(Expression::Integer)
+                    .map_or_else(|| resolve_value_svar(value, context), Ok)
+            })
+            .transpose()?
+    } else {
+        None
+    };
     let divided_allocation = parameter_map
         .get("DividedAsYouChoose")
         .map(|allocation| {
@@ -1346,6 +1442,14 @@ fn map_with_context_unconditioned(
     let mut base_expression = expression.clone();
     if sub_ability.is_some()
         || remember_targets
+        || target_unique
+        || target_group.is_some()
+        || reduce_cost.is_some()
+        || etb_effect
+        || power_up
+        || exhaust
+        || reorder_moved
+        || repeat_effect.is_some()
         || optional_effect
         || divided_allocation.is_some()
         || secondary.is_some()
@@ -1354,6 +1458,15 @@ fn map_with_context_unconditioned(
         base_expression.fields.retain(|field| {
             field.key.as_deref() != Some("SubAbility")
                 && field.key.as_deref() != Some("RememberTargets")
+                && field.key.as_deref() != Some("TargetUnique")
+                && field.key.as_deref() != Some("TargetsWithSameController")
+                && field.key.as_deref() != Some("TargetsWithDefinedController")
+                && field.key.as_deref() != Some("ReduceCost")
+                && field.key.as_deref() != Some("ETB")
+                && (!power_up || field.key.as_deref() != Some("PowerUp"))
+                && (!exhaust || field.key.as_deref() != Some("Exhaust"))
+                && (!reorder_moved || field.key.as_deref() != Some("Reorder"))
+                && (repeat_effect.is_none() || field.key.as_deref() != Some("Amount"))
                 && (!optional_effect || field.key.as_deref() != Some("Optional"))
                 && (!optional_effect || field.key.as_deref() != Some("OptionalDecider"))
                 && (divided_allocation.is_none()
@@ -1407,6 +1520,30 @@ fn map_with_context_unconditioned(
             ));
         }
     }
+    if target_unique || target_group.is_some() {
+        let replaced = wrap_target_selectors(
+            &mut mapped.expression,
+            target_unique,
+            target_group.as_deref(),
+        );
+        if replaced == 0 {
+            return Err(diagnostic(
+                "TARGET_BINDING_MISMATCH",
+                "target grouping did not produce a typed target selector",
+            ));
+        }
+    }
+    if let Some(reduction) = reduce_cost {
+        mapped
+            .costs
+            .push(call(Operation::ReduceCostBy, vec![reduction]));
+    }
+    if power_up {
+        mapped.costs.push(call(Operation::PowerUpCost, vec![]));
+    }
+    if exhaust {
+        mapped.costs.push(call(Operation::ExhaustCost, vec![]));
+    }
     if remember_targets {
         mapped.expression = sequence(
             call(
@@ -1452,6 +1589,25 @@ fn map_with_context_unconditioned(
             ));
         }
         mapped.expression = sequence(mapped.expression, linked.expression);
+    }
+    if etb_effect {
+        mapped.expression = call(Operation::EtbEffect, vec![mapped.expression]);
+    }
+    if reorder_moved {
+        mapped.expression = call(Operation::ReorderMoved, vec![mapped.expression]);
+    }
+    if let Some(amount) = repeat_effect {
+        mapped.expression = call(Operation::RepeatEffect, vec![amount, mapped.expression]);
+    }
+    if prefix == LegacyAbilityPrefix::Static
+        && parameter_map
+            .get("EffectZone")
+            .is_some_and(|zone| zone == "Command")
+    {
+        mapped.expression = call(
+            Operation::ActiveInZone,
+            vec![mapped.expression, Expression::Text("command".to_string())],
+        );
     }
     Ok(mapped)
 }
@@ -1616,6 +1772,12 @@ fn extract_legacy_conditions(
             _ => return Err(unsupported_value("OpponentTurn", value)),
         }
     }
+    if let Some(value) = parameters.get("Revolt") {
+        match value.as_str() {
+            "True" => conditions.push(call(Operation::RevoltOccurred, vec![])),
+            _ => return Err(unsupported_value("Revolt", value)),
+        }
+    }
     if conditions.is_empty() {
         if !check_on_resolution {
             let mut unconditioned = expression.clone();
@@ -1638,6 +1800,7 @@ fn extract_legacy_conditions(
                     | "ConditionSVarCompare"
                     | "ActivatorThisTurnCast"
                     | "OpponentTurn"
+                    | "Revolt"
                     | "NoResolvingCheck"
                     | "ConditionDescription"
             )
@@ -1661,6 +1824,7 @@ fn combine_conditions(mut conditions: Vec<Expression>) -> Option<Expression> {
 struct UnlessClause {
     payer: Expression,
     costs: Vec<Expression>,
+    switched: bool,
 }
 
 fn extract_unless_clause(
@@ -1669,6 +1833,11 @@ fn extract_unless_clause(
     let parameters = parameters(expression)?;
     let unless_cost = parameters.get("UnlessCost");
     let unless_payer = parameters.get("UnlessPayer");
+    let switched = match parameters.get("UnlessSwitched").map(String::as_str) {
+        None => false,
+        Some("True") => true,
+        Some(value) => return Err(unsupported_value("UnlessSwitched", value)),
+    };
     if unless_cost.is_none() && unless_payer.is_none() {
         return Ok((expression.clone(), None));
     }
@@ -1687,10 +1856,25 @@ fn extract_unless_clause(
     })?;
     let costs = parse_unless_cost(cost_text, payer_value, &payer)?;
     let mut unconditional = expression.clone();
-    unconditional
-        .fields
-        .retain(|field| !matches!(field.key.as_deref(), Some("UnlessCost" | "UnlessPayer")));
-    Ok((unconditional, Some(UnlessClause { payer, costs })))
+    unconditional.fields.retain(|field| {
+        !matches!(
+            field.key.as_deref(),
+            Some("UnlessCost" | "UnlessPayer" | "UnlessSwitched" | "UnlessResolveSubs")
+        )
+    });
+    if let Some(value) = parameters.get("UnlessResolveSubs") {
+        if !switched || value != "WhenPaid" {
+            return Err(unsupported_value("UnlessResolveSubs", value));
+        }
+    }
+    Ok((
+        unconditional,
+        Some(UnlessClause {
+            payer,
+            costs,
+            switched,
+        }),
+    ))
 }
 
 fn parse_unless_cost(
@@ -1731,9 +1915,20 @@ fn parse_unless_cost(
 }
 
 fn apply_unless_clause(effect: Expression, clause: UnlessClause) -> Expression {
-    let mut arguments = vec![effect, clause.payer];
+    let mut arguments = if clause.switched {
+        vec![clause.payer, effect]
+    } else {
+        vec![effect, clause.payer]
+    };
     arguments.extend(clause.costs);
-    call(Operation::UnlessPaid, arguments)
+    call(
+        if clause.switched {
+            Operation::PayToApply
+        } else {
+            Operation::UnlessPaid
+        },
+        arguments,
+    )
 }
 
 fn legacy_named_condition(value: &str) -> Result<Expression, MappingDiagnostic> {
@@ -2271,6 +2466,12 @@ fn map_dynamic_ability(
             operation: Operation::ReorderLibraryTop,
             argument: 1,
         }],
+        "ChangeZone" => vec![DynamicPatchSpec {
+            key: "ChangeNum",
+            placeholder: "1",
+            operation: Operation::SearchLibrary,
+            argument: 2,
+        }],
         "Amass" => vec![DynamicPatchSpec {
             key: "Num",
             placeholder: "1",
@@ -2425,6 +2626,14 @@ pub(crate) fn resolve_value_svar(
     name: &str,
     context: &MappingContext<'_>,
 ) -> Result<Expression, MappingDiagnostic> {
+    resolve_value_svar_inner(name, context, &mut Vec::new())
+}
+
+fn resolve_value_svar_inner(
+    name: &str,
+    context: &MappingContext<'_>,
+    stack: &mut Vec<String>,
+) -> Result<Expression, MappingDiagnostic> {
     if let Some(value) = context.value_bindings.get(name) {
         return Ok(value.clone());
     }
@@ -2432,6 +2641,12 @@ pub(crate) fn resolve_value_svar(
         return Err(diagnostic(
             "DUPLICATE_SVAR",
             &format!("SVar `{name}` is declared more than once"),
+        ));
+    }
+    if stack.iter().any(|active| active == name) {
+        return Err(diagnostic(
+            "CYCLIC_SVAR",
+            &format!("value SVar cycle reaches `{name}`"),
         ));
     }
     let expression = context.svars.get(name).copied().ok_or_else(|| {
@@ -2447,7 +2662,8 @@ pub(crate) fn resolve_value_svar(
         ));
     }
     let field = &expression.fields[0];
-    match field.key.as_deref() {
+    stack.push(name.to_string());
+    let result = match field.key.as_deref() {
         Some("Count") => map_count_value(name, &field.value),
         Some("TriggerCount") => map_trigger_count_value(name, &field.value),
         Some("PlayerCountOpponents") => map_opponent_count_value(name, &field.value),
@@ -2475,6 +2691,7 @@ pub(crate) fn resolve_value_svar(
             &field.value,
         ),
         Some("Remembered") => map_remembered_value(name, &field.value),
+        Some("SVar") => map_svar_arithmetic(name, &field.value, context, stack),
         _ => Err(diagnostic(
             "UNSUPPORTED_VALUE_SVAR",
             &format!(
@@ -2482,7 +2699,79 @@ pub(crate) fn resolve_value_svar(
                 expression.raw
             ),
         )),
+    };
+    stack.pop();
+    result
+}
+
+fn map_svar_arithmetic(
+    name: &str,
+    value: &str,
+    context: &MappingContext<'_>,
+    stack: &mut Vec<String>,
+) -> Result<Expression, MappingDiagnostic> {
+    let (base_name, operation) = value.split_once('/').unwrap_or((value, ""));
+    let base = resolve_value_svar_inner(base_name, context, stack)?;
+    if operation.is_empty() {
+        return Ok(base);
     }
+    let operand = |value: &str, stack: &mut Vec<String>| {
+        value
+            .parse::<i64>()
+            .map(Expression::Integer)
+            .map_or_else(|_| resolve_value_svar_inner(value, context, stack), Ok)
+    };
+    if operation == "Twice" {
+        return Ok(call(
+            Operation::ScaleValue,
+            vec![base, Expression::Integer(2)],
+        ));
+    }
+    if operation == "Thrice" {
+        return Ok(call(
+            Operation::ScaleValue,
+            vec![base, Expression::Integer(3)],
+        ));
+    }
+    if operation == "HalfDown" || operation == "HalfUp" {
+        return Ok(call(
+            Operation::DivideValue,
+            vec![
+                base,
+                Expression::Integer(2),
+                Expression::Text(
+                    if operation == "HalfDown" {
+                        "floor"
+                    } else {
+                        "ceiling"
+                    }
+                    .to_string(),
+                ),
+            ],
+        ));
+    }
+    if operation == "Abs" {
+        return Ok(call(Operation::AbsoluteValue, vec![base]));
+    }
+    for (prefix, operation_kind) in [
+        ("Plus.", Operation::AddValue),
+        ("Minus.", Operation::AddValue),
+        ("Times.", Operation::ScaleValue),
+        ("LimitMin.", Operation::MinimumValue),
+        ("LimitMax.", Operation::MaximumValue),
+    ] {
+        if let Some(value) = operation.strip_prefix(prefix) {
+            let mut right = operand(value, stack)?;
+            if prefix == "Minus." {
+                right = call(Operation::Negate, vec![right]);
+            }
+            return Ok(call(operation_kind, vec![base, right]));
+        }
+    }
+    Err(diagnostic(
+        "UNSUPPORTED_VALUE_SVAR",
+        &format!("value SVar `{name}` arithmetic `{value}` has no exact lowering"),
+    ))
 }
 
 fn map_remembered_value(name: &str, value: &str) -> Result<Expression, MappingDiagnostic> {
@@ -2889,6 +3178,34 @@ fn replace_dynamic_mana_limit(expression: &mut Expression, replacement: &Express
         replaced += replace_dynamic_mana_limit(argument, replacement);
     }
     replaced
+}
+
+fn wrap_target_selectors(expression: &mut Expression, unique: bool, group: Option<&str>) -> usize {
+    let Expression::Call {
+        operation,
+        arguments,
+    } = expression
+    else {
+        return 0;
+    };
+    if matches!(*operation, Operation::Target | Operation::TargetRange) {
+        let mut wrapped = expression.clone();
+        if unique {
+            wrapped = call(Operation::UniqueTarget, vec![wrapped]);
+        }
+        if let Some(group) = group {
+            wrapped = call(
+                Operation::TargetGroup,
+                vec![wrapped, Expression::Text(group.to_string())],
+            );
+        }
+        *expression = wrapped;
+        return 1;
+    }
+    arguments
+        .iter_mut()
+        .map(|argument| wrap_target_selectors(argument, unique, group))
+        .sum()
 }
 
 fn resolve_svar(
@@ -4104,6 +4421,14 @@ fn map_triggered_ability(
         })
         .transpose()?
         .flatten();
+    let player_turn = parameters
+        .remove("PlayerTurn")
+        .map(|value| match value.as_str() {
+            "True" | "You" => Ok(true),
+            _ => Err(unsupported_value("PlayerTurn", &value)),
+        })
+        .transpose()?
+        .unwrap_or(false);
     let activation_limit = parameters
         .remove("ActivationLimit")
         .map(|value| {
@@ -4135,6 +4460,24 @@ fn map_triggered_ability(
         None => false,
         Some("True") => true,
         Some(value) => return Err(unsupported_value("OneOff", value)),
+    };
+    let alone = match parameters.remove("Alone").as_deref() {
+        None => false,
+        Some("True") => true,
+        Some(value) => return Err(unsupported_value("Alone", value)),
+    };
+    let first_time = match parameters.remove("FirstTime").as_deref() {
+        None => false,
+        Some("True") => true,
+        Some(value) => return Err(unsupported_value("FirstTime", value)),
+    };
+    let valid_source = if api == "BecomesTarget" {
+        parameters
+            .remove("ValidSource")
+            .map(|value| event_source_selector(&value))
+            .transpose()?
+    } else {
+        None
     };
     let trigger_controller = parameters
         .remove("TriggerController")
@@ -4180,13 +4523,26 @@ fn map_triggered_ability(
             ));
         }
     };
+    let event = if alone {
+        call(Operation::EventAlone, vec![event])
+    } else {
+        event
+    };
+    let event = if player_turn {
+        call(
+            Operation::EventWhen,
+            vec![event, legacy_named_condition("PlayerTurn")?],
+        )
+    } else {
+        event
+    };
     let event = active_zone.map_or(event.clone(), |zone| {
         call(
             Operation::EventActiveZone,
             vec![event, Expression::Text(zone)],
         )
     });
-    let event_limit = match (activation_limit, one_off) {
+    let event_limit = match (activation_limit, one_off || first_time) {
         (Some(_), true) => {
             return Err(diagnostic(
                 "UNSUPPORTED_PARAMETER",
@@ -4214,6 +4570,9 @@ fn map_triggered_ability(
     };
     let event = trigger_controller.map_or(event.clone(), |controller| {
         call(Operation::EventController, vec![event, controller])
+    });
+    let event = valid_source.map_or(event.clone(), |source| {
+        call(Operation::EventSource, vec![event, source])
     });
     let linked = resolve_svar(execute, context, stack)?;
     if linked.event.is_some() {
@@ -4317,6 +4676,23 @@ fn map_set_in_motion_event(
         .transpose()?
         .unwrap_or_else(|| call(Operation::Any, vec![]));
     Ok(call(Operation::EventSetInMotion, vec![scheme]))
+}
+
+fn event_source_selector(value: &str) -> Result<Expression, MappingDiagnostic> {
+    match value {
+        "You" => Ok(call(Operation::You, vec![])),
+        "Opponent" => Ok(call(Operation::Opponent, vec![])),
+        "Spell"
+        | "Ability"
+        | "SpellAbility.OppCtrl"
+        | "SpellAbility.YouCtrl"
+        | "Spell.Aura"
+        | "Ability.numTargets EQ1" => Ok(call(
+            Operation::StackSource,
+            vec![Expression::Text(value.to_ascii_lowercase())],
+        )),
+        _ => Err(unsupported_value("ValidSource", value)),
+    }
 }
 
 fn map_taps_event(parameters: &BTreeMap<String, String>) -> Result<Expression, MappingDiagnostic> {
@@ -5318,18 +5694,34 @@ fn map_make_card(
         &[
             "Cost",
             "Conjure",
+            "TokenCard",
             "Name",
             "Zone",
+            "Amount",
             "RememberMade",
             "SpellDescription",
             "StackDescription",
         ],
     )?;
-    if required(parameters, "Conjure")? != "True" {
-        return Err(unsupported_value(
-            "Conjure",
-            required(parameters, "Conjure")?,
-        ));
+    match (
+        parameters.get("Conjure").map(String::as_str),
+        parameters.get("TokenCard").map(String::as_str),
+    ) {
+        (Some("True"), None) | (None, Some("True")) => {}
+        (Some(_), Some(_)) => {
+            return Err(diagnostic(
+                "UNSUPPORTED_PARAMETER",
+                "MakeCard cannot combine Conjure and TokenCard",
+            ));
+        }
+        (Some(value), None) => return Err(unsupported_value("Conjure", value)),
+        (None, Some(value)) => return Err(unsupported_value("TokenCard", value)),
+        (None, None) => {
+            return Err(diagnostic(
+                "MISSING_PARAMETER",
+                "MakeCard requires Conjure or TokenCard",
+            ));
+        }
     }
     let name = required(parameters, "Name")?.trim();
     if name.is_empty()
@@ -5345,9 +5737,14 @@ fn map_make_card(
         "Battlefield" => "battlefield",
         "Library" => "library",
         "Exile" => "exile",
+        "Graveyard" => "graveyard",
         value => return Err(unsupported_value("Zone", value)),
     };
-    let expression = apply_remembered_result(
+    let amount = optional_positive_integer(parameters, "Amount")?.unwrap_or(1);
+    if amount > 20 {
+        return Err(unsupported_value("Amount", &amount.to_string()));
+    }
+    let conjure = || {
         call(
             Operation::ConjureCard,
             vec![
@@ -5355,11 +5752,17 @@ fn map_make_card(
                 Expression::Text(zone.to_string()),
                 call(Operation::You, vec![]),
             ],
-        ),
-        parameters,
-        "RememberMade",
-        "made",
-    )?;
+        )
+    };
+    let expression = if amount == 1 {
+        conjure()
+    } else {
+        call(
+            Operation::Sequence,
+            (0..amount).map(|_| conjure()).collect(),
+        )
+    };
+    let expression = apply_remembered_result(expression, parameters, "RememberMade", "made")?;
     mapped_direct(prefix, api, parameters, expression)
 }
 
@@ -5818,6 +6221,8 @@ fn map_damage(
             "ValidTgts",
             "NumDmg",
             "DamageSource",
+            "RememberDamaged",
+            "ReplaceDyingDefined",
             "SpellDescription",
             "TgtPrompt",
         ],
@@ -5841,7 +6246,9 @@ fn map_damage(
             if let Some(source) = parameters.get("DamageSource") {
                 arguments.push(damage_source_selector(source)?);
             }
-            call(Operation::DealDamage, arguments)
+            let effect = call(Operation::DealDamage, arguments);
+            let effect = apply_replace_dying(effect, parameters)?;
+            apply_remembered_result(effect, parameters, "RememberDamaged", "damaged")?
         },
     })
 }
@@ -6708,6 +7115,49 @@ fn map_untap(
     selector: &str,
     parameters: &BTreeMap<String, String>,
 ) -> Result<MappedLegacyAbility, MappingDiagnostic> {
+    if parameters.contains_key("UntapType") || parameters.contains_key("UntapUpTo") {
+        require_selector_one_of(selector, &["AB", "SP", "DB"])?;
+        reject_unknown(
+            parameters,
+            &[
+                "Cost",
+                "UntapType",
+                "UntapUpTo",
+                "Amount",
+                "SpellDescription",
+                "StackDescription",
+                "AILogic",
+            ],
+        )?;
+        if required(parameters, "UntapUpTo")? != "True" {
+            return Err(unsupported_value(
+                "UntapUpTo",
+                required(parameters, "UntapUpTo")?,
+            ));
+        }
+        let amount = positive_integer(required(parameters, "Amount")?, "Amount")?;
+        let choose = call(
+            Operation::ChooseObjects,
+            vec![
+                affected_selector(required(parameters, "UntapType")?)?,
+                Expression::Integer(amount),
+                call(Operation::You, vec![]),
+                Expression::Text("up_to".to_string()),
+            ],
+        );
+        return mapped_direct(
+            prefix,
+            api,
+            parameters,
+            sequence(
+                choose,
+                call(
+                    Operation::Untap,
+                    vec![call(Operation::EffectResult, vec![])],
+                ),
+            ),
+        );
+    }
     map_object_effect(prefix, api, selector, parameters, Operation::Untap)
 }
 
@@ -7684,6 +8134,7 @@ fn map_change_zone(
             "AtEOT",
             "WithCountersType",
             "WithCountersAmount",
+            "AttachedTo",
             "SpellDescription",
             "StackDescription",
             "IsCurse",
@@ -7873,6 +8324,7 @@ fn map_change_zone(
     } else {
         expression
     };
+    let expression = apply_created_attachment(expression, parameters)?;
     let expression = apply_entry_counters(expression, parameters)?;
     let expression = apply_changed_object_metadata(expression, parameters)?;
     let expression = apply_zone_move_lifetime(expression, parameters, origin, destination)?;
@@ -8122,6 +8574,7 @@ fn map_token(
             "TokenAmount",
             "TokenTapped",
             "TokenAttacking",
+            "AttachedTo",
             "RememberTokens",
             "AtEOT",
             "WithCountersType",
@@ -8173,6 +8626,7 @@ fn map_token(
                 }
                 let created =
                     apply_token_attacking(call(Operation::CreateToken, arguments), parameters)?;
+                let created = apply_created_attachment(created, parameters)?;
                 let created = apply_entry_counters(created, parameters)?;
                 apply_created_object_metadata(created, parameters)
             })
@@ -8250,6 +8704,17 @@ fn apply_token_attacking(
         Operation::PutCreatedAttacking,
         vec![create_effect, defender],
     ))
+}
+
+fn apply_created_attachment(
+    create_effect: Expression,
+    parameters: &BTreeMap<String, String>,
+) -> Result<Expression, MappingDiagnostic> {
+    let Some(value) = parameters.get("AttachedTo") else {
+        return Ok(create_effect);
+    };
+    let target = defined_selector(value).or_else(|_| affected_selector(value))?;
+    Ok(call(Operation::AttachCreated, vec![create_effect, target]))
 }
 
 fn remove_all_card_types(affected: Expression) -> Expression {
@@ -8333,6 +8798,8 @@ fn map_damage_all(
             "ValidDescription",
             "NumDmg",
             "DamageSource",
+            "RememberDamaged",
+            "ReplaceDyingDefined",
             "SpellDescription",
             "StackDescription",
             "AILogic",
@@ -8375,7 +8842,23 @@ fn map_damage_all(
         arguments.push(damage_source_selector(source)?);
     }
     let expression = call(Operation::DealDamage, arguments);
+    let expression = apply_replace_dying(expression, parameters)?;
+    let expression = apply_remembered_result(expression, parameters, "RememberDamaged", "damaged")?;
     mapped_direct(prefix, api, parameters, expression)
+}
+
+fn apply_replace_dying(
+    damage: Expression,
+    parameters: &BTreeMap<String, String>,
+) -> Result<Expression, MappingDiagnostic> {
+    let Some(value) = parameters.get("ReplaceDyingDefined") else {
+        return Ok(damage);
+    };
+    let binding = value.strip_suffix(".Creature").unwrap_or(value);
+    Ok(call(
+        Operation::ExileIfDies,
+        vec![damage, defined_selector(binding)?],
+    ))
 }
 
 fn damage_source_selector(value: &str) -> Result<Expression, MappingDiagnostic> {
@@ -10556,6 +11039,7 @@ fn map_copy_permanent(
             "NumCopies",
             "TokenTapped",
             "TokenAttacking",
+            "AttachedTo",
             "RememberTokens",
             "AtEOT",
             "TgtPrompt",
@@ -10607,6 +11091,7 @@ fn map_copy_permanent(
         }
     };
     let expression = apply_token_attacking(expression, parameters)?;
+    let expression = apply_created_attachment(expression, parameters)?;
     if parameters.contains_key("TokenTapped")
         && (parameters.contains_key("RememberTokens") || parameters.contains_key("AtEOT"))
     {
@@ -10657,6 +11142,7 @@ fn map_clone(
             "AILogic",
             "TgtPrompt",
             "ChoiceTitle",
+            "AddTypes",
         ],
     )?;
     let target = match parameters.get("CloneTarget").map(String::as_str) {
@@ -10694,11 +11180,31 @@ fn map_clone(
             "Clone requires Defined, ValidTgts, or Choices",
         ));
     };
-    let mut effect = call(Operation::CloneCharacteristics, vec![target, source]);
+    let mut effect = call(
+        Operation::CloneCharacteristics,
+        vec![target.clone(), source],
+    );
     match parameters.get("Duration").map(String::as_str) {
         None | Some("Permanent") => {}
         Some("UntilEndOfTurn") => effect = call(Operation::UntilEndOfTurn, vec![effect]),
         Some(value) => return Err(unsupported_value("Duration", value)),
+    }
+    if let Some(types) = parameters.get("AddTypes") {
+        let additions = types
+            .split(" & ")
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .collect::<Vec<_>>();
+        if additions.is_empty() {
+            return Err(unsupported_value("AddTypes", types));
+        }
+        let mut arguments = vec![target];
+        arguments.extend(
+            additions
+                .into_iter()
+                .map(|value| Expression::Text(value.to_ascii_lowercase())),
+        );
+        effect = sequence(effect, call(Operation::AddType, arguments));
     }
     if closed_true_flag(parameters, "Optional")? {
         effect = call(Operation::ChooseUpTo, vec![Expression::Integer(1), effect]);
@@ -11538,12 +12044,46 @@ fn map_attach(
             "Cost",
             "Defined",
             "ValidTgts",
+            "Object",
+            "Choices",
+            "ChoiceZone",
+            "Move",
             "TgtPrompt",
             "SpellDescription",
             "StackDescription",
             "AILogic",
         ],
     )?;
+    if parameters.get("Move").is_some_and(|value| value != "True") {
+        return Err(unsupported_value("Move", required(parameters, "Move")?));
+    }
+    if parameters
+        .get("ChoiceZone")
+        .is_some_and(|value| value != "Battlefield")
+    {
+        return Err(unsupported_value(
+            "ChoiceZone",
+            required(parameters, "ChoiceZone")?,
+        ));
+    }
+    if let Some(object) = parameters.get("Object") {
+        let choices = required(parameters, "Choices")?;
+        return mapped_direct(
+            prefix,
+            api,
+            parameters,
+            call(
+                Operation::AttachChoice,
+                vec![defined_selector(object)?, affected_selector(choices)?],
+            ),
+        );
+    }
+    if parameters.contains_key("Choices") {
+        return Err(diagnostic(
+            "MISSING_PARAMETER",
+            "Attach Choices requires Object",
+        ));
+    }
     let target = object_selector(parameters, DefaultSelector::Source)?;
     mapped_direct(
         prefix,
@@ -12824,6 +13364,7 @@ fn defined_selector(value: &str) -> Result<Expression, MappingDiagnostic> {
             vec![call(Operation::Source, vec![])],
         )),
         "TriggeredCard" => Ok(call(Operation::Triggered, vec![])),
+        "TriggeredSource" | "TriggeredSourceLKICopy" => Ok(call(Operation::Triggered, vec![])),
         "TriggeredCardLKICopy" | "TriggeredNewCardLKICopy" => {
             Ok(call(Operation::Triggered, vec![]))
         }
@@ -13660,10 +14201,9 @@ fn require_static_effect_zone(
     parameters: &BTreeMap<String, String>,
     key: &str,
 ) -> Result<(), MappingDiagnostic> {
-    if parameters
-        .get(key)
-        .map_or(true, |zone| matches!(zone.as_str(), "Battlefield" | "All"))
-    {
+    if parameters.get(key).map_or(true, |zone| {
+        matches!(zone.as_str(), "Battlefield" | "All" | "Command")
+    }) {
         Ok(())
     } else {
         Err(unsupported_value(key, required(parameters, key)?))
@@ -14265,6 +14805,20 @@ mod tests {
             Operation::Remember
         ));
 
+        let repeated = map_line(
+            "A:DB$ MakeCard | TokenCard$ True | Name$ Reassembling Skeleton | Zone$ Graveyard | Amount$ 4",
+        )
+        .unwrap_or_else(|error| panic!("repeated token-card creation should map: {}", error.message));
+        assert!(matches!(
+            repeated.expression,
+            Expression::Call {
+                operation: Operation::Sequence,
+                ref arguments,
+            } if arguments.len() == 4 && arguments.iter().all(|argument| {
+                expression_contains_operation(argument, Operation::ConjureCard)
+            })
+        ));
+
         let error = map_line("A:DB$ MakeCard | Conjure$ True | Name$ ChosenName | Zone$ Hand")
             .err()
             .unwrap_or_else(|| panic!("dynamic conjure name must quarantine"));
@@ -14603,6 +15157,15 @@ mod tests {
             &replaced.expression,
             Operation::GainLife
         ));
+
+        let replace_dying = map_line(
+            "A:SP$ DealDamage | ValidTgts$ Creature | NumDmg$ 5 | ReplaceDyingDefined$ Targeted",
+        )
+        .unwrap_or_else(|error| panic!("replace-dying damage should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &replace_dying.expression,
+            Operation::ExileIfDies
+        ));
     }
 
     #[test]
@@ -14739,6 +15302,184 @@ mod tests {
                 expression_contains_operation(event, operation)
             }));
         }
+    }
+
+    #[test]
+    fn maps_target_groups_alone_attacks_and_created_attachments() {
+        let grouped = map_script_root(
+            "A:SP$ Destroy | ValidTgts$ Creature | TargetMin$ 2 | TargetMax$ 2 | TargetUnique$ True | TargetsWithSameController$ True\n",
+        )
+        .unwrap_or_else(|error| panic!("grouped targets should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &grouped.expression,
+            Operation::UniqueTarget
+        ));
+        assert!(expression_contains_operation(
+            &grouped.expression,
+            Operation::TargetGroup
+        ));
+
+        let alone = map_script_root(concat!(
+            "T:Mode$ Attacks | ValidCard$ Creature.YouCtrl | Alone$ True | Execute$ DBPump\n",
+            "SVar:DBPump:DB$ Pump | Defined$ TriggeredAttacker | NumAtt$ 1 | NumDef$ 1\n",
+        ))
+        .unwrap_or_else(|error| panic!("alone attack should map: {}", error.message));
+        assert!(alone
+            .event
+            .as_ref()
+            .is_some_and(|event| { expression_contains_operation(event, Operation::EventAlone) }));
+
+        let token = map_line(
+            "A:DB$ Token | TokenScript$ role_royal | TokenOwner$ You | AttachedTo$ Targeted | ValidTgts$ Creature.YouCtrl",
+        )
+        .unwrap_or_else(|error| panic!("attached token should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &token.expression,
+            Operation::AttachCreated
+        ));
+
+        let attach =
+            map_line("A:DB$ Attach | Object$ ParentTarget | Move$ True | Choices$ Permanent")
+                .unwrap_or_else(|error| panic!("chosen attachment should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &attach.expression,
+            Operation::AttachChoice
+        ));
+    }
+
+    #[test]
+    fn maps_source_filtered_triggers_reduced_costs_switched_payments_and_etb_effects() {
+        let trigger = map_script_root(concat!(
+            "T:Mode$ BecomesTarget | ValidTarget$ Card.Self | ValidSource$ SpellAbility.OppCtrl | FirstTime$ True | Execute$ DBDraw\n",
+            "SVar:DBDraw:DB$ Draw | Defined$ You | NumCards$ 1\n",
+        ))
+        .unwrap_or_else(|error| panic!("source-filtered trigger should map: {}", error.message));
+        assert!(trigger.event.as_ref().is_some_and(|event| {
+            expression_contains_operation(event, Operation::EventSource)
+                && expression_contains_operation(event, Operation::EventLimit)
+        }));
+
+        let reduced = map_script_root(concat!(
+            "A:AB$ Scry | Cost$ 5 T | ScryNum$ 1 | ReduceCost$ X\n",
+            "SVar:X:Count$Valid Creature.YouCtrl\n",
+        ))
+        .unwrap_or_else(|error| panic!("reduced activation should map: {}", error.message));
+        assert!(reduced
+            .costs
+            .iter()
+            .any(|cost| expression_contains_operation(cost, Operation::ReduceCostBy)));
+
+        let switched = map_script_root(
+            "A:SP$ Draw | NumCards$ 1 | UnlessCost$ Discard<1/Card> | UnlessPayer$ You | UnlessSwitched$ True\n",
+        )
+        .unwrap_or_else(|error| panic!("switched optional cost should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &switched.expression,
+            Operation::PayToApply
+        ));
+
+        let etb = map_script_root(
+            "A:DB$ PutCounter | ETB$ True | Defined$ ReplacedCard | CounterType$ P1P1 | CounterNum$ 1\n",
+        )
+        .unwrap_or_else(|error| panic!("ETB counter effect should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &etb.expression,
+            Operation::EtbEffect
+        ));
+    }
+
+    #[test]
+    fn maps_turn_bound_triggers_power_ups_reordering_and_repeated_effects() {
+        let turn_trigger = map_script_root(concat!(
+            "Name:Turn Trigger\n",
+            "T:Mode$ LifeGained | ValidPlayer$ You | TriggerZones$ Battlefield | PlayerTurn$ True | Execute$ DBLife\n",
+            "SVar:DBLife:DB$ GainLife | Defined$ You | LifeAmount$ 1\n",
+        ))
+        .unwrap_or_else(|error| panic!("turn-bound trigger should map: {}", error.message));
+        assert!(turn_trigger
+            .event
+            .as_ref()
+            .is_some_and(|event| { expression_contains_operation(event, Operation::EventWhen) }));
+
+        let power_up = map_script_root(
+            "A:AB$ PutCounter | Cost$ 5 G | Defined$ Self | CounterType$ P1P1 | CounterNum$ 1 | PowerUp$ True\n",
+        )
+        .unwrap_or_else(|error| panic!("power-up should map: {}", error.message));
+        assert!(power_up
+            .costs
+            .iter()
+            .any(|cost| expression_contains_operation(cost, Operation::PowerUpCost)));
+
+        let exhaust =
+            map_script_root("A:AB$ Draw | Cost$ 2 | Defined$ You | NumCards$ 1 | Exhaust$ True\n")
+                .unwrap_or_else(|error| panic!("exhaust ability should map: {}", error.message));
+        assert!(exhaust
+            .costs
+            .iter()
+            .any(|cost| expression_contains_operation(cost, Operation::ExhaustCost)));
+
+        let revolt =
+            map_script_root("A:DB$ GainLife | Defined$ You | LifeAmount$ 2 | Revolt$ True\n")
+                .unwrap_or_else(|error| panic!("revolt condition should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &revolt.expression,
+            Operation::RevoltOccurred
+        ));
+
+        let reordered = map_script_root(
+            "A:DB$ ChangeZone | Origin$ Hand | Destination$ Library | ChangeNum$ 2 | Mandatory$ True | Reorder$ True\n",
+        )
+        .unwrap_or_else(|error| panic!("ordered library move should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &reordered.expression,
+            Operation::ReorderMoved
+        ));
+
+        let repeated = map_script_root(concat!(
+            "Name:Repeated Copy\n",
+            "A:DB$ CopySpellAbility | Defined$ TriggeredSpellAbility | Amount$ X | MayChooseTarget$ True\n",
+            "SVar:X:Count$Valid Creature.YouCtrl\n",
+        ))
+        .unwrap_or_else(|error| panic!("dynamic repeated copy should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &repeated.expression,
+            Operation::RepeatEffect
+        ));
+        assert!(expression_contains_operation(
+            &repeated.expression,
+            Operation::Count
+        ));
+
+        let untap = map_line("A:DB$ Untap | UntapUpTo$ True | UntapType$ Land.YouCtrl | Amount$ 3")
+            .unwrap_or_else(|error| panic!("bounded untap choice should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &untap.expression,
+            Operation::ChooseObjects
+        ));
+
+        let clone = map_line(
+            "A:DB$ Clone | Choices$ Creature | ChoiceZone$ Battlefield | AddTypes$ Phyrexian & Artifact",
+        )
+        .unwrap_or_else(|error| panic!("clone type additions should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &clone.expression,
+            Operation::AddType
+        ));
+
+        let search = map_script_root(concat!(
+            "Name:Dynamic Search\n",
+            "A:SP$ ChangeZone | Origin$ Library | Destination$ Hand | ChangeType$ Card | ChangeNum$ X\n",
+            "SVar:X:Count$Valid Creature.YouCtrl\n",
+        ))
+        .unwrap_or_else(|error| panic!("dynamic search count should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &search.expression,
+            Operation::SearchLibrary
+        ));
+        assert!(expression_contains_operation(
+            &search.expression,
+            Operation::Count
+        ));
     }
 
     #[test]
@@ -15160,8 +15901,17 @@ mod tests {
             assert_eq!(error.code, code);
         }
 
+        let command = map_script_root(
+            "S:Mode$ ReduceCost | ValidCard$ Card.Self | Type$ Spell | Amount$ 1 | EffectZone$ Command | Description$ Reduce this spell.\n",
+        )
+        .unwrap_or_else(|error| panic!("command-zone static should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &command.expression,
+            Operation::ActiveInZone
+        ));
+
         let error = map_line(
-            "S:Mode$ ReduceCost | ValidCard$ Card.Self | Type$ Spell | Amount$ 1 | EffectZone$ Command | Description$ Reduce this spell.",
+            "S:Mode$ ReduceCost | ValidCard$ Card.Self | Type$ Spell | Amount$ 1 | EffectZone$ Hand | Description$ Reduce this spell.",
         )
         .err()
         .unwrap_or_else(|| panic!("non-closed static EffectZone must quarantine"));
@@ -15515,9 +16265,9 @@ mod tests {
                 mapped.event,
                 Some(Expression::Call { operation, .. }) if operation == expected_event
             ));
-            assert!(matches!(
-                mapped.expression,
-                Expression::Call { operation, .. } if operation == expected_effect
+            assert!(expression_contains_operation(
+                &mapped.expression,
+                expected_effect
             ));
         }
     }
@@ -16577,6 +17327,45 @@ mod tests {
             &paid.expression,
             Operation::PaidX
         ));
+    }
+
+    #[test]
+    fn lowers_closed_svar_arithmetic() {
+        let mapped = map_script_root(concat!(
+            "A:SP$ DealDamage | ValidTgts$ Any | NumDmg$ Z\n",
+            "SVar:X:Count$CardPower\n",
+            "SVar:Y:SVar$X/Times.3\n",
+            "SVar:Z:SVar$Y/Plus.2\n",
+        ))
+        .unwrap_or_else(|error| panic!("closed SVar arithmetic should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &mapped.expression,
+            Operation::ScaleValue
+        ));
+        assert!(expression_contains_operation(
+            &mapped.expression,
+            Operation::AddValue
+        ));
+
+        let half = map_script_root(concat!(
+            "A:SP$ GainLife | Defined$ You | LifeAmount$ Y\n",
+            "SVar:X:Count$CardPower\n",
+            "SVar:Y:SVar$X/HalfDown\n",
+        ))
+        .unwrap_or_else(|error| panic!("rounded SVar division should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &half.expression,
+            Operation::DivideValue
+        ));
+
+        let cycle = map_script_root(concat!(
+            "A:SP$ GainLife | Defined$ You | LifeAmount$ X\n",
+            "SVar:X:SVar$Y\n",
+            "SVar:Y:SVar$X\n",
+        ))
+        .err()
+        .unwrap_or_else(|| panic!("cyclic SVar arithmetic must quarantine"));
+        assert_eq!(cycle.code, "CYCLIC_SVAR");
     }
 
     #[test]
