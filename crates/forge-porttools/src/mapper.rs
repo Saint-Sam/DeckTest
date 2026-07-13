@@ -3828,6 +3828,9 @@ fn resolve_value_svar_inner(
         ),
         Some("Remembered") => map_remembered_value(name, &field.value),
         Some("RememberedLKI") => map_remembered_lki_value(name, &field.value),
+        Some("ReplaceCount") => {
+            map_replacement_amount(&format!("ReplaceCount${}", field.value), context)
+        }
         Some("SVar") => map_svar_arithmetic(name, &field.value, context, stack),
         Some("Number") => map_number_value(name, &field.value, context, stack),
         _ => Err(diagnostic(
@@ -14345,6 +14348,7 @@ fn map_trigger_effect(
         (None, Some("UntilYourNextTurn")) => "until_your_next_turn",
         (None, Some("UntilTheEndOfYourNextTurn")) => "until_end_of_your_next_turn",
         (None, Some("UntilUntaps")) => "until_source_untaps",
+        (None, Some("UntilTheEndOfYourNextUntap")) => "until_end_of_your_next_untap",
         (None, Some(value)) => return Err(unsupported_value("Duration", value)),
     };
     let mut effects = Vec::new();
@@ -19814,6 +19818,13 @@ mod tests {
         .unwrap_or_else(|error| panic!("identity replacement count should map: {}", error.message));
         assert!(expression_contains_operation(
             &replacement.expression,
+            Operation::ReplacementValue
+        ));
+        let replacement_value =
+            map_script_root("A:DB$ Draw | NumCards$ X\nSVar:X:ReplaceCount$DamageAmount\n")
+                .unwrap_or_else(|error| panic!("replacement SVar should map: {}", error.message));
+        assert!(expression_contains_operation(
+            &replacement_value.expression,
             Operation::ReplacementValue
         ));
 
