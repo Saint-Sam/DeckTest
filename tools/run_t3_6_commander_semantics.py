@@ -1282,12 +1282,243 @@ def expected_reconnaissance_mission_probe(
     }
 
 
+def expected_smothering_tithe_probe(case: dict[str, Any]) -> dict[str, Any] | None:
+    atoms = case.get("semantic_atoms", [])
+    taxes = [
+        atom
+        for atom in atoms
+        if atom.get("op") == "create_token"
+        and atom.get("trigger") == "each_opponent_card_drawn"
+    ]
+    if not taxes:
+        return None
+    permanents = [atom for atom in atoms if atom.get("op") == "resolve_permanent"]
+    if permanents != [{"destination": "battlefield", "op": "resolve_permanent"}]:
+        raise ValueError(f"{case['scenario_id']}: invalid permanent expectation")
+    if taxes != [
+        {
+            "controller": "source_controller",
+            "count": 1,
+            "mana_ability": {
+                "activation_cost": ["tap_source", "sacrifice_source"],
+                "legal_outputs": ["{W}", "{U}", "{B}", "{R}", "{G}"],
+            },
+            "op": "create_token",
+            "token": "Treasure",
+            "trigger": "each_opponent_card_drawn",
+            "unless_paid": {"cost": "{2}", "payer": "triggering_opponent"},
+        }
+    ]:
+        raise ValueError(f"{case['scenario_id']}: invalid opponent-draw tax expectation")
+
+    common_branch = {
+        "setup_succeeded": True,
+        "turn_started": True,
+        "registered": True,
+        "draw_applied": True,
+        "pending_trigger_exact": True,
+        "put_on_stack": True,
+        "missing_triggering_player_rejected_before_mutation": True,
+        "missing_payment_decision_rejected_before_mutation": True,
+        "mana_funded": True,
+        "bound_action_count": 1,
+        "stack_resolved": True,
+        "action_applied": True,
+        "token_count_before": 0,
+        "controller_mana_unchanged": True,
+    }
+    decline = {
+        **common_branch,
+        "pay_selected": False,
+        "decline_create_action_exact": True,
+        "payment_action_targets_triggering_opponent": False,
+        "token_count_after": 1,
+        "created_token_exact": True,
+        "exactly_one_treasure_created": True,
+        "treasure_suppressed": False,
+        "payer_mana_before": 0,
+        "payer_mana_after": 0,
+        "payer_mana_consumed": False,
+    }
+    pay = {
+        **common_branch,
+        "pay_selected": True,
+        "decline_create_action_exact": False,
+        "payment_action_targets_triggering_opponent": True,
+        "token_count_after": 0,
+        "created_token_exact": False,
+        "exactly_one_treasure_created": False,
+        "treasure_suppressed": True,
+        "payer_mana_before": 2,
+        "payer_mana_after": 0,
+        "payer_mana_consumed": True,
+    }
+    return {
+        "setup_succeeded": True,
+        "contract": {
+            "ability_count": 1,
+            "event_exact": True,
+            "definition_exact": True,
+            "payer_is_triggering_opponent": True,
+            "generic_mana_cost": 2,
+            "colored_mana_cost": 0,
+            "exact_payment_total": 2,
+            "effect_exact": True,
+            "artifact_token_template_exact": True,
+            "treasure_subtype_present": False,
+            "treasure_mana_ability_exact": True,
+            "treasure_mana_outputs": ["{W}", "{U}", "{B}", "{R}", "{G}"],
+            "no_targets_or_choices": True,
+        },
+        "event_boundary": {
+            "turn_started": True,
+            "registered": True,
+            "controller_draw_applied": True,
+            "controller_card_draw_event_count": 1,
+            "controller_draw_queued_no_trigger": True,
+            "empty_library_draw_applied": True,
+            "empty_library_event_count": 1,
+            "failed_draw_card_event_count": 0,
+            "empty_library_queued_no_trigger": True,
+            "opponent_draw_applied": True,
+            "opponent_card_draw_event_count": 2,
+            "pending_trigger_count": 2,
+            "one_trigger_per_opponent_card_drawn": True,
+            "pending_triggers_exact": True,
+            "pending_event_sequences_distinct": True,
+            "put_on_stack_count": 2,
+            "stack_entries_exact": True,
+        },
+        "decline": decline,
+        "pay": pay,
+    }
+
+
+def expected_purphoros_probe(case: dict[str, Any]) -> dict[str, Any] | None:
+    if case.get("card_name") != "Purphoros, God of the Forge":
+        return None
+    atoms = case.get("semantic_atoms", [])
+    if atoms != [
+        {
+            "destination": "battlefield",
+            "keywords": ["indestructible"],
+            "op": "resolve_permanent",
+            "subtypes": ["God"],
+            "type_line": "Legendary Enchantment Creature - God",
+        },
+        {
+            "ability": "team_pump",
+            "cost": "{2}{R}",
+            "op": "activate_ability",
+            "timing": "instant",
+        },
+        {
+            "condition": {
+                "color": "red",
+                "controller": "source_controller",
+                "devotion_less_than": 5,
+            },
+            "duration": "while_source_on_battlefield",
+            "op": "modify_characteristics",
+            "remove_type": "creature",
+            "subject": "source",
+        },
+        {
+            "duration": "until_end_of_turn",
+            "objects": "creatures_you_control",
+            "op": "modify_characteristics",
+            "power_delta": 1,
+            "toughness_delta": 0,
+        },
+        {
+            "amount": 2,
+            "op": "deal_damage",
+            "players": "each_opponent",
+            "targeting": False,
+            "trigger": "another_controlled_creature_enters",
+        },
+    ]:
+        raise ValueError(f"{case['scenario_id']}: invalid Purphoros expectation")
+    return {
+        "setup_succeeded": True,
+        "contract": {
+            "printed_red_symbols": 1,
+            "printed_types_include_enchantment_and_creature": True,
+            "printed_subtype_is_god": True,
+            "printed_indestructible": True,
+            "static_program_exact": True,
+            "trigger_program_exact": True,
+            "activated_program_exact": True,
+        },
+        "devotion": {
+            "static_definition_exact": True,
+            "static_registered": True,
+            "low": 1,
+            "source_noncreature_at_one": True,
+            "opponent_symbols_ignored": True,
+            "high": 5,
+            "source_creature_at_five": True,
+            "anchor_removed": True,
+            "low_again": 1,
+            "source_noncreature_after_drop": True,
+        },
+        "creature_enter_trigger": {
+            "turn_started": True,
+            "definition_exact": True,
+            "registered": True,
+            "source_entered": True,
+            "self_entry_excluded": True,
+            "opponent_creature_entered": True,
+            "opponent_creature_excluded": True,
+            "controlled_noncreature_entered": True,
+            "controlled_noncreature_excluded": True,
+            "controlled_creature_entered": True,
+            "pending_trigger_exact": True,
+            "put_on_stack": True,
+        },
+        "opponent_damage": {
+            "untargeted_contract": True,
+            "bound_action_count": 2,
+            "exact_actions": True,
+            "trigger_stack_resolved": True,
+            "all_actions_applied": True,
+            "exact_damage_event_count": 2,
+            "controller_life": 20,
+            "first_opponent_life": 18,
+            "second_opponent_life": 18,
+        },
+        "team_pump": {
+            "static_registered": True,
+            "source_noncreature_before_pump": True,
+            "generic_mana_cost": 2,
+            "red_mana_cost": 1,
+            "funded": True,
+            "paid": True,
+            "payment_consumed": True,
+            "bound_action_count": 1,
+            "bound_action_exact": True,
+            "all_actions_applied": True,
+            "controlled_creature_got_plus_one_zero": True,
+            "opponent_creature_unchanged": True,
+            "controlled_noncreature_unchanged": True,
+            "cleanup_reached": True,
+            "expired_until_end_of_turn": 1,
+            "pump_expired_at_cleanup": True,
+        },
+    }
+
+
 def verify_semantic_probe(case: dict[str, Any], actual: dict[str, Any]) -> None:
-    if case.get("status") != "semantic_case_ready":
+    smothering_tithe = expected_smothering_tithe_probe(case)
+    if case.get("status") != "semantic_case_ready" and smothering_tithe is None:
         return
     probe = actual.get("semantic_probe")
     if not isinstance(probe, dict):
         raise ValueError(f"{case['scenario_id']}: semantic probe is missing")
+    if smothering_tithe is not None and probe.get("smothering_tithe") != smothering_tithe:
+        raise ValueError(f"{case['scenario_id']}: Smothering Tithe semantic probe changed")
+    if case.get("status") != "semantic_case_ready":
+        return
 
     expected_mana = expected_mana_abilities(case)
     if expected_mana:
@@ -1430,6 +1661,11 @@ def verify_semantic_probe(case: dict[str, Any], actual: dict[str, Any]) -> None:
         raise ValueError(
             f"{case['scenario_id']}: Reconnaissance Mission semantic probe changed"
         )
+
+    purphoros = expected_purphoros_probe(case)
+    if purphoros is not None and probe.get("purphoros") != purphoros:
+        raise ValueError(f"{case['scenario_id']}: Purphoros semantic probe changed")
+
 
 
 def aggregate_translated_hash(cases: dict[str, Any]) -> str:

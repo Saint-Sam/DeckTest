@@ -81,6 +81,8 @@ def observed_from_cases(cases: dict) -> list[dict]:
                 "reconnaissance_mission": (
                     SEMANTICS.expected_reconnaissance_mission_probe(case)
                 ),
+                "smothering_tithe": SEMANTICS.expected_smothering_tithe_probe(case),
+                "purphoros": SEMANTICS.expected_purphoros_probe(case),
                 "noncreature_counter": (
                     SEMANTICS.expected_noncreature_counter_probe(case)
                 ),
@@ -121,9 +123,9 @@ class CommanderSemanticSidecarTests(unittest.TestCase):
             self.cases["summary"],
             {
                 "candidate_count": 100,
-                "semantic_case_ready": 77,
-                "blocked_semantic_gap": 20,
-                "blocked_runtime": 3,
+                "semantic_case_ready": 78,
+                "blocked_semantic_gap": 21,
+                "blocked_runtime": 1,
             },
         )
 
@@ -528,6 +530,118 @@ class CommanderSemanticSidecarTests(unittest.TestCase):
         with self.assertRaisesRegex(
             ValueError, "Reconnaissance Mission semantic probe changed"
         ):
+            SEMANTICS.verify_observed(self.cases, observed)
+
+    def test_smothering_tithe_queues_one_trigger_per_opponent_card_drawn(self) -> None:
+        observed = observed_from_cases(self.cases)
+        tithe_index = next(
+            index
+            for index, case in enumerate(self.cases["cases"])
+            if case["card_name"] == "Smothering Tithe"
+        )
+        observed[tithe_index]["semantic_probe"]["smothering_tithe"]["event_boundary"][
+            "one_trigger_per_opponent_card_drawn"
+        ] = False
+        with self.assertRaisesRegex(ValueError, "Smothering Tithe semantic probe changed"):
+            SEMANTICS.verify_observed(self.cases, observed)
+
+    def test_smothering_tithe_ignores_controller_and_failed_draws(self) -> None:
+        observed = observed_from_cases(self.cases)
+        tithe_index = next(
+            index
+            for index, case in enumerate(self.cases["cases"])
+            if case["card_name"] == "Smothering Tithe"
+        )
+        boundary = observed[tithe_index]["semantic_probe"]["smothering_tithe"][
+            "event_boundary"
+        ]
+        boundary["controller_draw_queued_no_trigger"] = False
+        boundary["empty_library_queued_no_trigger"] = False
+        with self.assertRaisesRegex(ValueError, "Smothering Tithe semantic probe changed"):
+            SEMANTICS.verify_observed(self.cases, observed)
+
+    def test_smothering_tithe_decline_creates_exactly_one_treasure(self) -> None:
+        observed = observed_from_cases(self.cases)
+        tithe_index = next(
+            index
+            for index, case in enumerate(self.cases["cases"])
+            if case["card_name"] == "Smothering Tithe"
+        )
+        observed[tithe_index]["semantic_probe"]["smothering_tithe"]["decline"][
+            "exactly_one_treasure_created"
+        ] = False
+        with self.assertRaisesRegex(ValueError, "Smothering Tithe semantic probe changed"):
+            SEMANTICS.verify_observed(self.cases, observed)
+
+    def test_smothering_tithe_exact_payment_consumes_payer_mana_and_suppresses_token(
+        self,
+    ) -> None:
+        observed = observed_from_cases(self.cases)
+        tithe_index = next(
+            index
+            for index, case in enumerate(self.cases["cases"])
+            if case["card_name"] == "Smothering Tithe"
+        )
+        payment = observed[tithe_index]["semantic_probe"]["smothering_tithe"]["pay"]
+        payment["payer_mana_consumed"] = False
+        payment["treasure_suppressed"] = False
+        with self.assertRaisesRegex(ValueError, "Smothering Tithe semantic probe changed"):
+            SEMANTICS.verify_observed(self.cases, observed)
+
+    def test_purphoros_devotion_toggles_creature_type_at_one_five_one(self) -> None:
+        observed = observed_from_cases(self.cases)
+        purphoros_index = next(
+            index
+            for index, case in enumerate(self.cases["cases"])
+            if case["card_name"] == "Purphoros, God of the Forge"
+        )
+        observed[purphoros_index]["semantic_probe"]["purphoros"]["devotion"][
+            "source_creature_at_five"
+        ] = False
+        with self.assertRaisesRegex(ValueError, "Purphoros semantic probe changed"):
+            SEMANTICS.verify_observed(self.cases, observed)
+
+    def test_purphoros_trigger_excludes_self_opponents_and_noncreatures(self) -> None:
+        observed = observed_from_cases(self.cases)
+        purphoros_index = next(
+            index
+            for index, case in enumerate(self.cases["cases"])
+            if case["card_name"] == "Purphoros, God of the Forge"
+        )
+        trigger = observed[purphoros_index]["semantic_probe"]["purphoros"][
+            "creature_enter_trigger"
+        ]
+        trigger["self_entry_excluded"] = False
+        trigger["opponent_creature_excluded"] = False
+        with self.assertRaisesRegex(ValueError, "Purphoros semantic probe changed"):
+            SEMANTICS.verify_observed(self.cases, observed)
+
+    def test_purphoros_deals_untargeted_damage_to_each_opponent(self) -> None:
+        observed = observed_from_cases(self.cases)
+        purphoros_index = next(
+            index
+            for index, case in enumerate(self.cases["cases"])
+            if case["card_name"] == "Purphoros, God of the Forge"
+        )
+        damage = observed[purphoros_index]["semantic_probe"]["purphoros"][
+            "opponent_damage"
+        ]
+        damage["untargeted_contract"] = False
+        damage["second_opponent_life"] = 20
+        with self.assertRaisesRegex(ValueError, "Purphoros semantic probe changed"):
+            SEMANTICS.verify_observed(self.cases, observed)
+
+    def test_purphoros_team_pump_is_paid_scoped_and_expires(self) -> None:
+        observed = observed_from_cases(self.cases)
+        purphoros_index = next(
+            index
+            for index, case in enumerate(self.cases["cases"])
+            if case["card_name"] == "Purphoros, God of the Forge"
+        )
+        pump = observed[purphoros_index]["semantic_probe"]["purphoros"]["team_pump"]
+        pump["payment_consumed"] = False
+        pump["pump_expired_at_cleanup"] = False
+        with self.assertRaisesRegex(ValueError, "Purphoros semantic probe changed"):
             SEMANTICS.verify_observed(self.cases, observed)
 
     def test_incremental_report_keeps_checkpoint_open(self) -> None:

@@ -12,12 +12,14 @@ use forge_core::{
     ActivatedAbilityEffect, ActivationCondition, ActivationCost, ActivationTiming,
     AttackDeclaration, BaseCreatureCharacteristics, BaseObjectCharacteristics, BlockDeclaration,
     CardId, CastSpellRequest, CombatDamageAssignment, CombatDamageAssignmentRequest,
-    CombatDamageTarget, CombatRestriction, CombatRestrictionSubject, ContinuousEffectDuration,
-    CounterKind, CreatureKeywords, GameState, ManaCost, ManaKind, ManaPool, ObjectColors,
+    CombatDamageTarget, CombatRestriction, CombatRestrictionSubject, ContinuousEffectCondition,
+    ContinuousEffectDuration, ContinuousEffectOperation, ContinuousEffectTarget, CounterKind,
+    CreatureKeywords, GameEvent, GameState, ManaCost, ManaKind, ManaPool, ObjectColors,
     ObjectSupertypes, ObjectTargetPredicate, ObjectTypes, Outcome, PlayerRule, PriorityOutcome,
     ResolutionOutcome, RestrictionEffect, SpellTiming, StackObjectKind, StateError, Step,
     TargetChoice, TargetControllerPredicate, TargetKind, TargetRequirement, TargetRestriction,
-    TargetRestrictionSubject, TriggerCondition, TriggerObjectFilter, ZoneId, ZoneKind,
+    TargetRestrictionSubject, TriggerCondition, TriggerObjectFilter, TriggerPlayerFilter, ZoneId,
+    ZoneKind,
 };
 use forge_testkit::runtime_smoke::{run_translated_card_runtime_smoke, RuntimeSmokeResult};
 use serde_json::json;
@@ -4004,6 +4006,1099 @@ fn reconnaissance_mission_probe(program: &CardProgram) -> Option<serde_json::Val
     }))
 }
 
+fn matching_artifact_token_count(
+    state: &GameState,
+    controller: forge_core::PlayerId,
+    card: CardId,
+) -> usize {
+    state
+        .zone_objects(ZoneId::new(None, ZoneKind::Battlefield))
+        .map_or(0, |objects| {
+            objects
+                .iter()
+                .filter(|object| {
+                    state.object(**object).is_some_and(|record| {
+                        record.is_token()
+                            && record.card() == card
+                            && record.owner() == controller
+                            && record.controller() == controller
+                            && record.base_object().types() == ObjectTypes::none().with_artifact()
+                            && record.base_creature().is_none()
+                    })
+                })
+                .count()
+        })
+}
+
+fn smothering_tithe_branch_probe(
+    program: &CardProgram,
+    pay: bool,
+    salt: u32,
+) -> Option<serde_json::Value> {
+    let [ability] = program.triggered_abilities() else {
+        return Some(json!({"setup_succeeded": false}));
+    };
+    let [EffectProgram::CreateTokens {
+        card: token_card,
+        base_object: token_base,
+        base_creature: token_creature,
+        count: AmountProgram::Literal(1),
+        players: PlayerBinding::Controller,
+        ..
+    }] = ability.effects()
+    else {
+        return Some(json!({"setup_succeeded": false}));
+    };
+    let unless_paid = ability.unless_paid()?;
+
+    let mut state = GameState::new();
+    let controller = match apply(&mut state, Action::AddPlayer) {
+        Outcome::PlayerAdded(player) => player,
+        _ => return Some(json!({"setup_succeeded": false})),
+    };
+    let opponent = match apply(&mut state, Action::AddPlayer) {
+        Outcome::PlayerAdded(player) => player,
+        _ => return Some(json!({"setup_succeeded": false})),
+    };
+    let source = create_probe_object(
+        &mut state,
+        salt,
+        controller,
+        controller,
+        ZoneId::new(None, ZoneKind::Battlefield),
+        program.base_object(),
+        program.base_creature(),
+    )?;
+    create_probe_object(
+        &mut state,
+        salt.wrapping_add(1),
+        opponent,
+        opponent,
+        ZoneId::new(Some(opponent), ZoneKind::Library),
+        BaseObjectCharacteristics::new(ObjectTypes::none().with_artifact(), ObjectColors::none()),
+        None,
+    )?;
+    let turn_started = matches!(
+        apply(
+            &mut state,
+            Action::StartTurn {
+                active_player: controller,
+            },
+        ),
+        Outcome::Applied
+    );
+    let definition = ability.bind(controller, source);
+    let registered = match apply(&mut state, Action::RegisterTriggeredAbility { definition }) {
+        Outcome::TriggerRegistered(trigger) => Some(trigger),
+        _ => None,
+    };
+    let draw_applied = matches!(
+        apply(
+            &mut state,
+            Action::DrawCards {
+                player: opponent,
+                count: 1,
+            },
+        ),
+        Outcome::Applied
+    );
+    let pending_trigger_exact = registered.is_some_and(|trigger| {
+        state.pending_triggers().len() == 1
+            && state.pending_triggers()[0].trigger() == trigger
+            && state.pending_triggers()[0].controller() == controller
+            && state.pending_triggers()[0].source() == Some(source)
+    });
+    let entries = match apply(&mut state, Action::PutPendingTriggeredAbilitiesOnStack) {
+        Outcome::StackEntriesAdded(entries) => entries,
+        _ => Vec::new(),
+    };
+    let trigger_put_on_stack = registered.is_some_and(|trigger| {
+        entries.len() == 1
+            && state.stack_top().is_some_and(|entry| {
+                entry.id() == entries[0]
+                    && entry.controller() == controller
+                    && entry.trigger() == Some(trigger)
+            })
+    });
+
+    let base_bindings = ExecutionBindings::new(controller, vec![opponent]).with_source(source);
+    let before_missing_player = state.deterministic_hash();
+    let missing_triggering_player_rejected_before_mutation = matches!(
+        bind_triggered_ability_actions(
+            &state,
+            ability,
+            &base_bindings.clone().with_unless_payment(true),
+        ),
+        Err(error) if error.code() == ExecutionDiagnosticCode::MissingBinding
+    ) && state.deterministic_hash()
+        == before_missing_player;
+    let with_triggering_player = base_bindings.with_triggering_player(opponent);
+    let before_missing_decision = state.deterministic_hash();
+    let missing_payment_decision_rejected_before_mutation = matches!(
+        bind_triggered_ability_actions(&state, ability, &with_triggering_player),
+        Err(error) if error.code() == ExecutionDiagnosticCode::MissingChoice
+    ) && state.deterministic_hash()
+        == before_missing_decision;
+
+    let mana_funded = !pay
+        || matches!(
+            apply(
+                &mut state,
+                Action::AddManaToPool {
+                    player: opponent,
+                    mana: unless_paid.exact_payment(),
+                },
+            ),
+            Outcome::Applied
+        );
+    let payer_mana_before = state.mana_pool(opponent).ok()?.total();
+    let controller_mana_before = state.mana_pool(controller).ok()?.total();
+    let actions = bind_triggered_ability_actions(
+        &state,
+        ability,
+        &with_triggering_player.with_unless_payment(pay),
+    )
+    .ok()?;
+    let bound_action_count = actions.len();
+    let decline_action_exact = !pay
+        && actions.len() == 1
+        && matches!(
+            actions[0].action(),
+            Action::CreateToken {
+                card,
+                owner,
+                controller: token_controller,
+                base_object,
+                base,
+            } if *card == *token_card
+                && *owner == controller
+                && *token_controller == controller
+                && *base_object == *token_base
+                && *base == *token_creature
+        );
+    let payment_action_exact = pay
+        && actions.len() == 1
+        && matches!(
+            actions[0].action(),
+            Action::PayMana { player, cost, .. }
+                if *player == opponent && *cost == unless_paid.mana_cost()
+        );
+    let tokens_before = matching_artifact_token_count(&state, controller, *token_card);
+    let stack_resolved = entries
+        .first()
+        .is_some_and(|entry| resolve_expected_stack_entry(&mut state, *entry));
+    let outcome = actions
+        .first()
+        .map(|bound| apply(&mut state, bound.action().clone()));
+    let action_applied = matches!(
+        outcome,
+        Some(Outcome::Applied) | Some(Outcome::ObjectCreated(_))
+    );
+    let created_token = match outcome {
+        Some(Outcome::ObjectCreated(object)) => Some(object),
+        _ => None,
+    };
+    let created_token_exact = created_token.is_some_and(|object| {
+        state.object(object).is_some_and(|record| {
+            record.is_token()
+                && record.card() == *token_card
+                && record.owner() == controller
+                && record.controller() == controller
+                && record.base_object() == *token_base
+                && record.base_creature() == *token_creature
+                && state.object_zone(object) == Some(ZoneId::new(None, ZoneKind::Battlefield))
+        })
+    });
+    let tokens_after = matching_artifact_token_count(&state, controller, *token_card);
+    let payer_mana_after = state.mana_pool(opponent).ok()?.total();
+    let controller_mana_after = state.mana_pool(controller).ok()?.total();
+
+    Some(json!({
+        "setup_succeeded": true,
+        "pay_selected": pay,
+        "turn_started": turn_started,
+        "registered": registered.is_some(),
+        "draw_applied": draw_applied,
+        "pending_trigger_exact": pending_trigger_exact,
+        "put_on_stack": trigger_put_on_stack,
+        "missing_triggering_player_rejected_before_mutation":
+            missing_triggering_player_rejected_before_mutation,
+        "missing_payment_decision_rejected_before_mutation":
+            missing_payment_decision_rejected_before_mutation,
+        "mana_funded": mana_funded,
+        "bound_action_count": bound_action_count,
+        "decline_create_action_exact": decline_action_exact,
+        "payment_action_targets_triggering_opponent": payment_action_exact,
+        "stack_resolved": stack_resolved,
+        "action_applied": action_applied,
+        "token_count_before": tokens_before,
+        "token_count_after": tokens_after,
+        "created_token_exact": created_token_exact,
+        "exactly_one_treasure_created": !pay
+            && created_token_exact
+            && tokens_after == tokens_before + 1,
+        "treasure_suppressed": pay && tokens_after == tokens_before,
+        "payer_mana_before": payer_mana_before,
+        "payer_mana_after": payer_mana_after,
+        "payer_mana_consumed": pay
+            && payer_mana_before == unless_paid.exact_payment().total()
+            && payer_mana_after == 0,
+        "controller_mana_unchanged": controller_mana_before == controller_mana_after,
+    }))
+}
+
+fn smothering_tithe_probe(program: &CardProgram) -> Option<serde_json::Value> {
+    if program.name() != "Smothering Tithe" {
+        return None;
+    }
+    let [ability] = program.triggered_abilities() else {
+        return Some(json!({
+            "setup_succeeded": false,
+            "observed_trigger_count": program.triggered_abilities().len(),
+        }));
+    };
+    let unless_paid = ability.unless_paid()?;
+    let (
+        effect_exact,
+        artifact_token_template_exact,
+        treasure_subtype_present,
+        treasure_mana_ability_exact,
+        treasure_mana_outputs,
+    ) = match ability.effects() {
+        [EffectProgram::CreateTokens {
+            base_object,
+            base_creature,
+            mana_ability: Some(mana_ability),
+            count: AmountProgram::Literal(1),
+            players: PlayerBinding::Controller,
+            ..
+        }] => {
+            let outputs = mana_ability
+                .output_choices()
+                .options()
+                .iter()
+                .copied()
+                .map(mana_label)
+                .collect::<Vec<_>>();
+            (
+                true,
+                base_object.types() == ObjectTypes::none().with_artifact()
+                    && base_object.colors() == ObjectColors::none()
+                    && base_creature.is_none(),
+                base_object.subtypes().as_slice().iter().any(|subtype| {
+                    String::from_utf8_lossy(subtype.as_bytes()).eq_ignore_ascii_case("Treasure")
+                }),
+                mana_ability.cost().mana() == ManaCost::new(0, 0, 0, 0, 0, 0)
+                    && mana_ability.cost().tap_source()
+                    && mana_ability.cost().sacrifice_source()
+                    && outputs == ["{W}", "{U}", "{B}", "{R}", "{G}"],
+                outputs,
+            )
+        }
+        _ => (false, false, false, false, Vec::new()),
+    };
+
+    let mut state = GameState::new();
+    let controller = match apply(&mut state, Action::AddPlayer) {
+        Outcome::PlayerAdded(player) => player,
+        _ => return Some(json!({"setup_succeeded": false})),
+    };
+    let first_opponent = match apply(&mut state, Action::AddPlayer) {
+        Outcome::PlayerAdded(player) => player,
+        _ => return Some(json!({"setup_succeeded": false})),
+    };
+    let second_opponent = match apply(&mut state, Action::AddPlayer) {
+        Outcome::PlayerAdded(player) => player,
+        _ => return Some(json!({"setup_succeeded": false})),
+    };
+    let source = create_probe_object(
+        &mut state,
+        9_680_000,
+        controller,
+        controller,
+        ZoneId::new(None, ZoneKind::Battlefield),
+        program.base_object(),
+        program.base_creature(),
+    )?;
+    let definition = ability.bind(controller, source);
+    let definition_exact = definition.source() == Some(source)
+        && matches!(
+            definition.condition(),
+            TriggerCondition::PlayerDrewCard {
+                player: TriggerPlayerFilter::OpponentOfController,
+            }
+        );
+    let card_base =
+        BaseObjectCharacteristics::new(ObjectTypes::none().with_artifact(), ObjectColors::none());
+    create_probe_object(
+        &mut state,
+        9_680_001,
+        controller,
+        controller,
+        ZoneId::new(Some(controller), ZoneKind::Library),
+        card_base,
+        None,
+    )?;
+    for card in 9_680_002..9_680_004 {
+        create_probe_object(
+            &mut state,
+            card,
+            first_opponent,
+            first_opponent,
+            ZoneId::new(Some(first_opponent), ZoneKind::Library),
+            card_base,
+            None,
+        )?;
+    }
+    let turn_started = matches!(
+        apply(
+            &mut state,
+            Action::StartTurn {
+                active_player: controller,
+            },
+        ),
+        Outcome::Applied
+    );
+    let registered = match apply(&mut state, Action::RegisterTriggeredAbility { definition }) {
+        Outcome::TriggerRegistered(trigger) => Some(trigger),
+        _ => None,
+    };
+
+    let controller_cursor = state.event_cursor();
+    let controller_draw_applied = matches!(
+        apply(
+            &mut state,
+            Action::DrawCards {
+                player: controller,
+                count: 1,
+            },
+        ),
+        Outcome::Applied
+    );
+    let controller_card_draw_events = state
+        .events_since(controller_cursor)
+        .ok()?
+        .iter()
+        .filter(|record| {
+            matches!(
+                record.event(),
+                GameEvent::CardDrawn { player, .. } if player == controller
+            )
+        })
+        .count();
+    let controller_draw_queued_no_trigger = state.pending_triggers().is_empty();
+
+    let empty_cursor = state.event_cursor();
+    let empty_library_draw_applied = matches!(
+        apply(
+            &mut state,
+            Action::DrawCards {
+                player: second_opponent,
+                count: 1,
+            },
+        ),
+        Outcome::Applied
+    );
+    let empty_events = state.events_since(empty_cursor).ok()?;
+    let empty_library_events = empty_events
+        .iter()
+        .filter(|record| {
+            matches!(
+                record.event(),
+                GameEvent::EmptyLibraryDraw { player } if player == second_opponent
+            )
+        })
+        .count();
+    let failed_draw_card_events = empty_events
+        .iter()
+        .filter(|record| {
+            matches!(
+                record.event(),
+                GameEvent::CardDrawn { player, .. } if player == second_opponent
+            )
+        })
+        .count();
+    let empty_library_queued_no_trigger = state.pending_triggers().is_empty();
+
+    let opponent_cursor = state.event_cursor();
+    let opponent_draw_applied = matches!(
+        apply(
+            &mut state,
+            Action::DrawCards {
+                player: first_opponent,
+                count: 2,
+            },
+        ),
+        Outcome::Applied
+    );
+    let opponent_card_draw_events = state
+        .events_since(opponent_cursor)
+        .ok()?
+        .iter()
+        .filter(|record| {
+            matches!(
+                record.event(),
+                GameEvent::CardDrawn { player, .. } if player == first_opponent
+            )
+        })
+        .count();
+    let pending_count = state.pending_triggers().len();
+    let pending_triggers_exact = registered.is_some_and(|trigger| {
+        state.pending_triggers().iter().all(|pending| {
+            pending.trigger() == trigger
+                && pending.controller() == controller
+                && pending.source() == Some(source)
+        })
+    });
+    let pending_event_sequences_distinct = state.pending_triggers().len() == 2
+        && state.pending_triggers()[0].event_sequence()
+            != state.pending_triggers()[1].event_sequence();
+    let stack_entries = match apply(&mut state, Action::PutPendingTriggeredAbilitiesOnStack) {
+        Outcome::StackEntriesAdded(entries) => entries,
+        _ => Vec::new(),
+    };
+    let stack_entries_exact = registered.is_some_and(|trigger| {
+        stack_entries.len() == 2
+            && stack_entries.iter().all(|entry| {
+                state.stack_entries().iter().any(|candidate| {
+                    candidate.id() == *entry
+                        && candidate.controller() == controller
+                        && candidate.trigger() == Some(trigger)
+                })
+            })
+    });
+
+    Some(json!({
+        "setup_succeeded": true,
+        "contract": {
+            "ability_count": program.triggered_abilities().len(),
+            "event_exact": ability.event() == TriggeredEventProgram::OpponentDrawsCard,
+            "definition_exact": definition_exact,
+            "payer_is_triggering_opponent":
+                unless_paid.payer() == PlayerBinding::TriggeringPlayer,
+            "generic_mana_cost": unless_paid.mana_cost().base_generic(),
+            "colored_mana_cost": unless_paid.mana_cost().colored_pool().total(),
+            "exact_payment_total": unless_paid.exact_payment().total(),
+            "effect_exact": effect_exact,
+            "artifact_token_template_exact": artifact_token_template_exact,
+            "treasure_subtype_present": treasure_subtype_present,
+            "treasure_mana_ability_exact": treasure_mana_ability_exact,
+            "treasure_mana_outputs": treasure_mana_outputs,
+            "no_targets_or_choices": ability.target_requirements().is_empty()
+                && ability.object_choice_requirements().is_empty()
+                && ability.optional_choice_count() == 0,
+        },
+        "event_boundary": {
+            "turn_started": turn_started,
+            "registered": registered.is_some(),
+            "controller_draw_applied": controller_draw_applied,
+            "controller_card_draw_event_count": controller_card_draw_events,
+            "controller_draw_queued_no_trigger": controller_draw_queued_no_trigger,
+            "empty_library_draw_applied": empty_library_draw_applied,
+            "empty_library_event_count": empty_library_events,
+            "failed_draw_card_event_count": failed_draw_card_events,
+            "empty_library_queued_no_trigger": empty_library_queued_no_trigger,
+            "opponent_draw_applied": opponent_draw_applied,
+            "opponent_card_draw_event_count": opponent_card_draw_events,
+            "pending_trigger_count": pending_count,
+            "one_trigger_per_opponent_card_drawn": pending_count == opponent_card_draw_events,
+            "pending_triggers_exact": pending_triggers_exact,
+            "pending_event_sequences_distinct": pending_event_sequences_distinct,
+            "put_on_stack_count": stack_entries.len(),
+            "stack_entries_exact": stack_entries_exact,
+        },
+        "decline": smothering_tithe_branch_probe(program, false, 9_681_000),
+        "pay": smothering_tithe_branch_probe(program, true, 9_682_000),
+    }))
+}
+
+fn purphoros_probe(program: &CardProgram) -> Option<serde_json::Value> {
+    if program.name() != "Purphoros, God of the Forge" {
+        return None;
+    }
+    let [static_ability] = program.static_abilities() else {
+        return Some(json!({
+            "setup_succeeded": false,
+            "observed_static_count": program.static_abilities().len(),
+        }));
+    };
+    let [trigger] = program.triggered_abilities() else {
+        return Some(json!({
+            "setup_succeeded": false,
+            "observed_trigger_count": program.triggered_abilities().len(),
+        }));
+    };
+    let [activated] = program.activated_effects() else {
+        return Some(json!({
+            "setup_succeeded": false,
+            "observed_activated_count": program.activated_effects().len(),
+        }));
+    };
+
+    let static_program_exact = matches!(
+        static_ability,
+        StaticAbilityProgram::DevotionSourceTypeRemoval {
+            color: ManaKind::Red,
+            threshold: 5,
+            types,
+        } if *types == ObjectTypes::none().with_creature()
+    );
+    let trigger_program_exact = matches!(
+        trigger.event(),
+        TriggeredEventProgram::ControllerPermanentEnters {
+            predicate,
+            exclude_source: true,
+        } if predicate.controller() == TargetControllerPredicate::You
+            && predicate.required_types() == ObjectTypes::none().with_creature()
+    ) && matches!(
+        trigger.effects(),
+        [EffectProgram::DealDamageToPlayers {
+            players: PlayerBinding::Opponents,
+            amount: AmountProgram::Literal(2),
+        }]
+    ) && trigger.target_requirements().is_empty()
+        && trigger.object_choice_requirements().is_empty()
+        && trigger.optional_choice_count() == 0;
+    let activated_program_exact = activated.mana_cost().base_generic() == 2
+        && activated.mana_cost().colored_pool() == ManaPool::of(ManaKind::Red, 1)
+        && activated.exact_payment().total() == 3
+        && activated.timing() == ActivationTiming::Instant
+        && !activated.tap_source()
+        && !activated.sacrifice_source()
+        && activated.pay_life() == 0
+        && activated.sacrifice_cost().is_none()
+        && activated.target_requirements().is_empty()
+        && activated.object_choice_requirements().is_empty()
+        && activated.optional_choice_count() == 0
+        && matches!(
+            activated.effects(),
+            [EffectProgram::ModifyPowerToughness {
+                objects: ObjectSetProgram::Battlefield(predicate),
+                power: AmountProgram::Literal(1),
+                toughness: AmountProgram::Literal(0),
+                duration: ContinuousEffectDuration::UntilEndOfTurn,
+            }] if predicate.controller() == TargetControllerPredicate::You
+                && predicate.required_types() == ObjectTypes::none().with_creature()
+        );
+
+    let mut devotion_state = GameState::new();
+    let devotion_controller = match apply(&mut devotion_state, Action::AddPlayer) {
+        Outcome::PlayerAdded(player) => player,
+        _ => return Some(json!({"setup_succeeded": false})),
+    };
+    let devotion_opponent = match apply(&mut devotion_state, Action::AddPlayer) {
+        Outcome::PlayerAdded(player) => player,
+        _ => return Some(json!({"setup_succeeded": false})),
+    };
+    let devotion_source = create_probe_object(
+        &mut devotion_state,
+        9_690_000,
+        devotion_controller,
+        devotion_controller,
+        ZoneId::new(None, ZoneKind::Battlefield),
+        program.base_object(),
+        program.base_creature(),
+    )?;
+    let static_actions = static_ability.bind_actions(devotion_controller, devotion_source);
+    let static_definition_exact = matches!(
+        static_actions.as_slice(),
+        [Action::RegisterContinuousEffect { definition }]
+            if definition.source() == Some(devotion_source)
+                && definition.target() == ContinuousEffectTarget::Object(devotion_source)
+                && definition.operation()
+                    == ContinuousEffectOperation::RemoveTypes {
+                        types: ObjectTypes::none().with_creature(),
+                    }
+                && definition.duration()
+                    == ContinuousEffectDuration::WhileSourceOnBattlefield
+                && definition.condition()
+                    == ContinuousEffectCondition::ControllerDevotionLessThan {
+                        color: ManaKind::Red,
+                        threshold: 5,
+                    }
+    );
+    let static_registered = static_actions.iter().all(|action| {
+        matches!(
+            apply(&mut devotion_state, action.clone()),
+            Outcome::ContinuousEffectRegistered(_)
+        )
+    });
+    let devotion_low = devotion_state
+        .controller_devotion(devotion_controller, ManaKind::Red)
+        .ok()?;
+    let source_noncreature_at_one = devotion_state
+        .object_characteristics(devotion_source)
+        .is_ok_and(|characteristics| !characteristics.types().creature())
+        && matches!(
+            devotion_state.creature_characteristics(devotion_source),
+            Err(StateError::NotACreature(object)) if object == devotion_source
+        );
+    create_probe_object(
+        &mut devotion_state,
+        9_690_001,
+        devotion_opponent,
+        devotion_opponent,
+        ZoneId::new(None, ZoneKind::Battlefield),
+        BaseObjectCharacteristics::new(
+            ObjectTypes::none().with_enchantment(),
+            ObjectColors::none(),
+        )
+        .with_printed_mana_symbols(ManaPool::of(ManaKind::Red, 10)),
+        None,
+    )?;
+    let opponent_symbols_ignored = devotion_state
+        .controller_devotion(devotion_controller, ManaKind::Red)
+        .ok()
+        == Some(1)
+        && devotion_state
+            .object_characteristics(devotion_source)
+            .is_ok_and(|characteristics| !characteristics.types().creature());
+    let devotion_anchor = create_probe_object(
+        &mut devotion_state,
+        9_690_002,
+        devotion_controller,
+        devotion_controller,
+        ZoneId::new(None, ZoneKind::Battlefield),
+        BaseObjectCharacteristics::new(
+            ObjectTypes::none().with_enchantment(),
+            ObjectColors::none(),
+        )
+        .with_printed_mana_symbols(ManaPool::of(ManaKind::Red, 4)),
+        None,
+    )?;
+    let devotion_high = devotion_state
+        .controller_devotion(devotion_controller, ManaKind::Red)
+        .ok()?;
+    let high_characteristics = devotion_state
+        .creature_characteristics(devotion_source)
+        .ok()?;
+    let source_creature_at_five = devotion_state
+        .object_characteristics(devotion_source)
+        .is_ok_and(|characteristics| characteristics.types().creature())
+        && high_characteristics.power() == 6
+        && high_characteristics.toughness() == 5
+        && high_characteristics.keywords().indestructible();
+    let anchor_removed = matches!(
+        apply(
+            &mut devotion_state,
+            Action::MoveObject {
+                object: devotion_anchor,
+                to: ZoneId::new(Some(devotion_controller), ZoneKind::Graveyard),
+            },
+        ),
+        Outcome::Applied
+    );
+    let devotion_low_again = devotion_state
+        .controller_devotion(devotion_controller, ManaKind::Red)
+        .ok()?;
+    let source_noncreature_after_drop = devotion_state
+        .object_characteristics(devotion_source)
+        .is_ok_and(|characteristics| !characteristics.types().creature())
+        && matches!(
+            devotion_state.creature_characteristics(devotion_source),
+            Err(StateError::NotACreature(object)) if object == devotion_source
+        );
+
+    let mut trigger_state = GameState::new();
+    let controller = match apply(&mut trigger_state, Action::AddPlayer) {
+        Outcome::PlayerAdded(player) => player,
+        _ => return Some(json!({"setup_succeeded": false})),
+    };
+    let first_opponent = match apply(&mut trigger_state, Action::AddPlayer) {
+        Outcome::PlayerAdded(player) => player,
+        _ => return Some(json!({"setup_succeeded": false})),
+    };
+    let second_opponent = match apply(&mut trigger_state, Action::AddPlayer) {
+        Outcome::PlayerAdded(player) => player,
+        _ => return Some(json!({"setup_succeeded": false})),
+    };
+    let source = create_probe_object(
+        &mut trigger_state,
+        9_691_000,
+        controller,
+        controller,
+        ZoneId::new(Some(controller), ZoneKind::Graveyard),
+        program.base_object(),
+        program.base_creature(),
+    )?;
+    let creature_base =
+        BaseObjectCharacteristics::new(ObjectTypes::none().with_creature(), ObjectColors::none());
+    let opponent_creature = create_probe_object(
+        &mut trigger_state,
+        9_691_001,
+        first_opponent,
+        first_opponent,
+        ZoneId::new(Some(first_opponent), ZoneKind::Hand),
+        creature_base,
+        Some(BaseCreatureCharacteristics::new(2, 2)),
+    )?;
+    let controlled_noncreature = create_probe_object(
+        &mut trigger_state,
+        9_691_002,
+        controller,
+        controller,
+        ZoneId::new(Some(controller), ZoneKind::Hand),
+        BaseObjectCharacteristics::new(ObjectTypes::none().with_artifact(), ObjectColors::none()),
+        None,
+    )?;
+    let controlled_creature = create_probe_object(
+        &mut trigger_state,
+        9_691_003,
+        controller,
+        controller,
+        ZoneId::new(Some(controller), ZoneKind::Hand),
+        creature_base,
+        Some(BaseCreatureCharacteristics::new(2, 2)),
+    )?;
+    let trigger_turn_started = matches!(
+        apply(
+            &mut trigger_state,
+            Action::StartTurn {
+                active_player: controller,
+            },
+        ),
+        Outcome::Applied
+    );
+    let trigger_definition = trigger.bind(controller, source);
+    let trigger_definition_exact = trigger_definition.source() == Some(source)
+        && matches!(
+            trigger_definition.condition(),
+            TriggerCondition::PermanentEnteredBattlefield {
+                predicate,
+                exclude_source: true,
+            } if predicate.controller() == TargetControllerPredicate::You
+                && predicate.required_types() == ObjectTypes::none().with_creature()
+        );
+    let registered_trigger = match apply(
+        &mut trigger_state,
+        Action::RegisterTriggeredAbility {
+            definition: trigger_definition,
+        },
+    ) {
+        Outcome::TriggerRegistered(trigger) => Some(trigger),
+        _ => None,
+    };
+    let source_entered = matches!(
+        apply(
+            &mut trigger_state,
+            Action::MoveObject {
+                object: source,
+                to: ZoneId::new(None, ZoneKind::Battlefield),
+            },
+        ),
+        Outcome::Applied
+    );
+    let self_entry_excluded = trigger_state.pending_triggers().is_empty();
+    let opponent_creature_entered = matches!(
+        apply(
+            &mut trigger_state,
+            Action::MoveObject {
+                object: opponent_creature,
+                to: ZoneId::new(None, ZoneKind::Battlefield),
+            },
+        ),
+        Outcome::Applied
+    );
+    let opponent_creature_excluded = trigger_state.pending_triggers().is_empty();
+    let controlled_noncreature_entered = matches!(
+        apply(
+            &mut trigger_state,
+            Action::MoveObject {
+                object: controlled_noncreature,
+                to: ZoneId::new(None, ZoneKind::Battlefield),
+            },
+        ),
+        Outcome::Applied
+    );
+    let controlled_noncreature_excluded = trigger_state.pending_triggers().is_empty();
+    let controlled_creature_entered = matches!(
+        apply(
+            &mut trigger_state,
+            Action::MoveObject {
+                object: controlled_creature,
+                to: ZoneId::new(None, ZoneKind::Battlefield),
+            },
+        ),
+        Outcome::Applied
+    );
+    let pending_trigger_exact = registered_trigger.is_some_and(|registered| {
+        trigger_state.pending_triggers().len() == 1
+            && trigger_state.pending_triggers()[0].trigger() == registered
+            && trigger_state.pending_triggers()[0].controller() == controller
+            && trigger_state.pending_triggers()[0].source() == Some(source)
+    });
+    let trigger_entries = match apply(
+        &mut trigger_state,
+        Action::PutPendingTriggeredAbilitiesOnStack,
+    ) {
+        Outcome::StackEntriesAdded(entries) => entries,
+        _ => Vec::new(),
+    };
+    let trigger_put_on_stack = registered_trigger.is_some_and(|registered| {
+        trigger_entries.len() == 1
+            && trigger_state.stack_top().is_some_and(|entry| {
+                entry.id() == trigger_entries[0]
+                    && entry.controller() == controller
+                    && entry.trigger() == Some(registered)
+            })
+    });
+    let damage_actions = bind_triggered_ability_actions(
+        &trigger_state,
+        trigger,
+        &ExecutionBindings::new(controller, vec![first_opponent, second_opponent])
+            .with_source(source),
+    )
+    .ok()?;
+    let untargeted_contract =
+        trigger.target_requirements().is_empty() && trigger.object_choice_requirements().is_empty();
+    let exact_damage_actions = damage_actions.len() == 2
+        && [first_opponent, second_opponent]
+            .iter()
+            .zip(damage_actions.iter())
+            .all(|(opponent, bound)| {
+                matches!(
+                    bound.action(),
+                    Action::DealDamage {
+                        source: Some(bound_source),
+                        target: CombatDamageTarget::Player(player),
+                        amount: 2,
+                    } if *bound_source == source && *player == *opponent
+                )
+            });
+    let trigger_stack_resolved = trigger_entries
+        .first()
+        .is_some_and(|entry| resolve_expected_stack_entry(&mut trigger_state, *entry));
+    let damage_cursor = trigger_state.event_cursor();
+    let damage_actions_applied = damage_actions.iter().all(|bound| {
+        matches!(
+            apply(&mut trigger_state, bound.action().clone()),
+            Outcome::Applied
+        )
+    });
+    let damage_events = trigger_state
+        .events_since(damage_cursor)
+        .ok()?
+        .iter()
+        .filter(|record| {
+            matches!(
+                record.event(),
+                GameEvent::NoncombatDamageDealt {
+                    source: Some(event_source),
+                    target: CombatDamageTarget::Player(player),
+                    amount: 2,
+                } if event_source == source
+                    && (player == first_opponent || player == second_opponent)
+            )
+        })
+        .count();
+
+    let mut pump_state = GameState::new();
+    let pump_controller = match apply(&mut pump_state, Action::AddPlayer) {
+        Outcome::PlayerAdded(player) => player,
+        _ => return Some(json!({"setup_succeeded": false})),
+    };
+    let pump_opponent = match apply(&mut pump_state, Action::AddPlayer) {
+        Outcome::PlayerAdded(player) => player,
+        _ => return Some(json!({"setup_succeeded": false})),
+    };
+    let pump_source = create_probe_object(
+        &mut pump_state,
+        9_692_000,
+        pump_controller,
+        pump_controller,
+        ZoneId::new(None, ZoneKind::Battlefield),
+        program.base_object(),
+        program.base_creature(),
+    )?;
+    let pumped_creature = create_probe_object(
+        &mut pump_state,
+        9_692_001,
+        pump_controller,
+        pump_controller,
+        ZoneId::new(None, ZoneKind::Battlefield),
+        creature_base,
+        Some(BaseCreatureCharacteristics::new(2, 2)),
+    )?;
+    let controlled_artifact = create_probe_object(
+        &mut pump_state,
+        9_692_002,
+        pump_controller,
+        pump_controller,
+        ZoneId::new(None, ZoneKind::Battlefield),
+        BaseObjectCharacteristics::new(ObjectTypes::none().with_artifact(), ObjectColors::none()),
+        None,
+    )?;
+    let opponent_pump_creature = create_probe_object(
+        &mut pump_state,
+        9_692_003,
+        pump_opponent,
+        pump_opponent,
+        ZoneId::new(None, ZoneKind::Battlefield),
+        creature_base,
+        Some(BaseCreatureCharacteristics::new(3, 3)),
+    )?;
+    let pump_static_registered = static_ability
+        .bind_actions(pump_controller, pump_source)
+        .iter()
+        .all(|action| {
+            matches!(
+                apply(&mut pump_state, action.clone()),
+                Outcome::ContinuousEffectRegistered(_)
+            )
+        });
+    let source_noncreature_before_pump = pump_state
+        .object_characteristics(pump_source)
+        .is_ok_and(|characteristics| !characteristics.types().creature());
+    let pump_actions = bind_activated_effect_actions(
+        &pump_state,
+        activated,
+        &ExecutionBindings::new(pump_controller, vec![pump_opponent]).with_source(pump_source),
+    )
+    .ok()?;
+    let pump_action_exact = matches!(
+        pump_actions.as_slice(),
+        [bound] if matches!(
+            bound.action(),
+            Action::RegisterContinuousEffect { definition }
+                if definition.target() == ContinuousEffectTarget::Object(pumped_creature)
+                    && definition.operation()
+                        == ContinuousEffectOperation::ModifyPowerToughness {
+                            power: 1,
+                            toughness: 0,
+                        }
+                    && definition.duration() == ContinuousEffectDuration::UntilEndOfTurn
+        )
+    );
+    let pump_funded = matches!(
+        apply(
+            &mut pump_state,
+            Action::AddManaToPool {
+                player: pump_controller,
+                mana: activated.exact_payment(),
+            },
+        ),
+        Outcome::Applied
+    );
+    let pump_payment = auto_payment_plan(activated.exact_payment(), activated.mana_cost())
+        .ok()
+        .flatten()?;
+    let pump_paid = matches!(
+        apply(
+            &mut pump_state,
+            Action::PayMana {
+                player: pump_controller,
+                cost: activated.mana_cost(),
+                plan: pump_payment,
+            },
+        ),
+        Outcome::Applied
+    );
+    let pump_payment_consumed =
+        pump_state.mana_pool(pump_controller).ok() == Some(ManaPool::empty());
+    let pump_actions_applied = pump_actions.iter().all(|bound| {
+        matches!(
+            apply(&mut pump_state, bound.action().clone()),
+            Outcome::ContinuousEffectRegistered(_)
+        )
+    });
+    let pumped_characteristics = pump_state.creature_characteristics(pumped_creature).ok()?;
+    let opponent_characteristics = pump_state
+        .creature_characteristics(opponent_pump_creature)
+        .ok()?;
+    let controlled_creature_got_plus_one_zero =
+        pumped_characteristics.power() == 3 && pumped_characteristics.toughness() == 2;
+    let opponent_creature_unchanged =
+        opponent_characteristics.power() == 3 && opponent_characteristics.toughness() == 3;
+    let noncreature_unchanged = pump_state
+        .object_characteristics(controlled_artifact)
+        .is_ok_and(|characteristics| !characteristics.types().creature());
+    let cleanup_reached = advance_to_cleanup(&mut pump_state, pump_controller);
+    let expired_until_end_of_turn = pump_state.last_cleanup_report().expired_until_end_of_turn();
+    let post_cleanup = pump_state.creature_characteristics(pumped_creature).ok()?;
+    let pump_expired_at_cleanup = post_cleanup.power() == 2 && post_cleanup.toughness() == 2;
+
+    Some(json!({
+        "setup_succeeded": true,
+        "contract": {
+            "printed_red_symbols": program
+                .base_object()
+                .printed_mana_symbols()
+                .get(ManaKind::Red),
+            "printed_types_include_enchantment_and_creature":
+                program.base_object().types().enchantment()
+                    && program.base_object().types().creature(),
+            "printed_subtype_is_god": program
+                .base_object()
+                .subtypes()
+                .as_slice()
+                .iter()
+                .any(|subtype| String::from_utf8_lossy(subtype.as_bytes())
+                    .eq_ignore_ascii_case("God")),
+            "printed_indestructible": program
+                .base_creature()
+                .is_some_and(|base| base.keywords().indestructible()),
+            "static_program_exact": static_program_exact,
+            "trigger_program_exact": trigger_program_exact,
+            "activated_program_exact": activated_program_exact,
+        },
+        "devotion": {
+            "static_definition_exact": static_definition_exact,
+            "static_registered": static_registered,
+            "low": devotion_low,
+            "source_noncreature_at_one": source_noncreature_at_one,
+            "opponent_symbols_ignored": opponent_symbols_ignored,
+            "high": devotion_high,
+            "source_creature_at_five": source_creature_at_five,
+            "anchor_removed": anchor_removed,
+            "low_again": devotion_low_again,
+            "source_noncreature_after_drop": source_noncreature_after_drop,
+        },
+        "creature_enter_trigger": {
+            "turn_started": trigger_turn_started,
+            "definition_exact": trigger_definition_exact,
+            "registered": registered_trigger.is_some(),
+            "source_entered": source_entered,
+            "self_entry_excluded": self_entry_excluded,
+            "opponent_creature_entered": opponent_creature_entered,
+            "opponent_creature_excluded": opponent_creature_excluded,
+            "controlled_noncreature_entered": controlled_noncreature_entered,
+            "controlled_noncreature_excluded": controlled_noncreature_excluded,
+            "controlled_creature_entered": controlled_creature_entered,
+            "pending_trigger_exact": pending_trigger_exact,
+            "put_on_stack": trigger_put_on_stack,
+        },
+        "opponent_damage": {
+            "untargeted_contract": untargeted_contract,
+            "bound_action_count": damage_actions.len(),
+            "exact_actions": exact_damage_actions,
+            "trigger_stack_resolved": trigger_stack_resolved,
+            "all_actions_applied": damage_actions_applied,
+            "exact_damage_event_count": damage_events,
+            "controller_life": trigger_state.players()[controller.index()].life(),
+            "first_opponent_life": trigger_state.players()[first_opponent.index()].life(),
+            "second_opponent_life": trigger_state.players()[second_opponent.index()].life(),
+        },
+        "team_pump": {
+            "static_registered": pump_static_registered,
+            "source_noncreature_before_pump": source_noncreature_before_pump,
+            "generic_mana_cost": activated.mana_cost().base_generic(),
+            "red_mana_cost": activated.mana_cost().colored_pool().get(ManaKind::Red),
+            "funded": pump_funded,
+            "paid": pump_paid,
+            "payment_consumed": pump_payment_consumed,
+            "bound_action_count": pump_actions.len(),
+            "bound_action_exact": pump_action_exact,
+            "all_actions_applied": pump_actions_applied,
+            "controlled_creature_got_plus_one_zero": controlled_creature_got_plus_one_zero,
+            "opponent_creature_unchanged": opponent_creature_unchanged,
+            "controlled_noncreature_unchanged": noncreature_unchanged,
+            "cleanup_reached": cleanup_reached,
+            "expired_until_end_of_turn": expired_until_end_of_turn,
+            "pump_expired_at_cleanup": pump_expired_at_cleanup,
+        },
+    }))
+}
+
 fn semantic_probe(program: &CardProgram) -> serde_json::Value {
     let base_subtypes = program
         .base_object()
@@ -4040,6 +5135,8 @@ fn semantic_probe(program: &CardProgram) -> serde_json::Value {
         "evoke": evoke_probe(program),
         "boros_charm": boros_charm_probe(program),
         "reconnaissance_mission": reconnaissance_mission_probe(program),
+        "smothering_tithe": smothering_tithe_probe(program),
+        "purphoros": purphoros_probe(program),
         "noncreature_counter": noncreature_counter_probe(program),
         "temporary_creature_protection": temporary_creature_protection_probe(program),
     })
