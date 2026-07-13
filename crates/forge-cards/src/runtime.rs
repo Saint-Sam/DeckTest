@@ -10,18 +10,19 @@ use forge_carddef::{
     Color, Expression, ManaSymbol, Operation, Supertype,
 };
 use forge_core::{
-    apply, AbilityPlayer, Action, ActivatedAbilityDefinition, ActivatedAbilityEffect,
-    ActivationCondition, ActivationCost, ActivationTiming, BaseCreatureCharacteristics,
-    BaseObjectCharacteristics, BasicLandTypes, CardId, CombatDamageTarget, CombatRestriction,
-    CombatRestrictionSubject, ContinuousEffectDefinition, ContinuousEffectDuration,
-    ContinuousEffectOperation, ContinuousEffectTarget, CostModifierDefinition,
-    CostModifierOperation, CostModifierScope, CounterKind, CreatureKeywords, GameState, ManaCost,
-    ManaKind, ManaPool, ObjectColors, ObjectId, ObjectSubtype, ObjectSubtypes, ObjectSupertypes,
-    ObjectTargetPredicate, ObjectTypes, Outcome, PlayerId, PlayerRule, PlayerRuleSubject,
-    PlayerTargetPredicate, RestrictionDefinition, RestrictionEffect, StackEntryId, TargetChoice,
-    TargetControllerPredicate, TargetKind, TargetRequirement, TargetRestriction,
-    TargetRestrictionSubject, TriggerCondition, TriggerDefinition, TriggerObjectFilter,
-    TriggerPlayerFilter, TriggerZoneFilter, ZoneId, ZoneKind,
+    apply, auto_payment_plan, AbilityPlayer, Action, ActivatedAbilityDefinition,
+    ActivatedAbilityEffect, ActivationCondition, ActivationCost, ActivationTiming,
+    BaseCreatureCharacteristics, BaseObjectCharacteristics, BasicLandTypes, CardId,
+    CombatDamageTarget, CombatRestriction, CombatRestrictionSubject, ContinuousEffectDefinition,
+    ContinuousEffectDuration, ContinuousEffectOperation, ContinuousEffectTarget,
+    CostModifierDefinition, CostModifierOperation, CostModifierScope, CounterKind,
+    CreatureKeywords, GameState, ManaCost, ManaKind, ManaPool, ObjectColors, ObjectId,
+    ObjectSubtype, ObjectSubtypes, ObjectSupertypes, ObjectTargetPredicate, ObjectTypes, Outcome,
+    PlayerId, PlayerRule, PlayerRuleSubject, PlayerTargetPredicate, RestrictionDefinition,
+    RestrictionEffect, StackEntryId, TargetChoice, TargetControllerPredicate, TargetKind,
+    TargetRequirement, TargetRestriction, TargetRestrictionSubject, TriggerCondition,
+    TriggerDefinition, TriggerObjectFilter, TriggerPlayerFilter, TriggerZoneFilter, ZoneId,
+    ZoneKind,
 };
 use std::{collections::BTreeMap, error::Error, fmt};
 
@@ -414,6 +415,8 @@ pub enum PlayerBinding {
     ControllerOfTargetObject(usize),
     /// The controller of one explicit stack-entry target slot.
     ControllerOfTargetStack(usize),
+    /// The player carried by the event that caused this trigger.
+    TriggeringPlayer,
 }
 
 /// A nonnegative effect amount resolved during prebinding.
@@ -701,6 +704,35 @@ pub struct TriggeredAbilityProgram {
     object_choice_requirements: Vec<ObjectChoiceRequirement>,
     effects: Vec<EffectProgram>,
     optional_effect_groups: Vec<OptionalEffectGroup>,
+    unless_paid: Option<UnlessPaidProgram>,
+}
+
+/// One exact "unless that player pays" branch on a triggered ability.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct UnlessPaidProgram {
+    payer: PlayerBinding,
+    mana_cost: ManaCost,
+    exact_payment: ManaPool,
+}
+
+impl UnlessPaidProgram {
+    /// Returns the event-bound player allowed to pay.
+    #[must_use]
+    pub const fn payer(self) -> PlayerBinding {
+        self.payer
+    }
+
+    /// Returns the exact payment cost.
+    #[must_use]
+    pub const fn mana_cost(self) -> ManaCost {
+        self.mana_cost
+    }
+
+    /// Returns one deterministic pool that exactly pays the cost.
+    #[must_use]
+    pub const fn exact_payment(self) -> ManaPool {
+        self.exact_payment
+    }
 }
 
 /// Closed event families supported by a compiled triggered ability.
@@ -718,6 +750,8 @@ pub enum TriggeredEventProgram {
     ControllerCasts(ObjectTargetPredicate),
     /// A matching permanent controlled by this source's controller deals combat damage to a player.
     ControllerPermanentDealsCombatDamageToPlayer(ObjectTargetPredicate),
+    /// An opponent of this source's controller draws a card.
+    OpponentDrawsCard,
 }
 
 /// One completely compiled non-mana activated ability.
@@ -1120,6 +1154,9 @@ impl TriggeredAbilityProgram {
             TriggeredEventProgram::ControllerPermanentDealsCombatDamageToPlayer(source) => {
                 TriggerCondition::CombatDamageToPlayer { source }
             }
+            TriggeredEventProgram::OpponentDrawsCard => TriggerCondition::PlayerDrewCard {
+                player: TriggerPlayerFilter::OpponentOfController,
+            },
         };
         TriggerDefinition::new(controller, condition).with_source(source)
     }
@@ -1158,6 +1195,12 @@ impl TriggeredAbilityProgram {
     #[must_use]
     pub fn optional_choice_count(&self) -> usize {
         self.optional_effect_groups.len()
+    }
+
+    /// Returns the exact conditional payment branch, when present.
+    #[must_use]
+    pub const fn unless_paid(&self) -> Option<UnlessPaidProgram> {
+        self.unless_paid
     }
 }
 
@@ -1797,6 +1840,7 @@ pub fn compile_card_program(definition: &CardDefinition) -> Result<CardProgram, 
             object_choice_requirements: Vec::new(),
             effects: vec![EffectProgram::SacrificeSource],
             optional_effect_groups: Vec::new(),
+            unless_paid: None,
         });
     }
     let compiled_effect_count = triggered_abilities
@@ -1913,7 +1957,8 @@ fn compile_triggered_ability(
     let event = compile_trigger_event(event_expression, &format!("{path}.event"))?;
 
     let mut compiler = ProgramCompiler::default();
-    compile_effect(&ability.effect, &format!("{path}.effect"), &mut compiler)?;
+    let unless_paid =
+        compile_triggered_effect(&ability.effect, &format!("{path}.effect"), &mut compiler)?;
     if compiler.effects.is_empty() {
         return Err(CompileDiagnostic::new(
             CompileDiagnosticCode::AbilityShape,
@@ -1936,7 +1981,63 @@ fn compile_triggered_ability(
             .collect(),
         effects: compiler.effects,
         optional_effect_groups: compiler.optional_effect_groups,
+        unless_paid,
     })
+}
+
+fn compile_triggered_effect(
+    expression: &Expression,
+    path: &str,
+    compiler: &mut ProgramCompiler,
+) -> Result<Option<UnlessPaidProgram>, CompileDiagnostic> {
+    let Expression::Call {
+        operation: Operation::UnlessPaid,
+        arguments,
+    } = expression
+    else {
+        compile_effect(expression, path, compiler)?;
+        return Ok(None);
+    };
+    let [effect, payer, cost] = arguments.as_slice() else {
+        return Err(effect_arity(
+            path,
+            &Operation::UnlessPaid,
+            "effect, triggering player, and mana_cost(...) ",
+        ));
+    };
+    compile_effect(effect, &format!("{path}.effect"), compiler)?;
+    let payer = compile_player_binding(payer, &format!("{path}.payer"), compiler)?;
+    if payer != PlayerBinding::TriggeringPlayer {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::PlayerSelector,
+            format!("{path}.payer"),
+            "unless_paid payer must be controller_of(triggered())",
+        ));
+    }
+    let Expression::Call {
+        operation: Operation::ManaCost,
+        arguments,
+    } = cost
+    else {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectArguments,
+            format!("{path}.cost"),
+            "unless_paid cost must be mana_cost(...) ",
+        ));
+    };
+    let [Expression::Text(value)] = arguments.as_slice() else {
+        return Err(effect_arity(
+            &format!("{path}.cost"),
+            &Operation::ManaCost,
+            "one exact mana-cost string",
+        ));
+    };
+    let (mana_cost, exact_payment) = compile_mana_cost_text(value, &format!("{path}.cost"))?;
+    Ok(Some(UnlessPaidProgram {
+        payer,
+        mana_cost,
+        exact_payment,
+    }))
 }
 
 fn compile_spell_alternate_cost(
@@ -2706,6 +2807,25 @@ fn compile_trigger_event(
                     object_predicate_from_spec(spec),
                 ),
             )
+        }
+        Operation::EventDraw => {
+            let [player] = arguments.as_slice() else {
+                return Err(effect_arity(path, operation, "opponent()"));
+            };
+            if !matches!(
+                player,
+                Expression::Call {
+                    operation: Operation::Opponent,
+                    arguments
+                } if arguments.is_empty()
+            ) {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::PlayerSelector,
+                    format!("{path}.player"),
+                    "draw trigger currently requires opponent()",
+                ));
+            }
+            Ok(TriggeredEventProgram::OpponentDrawsCard)
         }
         unsupported => Err(CompileDiagnostic::new(
             CompileDiagnosticCode::AbilityShape,
@@ -4635,6 +4755,15 @@ fn compile_player_binding(
                     "controller_of requires one object target",
                 ));
             };
+            if matches!(
+                target,
+                Expression::Call {
+                    operation: Operation::Triggered,
+                    arguments
+                } if arguments.is_empty()
+            ) {
+                return Ok(PlayerBinding::TriggeringPlayer);
+            }
             let selector = target_selector(target, path)?;
             if is_any_selector(selector) {
                 let object = unique_existing_target(compiler, TargetClass::Object, path)?;
@@ -6080,6 +6209,8 @@ pub struct ExecutionBindings {
     source: Option<ObjectId>,
     alternate_cost: Option<AlternateCostKind>,
     spell_mode: Option<usize>,
+    triggering_player: Option<PlayerId>,
+    unless_payment: Option<bool>,
     opponents: Vec<PlayerId>,
     targets: Vec<TargetChoice>,
     object_choices: Vec<Vec<ObjectId>>,
@@ -6096,6 +6227,8 @@ impl ExecutionBindings {
             source: None,
             alternate_cost: None,
             spell_mode: None,
+            triggering_player: None,
+            unless_payment: None,
             opponents,
             targets: Vec::new(),
             object_choices: Vec::new(),
@@ -6122,6 +6255,20 @@ impl ExecutionBindings {
     #[must_use]
     pub const fn with_spell_mode(mut self, mode: usize) -> Self {
         self.spell_mode = Some(mode);
+        self
+    }
+
+    /// Supplies the player carried by the event that queued a trigger.
+    #[must_use]
+    pub const fn with_triggering_player(mut self, player: PlayerId) -> Self {
+        self.triggering_player = Some(player);
+        self
+    }
+
+    /// Chooses whether the event-bound player pays an exact unless cost.
+    #[must_use]
+    pub const fn with_unless_payment(mut self, pay: bool) -> Self {
+        self.unless_payment = Some(pay);
         self
     }
 
@@ -6174,6 +6321,18 @@ impl ExecutionBindings {
     #[must_use]
     pub const fn spell_mode(&self) -> Option<usize> {
         self.spell_mode
+    }
+
+    /// Returns the event-bound triggering player, when supplied.
+    #[must_use]
+    pub const fn triggering_player(&self) -> Option<PlayerId> {
+        self.triggering_player
+    }
+
+    /// Returns the explicit unless-payment decision, when supplied.
+    #[must_use]
+    pub const fn unless_payment(&self) -> Option<bool> {
+        self.unless_payment
     }
 
     /// Returns opponents in deterministic execution order.
@@ -6421,14 +6580,65 @@ pub fn bind_triggered_ability_actions(
     ability: &TriggeredAbilityProgram,
     bindings: &ExecutionBindings,
 ) -> Result<Vec<BoundAction>, ExecutionDiagnostic> {
-    bind_effect_actions(
+    let effect_actions = bind_effect_actions(
         state,
         &ability.target_requirements,
         &ability.object_choice_requirements,
         &ability.effects,
         &ability.optional_effect_groups,
         bindings,
-    )
+    )?;
+    let Some(unless_paid) = ability.unless_paid else {
+        if bindings.unless_payment.is_some() {
+            return Err(ExecutionDiagnostic::new(
+                ExecutionDiagnosticCode::InvalidChoice,
+                None,
+                "an unless-payment decision was supplied for an unconditional trigger",
+            ));
+        }
+        return Ok(effect_actions);
+    };
+    let pay = bindings.unless_payment.ok_or_else(|| {
+        ExecutionDiagnostic::new(
+            ExecutionDiagnosticCode::MissingChoice,
+            None,
+            "trigger requires an explicit unless-payment decision",
+        )
+    })?;
+    if !pay {
+        return Ok(effect_actions);
+    }
+    let payers = resolve_players(state, unless_paid.payer, bindings, 0)?;
+    let [payer] = payers.as_slice() else {
+        return Err(ExecutionDiagnostic::new(
+            ExecutionDiagnosticCode::InvalidChoice,
+            None,
+            "unless_paid must resolve to exactly one payer",
+        ));
+    };
+    let payment = auto_payment_plan(unless_paid.exact_payment, unless_paid.mana_cost)
+        .map_err(|error| {
+            ExecutionDiagnostic::new(
+                ExecutionDiagnosticCode::InvalidChoice,
+                None,
+                format!("unless-payment plan is invalid: {error:?}"),
+            )
+        })?
+        .ok_or_else(|| {
+            ExecutionDiagnostic::new(
+                ExecutionDiagnosticCode::InvalidChoice,
+                None,
+                "unless-payment cost has no exact payment plan",
+            )
+        })?;
+    Ok(vec![BoundAction {
+        effect_index: 0,
+        action: Action::PayMana {
+            player: *payer,
+            cost: unless_paid.mana_cost,
+            plan: payment,
+        },
+    }])
 }
 
 /// Resolves one non-mana activated ability's bindings without mutating game state.
@@ -7197,6 +7407,23 @@ fn resolve_players(
                     )
                 })
         }
+        PlayerBinding::TriggeringPlayer => {
+            let player = bindings.triggering_player.ok_or_else(|| {
+                ExecutionDiagnostic::new(
+                    ExecutionDiagnosticCode::MissingBinding,
+                    Some(effect_index),
+                    "triggering-player binding is missing",
+                )
+            })?;
+            if !bindings.opponents.contains(&player) {
+                return Err(ExecutionDiagnostic::new(
+                    ExecutionDiagnosticCode::InvalidChoice,
+                    Some(effect_index),
+                    "triggering player is not in the bound opponent set",
+                ));
+            }
+            Ok(vec![player])
+        }
     }
 }
 
@@ -7356,7 +7583,8 @@ mod tests {
     use super::{
         bind_triggered_ability_actions, compile_card_program, execute_program,
         AlternateCostCondition, AlternateCostKind, Capability, CompileDiagnosticCode,
-        ExecutionBindings, ExecutionDiagnosticCode, ProgramKind,
+        ExecutionBindings, ExecutionDiagnosticCode, PlayerBinding, ProgramKind,
+        TriggeredEventProgram,
     };
     use forge_core::{
         apply, Action, ActivationCondition, BaseCreatureCharacteristics, BaseObjectCharacteristics,
@@ -7702,6 +7930,24 @@ card "Interpreter Contract" {
     keywords: []
     ability spell {
       effect: sequence(gain_life(3, you()), lose_life(2, opponent()), draw(1, you()), scry(1, you()), shuffle(you()))
+    }
+  }
+}
+"#;
+
+    const SMOTHERING_TITHE: &str = r#"
+card "Smothering Tithe" {
+  id: "153376c9-dffd-458c-8ce3-a4c8269bc4e9"
+  layout: normal
+  status: unverified_playable
+  face "Smothering Tithe" {
+    cost: "{3}{W}"
+    types: "Enchantment"
+    oracle: "Whenever an opponent draws a card, that player may pay {2}. If the player doesn't, you create a Treasure token."
+    keywords: []
+    ability triggered {
+      event: event_draw(opponent())
+      effect: unless_paid(create_token("c_a_treasure_sac", 1, you()), controller_of(triggered()), mana_cost("{2}"))
     }
   }
 }
@@ -8773,6 +9019,47 @@ card "Interpreter Contract" {
             Action::MoveObject { object, to }
                 if *object == source
                     && *to == ZoneId::new(Some(caster), ZoneKind::Graveyard)
+        ));
+    }
+
+    #[test]
+    fn opponent_draw_unless_paid_binds_both_exact_branches() {
+        let program = compile_card_program(&parse("smothering_tithe.frs", SMOTHERING_TITHE))
+            .unwrap_or_else(|error| panic!("unexpected compile error: {error}"));
+        let [ability] = program.triggered_abilities() else {
+            panic!("expected one draw trigger");
+        };
+        assert_eq!(ability.event(), TriggeredEventProgram::OpponentDrawsCard);
+        let unless_paid = ability.unless_paid().expect("expected exact unless branch");
+        assert_eq!(unless_paid.payer(), PlayerBinding::TriggeringPlayer);
+        assert_eq!(unless_paid.mana_cost(), ManaCost::new(0, 0, 0, 0, 0, 2));
+        assert_eq!(unless_paid.exact_payment(), ManaPool::new(0, 0, 0, 0, 0, 2));
+
+        let mut state = GameState::new();
+        let controller = add_player(&mut state);
+        let opponent = add_player(&mut state);
+        let base =
+            ExecutionBindings::new(controller, vec![opponent]).with_triggering_player(opponent);
+        let missing = bind_triggered_ability_actions(&state, ability, &base)
+            .expect_err("payment decision must be explicit");
+        assert_eq!(missing.code(), ExecutionDiagnosticCode::MissingChoice);
+
+        let decline = bind_triggered_ability_actions(
+            &state,
+            ability,
+            &base.clone().with_unless_payment(false),
+        )
+        .unwrap_or_else(|error| panic!("unexpected decline binding error: {error}"));
+        assert_eq!(decline.len(), 1);
+        assert!(matches!(decline[0].action(), Action::CreateToken { .. }));
+
+        let pay = bind_triggered_ability_actions(&state, ability, &base.with_unless_payment(true))
+            .unwrap_or_else(|error| panic!("unexpected payment binding error: {error}"));
+        assert_eq!(pay.len(), 1);
+        assert!(matches!(
+            pay[0].action(),
+            Action::PayMana { player, cost, .. }
+                if *player == opponent && *cost == ManaCost::new(0, 0, 0, 0, 0, 2)
         ));
     }
 

@@ -1,0 +1,15 @@
+card "Smothering Tithe" {
+  id: "153376c9-dffd-458c-8ce3-a4c8269bc4e9"
+  layout: normal
+  status: unverified_playable
+  face "Smothering Tithe" {
+    cost: "{3}{W}"
+    types: "Enchantment"
+    oracle: "Whenever an opponent draws a card, that player may pay {2}. If the player doesn't, you create a Treasure token."
+    keywords: []
+    ability triggered {
+      event: event_draw(opponent())
+      effect: unless_paid(create_token("c_a_treasure_sac", 1, you()), controller_of(triggered()), mana_cost("{2}"))
+    }
+  }
+}

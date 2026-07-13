@@ -673,7 +673,8 @@ const fn smoke_player_mask(binding: PlayerBinding) -> [bool; PLAYER_COUNT] {
         PlayerBinding::AllPlayers => [true, true],
         PlayerBinding::Target(_)
         | PlayerBinding::ControllerOfTargetObject(_)
-        | PlayerBinding::ControllerOfTargetStack(_) => [false, true],
+        | PlayerBinding::ControllerOfTargetStack(_)
+        | PlayerBinding::TriggeringPlayer => [false, true],
     }
 }
 
@@ -1188,6 +1189,7 @@ fn execute_smoke(
         opponent,
         base_card_id,
         Some(spell),
+        None,
         &mut hand_delta,
     )?;
     for (index, ability) in compiled.program.triggered_abilities().iter().enumerate() {
@@ -1347,6 +1349,17 @@ fn execute_smoke(
         })?;
     dispatch_bound_actions(&mut execution, bound_actions, spell_effects, "effect")?;
     assert_object_choice_destinations(&execution.state, spell_effects, &object_choices, caster)?;
+
+    execute_opponent_draw_triggers(
+        &mut execution,
+        &compiled.program,
+        &registered_triggers,
+        spell,
+        caster,
+        opponent,
+        base_card_id,
+        &mut hand_delta,
+    )?;
 
     execute_turn_triggers(
         &mut execution,
@@ -1837,6 +1850,7 @@ fn execute_controller_cast_triggers(
         opponent,
         base_card_id.wrapping_add(910_000),
         None,
+        None,
         hand_delta,
     )?;
     resolve_stack_entry(execution, test_spell)?;
@@ -1884,6 +1898,7 @@ fn execute_turn_triggers(
             opponent,
             base_card_id.wrapping_add(920_000),
             Some(source),
+            None,
             hand_delta,
         )?;
     }
@@ -1957,6 +1972,7 @@ fn execute_turn_triggers(
             opponent,
             base_card_id.wrapping_add(930_000),
             Some(source),
+            None,
             hand_delta,
         )?;
     }
@@ -2087,6 +2103,92 @@ fn execute_turn_triggers(
             opponent,
             base_card_id.wrapping_add(950_000),
             Some(source),
+            None,
+            hand_delta,
+        )?;
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn execute_opponent_draw_triggers(
+    execution: &mut Execution,
+    program: &CardProgram,
+    registered: &[(TriggerId, usize)],
+    source: ObjectId,
+    caster: PlayerId,
+    opponent: PlayerId,
+    base_card_id: u32,
+    hand_delta: &mut [i64; PLAYER_COUNT],
+) -> Result<(), RuntimeSmokeFailure> {
+    let abilities = program
+        .triggered_abilities()
+        .iter()
+        .enumerate()
+        .filter(|(_, ability)| ability.event() == TriggeredEventProgram::OpponentDrawsCard)
+        .collect::<Vec<_>>();
+    if abilities.is_empty() {
+        return Ok(());
+    }
+    if abilities.len() != 1 || abilities[0].1.unless_paid().is_none() {
+        return Err(RuntimeSmokeFailure::new(
+            RuntimeSmokeFailureCode::UnexpectedOutcome,
+            "trigger.opponent_draw.setup",
+            "draw-trigger smoke currently requires one exact unless-paid ability",
+        ));
+    }
+    let unless_paid = abilities[0].1.unless_paid().expect("checked above");
+    for (iteration, pay) in [false, true].into_iter().enumerate() {
+        expect_object(
+            execution.dispatch(
+                &format!("trigger.opponent_draw.library[{iteration}]"),
+                Action::CreateObject {
+                    card: CardId::new(
+                        base_card_id
+                            .wrapping_add(960_000)
+                            .wrapping_add(iteration as u32),
+                    ),
+                    owner: opponent,
+                    controller: opponent,
+                    zone: ZoneId::new(Some(opponent), ZoneKind::Library),
+                },
+            )?,
+        )?;
+        if pay {
+            execution.dispatch(
+                "trigger.opponent_draw.clear_mana",
+                Action::ClearManaPool { player: opponent },
+            )?;
+            execution.dispatch(
+                "trigger.opponent_draw.add_mana",
+                Action::AddManaToPool {
+                    player: opponent,
+                    mana: unless_paid.exact_payment(),
+                },
+            )?;
+        }
+        let outcome = execution.dispatch(
+            &format!("trigger.opponent_draw.draw[{iteration}]"),
+            Action::DrawCards {
+                player: opponent,
+                count: 1,
+            },
+        )?;
+        if !matches!(outcome, Outcome::Applied) {
+            return Err(unexpected_outcome("trigger.opponent_draw.draw", outcome));
+        }
+        hand_delta[1] = hand_delta[1].saturating_add(1);
+        execute_pending_triggers(
+            execution,
+            program,
+            registered,
+            abilities.len(),
+            &format!("trigger.opponent_draw[{iteration}]"),
+            caster,
+            opponent,
+            base_card_id.wrapping_add(970_000 + iteration as u32 * 1_000),
+            Some(source),
+            Some(pay),
             hand_delta,
         )?;
     }
@@ -2158,6 +2260,7 @@ fn execute_pending_triggers(
     opponent: PlayerId,
     base_card_id: u32,
     source: Option<ObjectId>,
+    unless_payment: Option<bool>,
     hand_delta: &mut [i64; PLAYER_COUNT],
 ) -> Result<(), RuntimeSmokeFailure> {
     if expected_count == 0 {
@@ -2233,6 +2336,12 @@ fn execute_pending_triggers(
                 .wrapping_add((ability_index as u32).saturating_mul(1_000)),
             &format!("setup.trigger[{ability_index}].choice"),
         )?;
+        let mut ignored_hand_delta = [0_i64; PLAYER_COUNT];
+        let effect_hand_delta = if ability.unless_paid().is_some() && unless_payment == Some(true) {
+            &mut ignored_hand_delta
+        } else {
+            &mut *hand_delta
+        };
         let mut bindings = prepare_effect_bindings_and_hand_delta(
             &execution.state,
             ability.effects(),
@@ -2242,11 +2351,28 @@ fn execute_pending_triggers(
             caster,
             opponent,
             None,
-            hand_delta,
+            effect_hand_delta,
             &format!("trigger[{ability_index}].effect"),
         )?;
         if let Some(source) = source {
             bindings = bindings.with_source(source);
+        }
+        if ability.unless_paid().is_some() {
+            bindings = bindings
+                .with_triggering_player(opponent)
+                .with_unless_payment(unless_payment.ok_or_else(|| {
+                    RuntimeSmokeFailure::new(
+                        RuntimeSmokeFailureCode::UnexpectedOutcome,
+                        format!("trigger[{ability_index}].bind"),
+                        "unless-paid trigger has no synthesized payment decision",
+                    )
+                })?);
+        } else if unless_payment.is_some() {
+            return Err(RuntimeSmokeFailure::new(
+                RuntimeSmokeFailureCode::UnexpectedOutcome,
+                format!("trigger[{ability_index}].bind"),
+                "payment decision was supplied for a trigger without unless_paid",
+            ));
         }
         let actions = bind_triggered_ability_actions(&execution.state, ability, &bindings)
             .map_err(|error| {
@@ -3512,6 +3638,8 @@ mod tests {
         include_str!("../tests/fixtures/runtime_smoke/supported_basic_land.frs");
     const RECONNAISSANCE_MISSION: &str =
         include_str!("../tests/fixtures/runtime_smoke/reconnaissance_mission.frs");
+    const SMOTHERING_TITHE: &str =
+        include_str!("../tests/fixtures/runtime_smoke/smothering_tithe.frs");
     const CREATURE_MANA_SOURCE: &str = r#"
 card "Creature Mana Source" {
   id: "forge:testkit:runtime:creature-mana"
@@ -3947,6 +4075,24 @@ card "Mulldrifter" {
         );
         assert_eq!(pass.effect_actions(), 1);
         assert_eq!(pass.final_life_totals(), [20, 19]);
+        assert_eq!(pass.destination(), "battlefield");
+    }
+
+    #[test]
+    fn smothering_tithe_executes_decline_and_exact_payment_branches() {
+        let definition = parse("smothering_tithe.frs", SMOTHERING_TITHE);
+        let report = run_translated_card_runtime_smoke(&definition);
+        let RuntimeSmokeResult::Passed(pass) = report.result() else {
+            panic!("expected pass, found {:?}", report.result());
+        };
+        assert_eq!(
+            pass.capabilities(),
+            [
+                RuntimeSmokeCapability::PermanentSpell,
+                RuntimeSmokeCapability::CreateToken,
+            ]
+        );
+        assert_eq!(pass.effect_actions(), 1);
         assert_eq!(pass.destination(), "battlefield");
     }
 

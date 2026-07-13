@@ -2218,6 +2218,8 @@ pub enum GameEventKind {
     BaseObjectCharacteristicsSet,
     /// Noncombat damage was dealt after replacement effects.
     NoncombatDamageDealt,
+    /// A card was successfully drawn from a library.
+    CardDrawn,
 }
 
 impl GameEventKind {
@@ -2292,6 +2294,7 @@ impl GameEventKind {
             Self::ObjectAttached => 66,
             Self::BaseObjectCharacteristicsSet => 67,
             Self::NoncombatDamageDealt => 68,
+            Self::CardDrawn => 69,
         }
     }
 }
@@ -2860,6 +2863,11 @@ pub enum TriggerCondition {
         /// Source predicate interpreted relative to the trigger controller.
         source: ObjectTargetPredicate,
     },
+    /// Match a successful card draw by a selected player.
+    PlayerDrewCard {
+        /// Player selector interpreted relative to the trigger controller.
+        player: TriggerPlayerFilter,
+    },
 }
 
 impl TriggerCondition {
@@ -2878,6 +2886,7 @@ impl TriggerCondition {
             Self::StepBeganFor { .. } => GameEventKind::StepBegan,
             Self::StackEntryAdded { .. } => GameEventKind::StackEntryAdded,
             Self::CombatDamageToPlayer { .. } => GameEventKind::CombatDamageDealt,
+            Self::PlayerDrewCard { .. } => GameEventKind::CardDrawn,
         }
     }
 
@@ -2894,6 +2903,7 @@ impl TriggerCondition {
             Self::StepBeganFor { .. } => 8,
             Self::StackEntryAdded { .. } => 9,
             Self::CombatDamageToPlayer { .. } => 10,
+            Self::PlayerDrewCard { .. } => 11,
         }
     }
 }
@@ -7949,6 +7959,13 @@ pub enum GameEvent {
         /// Final damage amount dealt.
         amount: u32,
     },
+    /// One object moved from a library to its owner's hand as a card draw.
+    CardDrawn {
+        /// Player who drew the card.
+        player: PlayerId,
+        /// Object drawn.
+        object: ObjectId,
+    },
 }
 
 impl GameEvent {
@@ -8023,6 +8040,7 @@ impl GameEvent {
             Self::ObjectAttached { .. } => 66,
             Self::BaseObjectCharacteristicsSet { .. } => 67,
             Self::NoncombatDamageDealt { .. } => 68,
+            Self::CardDrawn { .. } => 69,
         }
     }
 
@@ -8111,6 +8129,7 @@ impl GameEvent {
                 GameEventKind::BaseObjectCharacteristicsSet
             }
             Self::NoncombatDamageDealt { .. } => GameEventKind::NoncombatDamageDealt,
+            Self::CardDrawn { .. } => GameEventKind::CardDrawn,
         }
     }
 }
@@ -10891,6 +10910,10 @@ impl GameState {
                         source,
                         record.source(),
                     ))
+            }
+            TriggerCondition::PlayerDrewCard { player } => {
+                matches!(event, GameEvent::CardDrawn { player: event_player, .. }
+                    if self.trigger_player_matches(definition, player, event_player))
             }
         }
     }
@@ -14213,7 +14236,9 @@ impl GameState {
         let library = ZoneId::new(Some(player), ZoneKind::Library);
         let hand = ZoneId::new(Some(player), ZoneKind::Hand);
         for _ in 0..count {
-            if self.move_last_between_zones(library, hand)?.is_none() {
+            if let Some(object) = self.move_last_between_zones(library, hand)? {
+                self.emit_event(GameEvent::CardDrawn { player, object });
+            } else {
                 self.emit_event(GameEvent::EmptyLibraryDraw { player });
                 if !self.empty_library_draws_since_sba.contains(&player) {
                     self.empty_library_draws_since_sba.push(player);
@@ -14959,6 +14984,9 @@ impl Fnva64 {
             TriggerCondition::CombatDamageToPlayer { source } => {
                 self.write_object_target_predicate(source);
             }
+            TriggerCondition::PlayerDrewCard { player } => {
+                self.write_trigger_player_filter(player);
+            }
         }
     }
 
@@ -15799,6 +15827,10 @@ impl Fnva64 {
                 self.write_optional_object(source);
                 self.write_combat_damage_target(target);
                 self.write_u32(amount);
+            }
+            GameEvent::CardDrawn { player, object } => {
+                self.write_u32(player.0);
+                self.write_u32(object.0);
             }
         }
     }
@@ -16276,6 +16308,9 @@ impl CanonicalBytes {
             TriggerCondition::CombatDamageToPlayer { source } => {
                 self.write_object_target_predicate(source);
             }
+            TriggerCondition::PlayerDrewCard { player } => {
+                self.write_trigger_player_filter(player);
+            }
         }
     }
 
@@ -17117,6 +17152,10 @@ impl CanonicalBytes {
                 self.write_combat_damage_target(target);
                 self.write_u32(amount);
             }
+            GameEvent::CardDrawn { player, object } => {
+                self.write_u32(player.0);
+                self.write_u32(object.0);
+            }
         }
     }
 
@@ -17479,6 +17518,44 @@ mod tests {
                 controller,
             })
         );
+    }
+
+    #[test]
+    fn opponent_card_draw_trigger_queues_once_per_successful_draw() {
+        let mut state = GameState::new();
+        let controller = add_player_action(&mut state);
+        let opponent = add_player_action(&mut state);
+        seed_library_cards(&mut state, opponent, 2_250, 2);
+        let trigger = match apply(
+            &mut state,
+            Action::RegisterTriggeredAbility {
+                definition: TriggerDefinition::new(
+                    controller,
+                    TriggerCondition::PlayerDrewCard {
+                        player: TriggerPlayerFilter::OpponentOfController,
+                    },
+                ),
+            },
+        ) {
+            Outcome::TriggerRegistered(trigger) => trigger,
+            other => panic!("unexpected trigger registration outcome: {other:?}"),
+        };
+
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::DrawCards {
+                    player: opponent,
+                    count: 2,
+                },
+            ),
+            Outcome::Applied
+        );
+        assert_eq!(state.pending_triggers().len(), 2);
+        assert!(state
+            .pending_triggers()
+            .iter()
+            .all(|pending| pending.trigger() == trigger && pending.controller() == controller));
     }
 
     #[test]
@@ -19094,10 +19171,27 @@ mod tests {
             .rev()
             .copied()
             .collect::<Vec<_>>();
+        let cursor = state.event_cursor();
 
         assert_eq!(
             apply(&mut state, Action::DrawCards { player, count: 2 }),
             Outcome::Applied
+        );
+        let draw_events = state
+            .events_since(cursor)
+            .unwrap_or_else(|error| panic!("draw event replay failed: {error:?}"))
+            .iter()
+            .filter_map(|record| match record.event() {
+                GameEvent::CardDrawn {
+                    player: event_player,
+                    object,
+                } => Some((event_player, object)),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            draw_events,
+            vec![(player, expected[0]), (player, expected[1])]
         );
         assert_eq!(
             state
