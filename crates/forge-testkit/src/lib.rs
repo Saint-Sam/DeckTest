@@ -12,10 +12,10 @@ pub mod runtime_smoke;
 use forge_core::{
     apply, auto_payment_plan, AbilityPlayer, Action, ActivatedAbilityDefinition,
     ActivatedAbilityEffect, ActivatedAbilityId, ActivationCost, ActivationTiming,
-    AttackDeclaration, BaseCreatureCharacteristics, BlockDeclaration, CardId, CastSpellRequest,
-    CombatDamageAssignment, CombatDamageAssignmentRequest, CombatDamageTarget, CombatRestriction,
-    CombatRestrictionSubject, ContinuousEffectDefinition, ContinuousEffectId,
-    ContinuousEffectOperation, ContinuousEffectTarget, CostModifierDefinition,
+    AttackDeclaration, BaseCreatureCharacteristics, BaseObjectCharacteristics, BlockDeclaration,
+    CardId, CastSpellRequest, CombatDamageAssignment, CombatDamageAssignmentRequest,
+    CombatDamageTarget, CombatRestriction, CombatRestrictionSubject, ContinuousEffectDefinition,
+    ContinuousEffectId, ContinuousEffectOperation, ContinuousEffectTarget, CostModifierDefinition,
     CostModifierOperation, CostModifierScope, CounterKind, CreatureKeywords, GameOutcome,
     GameState, ManaCost, ManaKind, ManaPool, ObjectColors, ObjectId, ObjectTargetPredicate,
     ObjectTypes, Outcome, PlayerId, PlayerTargetPredicate, RangeOfInfluence, ReplacementCondition,
@@ -3019,6 +3019,14 @@ fn action_for_step(step: &ScenarioStep, context: &RunContext) -> Result<Action, 
                 card: CardId::new(*card),
                 owner: player_id(&context.players, *owner, "create_token.owner")?,
                 controller: player_id(&context.players, *controller, "create_token.controller")?,
+                base_object: BaseObjectCharacteristics::new(
+                    if base.is_some() {
+                        ObjectTypes::none().with_creature()
+                    } else {
+                        ObjectTypes::none()
+                    },
+                    ObjectColors::none(),
+                ),
                 base,
             })
         }

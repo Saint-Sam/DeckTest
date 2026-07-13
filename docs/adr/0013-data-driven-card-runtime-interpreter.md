@@ -129,6 +129,31 @@ abilities, triggers, most keywords, tokens, searches, alternate layouts, and
 other unsupported families remain fail-closed and are the next vertical
 implementation work.
 
+## Token and stack-predicate extension
+
+The next vertical slice extends the same interpreter rather than introducing a
+parallel card executor. Token creation compiles only exact token-script IDs in
+an explicit data registry. The first registry contains the four legacy 3/3
+green vanilla templates needed by Beast Within, Generous Gift, Pongify, and
+Rapid Hybridization. The compiler binds token ownership and control before any
+preceding target mutation, caps literal counts, and emits production
+`Action::CreateToken` actions carrying exact base types, color, power, and
+toughness. Unknown templates, metadata-bearing forms, nonliteral counts, and
+tokens with keywords or abilities remain unsupported.
+
+Stack spell predicates now compile a closed grammar of `type_is(...)`,
+`not(type_is(...))`, and `or(type_is(...), ...)`. The kernel applies the
+resulting object predicate to the physical spell object behind a stack entry;
+ability-only stack entries do not match. The smoke synthesizer constructs a
+legal spell type satisfying the predicate and verifies the same production
+target checks used during casting and resolution.
+
+This extension raises the local translated-corpus result from 547 to 567
+runtime passes with zero runtime failures. The frozen Commander semantic set
+moves from 24 to 30 runtime-smoke passes. These remain capability-level smoke
+claims only: token subtype behavior, non-vanilla templates, and card-specific
+semantic expectations remain T3.6 work.
+
 ## Consequences
 
 - Semantic work becomes reusable product code, so a T3.6 pass proves the path

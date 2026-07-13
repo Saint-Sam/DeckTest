@@ -6018,6 +6018,8 @@ pub enum Action {
         owner: PlayerId,
         /// Token controller.
         controller: PlayerId,
+        /// Base printed card types and colors.
+        base_object: BaseObjectCharacteristics,
         /// Optional base creature values.
         base: Option<BaseCreatureCharacteristics>,
     },
@@ -6553,8 +6555,9 @@ fn apply_fallback(state: &mut GameState, action: Action) -> Outcome {
             card,
             owner,
             controller,
+            base_object,
             base,
-        } => match state.create_token(card, owner, controller, base) {
+        } => match state.create_token(card, owner, controller, base_object, base) {
             Ok(object) => Outcome::ObjectCreated(object),
             Err(error) => Outcome::Failed(error),
         },
@@ -10508,6 +10511,7 @@ impl GameState {
         card: CardId,
         owner: PlayerId,
         controller: PlayerId,
+        base_object: BaseObjectCharacteristics,
         base: Option<BaseCreatureCharacteristics>,
     ) -> Result<ObjectId, StateError> {
         let object = self.create_object(
@@ -10522,8 +10526,13 @@ impl GameState {
                 .get_mut(object)
                 .ok_or(StateError::UnknownObject(object))?;
             record.token = true;
+            record.base_object = base_object;
             record.base_creature = base;
         }
+        self.emit_event(GameEvent::BaseObjectCharacteristicsSet {
+            object,
+            base: base_object,
+        });
         self.emit_event(GameEvent::TokenCreated {
             object,
             card,
@@ -12474,10 +12483,16 @@ impl GameState {
             (TargetPredicate::Object(predicate), TargetChoice::Object(object)) => {
                 self.object_target_predicate_matches(player, predicate, object)
             }
+            (TargetPredicate::Object(predicate), TargetChoice::StackEntry(entry)) => self
+                .stack_entries
+                .iter()
+                .find(|candidate| candidate.id() == entry)
+                .and_then(StackEntry::object)
+                .is_some_and(|object| {
+                    self.object_target_predicate_matches(player, predicate, object)
+                }),
             (TargetPredicate::Player(_), TargetChoice::Object(_) | TargetChoice::StackEntry(_))
-            | (TargetPredicate::Object(_), TargetChoice::Player(_) | TargetChoice::StackEntry(_)) => {
-                false
-            }
+            | (TargetPredicate::Object(_), TargetChoice::Player(_)) => false,
         }
     }
 

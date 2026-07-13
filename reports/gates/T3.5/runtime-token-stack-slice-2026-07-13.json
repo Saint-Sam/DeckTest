@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-13",
+  "task": "T3.5",
+  "slice": "exact-vanilla-tokens-and-stack-spell-type-predicates",
+  "status": "pass_incremental_slice",
+  "claim_boundary": "This proves production runtime execution for the exact registered vanilla-token templates and the closed stack-spell type predicate grammar. It does not close T3.5, verify token subtypes, support non-vanilla token text, or semantically verify cards.",
+  "source_binding": "The kernel, interpreter, smoke harness, tests, ADR record, specification, plan state, and this evidence record are committed together.",
+  "production_path": [
+    "Operation::CreateToken compiles only exact token-script registry entries, positive literal counts bounded at 64, and supported player bindings",
+    "all target-derived players and amounts are bound and kernel-validated before the first effect action mutates state",
+    "Action::CreateToken creates a battlefield token with exact owner, controller, base types, color, power, and toughness",
+    "stack spell predicates compile only type_is, not(type_is), and type_is unions",
+    "TargetPredicate::Object validates the physical spell object represented by a stack entry",
+    "the smoke harness selects a legal satisfying stack spell and checks every action, token postcondition, zone, view, and deterministic hash"
+  ],
+  "fail_closed_boundaries": [
+    "unknown token-script IDs remain unsupported",
+    "token templates with keywords, abilities, or unresolved metadata remain unsupported",
+    "nonliteral, zero, and over-limit token counts remain unsupported",
+    "stack predicates outside the closed type grammar remain unsupported",
+    "ability-only stack entries cannot satisfy spell object predicates"
+  ],
+  "translated_examples": [
+    "Beast Within",
+    "Generous Gift",
+    "Pongify",
+    "Rapid Hybridization",
+    "Negate",
+    "Dispel"
+  ],
+  "translated_corpus": {
+    "source": "target/translated-cards",
+    "report": "target/t3_5_runtime_token_stack_audit.json",
+    "report_sha256": "3817e56ad8c6f6267c7a610e4ecfbee0b3da6c136b4653fe0617efbd251ff669",
+    "total": 20082,
+    "passed": 567,
+    "unsupported_setup": 19515,
+    "failed": 0,
+    "prior_passed": 547,
+    "net_new_passed": 20,
+    "counter_stack_entry": 24,
+    "create_token": 4,
+    "destroy_permanent": 76,
+    "draw_cards": 55
+  },
+  "frozen_semantic_100": {
+    "runtime_smoke_passed": 30,
+    "unsupported_setup": 70,
+    "failed": 0,
+    "newly_passing": [
+      "Beast Within",
+      "Generous Gift",
+      "Negate",
+      "Pongify",
+      "Rapid Hybridization",
+      "Dispel"
+    ]
+  },
+  "verification": [
+    {
+      "command": "cargo test --offline --workspace",
+      "result": "pass: all workspace unit, integration, and doc tests"
+    },
+    {
+      "command": "cargo clippy --offline -p forge-core -p forge-cards -p forge-testkit --all-targets -- -D warnings",
+      "result": "pass"
+    },
+    {
+      "command": "target/debug/forge-testkit runtime-smoke target/translated-cards --report target/t3_5_runtime_token_stack_audit.json --quiet",
+      "result": "expected exit 2 because unsupported definitions remain; 567 passed, 19515 unsupported, 0 failed"
+    }
+  ],
+  "constraints": {
+    "local_only": true,
+    "network_used": false,
+    "installs_performed": false,
+    "github_actions_used": false,
+    "push_performed": false
+  }
+}

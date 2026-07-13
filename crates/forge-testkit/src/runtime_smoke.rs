@@ -433,7 +433,8 @@ fn compile_life_totals(
             | EffectProgram::DestroyPermanent { .. }
             | EffectProgram::ExileObject { .. }
             | EffectProgram::CounterStackEntry { .. }
-            | EffectProgram::MoveTargetObject { .. } => continue,
+            | EffectProgram::MoveTargetObject { .. }
+            | EffectProgram::CreateTokens { .. } => continue,
         };
         let player = smoke_player_index(players);
         totals[player] = totals[player]
@@ -507,7 +508,8 @@ fn compile_library_reserve(
             | EffectProgram::DestroyPermanent { .. }
             | EffectProgram::ExileObject { .. }
             | EffectProgram::CounterStackEntry { .. }
-            | EffectProgram::MoveTargetObject { .. } => {}
+            | EffectProgram::MoveTargetObject { .. }
+            | EffectProgram::CreateTokens { .. } => {}
         }
     }
     let mut reserve = [0_u32; PLAYER_COUNT];
@@ -860,7 +862,8 @@ fn execute_smoke(
             | EffectProgram::ShuffleLibrary { .. }
             | EffectProgram::DestroyPermanent { .. }
             | EffectProgram::ExileObject { .. }
-            | EffectProgram::CounterStackEntry { .. } => {}
+            | EffectProgram::CounterStackEntry { .. }
+            | EffectProgram::CreateTokens { .. } => {}
             EffectProgram::MoveTargetObject {
                 target, from, to, ..
             } => {
@@ -901,10 +904,44 @@ fn execute_smoke(
             )
         })?;
     for bound in bound_actions {
-        execution.dispatch(
-            &format!("effect[{}]", bound.effect_index()),
-            bound.action().clone(),
-        )?;
+        let action = bound.action().clone();
+        let token_expectation = match &action {
+            Action::CreateToken {
+                owner,
+                controller,
+                base_object,
+                base,
+                ..
+            } => Some((*owner, *controller, *base_object, *base)),
+            _ => None,
+        };
+        let outcome = execution.dispatch(&format!("effect[{}]", bound.effect_index()), action)?;
+        if let Some((owner, controller, base_object, base_creature)) = token_expectation {
+            let Outcome::ObjectCreated(object) = outcome else {
+                return Err(unexpected_outcome("effect.create_token", outcome));
+            };
+            let record = execution.state.object(object).ok_or_else(|| {
+                RuntimeSmokeFailure::new(
+                    RuntimeSmokeFailureCode::UnexpectedOutcome,
+                    "effect.create_token",
+                    "created token object is missing",
+                )
+            })?;
+            if !record.is_token()
+                || record.owner() != owner
+                || record.controller() != controller
+                || record.base_object() != base_object
+                || record.base_creature() != base_creature
+                || execution.state.object_zone(object)
+                    != Some(ZoneId::new(None, ZoneKind::Battlefield))
+            {
+                return Err(RuntimeSmokeFailure::new(
+                    RuntimeSmokeFailureCode::UnexpectedOutcome,
+                    "effect.create_token",
+                    format!("created object {object:?} does not match its exact token template"),
+                ));
+            }
+        }
     }
 
     let final_life_totals = [
@@ -996,6 +1033,10 @@ fn synthesize_targets(
                 TargetChoice::Player(player)
             }
             TargetKind::StackEntry => {
+                let (types, kind) = synthesize_stack_spell_shape(
+                    requirement.predicate(),
+                    &format!("setup.target[{index}]"),
+                )?;
                 let object = expect_object(execution.dispatch(
                     &format!("setup.target[{index}].stack_object"),
                     Action::CreateObject {
@@ -1012,17 +1053,26 @@ fn synthesize_targets(
                     Action::SetBaseObjectCharacteristics {
                         object,
                         base: BaseObjectCharacteristics::new(
-                            ObjectTypes::none().with_instant(),
+                            types,
                             ObjectColors::none().with_blue(),
                         ),
                     },
                 )?;
+                if types.creature() {
+                    execution.dispatch(
+                        &format!("setup.target[{index}].stack_creature"),
+                        Action::SetBaseCreatureCharacteristics {
+                            object,
+                            base: BaseCreatureCharacteristics::new(2, 2),
+                        },
+                    )?;
+                }
                 let outcome = execution.dispatch(
                     &format!("setup.target[{index}].put_on_stack"),
                     Action::PutSpellOnStack {
                         player: caster,
                         object,
-                        kind: StackObjectKind::InstantSpell,
+                        kind,
                         hold_priority: true,
                     },
                 )?;
@@ -1046,6 +1096,62 @@ fn synthesize_targets(
         choices.push(choice);
     }
     Ok(choices)
+}
+
+fn synthesize_stack_spell_shape(
+    predicate: TargetPredicate,
+    phase: &str,
+) -> Result<(ObjectTypes, StackObjectKind), RuntimeSmokeFailure> {
+    let predicate = match predicate {
+        TargetPredicate::Any => None,
+        TargetPredicate::Object(predicate) => Some(predicate),
+        TargetPredicate::Player(_) => {
+            return Err(RuntimeSmokeFailure::new(
+                RuntimeSmokeFailureCode::UnexpectedOutcome,
+                phase,
+                "stack target carries a player predicate",
+            ));
+        }
+    };
+    let forbidden = predicate
+        .map(|predicate| predicate.forbidden_types())
+        .unwrap_or(ObjectTypes::none());
+    let mut types = predicate
+        .map(|predicate| predicate.required_types())
+        .unwrap_or(ObjectTypes::none());
+    if let Some(required_any) = predicate.map(|predicate| predicate.required_any_types()) {
+        types = types.union(pick_one_type(required_any));
+    }
+    if types == ObjectTypes::none() {
+        for candidate in [
+            ObjectTypes::none().with_instant(),
+            ObjectTypes::none().with_sorcery(),
+            ObjectTypes::none().with_creature(),
+            ObjectTypes::none().with_artifact(),
+            ObjectTypes::none().with_enchantment(),
+            ObjectTypes::none().with_planeswalker(),
+        ] {
+            if !candidate.intersects(forbidden) {
+                types = candidate;
+                break;
+            }
+        }
+    }
+    if types == ObjectTypes::none() || types.intersects(forbidden) || types.land() {
+        return Err(RuntimeSmokeFailure::new(
+            RuntimeSmokeFailureCode::UnexpectedOutcome,
+            phase,
+            "stack spell predicate has no supported legal synthesized type",
+        ));
+    }
+    let kind = if types.instant() {
+        StackObjectKind::InstantSpell
+    } else if types.sorcery() {
+        StackObjectKind::SorcerySpell
+    } else {
+        StackObjectKind::PermanentSpell
+    };
+    Ok((types, kind))
 }
 
 fn synthesize_object_target(

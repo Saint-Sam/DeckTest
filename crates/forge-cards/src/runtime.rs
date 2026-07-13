@@ -11,15 +11,16 @@ use forge_carddef::{
 };
 use forge_core::{
     apply, AbilityPlayer, Action, ActivatedAbilityDefinition, ActivatedAbilityEffect,
-    ActivationCost, ActivationTiming, BaseObjectCharacteristics, GameState, ManaCost, ManaKind,
-    ManaPool, ObjectColors, ObjectId, ObjectTargetPredicate, ObjectTypes, Outcome, PlayerId,
-    PlayerTargetPredicate, StackEntryId, TargetChoice, TargetControllerPredicate, TargetKind,
-    TargetRequirement, ZoneId, ZoneKind,
+    ActivationCost, ActivationTiming, BaseCreatureCharacteristics, BaseObjectCharacteristics,
+    CardId, GameState, ManaCost, ManaKind, ManaPool, ObjectColors, ObjectId, ObjectTargetPredicate,
+    ObjectTypes, Outcome, PlayerId, PlayerTargetPredicate, StackEntryId, TargetChoice,
+    TargetControllerPredicate, TargetKind, TargetRequirement, ZoneId, ZoneKind,
 };
 use std::{collections::BTreeMap, error::Error, fmt};
 
 const MAX_EFFECTS: usize = 64;
 const MAX_ACTIVATED_ABILITIES: usize = 16;
+const MAX_TOKEN_COUNT: u32 = 64;
 
 /// Stable reason that a definition could not compile into a complete program.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -165,6 +166,8 @@ pub enum Capability {
     CounterStackEntry,
     /// Move a targeted object between explicit zones.
     MoveZone,
+    /// Create one or more exact registered token templates.
+    CreateToken,
 }
 
 impl Capability {
@@ -184,6 +187,7 @@ impl Capability {
             Self::ExileObject => "exile_object",
             Self::CounterStackEntry => "counter_stack_entry",
             Self::MoveZone => "move_zone",
+            Self::CreateToken => "create_token",
         }
     }
 }
@@ -307,6 +311,19 @@ pub enum EffectProgram {
         /// Destination zone.
         to: ZoneKind,
     },
+    /// Create one or more exact registered token templates.
+    CreateTokens {
+        /// Stable card identity for the token face.
+        card: CardId,
+        /// Token base types and colors.
+        base_object: BaseObjectCharacteristics,
+        /// Token base creature values.
+        base_creature: BaseCreatureCharacteristics,
+        /// Number of tokens to create.
+        count: u32,
+        /// Token controller and owner.
+        players: PlayerBinding,
+    },
 }
 
 impl EffectProgram {
@@ -321,6 +338,7 @@ impl EffectProgram {
             Self::ExileObject { .. } => Capability::ExileObject,
             Self::CounterStackEntry { .. } => Capability::CounterStackEntry,
             Self::MoveTargetObject { .. } => Capability::MoveZone,
+            Self::CreateTokens { .. } => Capability::CreateToken,
         }
     }
 }
@@ -913,6 +931,26 @@ fn compile_effect(
                 .push(EffectProgram::MoveTargetObject { target, from, to });
             Ok(())
         }
+        Operation::CreateToken => {
+            let [template, count, players] = arguments.as_slice() else {
+                return Err(effect_arity(
+                    path,
+                    operation,
+                    "registered token template, literal count, and player selector",
+                ));
+            };
+            let template = compile_token_template(template, &format!("{path}.template"))?;
+            let count = compile_token_count(count, &format!("{path}.count"))?;
+            let players = compile_player_binding(players, &format!("{path}.players"), compiler)?;
+            compiler.effects.push(EffectProgram::CreateTokens {
+                card: template.card,
+                base_object: template.base_object,
+                base_creature: template.base_creature,
+                count,
+                players,
+            });
+            Ok(())
+        }
         unsupported => Err(CompileDiagnostic::new(
             CompileDiagnosticCode::EffectOperation,
             path,
@@ -922,6 +960,76 @@ fn compile_effect(
             ),
         )),
     }
+}
+
+#[derive(Clone, Copy)]
+struct TokenTemplate {
+    card: CardId,
+    base_object: BaseObjectCharacteristics,
+    base_creature: BaseCreatureCharacteristics,
+}
+
+fn compile_token_template(
+    expression: &Expression,
+    path: &str,
+) -> Result<TokenTemplate, CompileDiagnostic> {
+    let Expression::Text(script) = expression else {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectArguments,
+            path,
+            "token template is not text",
+        ));
+    };
+    let supported = matches!(
+        script.as_str(),
+        "g_3_3_beast" | "g_3_3_elephant" | "g_3_3_ape" | "g_3_3_frog_lizard"
+    );
+    if !supported {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectArguments,
+            path,
+            format!("token template `{script}` is not in the exact runtime registry"),
+        ));
+    }
+    Ok(TokenTemplate {
+        card: CardId::new(stable_runtime_id(script)),
+        base_object: BaseObjectCharacteristics::new(
+            ObjectTypes::none().with_creature(),
+            ObjectColors::none().with_green(),
+        ),
+        base_creature: BaseCreatureCharacteristics::new(3, 3),
+    })
+}
+
+fn compile_token_count(expression: &Expression, path: &str) -> Result<u32, CompileDiagnostic> {
+    let Expression::Integer(count) = expression else {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectAmount,
+            path,
+            "token count is not a literal integer",
+        ));
+    };
+    let count = u32::try_from(*count).map_err(|_| {
+        CompileDiagnostic::new(
+            CompileDiagnosticCode::EffectAmount,
+            path,
+            format!("token count {count} is outside the u32 action range"),
+        )
+    })?;
+    if count == 0 || count > MAX_TOKEN_COUNT {
+        return Err(CompileDiagnostic::new(
+            CompileDiagnosticCode::ProgramBounds,
+            path,
+            format!("token count must be in 1..={MAX_TOKEN_COUNT}, found {count}"),
+        ));
+    }
+    Ok(count)
+}
+
+fn stable_runtime_id(value: &str) -> u32 {
+    value.bytes().fold(2_166_136_261_u32, |hash, byte| {
+        (hash ^ u32::from(byte)).wrapping_mul(16_777_619)
+    })
 }
 
 fn effect_arity(path: &str, operation: &Operation, expected: &str) -> CompileDiagnostic {
@@ -1066,17 +1174,114 @@ fn compile_stack_target(
         Expression::Call {
             operation: Operation::Spells,
             arguments,
-        } if arguments.is_empty() => intern_target(
-            compiler,
-            selector,
-            TargetRequirement::new(TargetKind::StackEntry),
-        ),
+        } => {
+            let requirement = match arguments.as_slice() {
+                [] => TargetRequirement::new(TargetKind::StackEntry),
+                [predicate] => TargetRequirement::new(TargetKind::StackEntry)
+                    .with_object_predicate(compile_stack_spell_predicate(predicate, path)?),
+                _ => {
+                    return Err(CompileDiagnostic::new(
+                        CompileDiagnosticCode::EffectArguments,
+                        path,
+                        "spells() accepts at most one closed type predicate",
+                    ));
+                }
+            };
+            intern_target(compiler, selector, requirement)
+        }
         _ => Err(CompileDiagnostic::new(
             CompileDiagnosticCode::EffectArguments,
             path,
             "target does not contain spells()",
         )),
     }
+}
+
+fn compile_stack_spell_predicate(
+    expression: &Expression,
+    path: &str,
+) -> Result<ObjectTargetPredicate, CompileDiagnostic> {
+    let mut spec = ObjectSelectorSpec::new(TargetKind::StackEntry);
+    match expression {
+        Expression::Call {
+            operation: Operation::TypeIs,
+            arguments,
+        } => {
+            let [value] = arguments.as_slice() else {
+                return Err(effect_arity(path, &Operation::TypeIs, "one type string"));
+            };
+            spec.required_types = compile_object_type(value, path)?;
+        }
+        Expression::Call {
+            operation: Operation::Not,
+            arguments,
+        } => {
+            let [predicate] = arguments.as_slice() else {
+                return Err(effect_arity(path, &Operation::Not, "one predicate"));
+            };
+            let Expression::Call {
+                operation: Operation::TypeIs,
+                arguments,
+            } = predicate
+            else {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::EffectArguments,
+                    path,
+                    "stack predicate not() only accepts type_is(...)",
+                ));
+            };
+            let [value] = arguments.as_slice() else {
+                return Err(effect_arity(path, &Operation::TypeIs, "one type string"));
+            };
+            spec.forbidden_types = compile_object_type(value, path)?;
+        }
+        Expression::Call {
+            operation: Operation::Or,
+            arguments,
+        } => {
+            if arguments.is_empty() {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::EffectArguments,
+                    path,
+                    "or() stack predicate is empty",
+                ));
+            }
+            for (index, predicate) in arguments.iter().enumerate() {
+                let Expression::Call {
+                    operation: Operation::TypeIs,
+                    arguments,
+                } = predicate
+                else {
+                    return Err(CompileDiagnostic::new(
+                        CompileDiagnosticCode::EffectArguments,
+                        format!("{path}.or[{index}]"),
+                        "stack predicate or() only accepts type_is(...) members",
+                    ));
+                };
+                let [value] = arguments.as_slice() else {
+                    return Err(effect_arity(
+                        &format!("{path}.or[{index}]"),
+                        &Operation::TypeIs,
+                        "one type string",
+                    ));
+                };
+                spec.required_any_types = spec
+                    .required_any_types
+                    .union(compile_object_type(value, &format!("{path}.or[{index}]"))?);
+            }
+        }
+        _ => {
+            return Err(CompileDiagnostic::new(
+                CompileDiagnosticCode::EffectArguments,
+                path,
+                "stack predicate must be type_is(...), not(type_is(...)), or a type_is(...) union",
+            ));
+        }
+    }
+    Ok(ObjectTargetPredicate::any()
+        .with_required_types(spec.required_types)
+        .with_required_any_types(spec.required_any_types)
+        .with_forbidden_types(spec.forbidden_types))
 }
 
 fn compile_object_target(
@@ -1891,6 +2096,28 @@ pub fn bind_program_actions(
                     },
                 });
             }
+            EffectProgram::CreateTokens {
+                card,
+                base_object,
+                base_creature,
+                count,
+                players,
+            } => {
+                for player in resolve_players(state, *players, bindings, effect_index)? {
+                    for _ in 0..*count {
+                        actions.push(BoundAction {
+                            effect_index,
+                            action: Action::CreateToken {
+                                card: *card,
+                                owner: player,
+                                controller: player,
+                                base_object: *base_object,
+                                base: Some(*base_creature),
+                            },
+                        });
+                    }
+                }
+            }
         }
     }
     Ok(actions)
@@ -2099,6 +2326,38 @@ card "Sol Ring" {
       costs: [tap_self()]
       effect: add_mana("2 x {C}", you())
       mana_ability: true
+    }
+  }
+}
+"#;
+    const BEAST_WITHIN: &str = r#"
+card "Beast Within" {
+  id: "adef83bc-4047-434f-9137-36d0bc473b2c"
+  layout: normal
+  status: unverified_playable
+  face "Beast Within" {
+    cost: "{2}{G}"
+    types: "Instant"
+    oracle: "Destroy target permanent. Its controller creates a 3/3 green Beast creature token."
+    keywords: []
+    ability spell {
+      effect: sequence(destroy(target(permanents())), create_token("g_3_3_beast", 1, controller_of(target(any()))))
+    }
+  }
+}
+"#;
+    const NEGATE: &str = r#"
+card "Negate" {
+  id: "f6a0c6f8-2fa7-4b0d-9acf-8fe95fbf1214"
+  layout: normal
+  status: unverified_playable
+  face "Negate" {
+    cost: "{1}{U}"
+    types: "Instant"
+    oracle: "Counter target noncreature spell."
+    keywords: []
+    ability spell {
+      effect: counter_spell(target(spells(not(type_is("creature")))))
     }
   }
 }
@@ -2326,6 +2585,143 @@ card "Interpreter Contract" {
         );
     }
 
+    #[test]
+    fn exact_token_template_prebinds_destroyed_targets_controller() {
+        let program = compile_card_program(&parse("beast_within.frs", BEAST_WITHIN))
+            .unwrap_or_else(|error| panic!("unexpected compile error: {error}"));
+        assert_eq!(
+            program.capabilities(),
+            vec![Capability::DestroyPermanent, Capability::CreateToken]
+        );
+        let mut state = GameState::new();
+        let caster = add_player(&mut state);
+        let opponent = add_player(&mut state);
+        let target = create_object(
+            &mut state,
+            CardId::new(2_002),
+            opponent,
+            ZoneId::new(None, ZoneKind::Battlefield),
+        );
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::SetBaseObjectCharacteristics {
+                    object: target,
+                    base: BaseObjectCharacteristics::new(
+                        ObjectTypes::none().with_artifact(),
+                        ObjectColors::none(),
+                    ),
+                },
+            ),
+            Outcome::Applied
+        );
+
+        execute_program(
+            &mut state,
+            &program,
+            &ExecutionBindings::new(caster, vec![opponent])
+                .with_targets(vec![TargetChoice::Object(target)]),
+        )
+        .unwrap_or_else(|error| panic!("unexpected execution error: {error}"));
+
+        assert_eq!(
+            state.object_zone(target),
+            Some(ZoneId::new(Some(opponent), ZoneKind::Graveyard))
+        );
+        let Some(battlefield) = state.zone_objects(ZoneId::new(None, ZoneKind::Battlefield)) else {
+            panic!("battlefield must exist");
+        };
+        assert_eq!(battlefield.len(), 1);
+        let Some(token) = state.object(battlefield[0]) else {
+            panic!("token must exist");
+        };
+        assert!(token.is_token());
+        assert_eq!(token.owner(), opponent);
+        assert_eq!(token.controller(), opponent);
+        assert_eq!(
+            token.base_object(),
+            BaseObjectCharacteristics::new(
+                ObjectTypes::none().with_creature(),
+                ObjectColors::none().with_green(),
+            )
+        );
+        assert_eq!(
+            token.base_creature(),
+            Some(BaseCreatureCharacteristics::new(3, 3))
+        );
+    }
+
+    #[test]
+    fn unknown_token_template_fails_closed_with_a_qualified_path() {
+        let definition = parse(
+            "unknown_token.frs",
+            &BEAST_WITHIN.replace("g_3_3_beast", "u_2_2_bird_flying"),
+        );
+        let error = match compile_card_program(&definition) {
+            Ok(_) => panic!("unknown token must not compile"),
+            Err(error) => error,
+        };
+        assert_eq!(error.code(), CompileDiagnosticCode::EffectArguments);
+        assert!(error.path().ends_with(".template"));
+        assert!(error.detail().contains("exact runtime registry"));
+    }
+
+    #[test]
+    fn stack_spell_type_predicate_rejects_creatures_and_accepts_instants() {
+        let program = compile_card_program(&parse("negate.frs", NEGATE))
+            .unwrap_or_else(|error| panic!("unexpected compile error: {error}"));
+        let requirement = program.target_requirements()[0];
+        let mut state = GameState::new();
+        let caster = add_player(&mut state);
+        let opponent = add_player(&mut state);
+        prepare_turn(&mut state, caster, opponent);
+
+        let instant = create_stack_spell(
+            &mut state,
+            caster,
+            CardId::new(2_003),
+            ObjectTypes::none().with_instant(),
+            StackObjectKind::InstantSpell,
+        );
+        let creature = create_stack_spell(
+            &mut state,
+            caster,
+            CardId::new(2_004),
+            ObjectTypes::none().with_creature(),
+            StackObjectKind::PermanentSpell,
+        );
+
+        assert!(state.can_target(caster, None, requirement, TargetChoice::StackEntry(instant)));
+        assert!(!state.can_target(
+            caster,
+            None,
+            requirement,
+            TargetChoice::StackEntry(creature)
+        ));
+    }
+
+    #[test]
+    fn stack_spell_type_union_compiles_to_a_closed_any_type_set() {
+        let definition = parse(
+            "stack_union.frs",
+            &NEGATE.replace(
+                "not(type_is(\"creature\"))",
+                "or(type_is(\"instant\"), type_is(\"sorcery\"))",
+            ),
+        );
+        let program = compile_card_program(&definition)
+            .unwrap_or_else(|error| panic!("unexpected compile error: {error}"));
+        let forge_core::TargetPredicate::Object(predicate) =
+            program.target_requirements()[0].predicate()
+        else {
+            panic!("typed spell target must use an object predicate");
+        };
+        assert_eq!(
+            predicate.required_any_types(),
+            ObjectTypes::none().with_instant().with_sorcery()
+        );
+    }
+
     fn parse(path: &str, source: &str) -> forge_carddef::CardDefinition {
         forge_cardc::parse_card_named(path, source)
             .unwrap_or_else(|error| panic!("fixture did not parse: {error}"))
@@ -2408,5 +2804,42 @@ card "Interpreter Contract" {
             apply(state, Action::AdvanceStep),
             Outcome::StepAdvanced(forge_core::Step::Upkeep)
         );
+    }
+
+    fn create_stack_spell(
+        state: &mut GameState,
+        player: forge_core::PlayerId,
+        card: CardId,
+        types: ObjectTypes,
+        kind: StackObjectKind,
+    ) -> forge_core::StackEntryId {
+        let object = create_object(
+            state,
+            card,
+            player,
+            ZoneId::new(Some(player), ZoneKind::Hand),
+        );
+        assert_eq!(
+            apply(
+                state,
+                Action::SetBaseObjectCharacteristics {
+                    object,
+                    base: BaseObjectCharacteristics::new(types, ObjectColors::none()),
+                },
+            ),
+            Outcome::Applied
+        );
+        match apply(
+            state,
+            Action::PutSpellOnStack {
+                player,
+                object,
+                kind,
+                hold_priority: true,
+            },
+        ) {
+            Outcome::StackEntryAdded(entry) => entry,
+            other => panic!("unexpected stack outcome: {other:?}"),
+        }
     }
 }
