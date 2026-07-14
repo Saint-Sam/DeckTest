@@ -64,5 +64,7 @@ while IFS= read -r relative_path; do
 done < <(jq -r '.cases[].translated_path' tests/t3_6/commander_semantic_cases.json)
 cargo llvm-cov run -p forge-testkit --bin forge-t3-6-runtime-probe --no-report -- \
   "${t3_6_paths[@]}" >target/coverage/t3_6_runtime_probe.json
+cargo llvm-cov run -p forge-testkit --bin forge-t3-9-four-player-pod --no-report -- \
+  --games 4 --jobs 4 --output target/coverage/t3_9_four_player_pod.json
 cargo llvm-cov report --fail-under-lines "$floor" --json --output-path "$raw_coverage"
 python3 tools/coverage_summary.py --raw "$raw_coverage" --floor "$floor"
