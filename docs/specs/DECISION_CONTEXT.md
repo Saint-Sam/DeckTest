@@ -57,6 +57,13 @@ The T4.3-T4.5 diagnostics path currently adapts:
 - exact normal-spell target products, modal branches, and optional-effect
   answers, preserved in the canonical descriptor and stack hash and rebound
   through real resolution; human labels expose every bound choice;
+- typed program-bound non-mana activations with exact payments, targets, and
+  optional answers announced through the kernel stack, followed by interpreter
+  effect binding only after successful resolution;
+- bounded resolution-time object products for those activated abilities,
+  including legal fail-to-find branches, authoritative characteristic
+  filtering, human search labels, AI successor evaluation, canonical telemetry,
+  and exact decision/action replay;
 - every live human and AI priority window, with legal normal-cost instants and
   a forced-pass fast path that does not invoke search or one-ply evaluation;
 - complete player-defender attack assignment products, including split attacks,
@@ -74,12 +81,13 @@ The T4.3-T4.5 diagnostics path currently adapts:
   contexts, with every selected ID revalidated against its supplied context.
 
 The current path remains `limited` and diagnostics-only because it does not yet
-canonicalize the full Commander prompt surface: non-mana activated abilities,
-target distribution, X, additional and alternative costs, trigger order,
-resolution-time searches and hidden choices, non-player combat defenders, and
-strategic damage ordering. Normal spell targets, modes, optional effects, and
-payments are covered, but those prompt families remain partial until their
-activated, triggered, and resolution-time forms use the same boundary.
+canonicalize the full Commander prompt surface: unsupported activation cost
+families, target distribution, X, additional and alternative costs, trigger
+order, spell and trigger resolution-time choices, non-player combat defenders,
+and strategic damage ordering. Normal spells and the current typed activated
+slice cover targets, optional effects, payments, and activated library searches,
+but those prompt families remain partial until their remaining triggered,
+spell-resolution, and multi-zone forms use the same boundary.
 A typed immediate concession action and event exist, but the always-available
 human/AI/benchmark prompt adapter remains open. These gaps cannot be silently
 skipped for CP-AI-BENCH,

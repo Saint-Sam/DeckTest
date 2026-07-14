@@ -7202,7 +7202,7 @@ fn bind_effect_actions(
     state
         .validate_target_choices(
             bindings.controller,
-            None,
+            bindings.source,
             target_requirements,
             &bindings.targets,
         )
@@ -7848,40 +7848,12 @@ fn validate_object_choices(
                     ),
                 ));
             }
-            let characteristics = state.object_characteristics(object).map_err(|error| {
-                ExecutionDiagnostic::new(
-                    ExecutionDiagnosticCode::InvalidChoice,
-                    None,
-                    format!("object choice {choice_index} characteristics failed: {error:?}"),
-                )
-            })?;
-            if !characteristics
-                .types()
-                .contains_all(requirement.required_types)
-                || (requirement.required_any_types != ObjectTypes::none()
-                    && !characteristics
-                        .types()
-                        .intersects(requirement.required_any_types))
-                || characteristics
-                    .types()
-                    .intersects(requirement.forbidden_types)
-                || !characteristics
-                    .supertypes()
-                    .contains_all(requirement.required_supertypes)
-                || !characteristics
-                    .subtypes()
-                    .contains_all(requirement.required_subtypes)
-                || !characteristics
-                    .basic_land_types()
-                    .contains_all(requirement.required_land_types)
-                || (requirement.required_any_land_types != BasicLandTypes::none()
-                    && !characteristics
-                        .basic_land_types()
-                        .intersects(requirement.required_any_land_types))
-                || ((requirement.required_land_types != BasicLandTypes::none()
-                    || requirement.required_any_land_types != BasicLandTypes::none())
-                    && !characteristics.types().land())
-            {
+            if !object_satisfies_choice_requirement(
+                state,
+                *requirement,
+                bindings.controller,
+                object,
+            )? {
                 return Err(ExecutionDiagnostic::new(
                     ExecutionDiagnosticCode::InvalidChoice,
                     None,
@@ -7893,6 +7865,64 @@ fn validate_object_choices(
         }
     }
     Ok(())
+}
+
+/// Tests one object against a compiled resolution-time choice requirement.
+///
+/// This is the authoritative predicate used both to enumerate a legal search
+/// surface and to validate the selected binding immediately before execution.
+pub fn object_satisfies_choice_requirement(
+    state: &GameState,
+    requirement: ObjectChoiceRequirement,
+    controller: PlayerId,
+    object: ObjectId,
+) -> Result<bool, ExecutionDiagnostic> {
+    let player = match requirement.player {
+        PlayerBinding::Controller => controller,
+        _ => {
+            return Err(ExecutionDiagnostic::new(
+                ExecutionDiagnosticCode::InvalidChoice,
+                None,
+                "object choice has an unsupported player binding",
+            ));
+        }
+    };
+    if state.object_zone(object) != Some(ZoneId::new(Some(player), requirement.zone)) {
+        return Ok(false);
+    }
+    let characteristics = state.object_characteristics(object).map_err(|error| {
+        ExecutionDiagnostic::new(
+            ExecutionDiagnosticCode::InvalidChoice,
+            None,
+            format!("object choice characteristics failed: {error:?}"),
+        )
+    })?;
+    Ok(characteristics
+        .types()
+        .contains_all(requirement.required_types)
+        && (requirement.required_any_types == ObjectTypes::none()
+            || characteristics
+                .types()
+                .intersects(requirement.required_any_types))
+        && !characteristics
+            .types()
+            .intersects(requirement.forbidden_types)
+        && characteristics
+            .supertypes()
+            .contains_all(requirement.required_supertypes)
+        && characteristics
+            .subtypes()
+            .contains_all(requirement.required_subtypes)
+        && characteristics
+            .basic_land_types()
+            .contains_all(requirement.required_land_types)
+        && (requirement.required_any_land_types == BasicLandTypes::none()
+            || characteristics
+                .basic_land_types()
+                .intersects(requirement.required_any_land_types))
+        && ((requirement.required_land_types == BasicLandTypes::none()
+            && requirement.required_any_land_types == BasicLandTypes::none())
+            || characteristics.types().land()))
 }
 
 fn validate_player_bindings(bindings: &ExecutionBindings) -> Result<(), ExecutionDiagnostic> {

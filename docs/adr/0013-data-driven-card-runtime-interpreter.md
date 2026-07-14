@@ -181,6 +181,42 @@ frozen Commander set moves from 30 to 40 runtime-smoke passes. These are still
 capability-level smoke claims; hidden-information prompts, card-specific
 expected outcomes, and deterministic semantic replays remain T3.6 work.
 
+## Canonical activation and resolution-choice extension
+
+The T4 vertical integration keeps rules ownership split at the same boundary.
+`forge-core` owns activation timing, costs, target announcement and snapshots,
+priority, stack identity, target revalidation, and the resolution record. A
+program-bound activation has no card-specific kernel effect body. Only after the
+kernel records a successful resolution does the driver ask `forge-cards` to bind
+the compiled effect program into ordinary production actions.
+
+Announcement-time targets and optional answers are carried in the stack entry
+and its canonical hash. Hidden-zone object choices are deliberately not chosen
+at activation: intervening priority may change the searched zone. At resolution,
+the adapter enumerates every bounded legal object product through the same
+`object_satisfies_choice_requirement` predicate used by execution validation.
+The resulting canonical options map to the fully bound production action
+sequence. Legal fail-to-find branches remain present for library searches,
+human labels reveal only information the searching controller is authorized to
+inspect, and AI policies evaluate successor `PlayerView` values produced by the
+real action sequence.
+
+`ChooseResolutionObjects` is an append-only composite decision descriptor for
+zero, one, many, or multiple ordered choice slots. This avoids overloading the
+older singular search descriptor and keeps replay IDs structural. Evolving
+Wilds is the first real vertical regression: its activation sacrifices the
+source, resolves through priority, excludes a nonbasic land, offers the legal
+empty and matching-basic choices, moves the selected basic to the battlefield
+tapped, and shuffles through kernel actions. A four-seat AI diagnostic then
+completed 241 turns, 18,035 typed actions, and 16,000 canonical decisions with
+an exact replay match after exercising the same adapter.
+
+This extension is not a claim that every search or activated cost is complete.
+Unsupported extra costs still fail closed, and spell, triggered-ability,
+multi-zone, and large combinatorial choice families remain explicit T4 decision
+surface gaps. Exact promotion evidence must be regenerated from the final clean
+T4 product commit rather than inherited from an earlier diagnostic tree.
+
 ## Consequences
 
 - Semantic work becomes reusable product code, so a T3.6 pass proves the path

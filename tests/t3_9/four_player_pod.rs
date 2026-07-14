@@ -13,18 +13,19 @@ use forge_ai::{
     SearchEngine, SearchLimit, SearchReport, SearchStopReason,
 };
 use forge_cards::runtime::{
-    bind_program_actions, bind_triggered_ability_actions, compile_card_program, CardProgram,
-    ExecutionBindings, ProgramKind, TriggeredAbilityProgram,
+    bind_activated_effect_actions, bind_program_actions, bind_triggered_ability_actions,
+    compile_card_program, object_satisfies_choice_requirement, CardProgram, ExecutionBindings,
+    ObjectChoiceRequirement, PlayerBinding, ProgramKind, TriggeredAbilityProgram,
 };
 use forge_core::{
-    apply, Action, ActivatedAbilityId, AttackDeclaration, BlockDeclaration, CanonicalActionId,
-    CardId, CastSpellRequest, CombatDamageAssignment, CombatDamageAssignmentRequest,
-    CombatDamageStepKind, CombatDamageTarget, DecisionContext, DecisionDescriptor, DecisionKind,
-    DecisionOption, GameOutcome, GameState, HiddenCardDefinition, HiddenSlotDefinition, ManaKind,
-    ObjectColors, ObjectId, ObjectView, Outcome, PaymentPlan, PlayerId, PlayerView,
-    PriorityOutcome, ResolutionOutcome, SpellTiming, StackDecisionBindings, StackEntryId,
-    StackObjectKind, Step, TargetChoice, TargetKind, TargetRequirement, TriggerId, ZoneId,
-    ZoneKind,
+    apply, Action, ActivatedAbilityDefinition, ActivatedAbilityEffect, ActivatedAbilityId,
+    ActivationCost, AttackDeclaration, BlockDeclaration, CanonicalActionId, CardId,
+    CastSpellRequest, CombatDamageAssignment, CombatDamageAssignmentRequest, CombatDamageStepKind,
+    CombatDamageTarget, DecisionContext, DecisionDescriptor, DecisionKind, DecisionOption,
+    GameOutcome, GameState, HiddenCardDefinition, HiddenSlotDefinition, ManaKind, ObjectColors,
+    ObjectId, ObjectView, Outcome, PaymentPlan, PlayerId, PlayerView, PriorityOutcome,
+    ResolutionOutcome, SpellTiming, StackDecisionBindings, StackEntryId, StackObjectKind, Step,
+    TargetChoice, TargetKind, TargetRequirement, TriggerId, ZoneId, ZoneKind,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -1271,6 +1272,29 @@ struct TriggerRuntime {
 }
 
 #[derive(Clone)]
+struct ActivatedRuntime {
+    program: Arc<CardProgram>,
+    ability_index: usize,
+    source: ObjectId,
+}
+
+#[derive(Clone)]
+struct RegisteredAbility {
+    source: ObjectId,
+    controller: PlayerId,
+    id: ActivatedAbilityId,
+    runtime: Option<ActivatedRuntime>,
+}
+
+#[derive(Clone)]
+struct PendingActivatedResolution {
+    controller: PlayerId,
+    runtime: ActivatedRuntime,
+    targets: Vec<TargetChoice>,
+    decisions: StackDecisionBindings,
+}
+
+#[derive(Clone)]
 enum MainChoice {
     PlayLand(ObjectId),
     ActivateAll,
@@ -1278,6 +1302,13 @@ enum MainChoice {
         source: ObjectId,
         ability: ActivatedAbilityId,
         payment: PaymentPlan,
+    },
+    ActivateProgram {
+        source: ObjectId,
+        ability: ActivatedAbilityId,
+        payment: PaymentPlan,
+        targets: Vec<TargetChoice>,
+        optional: Vec<bool>,
     },
     Cast {
         object: ObjectId,
@@ -1386,7 +1417,8 @@ struct GameDriver {
     guardrails: Arc<GuardrailTable>,
     commanders: Vec<ObjectId>,
     trigger_programs: HashMap<TriggerId, TriggerRuntime>,
-    mana_abilities: Vec<(ObjectId, PlayerId, ActivatedAbilityId)>,
+    activated_abilities: Vec<RegisteredAbility>,
+    pending_activated_resolution: Option<PendingActivatedResolution>,
     triggers_registered_for: HashSet<ObjectId>,
     permanent_runtime_registered_for: HashSet<ObjectId>,
     commander_zone_decisions: HashMap<ObjectId, ZoneId>,
@@ -1481,7 +1513,8 @@ impl GameDriver {
             ),
             commanders: Vec::with_capacity(PLAYER_COUNT),
             trigger_programs: HashMap::new(),
-            mana_abilities: Vec::new(),
+            activated_abilities: Vec::new(),
+            pending_activated_resolution: None,
             triggers_registered_for: HashSet::new(),
             permanent_runtime_registered_for: HashSet::new(),
             commander_zone_decisions: HashMap::new(),
@@ -1972,6 +2005,14 @@ impl GameDriver {
                     .is_some_and(|source| !source.is_legacy_replay()));
 
         while self.state.game_outcome() == GameOutcome::InProgress {
+            if self.pending_activated_resolution.is_some() {
+                self.complete_pending_activated_resolution(
+                    human,
+                    &mut decisions,
+                    ai_policies.as_ref(),
+                )?;
+                continue;
+            }
             let turn = self.state.turn_number();
             if turn > max_turns {
                 let life = self
@@ -2457,6 +2498,41 @@ impl GameDriver {
                 self.object_name(*source),
                 payment.waste_score()
             )),
+            DecisionDescriptor::ActivateProgramAbility {
+                source,
+                payment,
+                targets,
+                optional,
+                ..
+            } => {
+                let mut details = vec![format!("payment waste {}", payment.waste_score())];
+                if !targets.is_empty() {
+                    details.push(format!(
+                        "targets {}",
+                        targets
+                            .iter()
+                            .copied()
+                            .map(|target| self.target_choice_label(target))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ));
+                }
+                if !optional.is_empty() {
+                    details.push(format!(
+                        "optional {}",
+                        optional
+                            .iter()
+                            .map(|accept| if *accept { "yes" } else { "no" })
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ));
+                }
+                Ok(format!(
+                    "Activate ability: {} ({})",
+                    self.object_name(*source),
+                    details.join("; ")
+                ))
+            }
             DecisionDescriptor::CastSpell {
                 object,
                 payment,
@@ -2525,6 +2601,20 @@ impl GameDriver {
         }
     }
 
+    fn activated_runtime(&self, ability: ActivatedAbilityId) -> Result<&ActivatedRuntime, String> {
+        self.activated_abilities
+            .iter()
+            .find(|registered| registered.id == ability)
+            .and_then(|registered| registered.runtime.as_ref())
+            .ok_or_else(|| {
+                format!(
+                    "seed {} registered ability {} has no card runtime",
+                    self.seed,
+                    ability.index()
+                )
+            })
+    }
+
     fn apply_main_choice(&mut self, player: PlayerId, choice: MainChoice) -> Result<bool, String> {
         match choice {
             MainChoice::PlayLand(object) => {
@@ -2563,6 +2653,46 @@ impl GameDriver {
                     ));
                 }
                 Ok(false)
+            }
+            MainChoice::ActivateProgram {
+                source,
+                ability,
+                payment,
+                targets,
+                optional,
+            } => {
+                let runtime = self.activated_runtime(ability)?.clone();
+                let effect = runtime
+                    .program
+                    .activated_effects()
+                    .get(runtime.ability_index)
+                    .ok_or_else(|| {
+                        format!(
+                            "seed {} missing activated runtime {} on {}",
+                            self.seed,
+                            runtime.ability_index,
+                            runtime.program.name()
+                        )
+                    })?;
+                let decisions = StackDecisionBindings::new(None, &optional).map_err(|error| {
+                    format!("seed {} activation choices failed: {error:?}", self.seed)
+                })?;
+                let outcome = self.dispatch(Action::ActivateProgramAbility {
+                    player,
+                    ability,
+                    payment,
+                    target_requirements: effect.target_requirements().to_vec(),
+                    target_choices: targets,
+                    decisions,
+                })?;
+                if !matches!(outcome, Outcome::StackEntryAdded(_)) {
+                    return Err(format!(
+                        "seed {} program activation on {} returned {outcome:?}",
+                        self.seed,
+                        self.object_name(source)
+                    ));
+                }
+                Ok(true)
             }
             MainChoice::Cast {
                 object,
@@ -2871,6 +3001,102 @@ impl GameDriver {
         Ok(choices)
     }
 
+    fn legal_activation_choices(&self, player: PlayerId) -> Result<Vec<MainChoice>, String> {
+        let mut choices = Vec::new();
+        for registered in &self.activated_abilities {
+            if registered.controller != player
+                || self.state.object_zone(registered.source)
+                    != Some(ZoneId::new(None, ZoneKind::Battlefield))
+            {
+                continue;
+            }
+            let cost = self
+                .state
+                .effective_activation_cost(registered.id)
+                .map_err(|error| format!("seed {} activation cost failed: {error:?}", self.seed))?;
+            let payments = self
+                .state
+                .payment_plans_for_player(player, cost.mana())
+                .map_err(|error| {
+                    format!("seed {} payment enumeration failed: {error:?}", self.seed)
+                })?;
+            let Some(runtime) = registered.runtime.as_ref() else {
+                for payment in payments.plans().iter().copied() {
+                    let action = Action::ActivateAbility {
+                        player,
+                        ability: registered.id,
+                        payment,
+                    };
+                    if self.action_is_legal(&action) {
+                        choices.push(MainChoice::Activate {
+                            source: registered.source,
+                            ability: registered.id,
+                            payment,
+                        });
+                    }
+                }
+                continue;
+            };
+            let ability = runtime
+                .program
+                .activated_effects()
+                .get(runtime.ability_index)
+                .ok_or_else(|| {
+                    format!(
+                        "seed {} missing activated runtime {} on {}",
+                        self.seed,
+                        runtime.ability_index,
+                        runtime.program.name()
+                    )
+                })?;
+            let targets =
+                self.target_bindings(player, runtime.source, ability.target_requirements())?;
+            let optionals =
+                self.optional_bindings(runtime.program.name(), ability.optional_choice_count())?;
+            let branch_count = targets
+                .len()
+                .checked_mul(optionals.len())
+                .and_then(|count| count.checked_mul(payments.plans().len()))
+                .ok_or_else(|| format!("seed {} activation option count overflow", self.seed))?;
+            if branch_count > MAX_CANONICAL_SPELL_OPTIONS {
+                return Err(format!(
+                    "seed {} activated ability on {} exceeds the {}-option canonical cap",
+                    self.seed,
+                    runtime.program.name(),
+                    MAX_CANONICAL_SPELL_OPTIONS
+                ));
+            }
+            for target_binding in targets {
+                for optional in &optionals {
+                    let decisions =
+                        StackDecisionBindings::new(None, optional).map_err(|error| {
+                            format!("seed {} activation choices failed: {error:?}", self.seed)
+                        })?;
+                    for payment in payments.plans().iter().copied() {
+                        let action = Action::ActivateProgramAbility {
+                            player,
+                            ability: registered.id,
+                            payment,
+                            target_requirements: ability.target_requirements().to_vec(),
+                            target_choices: target_binding.clone(),
+                            decisions,
+                        };
+                        if self.action_is_legal(&action) {
+                            choices.push(MainChoice::ActivateProgram {
+                                source: registered.source,
+                                ability: registered.id,
+                                payment,
+                                targets: target_binding.clone(),
+                                optional: optional.clone(),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        Ok(choices)
+    }
+
     fn normal_spell_timing_available(&self, player: PlayerId, kind: ProgramKind) -> bool {
         if self.state.priority_player() != Some(player) {
             return false;
@@ -2964,54 +3190,22 @@ impl GameDriver {
             }
         }
 
-        let mut activations = Vec::new();
-        for (ability_source, controller, ability) in self.mana_abilities.iter().copied() {
-            if controller != player
-                || self.state.object_zone(ability_source)
-                    != Some(ZoneId::new(None, ZoneKind::Battlefield))
-                || self
-                    .state
-                    .object(ability_source)
-                    .map_or(true, |record| record.tapped())
-            {
-                continue;
-            }
-            let cost = self
-                .state
-                .effective_activation_cost(ability)
-                .map_err(|error| format!("seed {} activation cost failed: {error:?}", self.seed))?;
-            let payments = self
-                .state
-                .payment_plans_for_player(player, cost.mana())
-                .map_err(|error| {
-                    format!("seed {} payment enumeration failed: {error:?}", self.seed)
-                })?;
-            for payment in payments.plans().iter().copied() {
-                let action = Action::ActivateAbility {
-                    player,
-                    ability,
-                    payment,
-                };
-                if self.action_is_legal(&action) {
-                    activations.push((ability_source, ability, payment));
-                }
-            }
-        }
-        if !activations.is_empty() {
+        let activations = self.legal_activation_choices(player)?;
+        if activations
+            .iter()
+            .any(|choice| matches!(choice, MainChoice::Activate { .. }))
+        {
             labels.push("Activate all available mana sources".to_owned());
             choices.push(MainChoice::ActivateAll);
-            for (ability_source, ability, payment) in activations {
-                labels.push(format!(
-                    "Activate ability: {} (payment waste {})",
-                    self.object_name(ability_source),
-                    payment.waste_score()
-                ));
-                choices.push(MainChoice::Activate {
-                    source: ability_source,
-                    ability,
-                    payment,
-                });
-            }
+        }
+        for choice in activations {
+            let source = match &choice {
+                MainChoice::Activate { source, .. }
+                | MainChoice::ActivateProgram { source, .. } => *source,
+                _ => unreachable!("activation enumeration returned a non-activation choice"),
+            };
+            labels.push(format!("Activate ability: {}", self.object_name(source)));
+            choices.push(choice);
         }
 
         for choice in self.legal_cast_choices(player)? {
@@ -3063,20 +3257,21 @@ impl GameDriver {
         }
 
         let mut activations = Vec::new();
-        for (ability_source, controller, ability) in self.mana_abilities.iter().copied() {
-            if controller != player
-                || self.state.object_zone(ability_source)
+        for registered in &self.activated_abilities {
+            if registered.runtime.is_some()
+                || registered.controller != player
+                || self.state.object_zone(registered.source)
                     != Some(ZoneId::new(None, ZoneKind::Battlefield))
                 || self
                     .state
-                    .object(ability_source)
+                    .object(registered.source)
                     .map_or(true, |record| record.tapped())
             {
                 continue;
             }
             let cost = self
                 .state
-                .effective_activation_cost(ability)
+                .effective_activation_cost(registered.id)
                 .map_err(|error| format!("seed {} activation cost failed: {error:?}", self.seed))?;
             let Some(payment) = self
                 .state
@@ -3090,11 +3285,11 @@ impl GameDriver {
             };
             let action = Action::ActivateAbility {
                 player,
-                ability,
+                ability: registered.id,
                 payment,
             };
             if self.action_is_legal(&action) {
-                activations.push((ability_source, ability, payment));
+                activations.push((registered.source, registered.id, payment));
             }
         }
         if !activations.is_empty() {
@@ -3299,7 +3494,8 @@ impl GameDriver {
         &self,
         player: PlayerId,
     ) -> Result<(DecisionContext, Vec<(CanonicalActionId, MainChoice)>), String> {
-        let mut choices = self.legal_cast_choices(player)?;
+        let mut choices = self.legal_activation_choices(player)?;
+        choices.extend(self.legal_cast_choices(player)?);
         choices.push(MainChoice::Finish);
         let mut mappings = Vec::with_capacity(choices.len());
         let mut options = Vec::with_capacity(choices.len());
@@ -3338,6 +3534,47 @@ impl GameDriver {
                     payment,
                 }],
             )),
+            MainChoice::ActivateProgram {
+                source,
+                ability,
+                payment,
+                targets,
+                optional,
+            } => {
+                let runtime = self.activated_runtime(ability)?;
+                let effect = runtime
+                    .program
+                    .activated_effects()
+                    .get(runtime.ability_index)
+                    .ok_or_else(|| {
+                        format!(
+                            "seed {} missing activated runtime {} on {}",
+                            self.seed,
+                            runtime.ability_index,
+                            runtime.program.name()
+                        )
+                    })?;
+                let decisions = StackDecisionBindings::new(None, &optional).map_err(|error| {
+                    format!("seed {} activation choices failed: {error:?}", self.seed)
+                })?;
+                Ok(DecisionOption::new(
+                    DecisionDescriptor::ActivateProgramAbility {
+                        source,
+                        ability,
+                        payment,
+                        targets: targets.clone(),
+                        optional,
+                    },
+                    vec![Action::ActivateProgramAbility {
+                        player,
+                        ability,
+                        payment,
+                        target_requirements: effect.target_requirements().to_vec(),
+                        target_choices: targets,
+                        decisions,
+                    }],
+                ))
+            }
             MainChoice::Cast {
                 object,
                 payment,
@@ -3681,20 +3918,22 @@ impl GameDriver {
     }
 
     fn activate_mana_sources(&mut self, player: PlayerId) -> Result<(), String> {
-        let abilities = self.mana_abilities.clone();
-        for (source, controller, ability) in abilities {
-            if controller != player
-                || self.state.object_zone(source) != Some(ZoneId::new(None, ZoneKind::Battlefield))
+        let abilities = self.activated_abilities.clone();
+        for registered in abilities {
+            if registered.runtime.is_some()
+                || registered.controller != player
+                || self.state.object_zone(registered.source)
+                    != Some(ZoneId::new(None, ZoneKind::Battlefield))
                 || self
                     .state
-                    .object(source)
+                    .object(registered.source)
                     .map_or(true, |record| record.tapped())
             {
                 continue;
             }
             let cost = self
                 .state
-                .effective_activation_cost(ability)
+                .effective_activation_cost(registered.id)
                 .map_err(|error| format!("seed {} activation cost failed: {error:?}", self.seed))?;
             let Some(payment) = self
                 .state
@@ -3708,7 +3947,7 @@ impl GameDriver {
             };
             self.dispatch(Action::ActivateAbility {
                 player,
-                ability,
+                ability: registered.id,
                 payment,
             })?;
             self.metrics.mana_abilities = self.metrics.mana_abilities.saturating_add(1);
@@ -3889,7 +4128,327 @@ impl GameDriver {
                     self.seed
                 ));
             };
-            self.mana_abilities.push((source, controller, ability_id));
+            self.activated_abilities.push(RegisteredAbility {
+                source,
+                controller,
+                id: ability_id,
+                runtime: None,
+            });
+        }
+        for (ability_index, ability) in program.activated_effects().iter().enumerate() {
+            if ability.pay_life() != 0 || ability.sacrifice_cost().is_some() {
+                return Err(format!(
+                    "seed {} activated ability {} on {} requires an unsupported extra-cost adapter",
+                    self.seed,
+                    ability_index,
+                    program.name()
+                ));
+            }
+            let mut cost = ActivationCost::new(ability.mana_cost());
+            if ability.tap_source() {
+                cost = cost.with_tap_source();
+            }
+            if ability.sacrifice_source() {
+                cost = cost.with_sacrifice_source();
+            }
+            let outcome = self.dispatch(Action::RegisterActivatedAbility {
+                definition: ActivatedAbilityDefinition::new(
+                    controller,
+                    Some(source),
+                    ability.timing(),
+                    cost,
+                    ActivatedAbilityEffect::ProgramBound,
+                ),
+            })?;
+            let Outcome::ActivatedAbilityRegistered(ability_id) = outcome else {
+                return Err(format!(
+                    "seed {} program ability registration returned {outcome:?}",
+                    self.seed
+                ));
+            };
+            self.activated_abilities.push(RegisteredAbility {
+                source,
+                controller,
+                id: ability_id,
+                runtime: Some(ActivatedRuntime {
+                    program: Arc::clone(&program),
+                    ability_index,
+                    source,
+                }),
+            });
+        }
+        Ok(())
+    }
+
+    fn object_choice_bindings(
+        &self,
+        controller: PlayerId,
+        requirements: &[ObjectChoiceRequirement],
+    ) -> Result<Vec<Vec<Vec<ObjectId>>>, String> {
+        let mut complete = vec![Vec::new()];
+        for (choice_index, requirement) in requirements.iter().copied().enumerate() {
+            if requirement.player() != PlayerBinding::Controller {
+                return Err(format!(
+                    "seed {} object choice {choice_index} has an unsupported player binding",
+                    self.seed
+                ));
+            }
+            let zone = ZoneId::new(Some(controller), requirement.zone());
+            let mut candidates = Vec::new();
+            for object in self.state.zone_objects(zone).unwrap_or_default() {
+                if object_satisfies_choice_requirement(
+                    &self.state,
+                    requirement,
+                    controller,
+                    *object,
+                )
+                .map_err(|error| {
+                    format!(
+                        "seed {} object choice {choice_index} predicate failed: {error}",
+                        self.seed
+                    )
+                })? {
+                    candidates.push(*object);
+                }
+            }
+            candidates.sort_by_key(|object| object.index());
+            let selections = bounded_object_combinations(
+                &candidates,
+                requirement.minimum() as usize,
+                requirement.maximum() as usize,
+                MAX_CANONICAL_SPELL_OPTIONS,
+            )?;
+            if selections.is_empty() {
+                return Err(format!(
+                    "seed {} object choice {choice_index} has no legal binding",
+                    self.seed
+                ));
+            }
+            let next_count = complete
+                .len()
+                .checked_mul(selections.len())
+                .ok_or_else(|| format!("seed {} object choice count overflow", self.seed))?;
+            if next_count > MAX_CANONICAL_SPELL_OPTIONS {
+                return Err(format!(
+                    "seed {} resolution choice exceeds the {}-option canonical cap",
+                    self.seed, MAX_CANONICAL_SPELL_OPTIONS
+                ));
+            }
+            let mut next = Vec::with_capacity(next_count);
+            for prefix in complete {
+                for selection in &selections {
+                    let mut binding = prefix.clone();
+                    binding.push(selection.clone());
+                    next.push(binding);
+                }
+            }
+            complete = next;
+        }
+        Ok(complete)
+    }
+
+    fn pending_activated_actions(
+        &self,
+        pending: &PendingActivatedResolution,
+        object_choices: Vec<Vec<ObjectId>>,
+    ) -> Result<Vec<Action>, String> {
+        let effect = pending
+            .runtime
+            .program
+            .activated_effects()
+            .get(pending.runtime.ability_index)
+            .ok_or_else(|| {
+                format!(
+                    "seed {} missing activated runtime {} on {}",
+                    self.seed,
+                    pending.runtime.ability_index,
+                    pending.runtime.program.name()
+                )
+            })?;
+        let bindings =
+            ExecutionBindings::new(pending.controller, self.live_opponents(pending.controller))
+                .with_source(pending.runtime.source)
+                .with_targets(pending.targets.clone())
+                .with_object_choices(object_choices)
+                .with_optional_effect_choices(pending.decisions.optional_choices().collect());
+        bind_activated_effect_actions(&self.state, effect, &bindings)
+            .map(|actions| {
+                actions
+                    .into_iter()
+                    .map(|action| action.action().clone())
+                    .collect()
+            })
+            .map_err(|error| {
+                format!(
+                    "seed {} activated interpreter binding failed: {error}",
+                    self.seed
+                )
+            })
+    }
+
+    fn pending_activated_context(
+        &self,
+        pending: &PendingActivatedResolution,
+    ) -> Result<DecisionContext, String> {
+        let effect = pending
+            .runtime
+            .program
+            .activated_effects()
+            .get(pending.runtime.ability_index)
+            .ok_or_else(|| {
+                format!(
+                    "seed {} missing activated runtime {} on {}",
+                    self.seed,
+                    pending.runtime.ability_index,
+                    pending.runtime.program.name()
+                )
+            })?;
+        let choices =
+            self.object_choice_bindings(pending.controller, effect.object_choice_requirements())?;
+        let mut options = Vec::with_capacity(choices.len());
+        for choice in choices {
+            let actions = self.pending_activated_actions(pending, choice.clone())?;
+            options.push(DecisionOption::new(
+                DecisionDescriptor::ChooseResolutionObjects { choices: choice },
+                actions,
+            ));
+        }
+        let kind = if effect
+            .object_choice_requirements()
+            .iter()
+            .any(|requirement| requirement.zone() == ZoneKind::Library)
+        {
+            DecisionKind::Search
+        } else {
+            DecisionKind::HiddenChoice
+        };
+        self.decision_context(kind, pending.controller, options)
+    }
+
+    fn resolution_choice_label(&self, descriptor: &DecisionDescriptor) -> Result<String, String> {
+        let DecisionDescriptor::ChooseResolutionObjects { choices } = descriptor else {
+            return Err(format!(
+                "seed {} cannot label non-resolution descriptor {descriptor:?}",
+                self.seed
+            ));
+        };
+        if choices.iter().all(Vec::is_empty) {
+            return Ok("Find no matching cards".to_owned());
+        }
+        Ok(choices
+            .iter()
+            .enumerate()
+            .map(|(index, objects)| {
+                if objects.is_empty() {
+                    format!("choice {}: no card", index + 1)
+                } else {
+                    format!(
+                        "choice {}: {}",
+                        index + 1,
+                        objects
+                            .iter()
+                            .map(|object| self.object_name(*object))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(" | "))
+    }
+
+    fn complete_pending_activated_resolution(
+        &mut self,
+        human: Option<PlayerId>,
+        decisions: &mut Option<&mut dyn DecisionSource>,
+        ai_policies: Option<&SeatPolicies>,
+    ) -> Result<(), String> {
+        let pending = self
+            .pending_activated_resolution
+            .take()
+            .ok_or_else(|| format!("seed {} has no pending activated resolution", self.seed))?;
+        let context = self.pending_activated_context(&pending)?;
+        let selected_id = if human == Some(pending.controller) {
+            let labels = context
+                .options()
+                .iter()
+                .map(|option| self.resolution_choice_label(option.descriptor()))
+                .collect::<Result<Vec<_>, _>>()?;
+            let source = decisions.as_deref_mut().ok_or_else(|| {
+                "human game is missing a decision source for a resolution choice".to_owned()
+            })?;
+            self.prompt_context_choice(source, "Choose cards while resolving", &context, &labels)?
+        } else if let Some(policies) = ai_policies {
+            let decision_started = Instant::now();
+            let policy = self.policy_for(pending.controller, policies)?;
+            let (selected_id, decision, policy_name, candidates) = if context.options().len() == 1 {
+                (context.options()[0].id(), None, "forced-v1", Vec::new())
+            } else {
+                let candidates = if matches!(policy, AiController::Random(_)) {
+                    Vec::new()
+                } else {
+                    self.policy_candidates(&context, pending.controller, |_| 0)?
+                };
+                let (selected_id, decision, policy_name) = self.select_ai_action(
+                    policy,
+                    &context,
+                    &candidates,
+                    "resolution object choice",
+                )?;
+                (selected_id, decision, policy_name, candidates)
+            };
+            context.select(selected_id).map_err(|error| {
+                format!(
+                    "seed {} AI selected an illegal resolution choice: {error}",
+                    self.seed
+                )
+            })?;
+            self.record_ai_decision(AiDecisionTelemetry {
+                kind: "resolution_object_choice",
+                policy: policy_name,
+                context: &context,
+                action_id: selected_id,
+                decision,
+                evaluated_candidates: candidates.len(),
+                wall_latency_us: elapsed_us(decision_started),
+                score_override: None,
+                stop_reason: if context.options().len() == 1 {
+                    "single_legal_action"
+                } else if decision.is_some() {
+                    "one_ply_complete"
+                } else {
+                    "random_legal_selection"
+                },
+            });
+            selected_id
+        } else {
+            context
+                .options()
+                .iter()
+                .max_by_key(|option| match option.descriptor() {
+                    DecisionDescriptor::ChooseResolutionObjects { choices } => {
+                        choices.iter().map(Vec::len).sum::<usize>()
+                    }
+                    _ => 0,
+                })
+                .map(DecisionOption::id)
+                .ok_or_else(|| format!("seed {} has no autonomous resolution choice", self.seed))?
+        };
+        let actions = context
+            .select(selected_id)
+            .map_err(|error| format!("seed {} resolution choice failed: {error}", self.seed))?
+            .actions()
+            .to_vec();
+        let action_count = actions.len() as u64;
+        for action in actions {
+            self.dispatch(action)?;
+        }
+        self.metrics.interpreter_actions = self
+            .metrics
+            .interpreter_actions
+            .saturating_add(action_count);
+        if let Some(exercise) = self.identity_exercise_mut(pending.runtime.source) {
+            exercise.effect_actions = exercise.effect_actions.saturating_add(action_count);
         }
         Ok(())
     }
@@ -3917,6 +4476,7 @@ impl GameDriver {
         let controller = record.controller();
         let object = record.object();
         let trigger = record.trigger();
+        let activated_ability = record.activated_ability();
         let outcome = record.outcome();
         let targets = record
             .targets()
@@ -3929,6 +4489,58 @@ impl GameDriver {
         }
         if let Some(trigger) = trigger {
             return self.execute_trigger(controller, trigger);
+        }
+        if let Some(ability) = activated_ability {
+            let Some(runtime) = self
+                .activated_abilities
+                .iter()
+                .find(|registered| registered.id == ability)
+                .and_then(|registered| registered.runtime.clone())
+            else {
+                return Ok(());
+            };
+            let effect = runtime
+                .program
+                .activated_effects()
+                .get(runtime.ability_index)
+                .ok_or_else(|| {
+                    format!(
+                        "seed {} missing activated runtime {} on {}",
+                        self.seed,
+                        runtime.ability_index,
+                        runtime.program.name()
+                    )
+                })?;
+            let requires_object_choices = !effect.object_choice_requirements().is_empty();
+            let pending = PendingActivatedResolution {
+                controller,
+                runtime,
+                targets,
+                decisions,
+            };
+            if requires_object_choices {
+                if self.pending_activated_resolution.is_some() {
+                    return Err(format!(
+                        "seed {} attempted to overlap activated resolution choices",
+                        self.seed
+                    ));
+                }
+                self.pending_activated_resolution = Some(pending);
+                return Ok(());
+            }
+            let actions = self.pending_activated_actions(&pending, Vec::new())?;
+            let action_count = actions.len() as u64;
+            for action in actions {
+                self.dispatch(action)?;
+            }
+            self.metrics.interpreter_actions = self
+                .metrics
+                .interpreter_actions
+                .saturating_add(action_count);
+            if let Some(exercise) = self.identity_exercise_mut(pending.runtime.source) {
+                exercise.effect_actions = exercise.effect_actions.saturating_add(action_count);
+            }
+            return Ok(());
         }
         let Some(object) = object else {
             return Ok(());
@@ -5417,6 +6029,53 @@ impl SearchDomain for MainSearchDomain<'_> {
     }
 }
 
+fn bounded_object_combinations(
+    candidates: &[ObjectId],
+    minimum: usize,
+    maximum: usize,
+    limit: usize,
+) -> Result<Vec<Vec<ObjectId>>, String> {
+    fn extend(
+        candidates: &[ObjectId],
+        start: usize,
+        remaining: usize,
+        limit: usize,
+        current: &mut Vec<ObjectId>,
+        output: &mut Vec<Vec<ObjectId>>,
+    ) -> Result<(), String> {
+        if remaining == 0 {
+            if output.len() >= limit {
+                return Err(format!(
+                    "object-choice combinations exceed the {limit}-option canonical cap"
+                ));
+            }
+            output.push(current.clone());
+            return Ok(());
+        }
+        if candidates.len().saturating_sub(start) < remaining {
+            return Ok(());
+        }
+        let final_start = candidates.len() - remaining;
+        for index in start..=final_start {
+            current.push(candidates[index]);
+            extend(candidates, index + 1, remaining - 1, limit, current, output)?;
+            current.pop();
+        }
+        Ok(())
+    }
+
+    let maximum = maximum.min(candidates.len());
+    if minimum > maximum {
+        return Ok(Vec::new());
+    }
+    let mut output = Vec::new();
+    let mut current = Vec::new();
+    for count in minimum..=maximum {
+        extend(candidates, 0, count, limit, &mut current, &mut output)?;
+    }
+    Ok(output)
+}
+
 impl CombatSearchDomain<'_> {
     fn context(&self, driver: &GameDriver) -> Result<DecisionContext, String> {
         match self.kind {
@@ -5709,6 +6368,20 @@ fn decision_descriptor_value(descriptor: &DecisionDescriptor) -> Value {
             "ability_id": ability.get(),
             "payment": payment_value(*payment)
         }),
+        DecisionDescriptor::ActivateProgramAbility {
+            source,
+            ability,
+            payment,
+            targets,
+            optional,
+        } => json!({
+            "kind": "activate_program_ability",
+            "source_object_id": source.index(),
+            "ability_id": ability.get(),
+            "payment": payment_value(*payment),
+            "targets": targets.iter().copied().map(target_value).collect::<Vec<_>>(),
+            "optional": optional
+        }),
         DecisionDescriptor::CastSpell {
             object,
             payment,
@@ -5775,6 +6448,12 @@ fn decision_descriptor_value(descriptor: &DecisionDescriptor) -> Value {
         DecisionDescriptor::ChooseSearchObject { object } => json!({
             "kind": "choose_search_object",
             "object_id": object.index()
+        }),
+        DecisionDescriptor::ChooseResolutionObjects { choices } => json!({
+            "kind": "choose_resolution_objects",
+            "choice_object_ids": choices.iter().map(|choice| {
+                choice.iter().map(|object| object.index()).collect::<Vec<_>>()
+            }).collect::<Vec<_>>()
         }),
         DecisionDescriptor::AssignCombatDamage {
             source,
@@ -6985,11 +7664,13 @@ mod tests {
         TraceRecord, PLAYER_COUNT,
     };
     use forge_ai::{AiWeights, GuardrailTable};
+    use forge_cards::runtime::compile_card_program;
     use forge_core::{
-        apply, Action, AttackDeclaration, BaseCreatureCharacteristics, CardId, DecisionContext,
-        DecisionDescriptor, DecisionKind, DecisionOption, GameState, ManaPool, ObjectColors,
-        ObjectId, Outcome, PlayerId, PlayerView, ResolutionOutcome, Step, TargetChoice, ZoneId,
-        ZoneKind,
+        apply, Action, AttackDeclaration, BaseCreatureCharacteristics, BaseObjectCharacteristics,
+        BasicLandTypes, CardId, CombatDamageTarget, DecisionContext, DecisionDescriptor,
+        DecisionKind, DecisionOption, GameState, ManaPool, ObjectColors, ObjectId,
+        ObjectSupertypes, ObjectTypes, Outcome, PlayerId, PlayerView, ResolutionOutcome, Step,
+        TargetChoice, ZoneId, ZoneKind,
     };
     use std::{
         collections::{BTreeSet, HashMap, HashSet},
@@ -7570,6 +8251,272 @@ mod tests {
     }
 
     #[test]
+    fn program_activated_choices_survive_priority_stack_and_resolution() {
+        let source = r#"card "Choice Pinger" {
+  id: "f46a6fa5-df77-4da9-bd2c-733c86174cf9"
+  layout: normal
+  status: unverified_playable
+  face "Choice Pinger" {
+    cost: "{1}{R}"
+    types: "Enchantment"
+    oracle: "{R}: You may deal 2 damage to any target."
+    keywords: []
+    ability activated {
+      costs: [mana_cost("{R}")]
+      effect: choose_up_to(1, deal_damage(target(any()), 2))
+    }
+  }
+}"#;
+        let definition = forge_cardc::parse_card_named("choice_pinger.frs", source)
+            .unwrap_or_else(|error| panic!("activated fixture should parse: {error}"));
+        let program = Arc::new(
+            forge_cards::runtime::compile_card_program(&definition)
+                .unwrap_or_else(|error| panic!("activated fixture should compile: {error}")),
+        );
+        assert_eq!(program.activated_effects().len(), 1);
+        let (mut driver, caster, opponent, permanent) = modal_spell_driver();
+        Arc::make_mut(&mut driver.programs).insert(permanent, Arc::clone(&program));
+        driver
+            .dispatch(Action::SetBaseObjectCharacteristics {
+                object: permanent,
+                base: program.base_object(),
+            })
+            .unwrap_or_else(|error| panic!("activated base setup should succeed: {error}"));
+        driver
+            .dispatch(Action::MoveObject {
+                object: permanent,
+                to: ZoneId::new(None, ZoneKind::Battlefield),
+            })
+            .unwrap_or_else(|error| panic!("activated source setup should succeed: {error}"));
+        driver
+            .register_permanent_runtime(caster, permanent)
+            .unwrap_or_else(|error| panic!("activated runtime should register: {error}"));
+
+        let (context, mappings) = driver
+            .priority_decision_context(caster)
+            .unwrap_or_else(|error| panic!("activated priority context should exist: {error}"));
+        let selected = context
+            .options()
+            .iter()
+            .find(|option| {
+                matches!(
+                    option.descriptor(),
+                    DecisionDescriptor::ActivateProgramAbility {
+                        source,
+                        targets,
+                        optional,
+                        ..
+                    } if *source == permanent
+                        && targets == &vec![TargetChoice::Player(opponent)]
+                        && optional == &vec![true]
+                )
+            })
+            .unwrap_or_else(|| panic!("accepted opponent activation should be canonical"));
+        let choice = mappings
+            .iter()
+            .find_map(|(id, choice)| (*id == selected.id()).then(|| choice.clone()))
+            .unwrap_or_else(|| panic!("activated option should have a typed adapter"));
+        assert_eq!(driver.apply_main_choice(caster, choice), Ok(true));
+        let stack = driver
+            .state
+            .stack_top()
+            .unwrap_or_else(|| panic!("activated ability should be on the stack"));
+        assert!(stack.activated_ability().is_some());
+        assert_eq!(
+            stack.decisions().optional_choices().collect::<Vec<_>>(),
+            vec![true]
+        );
+        assert_eq!(
+            stack
+                .targets()
+                .iter()
+                .map(|target| target.choice())
+                .collect::<Vec<_>>(),
+            vec![TargetChoice::Player(opponent)]
+        );
+
+        driver
+            .pass_priority()
+            .unwrap_or_else(|error| panic!("caster pass should succeed: {error}"));
+        driver
+            .pass_priority()
+            .unwrap_or_else(|error| panic!("opponent pass should resolve: {error}"));
+        assert_eq!(driver.state.players()[opponent.index()].life(), 18);
+        assert!(driver.actions.iter().any(|action| matches!(
+            action,
+            Action::DealDamage {
+                target: CombatDamageTarget::Player(player),
+                amount: 2,
+                ..
+            } if *player == opponent
+        )));
+    }
+
+    #[test]
+    fn evolving_wilds_search_is_chosen_at_resolution_and_filters_nonbasic_lands() {
+        let source = r#"card "Evolving Wilds" {
+  id: "a75445d3-1303-4bb5-89ad-26ea93fecd48"
+  layout: normal
+  status: unverified_playable
+  face "Evolving Wilds" {
+    cost: ""
+    types: "Land"
+    oracle: "{T}, Sacrifice Evolving Wilds: Search your library for a basic land card, put it onto the battlefield tapped, then shuffle."
+    keywords: []
+    ability activated {
+      costs: [tap_self(), sacrifice_self()]
+      effect: sequence(search_library(cards(and(and(type_is("land"), supertype_is("basic")), zone_is("library"))), you(), 1), move_zone(chosen(cards(and(and(type_is("land"), supertype_is("basic")), zone_is("library")))), "battlefield", 1), tap(chosen(cards(and(and(type_is("land"), supertype_is("basic")), zone_is("library"))))), shuffle(you()))
+    }
+  }
+}"#;
+        let definition = forge_cardc::parse_card_named("evolving_wilds.frs", source)
+            .unwrap_or_else(|error| panic!("Evolving Wilds should parse: {error}"));
+        let program = Arc::new(
+            compile_card_program(&definition)
+                .unwrap_or_else(|error| panic!("Evolving Wilds should compile: {error}")),
+        );
+        let (mut driver, caster, _opponent, wilds) = modal_spell_driver();
+        Arc::make_mut(&mut driver.programs).insert(wilds, Arc::clone(&program));
+        driver
+            .dispatch(Action::SetBaseObjectCharacteristics {
+                object: wilds,
+                base: program.base_object(),
+            })
+            .unwrap_or_else(|error| panic!("Wilds characteristics should apply: {error}"));
+        driver
+            .dispatch(Action::MoveObject {
+                object: wilds,
+                to: ZoneId::new(None, ZoneKind::Battlefield),
+            })
+            .unwrap_or_else(|error| panic!("Wilds should enter the battlefield: {error}"));
+
+        let library = ZoneId::new(Some(caster), ZoneKind::Library);
+        let nonbasic = match driver
+            .dispatch(Action::CreateObject {
+                card: CardId::new(903),
+                owner: caster,
+                controller: caster,
+                zone: library,
+            })
+            .unwrap_or_else(|error| panic!("nonbasic setup should succeed: {error}"))
+        {
+            Outcome::ObjectCreated(object) => object,
+            other => panic!("unexpected nonbasic setup outcome: {other:?}"),
+        };
+        let basic = match driver
+            .dispatch(Action::CreateObject {
+                card: CardId::new(904),
+                owner: caster,
+                controller: caster,
+                zone: library,
+            })
+            .unwrap_or_else(|error| panic!("basic setup should succeed: {error}"))
+        {
+            Outcome::ObjectCreated(object) => object,
+            other => panic!("unexpected basic setup outcome: {other:?}"),
+        };
+        let forest = BasicLandTypes::none().with_forest();
+        for (object, supertypes) in [
+            (nonbasic, ObjectSupertypes::none()),
+            (basic, ObjectSupertypes::none().with_basic()),
+        ] {
+            driver
+                .dispatch(Action::SetBaseObjectCharacteristics {
+                    object,
+                    base: BaseObjectCharacteristics::new(
+                        ObjectTypes::none().with_land(),
+                        ObjectColors::none(),
+                    )
+                    .with_supertypes(supertypes)
+                    .with_basic_land_types(forest),
+                })
+                .unwrap_or_else(|error| panic!("land characteristics should apply: {error}"));
+        }
+        driver
+            .register_permanent_runtime(caster, wilds)
+            .unwrap_or_else(|error| panic!("Wilds runtime should register: {error}"));
+
+        let (context, mappings) = driver
+            .priority_decision_context(caster)
+            .unwrap_or_else(|error| panic!("Wilds priority context should exist: {error}"));
+        let selected = context
+            .options()
+            .iter()
+            .find(|option| {
+                matches!(
+                    option.descriptor(),
+                    DecisionDescriptor::ActivateProgramAbility {
+                        source,
+                        targets,
+                        optional,
+                        ..
+                    } if *source == wilds && targets.is_empty() && optional.is_empty()
+                )
+            })
+            .unwrap_or_else(|| panic!("Wilds activation should be canonical"));
+        let choice = mappings
+            .iter()
+            .find_map(|(id, choice)| (*id == selected.id()).then(|| choice.clone()))
+            .unwrap_or_else(|| panic!("Wilds activation should have a typed adapter"));
+        assert_eq!(driver.apply_main_choice(caster, choice), Ok(true));
+        driver
+            .pass_priority()
+            .unwrap_or_else(|error| panic!("caster pass should succeed: {error}"));
+        driver
+            .pass_priority()
+            .unwrap_or_else(|error| panic!("opponent pass should resolve Wilds: {error}"));
+        assert!(driver.pending_activated_resolution.is_some());
+        assert_eq!(
+            driver.state.object_zone(wilds),
+            Some(ZoneId::new(Some(caster), ZoneKind::Graveyard))
+        );
+
+        let pending = driver
+            .pending_activated_resolution
+            .as_ref()
+            .unwrap_or_else(|| panic!("Wilds should await its search choice"));
+        let search = driver
+            .pending_activated_context(pending)
+            .unwrap_or_else(|error| panic!("Wilds search context should exist: {error}"));
+        assert_eq!(search.kind(), DecisionKind::Search);
+        assert_eq!(search.options().len(), 2);
+        assert!(search
+            .options()
+            .iter()
+            .all(|option| match option.descriptor() {
+                DecisionDescriptor::ChooseResolutionObjects { choices } => {
+                    !choices.iter().flatten().any(|object| *object == nonbasic)
+                }
+                _ => false,
+            }));
+        assert!(search.options().iter().any(|option| matches!(
+            option.descriptor(),
+            DecisionDescriptor::ChooseResolutionObjects { choices }
+                if choices == &vec![vec![basic]]
+        )));
+
+        let mut source = PickNonEmptyResolutionChoice;
+        let mut decisions = Some(&mut source as &mut dyn DecisionSource);
+        driver
+            .complete_pending_activated_resolution(Some(caster), &mut decisions, None)
+            .unwrap_or_else(|error| panic!("Wilds search should complete: {error}"));
+        assert!(driver.pending_activated_resolution.is_none());
+        assert_eq!(
+            driver.state.object_zone(basic),
+            Some(ZoneId::new(None, ZoneKind::Battlefield))
+        );
+        assert!(driver
+            .state
+            .object(basic)
+            .is_some_and(|record| record.tapped()));
+        assert_eq!(driver.state.object_zone(nonbasic), Some(library));
+        assert!(driver.actions.iter().any(|action| matches!(
+            action,
+            Action::ShuffleLibrary { player } if *player == caster
+        )));
+    }
+
+    #[test]
     #[ignore = "requires the local T3 translated-card output"]
     fn scripted_human_game_completes_and_replays_exactly() {
         let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
@@ -7643,6 +8590,18 @@ mod tests {
         }
     }
 
+    struct PickNonEmptyResolutionChoice;
+
+    impl DecisionSource for PickNonEmptyResolutionChoice {
+        fn choose(&mut self, prompt: &DecisionPrompt<'_>) -> Result<usize, String> {
+            prompt
+                .options
+                .iter()
+                .position(|label| !label.starts_with("Find no matching"))
+                .ok_or_else(|| "expected a non-empty resolution choice".to_owned())
+        }
+    }
+
     fn commander_decision_driver() -> (GameDriver, PlayerId, ObjectId, ZoneId) {
         let mut state = GameState::new();
         let owner = match apply(&mut state, Action::AddPlayer) {
@@ -7684,7 +8643,8 @@ mod tests {
             ),
             commanders: vec![commander],
             trigger_programs: HashMap::new(),
-            mana_abilities: Vec::new(),
+            activated_abilities: Vec::new(),
+            pending_activated_resolution: None,
             triggers_registered_for: HashSet::new(),
             permanent_runtime_registered_for: HashSet::new(),
             commander_zone_decisions: HashMap::new(),
@@ -7795,7 +8755,8 @@ mod tests {
             ),
             commanders: vec![spell, creature],
             trigger_programs: HashMap::new(),
-            mana_abilities: Vec::new(),
+            activated_abilities: Vec::new(),
+            pending_activated_resolution: None,
             triggers_registered_for: HashSet::new(),
             permanent_runtime_registered_for: HashSet::new(),
             commander_zone_decisions: HashMap::new(),
@@ -7865,7 +8826,8 @@ mod tests {
             ),
             commanders: vec![first_attacker, second_attacker],
             trigger_programs: HashMap::new(),
-            mana_abilities: Vec::new(),
+            activated_abilities: Vec::new(),
+            pending_activated_resolution: None,
             triggers_registered_for: HashSet::new(),
             permanent_runtime_registered_for: HashSet::new(),
             commander_zone_decisions: HashMap::new(),

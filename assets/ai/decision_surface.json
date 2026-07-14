@@ -16,14 +16,14 @@
       "human": "partial",
       "ai": "partial",
       "benchmark": "partial",
-      "note": "Every live human and AI priority window now uses a shared canonical context with a forced-pass fast path and exact normal-cost instant targets, modes, optional answers, and payments. Non-mana activations, alternate costs, and resolution-time choices remain open."
+      "note": "Every live human and AI priority window uses one shared canonical context with a forced-pass fast path, exact normal-cost instant choices, and typed program-bound non-mana activations. Activation targets, optional answers, and payments survive the stack; alternate costs, unsupported extra activation costs, and triggered-ability prompts remain open."
     },
     {
       "kind": "main_phase",
       "human": "partial",
       "ai": "partial",
       "benchmark": "partial",
-      "note": "Human and AI consume the same canonical land, mana activation, normal-cost permanent/instant/sorcery cast, and finish options. Cast descriptors bind exact targets, modes, optional answers, and every legal payment. Non-mana activations, variable/additional/alternate costs, and resolution-time object choices remain open."
+      "note": "Human and AI consume the same canonical land, mana activation, typed program-bound non-mana activation, normal-cost cast, and finish options. Descriptors bind exact targets, modes, optional answers, and every legal payment. Variable/additional/alternate costs and spell or trigger resolution-time object choices remain open."
     },
     {
       "kind": "declare_attackers",
@@ -51,7 +51,7 @@
       "human": "partial",
       "ai": "partial",
       "benchmark": "partial",
-      "note": "Normal spell casts enumerate the exact legal target Cartesian product and preserve selected targets through stack resolution. Activated abilities, target distribution, and partial-illegality resolution remain open."
+      "note": "Normal spells and typed program-bound activated abilities enumerate exact legal target products and preserve selected targets through stack resolution. Triggered targets, target distribution, and partial-illegality resolution remain open."
     },
     {
       "kind": "mode",
@@ -79,7 +79,7 @@
       "human": "partial",
       "ai": "partial",
       "benchmark": "partial",
-      "note": "Normal spell optional-effect products are canonical, visible to humans, available to AI, hashed on the stack, and bound at resolution. Optional costs and activated/triggered/resolution-time optional prompts remain open."
+      "note": "Normal spell and typed program-bound activation optional-effect products are canonical, visible to humans, available to AI, hashed on the stack, and bound at resolution. Optional costs and triggered or deferred optional prompts remain open."
     },
     {
       "kind": "trigger_order",
@@ -97,10 +97,10 @@
     },
     {
       "kind": "search",
-      "human": "descriptor_only",
-      "ai": "descriptor_only",
-      "benchmark": "descriptor_only",
-      "note": "Interpreter choices exist in semantic probes; no complete live-game adapter is claimed."
+      "human": "partial",
+      "ai": "partial",
+      "benchmark": "partial",
+      "note": "Typed program-bound activated abilities now defer object selection until successful resolution, enumerate exact bounded legal products including fail-to-find, filter through the interpreter's authoritative predicate, expose authorized labels to humans, evaluate real bound actions for AI, and replay canonically. Spell, trigger, multi-zone, and sealed benchmark coverage remain open."
     },
     {
       "kind": "combat_damage",

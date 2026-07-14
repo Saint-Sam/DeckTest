@@ -198,6 +198,19 @@ pub enum DecisionDescriptor {
         /// Explicit mana payment.
         payment: PaymentPlan,
     },
+    /// Activate a program-bound non-mana ability with announced choices.
+    ActivateProgramAbility {
+        /// Source object used by presentation and auditing.
+        source: ObjectId,
+        /// Registered ability ID.
+        ability: ActivatedAbilityId,
+        /// Explicit mana payment.
+        payment: PaymentPlan,
+        /// Bound targets in requirement order.
+        targets: Vec<TargetChoice>,
+        /// Optional-effect answers in prompt order.
+        optional: Vec<bool>,
+    },
     /// Cast a spell with all currently bound choices.
     CastSpell {
         /// Spell object.
@@ -277,6 +290,11 @@ pub enum DecisionDescriptor {
         /// Selected object.
         object: ObjectId,
     },
+    /// Choose complete ordered object groups while resolving an effect.
+    ChooseResolutionObjects {
+        /// Selected objects in compiled choice-slot order.
+        choices: Vec<Vec<ObjectId>>,
+    },
     /// Choose one combat-damage amount for a typed target.
     AssignCombatDamage {
         /// Damage source.
@@ -313,6 +331,26 @@ impl DecisionDescriptor {
                 bytes.object(*source);
                 bytes.u32(ability.get());
                 bytes.payment(*payment);
+            }
+            Self::ActivateProgramAbility {
+                source,
+                ability,
+                payment,
+                targets,
+                optional,
+            } => {
+                bytes.u8(20);
+                bytes.object(*source);
+                bytes.u32(ability.get());
+                bytes.payment(*payment);
+                bytes.u32(targets.len() as u32);
+                for target in targets {
+                    bytes.target(*target);
+                }
+                bytes.u32(optional.len() as u32);
+                for accept in optional {
+                    bytes.u8(u8::from(*accept));
+                }
             }
             Self::CastSpell {
                 object,
@@ -398,6 +436,13 @@ impl DecisionDescriptor {
             Self::ChooseSearchObject { object } => {
                 bytes.u8(17);
                 bytes.object(*object);
+            }
+            Self::ChooseResolutionObjects { choices } => {
+                bytes.u8(21);
+                bytes.u32(choices.len() as u32);
+                for choice in choices {
+                    bytes.objects(choice);
+                }
             }
             Self::AssignCombatDamage {
                 source,
@@ -956,6 +1001,13 @@ mod tests {
                 ability: crate::ActivatedAbilityId(0),
                 payment,
             },
+            DecisionDescriptor::ActivateProgramAbility {
+                source: object,
+                ability: crate::ActivatedAbilityId(1),
+                payment,
+                targets: vec![crate::TargetChoice::Player(opponent)],
+                optional: vec![true],
+            },
             DecisionDescriptor::CastSpell {
                 object,
                 payment,
@@ -992,6 +1044,9 @@ mod tests {
                 slot: 0,
             },
             DecisionDescriptor::ChooseSearchObject { object },
+            DecisionDescriptor::ChooseResolutionObjects {
+                choices: vec![vec![object]],
+            },
             DecisionDescriptor::AssignCombatDamage {
                 source: object,
                 target: crate::TargetChoice::Player(player),
@@ -1003,6 +1058,6 @@ mod tests {
             .into_iter()
             .map(|descriptor| DecisionOption::new(descriptor, Vec::new()).id())
             .collect::<std::collections::BTreeSet<_>>();
-        assert_eq!(ids.len(), 20);
+        assert_eq!(ids.len(), 22);
     }
 }

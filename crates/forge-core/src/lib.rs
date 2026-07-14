@@ -3868,6 +3868,12 @@ pub enum ActivatedAbilityEffect {
         /// Damage amount.
         amount: u32,
     },
+    /// Defer the effect body to a registered typed card-program interpreter.
+    ///
+    /// The kernel still owns timing, costs, targets, priority, stack identity,
+    /// and resolution. The embedding runtime binds the closed program body only
+    /// after the corresponding resolution record reports success.
+    ProgramBound,
 }
 
 impl ActivatedAbilityEffect {
@@ -3877,6 +3883,7 @@ impl ActivatedAbilityEffect {
             Self::GainLife { .. } => 1,
             Self::LoseLife { .. } => 2,
             Self::AddManaAndDealDamage { .. } => 3,
+            Self::ProgramBound => 4,
         }
     }
 
@@ -4389,6 +4396,15 @@ struct StackEntryRequest {
     flashback: bool,
     split_second: bool,
     decisions: StackDecisionBindings,
+}
+
+enum AbilityActivationAdapter<'a> {
+    BuiltIn,
+    Program {
+        target_requirements: &'a [TargetRequirement],
+        target_choices: &'a [TargetChoice],
+        decisions: StackDecisionBindings,
+    },
 }
 
 /// Combat-relevant static keywords tracked by the T1.6 kernel.
@@ -6672,6 +6688,8 @@ pub enum StateError {
     DuplicateContinuousEffectDependency(ContinuousEffectId),
     /// The requested activated ability ID does not exist.
     UnknownActivatedAbility(ActivatedAbilityId),
+    /// The activation action does not match the registered effect adapter.
+    ActivatedAbilityAdapterMismatch(ActivatedAbilityId),
     /// The requested cost modifier ID does not exist.
     UnknownCostModifier(CostModifierId),
     /// The requested targeting or combat restriction ID does not exist.
@@ -7070,6 +7088,21 @@ pub enum Action {
         ability: ActivatedAbilityId,
         /// Mana payment selected for the effective activation cost.
         payment: PaymentPlan,
+    },
+    /// Activate a registered program-bound ability with announced choices.
+    ActivateProgramAbility {
+        /// Activating player.
+        player: PlayerId,
+        /// Registered ability to activate.
+        ability: ActivatedAbilityId,
+        /// Mana payment selected for the effective activation cost.
+        payment: PaymentPlan,
+        /// Closed target requirements in program order.
+        target_requirements: Vec<TargetRequirement>,
+        /// Announced target choices in requirement order.
+        target_choices: Vec<TargetChoice>,
+        /// Optional-effect decisions announced for the ability.
+        decisions: StackDecisionBindings,
     },
     /// Set base printed card types and colors for one object.
     SetBaseObjectCharacteristics {
@@ -7659,6 +7692,27 @@ fn apply_fallback(state: &mut GameState, action: Action) -> Outcome {
             ability,
             payment,
         } => match state.activate_ability(player, ability, payment) {
+            Ok(Some(entry)) => Outcome::StackEntryAdded(entry),
+            Ok(None) => Outcome::Applied,
+            Err(error) => Outcome::Failed(error),
+        },
+        Action::ActivateProgramAbility {
+            player,
+            ability,
+            payment,
+            target_requirements,
+            target_choices,
+            decisions,
+        } => match state.activate_ability_with_choices(
+            player,
+            ability,
+            payment,
+            AbilityActivationAdapter::Program {
+                target_requirements: &target_requirements,
+                target_choices: &target_choices,
+                decisions,
+            },
+        ) {
             Ok(Some(entry)) => Outcome::StackEntryAdded(entry),
             Ok(None) => Outcome::Applied,
             Err(error) => Outcome::Failed(error),
@@ -10335,7 +10389,36 @@ impl GameState {
         ability: ActivatedAbilityId,
         payment: PaymentPlan,
     ) -> Result<Option<StackEntryId>, StateError> {
+        self.activate_ability_with_choices(
+            player,
+            ability,
+            payment,
+            AbilityActivationAdapter::BuiltIn,
+        )
+    }
+
+    fn activate_ability_with_choices(
+        &mut self,
+        player: PlayerId,
+        ability: ActivatedAbilityId,
+        payment: PaymentPlan,
+        adapter: AbilityActivationAdapter<'_>,
+    ) -> Result<Option<StackEntryId>, StateError> {
         let definition = self.activated_ability_definition(ability)?;
+        let program_bound = matches!(adapter, AbilityActivationAdapter::Program { .. });
+        if matches!(definition.effect(), ActivatedAbilityEffect::ProgramBound) != program_bound {
+            return Err(StateError::ActivatedAbilityAdapterMismatch(ability));
+        }
+        let (target_requirements, target_choices, decisions) = match adapter {
+            AbilityActivationAdapter::BuiltIn => {
+                (&[][..], &[][..], StackDecisionBindings::default())
+            }
+            AbilityActivationAdapter::Program {
+                target_requirements,
+                target_choices,
+                decisions,
+            } => (target_requirements, target_choices, decisions),
+        };
         let controller = self.activated_ability_controller(definition)?;
         if controller != player {
             return Err(StateError::PriorityPlayerMismatch {
@@ -10360,6 +10443,12 @@ impl GameState {
         {
             return Err(StateError::InvalidSpellTiming);
         }
+        let target_snapshots = self.capture_target_snapshots(
+            player,
+            definition.source(),
+            target_requirements,
+            target_choices,
+        )?;
         let effective_cost = self.effective_activation_cost(ability)?;
         let canonical_payment = validate_payment_plan(
             self.mana_pool(player)?,
@@ -10391,13 +10480,13 @@ impl GameState {
                 trigger: None,
                 activated_ability: Some(ability),
                 kind: StackObjectKind::ActivatedAbility,
-                targets: Vec::new(),
+                targets: target_snapshots,
                 payment: Some(payment),
                 copy_info: None,
                 kicked: false,
                 flashback: false,
                 split_second: false,
-                decisions: StackDecisionBindings::default(),
+                decisions,
             });
             self.after_priority_action(player, true)?;
             Ok(Some(id))
@@ -10560,6 +10649,7 @@ impl GameState {
                     amount,
                 )?;
             }
+            ActivatedAbilityEffect::ProgramBound => {}
         }
         self.emit_event(GameEvent::ActivatedAbilityResolved {
             ability,
@@ -16083,6 +16173,7 @@ impl Fnva64 {
                 self.write_mana_pool(mana);
                 self.write_u32(amount);
             }
+            ActivatedAbilityEffect::ProgramBound => {}
         }
     }
 
@@ -17446,6 +17537,7 @@ impl CanonicalBytes {
                 self.write_mana_pool(mana);
                 self.write_u32(amount);
             }
+            ActivatedAbilityEffect::ProgramBound => {}
         }
     }
 
@@ -23529,6 +23621,118 @@ mod tests {
             ManaPool::new(0, 0, 0, 0, 1, 0)
         );
         assert_eq!(state.priority_player(), None);
+    }
+
+    #[test]
+    fn program_bound_activation_preserves_targets_and_decisions_on_stack() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let opponent = state.add_player();
+        let source = state
+            .create_object(
+                CardId::new(25_050),
+                active,
+                active,
+                ZoneId::new(None, ZoneKind::Battlefield),
+            )
+            .unwrap_or_else(|error| panic!("unexpected source create error: {error:?}"));
+        let ability = state
+            .register_activated_ability(ActivatedAbilityDefinition::new(
+                active,
+                Some(source),
+                ActivationTiming::Instant,
+                ActivationCost::new(ManaCost::new(0, 0, 0, 0, 0, 0)),
+                ActivatedAbilityEffect::ProgramBound,
+            ))
+            .unwrap_or_else(|error| panic!("unexpected ability registration error: {error:?}"));
+        let fixed_ability = state
+            .register_activated_ability(ActivatedAbilityDefinition::new(
+                active,
+                Some(source),
+                ActivationTiming::Instant,
+                ActivationCost::new(ManaCost::new(0, 0, 0, 0, 0, 0)),
+                ActivatedAbilityEffect::GainLife {
+                    player: AbilityPlayer::Controller,
+                    amount: 1,
+                },
+            ))
+            .unwrap_or_else(|error| {
+                panic!("unexpected fixed ability registration error: {error:?}")
+            });
+        start_upkeep(&mut state, active);
+        let requirement = TargetRequirement::new(TargetKind::Player);
+        let decisions = StackDecisionBindings::new(None, &[true])
+            .unwrap_or_else(|error| panic!("unexpected decision binding error: {error:?}"));
+        let payment = zero_payment(ManaCost::new(0, 0, 0, 0, 0, 0));
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::ActivateAbility {
+                    player: active,
+                    ability,
+                    payment,
+                },
+            ),
+            Outcome::Failed(StateError::ActivatedAbilityAdapterMismatch(ability))
+        );
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::ActivateProgramAbility {
+                    player: active,
+                    ability: fixed_ability,
+                    payment,
+                    target_requirements: Vec::new(),
+                    target_choices: Vec::new(),
+                    decisions: StackDecisionBindings::default(),
+                },
+            ),
+            Outcome::Failed(StateError::ActivatedAbilityAdapterMismatch(fixed_ability))
+        );
+
+        let outcome = apply(
+            &mut state,
+            Action::ActivateProgramAbility {
+                player: active,
+                ability,
+                payment,
+                target_requirements: vec![requirement],
+                target_choices: vec![TargetChoice::Player(opponent)],
+                decisions,
+            },
+        );
+        let Outcome::StackEntryAdded(entry) = outcome else {
+            panic!("program activation should use the stack: {outcome:?}");
+        };
+        let top = state
+            .stack_top()
+            .unwrap_or_else(|| panic!("program activation stack entry missing"));
+        assert_eq!(top.id(), entry);
+        assert_eq!(top.activated_ability(), Some(ability));
+        assert_eq!(top.decisions(), decisions);
+        assert_eq!(
+            top.targets()
+                .iter()
+                .map(|target| target.choice())
+                .collect::<Vec<_>>(),
+            vec![TargetChoice::Player(opponent)]
+        );
+
+        assert_eq!(
+            state.pass_priority(active),
+            Ok(PriorityOutcome::PassedTo(opponent))
+        );
+        assert_eq!(
+            state.pass_priority(opponent),
+            Ok(PriorityOutcome::Resolved(entry))
+        );
+        let record = state
+            .resolution_log()
+            .last()
+            .unwrap_or_else(|| panic!("program activation resolution missing"));
+        assert_eq!(record.activated_ability(), Some(ability));
+        assert_eq!(record.decisions(), decisions);
+        assert_eq!(record.outcome(), ResolutionOutcome::Resolved);
     }
 
     #[test]
