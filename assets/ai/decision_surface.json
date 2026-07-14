@@ -15,15 +15,15 @@
       "kind": "priority",
       "human": "partial",
       "ai": "partial",
-      "benchmark": "descriptor_only",
-      "note": "The diagnostics driver handles routine passes but not every human or AI instant-speed window."
+      "benchmark": "partial",
+      "note": "Every live human and AI priority window now uses a shared canonical context with a forced-pass fast path and exact normal-cost instant targets, modes, optional answers, and payments. Non-mana activations, alternate costs, and resolution-time choices remain open."
     },
     {
       "kind": "main_phase",
       "human": "partial",
       "ai": "partial",
       "benchmark": "partial",
-      "note": "Human and AI consume the same canonical land, mana activation, autonomous permanent cast, and finish options; choice-bearing spells and abilities remain closed."
+      "note": "Human and AI consume the same canonical land, mana activation, normal-cost permanent/instant/sorcery cast, and finish options. Cast descriptors bind exact targets, modes, optional answers, and every legal payment. Non-mana activations, variable/additional/alternate costs, and resolution-time object choices remain open."
     },
     {
       "kind": "declare_attackers",
@@ -48,17 +48,17 @@
     },
     {
       "kind": "target",
-      "human": "descriptor_only",
-      "ai": "descriptor_only",
-      "benchmark": "descriptor_only",
-      "note": "Typed IDs exist; no complete production prompt adapter is claimed."
+      "human": "partial",
+      "ai": "partial",
+      "benchmark": "partial",
+      "note": "Normal spell casts enumerate the exact legal target Cartesian product and preserve selected targets through stack resolution. Activated abilities, target distribution, and partial-illegality resolution remain open."
     },
     {
       "kind": "mode",
-      "human": "descriptor_only",
-      "ai": "descriptor_only",
-      "benchmark": "descriptor_only",
-      "note": "Typed IDs exist; no complete production prompt adapter is claimed."
+      "human": "partial",
+      "ai": "partial",
+      "benchmark": "partial",
+      "note": "Normal modal spell branches are canonical, visible to humans, available to AI, hashed on the stack, and bound at resolution. Modal activated and triggered abilities remain open."
     },
     {
       "kind": "numeric_value",
@@ -76,10 +76,10 @@
     },
     {
       "kind": "optional",
-      "human": "descriptor_only",
-      "ai": "descriptor_only",
-      "benchmark": "descriptor_only",
-      "note": "Typed IDs exist; no complete production prompt adapter is claimed."
+      "human": "partial",
+      "ai": "partial",
+      "benchmark": "partial",
+      "note": "Normal spell optional-effect products are canonical, visible to humans, available to AI, hashed on the stack, and bound at resolution. Optional costs and activated/triggered/resolution-time optional prompts remain open."
     },
     {
       "kind": "trigger_order",

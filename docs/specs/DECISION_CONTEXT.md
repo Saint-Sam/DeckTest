@@ -52,8 +52,13 @@ The T4.3-T4.5 diagnostics path currently adapts:
 
 - typed London mulligan/keep/ordered-bottom decisions for both live human and
   AI seats;
-- main-phase land plays, autonomous permanent casts, mana activations, every
-  enumerated mana payment, and priority pass;
+- main-phase land plays, normal-cost permanent/instant/sorcery casts, mana
+  activations, every enumerated mana payment, and priority pass;
+- exact normal-spell target products, modal branches, and optional-effect
+  answers, preserved in the canonical descriptor and stack hash and rebound
+  through real resolution; human labels expose every bound choice;
+- every live human and AI priority window, with legal normal-cost instants and
+  a forced-pass fast path that does not invoke search or one-ply evaluation;
 - complete player-defender attack assignment products, including split attacks,
   up to an explicit fail-closed option ceiling;
 - complete blocker assignments for every attacked player, submitted in
@@ -69,10 +74,12 @@ The T4.3-T4.5 diagnostics path currently adapts:
   contexts, with every selected ID revalidated against its supplied context.
 
 The current path remains `limited` and diagnostics-only because it does not yet
-canonicalize the full Commander prompt surface: arbitrary priority
-responses, targets, modes, X, optional and alternative costs, trigger order,
-searches, all hidden choices, non-player combat defenders, and strategic damage
-ordering.
+canonicalize the full Commander prompt surface: non-mana activated abilities,
+target distribution, X, additional and alternative costs, trigger order,
+resolution-time searches and hidden choices, non-player combat defenders, and
+strategic damage ordering. Normal spell targets, modes, optional effects, and
+payments are covered, but those prompt families remain partial until their
+activated, triggered, and resolution-time forms use the same boundary.
 A typed immediate concession action and event exist, but the always-available
 human/AI/benchmark prompt adapter remains open. These gaps cannot be silently
 skipped for CP-AI-BENCH,
