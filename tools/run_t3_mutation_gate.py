@@ -97,6 +97,14 @@ MUTANTS = (
         "forge-testkit",
         "identity_exercise_aggregation_preserves_every_counter",
     ),
+    Mutant(
+        "M05_RON_NESTING_GUARD_OFF_BY_ONE",
+        "crates/forge-testkit/src/lib.rs",
+        "        if self.nesting_depth >= MAX_RON_NESTING_DEPTH {\n",
+        "        if self.nesting_depth > MAX_RON_NESTING_DEPTH {\n",
+        "forge-testkit",
+        "ron_parser_rejects_adversarial_nesting_without_stack_overflow",
+    ),
 )
 
 
@@ -251,8 +259,9 @@ def render_report(metric: dict[str, Any]) -> str:
         "",
         f"Reviewed product: `{metric['reviewed_commit']}`",
         "",
-        "The generated campaign ran four focused baseline tests and four declared "
-        "mutants. Every baseline passed and every mutant was killed.",
+        f"The generated campaign ran {metric['mutants_total']} focused baseline tests "
+        f"and {metric['mutants_total']} declared mutants. Every baseline passed and "
+        "every mutant was killed.",
         "",
         f"- Mutation denominator: {metric['mutants_total']}",
         f"- Killed: {metric['mutants_killed']}",
@@ -425,7 +434,10 @@ def check() -> int:
         raise ValueError("generated test ledger content is stale")
     if not REPORT.is_file() or REPORT.read_text(encoding="utf-8") != render_report(metric):
         raise ValueError("generated mutation report is missing or stale")
-    print("PASS T3 mutation evidence: denominator=4 killed=4 survivors=0 score=100%")
+    print(
+        "PASS T3 mutation evidence: "
+        f"denominator={len(MUTANTS)} killed={len(MUTANTS)} survivors=0 score=100%"
+    )
     return 0
 
 

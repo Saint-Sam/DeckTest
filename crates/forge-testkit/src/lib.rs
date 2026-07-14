@@ -5798,10 +5798,13 @@ impl RonMap {
     }
 }
 
+const MAX_RON_NESTING_DEPTH: usize = 128;
+
 struct RonParser<'a> {
     input: &'a str,
     chars: Vec<char>,
     pos: usize,
+    nesting_depth: usize,
 }
 
 impl<'a> RonParser<'a> {
@@ -5810,6 +5813,7 @@ impl<'a> RonParser<'a> {
             input,
             chars: input.chars().collect(),
             pos: 0,
+            nesting_depth: 0,
         }
     }
 
@@ -5824,7 +5828,11 @@ impl<'a> RonParser<'a> {
 
     fn parse_value(&mut self) -> Result<RonValue, ScenarioError> {
         self.skip_ws_and_comments();
-        match self.peek() {
+        if self.nesting_depth >= MAX_RON_NESTING_DEPTH {
+            return Err(self.error("RON nesting depth exceeds 128"));
+        }
+        self.nesting_depth += 1;
+        let result = match self.peek() {
             Some('(') => self.parse_map(),
             Some('[') => self.parse_list(),
             Some('"') => self.parse_string().map(RonValue::String),
@@ -5832,7 +5840,9 @@ impl<'a> RonParser<'a> {
             Some(character) if is_ident_start(character) => self.parse_ident_value(),
             Some(_) => Err(self.error("unexpected token")),
             None => Err(self.error("unexpected end of input")),
-        }
+        };
+        self.nesting_depth -= 1;
+        result
     }
 
     fn parse_map(&mut self) -> Result<RonValue, ScenarioError> {
@@ -6035,6 +6045,7 @@ mod tests {
     use super::{
         crate_ready, parse_scenario_ron, run_scenario, run_scenario_ron, Invariant, LibrarySetup,
         Scenario, ScenarioExpect, ScenarioSetup, ScenarioStep, ZoneCountExpectation, ZoneSpec,
+        MAX_RON_NESTING_DEPTH,
     };
 
     #[test]
@@ -6362,5 +6373,16 @@ mod tests {
         assert!(parse_scenario_ron(bad_keyword).is_err());
         assert!(parse_scenario_ron(bad_step).is_err());
         assert!(parse_scenario_ron(bad_priority_player).is_err());
+    }
+
+    #[test]
+    fn ron_parser_rejects_adversarial_nesting_without_stack_overflow() {
+        for depth in [MAX_RON_NESTING_DEPTH, 4_096] {
+            let input = format!("{}u{}", "[".repeat(depth), "]".repeat(depth));
+
+            let error = parse_scenario_ron(&input).expect_err("deep nesting must fail closed");
+
+            assert!(error.to_string().contains("RON nesting depth exceeds 128"));
+        }
     }
 }
