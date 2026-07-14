@@ -778,9 +778,7 @@ impl GameDriver {
                 _ => self.pass_priority()?,
             }
 
-            if self.state.turn_number() % 8 == 0
-                && self.state.current_step() == Some(Step::Untap)
-            {
+            if self.state.turn_number() % 8 == 0 && self.state.current_step() == Some(Step::Untap) {
                 self.check_hidden_information()?;
             }
             if self.metrics.actions % 64 == 0 {
@@ -813,6 +811,12 @@ impl GameDriver {
     }
 
     fn dispatch(&mut self, action: Action) -> Result<Outcome, String> {
+        let lost_before = self
+            .state
+            .players()
+            .iter()
+            .filter(|player| player.lost())
+            .count();
         let outcome = apply(&mut self.state, action);
         self.metrics.actions = self.metrics.actions.saturating_add(1);
         if let Outcome::Failed(error) = &outcome {
@@ -821,6 +825,16 @@ impl GameDriver {
                 self.seed
             ));
         }
+        let lost_after = self
+            .state
+            .players()
+            .iter()
+            .filter(|player| player.lost())
+            .count();
+        self.metrics.eliminations = self
+            .metrics
+            .eliminations
+            .saturating_add(lost_after.saturating_sub(lost_before) as u64);
         Ok(outcome)
     }
 
@@ -1196,12 +1210,6 @@ impl GameDriver {
                 )],
             ));
         }
-        let before_lost = self
-            .state
-            .players()
-            .iter()
-            .filter(|player| player.lost())
-            .count();
         let outcome = self.dispatch(Action::AssignCombatDamage { assignments })?;
         let Outcome::CombatDamageAssigned(records) = outcome else {
             return Err(format!(
@@ -1213,16 +1221,6 @@ impl GameDriver {
             .metrics
             .combat_damage_events
             .saturating_add(records.len() as u64);
-        let after_lost = self
-            .state
-            .players()
-            .iter()
-            .filter(|player| player.lost())
-            .count();
-        self.metrics.eliminations = self
-            .metrics
-            .eliminations
-            .saturating_add(after_lost.saturating_sub(before_lost) as u64);
         Ok(())
     }
 
