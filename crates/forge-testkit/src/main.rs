@@ -145,6 +145,7 @@ fn runtime_smoke_command(args: &[String]) -> Result<(), String> {
                     "capabilities": capability_names,
                     "effect_actions": pass.effect_actions(),
                     "production_actions": pass.production_actions(),
+                    "final_life_totals": pass.final_life_totals(),
                     "destination": pass.destination(),
                     "final_hash": pass.final_hash(),
                 }));
