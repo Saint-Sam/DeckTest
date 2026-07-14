@@ -6380,9 +6380,12 @@ mod tests {
         for depth in [MAX_RON_NESTING_DEPTH, 4_096] {
             let input = format!("{}u{}", "[".repeat(depth), "]".repeat(depth));
 
-            let error = parse_scenario_ron(&input).expect_err("deep nesting must fail closed");
-
-            assert!(error.to_string().contains("RON nesting depth exceeds 128"));
+            match parse_scenario_ron(&input) {
+                Err(error) => {
+                    assert!(error.to_string().contains("RON nesting depth exceeds 128"));
+                }
+                Ok(_) => panic!("deep nesting must fail closed"),
+            }
         }
     }
 }
