@@ -256,6 +256,9 @@ else
   planner_deterministic=true
 fi
 
+python3 tools/quarantine_to_tickets.py \
+  --input "$primary_quarantine" --output metrics/primitive_tickets.json
+
 if [[ "$mode" == "development" ]]; then
   "$cardc" build "$primary_output" --catalog "$catalog" -o "$database" \
     >"$run_dir/compiler.log" 2>&1

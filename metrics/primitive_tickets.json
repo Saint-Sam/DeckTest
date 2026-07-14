@@ -1,0 +1,15 @@
+{
+  "affected_scripts": 0,
+  "kind": "t3_8_t2_primitive_ticket_queue",
+  "reason_code": "NEEDS_NEW_PRIMITIVE",
+  "route": "T2",
+  "schema_version": 1,
+  "source": {
+    "path": "metrics/translation_quarantine.json",
+    "sha256": "44885e943df9e68689a296632e28565e4810513ee95756c84383d7c3aa6014cc",
+    "source_revision": "1f0a3e0815822d8f58f798e0304b33d4534248b1",
+    "total_quarantined": 13208
+  },
+  "ticket_count": 0,
+  "tickets": []
+}
