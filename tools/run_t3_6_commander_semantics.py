@@ -10,7 +10,6 @@ import json
 import os
 import subprocess
 import sys
-import tempfile
 from collections import Counter
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -264,45 +263,21 @@ def validate_manifest(translated_root: Path) -> tuple[dict[str, Any], dict[str, 
 
 def build_probe(cargo_target_dir: Path) -> Path:
     cargo_target_dir.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="forge-t3-6-probe-") as temp:
-        manifest = Path(temp) / "Cargo.toml"
-        manifest.write_text(
-            "\n".join(
-                [
-                    "[package]",
-                    f'name = "{PROBE_NAME}"',
-                    'version = "0.0.0"',
-                    'edition = "2021"',
-                    "publish = false",
-                    "",
-                    "[dependencies]",
-                    f"forge-cardc = {{ path = {json.dumps(str(ROOT / 'crates/forge-cardc'))} }}",
-                    f"forge-cards = {{ path = {json.dumps(str(ROOT / 'crates/forge-cards'))} }}",
-                    f"forge-core = {{ path = {json.dumps(str(ROOT / 'crates/forge-core'))} }}",
-                    f"forge-testkit = {{ path = {json.dumps(str(ROOT / 'crates/forge-testkit'))} }}",
-                    'serde_json = "=1.0.150"',
-                    "",
-                    "[[bin]]",
-                    f'name = "{PROBE_NAME}"',
-                    f"path = {json.dumps(str(PROBE_SOURCE))}",
-                    "",
-                ]
-            ),
-            encoding="utf-8",
-        )
-        command = [
-            os.environ.get("CARGO", "cargo"),
-            "build",
-            "--offline",
-            "--quiet",
-            "--manifest-path",
-            str(manifest),
-            "--target-dir",
-            str(cargo_target_dir),
-        ]
-        result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
-        if result.returncode != 0:
-            raise RuntimeError(f"probe build failed\n{result.stdout}\n{result.stderr}")
+    command = [
+        os.environ.get("CARGO", "cargo"),
+        "build",
+        "--offline",
+        "--quiet",
+        "-p",
+        "forge-testkit",
+        "--bin",
+        PROBE_NAME,
+        "--target-dir",
+        str(cargo_target_dir),
+    ]
+    result = subprocess.run(command, cwd=ROOT, text=True, capture_output=True, check=False)
+    if result.returncode != 0:
+        raise RuntimeError(f"probe build failed\n{result.stdout}\n{result.stderr}")
     suffix = ".exe" if os.name == "nt" else ""
     probe = cargo_target_dir / "debug" / f"{PROBE_NAME}{suffix}"
     if not probe.is_file():

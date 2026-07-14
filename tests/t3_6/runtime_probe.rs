@@ -1,4 +1,5 @@
 #![forbid(unsafe_code)]
+//! Production-path semantic probe for the frozen T3.6 Commander set.
 
 use forge_cards::runtime::{
     bind_activated_effect_actions, bind_program_actions, bind_triggered_ability_actions,
@@ -2454,7 +2455,7 @@ fn evoke_probe(program: &CardProgram) -> Option<serde_json::Value> {
         .filter(|ability| {
             ability
                 .required_alternate_cost()
-                .is_none_or(|required| required == AlternateCostKind::Evoke)
+                .map_or(true, |required| required == AlternateCostKind::Evoke)
         })
         .count();
 
@@ -3672,7 +3673,7 @@ fn reconnaissance_mission_probe(program: &CardProgram) -> Option<serde_json::Val
         Outcome::PlayerAdded(player) => player,
         _ => return Some(json!({"setup_succeeded": false})),
     };
-    let cycle_opponent = match apply(&mut cycle_state, Action::AddPlayer) {
+    let _cycle_opponent = match apply(&mut cycle_state, Action::AddPlayer) {
         Outcome::PlayerAdded(player) => player,
         _ => return Some(json!({"setup_succeeded": false})),
     };
@@ -5489,7 +5490,8 @@ fn reveal_event_probe(program: &CardProgram) -> Option<serde_json::Value> {
         bind_program_actions(&state, program, &bindings).ok()?
     } else {
         let ability = triggered?;
-        let bindings = bindings.with_optional_effect_choices(vec![true; ability.optional_choice_count()]);
+        let bindings =
+            bindings.with_optional_effect_choices(vec![true; ability.optional_choice_count()]);
         bind_triggered_ability_actions(&state, ability, &bindings).ok()?
     };
     let reveal_index = actions.iter().position(|bound| {
@@ -5595,10 +5597,7 @@ fn regeneration_prohibition_probe(program: &CardProgram) -> Option<serde_json::V
         },
     );
     let normal_destroy_applied = matches!(
-        apply(
-            &mut state,
-            Action::DestroyPermanent { object: baseline },
-        ),
+        apply(&mut state, Action::DestroyPermanent { object: baseline },),
         Outcome::Applied
     );
     let baseline_record = state.object(baseline)?;
@@ -5619,9 +5618,7 @@ fn regeneration_prohibition_probe(program: &CardProgram) -> Option<serde_json::V
                 Action::DestroyPermanentWithoutRegeneration { object } if *object == target
             )
         })
-        .is_some_and(|bound| {
-            matches!(apply(&mut state, bound.action().clone()), Outcome::Applied)
-        });
+        .is_some_and(|bound| matches!(apply(&mut state, bound.action().clone()), Outcome::Applied));
     let target_graveyard = ZoneId::new(Some(opponent), ZoneKind::Graveyard);
 
     Some(json!({
@@ -5667,10 +5664,7 @@ fn cast_or_copy_probe(program: &CardProgram) -> Option<serde_json::Value> {
         definition.condition(),
         TriggerCondition::StackEntryAddedOrCopied { .. }
     );
-    let trigger = match apply(
-        &mut state,
-        Action::RegisterTriggeredAbility { definition },
-    ) {
+    let trigger = match apply(&mut state, Action::RegisterTriggeredAbility { definition }) {
         Outcome::TriggerRegistered(trigger) => trigger,
         _ => return Some(json!({"setup_succeeded": false, "phase": "register"})),
     };
@@ -5691,10 +5685,7 @@ fn cast_or_copy_probe(program: &CardProgram) -> Option<serde_json::Value> {
         controller,
         controller,
         ZoneId::new(Some(controller), ZoneKind::Hand),
-        BaseObjectCharacteristics::new(
-            ObjectTypes::none().with_instant(),
-            ObjectColors::none(),
-        ),
+        BaseObjectCharacteristics::new(ObjectTypes::none().with_instant(), ObjectColors::none()),
         None,
     )?;
     let priority_ready = prepare_stack_priority(&mut state, controller);
@@ -5710,8 +5701,8 @@ fn cast_or_copy_probe(program: &CardProgram) -> Option<serde_json::Value> {
         Outcome::StackEntryAdded(entry) => entry,
         _ => return Some(json!({"setup_succeeded": false, "phase": "cast"})),
     };
-    let cast_trigger_queued = state.pending_triggers().len() == 1
-        && state.pending_triggers()[0].trigger() == trigger;
+    let cast_trigger_queued =
+        state.pending_triggers().len() == 1 && state.pending_triggers()[0].trigger() == trigger;
     let copy = match apply(
         &mut state,
         Action::CopyStackEntry {
@@ -5741,13 +5732,17 @@ fn cast_or_copy_probe(program: &CardProgram) -> Option<serde_json::Value> {
             if matches!(bound.action(), Action::DrawCards { player, count } if *player == controller && *count == 1)
     );
     let hand = ZoneId::new(Some(controller), ZoneKind::Hand);
-    let before = state.zone_objects(hand).map_or(0, <[forge_core::ObjectId]>::len);
+    let before = state
+        .zone_objects(hand)
+        .map_or(0, <[forge_core::ObjectId]>::len);
     let two_draw_resolutions = (0..2).all(|_| {
         actions
             .iter()
             .all(|bound| matches!(apply(&mut state, bound.action().clone()), Outcome::Applied))
     });
-    let after = state.zone_objects(hand).map_or(0, <[forge_core::ObjectId]>::len);
+    let after = state
+        .zone_objects(hand)
+        .map_or(0, <[forge_core::ObjectId]>::len);
 
     Some(json!({
         "setup_succeeded": priority_ready,
