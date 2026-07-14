@@ -74,6 +74,7 @@ allowed = {
     ("AttackingCreature", "blockers"): "object IDs bounded by current combat declarations",
     ("CombatState", "attackers"): "current-combat records cleared between combats",
     ("CombatState", "blockers"): "current-combat Copy records cleared between combats",
+    ("CombatState", "blockers_declared_by"): "attacked player IDs bounded by player count and cleared between combats",
     ("CombatState", "damage_records"): "current-combat Copy damage records",
     ("CombatState", "first_strike_participants"): "object IDs bounded by current combat",
     ("GameState", "players"): "player scalar arena bounded by player count",

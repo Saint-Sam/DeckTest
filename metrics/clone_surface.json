@@ -33,7 +33,7 @@
   "full_state_snapshot_surface": false,
   "game_state_debug": false,
   "guard": "static persistent allocation field count",
-  "persistent_allocation_field_count": 31,
+  "persistent_allocation_field_count": 32,
   "persistent_allocation_fields": [
     {
       "field": "targets",
@@ -70,6 +70,12 @@
       "reason": "current-combat Copy records cleared between combats",
       "struct": "CombatState",
       "type": "Vec<BlockingCreature>"
+    },
+    {
+      "field": "blockers_declared_by",
+      "reason": "attacked player IDs bounded by player count and cleared between combats",
+      "struct": "CombatState",
+      "type": "Vec<PlayerId>"
     },
     {
       "field": "damage_records",
