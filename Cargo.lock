@@ -261,6 +261,7 @@ name = "forge-cli"
 version = "0.0.0"
 dependencies = [
  "forge-core",
+ "forge-testkit",
 ]
 
 [[package]]
@@ -293,6 +294,7 @@ dependencies = [
  "forge-carddef",
  "forge-cards",
  "forge-core",
+ "serde",
  "serde_json",
 ]
 

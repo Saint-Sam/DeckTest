@@ -64,8 +64,17 @@ if [[ -d "${evidence_dir}/reviewer_oracles" ]]; then
   cp -R "${evidence_dir}/reviewer_oracles/." "$bundle/reviewer_oracles/"
 fi
 
+if [[ -d "${evidence_dir}/fuzz" ]]; then
+  mkdir -p "$bundle/fuzz"
+  cp -R "${evidence_dir}/fuzz/." "$bundle/fuzz/"
+fi
+
 if [[ -f "metrics/coverage.json" ]]; then
   cp "metrics/coverage.json" "$bundle/coverage.json"
+fi
+
+if [[ -f "metrics/local_fuzz.json" ]]; then
+  cp "metrics/local_fuzz.json" "$bundle/local_fuzz.json"
 fi
 
 if [[ -f "metrics/clone_surface.json" ]]; then

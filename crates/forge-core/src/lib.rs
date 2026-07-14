@@ -6373,6 +6373,20 @@ pub enum StateError {
     CommanderTaxOverflow(ObjectId),
     /// The object is not designated as a commander.
     ObjectNotCommander(ObjectId),
+    /// A player tried to make a Commander zone choice for another player's commander.
+    CommanderZoneChoiceOwnerMismatch {
+        /// Player making the choice.
+        player: PlayerId,
+        /// Commander named by the choice.
+        object: ObjectId,
+    },
+    /// A Commander zone choice was requested outside a graveyard or exile zone.
+    InvalidCommanderZoneChoice {
+        /// Commander named by the choice.
+        object: ObjectId,
+        /// Zone the commander currently occupies.
+        from: ZoneId,
+    },
     /// A player has no commander identity metadata to validate against.
     NoCommanderForPlayer(PlayerId),
     /// An object's color identity is outside its commander's allowed identity.
@@ -6648,6 +6662,13 @@ pub enum Action {
     /// Record one commander cast for tax tracking.
     RecordCommanderCast {
         /// Commander object.
+        object: ObjectId,
+    },
+    /// Have a commander's owner move it from graveyard or exile to the command zone.
+    ChooseCommanderZone {
+        /// Player making the owner-only choice.
+        player: PlayerId,
+        /// Commander moving to the command zone.
         object: ObjectId,
     },
     /// Validate objects against a player's Commander color identity.
@@ -7232,6 +7253,12 @@ fn apply_fallback(state: &mut GameState, action: Action) -> Outcome {
             Ok(()) => Outcome::Applied,
             Err(error) => Outcome::Failed(error),
         },
+        Action::ChooseCommanderZone { player, object } => {
+            match state.choose_commander_zone(player, object) {
+                Ok(()) => Outcome::Applied,
+                Err(error) => Outcome::Failed(error),
+            }
+        }
         Action::ValidateCommanderColorIdentity { player, objects } => {
             match state.validate_commander_color_identity(player, &objects) {
                 Ok(()) => Outcome::Applied,
@@ -9407,6 +9434,34 @@ impl GameState {
             tax,
         });
         Ok(())
+    }
+
+    /// Applies the owner's Commander zone choice after a commander reaches graveyard or exile.
+    fn choose_commander_zone(
+        &mut self,
+        player: PlayerId,
+        object: ObjectId,
+    ) -> Result<(), StateError> {
+        self.require_player(player)?;
+        let record = self
+            .objects
+            .get(object)
+            .ok_or(StateError::UnknownObject(object))?;
+        if !record.is_commander() {
+            return Err(StateError::ObjectNotCommander(object));
+        }
+        if record.owner() != player {
+            return Err(StateError::CommanderZoneChoiceOwnerMismatch { player, object });
+        }
+        let from = self
+            .object_zone(object)
+            .ok_or(StateError::MissingZoneMembership(object))?;
+        let legal_origin = from == ZoneId::new(Some(player), ZoneKind::Graveyard)
+            || from == ZoneId::new(None, ZoneKind::Exile);
+        if !legal_origin {
+            return Err(StateError::InvalidCommanderZoneChoice { object, from });
+        }
+        self.move_object(object, ZoneId::new(None, ZoneKind::Command))
     }
 
     /// Returns the current Commander tax for one commander.
@@ -22978,6 +23033,74 @@ mod tests {
                 _ => None,
             })
             .collect()
+    }
+
+    #[test]
+    fn commander_zone_choice_is_owner_only_and_fail_closed() {
+        let mut state = GameState::new();
+        let owner = state.add_player();
+        let opponent = state.add_player();
+        let graveyard = ZoneId::new(Some(owner), ZoneKind::Graveyard);
+        let command = ZoneId::new(None, ZoneKind::Command);
+        let commander = state
+            .create_object(CardId::new(9_901), owner, owner, graveyard)
+            .unwrap_or_else(|error| panic!("unexpected commander create error: {error:?}"));
+        state
+            .designate_commander(commander, ObjectColors::none())
+            .unwrap_or_else(|error| panic!("unexpected designation error: {error:?}"));
+
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::ChooseCommanderZone {
+                    player: opponent,
+                    object: commander,
+                },
+            ),
+            Outcome::Failed(StateError::CommanderZoneChoiceOwnerMismatch {
+                player: opponent,
+                object: commander,
+            })
+        );
+        assert_eq!(state.object_zone(commander), Some(graveyard));
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::ChooseCommanderZone {
+                    player: owner,
+                    object: commander,
+                },
+            ),
+            Outcome::Applied
+        );
+        assert_eq!(state.object_zone(commander), Some(command));
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::ChooseCommanderZone {
+                    player: owner,
+                    object: commander,
+                },
+            ),
+            Outcome::Failed(StateError::InvalidCommanderZoneChoice {
+                object: commander,
+                from: command,
+            })
+        );
+
+        let ordinary = state
+            .create_object(CardId::new(9_902), owner, owner, graveyard)
+            .unwrap_or_else(|error| panic!("unexpected ordinary create error: {error:?}"));
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::ChooseCommanderZone {
+                    player: owner,
+                    object: ordinary,
+                },
+            ),
+            Outcome::Failed(StateError::ObjectNotCommander(ordinary))
+        );
     }
 
     fn zero_payment(cost: ManaCost) -> super::PaymentPlan {

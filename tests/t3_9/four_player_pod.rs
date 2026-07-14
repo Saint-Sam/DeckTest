@@ -11,12 +11,13 @@ use forge_cards::runtime::{
     ProgramKind, TriggeredAbilityProgram,
 };
 use forge_core::{
-    apply, Action, ActivatedAbilityId, AttackDeclaration, CardId, CastSpellRequest,
-    CombatDamageAssignment, CombatDamageAssignmentRequest, CombatDamageStepKind,
+    apply, Action, ActivatedAbilityId, AttackDeclaration, BlockDeclaration, CardId,
+    CastSpellRequest, CombatDamageAssignment, CombatDamageAssignmentRequest, CombatDamageStepKind,
     CombatDamageTarget, GameOutcome, GameState, ManaKind, ObjectColors, ObjectId, ObjectView,
     Outcome, PlayerId, PriorityOutcome, SpellTiming, StackEntryId, StackObjectKind, Step,
     TriggerId, ZoneId, ZoneKind,
 };
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
@@ -34,7 +35,10 @@ const MAX_WORKERS: usize = 24;
 const DEFAULT_GAMES: usize = 1_000;
 const DEFAULT_MAX_TURNS: u32 = 160;
 const DEFAULT_SEED_BASE: u64 = 0xF02D_0000_0000_0000;
+const POD_REPLAY_MAGIC: &str = "forge-pod-replay-v1";
+const RETAINED_REPLAYS: usize = 10;
 
+#[allow(dead_code)]
 fn main() {
     if let Err(error) = run() {
         eprintln!("T3.9 pod gate failed: {error}");
@@ -42,7 +46,8 @@ fn main() {
     }
 }
 
-fn run() -> Result<(), String> {
+/// Runs the complete local T3.9 pod campaign from process arguments.
+pub fn run() -> Result<(), String> {
     let options = Options::parse()?;
     let load_started = Instant::now();
     let pod = Arc::new(PodTemplate::load(&options.manifest)?);
@@ -58,40 +63,28 @@ fn run() -> Result<(), String> {
         return Ok(());
     }
 
-    let first_started = Instant::now();
-    let first = run_campaign(
+    let campaign_started = Instant::now();
+    let campaign = run_campaign(
         Arc::clone(&pod),
         options.games,
         options.jobs,
         options.max_turns,
         options.seed_base,
+        &options.manifest,
     )?;
-    let first_ms = first_started.elapsed().as_millis();
+    let campaign_ms = campaign_started.elapsed().as_millis();
 
-    let replay_started = Instant::now();
-    let replay = run_campaign(
-        Arc::clone(&pod),
-        options.games,
-        options.jobs,
-        options.max_turns,
-        options.seed_base,
-    )?;
-    let replay_ms = replay_started.elapsed().as_millis();
-    if first != replay {
-        let mismatch = first
-            .iter()
-            .zip(&replay)
-            .position(|(left, right)| left != right)
-            .unwrap_or(0);
-        return Err(format!(
-            "deterministic replay diverged at game {mismatch}: {:?} != {:?}",
-            first.get(mismatch),
-            replay.get(mismatch)
-        ));
-    }
-
-    validate_campaign(&first, options.games)?;
-    let report = build_report(&pod, &options, &first, load_ms, first_ms, replay_ms);
+    validate_campaign(&campaign.summaries, options.games, &pod.semantic_identities)?;
+    write_replays(&options.replay_dir, &campaign.replays)?;
+    let report = build_report(
+        &pod,
+        &options,
+        &campaign.summaries,
+        load_ms,
+        campaign_ms,
+        campaign.primary_worker_ms,
+        campaign.replay_worker_ms,
+    );
     if let Some(parent) = options.output.parent() {
         fs::create_dir_all(parent)
             .map_err(|error| format!("failed to create {}: {error}", parent.display()))?;
@@ -112,6 +105,7 @@ fn run() -> Result<(), String> {
 struct Options {
     manifest: PathBuf,
     output: PathBuf,
+    replay_dir: PathBuf,
     games: usize,
     jobs: usize,
     max_turns: u32,
@@ -128,6 +122,7 @@ impl Options {
         let mut options = Self {
             manifest: PathBuf::from("assets/t3_9/integration_decks.json"),
             output: PathBuf::from("metrics/four_player_pod.json"),
+            replay_dir: PathBuf::from("reports/gates/T3.9/replays"),
             games: DEFAULT_GAMES,
             jobs: default_jobs,
             max_turns: DEFAULT_MAX_TURNS,
@@ -139,6 +134,9 @@ impl Options {
             match argument.as_str() {
                 "--manifest" => options.manifest = PathBuf::from(next_arg(&mut args, &argument)?),
                 "--output" => options.output = PathBuf::from(next_arg(&mut args, &argument)?),
+                "--replay-dir" => {
+                    options.replay_dir = PathBuf::from(next_arg(&mut args, &argument)?);
+                }
                 "--games" => {
                     options.games = parse_arg(&next_arg(&mut args, &argument)?, &argument)?;
                 }
@@ -155,6 +153,7 @@ impl Options {
                 "--help" | "-h" => {
                     println!(
                         "forge-t3-9-four-player-pod [--manifest PATH] [--output PATH] \
+                         [--replay-dir PATH] \
                          [--games N] [--jobs 1..24] [--max-turns N] [--seed-base N] \
                          [--validate-only]"
                     );
@@ -220,6 +219,7 @@ struct PodTemplate {
     semantic_registry: PathBuf,
     decks: Vec<DeckTemplate>,
     semantic_mainboard_cards: usize,
+    semantic_identities: BTreeMap<String, bool>,
 }
 
 impl PodTemplate {
@@ -320,12 +320,28 @@ impl PodTemplate {
             });
         }
 
+        let mut semantic_identities = BTreeMap::new();
+        for deck in &decks {
+            for card in &deck.mainboard {
+                let oracle_id = card.program.oracle_id().to_owned();
+                let is_land = card.program.kind() == ProgramKind::Land;
+                if let Some(previous) = semantic_identities.insert(oracle_id.clone(), is_land) {
+                    if previous != is_land {
+                        return Err(format!(
+                            "semantic identity {oracle_id} compiled as both land and nonland"
+                        ));
+                    }
+                }
+            }
+        }
+
         Ok(Self {
             manifest_path: manifest_path.to_path_buf(),
             source_root,
             semantic_registry,
             decks,
             semantic_mainboard_cards,
+            semantic_identities,
         })
     }
 }
@@ -504,7 +520,101 @@ fn require_array<'a>(value: &'a Value, key: &str) -> Result<&'a [Value], String>
         .ok_or_else(|| format!("missing or invalid array field `{key}`"))
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+struct IdentityExercise {
+    land_plays: u64,
+    casts: u64,
+    resolutions: u64,
+    effect_actions: u64,
+    trigger_resolutions: u64,
+}
+
+impl IdentityExercise {
+    fn add_assign(&mut self, other: &Self) {
+        self.land_plays = self.land_plays.saturating_add(other.land_plays);
+        self.casts = self.casts.saturating_add(other.casts);
+        self.resolutions = self.resolutions.saturating_add(other.resolutions);
+        self.effect_actions = self.effect_actions.saturating_add(other.effect_actions);
+        self.trigger_resolutions = self
+            .trigger_resolutions
+            .saturating_add(other.trigger_resolutions);
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+struct TraceRecord {
+    index: u64,
+    action: String,
+    before_hash: u64,
+    outcome: String,
+    after_hash: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+struct PodReplay {
+    format: String,
+    manifest: PathBuf,
+    seed: u64,
+    max_turns: u32,
+    coverage_target: Option<String>,
+    actions: Vec<TraceRecord>,
+    expected: GameSummary,
+}
+
+enum TraceMode {
+    Off,
+    Record(Vec<TraceRecord>),
+    Verify {
+        expected: Vec<TraceRecord>,
+        cursor: usize,
+    },
+}
+
+impl TraceMode {
+    const fn enabled(&self) -> bool {
+        !matches!(self, Self::Off)
+    }
+
+    fn accept(&mut self, actual: TraceRecord) -> Result<(), String> {
+        match self {
+            Self::Off => Ok(()),
+            Self::Record(records) => {
+                records.push(actual);
+                Ok(())
+            }
+            Self::Verify { expected, cursor } => {
+                let Some(wanted) = expected.get(*cursor) else {
+                    return Err(format!(
+                        "replay emitted unexpected action {}: {}",
+                        actual.index, actual.action
+                    ));
+                };
+                if wanted != &actual {
+                    return Err(format!(
+                        "replay diverged at action {}: expected {wanted:?}, got {actual:?}",
+                        actual.index
+                    ));
+                }
+                *cursor = cursor.saturating_add(1);
+                Ok(())
+            }
+        }
+    }
+
+    fn finish(self) -> Result<Option<Vec<TraceRecord>>, String> {
+        match self {
+            Self::Off => Ok(None),
+            Self::Record(records) => Ok(Some(records)),
+            Self::Verify { expected, cursor } if cursor == expected.len() => Ok(None),
+            Self::Verify { expected, cursor } => Err(format!(
+                "replay stopped after {cursor} of {} recorded actions",
+                expected.len()
+            )),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 struct GameMetrics {
     actions: u64,
     casts: u64,
@@ -522,6 +632,7 @@ struct GameMetrics {
     eliminations: u64,
     invariant_checks: u64,
     hidden_information_checks: u64,
+    identity_exercise: BTreeMap<String, IdentityExercise>,
 }
 
 impl GameMetrics {
@@ -542,10 +653,16 @@ impl GameMetrics {
         self.eliminations += other.eliminations;
         self.invariant_checks += other.invariant_checks;
         self.hidden_information_checks += other.hidden_information_checks;
+        for (identity, exercise) in &other.identity_exercise {
+            self.identity_exercise
+                .entry(identity.clone())
+                .or_default()
+                .add_assign(exercise);
+        }
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 struct GameSummary {
     seed: u64,
     winner: usize,
@@ -553,6 +670,19 @@ struct GameSummary {
     final_hash: u64,
     final_life: [i32; PLAYER_COUNT],
     metrics: GameMetrics,
+}
+
+struct GameRun {
+    summary: GameSummary,
+    trace: Option<Vec<TraceRecord>>,
+    actions: Vec<Action>,
+}
+
+struct CampaignResult {
+    summaries: Vec<GameSummary>,
+    replays: Vec<PodReplay>,
+    primary_worker_ms: u128,
+    replay_worker_ms: u128,
 }
 
 #[derive(Clone)]
@@ -571,15 +701,24 @@ struct GameDriver {
     mana_abilities: Vec<(ObjectId, PlayerId, ActivatedAbilityId)>,
     triggers_registered_for: HashSet<ObjectId>,
     permanent_runtime_registered_for: HashSet<ObjectId>,
-    commander_attacked: HashSet<ObjectId>,
-    commander_returned: HashSet<ObjectId>,
     current_attacks: Vec<AttackDeclaration>,
+    current_defender: Option<PlayerId>,
+    coverage_target: Option<String>,
     metrics: GameMetrics,
+    trace: TraceMode,
+    actions: Vec<Action>,
+    next_hidden_check_action: u64,
+    next_invariant_check_action: u64,
     seed: u64,
 }
 
 impl GameDriver {
-    fn setup(pod: &PodTemplate, seed: u64) -> Result<Self, String> {
+    fn setup(
+        pod: &PodTemplate,
+        seed: u64,
+        coverage_target: Option<String>,
+        trace: TraceMode,
+    ) -> Result<Self, String> {
         let mut driver = Self {
             state: GameState::new(),
             players: Vec::with_capacity(PLAYER_COUNT),
@@ -589,10 +728,14 @@ impl GameDriver {
             mana_abilities: Vec::new(),
             triggers_registered_for: HashSet::new(),
             permanent_runtime_registered_for: HashSet::new(),
-            commander_attacked: HashSet::new(),
-            commander_returned: HashSet::new(),
             current_attacks: Vec::new(),
+            current_defender: None,
+            coverage_target,
             metrics: GameMetrics::default(),
+            trace,
+            actions: Vec::new(),
+            next_hidden_check_action: 32,
+            next_invariant_check_action: 64,
             seed,
         };
         driver.dispatch(Action::SetSeed { seed })?;
@@ -645,6 +788,28 @@ impl GameDriver {
             })?;
             driver.dispatch(Action::ShuffleLibrary { player })?;
         }
+        if let Some(target) = driver.coverage_target.as_deref() {
+            let target_object = driver
+                .programs
+                .iter()
+                .filter(|(_, program)| program.oracle_id() == target)
+                .map(|(object, _)| *object)
+                .filter(|object| {
+                    driver.players.iter().any(|player| {
+                        driver.state.object_zone(*object)
+                            == Some(ZoneId::new(Some(*player), ZoneKind::Library))
+                    })
+                })
+                .min_by_key(|object| object.index());
+            if let Some(object) = target_object {
+                let player = driver
+                    .state
+                    .object(object)
+                    .ok_or_else(|| format!("seed {seed} missing coverage target object"))?
+                    .owner();
+                driver.dispatch(Action::PutObjectOnTopOfLibrary { player, object })?;
+            }
+        }
         driver.dispatch(Action::DrawOpeningHands)?;
         for player in driver.players.clone() {
             driver.dispatch(Action::KeepOpeningHand {
@@ -694,12 +859,11 @@ impl GameDriver {
         Ok(object)
     }
 
-    fn run(mut self, max_turns: u32) -> Result<GameSummary, String> {
+    fn run(mut self, max_turns: u32) -> Result<GameRun, String> {
         let mut main_done = BTreeSet::<u32>::new();
         let mut attackers_done = BTreeSet::<u32>::new();
         let mut blockers_done = BTreeSet::<u32>::new();
         let mut damage_done = BTreeSet::<(u32, CombatDamageStepKind)>::new();
-        let mut postcombat_done = BTreeSet::<u32>::new();
 
         while self.state.game_outcome() == GameOutcome::InProgress {
             let turn = self.state.turn_number();
@@ -753,13 +917,16 @@ impl GameDriver {
             let active_has_priority = self.state.priority_player() == Some(active);
             match step {
                 Step::PrecombatMain if active_has_priority && main_done.insert(turn) => {
+                    self.check_hidden_information()?;
                     self.take_main_phase_actions(active)?;
                 }
                 Step::DeclareAttackers if active_has_priority && attackers_done.insert(turn) => {
+                    self.check_hidden_information()?;
                     self.declare_attackers(active)?;
                 }
                 Step::DeclareBlockers if active_has_priority && blockers_done.insert(turn) => {
-                    self.declare_no_blocks(active)?;
+                    self.check_hidden_information()?;
+                    self.declare_blocks(active)?;
                 }
                 Step::CombatDamage if active_has_priority => {
                     let damage_step =
@@ -767,22 +934,23 @@ impl GameDriver {
                             format!("seed {} missing combat damage step", self.seed)
                         })?;
                     if damage_done.insert((turn, damage_step)) {
+                        self.check_hidden_information()?;
                         self.assign_combat_damage()?;
                     } else {
                         self.pass_priority()?;
                     }
                 }
-                Step::PostcombatMain if active_has_priority && postcombat_done.insert(turn) => {
-                    self.return_attacked_commander(active)?;
-                }
                 _ => self.pass_priority()?,
             }
 
-            if self.state.turn_number() % 8 == 0 && self.state.current_step() == Some(Step::Untap) {
+            while self.metrics.actions >= self.next_hidden_check_action {
                 self.check_hidden_information()?;
+                self.next_hidden_check_action = self.next_hidden_check_action.saturating_add(32);
             }
-            if self.metrics.actions % 64 == 0 {
+            while self.metrics.actions >= self.next_invariant_check_action {
                 self.check_invariants()?;
+                self.next_invariant_check_action =
+                    self.next_invariant_check_action.saturating_add(64);
             }
         }
 
@@ -800,24 +968,47 @@ impl GameDriver {
             .position(|player| *player == winner)
             .ok_or_else(|| format!("seed {} winner is outside the pod", self.seed))?;
         let final_life = std::array::from_fn(|index| self.state.players()[index].life());
-        Ok(GameSummary {
+        let summary = GameSummary {
             seed: self.seed,
             winner,
             turns: self.state.turn_number(),
             final_hash: self.state.deterministic_hash().get(),
             final_life,
             metrics: self.metrics,
+        };
+        let trace = self.trace.finish()?;
+        Ok(GameRun {
+            summary,
+            trace,
+            actions: self.actions,
         })
     }
 
     fn dispatch(&mut self, action: Action) -> Result<Outcome, String> {
+        let trace_header = self
+            .trace
+            .enabled()
+            .then(|| (format!("{action:?}"), self.state.deterministic_hash().get()));
         let lost_before = self
             .state
             .players()
             .iter()
             .filter(|player| player.lost())
             .count();
+        self.actions.push(action.clone());
         let outcome = apply(&mut self.state, action);
+        if let Some((action, before_hash)) = trace_header {
+            let trace_record = TraceRecord {
+                index: self.metrics.actions,
+                action,
+                before_hash,
+                outcome: format!("{outcome:?}"),
+                after_hash: self.state.deterministic_hash().get(),
+            };
+            self.trace
+                .accept(trace_record)
+                .map_err(|error| format!("seed {}: {error}", self.seed))?;
+        }
         self.metrics.actions = self.metrics.actions.saturating_add(1);
         if let Outcome::Failed(error) = &outcome {
             return Err(format!(
@@ -838,6 +1029,11 @@ impl GameDriver {
         Ok(outcome)
     }
 
+    fn identity_exercise_mut(&mut self, object: ObjectId) -> Option<&mut IdentityExercise> {
+        let oracle_id = self.programs.get(&object)?.oracle_id().to_owned();
+        Some(self.metrics.identity_exercise.entry(oracle_id).or_default())
+    }
+
     fn take_main_phase_actions(&mut self, player: PlayerId) -> Result<(), String> {
         self.play_land(player)?;
         self.activate_mana_sources(player)?;
@@ -856,12 +1052,27 @@ impl GameDriver {
             .copied()
             .filter_map(|object| self.programs.get(&object).map(|program| (object, program)))
             .filter(|(_, program)| program.kind() == ProgramKind::Land)
-            .max_by_key(|(_, program)| !program.activated_abilities().is_empty());
+            .min_by_key(|(object, program)| {
+                let prior_plays = self
+                    .metrics
+                    .identity_exercise
+                    .get(program.oracle_id())
+                    .map_or(0, |exercise| exercise.land_plays);
+                (
+                    self.coverage_target.as_deref() != Some(program.oracle_id()),
+                    program.activated_abilities().is_empty(),
+                    prior_plays,
+                    object.index(),
+                )
+            });
         let Some((object, _)) = land else {
             return Ok(());
         };
         self.dispatch(Action::PlayLand { player, object })?;
         self.metrics.lands_played = self.metrics.lands_played.saturating_add(1);
+        if let Some(exercise) = self.identity_exercise_mut(object) {
+            exercise.land_plays = exercise.land_plays.saturating_add(1);
+        }
         self.register_permanent_runtime(player, object)
     }
 
@@ -920,11 +1131,15 @@ impl GameDriver {
             .to_vec();
         hand_objects.sort_by_key(|object| {
             let program = self.programs.get(object);
+            let coverage_rank = match program {
+                Some(program) => self.coverage_target.as_deref() != Some(program.oracle_id()),
+                None => true,
+            };
             let trigger_rank =
                 program.is_some_and(|program| !program.triggered_abilities().is_empty());
             let creature_rank =
                 program.is_some_and(|program| program.base_object().types().creature());
-            (!trigger_rank, !creature_rank, object.index())
+            (coverage_rank, !trigger_rank, !creature_rank, object.index())
         });
         candidates.extend(hand_objects);
 
@@ -967,6 +1182,9 @@ impl GameDriver {
                 request,
             })?;
             self.metrics.casts = self.metrics.casts.saturating_add(1);
+            if let Some(exercise) = self.identity_exercise_mut(object) {
+                exercise.casts = exercise.casts.saturating_add(1);
+            }
             if was_commander {
                 self.metrics.commander_casts = self.metrics.commander_casts.saturating_add(1);
                 if self
@@ -1088,6 +1306,9 @@ impl GameDriver {
             .get(&object)
             .cloned()
             .ok_or_else(|| format!("seed {} missing program for resolved spell", self.seed))?;
+        if let Some(exercise) = self.identity_exercise_mut(object) {
+            exercise.resolutions = exercise.resolutions.saturating_add(1);
+        }
         if program.kind() == ProgramKind::Permanent
             && self.state.object_zone(object) == Some(ZoneId::new(None, ZoneKind::Battlefield))
         {
@@ -1104,6 +1325,11 @@ impl GameDriver {
                 .metrics
                 .interpreter_actions
                 .saturating_add(trace.records().len() as u64);
+            if let Some(exercise) = self.identity_exercise_mut(object) {
+                exercise.effect_actions = exercise
+                    .effect_actions
+                    .saturating_add(trace.records().len() as u64);
+            }
         }
         Ok(())
     }
@@ -1133,11 +1359,28 @@ impl GameDriver {
             self.metrics.interpreter_actions = self.metrics.interpreter_actions.saturating_add(1);
         }
         self.metrics.triggers_resolved = self.metrics.triggers_resolved.saturating_add(1);
+        if let Some(exercise) = self.identity_exercise_mut(runtime.source) {
+            exercise.trigger_resolutions = exercise.trigger_resolutions.saturating_add(1);
+        }
         Ok(())
     }
 
     fn declare_attackers(&mut self, active: PlayerId) -> Result<(), String> {
-        let Some(defender) = self.next_live_opponent(active) else {
+        let seat = self
+            .players
+            .iter()
+            .position(|player| *player == active)
+            .ok_or_else(|| format!("seed {} unknown active player", self.seed))?;
+        let commander = self.commanders[seat];
+        let commander_record = self.state.object(commander);
+        let kill_defender = commander_record
+            .filter(|record| {
+                record.commander_cast_count() == 1
+                    && self.state.object_zone(commander)
+                        == Some(ZoneId::new(None, ZoneKind::Battlefield))
+            })
+            .and_then(|_| self.commander_kill_defender(active, commander));
+        let Some(defender) = kill_defender.or_else(|| self.next_live_opponent(active)) else {
             return Ok(());
         };
         let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
@@ -1146,69 +1389,196 @@ impl GameDriver {
             .zone_objects(battlefield)
             .ok_or_else(|| format!("seed {} missing battlefield", self.seed))?
             .to_vec();
+        let commander_may_attack = commander_record
+            .is_some_and(|record| record.commander_cast_count() >= 2 || kill_defender.is_some());
         let attacks = objects
             .into_iter()
+            .filter(|object| *object != commander || commander_may_attack)
             .map(|object| AttackDeclaration::new(object, defender))
             .filter(|attack| self.state.can_attack(active, *attack))
             .collect::<Vec<_>>();
-        for attack in &attacks {
-            if self.commanders.contains(&attack.attacker()) {
-                self.commander_attacked.insert(attack.attacker());
-            }
-        }
         self.dispatch(Action::DeclareAttackers {
             player: active,
             attacks: attacks.clone(),
         })?;
         self.current_attacks = attacks;
+        self.current_defender = Some(defender);
         self.metrics.combat_declarations = self.metrics.combat_declarations.saturating_add(1);
         Ok(())
     }
 
-    fn declare_no_blocks(&mut self, active: PlayerId) -> Result<(), String> {
-        let defender = self
-            .current_attacks
-            .first()
-            .map(|attack| attack.defending_player())
-            .or_else(|| self.next_live_opponent(active));
+    fn commander_kill_defender(&self, active: PlayerId, commander: ObjectId) -> Option<PlayerId> {
+        let attacker = self.state.creature_characteristics(commander).ok()?;
+        let battlefield = self
+            .state
+            .zone_objects(ZoneId::new(None, ZoneKind::Battlefield))?;
+        self.players.iter().copied().find(|defender| {
+            if *defender == active || self.state.players()[defender.index()].lost() {
+                return false;
+            }
+            let attack = AttackDeclaration::new(commander, *defender);
+            if !self.state.can_attack(active, attack) {
+                return false;
+            }
+            battlefield.iter().copied().any(|blocker| {
+                let Some(record) = self.state.object(blocker) else {
+                    return false;
+                };
+                let Ok(controller) = self.state.object_controller(blocker) else {
+                    return false;
+                };
+                let Ok(characteristics) = self.state.creature_characteristics(blocker) else {
+                    return false;
+                };
+                let evasion_ok = !attacker.keywords().flying()
+                    || characteristics.keywords().flying()
+                    || characteristics.keywords().reach();
+                controller == *defender
+                    && !record.tapped()
+                    && evasion_ok
+                    && (characteristics.power() >= attacker.toughness()
+                        || characteristics.keywords().deathtouch())
+            })
+        })
+    }
+
+    fn declare_blocks(&mut self, active: PlayerId) -> Result<(), String> {
+        let defender = self.current_defender.or_else(|| {
+            self.current_attacks
+                .first()
+                .map(|attack| attack.defending_player())
+                .or_else(|| self.next_live_opponent(active))
+        });
         if let Some(defending_player) = defender {
+            if self.metrics.commander_zone_returns > 0 {
+                self.dispatch(Action::DeclareBlockers {
+                    defending_player,
+                    blocks: Vec::new(),
+                })?;
+                return Ok(());
+            }
+            let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+            let mut blockers = self
+                .state
+                .zone_objects(battlefield)
+                .ok_or_else(|| format!("seed {} missing battlefield", self.seed))?
+                .iter()
+                .copied()
+                .filter(|object| self.state.object_controller(*object) == Ok(defending_player))
+                .collect::<Vec<_>>();
+            blockers.sort_by_key(|object| (!self.commanders.contains(object), object.index()));
+            let mut attacks = self.current_attacks.clone();
+            attacks.sort_by_key(|attack| {
+                (
+                    !self.commanders.contains(&attack.attacker()),
+                    attack.attacker().index(),
+                )
+            });
+            let mut blocks = Vec::new();
+            'attacks: for attack in attacks {
+                if !self.commanders.contains(&attack.attacker()) {
+                    continue;
+                }
+                let Ok(attacker) = self.state.creature_characteristics(attack.attacker()) else {
+                    continue;
+                };
+                for blocker in &blockers {
+                    let Ok(characteristics) = self.state.creature_characteristics(*blocker) else {
+                        continue;
+                    };
+                    let declaration = BlockDeclaration::new(*blocker, attack.attacker());
+                    if self.state.can_block(defending_player, declaration)
+                        && (characteristics.power() >= attacker.toughness()
+                            || characteristics.keywords().deathtouch())
+                    {
+                        blocks.push(declaration);
+                        break 'attacks;
+                    }
+                }
+            }
             self.dispatch(Action::DeclareBlockers {
                 defending_player,
-                blocks: Vec::new(),
+                blocks: blocks.clone(),
             })?;
         }
         Ok(())
     }
 
     fn assign_combat_damage(&mut self) -> Result<(), String> {
+        let combat = self.state.combat_state().clone();
+        let step = combat
+            .damage_step()
+            .ok_or_else(|| format!("seed {} missing combat damage step", self.seed))?;
         let mut assignments = Vec::new();
-        for attack in &self.current_attacks {
-            if self.state.object_zone(attack.attacker())
+        for attack in combat.attackers() {
+            if self.state.object_zone(attack.object())
                 != Some(ZoneId::new(None, ZoneKind::Battlefield))
             {
                 continue;
             }
             let characteristics = self
                 .state
-                .creature_characteristics(attack.attacker())
+                .creature_characteristics(attack.object())
                 .map_err(|error| {
                     format!(
                         "seed {} combat characteristics failed: {error:?}",
                         self.seed
                     )
                 })?;
+            if !damage_step_eligible(step, characteristics.keywords()) {
+                continue;
+            }
             let amount = u32::try_from(characteristics.power().max(0))
                 .map_err(|error| format!("seed {} invalid combat power: {error}", self.seed))?;
             if amount == 0 {
                 continue;
             }
+            let active_blocker = attack.blockers().iter().copied().find(|blocker| {
+                self.state.object_zone(*blocker) == Some(ZoneId::new(None, ZoneKind::Battlefield))
+            });
+            let target = if let Some(blocker) = active_blocker {
+                CombatDamageTarget::Object(blocker)
+            } else if !attack.blocked() || characteristics.keywords().trample() {
+                CombatDamageTarget::Player(attack.defending_player())
+            } else {
+                continue;
+            };
             assignments.push(CombatDamageAssignmentRequest::new(
-                attack.attacker(),
-                vec![CombatDamageAssignment::new(
-                    CombatDamageTarget::Player(attack.defending_player()),
-                    amount,
-                )],
+                attack.object(),
+                vec![CombatDamageAssignment::new(target, amount)],
             ));
+        }
+        for block in combat.blockers() {
+            if self.state.object_zone(block.object())
+                != Some(ZoneId::new(None, ZoneKind::Battlefield))
+                || self.state.object_zone(block.attacker())
+                    != Some(ZoneId::new(None, ZoneKind::Battlefield))
+            {
+                continue;
+            }
+            let characteristics = self
+                .state
+                .creature_characteristics(block.object())
+                .map_err(|error| {
+                    format!(
+                        "seed {} blocker characteristics failed: {error:?}",
+                        self.seed
+                    )
+                })?;
+            if !damage_step_eligible(step, characteristics.keywords()) {
+                continue;
+            }
+            let amount = u32::try_from(characteristics.power().max(0))
+                .map_err(|error| format!("seed {} invalid blocker power: {error}", self.seed))?;
+            if amount > 0 {
+                assignments.push(CombatDamageAssignmentRequest::new(
+                    block.object(),
+                    vec![CombatDamageAssignment::new(
+                        CombatDamageTarget::Object(block.attacker()),
+                        amount,
+                    )],
+                ));
+            }
         }
         let outcome = self.dispatch(Action::AssignCombatDamage { assignments })?;
         let Outcome::CombatDamageAssigned(records) = outcome else {
@@ -1221,32 +1591,26 @@ impl GameDriver {
             .metrics
             .combat_damage_events
             .saturating_add(records.len() as u64);
+        self.choose_dead_commanders()?;
         Ok(())
     }
 
-    fn return_attacked_commander(&mut self, active: PlayerId) -> Result<(), String> {
-        let seat = self
-            .players
-            .iter()
-            .position(|player| *player == active)
-            .ok_or_else(|| format!("seed {} unknown active player", self.seed))?;
-        let commander = self.commanders[seat];
-        if self.commander_returned.contains(&commander)
-            || !self.commander_attacked.contains(&commander)
-            || self.state.object_zone(commander) != Some(ZoneId::new(None, ZoneKind::Battlefield))
-            || self
-                .state
-                .object(commander)
-                .map_or(true, |record| record.commander_cast_count() != 1)
-        {
-            return Ok(());
+    fn choose_dead_commanders(&mut self) -> Result<(), String> {
+        for (seat, commander) in self.commanders.clone().into_iter().enumerate() {
+            let owner = self.players[seat];
+            let zone = self.state.object_zone(commander);
+            if zone != Some(ZoneId::new(Some(owner), ZoneKind::Graveyard))
+                && zone != Some(ZoneId::new(None, ZoneKind::Exile))
+            {
+                continue;
+            }
+            self.dispatch(Action::ChooseCommanderZone {
+                player: owner,
+                object: commander,
+            })?;
+            self.metrics.commander_zone_returns =
+                self.metrics.commander_zone_returns.saturating_add(1);
         }
-        self.dispatch(Action::MoveObject {
-            object: commander,
-            to: ZoneId::new(None, ZoneKind::Command),
-        })?;
-        self.commander_returned.insert(commander);
-        self.metrics.commander_zone_returns = self.metrics.commander_zone_returns.saturating_add(1);
         Ok(())
     }
 
@@ -1319,6 +1683,17 @@ impl GameDriver {
     }
 }
 
+fn damage_step_eligible(
+    step: CombatDamageStepKind,
+    keywords: forge_core::CreatureKeywords,
+) -> bool {
+    match step {
+        CombatDamageStepKind::Normal => true,
+        CombatDamageStepKind::FirstStrike => keywords.first_strike() || keywords.double_strike(),
+        CombatDamageStepKind::Regular => !keywords.first_strike() || keywords.double_strike(),
+    }
+}
+
 fn ensure_trigger_is_autonomous(
     ability: &TriggeredAbilityProgram,
     card_name: &str,
@@ -1342,17 +1717,20 @@ fn run_campaign(
     jobs: usize,
     max_turns: u32,
     seed_base: u64,
-) -> Result<Vec<GameSummary>, String> {
+    manifest: &Path,
+) -> Result<CampaignResult, String> {
     let worker_count = jobs.min(games);
+    let manifest = manifest.to_path_buf();
     let batches = thread::scope(|scope| {
         let mut handles = Vec::with_capacity(worker_count);
         for worker in 0..worker_count {
             let pod = Arc::clone(&pod);
+            let manifest = manifest.clone();
             handles.push(scope.spawn(move || {
                 let mut batch = Vec::new();
                 for index in (worker..games).step_by(worker_count) {
-                    let seed = seed_base.wrapping_add(index as u64);
-                    let result = GameDriver::setup(&pod, seed).and_then(|game| game.run(max_turns));
+                    let seed = campaign_seed(seed_base, index);
+                    let result = run_game_pair(&pod, &manifest, index, seed, max_turns);
                     batch.push((index, result));
                 }
                 batch
@@ -1366,18 +1744,188 @@ fn run_campaign(
     let mut ordered = vec![None; games];
     for batch in batches {
         for (index, result) in batch {
-            let summary = result.map_err(|error| format!("game {index}: {error}"))?;
-            ordered[index] = Some(summary);
+            let result = result.map_err(|error| format!("game {index}: {error}"))?;
+            ordered[index] = Some(result);
         }
     }
-    ordered
-        .into_iter()
-        .enumerate()
-        .map(|(index, summary)| summary.ok_or_else(|| format!("worker omitted game {index}")))
-        .collect()
+    let mut summaries = Vec::with_capacity(games);
+    let mut replays = Vec::with_capacity(RETAINED_REPLAYS.min(games));
+    let mut primary_worker_ms = 0_u128;
+    let mut replay_worker_ms = 0_u128;
+    for (index, result) in ordered.into_iter().enumerate() {
+        let (summary, replay, primary_ms, verification_ms) =
+            result.ok_or_else(|| format!("worker omitted game {index}"))?;
+        summaries.push(summary);
+        if let Some(replay) = replay {
+            replays.push(replay);
+        }
+        primary_worker_ms = primary_worker_ms.saturating_add(primary_ms);
+        replay_worker_ms = replay_worker_ms.saturating_add(verification_ms);
+    }
+    Ok(CampaignResult {
+        summaries,
+        replays,
+        primary_worker_ms,
+        replay_worker_ms,
+    })
 }
 
-fn validate_campaign(games: &[GameSummary], expected: usize) -> Result<(), String> {
+fn campaign_seed(base: u64, index: usize) -> u64 {
+    let mut value = base ^ (index as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15);
+    value = (value ^ (value >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    value = (value ^ (value >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+    value ^ (value >> 31)
+}
+
+fn run_game_pair(
+    pod: &PodTemplate,
+    manifest: &Path,
+    index: usize,
+    seed: u64,
+    max_turns: u32,
+) -> Result<(GameSummary, Option<PodReplay>, u128, u128), String> {
+    let coverage_target = pod
+        .semantic_identities
+        .keys()
+        .nth(index % pod.semantic_identities.len())
+        .cloned();
+    let primary_started = Instant::now();
+    let primary_mode = if index < RETAINED_REPLAYS {
+        TraceMode::Record(Vec::new())
+    } else {
+        TraceMode::Off
+    };
+    let primary =
+        GameDriver::setup(pod, seed, coverage_target.clone(), primary_mode)?.run(max_turns)?;
+    let primary_ms = primary_started.elapsed().as_millis();
+    let retained_trace = primary.trace.clone();
+    if index < RETAINED_REPLAYS && retained_trace.is_none() {
+        return Err("recording run did not return an action trace".to_owned());
+    }
+
+    let replay_started = Instant::now();
+    let replay_state = replay_captured_actions(&primary.actions, primary.trace.as_deref())?;
+    let replay_ms = replay_started.elapsed().as_millis();
+    let replay_life = std::array::from_fn(|seat| replay_state.players()[seat].life());
+    let replay_winner = match replay_state.game_outcome() {
+        GameOutcome::Won(player) => player.index(),
+        outcome => return Err(format!("direct action replay ended with {outcome:?}")),
+    };
+    if replay_state.deterministic_hash().get() != primary.summary.final_hash
+        || replay_life != primary.summary.final_life
+        || replay_winner != primary.summary.winner
+    {
+        return Err(format!(
+            "direct action replay diverged from primary summary: {:?}",
+            primary.summary
+        ));
+    }
+    let replay_artifact = retained_trace.map(|actions| PodReplay {
+        format: POD_REPLAY_MAGIC.to_owned(),
+        manifest: manifest.to_path_buf(),
+        seed,
+        max_turns,
+        coverage_target,
+        actions,
+        expected: primary.summary.clone(),
+    });
+    Ok((primary.summary, replay_artifact, primary_ms, replay_ms))
+}
+
+fn replay_captured_actions(
+    actions: &[Action],
+    expected_trace: Option<&[TraceRecord]>,
+) -> Result<GameState, String> {
+    if expected_trace.is_some_and(|trace| trace.len() != actions.len()) {
+        return Err("retained trace length does not match the typed action stream".to_owned());
+    }
+    let mut state = GameState::new();
+    for (index, action) in actions.iter().enumerate() {
+        let expected = expected_trace.and_then(|trace| trace.get(index));
+        let before_hash = expected.map(|_| state.deterministic_hash().get());
+        let outcome = apply(&mut state, action.clone());
+        if let Some(expected) = expected {
+            let actual = TraceRecord {
+                index: index as u64,
+                action: format!("{action:?}"),
+                before_hash: before_hash.unwrap_or_default(),
+                outcome: format!("{outcome:?}"),
+                after_hash: state.deterministic_hash().get(),
+            };
+            if &actual != expected {
+                return Err(format!(
+                    "direct replay diverged at action {index}: expected {expected:?}, got {actual:?}"
+                ));
+            }
+        }
+        if let Outcome::Failed(error) = outcome {
+            return Err(format!(
+                "direct replay action {index} was rejected: {error:?}"
+            ));
+        }
+    }
+    Ok(state)
+}
+
+fn write_replays(directory: &Path, replays: &[PodReplay]) -> Result<(), String> {
+    fs::create_dir_all(directory)
+        .map_err(|error| format!("failed to create {}: {error}", directory.display()))?;
+    for (index, replay) in replays.iter().enumerate() {
+        let path = directory.join(format!("pod-seed-{:02}.frsreplay", index + 1));
+        let payload = serde_json::to_vec_pretty(replay)
+            .map_err(|error| format!("failed to serialize {}: {error}", path.display()))?;
+        fs::write(&path, payload)
+            .map_err(|error| format!("failed to write {}: {error}", path.display()))?;
+    }
+    Ok(())
+}
+
+/// Replays a recorded T3.9 pod action stream and verifies every state transition.
+pub fn replay_pod_file(path: impl AsRef<Path>) -> Result<String, String> {
+    let path = path.as_ref();
+    let payload =
+        fs::read(path).map_err(|error| format!("failed to read {}: {error}", path.display()))?;
+    let replay: PodReplay = serde_json::from_slice(&payload)
+        .map_err(|error| format!("failed to parse {}: {error}", path.display()))?;
+    if replay.format != POD_REPLAY_MAGIC {
+        return Err(format!(
+            "{} is not a {POD_REPLAY_MAGIC} artifact",
+            path.display()
+        ));
+    }
+    let pod = PodTemplate::load(&replay.manifest)?;
+    let action_count = replay.actions.len();
+    let run = GameDriver::setup(
+        &pod,
+        replay.seed,
+        replay.coverage_target.clone(),
+        TraceMode::Verify {
+            expected: replay.actions,
+            cursor: 0,
+        },
+    )?
+    .run(replay.max_turns)?;
+    if run.summary != replay.expected {
+        return Err(format!(
+            "replay summary diverged: {:?} != {:?}",
+            replay.expected, run.summary
+        ));
+    }
+    let direct_state = replay_captured_actions(&run.actions, None)?;
+    if direct_state.deterministic_hash().get() != replay.expected.final_hash {
+        return Err("direct typed-action playback produced a different final hash".to_owned());
+    }
+    Ok(format!(
+        "pod replay complete (typed actions reapplied)\nseed: {}\nactions: {}\nfinal_hash: {}\nwinner_seat: {}\n",
+        replay.seed, action_count, run.summary.final_hash, run.summary.winner
+    ))
+}
+
+fn validate_campaign(
+    games: &[GameSummary],
+    expected: usize,
+    semantic_identities: &BTreeMap<String, bool>,
+) -> Result<(), String> {
     if games.len() != expected {
         return Err(format!(
             "campaign produced {} of {expected} games",
@@ -1410,6 +1958,23 @@ fn validate_campaign(games: &[GameSummary], expected: usize) -> Result<(), Strin
     }
     if let Some(game) = games
         .iter()
+        .find(|game| game.metrics.commander_zone_returns == 0)
+    {
+        return Err(format!(
+            "seed {} did not exercise an owner commander-zone choice",
+            game.seed
+        ));
+    }
+    if let Some(game) = games.iter().find(|game| {
+        game.metrics.hidden_information_checks <= (PLAYER_COUNT as u64).saturating_mul(2)
+    }) {
+        return Err(format!(
+            "seed {} only ran endpoint hidden-information checks ({})",
+            game.seed, game.metrics.hidden_information_checks
+        ));
+    }
+    if let Some(game) = games
+        .iter()
         .find(|game| game.metrics.combat_damage_events == 0 || game.metrics.eliminations < 3)
     {
         return Err(format!(
@@ -1425,6 +1990,30 @@ fn validate_campaign(games: &[GameSummary], expected: usize) -> Result<(), Strin
     {
         return Err("campaign did not resolve any card-driven trigger".to_owned());
     }
+    let mut observed = BTreeMap::<String, IdentityExercise>::new();
+    for game in games {
+        for (identity, exercise) in &game.metrics.identity_exercise {
+            observed
+                .entry(identity.clone())
+                .or_default()
+                .add_assign(exercise);
+        }
+    }
+    if expected >= semantic_identities.len() {
+        for (identity, is_land) in semantic_identities {
+            let exercise = observed.get(identity).cloned().unwrap_or_default();
+            let exercised = if *is_land {
+                exercise.land_plays > 0
+            } else {
+                exercise.casts > 0 && exercise.resolutions > 0
+            };
+            if !exercised {
+                return Err(format!(
+                    "semantic pod identity {identity} (land={is_land}) was not exercised: {exercise:?}"
+                ));
+            }
+        }
+    }
     Ok(())
 }
 
@@ -1433,8 +2022,9 @@ fn build_report(
     options: &Options,
     games: &[GameSummary],
     load_ms: u128,
-    first_ms: u128,
-    replay_ms: u128,
+    campaign_ms: u128,
+    primary_worker_ms: u128,
+    replay_worker_ms: u128,
 ) -> Value {
     let mut totals = GameMetrics::default();
     let mut wins = [0_u64; PLAYER_COUNT];
@@ -1448,7 +2038,7 @@ fn build_report(
         min_turns = min_turns.min(game.turns);
         sum_turns = sum_turns.saturating_add(u64::from(game.turns));
     }
-    let seconds = first_ms.max(1) as f64 / 1_000.0;
+    let seconds = campaign_ms.max(1) as f64 / 1_000.0;
     let deck_records = pod
         .decks
         .iter()
@@ -1464,11 +2054,11 @@ fn build_report(
         })
         .collect::<Vec<_>>();
     json!({
-        "schema_version": 1,
+        "schema_version": 2,
         "task": "T3.9",
         "checkpoint": "CP-FOUR-PLAYER-POD",
         "status": "passed",
-        "claim_boundary": "Four legal compiled Commander decks completed deterministic card-driven games through production setup, mana, casting, priority, triggers, combat, commander zone/tax, elimination, redacted views, invariants, and exact replay.",
+        "claim_boundary": "Four legal compiled Commander decks completed deterministic card-driven games through production setup, mana, casting, priority, triggers, combat, owner-selected commander zone/tax, elimination, recurring redacted-view canaries, invariants, and direct typed-action replay against fresh kernel state.",
         "source": {
             "manifest": pod.manifest_path,
             "translated_definitions": pod.source_root,
@@ -1491,12 +2081,18 @@ fn build_report(
             "jobs": options.jobs.min(options.games),
             "max_turns": options.max_turns,
             "seed_base": options.seed_base.to_string(),
+            "coverage_schedule": "deterministic round-robin identity placed on top before opening hands; all subsequent actions remain production-legal",
+            "replay_directory": options.replay_dir,
             "decks": deck_records,
-            "semantic_mainboard_cards_across_manifests": pod.semantic_mainboard_cards
+            "semantic_mainboard_cards_across_manifests": pod.semantic_mainboard_cards,
+            "semantic_identity_count": pod.semantic_identities.len(),
+            "semantic_identity_requirements": pod.semantic_identities
         },
         "results": {
             "games_completed": games.len(),
-            "deterministic_replays_matched": games.len(),
+            "direct_typed_action_replays_matched": games.len(),
+            "action_replays_matched": RETAINED_REPLAYS.min(games.len()),
+            "retained_action_replays": RETAINED_REPLAYS.min(games.len()),
             "draws": 0,
             "wins_by_seat": wins,
             "turns": {
@@ -1521,13 +2117,84 @@ fn build_report(
             "invariant_checks": totals.invariant_checks,
             "invariant_violations": 0,
             "hidden_information_checks": totals.hidden_information_checks,
-            "hidden_information_canary_violations": 0
+            "hidden_information_canary_violations": 0,
+            "identity_exercise": totals.identity_exercise
         },
         "runtime": {
             "manifest_load_ms": load_ms,
-            "primary_campaign_ms": first_ms,
-            "replay_campaign_ms": replay_ms,
+            "campaign_wall_ms": campaign_ms,
+            "primary_worker_ms": primary_worker_ms,
+            "replay_worker_ms": replay_worker_ms,
             "primary_games_per_second": games.len() as f64 / seconds
         }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{campaign_seed, replay_captured_actions, IdentityExercise, TraceRecord};
+    use forge_core::{apply, Action, GameState};
+    use std::collections::BTreeSet;
+
+    #[test]
+    fn action_replay_rejects_a_tampered_transition() {
+        let action = Action::SetSeed { seed: 7 };
+        let mut primary = GameState::new();
+        let before_hash = primary.deterministic_hash().get();
+        let outcome = apply(&mut primary, action.clone());
+        let expected = TraceRecord {
+            index: 0,
+            action: format!("{action:?}"),
+            before_hash,
+            outcome: format!("{outcome:?}"),
+            after_hash: primary.deterministic_hash().get(),
+        };
+        assert!(replay_captured_actions(
+            std::slice::from_ref(&action),
+            Some(std::slice::from_ref(&expected)),
+        )
+        .is_ok());
+        let mut tampered = expected;
+        tampered.after_hash = tampered.after_hash.wrapping_add(1);
+        let error = match replay_captured_actions(&[action], Some(&[tampered])) {
+            Ok(_) => panic!("a changed state hash must fail replay"),
+            Err(error) => error,
+        };
+        assert!(error.contains("direct replay diverged at action 0"));
+    }
+
+    #[test]
+    fn campaign_seed_schedule_is_deterministic_and_disperse() {
+        let first = (0..1_000)
+            .map(|index| campaign_seed(17, index))
+            .collect::<Vec<_>>();
+        let second = (0..1_000)
+            .map(|index| campaign_seed(17, index))
+            .collect::<Vec<_>>();
+        assert_eq!(first, second);
+        assert_eq!(first.iter().copied().collect::<BTreeSet<_>>().len(), 1_000);
+    }
+
+    #[test]
+    fn identity_exercise_aggregation_preserves_every_counter() {
+        let mut total = IdentityExercise {
+            land_plays: 1,
+            casts: 2,
+            resolutions: 3,
+            effect_actions: 4,
+            trigger_resolutions: 5,
+        };
+        total.add_assign(&IdentityExercise {
+            land_plays: 6,
+            casts: 7,
+            resolutions: 8,
+            effect_actions: 9,
+            trigger_resolutions: 10,
+        });
+        assert_eq!(total.land_plays, 7);
+        assert_eq!(total.casts, 9);
+        assert_eq!(total.resolutions, 11);
+        assert_eq!(total.effect_actions, 13);
+        assert_eq!(total.trigger_resolutions, 15);
+    }
 }

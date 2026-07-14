@@ -101,7 +101,12 @@ fn replay_command(args: &[String]) -> Result<String, String> {
     if args.len() != 1 {
         return Err("replay requires exactly one path".to_owned());
     }
-    let replay = Replay::from_file(&args[0])?;
+    let payload = fs::read_to_string(&args[0])
+        .map_err(|error| format!("failed to read {}: {error}", args[0]))?;
+    if payload.trim_start().starts_with('{') {
+        return forge_testkit::t3_9_pod::replay_pod_file(&args[0]);
+    }
+    let replay = Replay::parse(&payload)?;
     let report = run_replay(&replay)?;
     Ok(format_report("replay", &report, Some(replay.actions.len())))
 }

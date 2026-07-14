@@ -9,6 +9,10 @@
 
 pub mod runtime_smoke;
 
+/// Deterministic four-player pod runner and action-replay verifier.
+#[path = "../../../tests/t3_9/four_player_pod.rs"]
+pub mod t3_9_pod;
+
 use forge_core::{
     apply, auto_payment_plan, AbilityPlayer, Action, ActivatedAbilityDefinition,
     ActivatedAbilityEffect, ActivatedAbilityId, ActivationCost, ActivationTiming,

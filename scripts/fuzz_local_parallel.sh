@@ -12,17 +12,13 @@ if [[ "$mode" == "--self-test" ]]; then
   exit 0
 fi
 
-minimum_total_args=()
-evidence_args=()
-if [[ -n "${FORGE_CP_DSL_EVIDENCE_DIR:-}" ]]; then
-  evidence_args=(--evidence-dir "${FORGE_CP_DSL_EVIDENCE_DIR}/fuzz")
-fi
+runner_args=()
 case "$mode" in
   smoke) seconds="${FORGE_FUZZ_SECONDS:-10}" ;;
   task) seconds="${FORGE_FUZZ_SECONDS:-30}" ;;
   gate)
     seconds="${FORGE_FUZZ_SECONDS:-300}"
-    minimum_total_args=(--minimum-total-worker-seconds 2400)
+    runner_args+=(--minimum-total-worker-seconds 2400)
     ;;
   check)
     exec python3 tools/run_local_fuzz.py --check \
@@ -34,5 +30,8 @@ case "$mode" in
     ;;
 esac
 
-exec python3 tools/run_local_fuzz.py --seconds "$seconds" \
-  "${minimum_total_args[@]}" "${evidence_args[@]}"
+if [[ -n "${FORGE_CP_DSL_EVIDENCE_DIR:-}" ]]; then
+  runner_args+=(--evidence-dir "${FORGE_CP_DSL_EVIDENCE_DIR}/fuzz")
+fi
+
+exec python3 tools/run_local_fuzz.py --seconds "$seconds" "${runner_args[@]}"

@@ -568,12 +568,10 @@ onto identities.
 
 ## Next Gates
 
-1. Continue the measured T3.3 mapper lane at its current measured capacity until the corpus floor
-   is met; every batch records before/after coverage and quarantine deltas.
-2. T3.5 capability-specific runtime smoke; unsupported setup is reason-coded.
-3. T3.6 and CP-CARD-SEMANTICS-100 for the frozen 100-card Commander set.
-4. T3.9 and CP-FOUR-PLAYER-POD with four complete decks and 1,000 seeded games.
-5. T1.R10 and CP-HUMAN-PLAY-CLI before trace collection or Trainer claims.
+1. T1.R10 and CP-HUMAN-PLAY-CLI before human trace collection or Trainer claims.
+2. Begin the initial T4 AI baseline only on the exact card-driven runtime proven by Tier 3.
+3. Keep the mapper lane targeted to blockers for human play, semantic decks, and later gates;
+   the broad T3.3 campaign remains closed at its approved structural floor.
 
 Per-identity generated detail: `{summary['detail']['path']}` (untracked,
 {summary['detail']['record_count']:,} records; SHA-256
