@@ -34,6 +34,7 @@ def source_hash(root: Path) -> str:
     digest = hashlib.sha256()
     paths = [
         root / "fuzz/Cargo.toml",
+        root / "fuzz/Cargo.lock",
         root / "tools/run_local_fuzz.py",
         root / "scripts/fuzz_local_parallel.sh",
         root / "rust-toolchain.toml",

@@ -96,6 +96,14 @@ def evidence_only_path(path: str) -> bool:
     )
 
 
+def product_dirty_paths() -> list[str]:
+    status_rows = git(
+        "status", "--porcelain", "--untracked-files=all", "--ignore-submodules=all"
+    ).splitlines()
+    changed_paths = [row[3:].split(" -> ")[-1] for row in status_rows if len(row) > 3]
+    return [path for path in changed_paths if not evidence_only_path(path)]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--manifest", default="assets/t3_9/integration_decks.json")
@@ -108,17 +116,25 @@ def main() -> int:
     parser.add_argument("--max-turns", type=int, default=160)
     parser.add_argument("--skip-build", action="store_true")
     parser.add_argument("--allow-dirty", action="store_true")
+    parser.add_argument("--check-product-clean-only", action="store_true")
     args = parser.parse_args()
 
+    product_dirty = product_dirty_paths()
+    if args.check_product_clean_only:
+        if product_dirty:
+            raise SystemExit(
+                "exact gate changed product sources: " + ", ".join(product_dirty)
+            )
+        print("PASS: exact gate left product sources clean")
+        return 0
     if not 1 <= args.jobs <= 24:
         raise SystemExit("--jobs must be in 1..=24")
+    if product_dirty and not args.allow_dirty:
+        raise SystemExit("exact pod gate requires clean product sources")
     status_rows = git(
         "status", "--porcelain", "--untracked-files=all", "--ignore-submodules=all"
     ).splitlines()
     changed_paths = [row[3:].split(" -> ")[-1] for row in status_rows if len(row) > 3]
-    product_dirty = [path for path in changed_paths if not evidence_only_path(path)]
-    if product_dirty and not args.allow_dirty:
-        raise SystemExit("exact pod gate requires clean product sources")
     commit = git("rev-parse", "HEAD")
     tree = git("show", "-s", "--format=%T", commit)
     if not args.skip_build:

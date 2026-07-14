@@ -49,6 +49,7 @@ if [[ "${1:-}" == "--run-exact" ]]; then
   python3 tools/run_t3_mutation_gate.py --jobs 8
   python3 tools/write_card_maturity.py
   python3 tools/write_project_status.py
+  python3 tools/run_t3_9_pod_gate.py --check-product-clean-only
 elif [[ -n "${1:-}" ]]; then
   echo "usage: scripts/gates/gate_T3.sh [--run-exact|--self-test]" >&2
   exit 2
