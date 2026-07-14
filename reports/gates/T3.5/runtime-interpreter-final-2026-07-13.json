@@ -4,8 +4,8 @@
   "task": "T3.5",
   "slice": "data-driven-card-runtime-interpreter",
   "status": "pass_local",
-  "claim_boundary": "This closes T3.5 by classifying every compiler-valid translated definition through the capability smoke harness and by executing all 100 frozen Commander identities. Typed unsupported classifications are not passes, and this evidence does not semantically verify or promote any card.",
-  "source_commit": "741bf5c174b7e62021f25ddb83c87f69f4adbe43",
+  "claim_boundary": "T3.5 closes by classifying every compiler-valid translated definition through the capability smoke harness and executing all 100 frozen Commander identities. Typed unsupported classifications are not passes. Semantic promotion is supplied separately by the passing T3.6-B exact replay evidence.",
+  "source_commit": "06b31aef6cc0e30ed3c1b72cc2e1ab2b194fbb11",
   "architecture": {
     "decision": "docs/adr/0013-data-driven-card-runtime-interpreter.md",
     "owner": "forge-cards::runtime",
@@ -20,18 +20,18 @@
   "translated_corpus": {
     "source": "target/translated-cards",
     "report": "target/t3_5_runtime_interpreter_audit_current.json",
-    "report_sha256": "544273812e86e8136208dd67d9b7b8586c4d90b8af8ff63cb1cbef3a803dae8b",
+    "report_sha256": "177c32c1f78b591ef25e867a9f3e5fb3e263962d5c9d6d2075dd01917dd7497a",
     "total": 20082,
-    "passed": 3122,
-    "unsupported_setup": 16960,
+    "passed": 3123,
+    "unsupported_setup": 16959,
     "failed": 0,
     "unsupported_reason_counts": {
       "unsupported_ability_shape": 3717,
       "unsupported_card_layout": 453,
       "unsupported_card_type": 62,
       "unsupported_effect_amount": 436,
-      "unsupported_effect_arguments": 4945,
-      "unsupported_effect_operation": 3817,
+      "unsupported_effect_arguments": 4949,
+      "unsupported_effect_operation": 3812,
       "unsupported_keyword_semantics": 2794,
       "unsupported_mana_symbol": 663,
       "unsupported_player_selector": 73
@@ -41,29 +41,34 @@
     "manifest": "assets/t3_6_commander_semantic_candidates.json",
     "source": "target/t3_6_frozen_100",
     "report": "target/t3_5_frozen_100_current.json",
-    "report_sha256": "361411460a0d6e6851d32128fc46b156f0b386d8aa9046319bf165b24f3d844c",
+    "report_sha256": "773c841a630e46da18c94eeb08d5a88cbccf39860bcccc716cce9643947b7a2a",
     "total": 100,
     "runtime_smoke_passed": 100,
     "unsupported_setup": 0,
     "failed": 0,
-    "semantic_verified": 0
+    "semantic_verified": 100,
+    "semantic_evidence": "reports/gates/T3.6-B/EVIDENCE.json"
   },
   "focused_verification": [
     {
-      "command": "CARGO_BUILD_JOBS=24 cargo test -p forge-core -p forge-cards -p forge-testkit",
-      "result": "pass: forge-core 109, forge-cards 32, forge-testkit 31 library tests and 12 CLI tests; doc tests pass"
+      "command": "CARGO_BUILD_JOBS=24 cargo test --workspace --quiet",
+      "result": "pass: forge-core 112, forge-cards 34, forge-porttools 159, forge-testkit 32 library tests and 12 CLI tests; all workspace and doc tests pass"
     },
     {
       "command": "target/debug/forge-testkit runtime-smoke target/translated-cards --report target/t3_5_runtime_interpreter_audit_current.json --quiet",
-      "result": "expected exit 2 because typed unsupported definitions remain; 3122 passed, 16960 unsupported, 0 failed"
+      "result": "expected exit 2 because typed unsupported definitions remain; 3123 passed, 16959 unsupported, 0 failed"
     },
     {
       "command": "target/debug/forge-testkit runtime-smoke target/t3_6_frozen_100 --report target/t3_5_frozen_100_current.json --quiet",
       "result": "pass: 100 passed, 0 unsupported, 0 failed"
     },
     {
-      "command": "rustfmt --edition 2021 crates/forge-testkit/src/runtime_smoke.rs and git diff --check",
-      "result": "pass"
+      "command": "python3 tools/run_t3_6_commander_semantics.py --report reports/gates/T3.6-B/EVIDENCE.json",
+      "result": "pass: 100 semantic verified, 0 semantic blocked, 0 runtime blocked; 43 sidecar tests pass"
+    },
+    {
+      "command": "FORGE_T3_TOTAL_WORKERS=24 CARGO_BUILD_JOBS=24 CARGO_NET_OFFLINE=true scripts/t3_parallel_sweep.sh checkpoint",
+      "result": "pass: deterministic local checkpoint, workspace format/lint/tests green, line coverage 80.2266%"
     }
   ],
   "constraints": {
@@ -74,7 +79,7 @@
     "push_performed": false
   },
   "continuation": {
-    "status": "T3.5_closed_T3.6_active",
-    "next": "Complete card-specific deterministic semantic scenarios and replay for all 100 frozen Commander identities before CP-CARD-SEMANTICS-100 can pass."
+    "status": "T3.5_and_T3.6_closed",
+    "next": "Proceed to T3.9 four-player integration using the 100 semantically verified identities and targeted mapper work only for pod blockers."
   }
 }

@@ -5157,8 +5157,8 @@
   ],
   "claim_boundary": "Only semantic_case_ready entries can be promoted by a passing replay and any required card-specific semantic probe. Runtime-smoke success alone never promotes a known gap.",
   "generated_at": "2026-07-13",
-  "payload_sha256": "1c6d2839e49e559e4a897d66b14a1824c82a22064b65d4891f9174589d529540",
-  "product_source_commit": "15adf70c3f525908e9aa7ba09ec4ff85021f5eae",
+  "payload_sha256": "94575c43fe71f369148d228401d0ac9b12869d6945662659e0b97a96cc6d50dc",
+  "product_source_commit": "06b31aef6cc0e30ed3c1b72cc2e1ab2b194fbb11",
   "schema_version": 2,
   "summary": {
     "blocked_runtime": 0,

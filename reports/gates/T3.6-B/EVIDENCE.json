@@ -2,177 +2,27 @@
   "artifacts": {
     "runner": {
       "path": "tools/run_t3_6_commander_semantics.py",
-      "sha256": "845c423224d59686b7fee457baa361f0a9aed31969d0f31ade76577d5527c942"
+      "sha256": "e7570daf98c5f67ee5ed89eecc26823f3a06605d5c2ab78836f8e06f9e1d75d1"
     },
     "runtime_probe": {
       "path": "tests/t3_6/runtime_probe.rs",
-      "sha256": "1d012cedbb585fa2e1749a8bdde162c5b51dc6281756720436df9a27dad5f732"
+      "sha256": "687d0ae67a7e37fc90fd5a163edb295610756cb98724b07d2d4912478b80f319"
     },
     "semantic_cases": {
       "path": "tests/t3_6/commander_semantic_cases.json",
-      "sha256": "4502f39285513a73dde3c846dad49f5f9047ef9e1b3b64839dff4f1e7c06ae43"
+      "sha256": "e9a797d7f526a04d87e09f09b853e070fe8e02239291c7fc43ab52a8707a681b"
     }
   },
   "blocked_runtime": [],
-  "blocked_semantic_gap": [
-    {
-      "card_name": "Beast Within",
-      "reason_codes": [
-        "TOKEN_SUBTYPE_STATE_MISSING"
-      ],
-      "scenario_id": "T3.6-013"
-    },
-    {
-      "card_name": "Generous Gift",
-      "reason_codes": [
-        "TOKEN_SUBTYPE_STATE_MISSING"
-      ],
-      "scenario_id": "T3.6-014"
-    },
-    {
-      "card_name": "Putrefy",
-      "reason_codes": [
-        "REGENERATION_PROHIBITION_MISSING"
-      ],
-      "scenario_id": "T3.6-048"
-    },
-    {
-      "card_name": "Terminate",
-      "reason_codes": [
-        "REGENERATION_PROHIBITION_MISSING"
-      ],
-      "scenario_id": "T3.6-049"
-    },
-    {
-      "card_name": "Pongify",
-      "reason_codes": [
-        "TOKEN_SUBTYPE_STATE_MISSING",
-        "REGENERATION_PROHIBITION_MISSING"
-      ],
-      "scenario_id": "T3.6-052"
-    },
-    {
-      "card_name": "Rapid Hybridization",
-      "reason_codes": [
-        "TOKEN_SUBTYPE_STATE_MISSING",
-        "REGENERATION_PROHIBITION_MISSING"
-      ],
-      "scenario_id": "T3.6-053"
-    },
-    {
-      "card_name": "Swan Song",
-      "reason_codes": [
-        "TOKEN_SUBTYPE_STATE_MISSING"
-      ],
-      "scenario_id": "T3.6-054"
-    },
-    {
-      "card_name": "An Offer You Can't Refuse",
-      "reason_codes": [
-        "TOKEN_SUBTYPE_STATE_MISSING"
-      ],
-      "scenario_id": "T3.6-055"
-    },
-    {
-      "card_name": "Big Score",
-      "reason_codes": [
-        "TOKEN_SUBTYPE_STATE_MISSING"
-      ],
-      "scenario_id": "T3.6-072"
-    },
-    {
-      "card_name": "Unexpected Windfall",
-      "reason_codes": [
-        "TOKEN_SUBTYPE_STATE_MISSING"
-      ],
-      "scenario_id": "T3.6-073"
-    },
-    {
-      "card_name": "Seize the Spoils",
-      "reason_codes": [
-        "TOKEN_SUBTYPE_STATE_MISSING"
-      ],
-      "scenario_id": "T3.6-074"
-    },
-    {
-      "card_name": "Archmage Emeritus",
-      "reason_codes": [
-        "COPY_TRIGGER_EVENT_MISSING"
-      ],
-      "scenario_id": "T3.6-075"
-    },
-    {
-      "card_name": "Grave Titan",
-      "reason_codes": [
-        "TOKEN_SUBTYPE_STATE_MISSING"
-      ],
-      "scenario_id": "T3.6-079"
-    },
-    {
-      "card_name": "Smothering Tithe",
-      "reason_codes": [
-        "TOKEN_SUBTYPE_STATE_MISSING"
-      ],
-      "scenario_id": "T3.6-087"
-    },
-    {
-      "card_name": "Dockside Extortionist",
-      "reason_codes": [
-        "TOKEN_SUBTYPE_STATE_MISSING"
-      ],
-      "scenario_id": "T3.6-088"
-    },
-    {
-      "card_name": "Mystical Tutor",
-      "reason_codes": [
-        "REVEAL_KNOWLEDGE_EVENT_MISSING"
-      ],
-      "scenario_id": "T3.6-090"
-    },
-    {
-      "card_name": "Enlightened Tutor",
-      "reason_codes": [
-        "REVEAL_KNOWLEDGE_EVENT_MISSING"
-      ],
-      "scenario_id": "T3.6-091"
-    },
-    {
-      "card_name": "Worldly Tutor",
-      "reason_codes": [
-        "REVEAL_KNOWLEDGE_EVENT_MISSING"
-      ],
-      "scenario_id": "T3.6-092"
-    },
-    {
-      "card_name": "Eladamri's Call",
-      "reason_codes": [
-        "REVEAL_KNOWLEDGE_EVENT_MISSING"
-      ],
-      "scenario_id": "T3.6-093"
-    },
-    {
-      "card_name": "Fabricate",
-      "reason_codes": [
-        "REVEAL_KNOWLEDGE_EVENT_MISSING"
-      ],
-      "scenario_id": "T3.6-094"
-    },
-    {
-      "card_name": "Goblin Matron",
-      "reason_codes": [
-        "REVEAL_KNOWLEDGE_EVENT_MISSING"
-      ],
-      "scenario_id": "T3.6-097"
-    }
-  ],
+  "blocked_semantic_gap": [],
   "checkpoint": {
     "id": "CP-CARD-SEMANTICS-100",
-    "remaining": 21,
+    "remaining": 0,
     "required": 100,
-    "semantic_verified": 79,
-    "status": "in_progress"
+    "semantic_verified": 100,
+    "status": "passed"
   },
-  "claim_boundary": "79 identities have one card-specific expected production path and exact deterministic replay. The other 21 remain reason-coded and are not semantic_verified; CP-CARD-SEMANTICS-100 remains open.",
+  "claim_boundary": "All 100 frozen identities have one card-specific expected production path, exact shared-primitive validation, and deterministic replay. CP-CARD-SEMANTICS-100 passed.",
   "constraints": {
     "github_actions_used": false,
     "installs_performed": false,
@@ -188,25 +38,20 @@
   "generated_at": "2026-07-13",
   "measured": {
     "blocked_runtime": 0,
-    "blocked_semantic_gap": 21,
+    "blocked_semantic_gap": 0,
     "frozen_candidates": 100,
     "production_failures": 0,
     "runtime_blocker_reason_counts": {},
     "runtime_smoke_passed": 100,
-    "semantic_blocker_reason_counts": {
-      "COPY_TRIGGER_EVENT_MISSING": 1,
-      "REGENERATION_PROHIBITION_MISSING": 4,
-      "REVEAL_KNOWLEDGE_EVENT_MISSING": 6,
-      "TOKEN_SUBTYPE_STATE_MISSING": 12
-    },
-    "semantic_verified": 79
+    "semantic_blocker_reason_counts": {},
+    "semantic_verified": 100
   },
   "product_binding": {
     "candidate_payload_sha256": "901a08efac2e4eaefc3c2adba3fa23515709595efcde30e43032f24112552e0b",
-    "observed_replay_sha256": "e75de75ea0a2e3693d299f00a134d0928529de24afb017631f1012436d7e30b7",
-    "runtime_source_commit": "15adf70c3f525908e9aa7ba09ec4ff85021f5eae",
-    "semantic_cases_payload_sha256": "202dc206805d14e4ea25915c34c19602188f9e3fd4a8642af678846a8e493095",
-    "translated_definitions_aggregate_sha256": "9e09956bdd16d34c77905dcbf53fea2b9f31164b7049c3a30424dc7109801fb0"
+    "observed_replay_sha256": "39620bd0526f43422adc184d41da25fa19815420025e19cead513be636d4ca53",
+    "runtime_source_commit": "06b31aef6cc0e30ed3c1b72cc2e1ab2b194fbb11",
+    "semantic_cases_payload_sha256": "94575c43fe71f369148d228401d0ac9b12869d6945662659e0b97a96cc6d50dc",
+    "translated_definitions_aggregate_sha256": "60dcf40270b1de3b8ce8cca31402ea64b2d39e7117cb06806f7cde6741e03a3f"
   },
   "schema_version": 2,
   "semantic_verified_identities": [
@@ -304,6 +149,22 @@
       "freeze_rank": 12,
       "oracle_id": "b1544f21-7e98-461b-aed5-e748b0168c52",
       "scenario_id": "T3.6-012",
+      "stratum": "targeted_permanent_interaction"
+    },
+    {
+      "card_name": "Beast Within",
+      "final_hash": "10283368881779575519",
+      "freeze_rank": 13,
+      "oracle_id": "7735eeba-693b-47e2-bd51-414379cf1016",
+      "scenario_id": "T3.6-013",
+      "stratum": "targeted_permanent_interaction"
+    },
+    {
+      "card_name": "Generous Gift",
+      "final_hash": "17942692721988042745",
+      "freeze_rank": 14,
+      "oracle_id": "fae37e28-e137-4177-b973-fa8b4dd8f409",
+      "scenario_id": "T3.6-014",
       "stratum": "targeted_permanent_interaction"
     },
     {
@@ -571,6 +432,22 @@
       "stratum": "targeted_permanent_interaction"
     },
     {
+      "card_name": "Putrefy",
+      "final_hash": "3298447710800952191",
+      "freeze_rank": 48,
+      "oracle_id": "9b271430-f53d-42d6-a547-2f286dd9bcb6",
+      "scenario_id": "T3.6-048",
+      "stratum": "targeted_permanent_interaction"
+    },
+    {
+      "card_name": "Terminate",
+      "final_hash": "17251917636777867270",
+      "freeze_rank": 49,
+      "oracle_id": "6257c2fd-005f-41e3-8a72-af76df1eb134",
+      "scenario_id": "T3.6-049",
+      "stratum": "targeted_permanent_interaction"
+    },
+    {
       "card_name": "Bedevil",
       "final_hash": "14239107811800494451",
       "freeze_rank": 50,
@@ -585,6 +462,38 @@
       "oracle_id": "63c1ac21-e3d8-40c2-8c09-3f31c52992ef",
       "scenario_id": "T3.6-051",
       "stratum": "targeted_permanent_interaction"
+    },
+    {
+      "card_name": "Pongify",
+      "final_hash": "18211417928750510667",
+      "freeze_rank": 52,
+      "oracle_id": "05849bd6-8f38-4031-be2b-e2aa03beb8cc",
+      "scenario_id": "T3.6-052",
+      "stratum": "token_and_sacrifice"
+    },
+    {
+      "card_name": "Rapid Hybridization",
+      "final_hash": "12202431277641511376",
+      "freeze_rank": 53,
+      "oracle_id": "06692cd9-ac2f-4a32-8fd1-043ba3c0fe71",
+      "scenario_id": "T3.6-053",
+      "stratum": "token_and_sacrifice"
+    },
+    {
+      "card_name": "Swan Song",
+      "final_hash": "499161338364396216",
+      "freeze_rank": 54,
+      "oracle_id": "8ddfc283-c9b4-41a5-af88-cf0068e986cc",
+      "scenario_id": "T3.6-054",
+      "stratum": "stack_interaction_and_protection"
+    },
+    {
+      "card_name": "An Offer You Can't Refuse",
+      "final_hash": "17212411059380135356",
+      "freeze_rank": 55,
+      "oracle_id": "234a734b-ba28-4f1b-9d01-3c3e7d516590",
+      "scenario_id": "T3.6-055",
+      "stratum": "stack_interaction_and_protection"
     },
     {
       "card_name": "Dispel",
@@ -668,7 +577,7 @@
     },
     {
       "card_name": "Reconnaissance Mission",
-      "final_hash": "8781711444584650747",
+      "final_hash": "9847231882384415800",
       "freeze_rank": 66,
       "oracle_id": "11bf211c-95a3-4e7f-bd08-13f979d54e73",
       "scenario_id": "T3.6-066",
@@ -715,6 +624,38 @@
       "stratum": "card_flow"
     },
     {
+      "card_name": "Big Score",
+      "final_hash": "15009024014771681300",
+      "freeze_rank": 72,
+      "oracle_id": "a5cbd257-c836-493e-bb1a-76242619dea2",
+      "scenario_id": "T3.6-072",
+      "stratum": "token_and_sacrifice"
+    },
+    {
+      "card_name": "Unexpected Windfall",
+      "final_hash": "7721431299380069807",
+      "freeze_rank": 73,
+      "oracle_id": "498c10c9-253d-4b15-b48c-1509381b17e8",
+      "scenario_id": "T3.6-073",
+      "stratum": "token_and_sacrifice"
+    },
+    {
+      "card_name": "Seize the Spoils",
+      "final_hash": "4309531831151550104",
+      "freeze_rank": 74,
+      "oracle_id": "58f83528-9110-4895-b5ea-51b90af30a8d",
+      "scenario_id": "T3.6-074",
+      "stratum": "token_and_sacrifice"
+    },
+    {
+      "card_name": "Archmage Emeritus",
+      "final_hash": "9803115972984659090",
+      "freeze_rank": 75,
+      "oracle_id": "8305d576-21d8-4ce7-8eda-a7cd9793aca5",
+      "scenario_id": "T3.6-075",
+      "stratum": "triggered_synergies"
+    },
+    {
       "card_name": "Mulldrifter",
       "final_hash": "404320641576241320",
       "freeze_rank": 76,
@@ -737,6 +678,14 @@
       "oracle_id": "b2e950fb-cb7e-40a0-a311-5bbdd0477b29",
       "scenario_id": "T3.6-078",
       "stratum": "library_and_graveyard_access"
+    },
+    {
+      "card_name": "Grave Titan",
+      "final_hash": "12911212036658501527",
+      "freeze_rank": 79,
+      "oracle_id": "f3abd4d1-a975-4e85-8684-aa0fce029670",
+      "scenario_id": "T3.6-079",
+      "stratum": "token_and_sacrifice"
     },
     {
       "card_name": "Primeval Titan",
@@ -795,11 +744,67 @@
       "stratum": "library_and_graveyard_access"
     },
     {
+      "card_name": "Smothering Tithe",
+      "final_hash": "2907546886426573296",
+      "freeze_rank": 87,
+      "oracle_id": "153376c9-dffd-458c-8ce3-a4c8269bc4e9",
+      "scenario_id": "T3.6-087",
+      "stratum": "token_and_sacrifice"
+    },
+    {
+      "card_name": "Dockside Extortionist",
+      "final_hash": "2050461665219275799",
+      "freeze_rank": 88,
+      "oracle_id": "697bcfe1-ecbf-42a1-bfc7-0766d48ca56b",
+      "scenario_id": "T3.6-088",
+      "stratum": "token_and_sacrifice"
+    },
+    {
       "card_name": "Archaeomancer",
       "final_hash": "16740388603478327681",
       "freeze_rank": 89,
       "oracle_id": "a91a3266-cadd-47a0-9b20-160307f14c07",
       "scenario_id": "T3.6-089",
+      "stratum": "library_and_graveyard_access"
+    },
+    {
+      "card_name": "Mystical Tutor",
+      "final_hash": "16503655492182732186",
+      "freeze_rank": 90,
+      "oracle_id": "fb81f95c-70f8-4eb7-8d15-15d0ae23ec03",
+      "scenario_id": "T3.6-090",
+      "stratum": "library_and_graveyard_access"
+    },
+    {
+      "card_name": "Enlightened Tutor",
+      "final_hash": "13592764669296420489",
+      "freeze_rank": 91,
+      "oracle_id": "c5229c17-b7be-4b05-b683-f2277edc4849",
+      "scenario_id": "T3.6-091",
+      "stratum": "library_and_graveyard_access"
+    },
+    {
+      "card_name": "Worldly Tutor",
+      "final_hash": "1364819032397390520",
+      "freeze_rank": 92,
+      "oracle_id": "e8863518-0bfa-49c3-8c6e-6c9116a81051",
+      "scenario_id": "T3.6-092",
+      "stratum": "library_and_graveyard_access"
+    },
+    {
+      "card_name": "Eladamri's Call",
+      "final_hash": "13812506586565458529",
+      "freeze_rank": 93,
+      "oracle_id": "4acb6612-54e8-428d-acb6-c7259a5ad6a8",
+      "scenario_id": "T3.6-093",
+      "stratum": "library_and_graveyard_access"
+    },
+    {
+      "card_name": "Fabricate",
+      "final_hash": "823771064309835998",
+      "freeze_rank": 94,
+      "oracle_id": "422e1869-134f-463d-9fa1-86b66a998b3e",
+      "scenario_id": "T3.6-094",
       "stratum": "library_and_graveyard_access"
     },
     {
@@ -817,6 +822,14 @@
       "oracle_id": "39882df0-c20f-469d-94ba-1617224e71a1",
       "scenario_id": "T3.6-096",
       "stratum": "continuous_combat_and_costs"
+    },
+    {
+      "card_name": "Goblin Matron",
+      "final_hash": "8273859114590190045",
+      "freeze_rank": 97,
+      "oracle_id": "145737a7-c597-4dec-b752-207c2d0501e3",
+      "scenario_id": "T3.6-097",
+      "stratum": "triggered_synergies"
     },
     {
       "card_name": "Purphoros, God of the Forge",
@@ -843,12 +856,12 @@
       "stratum": "continuous_combat_and_costs"
     }
   ],
-  "status": "pass_incremental_semantic_slice",
+  "status": "pass_local",
   "task": "T3.6-B",
   "verification": [
     {
       "command": "CARGO_NET_OFFLINE=true python3 tools/run_t3_6_commander_semantics.py --translated-root target/translated-cards --cargo-target-dir target --report reports/gates/T3.6-B/EVIDENCE.json",
-      "result": "PASS; two exact production replays, 79 semantic outcomes matched, 21 semantic gaps and 0 runtime blockers remained fail-closed"
+      "result": "PASS; two exact production replays, 100 semantic outcomes matched, 0 semantic gaps and 0 runtime blockers remained fail-closed"
     }
   ],
   "verification_mode": "local_only"

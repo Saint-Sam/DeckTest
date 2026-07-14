@@ -291,23 +291,26 @@
       "branch": "task/T3.5-capability-runtime-smoke",
       "attempts": 0,
       "allocation_percent": 30,
-      "source_commit": "741bf5c174b7e62021f25ddb83c87f69f4adbe43",
+      "source_commit": "06b31aef6cc0e30ed3c1b72cc2e1ab2b194fbb11",
       "exact_integration_product": "reports/gates/T3.5/runtime-interpreter-final-2026-07-13.json",
       "architecture": "docs/adr/0013-data-driven-card-runtime-interpreter.md",
-      "verification": "PASS local-only. The Owner-approved data-driven interpreter architecture classifies all 20,082 compiler-valid translated definitions through a typed fail-closed runtime smoke: 3,122 execute through production actions, 16,960 are reason-coded unsupported, and 0 fail. The exact frozen Commander set is 100/100 runtime-smoke passed with 0 unsupported and 0 failed. Focused local tests pass: forge-core 109, forge-cards 32, forge-testkit 31 library tests and 12 CLI tests, plus doc tests. Unsupported classifications are not passes, and T3.5 promotes no card to semantic_verified. Evidence is recorded in reports/gates/T3.5/runtime-interpreter-final-2026-07-13.json; no GitHub Actions, network, downloads, installs, or push were used.",
-      "next": "Complete T3.6 card-specific deterministic semantic verification and replay for all 100 frozen Commander identities."
+      "verification": "PASS local-only. The Owner-approved data-driven interpreter classifies all 20,082 compiler-valid translated definitions through a typed fail-closed runtime smoke: 3,123 execute through production actions, 16,959 are reason-coded unsupported, and 0 fail. The exact frozen Commander set is 100/100 runtime-smoke passed with 0 unsupported and 0 failed. Full workspace format, lint, tests, deterministic translation replay, compiler/database roundtrips, and 80.2266% line coverage pass in the exact local checkpoint at 06b31aef6cc0e30ed3c1b72cc2e1ab2b194fbb11. Unsupported classifications are not passes. Evidence is reports/gates/T3.5/runtime-interpreter-final-2026-07-13.json; no GitHub Actions, network, downloads, installs, or push were used.",
+      "next": "T3.5 is closed; proceed to T3.9 after the separately passing T3.6 semantic checkpoint."
     },
     "T3.6": {
-      "status": "in_progress_candidate_set_frozen",
+      "status": "verified_local",
       "branch": "task/T3.6-semantic-gold-100",
       "attempts": 0,
       "allocation_percent": 20,
-      "source_and_exact_product_commit": "4e53dc59c9af194deea99a7aa4732381b1726172",
+      "source_and_exact_product_commit": "06b31aef6cc0e30ed3c1b72cc2e1ab2b194fbb11",
+      "source_and_exact_product_tree": "edb06afe188a59ebbaf4bc925ad9aaa87f6139d3",
       "candidate_manifest": "assets/t3_6_commander_semantic_candidates.json",
       "candidate_payload_sha256": "901a08efac2e4eaefc3c2adba3fa23515709595efcde30e43032f24112552e0b",
-      "verification": "A deterministic, reason-coded 100-identity Commander candidate set is frozen across nine strata from the exact current translation product. The generator self-test, four focused tests, deterministic regeneration, and checked-in byte comparison pass locally. Every identity remains candidate_only; no card is semantic_verified by selection alone.",
+      "semantic_cases_payload_sha256": "94575c43fe71f369148d228401d0ac9b12869d6945662659e0b97a96cc6d50dc",
+      "exact_integration_product": "reports/gates/T3.6-B/EVIDENCE.json",
+      "verification": "PASS local-only. All 100 frozen Commander identities pass one card-specific production-path scenario plus shared typed primitive checks under two deterministic exact replays: 100 semantic_verified, 0 semantic blocked, 0 runtime blocked, nonzero final hashes, and 0 production failures. The 43-test semantic sidecar suite passes. The exact 24-worker checkpoint at 06b31aef6cc0e30ed3c1b72cc2e1ab2b194fbb11 passes format, clippy -D warnings, all workspace tests, deterministic translation/planner replay, compiler/database roundtrips, and 80.2266% line coverage. No GitHub Actions, network, downloads, installs, or push were used.",
       "checkpoint": "CP-CARD-SEMANTICS-100",
-      "checkpoint_status": "not_run"
+      "checkpoint_status": "passed_local_exact_product"
     },
     "T3.7": {
       "status": "verified_local_exact_product",
@@ -323,7 +326,7 @@
       "branch": "task/T3.9-four-integration-decks",
       "attempts": 0,
       "allocation_percent": 10,
-      "entry_condition": "T3.6 selection overlaps the four complete legal decks",
+      "entry_condition": "T3.6 passed with 100 semantic-verified identities; assemble four complete legal decks and use targeted mapper/runtime work only for pod blockers",
       "checkpoint": "CP-FOUR-PLAYER-POD"
     }
   },
@@ -334,7 +337,8 @@
     "CP-LAYERS",
     "T2",
     "CP-DSL",
-    "CP-STATUS-TRUTH"
+    "CP-STATUS-TRUTH",
+    "CP-CARD-SEMANTICS-100"
   ],
   "checkpoints": {
     "CP-STATUS-TRUTH": {
@@ -352,8 +356,17 @@
       ]
     },
     "CP-CARD-SEMANTICS-100": {
-      "status": "pending",
-      "task": "T3.6"
+      "status": "passed_local_exact_product",
+      "task": "T3.6",
+      "product_commit": "06b31aef6cc0e30ed3c1b72cc2e1ab2b194fbb11",
+      "product_tree": "edb06afe188a59ebbaf4bc925ad9aaa87f6139d3",
+      "evidence": [
+        "tests/t3_6/commander_semantic_cases.json",
+        "reports/gates/T3.6-B/EVIDENCE.json",
+        "reports/gates/T3.6-B/GATE_REVIEW.md",
+        "metrics/card_runtime_smoke.json",
+        "metrics/card_semantics_100.json"
+      ]
     },
     "CP-FOUR-PLAYER-POD": {
       "status": "pending",
@@ -449,6 +462,14 @@
       "verdict": "PASS: no blocking findings. Both prior P1s are closed; exact evidence and live checks reconcile.",
       "technical_remediation": "Complete. Cargo offline mode is forced, packet validation binds current HEAD/tree, unexpected checkout changes fail closed, and an explicit stale-checkout test was rejected.",
       "owner_decision": "Owner chose Option 2 on 2026-07-10, then approved O4 in the Codex thread: approve CP-DSL freeze and proceed to T3.2. PC-0004 keeps the 100 definitions unverified and defers card-specific semantic promotion to T3.6 and CP-PORT-20."
+    },
+    "CP-CARD-SEMANTICS-100": {
+      "status": "passed_local_exact_product",
+      "reviewed_commit": "06b31aef6cc0e30ed3c1b72cc2e1ab2b194fbb11",
+      "reviewed_tree": "edb06afe188a59ebbaf4bc925ad9aaa87f6139d3",
+      "evidence": "reports/gates/T3.6-B/EVIDENCE.json",
+      "gate_review": "reports/gates/T3.6-B/GATE_REVIEW.md",
+      "verdict": "PASS: 100/100 frozen Commander identities completed two deterministic card-specific production replays with zero semantic or runtime blockers; full exact local checkpoint and 80% coverage floor passed."
     },
     "ADR-0012": {
       "status": "accepted",
