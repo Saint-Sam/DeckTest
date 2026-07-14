@@ -1,0 +1,1529 @@
+{
+  "capability_counts": {
+    "activated_ability": 13,
+    "add_counters": 1,
+    "alternate_cost": 5,
+    "attach_object": 3,
+    "choose_mode": 1,
+    "combat_restriction": 1,
+    "counter_stack_entry": 6,
+    "create_token": 13,
+    "cycling": 1,
+    "deal_damage": 2,
+    "destroy_permanent": 14,
+    "discard_cards": 2,
+    "draw_cards": 20,
+    "exile_object": 4,
+    "gain_life": 3,
+    "indestructible": 3,
+    "land_play": 11,
+    "lose_life": 5,
+    "mana_ability": 18,
+    "modal_dfc": 1,
+    "modify_characteristics": 11,
+    "modify_player_rules": 2,
+    "move_zone": 29,
+    "overload": 1,
+    "permanent_spell": 40,
+    "reduce_spell_cost": 1,
+    "reveal_objects": 6,
+    "sacrifice_permanent": 1,
+    "scry": 3,
+    "search_library": 22,
+    "shuffle_library": 22,
+    "split_second": 1,
+    "tap_object": 11,
+    "targeting_restriction": 3
+  },
+  "entries": [
+    {
+      "capabilities": [
+        "permanent_spell",
+        "destroy_permanent"
+      ],
+      "card_name": "Acidic Slime",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 1,
+      "final_hash": 9438680750414767143,
+      "oracle_id": "21f45043-5419-4019-8b6c-e5294bd5f549",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/acidic_slime.frs",
+      "production_actions": 44
+    },
+    {
+      "capabilities": [
+        "counter_stack_entry",
+        "create_token"
+      ],
+      "card_name": "An Offer You Can't Refuse",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 2,
+      "final_hash": 17212411059380135356,
+      "oracle_id": "234a734b-ba28-4f1b-9d01-3c3e7d516590",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/an_offer_you_cant_refuse.frs",
+      "production_actions": 47
+    },
+    {
+      "capabilities": [
+        "exile_object",
+        "lose_life"
+      ],
+      "card_name": "Anguished Unmaking",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 2,
+      "final_hash": 13943701242724329166,
+      "oracle_id": "ad09b3c3-c8e7-481c-8c45-e7f234935117",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/anguished_unmaking.frs",
+      "production_actions": 35
+    },
+    {
+      "capabilities": [
+        "permanent_spell",
+        "move_zone"
+      ],
+      "card_name": "Archaeomancer",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 1,
+      "final_hash": 16740388603478327681,
+      "oracle_id": "a91a3266-cadd-47a0-9b20-160307f14c07",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/archaeomancer.frs",
+      "production_actions": 44
+    },
+    {
+      "capabilities": [
+        "permanent_spell",
+        "draw_cards"
+      ],
+      "card_name": "Archmage Emeritus",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 1,
+      "final_hash": 9803115972984659090,
+      "oracle_id": "8305d576-21d8-4ce7-8eda-a7cd9793aca5",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/archmage_emeritus.frs",
+      "production_actions": 56
+    },
+    {
+      "capabilities": [
+        "modal_dfc",
+        "move_zone",
+        "land_play",
+        "mana_ability"
+      ],
+      "card_name": "Bala Ged Recovery // Bala Ged Sanctuary",
+      "destination": "modal_dfc_faces",
+      "disposition": "passed",
+      "effect_actions": 1,
+      "final_hash": 13102171917389894931,
+      "oracle_id": "d2075f58-b0e9-4e85-b7e6-0523a27a1d5b",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/bala_ged_recovery_bala_ged_sanctuary.frs",
+      "production_actions": 75
+    },
+    {
+      "capabilities": [
+        "permanent_spell",
+        "draw_cards"
+      ],
+      "card_name": "Beast Whisperer",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 1,
+      "final_hash": 14982047925617811041,
+      "oracle_id": "5da7eea8-bb9e-47ce-a554-8a1ee058bd7a",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/beast_whisperer.frs",
+      "production_actions": 49
+    },
+    {
+      "capabilities": [
+        "destroy_permanent",
+        "create_token"
+      ],
+      "card_name": "Beast Within",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 2,
+      "final_hash": 10283368881779575519,
+      "oracle_id": "7735eeba-693b-47e2-bd51-414379cf1016",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/beast_within.frs",
+      "production_actions": 35
+    },
+    {
+      "capabilities": [
+        "destroy_permanent"
+      ],
+      "card_name": "Bedevil",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 1,
+      "final_hash": 14239107811800494451,
+      "oracle_id": "bceecc64-96f1-4e7b-8904-0aef90377764",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/bedevil.frs",
+      "production_actions": 34
+    },
+    {
+      "capabilities": [
+        "draw_cards",
+        "create_token"
+      ],
+      "card_name": "Big Score",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 2,
+      "final_hash": 15009024014771681300,
+      "oracle_id": "a5cbd257-c836-493e-bb1a-76242619dea2",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/big_score.frs",
+      "production_actions": 48
+    },
+    {
+      "capabilities": [
+        "permanent_spell",
+        "mana_ability"
+      ],
+      "card_name": "Birds of Paradise",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 0,
+      "final_hash": 2033056412664349083,
+      "oracle_id": "d3a0b660-358c-41bd-9cd2-41fbf3491b1a",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/birds_of_paradise.frs",
+      "production_actions": 77
+    },
+    {
+      "capabilities": [
+        "choose_mode",
+        "deal_damage",
+        "indestructible",
+        "modify_characteristics"
+      ],
+      "card_name": "Boros Charm",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 0,
+      "final_hash": 11471151739109253368,
+      "oracle_id": "2679d0dd-ba30-4a1c-b6a0-b3ac6c790496",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/boros_charm.frs",
+      "production_actions": 31
+    },
+    {
+      "capabilities": [
+        "permanent_spell",
+        "activated_ability",
+        "search_library",
+        "move_zone",
+        "tap_object",
+        "shuffle_library"
+      ],
+      "card_name": "Burnished Hart",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 4,
+      "final_hash": 16035116560312325545,
+      "oracle_id": "893fed41-c144-433f-af88-bc7d419b7fb3",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/burnished_hart.frs",
+      "production_actions": 56
+    },
+    {
+      "capabilities": [
+        "permanent_spell",
+        "activated_ability",
+        "combat_restriction",
+        "add_counters"
+      ],
+      "card_name": "Carrion Feeder",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 2,
+      "final_hash": 6382756864894178722,
+      "oracle_id": "a1cc5e37-b09a-4b7f-afd5-77c1c35aa425",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/carrion_feeder.frs",
+      "production_actions": 47
+    },
+    {
+      "capabilities": [
+        "permanent_spell",
+        "activated_ability",
+        "destroy_permanent"
+      ],
+      "card_name": "Caustic Caterpillar",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 1,
+      "final_hash": 8608943935958438625,
+      "oracle_id": "45d35128-76e6-43f9-8d23-41f7506c3a71",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/caustic_caterpillar.frs",
+      "production_actions": 50
+    },
+    {
+      "capabilities": [
+        "permanent_spell",
+        "gain_life",
+        "draw_cards"
+      ],
+      "card_name": "Cloudblazer",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 2,
+      "final_hash": 2559281410774464679,
+      "oracle_id": "f84d1291-1f82-4b67-a26e-b79624b4ce1d",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/cloudblazer.frs",
+      "production_actions": 45
+    },
+    {
+      "capabilities": [
+        "counter_stack_entry"
+      ],
+      "card_name": "Counterspell",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 1,
+      "final_hash": 13441174001885369040,
+      "oracle_id": "cc187110-1148-4090-bbb8-e205694a39f5",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/counterspell.frs",
+      "production_actions": 35
+    },
+    {
+      "capabilities": [
+        "permanent_spell",
+        "modify_characteristics",
+        "modify_characteristics"
+      ],
+      "card_name": "Craterhoof Behemoth",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 2,
+      "final_hash": 18137891647022498068,
+      "oracle_id": "8c52bd39-0586-48ca-b263-17210cf9feb6",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/craterhoof_behemoth.frs",
+      "production_actions": 53
+    },
+    {
+      "capabilities": [
+        "alternate_cost",
+        "overload",
+        "move_zone"
+      ],
+      "card_name": "Cyclonic Rift",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 1,
+      "final_hash": 11988647174622915237,
+      "oracle_id": "d75b9c82-1b49-4c3e-a1b5-aeef57d6644b",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/cyclonic_rift.frs",
+      "production_actions": 37
+    },
+    {
+      "capabilities": [
+        "exile_object"
+      ],
+      "card_name": "Despark",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 1,
+      "final_hash": 17784958032931090952,
+      "oracle_id": "bd16434d-55ea-4c5a-a9ef-752971a4af16",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/despark.frs",
+      "production_actions": 34
+    },
+    {
+      "capabilities": [
+        "counter_stack_entry"
+      ],
+      "card_name": "Dispel",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 1,
+      "final_hash": 10544022319906728895,
+      "oracle_id": "6d7be242-a072-40ce-b540-95880506cccd",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/dispel.frs",
+      "production_actions": 35
+    },
+    {
+      "capabilities": [
+        "permanent_spell",
+        "create_token"
+      ],
+      "card_name": "Dockside Extortionist",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 1,
+      "final_hash": 2050461665219275799,
+      "oracle_id": "697bcfe1-ecbf-42a1-bfc7-0766d48ca56b",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/dockside_extortionist.frs",
+      "production_actions": 57
+    },
+    {
+      "capabilities": [
+        "search_library",
+        "reveal_objects",
+        "move_zone",
+        "shuffle_library"
+      ],
+      "card_name": "Eladamri's Call",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 4,
+      "final_hash": 13812506586565458529,
+      "oracle_id": "4acb6612-54e8-428d-acb6-c7259a5ad6a8",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/eladamris_call.frs",
+      "production_actions": 37
+    },
+    {
+      "capabilities": [
+        "permanent_spell",
+        "mana_ability"
+      ],
+      "card_name": "Elvish Mystic",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 0,
+      "final_hash": 190843668242813319,
+      "oracle_id": "3f3b2c10-21f8-4e13-be83-4ef3fa36e123",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/elvish_mystic.frs",
+      "production_actions": 77
+    },
+    {
+      "capabilities": [
+        "search_library",
+        "reveal_objects",
+        "shuffle_library",
+        "move_zone"
+      ],
+      "card_name": "Enlightened Tutor",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 4,
+      "final_hash": 13592764669296420489,
+      "oracle_id": "c5229c17-b7be-4b05-b683-f2277edc4849",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/enlightened_tutor.frs",
+      "production_actions": 36
+    },
+    {
+      "capabilities": [
+        "permanent_spell",
+        "move_zone"
+      ],
+      "card_name": "Eternal Witness",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 1,
+      "final_hash": 17870944459760133503,
+      "oracle_id": "30b24e8e-3b0e-4d8e-90f3-f66eb7c1858c",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/eternal_witness.frs",
+      "production_actions": 44
+    },
+    {
+      "capabilities": [
+        "land_play",
+        "activated_ability",
+        "search_library",
+        "move_zone",
+        "tap_object",
+        "shuffle_library"
+      ],
+      "card_name": "Evolving Wilds",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 4,
+      "final_hash": 3417362289589099294,
+      "oracle_id": "a75445d3-1303-4bb5-89ad-26ea93fecd48",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/evolving_wilds.frs",
+      "production_actions": 46
+    },
+    {
+      "capabilities": [
+        "search_library",
+        "reveal_objects",
+        "move_zone",
+        "shuffle_library"
+      ],
+      "card_name": "Fabricate",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 4,
+      "final_hash": 823771064309835998,
+      "oracle_id": "422e1869-134f-463d-9fa1-86b66a998b3e",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/fabricate.frs",
+      "production_actions": 41
+    },
+    {
+      "capabilities": [
+        "alternate_cost",
+        "draw_cards",
+        "discard_cards"
+      ],
+      "card_name": "Faithless Looting",
+      "destination": "exile",
+      "disposition": "passed",
+      "effect_actions": 2,
+      "final_hash": 158463025513651670,
+      "oracle_id": "3d6fa57a-aa53-4b5c-b8af-a7612c823117",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/faithless_looting.frs",
+      "production_actions": 45
+    },
+    {
+      "capabilities": [
+        "permanent_spell",
+        "search_library",
+        "move_zone",
+        "tap_object",
+        "shuffle_library"
+      ],
+      "card_name": "Farhaven Elf",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 4,
+      "final_hash": 18137658318482532191,
+      "oracle_id": "4ce2357f-93e6-40ca-beca-8f4e15adc464",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/farhaven_elf.frs",
+      "production_actions": 46
+    },
+    {
+      "capabilities": [
+        "search_library",
+        "move_zone",
+        "tap_object",
+        "shuffle_library"
+      ],
+      "card_name": "Farseek",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 4,
+      "final_hash": 4196209464807812341,
+      "oracle_id": "495e52e6-4c2b-4574-9474-eadbdcc8b4ac",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/farseek.frs",
+      "production_actions": 41
+    },
+    {
+      "capabilities": [
+        "alternate_cost",
+        "counter_stack_entry"
+      ],
+      "card_name": "Fierce Guardianship",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 1,
+      "final_hash": 10943700837431517034,
+      "oracle_id": "d09c9cba-fdd2-479b-ad5d-d05181c3e3f9",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/fierce_guardianship.frs",
+      "production_actions": 39
+    },
+    {
+      "capabilities": [
+        "alternate_cost",
+        "indestructible"
+      ],
+      "card_name": "Flawless Maneuver",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 1,
+      "final_hash": 779299847446673395,
+      "oracle_id": "4e183439-17d2-47ff-9d99-5e22821d91e3",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/flawless_maneuver.frs",
+      "production_actions": 36
+    },
+    {
+      "capabilities": [
+        "land_play",
+        "mana_ability"
+      ],
+      "card_name": "Forest",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 0,
+      "final_hash": 15919359179010756526,
+      "oracle_id": "b34bb2dc-c1af-4d77-b0b3-a0fb342a5fc6",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/forest.frs",
+      "production_actions": 35
+    },
+    {
+      "capabilities": [
+        "destroy_permanent",
+        "create_token"
+      ],
+      "card_name": "Generous Gift",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 2,
+      "final_hash": 17942692721988042745,
+      "oracle_id": "fae37e28-e137-4177-b973-fa8b4dd8f409",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/generous_gift.frs",
+      "production_actions": 35
+    },
+    {
+      "capabilities": [
+        "permanent_spell",
+        "modify_characteristics",
+        "modify_characteristics"
+      ],
+      "card_name": "Goblin Chieftain",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 2,
+      "final_hash": 17857373973413466634,
+      "oracle_id": "368b4052-174e-4458-a6e6-eaf8093aa0fe",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/goblin_chieftain.frs",
+      "production_actions": 39
+    },
+    {
+      "capabilities": [
+        "permanent_spell",
+        "search_library",
+        "reveal_objects",
+        "move_zone",
+        "shuffle_library"
+      ],
+      "card_name": "Goblin Matron",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 4,
+      "final_hash": 8273859114590190045,
+      "oracle_id": "145737a7-c597-4dec-b752-207c2d0501e3",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/goblin_matron.frs",
+      "production_actions": 47
+    },
+    {
+      "capabilities": [
+        "permanent_spell",
+        "reduce_spell_cost",
+        "modify_characteristics"
+      ],
+      "card_name": "Goblin Warchief",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 2,
+      "final_hash": 7664413663023728949,
+      "oracle_id": "39882df0-c20f-469d-94ba-1617224e71a1",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/goblin_warchief.frs",
+      "production_actions": 39
+    },
+    {
+      "capabilities": [
+        "permanent_spell",
+        "create_token",
+        "create_token"
+      ],
+      "card_name": "Grave Titan",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 2,
+      "final_hash": 12911212036658501527,
+      "oracle_id": "f3abd4d1-a975-4e85-8684-aa0fce029670",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/grave_titan.frs",
+      "production_actions": 92
+    },
+    {
+      "capabilities": [
+        "permanent_spell",
+        "activated_ability",
+        "draw_cards"
+      ],
+      "card_name": "Greed",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 1,
+      "final_hash": 16244125418472746692,
+      "oracle_id": "1ff62220-be95-4901-b8d8-812b9a1a1b0a",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/greed.frs",
+      "production_actions": 47
+    },
+    {
+      "capabilities": [
+        "draw_cards"
+      ],
+      "card_name": "Harmonize",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 1,
+      "final_hash": 9081379717559947413,
+      "oracle_id": "7eff84f1-f772-497a-b350-bbc93d0230f7",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/harmonize.frs",
+      "production_actions": 40
+    },
+    {
+      "capabilities": [
+        "search_library",
+        "move_zone",
+        "shuffle_library"
+      ],
+      "card_name": "Harrow",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 3,
+      "final_hash": 13941112417585239387,
+      "oracle_id": "705509e9-a034-4a5a-9c65-66f58748b8a2",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/harrow.frs",
+      "production_actions": 41
+    },
+    {
+      "capabilities": [
+        "targeting_restriction",
+        "indestructible"
+      ],
+      "card_name": "Heroic Intervention",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 2,
+      "final_hash": 16547913841561562515,
+      "oracle_id": "24882fa2-3fe9-4c1b-aa3d-0e6488b9db27",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/heroic_intervention.frs",
+      "production_actions": 31
+    },
+    {
+      "capabilities": [
+        "land_play",
+        "mana_ability"
+      ],
+      "card_name": "Island",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 0,
+      "final_hash": 18424088531383371380,
+      "oracle_id": "b2c6aa39-2d2a-459c-a555-fb48ba993373",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/island.frs",
+      "production_actions": 35
+    },
+    {
+      "capabilities": [
+        "split_second",
+        "destroy_permanent"
+      ],
+      "card_name": "Krosan Grip",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 1,
+      "final_hash": 13900001521722426860,
+      "oracle_id": "3e39224c-72ce-4ecc-aa17-12c071ea1f3e",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/krosan_grip.frs",
+      "production_actions": 34
+    },
+    {
+      "capabilities": [
+        "permanent_spell",
+        "activated_ability",
+        "modify_characteristics",
+        "targeting_restriction",
+        "attach_object"
+      ],
+      "card_name": "Lightning Greaves",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 3,
+      "final_hash": 16086964848701572033,
+      "oracle_id": "ca204b66-8d0c-431a-8d34-282f7c2d17da",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/lightning_greaves.frs",
+      "production_actions": 46
+    },
+    {
+      "capabilities": [
+        "permanent_spell",
+        "mana_ability"
+      ],
+      "card_name": "Llanowar Elves",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 0,
+      "final_hash": 3764443758726214271,
+      "oracle_id": "68954295-54e3-4303-a6bc-fc4547a4e3a3",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/llanowar_elves.frs",
+      "production_actions": 77
+    },
+    {
+      "capabilities": [
+        "permanent_spell",
+        "mana_ability",
+        "activated_ability",
+        "draw_cards"
+      ],
+      "card_name": "Mind Stone",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 1,
+      "final_hash": 12097183985972824246,
+      "oracle_id": "c97361b5-af16-4a7b-af85-a429dbaf4ad2",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/mind_stone.frs",
+      "production_actions": 50
+    },
+    {
+      "capabilities": [
+        "destroy_permanent"
+      ],
+      "card_name": "Mortify",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 1,
+      "final_hash": 5005597024303017595,
+      "oracle_id": "faa01ed1-ccfa-4e58-951f-cd81f9068027",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/mortify.frs",
+      "production_actions": 35
+    },
+    {
+      "capabilities": [
+        "land_play",
+        "mana_ability"
+      ],
+      "card_name": "Mountain",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 0,
+      "final_hash": 3508006936737073742,
+      "oracle_id": "a3fb7228-e76b-4e96-a40e-20b5fed75685",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/mountain.frs",
+      "production_actions": 35
+    },
+    {
+      "capabilities": [
+        "permanent_spell",
+        "alternate_cost",
+        "draw_cards",
+        "sacrifice_permanent"
+      ],
+      "card_name": "Mulldrifter",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 2,
+      "final_hash": 404320641576241320,
+      "oracle_id": "24d0f5e7-0d9e-4b76-900e-a7274e80312d",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/mulldrifter.frs",
+      "production_actions": 48
+    },
+    {
+      "capabilities": [
+        "search_library",
+        "reveal_objects",
+        "shuffle_library",
+        "move_zone"
+      ],
+      "card_name": "Mystical Tutor",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 4,
+      "final_hash": 16503655492182732186,
+      "oracle_id": "fb81f95c-70f8-4eb7-8d15-15d0ae23ec03",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/mystical_tutor.frs",
+      "production_actions": 36
+    },
+    {
+      "capabilities": [
+        "destroy_permanent",
+        "gain_life"
+      ],
+      "card_name": "Nature's Claim",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 2,
+      "final_hash": 15790858056394614058,
+      "oracle_id": "6d4e558e-9109-4918-a082-fdcbaffd516b",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/natures_claim.frs",
+      "production_actions": 35
+    },
+    {
+      "capabilities": [
+        "search_library",
+        "move_zone",
+        "shuffle_library"
+      ],
+      "card_name": "Nature's Lore",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 3,
+      "final_hash": 12331350856850849653,
+      "oracle_id": "78826359-fe63-44ad-adc4-a17ffcd710e4",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/natures_lore.frs",
+      "production_actions": 40
+    },
+    {
+      "capabilities": [
+        "counter_stack_entry"
+      ],
+      "card_name": "Negate",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 1,
+      "final_hash": 8709470471152802690,
+      "oracle_id": "3407fe41-fdd3-4119-8f70-4bc4590a379f",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/negate.frs",
+      "production_actions": 35
+    },
+    {
+      "capabilities": [
+        "draw_cards",
+        "lose_life"
+      ],
+      "card_name": "Night's Whisper",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 2,
+      "final_hash": 8075265169177359152,
+      "oracle_id": "7ffae8f8-3006-4969-a339-6d30678f87ea",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/nights_whisper.frs",
+      "production_actions": 40
+    },
+    {
+      "capabilities": [
+        "scry",
+        "draw_cards"
+      ],
+      "card_name": "Opt",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 2,
+      "final_hash": 7152036698539764365,
+      "oracle_id": "713332c1-5bd8-400f-bfff-c1ca0697a043",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/opt.frs",
+      "production_actions": 35
+    },
+    {
+      "capabilities": [
+        "permanent_spell",
+        "draw_cards",
+        "lose_life"
+      ],
+      "card_name": "Phyrexian Arena",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 2,
+      "final_hash": 5969953342614007810,
+      "oracle_id": "ee579a32-a048-4335-b966-231ba731cdea",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/phyrexian_arena.frs",
+      "production_actions": 77
+    },
+    {
+      "capabilities": [
+        "land_play",
+        "mana_ability"
+      ],
+      "card_name": "Plains",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 0,
+      "final_hash": 9028036562559047711,
+      "oracle_id": "bc71ebf6-2056-41f7-be35-b2e5c34afa99",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/plains.frs",
+      "production_actions": 35
+    },
+    {
+      "capabilities": [
+        "destroy_permanent",
+        "create_token"
+      ],
+      "card_name": "Pongify",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 2,
+      "final_hash": 18211417928750510667,
+      "oracle_id": "05849bd6-8f38-4031-be2b-e2aa03beb8cc",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/pongify.frs",
+      "production_actions": 36
+    },
+    {
+      "capabilities": [
+        "scry",
+        "draw_cards"
+      ],
+      "card_name": "Preordain",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 2,
+      "final_hash": 16301200527895607530,
+      "oracle_id": "ac641490-ca14-48d7-8cc4-b69ce984befa",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/preordain.frs",
+      "production_actions": 41
+    },
+    {
+      "capabilities": [
+        "permanent_spell",
+        "search_library",
+        "move_zone",
+        "tap_object",
+        "shuffle_library",
+        "search_library",
+        "move_zone",
+        "tap_object",
+        "shuffle_library"
+      ],
+      "card_name": "Primeval Titan",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 8,
+      "final_hash": 4241557153947084651,
+      "oracle_id": "ae83ef2c-960f-4c5b-97cc-52465c687c18",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/primeval_titan.frs",
+      "production_actions": 106
+    },
+    {
+      "capabilities": [
+        "permanent_spell",
+        "activated_ability",
+        "modify_characteristics",
+        "modify_characteristics",
+        "deal_damage"
+      ],
+      "card_name": "Purphoros, God of the Forge",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 3,
+      "final_hash": 9522632798185093089,
+      "oracle_id": "4fdbbec2-e921-4b63-958d-f9ba1e417197",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/purphoros_god_of_the_forge.frs",
+      "production_actions": 60
+    },
+    {
+      "capabilities": [
+        "destroy_permanent"
+      ],
+      "card_name": "Putrefy",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 1,
+      "final_hash": 3298447710800952191,
+      "oracle_id": "9b271430-f53d-42d6-a547-2f286dd9bcb6",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/putrefy.frs",
+      "production_actions": 34
+    },
+    {
+      "capabilities": [
+        "search_library",
+        "move_zone",
+        "tap_object",
+        "shuffle_library"
+      ],
+      "card_name": "Rampant Growth",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 4,
+      "final_hash": 9441322719530996435,
+      "oracle_id": "8539f295-5d58-4436-a73a-b9277c4c7795",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/rampant_growth.frs",
+      "production_actions": 41
+    },
+    {
+      "capabilities": [
+        "destroy_permanent",
+        "create_token"
+      ],
+      "card_name": "Rapid Hybridization",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 2,
+      "final_hash": 12202431277641511376,
+      "oracle_id": "06692cd9-ac2f-4a32-8fd1-043ba3c0fe71",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/rapid_hybridization.frs",
+      "production_actions": 36
+    },
+    {
+      "capabilities": [
+        "scry",
+        "draw_cards",
+        "lose_life"
+      ],
+      "card_name": "Read the Bones",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 3,
+      "final_hash": 15186204702802597715,
+      "oracle_id": "5bf4d8d9-a2b2-4dba-ac05-9d4470a89db2",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/read_the_bones.frs",
+      "production_actions": 43
+    },
+    {
+      "capabilities": [
+        "permanent_spell",
+        "destroy_permanent"
+      ],
+      "card_name": "Reclamation Sage",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 1,
+      "final_hash": 12500279918857119490,
+      "oracle_id": "032ec6e2-6cc3-4a97-9cc7-3233f5e11904",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/reclamation_sage.frs",
+      "production_actions": 44
+    },
+    {
+      "capabilities": [
+        "permanent_spell",
+        "cycling",
+        "draw_cards"
+      ],
+      "card_name": "Reconnaissance Mission",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 1,
+      "final_hash": 9847231882384415800,
+      "oracle_id": "11bf211c-95a3-4e7f-bd08-13f979d54e73",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/reconnaissance_mission.frs",
+      "production_actions": 62
+    },
+    {
+      "capabilities": [
+        "move_zone"
+      ],
+      "card_name": "Regrowth",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 1,
+      "final_hash": 5426989910611594976,
+      "oracle_id": "e6e4a8bd-5c40-4654-8de1-0da9afed90fd",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/regrowth.frs",
+      "production_actions": 39
+    },
+    {
+      "capabilities": [
+        "land_play",
+        "mana_ability",
+        "modify_player_rules"
+      ],
+      "card_name": "Reliquary Tower",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 1,
+      "final_hash": 3826122692758412590,
+      "oracle_id": "c23e5b80-08d2-4e24-9908-fe2aa4f30f6f",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/reliquary_tower.frs",
+      "production_actions": 36
+    },
+    {
+      "capabilities": [
+        "permanent_spell",
+        "activated_ability",
+        "search_library",
+        "move_zone",
+        "tap_object",
+        "shuffle_library"
+      ],
+      "card_name": "Sakura-Tribe Elder",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 4,
+      "final_hash": 5055056659784858856,
+      "oracle_id": "e3afc704-220f-498f-9eaa-0821b17dc24c",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/sakura_tribe_elder.frs",
+      "production_actions": 50
+    },
+    {
+      "capabilities": [
+        "draw_cards",
+        "create_token"
+      ],
+      "card_name": "Seize the Spoils",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 2,
+      "final_hash": 4309531831151550104,
+      "oracle_id": "58f83528-9110-4895-b5ea-51b90af30a8d",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/seize_the_spoils.frs",
+      "production_actions": 47
+    },
+    {
+      "capabilities": [
+        "draw_cards",
+        "lose_life"
+      ],
+      "card_name": "Sign in Blood",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 2,
+      "final_hash": 13037556865995045546,
+      "oracle_id": "c6207f6a-a624-4754-88f5-dbe700c841ff",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/sign_in_blood.frs",
+      "production_actions": 40
+    },
+    {
+      "capabilities": [
+        "search_library",
+        "move_zone",
+        "shuffle_library"
+      ],
+      "card_name": "Skyshroud Claim",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 3,
+      "final_hash": 4388386030653623371,
+      "oracle_id": "376c9d3f-21d3-4251-bb6a-026fa9e1b0e1",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/skyshroud_claim.frs",
+      "production_actions": 43
+    },
+    {
+      "capabilities": [
+        "permanent_spell",
+        "create_token"
+      ],
+      "card_name": "Smothering Tithe",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 1,
+      "final_hash": 2907546886426573296,
+      "oracle_id": "153376c9-dffd-458c-8ce3-a4c8269bc4e9",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/smothering_tithe.frs",
+      "production_actions": 56
+    },
+    {
+      "capabilities": [
+        "permanent_spell",
+        "mana_ability"
+      ],
+      "card_name": "Sol Ring",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 0,
+      "final_hash": 3301131470662938370,
+      "oracle_id": "6ad8011d-3471-4369-9d68-b264cc027487",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/sol_ring.frs",
+      "production_actions": 38
+    },
+    {
+      "capabilities": [
+        "permanent_spell",
+        "move_zone",
+        "move_zone"
+      ],
+      "card_name": "Sun Titan",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 2,
+      "final_hash": 16006620467080090415,
+      "oracle_id": "b2e950fb-cb7e-40a0-a311-5bbdd0477b29",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/sun_titan.frs",
+      "production_actions": 94
+    },
+    {
+      "capabilities": [
+        "land_play",
+        "mana_ability"
+      ],
+      "card_name": "Swamp",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 0,
+      "final_hash": 2426403207749745962,
+      "oracle_id": "56719f6a-1a6c-4c0a-8d21-18f7d7350b68",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/swamp.frs",
+      "production_actions": 35
+    },
+    {
+      "capabilities": [
+        "counter_stack_entry",
+        "create_token"
+      ],
+      "card_name": "Swan Song",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 2,
+      "final_hash": 499161338364396216,
+      "oracle_id": "8ddfc283-c9b4-41a5-af88-cf0068e986cc",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/swan_song.frs",
+      "production_actions": 36
+    },
+    {
+      "capabilities": [
+        "permanent_spell",
+        "activated_ability",
+        "modify_characteristics",
+        "targeting_restriction",
+        "attach_object"
+      ],
+      "card_name": "Swiftfoot Boots",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 3,
+      "final_hash": 17974477996148628045,
+      "oracle_id": "c8b143ad-43ec-4e0d-a440-e348daa31391",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/swiftfoot_boots.frs",
+      "production_actions": 48
+    },
+    {
+      "capabilities": [
+        "permanent_spell",
+        "activated_ability",
+        "modify_characteristics",
+        "attach_object",
+        "search_library",
+        "move_zone",
+        "tap_object",
+        "shuffle_library"
+      ],
+      "card_name": "Sword of the Animist",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 6,
+      "final_hash": 13746005120242976957,
+      "oracle_id": "d79cbc61-6c15-48ea-bbba-3cffb819ccba",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/sword_of_the_animist.frs",
+      "production_actions": 99
+    },
+    {
+      "capabilities": [
+        "exile_object",
+        "gain_life"
+      ],
+      "card_name": "Swords to Plowshares",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 2,
+      "final_hash": 8046467409520910944,
+      "oracle_id": "b1544f21-7e98-461b-aed5-e748b0168c52",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/swords_to_plowshares.frs",
+      "production_actions": 36
+    },
+    {
+      "capabilities": [
+        "permanent_spell",
+        "mana_ability"
+      ],
+      "card_name": "Talisman of Creativity",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 0,
+      "final_hash": 14561846409843864382,
+      "oracle_id": "14d2979d-5728-42d7-a027-0eb1f754655d",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/talisman_of_creativity.frs",
+      "production_actions": 41
+    },
+    {
+      "capabilities": [
+        "permanent_spell",
+        "mana_ability"
+      ],
+      "card_name": "Talisman of Dominance",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 0,
+      "final_hash": 11142285876190424476,
+      "oracle_id": "4c0a0448-b9d6-43a0-8549-64066dac63f0",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/talisman_of_dominance.frs",
+      "production_actions": 41
+    },
+    {
+      "capabilities": [
+        "permanent_spell",
+        "mana_ability"
+      ],
+      "card_name": "Talisman of Progress",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 0,
+      "final_hash": 15729098747384979350,
+      "oracle_id": "00e35322-1a9a-41e3-9ce1-359c8eaa3bc7",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/talisman_of_progress.frs",
+      "production_actions": 41
+    },
+    {
+      "capabilities": [
+        "land_play",
+        "mana_ability"
+      ],
+      "card_name": "Temple of the False God",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 0,
+      "final_hash": 9697171001654559146,
+      "oracle_id": "cfdd5dc6-593e-495a-8cfe-3a56b3c4c7df",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/temple_of_the_false_god.frs",
+      "production_actions": 43
+    },
+    {
+      "capabilities": [
+        "destroy_permanent"
+      ],
+      "card_name": "Terminate",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 1,
+      "final_hash": 17251917636777867270,
+      "oracle_id": "6257c2fd-005f-41e3-8a72-af76df1eb134",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/terminate.frs",
+      "production_actions": 35
+    },
+    {
+      "capabilities": [
+        "land_play",
+        "activated_ability",
+        "search_library",
+        "move_zone",
+        "tap_object",
+        "shuffle_library"
+      ],
+      "card_name": "Terramorphic Expanse",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 4,
+      "final_hash": 7064864545482964682,
+      "oracle_id": "1bd3e453-aa21-4ee6-95c2-d6d920ee8e7a",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/terramorphic_expanse.frs",
+      "production_actions": 46
+    },
+    {
+      "capabilities": [
+        "permanent_spell",
+        "mana_ability",
+        "modify_player_rules"
+      ],
+      "card_name": "Thought Vessel",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 1,
+      "final_hash": 7719470566147779938,
+      "oracle_id": "9965d9c5-2ebf-4a6c-930e-55c5890979be",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/thought_vessel.frs",
+      "production_actions": 39
+    },
+    {
+      "capabilities": [
+        "search_library",
+        "move_zone",
+        "shuffle_library"
+      ],
+      "card_name": "Three Visits",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 3,
+      "final_hash": 13992130196140174865,
+      "oracle_id": "1b882a0e-0ede-4d1a-bd1a-9b7cffbcde8e",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/three_visits.frs",
+      "production_actions": 40
+    },
+    {
+      "capabilities": [
+        "draw_cards",
+        "create_token"
+      ],
+      "card_name": "Unexpected Windfall",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 2,
+      "final_hash": 7721431299380069807,
+      "oracle_id": "498c10c9-253d-4b15-b48c-1509381b17e8",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/unexpected_windfall.frs",
+      "production_actions": 48
+    },
+    {
+      "capabilities": [
+        "exile_object"
+      ],
+      "card_name": "Utter End",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 1,
+      "final_hash": 14504157556625571903,
+      "oracle_id": "cba94732-1f1f-4ffd-9aba-45db990043fa",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/utter_end.frs",
+      "production_actions": 34
+    },
+    {
+      "capabilities": [
+        "draw_cards"
+      ],
+      "card_name": "Village Rites",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 1,
+      "final_hash": 5961715059655546644,
+      "oracle_id": "365548fb-5acc-4a8a-b20b-26d28b7d029f",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/village_rites.frs",
+      "production_actions": 38
+    },
+    {
+      "capabilities": [
+        "destroy_permanent"
+      ],
+      "card_name": "Vindicate",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 1,
+      "final_hash": 4295518587046996507,
+      "oracle_id": "63c1ac21-e3d8-40c2-8c09-3f31c52992ef",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/vindicate.frs",
+      "production_actions": 39
+    },
+    {
+      "capabilities": [
+        "land_play",
+        "mana_ability"
+      ],
+      "card_name": "Wastes",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 0,
+      "final_hash": 18150494067313383318,
+      "oracle_id": "05d24b0c-904a-46b6-b42a-96a4d91a0dd4",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/wastes.frs",
+      "production_actions": 35
+    },
+    {
+      "capabilities": [
+        "permanent_spell",
+        "activated_ability",
+        "search_library",
+        "move_zone",
+        "tap_object",
+        "shuffle_library"
+      ],
+      "card_name": "Wayfarer's Bauble",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 4,
+      "final_hash": 4382818266288311428,
+      "oracle_id": "31f15274-301b-47c5-ba19-0ced04520878",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/wayfarers_bauble.frs",
+      "production_actions": 51
+    },
+    {
+      "capabilities": [
+        "discard_cards",
+        "draw_cards"
+      ],
+      "card_name": "Wheel of Fortune",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 2,
+      "final_hash": 9936122576148224457,
+      "oracle_id": "a8abd966-de7b-46a3-8ac7-8747ab35653a",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/wheel_of_fortune.frs",
+      "production_actions": 66
+    },
+    {
+      "capabilities": [
+        "permanent_spell",
+        "search_library",
+        "move_zone",
+        "shuffle_library"
+      ],
+      "card_name": "Wood Elves",
+      "destination": "battlefield",
+      "disposition": "passed",
+      "effect_actions": 3,
+      "final_hash": 14240064325662711133,
+      "oracle_id": "8973bd99-20f8-4867-90ef-50392147ee1b",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/wood_elves.frs",
+      "production_actions": 45
+    },
+    {
+      "capabilities": [
+        "search_library",
+        "reveal_objects",
+        "shuffle_library",
+        "move_zone"
+      ],
+      "card_name": "Worldly Tutor",
+      "destination": "owner_graveyard",
+      "disposition": "passed",
+      "effect_actions": 4,
+      "final_hash": 1364819032397390520,
+      "oracle_id": "e8863518-0bfa-49c3-8c6e-6c9116a81051",
+      "path": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100/worldly_tutor.frs",
+      "production_actions": 37
+    }
+  ],
+  "failed": 0,
+  "failure_reason_counts": {},
+  "kind": "t3_5_runtime_smoke_audit",
+  "passed": 100,
+  "schema_version": 1,
+  "source_root": "/private/tmp/forge-t3-exact-7bbbafa/target/t3-card-stage/frozen-100",
+  "total_definitions": 100,
+  "unsupported_reason_counts": {},
+  "unsupported_setup": 0
+}

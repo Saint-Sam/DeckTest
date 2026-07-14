@@ -7,10 +7,10 @@
     "unique_blocker_families": 5718
   },
   "coverage": {
-    "count": 64339,
-    "covered": 51617,
-    "not_covered": 12722,
-    "percent": 80.22661216369542
+    "count": 64503,
+    "covered": 51845,
+    "not_covered": 12658,
+    "percent": 80.37610653768041
   },
   "deterministic_blocker_plan_replay": true,
   "deterministic_parallel_replay": true,
@@ -18,8 +18,8 @@
     "accelerated_core_phase": 43,
     "comparable_serial_core_baseline": null,
     "core_saved_percent": null,
-    "full_workspace_verification": 436,
-    "total": 490
+    "full_workspace_verification": 478,
+    "total": 536
   },
   "github_actions_used": false,
   "local_only": true,

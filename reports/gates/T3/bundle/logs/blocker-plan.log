@@ -1,0 +1,4 @@
+analyzed 33290 scripts; 11045 have confirmed blockers across 5718 families
+recommended 6 blocker batches
+metrics metrics/blocker_plan.json
+details target/t3-parallel/blocker-cards.json

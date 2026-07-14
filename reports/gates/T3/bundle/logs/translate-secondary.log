@@ -1,0 +1,7 @@
+emitted 20082/33290 legacy scripts (60.3244%) with 12 local workers
+priority 281/365 requested cards (76.9863%)
+fingerprint efb1d6c4d33d4d33fb43e1ec3282b061
+output skipped (fingerprint-only replay)
+metrics target/t3-parallel/translation-secondary.json
+priority metrics target/t3-parallel/priority-secondary.json
+quarantine target/t3-parallel/quarantine-secondary.json

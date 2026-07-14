@@ -8,10 +8,10 @@
   "detail": {
     "path": "target/card-maturity/identities.json",
     "record_count": 38306,
-    "sha256": "b7e7952782b89dad37d5236d66dff5525c0e53eb8fc9d44f23215b23047e29b6",
+    "sha256": "370f9b945ac82201338c3250d61e80fe9b9248fbce05a878a43af77d22093c20",
     "tracked": false
   },
-  "generated_at": "2026-07-14T02:22:05.590176+00:00",
+  "generated_at": "2026-07-14T08:18:18.889209+00:00",
   "generator": "tools/write_card_maturity.py",
   "implementation_maturity": {
     "compiler_evidence": {
@@ -30,7 +30,7 @@
       "compiler_valid": 20118,
       "mapped_partial": 20118,
       "parsed": 20118,
-      "pod_integration_verified": 0,
+      "pod_integration_verified": 21,
       "product_eligible": 0,
       "runtime_smoke_passed": 100,
       "semantic_verified": 100,
@@ -42,10 +42,10 @@
       "compiler_valid": 20018,
       "mapped_partial": 0,
       "parsed": 0,
-      "pod_integration_verified": 0,
+      "pod_integration_verified": 21,
       "product_eligible": 0,
       "runtime_smoke_passed": 0,
-      "semantic_verified": 100,
+      "semantic_verified": 79,
       "structurally_translated": 0
     },
     "optional_stage_evidence": {
@@ -56,10 +56,10 @@
         "sha256": null
       },
       "pod_integration_verified": {
-        "identity_count": 0,
+        "identity_count": 21,
         "path": "metrics/pod_integration.json",
-        "present": false,
-        "sha256": null
+        "present": true,
+        "sha256": "1956ff706f586f672ed2585c6ce1c7b7903580d738168e689ea4c29abdd61ece"
       },
       "product_eligible": {
         "identity_count": 0,
@@ -71,13 +71,13 @@
         "identity_count": 100,
         "path": "metrics/card_runtime_smoke.json",
         "present": true,
-        "sha256": "49a03c560982112f94fb2e03a3501546e62c08873ddd925550db21b2fa958081"
+        "sha256": "c22f29a13e13a1bf116ed4e23433daf3d6427f1d268b4a3c20195c161ea2d7fa"
       },
       "semantic_verified": {
         "identity_count": 100,
         "path": "metrics/card_semantics_100.json",
         "present": true,
-        "sha256": "cc3e0590de968c3ee42d78ae1ac5b57b2a22f112056f9a921790cc403ee6a07e"
+        "sha256": "9f719f5698010946074270278f39c70e162b9c1551aa3d0ad45c9370d2ae6e98"
       }
     },
     "population": 32792,
@@ -132,9 +132,9 @@
     "unit": "owner_priority_card_name"
   },
   "product_binding": {
-    "commit": "06b31aef6cc0e30ed3c1b72cc2e1ab2b194fbb11",
+    "commit": "7bbbafa376a5222c3a335a744b5b942898c67a84",
     "source": "metrics/coverage.json",
-    "tree": "edb06afe188a59ebbaf4bc925ad9aaa87f6139d3"
+    "tree": "270d978f32921a29e92492fc2a782bf60bab0bc2"
   },
   "scenario_evidence": {
     "distinct_operations": 19,
@@ -157,19 +157,19 @@
   },
   "source_artifacts": {
     "FORGE_REBUILD_MASTER_PLAN.md": "f56f54ec3dffcb556695ff3e7048e1a8f909fd7147c6db6fd094c073e3d89cb4",
-    "PLAN_STATE.json": "9c3c46c14e5bffd9ee5dbdc58f8595a0394a8d2cee87a2da54b5e997537644ad",
+    "PLAN_STATE.json": "d86a7a4e29c164b38e63e2f41b465bee34d7e3b504da581888e30bf617306a40",
     "assets/card_catalog.json": "6c7c41ba91b524b8ac59cf7e215fbceaa31c1f9567ae11623dcfa15f6b3f8321",
     "metrics/api_coverage.json": "f17d81a3ab92b2e0b0bf4da7a5a4207b49c119318576744057380c2e6a266dbb",
     "metrics/card_catalog.json": "69c4662acbc20750847355bd461f469578aa27bd4c7932b88ac1a47bbc43c05a",
-    "metrics/coverage.json": "a8167059db551b41229714d1cf7cfabaa1b290bbbcda5af9d66d37f2f854fe45",
+    "metrics/coverage.json": "d8f65738bde886462b03b6e63ca93fb253e7ec67755b04e4c41a37a635418599",
     "metrics/cp_dsl_corpus.json": "8e66dcf0f81ce9625e969346291239e789d0606c179f800de704e969bec02bd7",
     "metrics/legacy_parse.json": "b5782a750b8840efebf74859e1359bf95c746a6c594a3ede504f5b197e4b0603",
     "metrics/local_platforms.json": "2276b8f85a05cec3c798ac4fef11069b5170b85b9d806a8f1eb0ce9daa551cf8",
     "metrics/oracle_semantics.json": "401def585d647dafb90af2fc2a54ffe7cc95d92e12e45b38aa9942e63bd153d5",
     "metrics/priority_coverage.json": "ecfa4e17896b5d603f52f6e7a5b42b9aef146ed962e8ed80ae8602b41e14747c",
-    "metrics/t3_parallel_validation.json": "fb4ee352762493111c105d86cc72051c50c1bb5718d3d226d66d041eb96a64df",
+    "metrics/t3_parallel_validation.json": "f37d1f2f18ace437a17068f75c4c9c50e1b8b94c5bdb8c3e032a868cd4b3c5c0",
     "metrics/translation.json": "5ad4bbf0364f7c2623182dc59f662ab926fea9f607c348c177aa90578d32aa8b",
-    "tools/write_card_maturity.py": "79ddcc4e4065cf6d1c77687b2f71c4ceeeef673fb73c4bbab51965b713169ed5"
+    "tools/write_card_maturity.py": "44cc5eba9de6a2972a40c9b881337f226638f345841d3cc5db888d3bd7808f51"
   },
   "units_are_separate": true
 }

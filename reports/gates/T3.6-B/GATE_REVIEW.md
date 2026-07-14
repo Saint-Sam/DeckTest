@@ -1,29 +1,31 @@
 # CP-CARD-SEMANTICS-100 Gate Review
 
-Date: 2026-07-13
+Date: 2026-07-14
 
-Reviewer: Codex Gate Reviewer using strong reasoning under Owner-approved Gate Reviewer Option C.
+Reviewer: independent `gpt-5.6-sol` Gate Reviewer with high reasoning under
+Owner-approved Gate Reviewer Option C.
 
-## Reviewed Binding
+Reviewed product: `7bbbafa376a5222c3a335a744b5b942898c67a84`
 
-- Product commit: `06b31aef6cc0e30ed3c1b72cc2e1ab2b194fbb11`
-- Product tree: `edb06afe188a59ebbaf4bc925ad9aaa87f6139d3`
-- T3.6-B evidence SHA-256: `14ba27e7cd8a44019c85fcb40bb4ef24b31e9ee28923e3429d21446c34de1f2a`
-- Runtime-stage evidence SHA-256: `49a03c560982112f94fb2e03a3501546e62c08873ddd925550db21b2fa958081`
-- Semantic-stage evidence SHA-256: `cc3e0590de968c3ee42d78ae1ac5b57b2a22f112056f9a921790cc403ee6a07e`
-
-## Review
-
-The Reviewer checked the frozen 100-identity manifest, source and translated-definition bindings, card-specific expected production paths, two-run deterministic replay, nonzero final hashes, stage-closure evidence, and the exact detached local checkpoint. All 100 identities are runtime-smoke passed and semantic verified. There are zero runtime blockers, semantic blockers, production failures, or replay mismatches.
-
-The exact checkpoint passed formatting, workspace lint with warnings denied, all workspace tests, deterministic translation and blocker-plan replays, compiler/database validation, and the 80% line-coverage floor at 80.2266%. Typed unsupported cards outside the frozen set remain fail-closed and are not promoted.
-
-No GitHub Actions, network access, installs, push, PR, release, licensing, IP, de-scope, or plan-change action was used.
+Reviewed tree: `270d978f32921a29e92492fc2a782bf60bab0bc2`
 
 ## Findings
 
-No blocking findings.
+No P0, P1, or P2 findings.
+
+## Review
+
+All 100 frozen Commander identities pass runtime smoke and card-specific
+semantic execution under two deterministic exact replays. There are zero
+runtime blockers, semantic blockers, production failures, or replay mismatches.
+The stage records are generated from executed probes and are product-, input-,
+and evidence-hash bound; their checker reconstructs the expected records.
+
+The full translated runtime corpus remains truthful: 3,123 definitions execute,
+16,959 are typed unsupported, and zero fail. Unsupported definitions are not
+promoted. The final exact checkpoint passes all workspace checks and 80.3761%
+line coverage locally without GitHub Actions or network access.
 
 ## Verdict
 
-**PASS.** T3.5 and T3.6 are closed locally. T3.9 four-player pod integration is next.
+**PASS.** CP-CARD-SEMANTICS-100 is closed for the exact reviewed product.

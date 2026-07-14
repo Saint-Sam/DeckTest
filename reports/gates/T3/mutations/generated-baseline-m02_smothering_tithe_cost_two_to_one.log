@@ -1,0 +1,19 @@
+$ cargo test -p forge-cards --locked --offline --jobs 8 --lib opponent_draw_unless_paid_binds_both_exact_branches
+exit_code=0
+
+   Compiling forge-core v0.0.0 (/private/tmp/forge-t3-exact-7bbbafa/target/t3-mutation/source/crates/forge-core)
+   Compiling forge-cards v0.0.0 (/private/tmp/forge-t3-exact-7bbbafa/target/t3-mutation/source/crates/forge-cards)
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-R0Lr0jJy' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-5XpfUt6h' (errno=Operation not permitted)
+
+warning: `forge-cards` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.28s
+     Running unittests src/lib.rs (/private/tmp/forge-t3-exact-7bbbafa/target/t3-mutation/build/debug/deps/forge_cards-c3caadd4267240fc)
+
+running 1 test
+test runtime::tests::opponent_draw_unless_paid_binds_both_exact_branches ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 33 filtered out; finished in 0.00s
+

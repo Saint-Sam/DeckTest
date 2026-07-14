@@ -1,0 +1,46 @@
+$ cargo test -p forge-porttools --locked --offline --jobs 8 --lib source_bound_closed_zone_moves_retain_their_origin_guard
+exit_code=0
+
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.46
+   Compiling unicode-ident v1.0.24
+   Compiling serde_core v1.0.228
+   Compiling memchr v2.8.2
+   Compiling crossbeam-utils v0.8.22
+   Compiling ucd-trie v0.1.7
+   Compiling crossbeam-epoch v0.9.20
+   Compiling serde v1.0.228
+   Compiling zmij v1.0.21
+   Compiling pest v2.8.7
+   Compiling crossbeam-deque v0.8.7
+   Compiling pest_meta v2.8.7
+   Compiling virtue v0.0.18
+   Compiling serde_json v1.0.150
+   Compiling rayon-core v1.13.0
+   Compiling bincode_derive v2.0.1
+   Compiling syn v2.0.118
+   Compiling itoa v1.0.18
+   Compiling unty v0.0.4
+   Compiling either v1.16.0
+   Compiling rayon v1.12.0
+   Compiling pest_generator v2.8.7
+   Compiling serde_derive v1.0.228
+   Compiling pest_derive v2.8.7
+   Compiling bincode v2.0.1
+   Compiling forge-carddef v0.0.0 (/private/tmp/forge-t3-exact-7bbbafa/target/t3-mutation/source/crates/forge-carddef)
+   Compiling forge-cardc v0.0.0 (/private/tmp/forge-t3-exact-7bbbafa/target/t3-mutation/source/crates/forge-cardc)
+   Compiling forge-porttools v0.0.0 (/private/tmp/forge-t3-exact-7bbbafa/target/t3-mutation/source/crates/forge-porttools)
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-EYeavAQA' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-1ABj41RF' (errno=Operation not permitted)
+
+warning: `forge-porttools` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 8.73s
+     Running unittests src/lib.rs (/private/tmp/forge-t3-exact-7bbbafa/target/t3-mutation/build/debug/deps/forge_porttools-5eec4d9cedc6394e)
+
+running 1 test
+test mapper::tests::source_bound_closed_zone_moves_retain_their_origin_guard ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 158 filtered out; finished in 0.00s
+

@@ -1,0 +1,33 @@
+$ cargo test -p forge-cards --locked --offline --jobs 8 --lib opponent_draw_unless_paid_binds_both_exact_branches
+exit_code=101
+
+   Compiling forge-cards v0.0.0 (/private/tmp/forge-t3-exact-7bbbafa/target/t3-mutation/source/crates/forge-cards)
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-rwTlyiv2' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-ntC3EiPy' (errno=Operation not permitted)
+
+warning: `forge-cards` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.47s
+     Running unittests src/lib.rs (/private/tmp/forge-t3-exact-7bbbafa/target/t3-mutation/build/debug/deps/forge_cards-c3caadd4267240fc)
+
+running 1 test
+test runtime::tests::opponent_draw_unless_paid_binds_both_exact_branches ... FAILED
+
+failures:
+
+---- runtime::tests::opponent_draw_unless_paid_binds_both_exact_branches stdout ----
+
+thread 'runtime::tests::opponent_draw_unless_paid_binds_both_exact_branches' (37259783) panicked at crates/forge-cards/src/runtime.rs:9894:9:
+assertion `left == right` failed
+  left: ManaCost { colored: [0, 0, 0, 0, 0], generic: 1, x_count: 0, x_value: 0 }
+ right: ManaCost { colored: [0, 0, 0, 0, 0], generic: 2, x_count: 0, x_value: 0 }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    runtime::tests::opponent_draw_unless_paid_binds_both_exact_branches
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 33 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p forge-cards --lib`

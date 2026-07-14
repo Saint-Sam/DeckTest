@@ -1,0 +1,33 @@
+$ cargo test -p forge-testkit --locked --offline --jobs 8 --lib identity_exercise_aggregation_preserves_every_counter
+exit_code=101
+
+   Compiling forge-testkit v0.0.0 (/private/tmp/forge-t3-exact-7bbbafa/target/t3-mutation/source/crates/forge-testkit)
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-4kczrAUT' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-LVDwDxAq' (errno=Operation not permitted)
+
+warning: `forge-testkit` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.66s
+     Running unittests src/lib.rs (/private/tmp/forge-t3-exact-7bbbafa/target/t3-mutation/build/debug/deps/forge_testkit-e3e0ac3308292159)
+
+running 1 test
+test t3_9_pod::tests::identity_exercise_aggregation_preserves_every_counter ... FAILED
+
+failures:
+
+---- t3_9_pod::tests::identity_exercise_aggregation_preserves_every_counter stdout ----
+
+thread 't3_9_pod::tests::identity_exercise_aggregation_preserves_every_counter' (37260300) panicked at crates/forge-testkit/src/../../../tests/t3_9/four_player_pod.rs:2197:9:
+assertion `left == right` failed
+  left: 4
+ right: 13
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    t3_9_pod::tests::identity_exercise_aggregation_preserves_every_counter
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 35 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p forge-testkit --lib`

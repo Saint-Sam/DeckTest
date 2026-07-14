@@ -1,0 +1,25 @@
+Tier 3 exact product: 7bbbafa376a5222c3a335a744b5b942898c67a84
+
+Focused semantic and fail-closed coverage:
+- crates/forge-porttools/src/mapper.rs:20135 source_bound_closed_zone_moves_retain_their_origin_guard
+- crates/forge-porttools/src/mapper.rs:20154 defined_closed_zone_moves_retain_their_origin_guards
+- crates/forge-porttools/src/mapper.rs:21980 new_batch_values_still_fail_closed
+- crates/forge-cards/src/runtime.rs:9883 opponent_draw_unless_paid_binds_both_exact_branches
+- crates/forge-core/src/lib.rs:19129 player_view_hides_opponent_hand_and_library_objects
+- crates/forge-core/src/lib.rs:19569 opening_hand_player_view_hides_opponent_hand_and_libraries
+
+T3.9 hardening coverage:
+- crates/forge-core/src/lib.rs:23039 commander_zone_choice_is_owner_only_and_fail_closed
+- tests/t3_9/four_player_pod.rs:2140 action_replay_rejects_a_tampered_transition
+- tests/t3_9/four_player_pod.rs:2167 campaign_seed_schedule_is_deterministic_and_disperse
+- tests/t3_9/four_player_pod.rs:2179 identity_exercise_aggregation_preserves_every_counter
+- crates/forge-testkit/src/lib.rs ron_parser_rejects_adversarial_nesting_without_stack_overflow
+
+Exact campaign evidence:
+- 100/100 T3.6 semantic cases passed two deterministic production replays.
+- 1,000/1,000 four-player games directly reapplied their typed action streams.
+- 10/10 retained replay files passed transition-level and forge-cli replay checks.
+- 1,385,060 hidden-information checks passed with zero canary violations.
+- 3,608 AddressSanitizer worker-seconds passed across all five required fuzz targets.
+- 5/5 declared Tier 3 mutants were killed with zero survivors.
+- The preserved pre-final scenario-parser stack-overflow input executes normally after the 128-level fail-closed nesting guard.

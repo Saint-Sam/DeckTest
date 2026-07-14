@@ -1,0 +1,232 @@
+{
+  "action_replays": [
+    {
+      "path": "reports/gates/T3.9/replays/pod-seed-01.frsreplay",
+      "sha256": "0b48d9128e4e01f6c243e99bf7ddaa034ab5c7c3320e5821cd2c53bd9fe11206"
+    },
+    {
+      "path": "reports/gates/T3.9/replays/pod-seed-02.frsreplay",
+      "sha256": "3bdb1e4b37451f5a8381341cccc24c66f48619a5824c0423ac32aef4255fde2a"
+    },
+    {
+      "path": "reports/gates/T3.9/replays/pod-seed-03.frsreplay",
+      "sha256": "b47c31353f91555bf285d49f3bd49aab6c0a065dbc195388867a132eaf49b41e"
+    },
+    {
+      "path": "reports/gates/T3.9/replays/pod-seed-04.frsreplay",
+      "sha256": "8f3d0c6614705349f0eab6a8e3536f8d51cefcd4b2af932c543fac053e55156c"
+    },
+    {
+      "path": "reports/gates/T3.9/replays/pod-seed-05.frsreplay",
+      "sha256": "db4040e14850858d9e525fb0a7b97bf05b245169a29e1d9745b02154bbd2db23"
+    },
+    {
+      "path": "reports/gates/T3.9/replays/pod-seed-06.frsreplay",
+      "sha256": "4e599e8c33765ed4f4c9dc68ae85d7788b90b3a8f8b4fe8e229ee5b01b0243ac"
+    },
+    {
+      "path": "reports/gates/T3.9/replays/pod-seed-07.frsreplay",
+      "sha256": "217a4e1ecc74b95aa17fb9306dae77d9857c402a06c4dfec518301f88900125e"
+    },
+    {
+      "path": "reports/gates/T3.9/replays/pod-seed-08.frsreplay",
+      "sha256": "3de7391e6b135d611b34d27f573667b97e4a9447ff27af9ac58905b0a75399fc"
+    },
+    {
+      "path": "reports/gates/T3.9/replays/pod-seed-09.frsreplay",
+      "sha256": "71f6b2b7fc36f4a2df5d17613e4324d68963f3b0aafe72682fe5876abba56c5a"
+    },
+    {
+      "path": "reports/gates/T3.9/replays/pod-seed-10.frsreplay",
+      "sha256": "8917db4893defd5779cfb249c2578b533594daa2c3bfc84c533627718c0eef07"
+    }
+  ],
+  "evidence": "reports/gates/T3.9/cp-four-player-pod-2026-07-13.json",
+  "evidence_sha256": "3c780dc9cca68c5e11fb94135efb7b9d8c502b22948b888802a6deaadf6d1c97",
+  "generated_at": "2026-07-14T07:57:36.016707Z",
+  "generator": "tools/write_pod_integration.py",
+  "identity_exercise": {
+    "05d24b0c-904a-46b6-b42a-96a4d91a0dd4": {
+      "casts": 0,
+      "effect_actions": 0,
+      "land_plays": 12484,
+      "resolutions": 0,
+      "trigger_resolutions": 0
+    },
+    "153376c9-dffd-458c-8ce3-a4c8269bc4e9": {
+      "casts": 491,
+      "effect_actions": 0,
+      "land_plays": 0,
+      "resolutions": 491,
+      "trigger_resolutions": 14101
+    },
+    "1bd3e453-aa21-4ee6-95c2-d6d920ee8e7a": {
+      "casts": 0,
+      "effect_actions": 0,
+      "land_plays": 79,
+      "resolutions": 0,
+      "trigger_resolutions": 0
+    },
+    "24d0f5e7-0d9e-4b76-900e-a7274e80312d": {
+      "casts": 268,
+      "effect_actions": 0,
+      "land_plays": 0,
+      "resolutions": 268,
+      "trigger_resolutions": 536
+    },
+    "31f15274-301b-47c5-ba19-0ced04520878": {
+      "casts": 971,
+      "effect_actions": 0,
+      "land_plays": 0,
+      "resolutions": 971,
+      "trigger_resolutions": 0
+    },
+    "4fdbbec2-e921-4b63-958d-f9ba1e417197": {
+      "casts": 276,
+      "effect_actions": 0,
+      "land_plays": 0,
+      "resolutions": 276,
+      "trigger_resolutions": 196
+    },
+    "56719f6a-1a6c-4c0a-8d21-18f7d7350b68": {
+      "casts": 0,
+      "effect_actions": 0,
+      "land_plays": 13578,
+      "resolutions": 0,
+      "trigger_resolutions": 0
+    },
+    "6ad8011d-3471-4369-9d68-b264cc027487": {
+      "casts": 971,
+      "effect_actions": 0,
+      "land_plays": 0,
+      "resolutions": 971,
+      "trigger_resolutions": 0
+    },
+    "893fed41-c144-433f-af88-bc7d419b7fb3": {
+      "casts": 1026,
+      "effect_actions": 0,
+      "land_plays": 0,
+      "resolutions": 1026,
+      "trigger_resolutions": 0
+    },
+    "9965d9c5-2ebf-4a6c-930e-55c5890979be": {
+      "casts": 1011,
+      "effect_actions": 0,
+      "land_plays": 0,
+      "resolutions": 1011,
+      "trigger_resolutions": 0
+    },
+    "a3fb7228-e76b-4e96-a40e-20b5fed75685": {
+      "casts": 0,
+      "effect_actions": 0,
+      "land_plays": 13390,
+      "resolutions": 0,
+      "trigger_resolutions": 0
+    },
+    "a75445d3-1303-4bb5-89ad-26ea93fecd48": {
+      "casts": 0,
+      "effect_actions": 0,
+      "land_plays": 86,
+      "resolutions": 0,
+      "trigger_resolutions": 0
+    },
+    "b2c6aa39-2d2a-459c-a555-fb48ba993373": {
+      "casts": 0,
+      "effect_actions": 0,
+      "land_plays": 8236,
+      "resolutions": 0,
+      "trigger_resolutions": 0
+    },
+    "bc71ebf6-2056-41f7-be35-b2e5c34afa99": {
+      "casts": 0,
+      "effect_actions": 0,
+      "land_plays": 17395,
+      "resolutions": 0,
+      "trigger_resolutions": 0
+    },
+    "c23e5b80-08d2-4e24-9908-fe2aa4f30f6f": {
+      "casts": 0,
+      "effect_actions": 0,
+      "land_plays": 955,
+      "resolutions": 0,
+      "trigger_resolutions": 0
+    },
+    "c8b143ad-43ec-4e0d-a440-e348daa31391": {
+      "casts": 1010,
+      "effect_actions": 0,
+      "land_plays": 0,
+      "resolutions": 1010,
+      "trigger_resolutions": 0
+    },
+    "c97361b5-af16-4a7b-af85-a429dbaf4ad2": {
+      "casts": 1026,
+      "effect_actions": 0,
+      "land_plays": 0,
+      "resolutions": 1026,
+      "trigger_resolutions": 0
+    },
+    "ca204b66-8d0c-431a-8d34-282f7c2d17da": {
+      "casts": 943,
+      "effect_actions": 0,
+      "land_plays": 0,
+      "resolutions": 943,
+      "trigger_resolutions": 0
+    },
+    "cfdd5dc6-593e-495a-8cfe-3a56b3c4c7df": {
+      "casts": 0,
+      "effect_actions": 0,
+      "land_plays": 973,
+      "resolutions": 0,
+      "trigger_resolutions": 0
+    },
+    "d79cbc61-6c15-48ea-bbba-3cffb819ccba": {
+      "casts": 964,
+      "effect_actions": 0,
+      "land_plays": 0,
+      "resolutions": 964,
+      "trigger_resolutions": 0
+    },
+    "f3abd4d1-a975-4e85-8684-aa0fce029670": {
+      "casts": 289,
+      "effect_actions": 0,
+      "land_plays": 0,
+      "resolutions": 289,
+      "trigger_resolutions": 1617
+    }
+  },
+  "identity_ids": [
+    "05d24b0c-904a-46b6-b42a-96a4d91a0dd4",
+    "153376c9-dffd-458c-8ce3-a4c8269bc4e9",
+    "1bd3e453-aa21-4ee6-95c2-d6d920ee8e7a",
+    "24d0f5e7-0d9e-4b76-900e-a7274e80312d",
+    "31f15274-301b-47c5-ba19-0ced04520878",
+    "4fdbbec2-e921-4b63-958d-f9ba1e417197",
+    "56719f6a-1a6c-4c0a-8d21-18f7d7350b68",
+    "6ad8011d-3471-4369-9d68-b264cc027487",
+    "893fed41-c144-433f-af88-bc7d419b7fb3",
+    "9965d9c5-2ebf-4a6c-930e-55c5890979be",
+    "a3fb7228-e76b-4e96-a40e-20b5fed75685",
+    "a75445d3-1303-4bb5-89ad-26ea93fecd48",
+    "b2c6aa39-2d2a-459c-a555-fb48ba993373",
+    "bc71ebf6-2056-41f7-be35-b2e5c34afa99",
+    "c23e5b80-08d2-4e24-9908-fe2aa4f30f6f",
+    "c8b143ad-43ec-4e0d-a440-e348daa31391",
+    "c97361b5-af16-4a7b-af85-a429dbaf4ad2",
+    "ca204b66-8d0c-431a-8d34-282f7c2d17da",
+    "cfdd5dc6-593e-495a-8cfe-3a56b3c4c7df",
+    "d79cbc61-6c15-48ea-bbba-3cffb819ccba",
+    "f3abd4d1-a975-4e85-8684-aa0fce029670"
+  ],
+  "manifest": "assets/t3_9/integration_decks.json",
+  "manifest_sha256": "0ed6260e37d1f62ad3d5463bbe9235730a31860d2c1c69c4b69f0735979c40c1",
+  "passed": true,
+  "product_commit": "7bbbafa376a5222c3a335a744b5b942898c67a84",
+  "product_tree": "270d978f32921a29e92492fc2a782bf60bab0bc2",
+  "schema_version": 1,
+  "source": {
+    "card_catalog_sha256": "6c7c41ba91b524b8ac59cf7e215fbceaa31c1f9567ae11623dcfa15f6b3f8321",
+    "card_database_sha256": "9593a0e86dd288bad9682af0e43308f07a2b2a3685e8b2b2954156c068d261d1",
+    "translation_fingerprint": "efb1d6c4d33d4d33fb43e1ec3282b061"
+  },
+  "stage": "pod_integration_verified"
+}

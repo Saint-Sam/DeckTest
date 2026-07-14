@@ -1,0 +1,3 @@
+built 20082 definition(s) with 20082/20082 canonical round-trips, 38306 identities, and 113234 printings into target/t3-parallel/translated-carddb.bin (39862869 bytes)
+index target/t3-parallel/translated-carddb.index.json
+validated 38306 identities, 113234 printings, and 20082 definitions

@@ -1,30 +1,39 @@
 {
-  "schema_version": 1,
-  "generated_at": "2026-07-13",
-  "task": "T3.5",
-  "slice": "data-driven-card-runtime-interpreter",
-  "status": "pass_local",
-  "claim_boundary": "T3.5 closes by classifying every compiler-valid translated definition through the capability smoke harness and executing all 100 frozen Commander identities. Typed unsupported classifications are not passes. Semantic promotion is supplied separately by the passing T3.6-B exact replay evidence.",
-  "source_commit": "06b31aef6cc0e30ed3c1b72cc2e1ab2b194fbb11",
-  "architecture": {
-    "decision": "docs/adr/0013-data-driven-card-runtime-interpreter.md",
-    "owner": "forge-cards::runtime",
-    "kernel": "forge-core",
-    "scenario_driver": "forge-testkit",
-    "runtime_oracle_text_parsing": false,
-    "card_name_branches": false,
-    "all_mutations_use_typed_actions": true,
-    "complete_binding_before_mutation": true,
-    "unsupported_behavior": "fail_closed"
+  "claim_boundary": "T3.5 classifies every compiler-valid translated definition through the typed fail-closed runtime smoke and executes all 100 frozen Commander identities. Typed unsupported classifications are not passes.",
+  "constraints": {
+    "github_actions_used": false,
+    "installs_performed": false,
+    "local_only": true,
+    "network_used": false,
+    "push_performed": false
   },
-  "translated_corpus": {
-    "source": "target/translated-cards",
-    "report": "target/t3_5_runtime_interpreter_audit_current.json",
-    "report_sha256": "177c32c1f78b591ef25e867a9f3e5fb3e263962d5c9d6d2075dd01917dd7497a",
-    "total": 20082,
-    "passed": 3123,
-    "unsupported_setup": 16959,
+  "frozen_semantic_100": {
     "failed": 0,
+    "manifest": "assets/t3_6_commander_semantic_candidates.json",
+    "report": "reports/gates/T3.5/runtime-smoke-frozen-100.json",
+    "report_sha256": "6374462d08150859b853486117fdd5a7366d1447a2a892ea311d7d56ed56030c",
+    "runtime_smoke_passed": 100,
+    "semantic_evidence": "reports/gates/T3.6-B/EVIDENCE.json",
+    "semantic_evidence_sha256": "e929a008408144204cf5eb2f9a26a68e9db98446d3059471220833f909080e49",
+    "semantic_verified": 100,
+    "total": 100,
+    "unsupported_setup": 0
+  },
+  "generated_at": "2026-07-14T07:56:40.919955+00:00",
+  "generator": "tools/run_t3_card_stage_gate.py",
+  "schema_version": 2,
+  "slice": "data-driven-card-runtime-interpreter",
+  "source_commit": "7bbbafa376a5222c3a335a744b5b942898c67a84",
+  "source_tree": "270d978f32921a29e92492fc2a782bf60bab0bc2",
+  "status": "pass_local",
+  "task": "T3.5",
+  "translated_corpus": {
+    "failed": 0,
+    "passed": 3123,
+    "report": "reports/gates/T3.5/runtime-smoke-corpus.json",
+    "report_sha256": "38caa7a15810997ea0305d286a0ba288eebd818ced75ed9092fdfdeed5c2e553",
+    "source": "target/translated-cards",
+    "total": 20082,
     "unsupported_reason_counts": {
       "unsupported_ability_shape": 3717,
       "unsupported_card_layout": 453,
@@ -35,51 +44,12 @@
       "unsupported_keyword_semantics": 2794,
       "unsupported_mana_symbol": 663,
       "unsupported_player_selector": 73
-    }
+    },
+    "unsupported_setup": 16959
   },
-  "frozen_semantic_100": {
-    "manifest": "assets/t3_6_commander_semantic_candidates.json",
-    "source": "target/t3_6_frozen_100",
-    "report": "target/t3_5_frozen_100_current.json",
-    "report_sha256": "773c841a630e46da18c94eeb08d5a88cbccf39860bcccc716cce9643947b7a2a",
-    "total": 100,
-    "runtime_smoke_passed": 100,
-    "unsupported_setup": 0,
-    "failed": 0,
-    "semantic_verified": 100,
-    "semantic_evidence": "reports/gates/T3.6-B/EVIDENCE.json"
-  },
-  "focused_verification": [
-    {
-      "command": "CARGO_BUILD_JOBS=24 cargo test --workspace --quiet",
-      "result": "pass: forge-core 112, forge-cards 34, forge-porttools 159, forge-testkit 32 library tests and 12 CLI tests; all workspace and doc tests pass"
-    },
-    {
-      "command": "target/debug/forge-testkit runtime-smoke target/translated-cards --report target/t3_5_runtime_interpreter_audit_current.json --quiet",
-      "result": "expected exit 2 because typed unsupported definitions remain; 3123 passed, 16959 unsupported, 0 failed"
-    },
-    {
-      "command": "target/debug/forge-testkit runtime-smoke target/t3_6_frozen_100 --report target/t3_5_frozen_100_current.json --quiet",
-      "result": "pass: 100 passed, 0 unsupported, 0 failed"
-    },
-    {
-      "command": "python3 tools/run_t3_6_commander_semantics.py --report reports/gates/T3.6-B/EVIDENCE.json",
-      "result": "pass: 100 semantic verified, 0 semantic blocked, 0 runtime blocked; 43 sidecar tests pass"
-    },
-    {
-      "command": "FORGE_T3_TOTAL_WORKERS=24 CARGO_BUILD_JOBS=24 CARGO_NET_OFFLINE=true scripts/t3_parallel_sweep.sh checkpoint",
-      "result": "pass: deterministic local checkpoint, workspace format/lint/tests green, line coverage 80.2266%"
-    }
-  ],
-  "constraints": {
-    "local_only": true,
-    "network_used": false,
-    "installs_performed": false,
-    "github_actions_used": false,
-    "push_performed": false
-  },
-  "continuation": {
-    "status": "T3.5_and_T3.6_closed",
-    "next": "Proceed to T3.9 four-player integration using the 100 semantically verified identities and targeted mapper work only for pod blockers."
+  "verification": {
+    "coverage_percent": 80.37610653768041,
+    "deterministic_semantic_replay": true,
+    "deterministic_translation_replay": true
   }
 }

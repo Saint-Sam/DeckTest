@@ -1,0 +1,354 @@
+{
+  "checkpoint": "CP-FOUR-PLAYER-POD",
+  "claim_boundary": "Four legal compiled Commander decks completed deterministic card-driven games through production setup, mana, casting, priority, triggers, combat, owner-selected commander zone/tax, elimination, recurring redacted-view canaries, invariants, and direct typed-action replay against fresh kernel state.",
+  "configuration": {
+    "coverage_schedule": "deterministic round-robin identity placed on top before opening hands; all subsequent actions remain production-legal",
+    "decks": [
+      {
+        "cards": 100,
+        "commander": "Isamaru, Hound of Konda",
+        "commander_oracle_id": "cfb756dd-6fe1-430a-8f04-8b10cac62a86",
+        "id": "mono-white-isamaru",
+        "name": "Isamaru Integration",
+        "semantic_mainboard_cards": 99
+      },
+      {
+        "cards": 100,
+        "commander": "Tobias Andrion",
+        "commander_oracle_id": "55dfe722-7487-4d25-b90c-e6ad2c82a671",
+        "id": "azorius-tobias",
+        "name": "Tobias Integration",
+        "semantic_mainboard_cards": 99
+      },
+      {
+        "cards": 100,
+        "commander": "Yargle, Glutton of Urborg",
+        "commander_oracle_id": "ed66cd31-958f-4b28-82a3-e04acc819afc",
+        "id": "mono-black-yargle",
+        "name": "Yargle Integration",
+        "semantic_mainboard_cards": 99
+      },
+      {
+        "cards": 100,
+        "commander": "Rorix Bladewing",
+        "commander_oracle_id": "48fe0f52-1676-49d5-acf6-5476081e8e1b",
+        "id": "mono-red-rorix",
+        "name": "Rorix Integration",
+        "semantic_mainboard_cards": 99
+      }
+    ],
+    "games": 1000,
+    "jobs": 24,
+    "max_turns": 160,
+    "players_per_game": 4,
+    "replay_directory": "reports/gates/T3.9/replays",
+    "replay_runs": 2,
+    "seed_base": "17306488943054684160",
+    "semantic_identity_count": 21,
+    "semantic_identity_requirements": {
+      "05d24b0c-904a-46b6-b42a-96a4d91a0dd4": true,
+      "153376c9-dffd-458c-8ce3-a4c8269bc4e9": false,
+      "1bd3e453-aa21-4ee6-95c2-d6d920ee8e7a": true,
+      "24d0f5e7-0d9e-4b76-900e-a7274e80312d": false,
+      "31f15274-301b-47c5-ba19-0ced04520878": false,
+      "4fdbbec2-e921-4b63-958d-f9ba1e417197": false,
+      "56719f6a-1a6c-4c0a-8d21-18f7d7350b68": true,
+      "6ad8011d-3471-4369-9d68-b264cc027487": false,
+      "893fed41-c144-433f-af88-bc7d419b7fb3": false,
+      "9965d9c5-2ebf-4a6c-930e-55c5890979be": false,
+      "a3fb7228-e76b-4e96-a40e-20b5fed75685": true,
+      "a75445d3-1303-4bb5-89ad-26ea93fecd48": true,
+      "b2c6aa39-2d2a-459c-a555-fb48ba993373": true,
+      "bc71ebf6-2056-41f7-be35-b2e5c34afa99": true,
+      "c23e5b80-08d2-4e24-9908-fe2aa4f30f6f": true,
+      "c8b143ad-43ec-4e0d-a440-e348daa31391": false,
+      "c97361b5-af16-4a7b-af85-a429dbaf4ad2": false,
+      "ca204b66-8d0c-431a-8d34-282f7c2d17da": false,
+      "cfdd5dc6-593e-495a-8cfe-3a56b3c4c7df": true,
+      "d79cbc61-6c15-48ea-bbba-3cffb819ccba": false,
+      "f3abd4d1-a975-4e85-8684-aa0fce029670": false
+    },
+    "semantic_mainboard_cards_across_manifests": 396,
+    "starting_life": 40
+  },
+  "constraints": {
+    "github_actions_used": false,
+    "installs_performed": false,
+    "network_used": false,
+    "push_performed": false,
+    "worker_limit": 24
+  },
+  "product_binding": {
+    "commit": "7bbbafa376a5222c3a335a744b5b942898c67a84",
+    "ignored_generated_evidence_changes": [
+      "metrics/card_runtime_smoke.json",
+      "metrics/card_semantics_100.json",
+      "metrics/coverage.json",
+      "metrics/t3_parallel_validation.json",
+      "reports/gates/T3.5/runtime-interpreter-final-2026-07-13.json",
+      "reports/gates/T3.5/runtime-smoke-corpus.json",
+      "reports/gates/T3.5/runtime-smoke-frozen-100.json",
+      "reports/gates/T3.6-B/EVIDENCE.json",
+      "reports/gates/T3.9/t3-6-semantic-revalidation.json",
+      "tests/t3_6/commander_semantic_cases.json"
+    ],
+    "tracked_clean_at_start": true,
+    "tree": "270d978f32921a29e92492fc2a782bf60bab0bc2"
+  },
+  "resources": {
+    "child_max_rss_bytes": 721846272,
+    "child_system_cpu_seconds": 9.502214,
+    "child_user_cpu_seconds": 571.435491,
+    "disk_after": {
+      "free_bytes": 49876250624,
+      "total_bytes": 1995218165760,
+      "used_bytes": 1945341915136
+    },
+    "disk_before": {
+      "free_bytes": 51646435328,
+      "total_bytes": 1995218165760,
+      "used_bytes": 1943571730432
+    },
+    "disk_free_headroom_bytes": 49876250624,
+    "logical_cpu_count": 24,
+    "maximum_rss_bytes": 2147483648,
+    "maximum_wall_seconds": 300.0,
+    "measurement_scope": "pod_process_only",
+    "minimum_disk_free_headroom_bytes": 5368709120,
+    "platform": "macOS-14.6.1-arm64-arm-64bit",
+    "wall_seconds": 35.155642000027,
+    "worker_ceiling": 24,
+    "workers_used": 24
+  },
+  "results": {
+    "action_replays_matched": 10,
+    "actions": 4826549,
+    "casts": 14248,
+    "cli_action_replays_verified": 10,
+    "combat_damage_events": 42883,
+    "combat_declarations": 67177,
+    "commander_casts": 5002,
+    "commander_zone_returns": 1012,
+    "direct_typed_action_replays_matched": 1000,
+    "draws": 0,
+    "eliminations": 3000,
+    "games_completed": 1000,
+    "hidden_information_canary_violations": 0,
+    "hidden_information_checks": 1385060,
+    "identity_exercise": {
+      "05d24b0c-904a-46b6-b42a-96a4d91a0dd4": {
+        "casts": 0,
+        "effect_actions": 0,
+        "land_plays": 12484,
+        "resolutions": 0,
+        "trigger_resolutions": 0
+      },
+      "153376c9-dffd-458c-8ce3-a4c8269bc4e9": {
+        "casts": 491,
+        "effect_actions": 0,
+        "land_plays": 0,
+        "resolutions": 491,
+        "trigger_resolutions": 14101
+      },
+      "1bd3e453-aa21-4ee6-95c2-d6d920ee8e7a": {
+        "casts": 0,
+        "effect_actions": 0,
+        "land_plays": 79,
+        "resolutions": 0,
+        "trigger_resolutions": 0
+      },
+      "24d0f5e7-0d9e-4b76-900e-a7274e80312d": {
+        "casts": 268,
+        "effect_actions": 0,
+        "land_plays": 0,
+        "resolutions": 268,
+        "trigger_resolutions": 536
+      },
+      "31f15274-301b-47c5-ba19-0ced04520878": {
+        "casts": 971,
+        "effect_actions": 0,
+        "land_plays": 0,
+        "resolutions": 971,
+        "trigger_resolutions": 0
+      },
+      "48fe0f52-1676-49d5-acf6-5476081e8e1b": {
+        "casts": 1000,
+        "effect_actions": 0,
+        "land_plays": 0,
+        "resolutions": 1000,
+        "trigger_resolutions": 0
+      },
+      "4fdbbec2-e921-4b63-958d-f9ba1e417197": {
+        "casts": 276,
+        "effect_actions": 0,
+        "land_plays": 0,
+        "resolutions": 276,
+        "trigger_resolutions": 196
+      },
+      "55dfe722-7487-4d25-b90c-e6ad2c82a671": {
+        "casts": 1003,
+        "effect_actions": 0,
+        "land_plays": 0,
+        "resolutions": 1003,
+        "trigger_resolutions": 0
+      },
+      "56719f6a-1a6c-4c0a-8d21-18f7d7350b68": {
+        "casts": 0,
+        "effect_actions": 0,
+        "land_plays": 13578,
+        "resolutions": 0,
+        "trigger_resolutions": 0
+      },
+      "6ad8011d-3471-4369-9d68-b264cc027487": {
+        "casts": 971,
+        "effect_actions": 0,
+        "land_plays": 0,
+        "resolutions": 971,
+        "trigger_resolutions": 0
+      },
+      "893fed41-c144-433f-af88-bc7d419b7fb3": {
+        "casts": 1026,
+        "effect_actions": 0,
+        "land_plays": 0,
+        "resolutions": 1026,
+        "trigger_resolutions": 0
+      },
+      "9965d9c5-2ebf-4a6c-930e-55c5890979be": {
+        "casts": 1011,
+        "effect_actions": 0,
+        "land_plays": 0,
+        "resolutions": 1011,
+        "trigger_resolutions": 0
+      },
+      "a3fb7228-e76b-4e96-a40e-20b5fed75685": {
+        "casts": 0,
+        "effect_actions": 0,
+        "land_plays": 13390,
+        "resolutions": 0,
+        "trigger_resolutions": 0
+      },
+      "a75445d3-1303-4bb5-89ad-26ea93fecd48": {
+        "casts": 0,
+        "effect_actions": 0,
+        "land_plays": 86,
+        "resolutions": 0,
+        "trigger_resolutions": 0
+      },
+      "b2c6aa39-2d2a-459c-a555-fb48ba993373": {
+        "casts": 0,
+        "effect_actions": 0,
+        "land_plays": 8236,
+        "resolutions": 0,
+        "trigger_resolutions": 0
+      },
+      "bc71ebf6-2056-41f7-be35-b2e5c34afa99": {
+        "casts": 0,
+        "effect_actions": 0,
+        "land_plays": 17395,
+        "resolutions": 0,
+        "trigger_resolutions": 0
+      },
+      "c23e5b80-08d2-4e24-9908-fe2aa4f30f6f": {
+        "casts": 0,
+        "effect_actions": 0,
+        "land_plays": 955,
+        "resolutions": 0,
+        "trigger_resolutions": 0
+      },
+      "c8b143ad-43ec-4e0d-a440-e348daa31391": {
+        "casts": 1010,
+        "effect_actions": 0,
+        "land_plays": 0,
+        "resolutions": 1010,
+        "trigger_resolutions": 0
+      },
+      "c97361b5-af16-4a7b-af85-a429dbaf4ad2": {
+        "casts": 1026,
+        "effect_actions": 0,
+        "land_plays": 0,
+        "resolutions": 1026,
+        "trigger_resolutions": 0
+      },
+      "ca204b66-8d0c-431a-8d34-282f7c2d17da": {
+        "casts": 943,
+        "effect_actions": 0,
+        "land_plays": 0,
+        "resolutions": 943,
+        "trigger_resolutions": 0
+      },
+      "cfb756dd-6fe1-430a-8f04-8b10cac62a86": {
+        "casts": 1987,
+        "effect_actions": 0,
+        "land_plays": 0,
+        "resolutions": 1987,
+        "trigger_resolutions": 0
+      },
+      "cfdd5dc6-593e-495a-8cfe-3a56b3c4c7df": {
+        "casts": 0,
+        "effect_actions": 0,
+        "land_plays": 973,
+        "resolutions": 0,
+        "trigger_resolutions": 0
+      },
+      "d79cbc61-6c15-48ea-bbba-3cffb819ccba": {
+        "casts": 964,
+        "effect_actions": 0,
+        "land_plays": 0,
+        "resolutions": 964,
+        "trigger_resolutions": 0
+      },
+      "ed66cd31-958f-4b28-82a3-e04acc819afc": {
+        "casts": 1012,
+        "effect_actions": 0,
+        "land_plays": 0,
+        "resolutions": 1012,
+        "trigger_resolutions": 0
+      },
+      "f3abd4d1-a975-4e85-8684-aa0fce029670": {
+        "casts": 289,
+        "effect_actions": 0,
+        "land_plays": 0,
+        "resolutions": 289,
+        "trigger_resolutions": 1617
+      }
+    },
+    "interpreter_actions": 25565,
+    "invariant_checks": 76915,
+    "invariant_violations": 0,
+    "lands_played": 67176,
+    "mana_abilities": 636691,
+    "priority_passes": 2494768,
+    "retained_action_replays": 10,
+    "taxed_commander_recasts": 1012,
+    "triggers_registered": 2845,
+    "triggers_resolved": 16450,
+    "turns": {
+      "max": 110,
+      "mean": 67.177,
+      "min": 38
+    },
+    "wins_by_seat": [
+      721,
+      22,
+      257,
+      0
+    ]
+  },
+  "runtime": {
+    "campaign_wall_ms": 34937,
+    "manifest_load_ms": 5,
+    "primary_games_per_second": 28.62294988121476,
+    "primary_worker_ms": 325853,
+    "replay_worker_ms": 285553
+  },
+  "schema_version": 2,
+  "source": {
+    "kernel_boundary": "forge_core::apply",
+    "manifest": "assets/t3_9/integration_decks.json",
+    "runtime": "forge_cards::runtime",
+    "semantic_registry": "metrics/card_semantics_100.json",
+    "translated_definitions": "target/translated-cards"
+  },
+  "status": "passed",
+  "task": "T3.9"
+}

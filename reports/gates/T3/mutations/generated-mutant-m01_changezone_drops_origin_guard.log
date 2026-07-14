@@ -1,0 +1,35 @@
+$ cargo test -p forge-porttools --locked --offline --jobs 8 --lib source_bound_closed_zone_moves_retain_their_origin_guard
+exit_code=101
+
+   Compiling forge-porttools v0.0.0 (/private/tmp/forge-t3-exact-7bbbafa/target/t3-mutation/source/crates/forge-porttools)
+warning: output of `xcrun` while finding MacOSX.sdk
+  |
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-2SiR30fY' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-xnROaiR2' (errno=Operation not permitted)
+
+warning: `forge-porttools` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.51s
+     Running unittests src/lib.rs (/private/tmp/forge-t3-exact-7bbbafa/target/t3-mutation/build/debug/deps/forge_porttools-5eec4d9cedc6394e)
+
+running 1 test
+test mapper::tests::source_bound_closed_zone_moves_retain_their_origin_guard ... FAILED
+
+failures:
+
+---- mapper::tests::source_bound_closed_zone_moves_retain_their_origin_guard stdout ----
+
+thread 'mapper::tests::source_bound_closed_zone_moves_retain_their_origin_guard' (37259584) panicked at crates/forge-porttools/src/mapper.rs:20140:9:
+assertion failed: matches!(mapped.expression, Expression::Call
+    { operation: Operation::MoveZoneFrom, ref arguments, } if arguments ==
+    &vec![super::call(Operation::Source, vec![]),
+    Expression::Text("graveyard".to_string()),
+    Expression::Text("exile".to_string()),])
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    mapper::tests::source_bound_closed_zone_moves_retain_their_origin_guard
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 158 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p forge-porttools --lib`

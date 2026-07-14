@@ -1,6 +1,6 @@
 # DeckTest / Forge 2.0 Status
 
-Generated: 2026-07-14T02:22:05.590176+00:00 by `tools/write_card_maturity.py`
+Generated: 2026-07-14T08:18:18.889209+00:00 by `tools/write_card_maturity.py`
 
 Plan: v1.8
 
@@ -38,8 +38,8 @@ Exclusive highest evidence stage for the 32,792 in-v1 Oracle identities:
 | Structurally translated | 0 |
 | Compiler valid | 20,018 |
 | Runtime smoke passed | 0 |
-| Semantic verified | 100 |
-| Pod integration verified | 0 |
+| Semantic verified | 79 |
+| Pod integration verified | 21 |
 | AI supported | 0 |
 | Product eligible | 0 |
 
@@ -73,13 +73,11 @@ onto identities.
 
 ## Next Gates
 
-1. Continue the measured T3.3 mapper lane at its current measured capacity until the corpus floor
-   is met; every batch records before/after coverage and quarantine deltas.
-2. T3.5 capability-specific runtime smoke; unsupported setup is reason-coded.
-3. T3.6 and CP-CARD-SEMANTICS-100 for the frozen 100-card Commander set.
-4. T3.9 and CP-FOUR-PLAYER-POD with four complete decks and 1,000 seeded games.
-5. T1.R10 and CP-HUMAN-PLAY-CLI before trace collection or Trainer claims.
+1. T1.R10 and CP-HUMAN-PLAY-CLI before human trace collection or Trainer claims.
+2. Begin the initial T4 AI baseline only on the exact card-driven runtime proven by Tier 3.
+3. Keep the mapper lane targeted to blockers for human play, semantic decks, and later gates;
+   the broad T3.3 campaign remains closed at its approved structural floor.
 
 Per-identity generated detail: `target/card-maturity/identities.json` (untracked,
 38,306 records; SHA-256
-`b7e7952782b89dad37d5236d66dff5525c0e53eb8fc9d44f23215b23047e29b6`).
+`370f9b945ac82201338c3250d61e80fe9b9248fbce05a878a43af77d22093c20`).

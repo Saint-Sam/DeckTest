@@ -1,7 +1,8 @@
 {
   "evidence": "reports/gates/T3.6-B/EVIDENCE.json",
-  "generated_at": "2026-07-13",
-  "generator": "tools/run_t3_6_commander_semantics.py",
+  "evidence_sha256": "e929a008408144204cf5eb2f9a26a68e9db98446d3059471220833f909080e49",
+  "generated_at": "2026-07-14T07:56:40.919955+00:00",
+  "generator": "tools/run_t3_card_stage_gate.py",
   "identity_ids": [
     "bc71ebf6-2056-41f7-be35-b2e5c34afa99",
     "b2c6aa39-2d2a-459c-a555-fb48ba993373",
@@ -104,9 +105,16 @@
     "a1cc5e37-b09a-4b7f-afd5-77c1c35aa425",
     "8c52bd39-0586-48ca-b263-17210cf9feb6"
   ],
+  "inputs": {
+    "candidate_manifest_sha256": "3daf52abe01e66b48e9193ecbbd897565fc8e7a5534553a2327be1ce742f4a22",
+    "corpus_runtime_report_sha256": "38caa7a15810997ea0305d286a0ba288eebd818ced75ed9092fdfdeed5c2e553",
+    "frozen_runtime_report_sha256": "6374462d08150859b853486117fdd5a7366d1447a2a892ea311d7d56ed56030c",
+    "semantic_cases_sha256": "c228892b3ec14acd47b8843179850e9d845335ecddafc4bc58da59cc36d113d0",
+    "semantic_evidence_sha256": "e929a008408144204cf5eb2f9a26a68e9db98446d3059471220833f909080e49"
+  },
   "passed": true,
-  "product_commit": "06b31aef6cc0e30ed3c1b72cc2e1ab2b194fbb11",
-  "product_tree": "edb06afe188a59ebbaf4bc925ad9aaa87f6139d3",
+  "product_commit": "7bbbafa376a5222c3a335a744b5b942898c67a84",
+  "product_tree": "270d978f32921a29e92492fc2a782bf60bab0bc2",
   "schema_version": 1,
   "source": {
     "card_catalog_sha256": "6c7c41ba91b524b8ac59cf7e215fbceaa31c1f9567ae11623dcfa15f6b3f8321",
