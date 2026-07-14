@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "tier": "T4",
+  "status": "local_diagnostic_preflight_passed_promotion_blocked",
+  "verified_at": "2026-07-14",
+  "verification_mode": "local_only_no_github_actions",
+  "product_commit": "df32b4a778426f1c269a666ea98032ce93f5f0b7",
+  "product_tree": "630fcd24c1a9a3cc972815a207133eb23c3dc309",
+  "gate_command": "scripts/gates/gate_T4.sh --preflight",
+  "checks": {
+    "format": "passed",
+    "strict_clippy": "passed",
+    "tests": {
+      "passed": 209,
+      "failed": 0,
+      "ignored": 1,
+      "ignored_reason": "requires local generated T3 translated-card output"
+    },
+    "heuristic_exact_policy_and_typed_action_replay": "passed",
+    "random_legal_exact_policy_and_typed_action_replay": "passed",
+    "search_exact_policy_and_typed_action_replay": "passed",
+    "wasm32_unknown_unknown_compile": "passed",
+    "aarch64_linux_android_compile": "passed",
+    "clone_surface_guard": {
+      "status": "passed",
+      "persistent_allocation_field_count": 31
+    },
+    "search_knee_smoke": {
+      "budgets_ms": [1, 2, 4],
+      "paired_b_vs_2b_comparisons": 2,
+      "fixed_vs_adaptive_ablations": 3,
+      "selected_budget_ms": null,
+      "strength_claim": false
+    }
+  },
+  "implemented_t4_tasks": ["T4.1", "T4.2", "T4.3", "T4.4", "T4.5", "T4.7", "T4.10"],
+  "promotion_blockers": [
+    "complete canonical human, AI, and benchmark Choice/Prompt adapters",
+    "three materially different archetype tracks",
+    "development, validation, and sealed Track A campaigns",
+    "sealed Track B acceptable-action, catastrophic-blunder, and bounded win/defense labels",
+    "near-state and replay-family leakage audits",
+    "per-decision CPU time and resident-memory measurement",
+    "physical Android and WASM reference-device latency",
+    "Owner CP-AI-LADDER review",
+    "Owner CP-NN-GO decision"
+  ],
+  "promotion_eligible": false,
+  "github_actions_used": false,
+  "network_used": false,
+  "push_performed": false
+}

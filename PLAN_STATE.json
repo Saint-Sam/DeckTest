@@ -15,6 +15,13 @@
     "next": "CP-AI-LADDER Owner review, then CP-NN-GO",
     "targeted_fallback": "When T4 discovers a concrete coverage blocker, fix the smallest shared T3 primitive, add semantic regression tests, and resume T4. Do not reopen broad mapper expansion."
   },
+  "t4_diagnostic_product": {
+    "status": "local_preflight_passed_promotion_blocked",
+    "commit": "df32b4a778426f1c269a666ea98032ce93f5f0b7",
+    "tree": "630fcd24c1a9a3cc972815a207133eb23c3dc309",
+    "evidence": "reports/gates/T4/LOCAL-DIAGNOSTIC-PREFLIGHT.json",
+    "promotion_gate": "scripts/gates/gate_T4.sh"
+  },
   "tasks": {
     "T0.1": {
       "status": "verified",
