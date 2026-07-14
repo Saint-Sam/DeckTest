@@ -47,7 +47,8 @@ raise SystemExit(result.returncode)
 
 
 def git(*args: str) -> str:
-    return subprocess.check_output(["git", *args], cwd=ROOT, text=True).strip()
+    # Preserve porcelain status' leading columns while still dropping line endings.
+    return subprocess.check_output(["git", *args], cwd=ROOT, text=True).rstrip()
 
 
 def disk_snapshot() -> dict[str, int]:
