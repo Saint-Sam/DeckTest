@@ -6,7 +6,11 @@
 use forge_core::{
     apply, Action, CardId, GameOutcome, GameState, Outcome, PlayerId, StateHash, ZoneId, ZoneKind,
 };
-use std::{fs, path::Path};
+use std::{
+    fs,
+    io::{BufRead, Write},
+    path::{Path, PathBuf},
+};
 
 /// Returns true when the bootstrap crate is linked correctly.
 #[must_use]
@@ -17,6 +21,7 @@ pub const fn crate_ready() -> bool {
 /// Runs the Forge CLI with already-tokenized arguments and returns stdout text.
 ///
 /// Supported commands:
+/// - `play --human [--seed N] [--seat 1..4] [--replay-out PATH]`
 /// - `play --demo [--seed N] [--replay-out PATH]`
 /// - `demo [--seed N] [--replay-out PATH]`
 /// - `replay PATH`
@@ -36,9 +41,103 @@ pub fn run_cli(args: Vec<String>) -> Result<String, String> {
     }
 }
 
+/// Runs the CLI with explicit input/output streams for interactive commands.
+///
+/// Noninteractive commands are delegated to [`run_cli`].
+pub fn run_cli_with_io(
+    args: Vec<String>,
+    input: &mut dyn BufRead,
+    output: &mut dyn Write,
+) -> Result<String, String> {
+    if args.first().map(String::as_str) == Some("play")
+        && args.iter().skip(1).any(|argument| argument == "--human")
+    {
+        return human_play_command(&args[1..], input, output);
+    }
+    run_cli(args)
+}
+
 fn usage() -> String {
-    "forge-cli commands:\n  play --demo [--seed N] [--replay-out PATH]\n  demo [--seed N] [--replay-out PATH]\n  replay PATH\n  roundtrip PATH\n"
+    "forge-cli commands:\n  play --human [--seed N] [--seat 1..4] [--manifest PATH] [--replay-out PATH] [--max-turns N]\n  play --demo [--seed N] [--replay-out PATH]\n  demo [--seed N] [--replay-out PATH]\n  replay PATH\n  roundtrip PATH\n"
         .to_owned()
+}
+
+fn human_play_command(
+    args: &[String],
+    input: &mut dyn BufRead,
+    output: &mut dyn Write,
+) -> Result<String, String> {
+    let mut seed = 0xF02D_0000_0000_0A10_u64;
+    let mut seat = 1_usize;
+    let mut manifest = PathBuf::from("assets/t3_9/integration_decks.json");
+    let mut replay_out = PathBuf::from("reports/gates/T1.R10/owner-game.frsreplay");
+    let mut max_turns = 160_u32;
+    let mut saw_human = false;
+    let mut index = 0;
+    while let Some(argument) = args.get(index) {
+        match argument.as_str() {
+            "--human" => saw_human = true,
+            "--seed" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "--seed requires a value".to_owned())?;
+                seed = value
+                    .parse::<u64>()
+                    .map_err(|error| format!("invalid --seed value `{value}`: {error}"))?;
+                index += 1;
+            }
+            "--seat" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "--seat requires a value".to_owned())?;
+                seat = value
+                    .parse::<usize>()
+                    .map_err(|error| format!("invalid --seat value `{value}`: {error}"))?;
+                index += 1;
+            }
+            "--manifest" => {
+                manifest = PathBuf::from(
+                    args.get(index + 1)
+                        .ok_or_else(|| "--manifest requires a path".to_owned())?,
+                );
+                index += 1;
+            }
+            "--replay-out" => {
+                replay_out = PathBuf::from(
+                    args.get(index + 1)
+                        .ok_or_else(|| "--replay-out requires a path".to_owned())?,
+                );
+                index += 1;
+            }
+            "--max-turns" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "--max-turns requires a value".to_owned())?;
+                max_turns = value
+                    .parse::<u32>()
+                    .map_err(|error| format!("invalid --max-turns value `{value}`: {error}"))?;
+                index += 1;
+            }
+            "--demo" => return Err("choose either --human or --demo, not both".to_owned()),
+            other => return Err(format!("unknown human-play option `{other}`")),
+        }
+        index += 1;
+    }
+    if !saw_human {
+        return Err("interactive play requires --human".to_owned());
+    }
+    if !(1..=4).contains(&seat) {
+        return Err("--seat must be in 1..=4".to_owned());
+    }
+    forge_testkit::t3_9_pod::run_prompted_game(
+        manifest,
+        replay_out,
+        seed,
+        max_turns,
+        seat - 1,
+        input,
+        output,
+    )
 }
 
 fn play_command(args: &[String]) -> Result<String, String> {
@@ -104,7 +203,7 @@ fn replay_command(args: &[String]) -> Result<String, String> {
     let payload = fs::read_to_string(&args[0])
         .map_err(|error| format!("failed to read {}: {error}", args[0]))?;
     if payload.trim_start().starts_with('{') {
-        return forge_testkit::t3_9_pod::replay_pod_file(&args[0]);
+        return forge_testkit::t3_9_pod::replay_json_file(&args[0]);
     }
     let replay = Replay::parse(&payload)?;
     let report = run_replay(&replay)?;

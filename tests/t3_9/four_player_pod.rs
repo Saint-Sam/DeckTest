@@ -14,14 +14,15 @@ use forge_core::{
     apply, Action, ActivatedAbilityId, AttackDeclaration, BlockDeclaration, CardId,
     CastSpellRequest, CombatDamageAssignment, CombatDamageAssignmentRequest, CombatDamageStepKind,
     CombatDamageTarget, GameOutcome, GameState, ManaKind, ObjectColors, ObjectId, ObjectView,
-    Outcome, PlayerId, PriorityOutcome, SpellTiming, StackEntryId, StackObjectKind, Step,
-    TriggerId, ZoneId, ZoneKind,
+    Outcome, PaymentPlan, PlayerId, PlayerView, PriorityOutcome, SpellTiming, StackEntryId,
+    StackObjectKind, Step, TriggerId, ZoneId, ZoneKind,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     env, fs,
+    io::{BufRead, Write},
     path::{Path, PathBuf},
     sync::Arc,
     thread,
@@ -36,6 +37,7 @@ const DEFAULT_GAMES: usize = 1_000;
 const DEFAULT_MAX_TURNS: u32 = 160;
 const DEFAULT_SEED_BASE: u64 = 0xF02D_0000_0000_0000;
 const POD_REPLAY_MAGIC: &str = "forge-pod-replay-v1";
+const HUMAN_REPLAY_MAGIC: &str = "forge-human-play-replay-v1";
 const RETAINED_REPLAYS: usize = 10;
 
 #[allow(dead_code)]
@@ -561,6 +563,212 @@ struct PodReplay {
     expected: GameSummary,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+struct HumanDecisionRecord {
+    index: u64,
+    prompt: String,
+    turn: u32,
+    step: String,
+    view_fingerprint: String,
+    options: Vec<String>,
+    selected: usize,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+struct HumanPlayReplay {
+    format: String,
+    manifest: PathBuf,
+    seed: u64,
+    max_turns: u32,
+    human_seat: usize,
+    decisions: Vec<HumanDecisionRecord>,
+    actions: Vec<TraceRecord>,
+    expected: GameSummary,
+}
+
+struct DecisionPrompt<'a> {
+    kind: &'static str,
+    view: &'a PlayerView,
+    options: &'a [String],
+}
+
+trait DecisionSource {
+    fn choose(&mut self, prompt: &DecisionPrompt<'_>) -> Result<usize, String>;
+}
+
+struct TerminalDecisionSource<'a> {
+    input: &'a mut dyn BufRead,
+    output: &'a mut dyn Write,
+    decisions: Vec<HumanDecisionRecord>,
+}
+
+impl<'a> TerminalDecisionSource<'a> {
+    fn new(input: &'a mut dyn BufRead, output: &'a mut dyn Write) -> Self {
+        Self {
+            input,
+            output,
+            decisions: Vec::new(),
+        }
+    }
+
+    fn into_decisions(self) -> Vec<HumanDecisionRecord> {
+        self.decisions
+    }
+}
+
+impl DecisionSource for TerminalDecisionSource<'_> {
+    fn choose(&mut self, prompt: &DecisionPrompt<'_>) -> Result<usize, String> {
+        if prompt.options.is_empty() {
+            return Err(format!("{} prompt has no legal options", prompt.kind));
+        }
+        let observer = prompt.view.observer();
+        writeln!(
+            self.output,
+            "\nTurn {} {:?} | You are seat {}",
+            prompt.view.turn_number(),
+            prompt.view.current_step(),
+            observer.index() + 1
+        )
+        .map_err(|error| format!("failed to write human prompt: {error}"))?;
+        write!(self.output, "Life:")
+            .map_err(|error| format!("failed to write human prompt: {error}"))?;
+        for player in prompt.view.players() {
+            write!(
+                self.output,
+                " seat {}={}{}",
+                player.id().index() + 1,
+                player.life(),
+                if player.lost() { " (out)" } else { "" }
+            )
+            .map_err(|error| format!("failed to write human prompt: {error}"))?;
+        }
+        writeln!(self.output, "\n{}", prompt.kind)
+            .map_err(|error| format!("failed to write human prompt: {error}"))?;
+        for (index, option) in prompt.options.iter().enumerate() {
+            writeln!(self.output, "  {}. {option}", index + 1)
+                .map_err(|error| format!("failed to write human prompt: {error}"))?;
+        }
+
+        let selected = loop {
+            write!(self.output, "> ")
+                .map_err(|error| format!("failed to write human prompt: {error}"))?;
+            self.output
+                .flush()
+                .map_err(|error| format!("failed to flush human prompt: {error}"))?;
+            let mut line = String::new();
+            let read = self
+                .input
+                .read_line(&mut line)
+                .map_err(|error| format!("failed to read human choice: {error}"))?;
+            if read == 0 {
+                return Err("human input ended before the game completed".to_owned());
+            }
+            if line.trim().eq_ignore_ascii_case("q") {
+                return Err("human game aborted by owner".to_owned());
+            }
+            let Ok(choice) = line.trim().parse::<usize>() else {
+                writeln!(self.output, "Enter an option number, or q to stop.")
+                    .map_err(|error| format!("failed to write human prompt: {error}"))?;
+                continue;
+            };
+            if (1..=prompt.options.len()).contains(&choice) {
+                break choice - 1;
+            }
+            writeln!(
+                self.output,
+                "Choose a number from 1 to {}.",
+                prompt.options.len()
+            )
+            .map_err(|error| format!("failed to write human prompt: {error}"))?;
+        };
+        self.decisions.push(snapshot_prompt(
+            self.decisions.len() as u64,
+            prompt,
+            selected,
+        ));
+        Ok(selected)
+    }
+}
+
+struct ReplayDecisionSource {
+    decisions: Vec<HumanDecisionRecord>,
+    cursor: usize,
+}
+
+impl ReplayDecisionSource {
+    fn new(decisions: Vec<HumanDecisionRecord>) -> Self {
+        Self {
+            decisions,
+            cursor: 0,
+        }
+    }
+
+    fn finish(&self) -> Result<(), String> {
+        if self.cursor == self.decisions.len() {
+            Ok(())
+        } else {
+            Err(format!(
+                "decision replay stopped after {} of {} prompts",
+                self.cursor,
+                self.decisions.len()
+            ))
+        }
+    }
+}
+
+impl DecisionSource for ReplayDecisionSource {
+    fn choose(&mut self, prompt: &DecisionPrompt<'_>) -> Result<usize, String> {
+        let expected = self
+            .decisions
+            .get(self.cursor)
+            .ok_or_else(|| format!("unexpected replay prompt `{}`", prompt.kind))?;
+        let actual = snapshot_prompt(expected.index, prompt, expected.selected);
+        if &actual != expected {
+            return Err(format!(
+                "decision replay diverged at prompt {}: expected {expected:?}, got {actual:?}",
+                self.cursor
+            ));
+        }
+        if expected.selected >= prompt.options.len() {
+            return Err(format!(
+                "decision replay selection {} is outside {} options",
+                expected.selected,
+                prompt.options.len()
+            ));
+        }
+        self.cursor = self.cursor.saturating_add(1);
+        Ok(expected.selected)
+    }
+}
+
+fn snapshot_prompt(
+    index: u64,
+    prompt: &DecisionPrompt<'_>,
+    selected: usize,
+) -> HumanDecisionRecord {
+    HumanDecisionRecord {
+        index,
+        prompt: prompt.kind.to_owned(),
+        turn: prompt.view.turn_number(),
+        step: prompt
+            .view
+            .current_step()
+            .map_or_else(|| "none".to_owned(), |step| format!("{step:?}")),
+        view_fingerprint: player_view_fingerprint(prompt.view),
+        options: prompt.options.to_vec(),
+        selected,
+    }
+}
+
+fn player_view_fingerprint(view: &PlayerView) -> String {
+    let mut hash = 0xcbf2_9ce4_8422_2325_u64;
+    for byte in format!("{view:?}").as_bytes() {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    format!("{hash:016x}")
+}
+
 enum TraceMode {
     Off,
     Record(Vec<TraceRecord>),
@@ -692,6 +900,22 @@ struct TriggerRuntime {
     source: ObjectId,
 }
 
+#[derive(Clone, Copy)]
+enum HumanMainChoice {
+    PlayLand(ObjectId),
+    ActivateAll,
+    Activate {
+        source: ObjectId,
+        ability: ActivatedAbilityId,
+        payment: PaymentPlan,
+    },
+    Cast {
+        object: ObjectId,
+        payment: PaymentPlan,
+    },
+    Finish,
+}
+
 struct GameDriver {
     state: GameState,
     players: Vec<PlayerId>,
@@ -701,6 +925,7 @@ struct GameDriver {
     mana_abilities: Vec<(ObjectId, PlayerId, ActivatedAbilityId)>,
     triggers_registered_for: HashSet<ObjectId>,
     permanent_runtime_registered_for: HashSet<ObjectId>,
+    commander_zone_decisions: HashMap<ObjectId, ZoneId>,
     current_attacks: Vec<AttackDeclaration>,
     current_defender: Option<PlayerId>,
     coverage_target: Option<String>,
@@ -728,6 +953,7 @@ impl GameDriver {
             mana_abilities: Vec::new(),
             triggers_registered_for: HashSet::new(),
             permanent_runtime_registered_for: HashSet::new(),
+            commander_zone_decisions: HashMap::new(),
             current_attacks: Vec::new(),
             current_defender: None,
             coverage_target,
@@ -859,7 +1085,25 @@ impl GameDriver {
         Ok(object)
     }
 
-    fn run(mut self, max_turns: u32) -> Result<GameRun, String> {
+    fn run(self, max_turns: u32) -> Result<GameRun, String> {
+        self.run_controlled(max_turns, None, None)
+    }
+
+    fn run_human(
+        self,
+        max_turns: u32,
+        human: PlayerId,
+        decisions: &mut dyn DecisionSource,
+    ) -> Result<GameRun, String> {
+        self.run_controlled(max_turns, Some(human), Some(decisions))
+    }
+
+    fn run_controlled(
+        mut self,
+        max_turns: u32,
+        human: Option<PlayerId>,
+        mut decisions: Option<&mut dyn DecisionSource>,
+    ) -> Result<GameRun, String> {
         let mut main_done = BTreeSet::<u32>::new();
         let mut attackers_done = BTreeSet::<u32>::new();
         let mut blockers_done = BTreeSet::<u32>::new();
@@ -918,15 +1162,37 @@ impl GameDriver {
             match step {
                 Step::PrecombatMain if active_has_priority && main_done.insert(turn) => {
                     self.check_hidden_information()?;
-                    self.take_main_phase_actions(active)?;
+                    if human == Some(active) {
+                        let source = decisions
+                            .as_deref_mut()
+                            .ok_or_else(|| "human game is missing a decision source".to_owned())?;
+                        self.take_human_main_phase_actions(active, source)?;
+                    } else {
+                        self.take_main_phase_actions(active)?;
+                    }
                 }
                 Step::DeclareAttackers if active_has_priority && attackers_done.insert(turn) => {
                     self.check_hidden_information()?;
-                    self.declare_attackers(active)?;
+                    if human == Some(active) {
+                        let source = decisions
+                            .as_deref_mut()
+                            .ok_or_else(|| "human game is missing a decision source".to_owned())?;
+                        self.declare_human_attackers(active, source)?;
+                    } else {
+                        self.declare_attackers(active)?;
+                    }
                 }
                 Step::DeclareBlockers if active_has_priority && blockers_done.insert(turn) => {
                     self.check_hidden_information()?;
-                    self.declare_blocks(active)?;
+                    let defender = self.current_defending_player(active);
+                    if defender.is_some() && defender == human {
+                        let source = decisions
+                            .as_deref_mut()
+                            .ok_or_else(|| "human game is missing a decision source".to_owned())?;
+                        self.declare_human_blocks(active, source)?;
+                    } else {
+                        self.declare_blocks(active)?;
+                    }
                 }
                 Step::CombatDamage if active_has_priority => {
                     let damage_step =
@@ -936,6 +1202,14 @@ impl GameDriver {
                     if damage_done.insert((turn, damage_step)) {
                         self.check_hidden_information()?;
                         self.assign_combat_damage()?;
+                        if let Some(human) = human {
+                            let source = decisions.as_deref_mut().ok_or_else(|| {
+                                "human game is missing a decision source".to_owned()
+                            })?;
+                            self.choose_dead_commanders_with_human(human, source)?;
+                        } else {
+                            self.choose_dead_commanders()?;
+                        }
                     } else {
                         self.pass_priority()?;
                     }
@@ -1038,6 +1312,239 @@ impl GameDriver {
         self.play_land(player)?;
         self.activate_mana_sources(player)?;
         self.cast_one_permanent(player)
+    }
+
+    fn prompt_choice(
+        &self,
+        player: PlayerId,
+        source: &mut dyn DecisionSource,
+        kind: &'static str,
+        options: &[String],
+    ) -> Result<usize, String> {
+        let view = self
+            .state
+            .player_view(player)
+            .map_err(|error| format!("seed {} player view failed: {error:?}", self.seed))?;
+        let selected = source.choose(&DecisionPrompt {
+            kind,
+            view: &view,
+            options,
+        })?;
+        if selected >= options.len() {
+            return Err(format!(
+                "seed {} prompt `{kind}` returned option {selected} outside {} choices",
+                self.seed,
+                options.len()
+            ));
+        }
+        Ok(selected)
+    }
+
+    fn take_human_main_phase_actions(
+        &mut self,
+        player: PlayerId,
+        source: &mut dyn DecisionSource,
+    ) -> Result<(), String> {
+        loop {
+            let (labels, choices) = self.human_main_choices(player)?;
+            let selected =
+                self.prompt_choice(player, source, "Choose a main-phase action", &labels)?;
+            match choices[selected] {
+                HumanMainChoice::PlayLand(object) => {
+                    self.dispatch(Action::PlayLand { player, object })?;
+                    self.metrics.lands_played = self.metrics.lands_played.saturating_add(1);
+                    if let Some(exercise) = self.identity_exercise_mut(object) {
+                        exercise.land_plays = exercise.land_plays.saturating_add(1);
+                    }
+                    self.register_permanent_runtime(player, object)?;
+                }
+                HumanMainChoice::ActivateAll => {
+                    self.activate_mana_sources(player)?;
+                }
+                HumanMainChoice::Activate {
+                    source: ability_source,
+                    ability,
+                    payment,
+                } => {
+                    self.dispatch(Action::ActivateAbility {
+                        player,
+                        ability,
+                        payment,
+                    })?;
+                    self.metrics.mana_abilities = self.metrics.mana_abilities.saturating_add(1);
+                    if !self.state.stack_entries().is_empty()
+                        || self.state.priority_player() != Some(player)
+                    {
+                        return Ok(());
+                    }
+                    if self.state.object(ability_source).is_none() {
+                        return Err(format!(
+                            "seed {} activated source disappeared without a stack transition",
+                            self.seed
+                        ));
+                    }
+                }
+                HumanMainChoice::Cast { object, payment } => {
+                    self.cast_permanent_with_payment(player, object, payment)?;
+                    return Ok(());
+                }
+                HumanMainChoice::Finish => return Ok(()),
+            }
+        }
+    }
+
+    fn human_main_choices(
+        &self,
+        player: PlayerId,
+    ) -> Result<(Vec<String>, Vec<HumanMainChoice>), String> {
+        let mut labels = Vec::new();
+        let mut choices = Vec::new();
+        let hand = ZoneId::new(Some(player), ZoneKind::Hand);
+        let mut hand_objects = self
+            .state
+            .zone_objects(hand)
+            .ok_or_else(|| format!("seed {} missing hand zone", self.seed))?
+            .to_vec();
+        hand_objects.sort_by_key(|object| object.index());
+
+        if self.state.players()[player.index()].lands_played_this_turn() == 0 {
+            let mut seen_land_identities = BTreeSet::new();
+            for object in hand_objects.iter().copied() {
+                let Some(program) = self.programs.get(&object) else {
+                    continue;
+                };
+                if program.kind() != ProgramKind::Land
+                    || !seen_land_identities.insert(program.oracle_id().to_owned())
+                {
+                    continue;
+                }
+                let action = Action::PlayLand { player, object };
+                if self.action_is_legal(&action) {
+                    labels.push(format!("Play land: {}", self.object_name(object)));
+                    choices.push(HumanMainChoice::PlayLand(object));
+                }
+            }
+        }
+
+        let mut activations = Vec::new();
+        for (ability_source, controller, ability) in self.mana_abilities.iter().copied() {
+            if controller != player
+                || self.state.object_zone(ability_source)
+                    != Some(ZoneId::new(None, ZoneKind::Battlefield))
+                || self
+                    .state
+                    .object(ability_source)
+                    .map_or(true, |record| record.tapped())
+            {
+                continue;
+            }
+            let cost = self
+                .state
+                .effective_activation_cost(ability)
+                .map_err(|error| format!("seed {} activation cost failed: {error:?}", self.seed))?;
+            let Some(payment) = self
+                .state
+                .payment_plans_for_player(player, cost.mana())
+                .map_err(|error| {
+                    format!("seed {} payment enumeration failed: {error:?}", self.seed)
+                })?
+                .best()
+            else {
+                continue;
+            };
+            let action = Action::ActivateAbility {
+                player,
+                ability,
+                payment,
+            };
+            if self.action_is_legal(&action) {
+                activations.push((ability_source, ability, payment));
+            }
+        }
+        if !activations.is_empty() {
+            labels.push("Activate all available mana sources".to_owned());
+            choices.push(HumanMainChoice::ActivateAll);
+            for (ability_source, ability, payment) in activations {
+                labels.push(format!(
+                    "Activate ability: {}",
+                    self.object_name(ability_source)
+                ));
+                choices.push(HumanMainChoice::Activate {
+                    source: ability_source,
+                    ability,
+                    payment,
+                });
+            }
+        }
+
+        let seat = self
+            .players
+            .iter()
+            .position(|candidate| *candidate == player)
+            .ok_or_else(|| format!("seed {} unknown active player", self.seed))?;
+        let commander = self.commanders[seat];
+        let mut cast_candidates = Vec::new();
+        if self.state.object_zone(commander) == Some(ZoneId::new(None, ZoneKind::Command)) {
+            cast_candidates.push(commander);
+        }
+        cast_candidates.extend(hand_objects);
+        for object in cast_candidates {
+            let Some(program) = self.programs.get(&object) else {
+                continue;
+            };
+            if program.kind() != ProgramKind::Permanent
+                || !program.target_requirements().is_empty()
+                || !program.object_choice_requirements().is_empty()
+                || !program.spell_modes().is_empty()
+                || program.optional_choice_count() != 0
+            {
+                continue;
+            }
+            let cost = self
+                .state
+                .effective_spell_cost(player, object, program.mana_cost())
+                .map_err(|error| format!("seed {} spell cost failed: {error:?}", self.seed))?;
+            let Some(payment) = self
+                .state
+                .payment_plans_for_player(player, cost)
+                .map_err(|error| {
+                    format!("seed {} payment enumeration failed: {error:?}", self.seed)
+                })?
+                .best()
+            else {
+                continue;
+            };
+            let action = Action::CastSpell {
+                player,
+                object,
+                request: CastSpellRequest::new(
+                    StackObjectKind::PermanentSpell,
+                    SpellTiming::Sorcery,
+                    program.mana_cost(),
+                    payment,
+                ),
+            };
+            if self.action_is_legal(&action) {
+                labels.push(format!("Cast: {}", program.name()));
+                choices.push(HumanMainChoice::Cast { object, payment });
+            }
+        }
+
+        labels.push("Finish main phase".to_owned());
+        choices.push(HumanMainChoice::Finish);
+        Ok((labels, choices))
+    }
+
+    fn object_name(&self, object: ObjectId) -> String {
+        self.programs.get(&object).map_or_else(
+            || format!("object {}", object.index()),
+            |program| program.name().to_owned(),
+        )
+    }
+
+    fn action_is_legal(&self, action: &Action) -> bool {
+        let mut state = self.state.clone();
+        !matches!(apply(&mut state, action.clone()), Outcome::Failed(_))
     }
 
     fn play_land(&mut self, player: PlayerId) -> Result<(), String> {
@@ -1169,37 +1676,50 @@ impl GameDriver {
             else {
                 continue;
             };
-            let request = CastSpellRequest::new(
-                StackObjectKind::PermanentSpell,
-                SpellTiming::Sorcery,
-                program.mana_cost(),
-                payment,
-            );
-            let was_commander = self.commanders.contains(&object);
-            self.dispatch(Action::CastSpell {
-                player,
-                object,
-                request,
-            })?;
-            self.metrics.casts = self.metrics.casts.saturating_add(1);
-            if let Some(exercise) = self.identity_exercise_mut(object) {
-                exercise.casts = exercise.casts.saturating_add(1);
-            }
-            if was_commander {
-                self.metrics.commander_casts = self.metrics.commander_casts.saturating_add(1);
-                if self
-                    .state
-                    .object(object)
-                    .is_some_and(|record| record.commander_cast_count() >= 2)
-                {
-                    self.metrics.taxed_commander_recasts =
-                        self.metrics.taxed_commander_recasts.saturating_add(1);
-                }
-            }
-            self.register_triggers(player, object, &program)?;
-            return Ok(());
+            return self.cast_permanent_with_payment(player, object, payment);
         }
         Ok(())
+    }
+
+    fn cast_permanent_with_payment(
+        &mut self,
+        player: PlayerId,
+        object: ObjectId,
+        payment: PaymentPlan,
+    ) -> Result<(), String> {
+        let program = self
+            .programs
+            .get(&object)
+            .cloned()
+            .ok_or_else(|| format!("seed {} missing program for cast object", self.seed))?;
+        let request = CastSpellRequest::new(
+            StackObjectKind::PermanentSpell,
+            SpellTiming::Sorcery,
+            program.mana_cost(),
+            payment,
+        );
+        let was_commander = self.commanders.contains(&object);
+        self.dispatch(Action::CastSpell {
+            player,
+            object,
+            request,
+        })?;
+        self.metrics.casts = self.metrics.casts.saturating_add(1);
+        if let Some(exercise) = self.identity_exercise_mut(object) {
+            exercise.casts = exercise.casts.saturating_add(1);
+        }
+        if was_commander {
+            self.metrics.commander_casts = self.metrics.commander_casts.saturating_add(1);
+            if self
+                .state
+                .object(object)
+                .is_some_and(|record| record.commander_cast_count() >= 2)
+            {
+                self.metrics.taxed_commander_recasts =
+                    self.metrics.taxed_commander_recasts.saturating_add(1);
+            }
+        }
+        self.register_triggers(player, object, &program)
     }
 
     fn register_triggers(
@@ -1365,6 +1885,79 @@ impl GameDriver {
         Ok(())
     }
 
+    fn declare_human_attackers(
+        &mut self,
+        active: PlayerId,
+        source: &mut dyn DecisionSource,
+    ) -> Result<(), String> {
+        let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+        let objects = self
+            .state
+            .zone_objects(battlefield)
+            .ok_or_else(|| format!("seed {} missing battlefield", self.seed))?
+            .iter()
+            .copied()
+            .filter(|object| self.state.object_controller(*object) == Ok(active))
+            .collect::<Vec<_>>();
+        let mut labels = Vec::new();
+        let mut candidates = Vec::<Vec<AttackDeclaration>>::new();
+        let mut seen = BTreeSet::new();
+        for defender in self.live_opponents(active) {
+            let legal = objects
+                .iter()
+                .copied()
+                .map(|object| AttackDeclaration::new(object, defender))
+                .filter(|attack| self.state.can_attack(active, *attack))
+                .collect::<Vec<_>>();
+            if legal.is_empty() {
+                continue;
+            }
+            let mut variants = Vec::with_capacity(legal.len() + 1);
+            variants.push(legal.clone());
+            variants.extend(legal.iter().copied().map(|attack| vec![attack]));
+            for attacks in variants {
+                let key = format!("{attacks:?}");
+                let action = Action::DeclareAttackers {
+                    player: active,
+                    attacks: attacks.clone(),
+                };
+                if !seen.insert(key) || !self.action_is_legal(&action) {
+                    continue;
+                }
+                let names = attacks
+                    .iter()
+                    .map(|attack| self.object_name(attack.attacker()))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                labels.push(format!("Attack seat {} with {names}", defender.index() + 1));
+                candidates.push(attacks);
+            }
+        }
+        let no_attacks = Vec::new();
+        let no_attack_action = Action::DeclareAttackers {
+            player: active,
+            attacks: no_attacks.clone(),
+        };
+        if !self.action_is_legal(&no_attack_action) {
+            return Err(format!(
+                "seed {} kernel rejected the no-attack fallback",
+                self.seed
+            ));
+        }
+        labels.push("Attack no one".to_owned());
+        candidates.push(no_attacks);
+        let selected = self.prompt_choice(active, source, "Choose attackers", &labels)?;
+        let attacks = candidates[selected].clone();
+        self.dispatch(Action::DeclareAttackers {
+            player: active,
+            attacks: attacks.clone(),
+        })?;
+        self.current_defender = attacks.first().map(|attack| attack.defending_player());
+        self.current_attacks = attacks;
+        self.metrics.combat_declarations = self.metrics.combat_declarations.saturating_add(1);
+        Ok(())
+    }
+
     fn declare_attackers(&mut self, active: PlayerId) -> Result<(), String> {
         let seat = self
             .players
@@ -1442,13 +2035,101 @@ impl GameDriver {
         })
     }
 
-    fn declare_blocks(&mut self, active: PlayerId) -> Result<(), String> {
-        let defender = self.current_defender.or_else(|| {
+    fn current_defending_player(&self, active: PlayerId) -> Option<PlayerId> {
+        self.current_defender.or_else(|| {
             self.current_attacks
                 .first()
                 .map(|attack| attack.defending_player())
                 .or_else(|| self.next_live_opponent(active))
-        });
+        })
+    }
+
+    fn declare_human_blocks(
+        &mut self,
+        active: PlayerId,
+        source: &mut dyn DecisionSource,
+    ) -> Result<(), String> {
+        let defending_player = self
+            .current_defending_player(active)
+            .ok_or_else(|| format!("seed {} missing human defending player", self.seed))?;
+        let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+        let blockers = self
+            .state
+            .zone_objects(battlefield)
+            .ok_or_else(|| format!("seed {} missing battlefield", self.seed))?
+            .iter()
+            .copied()
+            .filter(|object| self.state.object_controller(*object) == Ok(defending_player))
+            .collect::<Vec<_>>();
+        let mut labels = Vec::new();
+        let mut candidates = Vec::<Vec<BlockDeclaration>>::new();
+        let mut seen = BTreeSet::new();
+
+        for blocker in blockers.iter().copied() {
+            for attack in &self.current_attacks {
+                let blocks = vec![BlockDeclaration::new(blocker, attack.attacker())];
+                let action = Action::DeclareBlockers {
+                    defending_player,
+                    blocks: blocks.clone(),
+                };
+                let key = format!("{blocks:?}");
+                if seen.insert(key) && self.action_is_legal(&action) {
+                    labels.push(format!(
+                        "Block {} with {}",
+                        self.object_name(attack.attacker()),
+                        self.object_name(blocker)
+                    ));
+                    candidates.push(blocks);
+                }
+            }
+        }
+
+        let mut greedy = Vec::new();
+        for blocker in blockers {
+            if let Some(attack) = self.current_attacks.iter().find(|attack| {
+                self.state.can_block(
+                    defending_player,
+                    BlockDeclaration::new(blocker, attack.attacker()),
+                )
+            }) {
+                greedy.push(BlockDeclaration::new(blocker, attack.attacker()));
+            }
+        }
+        if greedy.len() > 1 {
+            let action = Action::DeclareBlockers {
+                defending_player,
+                blocks: greedy.clone(),
+            };
+            let key = format!("{greedy:?}");
+            if seen.insert(key) && self.action_is_legal(&action) {
+                labels.insert(0, "Use all available blockers".to_owned());
+                candidates.insert(0, greedy);
+            }
+        }
+
+        let no_blocks = Vec::new();
+        let no_block_action = Action::DeclareBlockers {
+            defending_player,
+            blocks: no_blocks.clone(),
+        };
+        if !self.action_is_legal(&no_block_action) {
+            return Err(format!(
+                "seed {} kernel rejected the no-block fallback",
+                self.seed
+            ));
+        }
+        labels.push("Block no attackers".to_owned());
+        candidates.push(no_blocks);
+        let selected = self.prompt_choice(defending_player, source, "Choose blockers", &labels)?;
+        self.dispatch(Action::DeclareBlockers {
+            defending_player,
+            blocks: candidates[selected].clone(),
+        })?;
+        Ok(())
+    }
+
+    fn declare_blocks(&mut self, active: PlayerId) -> Result<(), String> {
+        let defender = self.current_defending_player(active);
         if let Some(defending_player) = defender {
             if self.metrics.commander_zone_returns > 0 {
                 self.dispatch(Action::DeclareBlockers {
@@ -1591,7 +2272,6 @@ impl GameDriver {
             .metrics
             .combat_damage_events
             .saturating_add(records.len() as u64);
-        self.choose_dead_commanders()?;
         Ok(())
     }
 
@@ -1602,7 +2282,57 @@ impl GameDriver {
             if zone != Some(ZoneId::new(Some(owner), ZoneKind::Graveyard))
                 && zone != Some(ZoneId::new(None, ZoneKind::Exile))
             {
+                self.commander_zone_decisions.remove(&commander);
                 continue;
+            }
+            let zone = zone.ok_or_else(|| format!("seed {} missing commander zone", self.seed))?;
+            if self.commander_zone_decisions.get(&commander) == Some(&zone) {
+                continue;
+            }
+            self.commander_zone_decisions.insert(commander, zone);
+            self.dispatch(Action::ChooseCommanderZone {
+                player: owner,
+                object: commander,
+            })?;
+            self.metrics.commander_zone_returns =
+                self.metrics.commander_zone_returns.saturating_add(1);
+        }
+        Ok(())
+    }
+
+    fn choose_dead_commanders_with_human(
+        &mut self,
+        human: PlayerId,
+        source: &mut dyn DecisionSource,
+    ) -> Result<(), String> {
+        for (seat, commander) in self.commanders.clone().into_iter().enumerate() {
+            let owner = self.players[seat];
+            let zone = self.state.object_zone(commander);
+            if zone != Some(ZoneId::new(Some(owner), ZoneKind::Graveyard))
+                && zone != Some(ZoneId::new(None, ZoneKind::Exile))
+            {
+                self.commander_zone_decisions.remove(&commander);
+                continue;
+            }
+            let zone = zone.ok_or_else(|| format!("seed {} missing commander zone", self.seed))?;
+            if self.commander_zone_decisions.get(&commander) == Some(&zone) {
+                continue;
+            }
+            self.commander_zone_decisions.insert(commander, zone);
+            if owner == human {
+                let labels = vec![
+                    format!("Move {} to the command zone", self.object_name(commander)),
+                    format!("Leave {} in {zone:?}", self.object_name(commander)),
+                ];
+                let selected = self.prompt_choice(
+                    human,
+                    source,
+                    "Choose whether to move your commander",
+                    &labels,
+                )?;
+                if selected == 1 {
+                    continue;
+                }
             }
             self.dispatch(Action::ChooseCommanderZone {
                 player: owner,
@@ -1880,6 +2610,167 @@ fn write_replays(directory: &Path, replays: &[PodReplay]) -> Result<(), String> 
     Ok(())
 }
 
+/// Runs one prompted four-player Commander game and writes an exact replay artifact.
+pub fn run_prompted_game(
+    manifest: impl AsRef<Path>,
+    replay_out: impl AsRef<Path>,
+    seed: u64,
+    max_turns: u32,
+    human_seat: usize,
+    input: &mut dyn BufRead,
+    output: &mut dyn Write,
+) -> Result<String, String> {
+    if human_seat >= PLAYER_COUNT {
+        return Err(format!("human seat must be in 1..={PLAYER_COUNT}"));
+    }
+    if max_turns < 20 {
+        return Err("--max-turns must be at least 20".to_owned());
+    }
+    let manifest = manifest.as_ref();
+    let replay_out = replay_out.as_ref();
+    let pod = PodTemplate::load(manifest)?;
+    writeln!(
+        output,
+        "Forge human play | seat {}: {} | seed {seed}",
+        human_seat + 1,
+        pod.decks[human_seat].name
+    )
+    .map_err(|error| format!("failed to write game introduction: {error}"))?;
+    writeln!(output, "Choose numbered legal actions. Enter q to stop.")
+        .map_err(|error| format!("failed to write game introduction: {error}"))?;
+
+    let driver = GameDriver::setup(&pod, seed, None, TraceMode::Record(Vec::new()))?;
+    let human = driver.players[human_seat];
+    let mut terminal = TerminalDecisionSource::new(input, output);
+    let primary = driver.run_human(max_turns, human, &mut terminal)?;
+    let decisions = terminal.into_decisions();
+    let actions = primary
+        .trace
+        .clone()
+        .ok_or_else(|| "human game did not retain an action trace".to_owned())?;
+
+    let verify_driver = GameDriver::setup(
+        &pod,
+        seed,
+        None,
+        TraceMode::Verify {
+            expected: actions.clone(),
+            cursor: 0,
+        },
+    )?;
+    let verify_human = verify_driver.players[human_seat];
+    let mut replay_source = ReplayDecisionSource::new(decisions.clone());
+    let verified = verify_driver.run_human(max_turns, verify_human, &mut replay_source)?;
+    replay_source.finish()?;
+    if verified.summary != primary.summary {
+        return Err(format!(
+            "human decision replay summary diverged: {:?} != {:?}",
+            primary.summary, verified.summary
+        ));
+    }
+    let direct_state = replay_captured_actions(&primary.actions, Some(&actions))?;
+    if direct_state.deterministic_hash().get() != primary.summary.final_hash {
+        return Err("direct human-game action replay produced a different final hash".to_owned());
+    }
+
+    let replay = HumanPlayReplay {
+        format: HUMAN_REPLAY_MAGIC.to_owned(),
+        manifest: manifest.to_path_buf(),
+        seed,
+        max_turns,
+        human_seat,
+        decisions,
+        actions,
+        expected: primary.summary.clone(),
+    };
+    if let Some(parent) = replay_out
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
+        fs::create_dir_all(parent)
+            .map_err(|error| format!("failed to create {}: {error}", parent.display()))?;
+    }
+    let payload = serde_json::to_vec_pretty(&replay)
+        .map_err(|error| format!("failed to serialize human replay: {error}"))?;
+    fs::write(replay_out, payload)
+        .map_err(|error| format!("failed to write {}: {error}", replay_out.display()))?;
+    Ok(format!(
+        "human game complete\nseed: {}\nturns: {}\nwinner_seat: {}\nactions: {}\ndecisions: {}\nfinal_hash: {}\nreplay: {}\n",
+        seed,
+        primary.summary.turns,
+        primary.summary.winner + 1,
+        primary.actions.len(),
+        replay.decisions.len(),
+        primary.summary.final_hash,
+        replay_out.display()
+    ))
+}
+
+/// Replays either a T3.9 pod artifact or a T1.R10 human-play artifact.
+pub fn replay_json_file(path: impl AsRef<Path>) -> Result<String, String> {
+    let path = path.as_ref();
+    let payload = fs::read_to_string(path)
+        .map_err(|error| format!("failed to read {}: {error}", path.display()))?;
+    let value: Value = serde_json::from_str(&payload)
+        .map_err(|error| format!("failed to parse {}: {error}", path.display()))?;
+    match value.get("format").and_then(Value::as_str) {
+        Some(POD_REPLAY_MAGIC) => replay_pod_file(path),
+        Some(HUMAN_REPLAY_MAGIC) => replay_human_file(path),
+        Some(format) => Err(format!("unsupported JSON replay format `{format}`")),
+        None => Err(format!("{} has no replay format", path.display())),
+    }
+}
+
+/// Replays a T1.R10 prompted game, including every recorded human decision.
+pub fn replay_human_file(path: impl AsRef<Path>) -> Result<String, String> {
+    let path = path.as_ref();
+    let payload =
+        fs::read(path).map_err(|error| format!("failed to read {}: {error}", path.display()))?;
+    let replay: HumanPlayReplay = serde_json::from_slice(&payload)
+        .map_err(|error| format!("failed to parse {}: {error}", path.display()))?;
+    if replay.format != HUMAN_REPLAY_MAGIC {
+        return Err(format!(
+            "{} is not a {HUMAN_REPLAY_MAGIC} artifact",
+            path.display()
+        ));
+    }
+    if replay.human_seat >= PLAYER_COUNT {
+        return Err(format!("human replay seat must be in 1..={PLAYER_COUNT}"));
+    }
+    let pod = PodTemplate::load(&replay.manifest)?;
+    let driver = GameDriver::setup(
+        &pod,
+        replay.seed,
+        None,
+        TraceMode::Verify {
+            expected: replay.actions.clone(),
+            cursor: 0,
+        },
+    )?;
+    let human = driver.players[replay.human_seat];
+    let mut decisions = ReplayDecisionSource::new(replay.decisions.clone());
+    let run = driver.run_human(replay.max_turns, human, &mut decisions)?;
+    decisions.finish()?;
+    if run.summary != replay.expected {
+        return Err(format!(
+            "human replay summary diverged: {:?} != {:?}",
+            replay.expected, run.summary
+        ));
+    }
+    let direct_state = replay_captured_actions(&run.actions, None)?;
+    if direct_state.deterministic_hash().get() != replay.expected.final_hash {
+        return Err("direct typed-action playback produced a different final hash".to_owned());
+    }
+    Ok(format!(
+        "human replay complete (decisions and typed actions verified)\nseed: {}\ndecisions: {}\nactions: {}\nfinal_hash: {}\nwinner_seat: {}\n",
+        replay.seed,
+        replay.decisions.len(),
+        replay.actions.len(),
+        run.summary.final_hash,
+        run.summary.winner + 1
+    ))
+}
+
 /// Replays a recorded T3.9 pod action stream and verifies every state transition.
 pub fn replay_pod_file(path: impl AsRef<Path>) -> Result<String, String> {
     let path = path.as_ref();
@@ -2132,9 +3023,13 @@ fn build_report(
 
 #[cfg(test)]
 mod tests {
-    use super::{campaign_seed, replay_captured_actions, IdentityExercise, TraceRecord};
-    use forge_core::{apply, Action, GameState};
-    use std::collections::BTreeSet;
+    use super::{
+        campaign_seed, player_view_fingerprint, replay_captured_actions, replay_human_file,
+        run_prompted_game, snapshot_prompt, DecisionPrompt, DecisionSource, IdentityExercise,
+        ReplayDecisionSource, TraceRecord,
+    };
+    use forge_core::{apply, Action, CardId, GameState, Outcome, PlayerView, ZoneId, ZoneKind};
+    use std::{collections::BTreeSet, env, io::Cursor, path::Path};
 
     #[test]
     fn action_replay_rejects_a_tampered_transition() {
@@ -2196,5 +3091,111 @@ mod tests {
         assert_eq!(total.resolutions, 11);
         assert_eq!(total.effect_actions, 13);
         assert_eq!(total.trigger_resolutions, 15);
+    }
+
+    #[test]
+    fn decision_replay_binds_view_options_and_selection() {
+        let view = hidden_card_view(7, false);
+        let options = vec!["First legal action".to_owned(), "Pass".to_owned()];
+        let prompt = DecisionPrompt {
+            kind: "Choose",
+            view: &view,
+            options: &options,
+        };
+        let record = snapshot_prompt(0, &prompt, 1);
+        let mut replay = ReplayDecisionSource::new(vec![record]);
+        assert_eq!(replay.choose(&prompt), Ok(1));
+        assert!(replay.finish().is_ok());
+
+        let changed_options = vec!["Different action".to_owned(), "Pass".to_owned()];
+        let changed_prompt = DecisionPrompt {
+            kind: "Choose",
+            view: &view,
+            options: &changed_options,
+        };
+        let record = snapshot_prompt(0, &prompt, 1);
+        let mut replay = ReplayDecisionSource::new(vec![record]);
+        assert!(replay.choose(&changed_prompt).is_err());
+    }
+
+    #[test]
+    fn prompt_fingerprint_cannot_see_opponent_hidden_card_identity() {
+        let first_hidden = hidden_card_view(11, false);
+        let second_hidden = hidden_card_view(99, false);
+        assert_eq!(
+            player_view_fingerprint(&first_hidden),
+            player_view_fingerprint(&second_hidden)
+        );
+
+        let first_known = hidden_card_view(11, true);
+        let second_known = hidden_card_view(99, true);
+        assert_ne!(
+            player_view_fingerprint(&first_known),
+            player_view_fingerprint(&second_known)
+        );
+    }
+
+    #[test]
+    #[ignore = "requires the local T3 translated-card output"]
+    fn scripted_human_game_completes_and_replays_exactly() {
+        let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        if let Err(error) = env::set_current_dir(&workspace) {
+            panic!("workspace root should be available: {error}");
+        }
+        let manifest = Path::new("assets/t3_9/integration_decks.json");
+        let replay = Path::new("target/t1-r10/scripted-human.frsreplay");
+        assert!(
+            Path::new("target/translated-cards/i/isamaru_hound_of_konda.frs").is_file(),
+            "run scripts/t3_parallel_sweep.sh development first"
+        );
+        let mut input = Cursor::new("1\n".repeat(20_000));
+        let mut output = Vec::new();
+        let report = match run_prompted_game(
+            manifest,
+            replay,
+            20_260_714,
+            160,
+            0,
+            &mut input,
+            &mut output,
+        ) {
+            Ok(report) => report,
+            Err(error) => panic!("scripted prompt driver should complete: {error}"),
+        };
+        assert!(report.contains("human game complete"));
+        let replay_report = match replay_human_file(replay) {
+            Ok(report) => report,
+            Err(error) => panic!("saved human replay should verify: {error}"),
+        };
+        assert!(replay_report.contains("decisions and typed actions verified"));
+    }
+
+    fn hidden_card_view(card: u32, owned_by_observer: bool) -> PlayerView {
+        let mut state = GameState::new();
+        let Outcome::PlayerAdded(observer) = apply(&mut state, Action::AddPlayer) else {
+            panic!("observer setup failed");
+        };
+        let Outcome::PlayerAdded(opponent) = apply(&mut state, Action::AddPlayer) else {
+            panic!("opponent setup failed");
+        };
+        let owner = if owned_by_observer {
+            observer
+        } else {
+            opponent
+        };
+        let outcome = apply(
+            &mut state,
+            Action::CreateObject {
+                card: CardId::new(card),
+                owner,
+                controller: owner,
+                zone: ZoneId::new(Some(owner), ZoneKind::Hand),
+            },
+        );
+        assert!(matches!(outcome, Outcome::ObjectCreated(_)));
+        match state.player_view(observer) {
+            Ok(view) => view,
+            Err(error) => panic!("player view should exist: {error:?}"),
+        }
     }
 }

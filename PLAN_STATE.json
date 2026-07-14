@@ -10,6 +10,11 @@
     "github_egress": "owner_performs_or_explicitly_approves_pushes_and_pull_requests"
   },
   "tier": 3,
+  "execution_flow": {
+    "current": "T1.R10 implementation then CP-HUMAN-PLAY-CLI Owner game",
+    "next": "T4.1-T4.3 baseline AI, then T4.4+ search and calibration",
+    "targeted_fallback": "When T4 discovers a concrete coverage blocker, fix the smallest shared T3 primitive, add semantic regression tests, and resume T4. Do not reopen broad mapper expansion."
+  },
   "tasks": {
     "T0.1": {
       "status": "verified",
@@ -177,11 +182,14 @@
       "verification": "GitHub Actions ci #18 run 28883217715 passed all required jobs for exact T1 gate evidence commit 2198493284299d9721d59ab3a23e3b2a2ab71f56"
     },
     "T1.R10": {
-      "status": "pending",
+      "status": "implementation_verified_owner_checkpoint_pending",
       "branch": "task/T1.R10-interactive-human-play-cli",
       "attempts": 0,
       "entry_condition": "CP-FOUR-PLAYER-POD passed and production legal-action/deck/replay path is stable",
-      "checkpoint": "CP-HUMAN-PLAY-CLI"
+      "checkpoint": "CP-HUMAN-PLAY-CLI",
+      "verification": "Local scripted-input game completed in 82 turns with 93 human prompts and 5,634 typed actions; decision replay, direct typed-action replay, redacted PlayerView fingerprint tests, and a 10-game T3.9 regression all passed without GitHub Actions.",
+      "gate": "scripts/gates/gate_T1_R10.sh",
+      "owner_brief": "reports/owner/brief-CP-HUMAN-PLAY-CLI.md"
     },
     "T2.1": {
       "status": "verified_remote",
@@ -399,9 +407,11 @@
       ]
     },
     "CP-HUMAN-PLAY-CLI": {
-      "status": "pending",
+      "status": "owner_play_required",
       "task": "T1.R10",
-      "owner_input": "O12"
+      "owner_input": "O12",
+      "implementation_gate": "scripts/gates/gate_T1_R10.sh",
+      "required_artifact": "reports/gates/T1.R10/owner-game.frsreplay"
     },
     "CP-HUMAN-TRACE": {
       "status": "pending",
@@ -544,7 +554,7 @@
     "O9-PC-0005": "complete_2026-07-10_owner_approved_bounded_dsl_amendment_and_priority_list",
     "O9-PC-0006": "complete_2026-07-10_owner_approved_t3_all_blocker_batching_and_local_validation_acceleration",
     "O9-PC-0007": "complete_2026-07-10_owner_approved_exact_dual_track_bridge_and_private_public_repository_split",
-    "O12": "pending_CP-HUMAN-PLAY-CLI_45_to_120_minutes",
+    "O12": "ready_CP-HUMAN-PLAY-CLI_real_game_and_replay_required",
     "O13": "pending_CP-TEACHER-CORPUS-ALPHA_20_to_40_hours_across_sessions",
     "O14": "pending_CP-TRAINER-UI_60_to_120_minutes"
   },

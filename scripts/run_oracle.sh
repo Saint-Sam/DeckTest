@@ -20,9 +20,9 @@ if ! command -v cargo >/dev/null 2>&1; then
 fi
 
 if [[ "${1:-}" == "--all" ]]; then
-  cargo run --locked --offline -p forge-testkit -- oracle --all
+  cargo run --locked --offline -p forge-testkit --bin forge-testkit -- oracle --all
 elif [[ "${1:-}" == "--filter" && -n "${2:-}" ]]; then
-  cargo run --locked --offline -p forge-testkit -- oracle --filter "$2"
+  cargo run --locked --offline -p forge-testkit --bin forge-testkit -- oracle --filter "$2"
 else
-  cargo run --locked --offline -p forge-testkit -- oracle "$@"
+  cargo run --locked --offline -p forge-testkit --bin forge-testkit -- oracle "$@"
 fi

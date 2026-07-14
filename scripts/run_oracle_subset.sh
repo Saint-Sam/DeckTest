@@ -32,7 +32,7 @@ if ! find tests/oracle -type f -name '*.ron' -print -quit | grep -q .; then
 fi
 
 if [[ -n "$filter" ]]; then
-  cargo run -p forge-testkit -- oracle --filter "$filter"
+  cargo run --locked --offline -p forge-testkit --bin forge-testkit -- oracle --filter "$filter"
 else
-  cargo run -p forge-testkit -- oracle --changed
+  cargo run --locked --offline -p forge-testkit --bin forge-testkit -- oracle --changed
 fi

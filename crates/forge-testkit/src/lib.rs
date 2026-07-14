@@ -9,7 +9,7 @@
 
 pub mod runtime_smoke;
 
-/// Deterministic four-player pod runner and action-replay verifier.
+/// Deterministic four-player pod, prompted-human controller, and replay verifier.
 #[path = "../../../tests/t3_9/four_player_pod.rs"]
 pub mod t3_9_pod;
 

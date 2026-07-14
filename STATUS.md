@@ -73,10 +73,12 @@ onto identities.
 
 ## Next Gates
 
-1. T1.R10 and CP-HUMAN-PLAY-CLI before human trace collection or Trainer claims.
-2. Begin the initial T4 AI baseline only on the exact card-driven runtime proven by Tier 3.
-3. Keep the mapper lane targeted to blockers for human play, semantic decks, and later gates;
-   the broad T3.3 campaign remains closed at its approved structural floor.
+1. T1.R10 implementation is locally green; the Owner must complete
+   CP-HUMAN-PLAY-CLI before T4 starts.
+2. After that checkpoint, begin T4.1-T4.3 on the exact card-driven runtime
+   proven by Tier 3, then proceed to T4.4+ search and calibration.
+3. Reopen T3 only for a concrete T4 blocker, fix the smallest shared primitive,
+   add semantic regressions, and resume T4. Broad mapper expansion remains closed.
 
 Per-identity generated detail: `target/card-maturity/identities.json` (untracked,
 38,306 records; SHA-256
