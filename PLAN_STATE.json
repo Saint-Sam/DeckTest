@@ -16,11 +16,11 @@
     "targeted_fallback": "When T4 discovers a concrete coverage blocker, fix the smallest shared T3 primitive, add semantic regression tests, and resume T4. Do not reopen broad mapper expansion."
   },
   "t4_diagnostic_product": {
-    "status": "local_preflight_passed_promotion_blocked",
-    "commit": "7bbeae0b24102c4b01755fceed3e00b639ab54b8",
-    "tree": "d658c12a9d78c1281e4ac1929c071abd1b5841fa",
-    "preflight_evidence_commit": "20100af465e4da7606c424100c18a82fafda5ba2",
-    "preflight_evidence_tree": "e557699d76ca7bc4e319eeadf5c695b6a9482200",
+    "status": "local_preflight_passed_promotion_blocked_eager_surface",
+    "commit": "316d9fd5f39a4a6542521cb01d6e006e9387f04c",
+    "tree": "154f823f910745301a49c99bdd7c36e9f74856fa",
+    "preflight_evidence_commit": "6fa710507b8990335d42adce337201c260ad4c79",
+    "preflight_evidence_tree": "47fa848749f655653e7496f4fe3a02aaffa05683",
     "evidence": "reports/gates/T4/LOCAL-DIAGNOSTIC-PREFLIGHT.json",
     "promotion_gate": "scripts/gates/gate_T4.sh"
   },
@@ -392,10 +392,10 @@
       "verification": "Product 316d9fd creates one deadline from the caller's pre-context decision start, shares it across every determinization and worker, stops later sequential determinizations after expiry, and runs workers=1 inline. Exact heuristic, random, and search replays pass unchanged. The refreshed 1-4 ms ladder still measures approximately 240-266 ms p95 because eager high-branching contexts are non-preemptible, so it remains diagnostic defect evidence and no knee is claimed."
     },
     "T4.6": {
-      "status": "blocked_on_search_correctness_and_promotion_evidence",
+      "status": "blocked_on_decision_surface_cost_and_promotion_evidence",
       "branch": "task/T4.6-difficulty-calibration",
       "attempts": 0,
-      "verification": "Versioned provisional tier definitions and paired seat-swapped ladder/calibration/search-knee infrastructure are implemented. Calibration is paused until T4.5 enforces a true total decision deadline and T4.9 records CPU/memory. No tier or Standard knee is promoted because development, validation, sealed, three-archetype, acceptable-action, CPU-cost, and Owner play evidence remain incomplete."
+      "verification": "Versioned provisional tier definitions and paired seat-swapped ladder/calibration/search-knee infrastructure are implemented. Calibration is paused until hierarchical high-branching decision contexts satisfy end-to-end latency bounds and T4.9 records CPU/memory. No tier or Standard knee is promoted because development, validation, sealed, three-archetype, acceptable-action, CPU-cost, and Owner play evidence remain incomplete."
     },
     "T4.7": {
       "status": "verified_local_diagnostics",

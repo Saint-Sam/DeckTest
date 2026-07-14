@@ -4,18 +4,18 @@
   "status": "local_diagnostic_preflight_passed_promotion_blocked",
   "verified_at": "2026-07-14",
   "verification_mode": "local_only_no_github_actions",
-  "product_commit": "7bbeae0b24102c4b01755fceed3e00b639ab54b8",
-  "product_tree": "d658c12a9d78c1281e4ac1929c071abd1b5841fa",
-  "preflight_evidence_commit": "20100af465e4da7606c424100c18a82fafda5ba2",
-  "preflight_evidence_tree": "e557699d76ca7bc4e319eeadf5c695b6a9482200",
+  "product_commit": "316d9fd5f39a4a6542521cb01d6e006e9387f04c",
+  "product_tree": "154f823f910745301a49c99bdd7c36e9f74856fa",
+  "preflight_evidence_commit": "6fa710507b8990335d42adce337201c260ad4c79",
+  "preflight_evidence_tree": "47fa848749f655653e7496f4fe3a02aaffa05683",
   "gate_command": "scripts/gates/gate_T4.sh --preflight",
   "gate_log": "reports/gates/T4/commands/00-preflight.log",
-  "gate_log_sha256": "c9bbcb01c5966ee0cebfe98944cc8026e97b82e02b384dbb7cf2ab82d6a19a6b",
+  "gate_log_sha256": "52b502a22929a3356b5c418426eefd4f075a9bfe39a23b52b91e317d56be417b",
   "checks": {
     "format": "passed",
     "strict_clippy": "passed",
     "tests": {
-      "passed": 226,
+      "passed": 229,
       "failed": 0,
       "ignored": 1,
       "ignored_reason": "requires local generated T3 translated-card output"
@@ -58,13 +58,13 @@
       "fixed_vs_adaptive_ablations": 3,
       "selected_budget_ms": null,
       "strength_claim": false,
-      "total_decision_budget_contract": "failed",
+      "total_decision_budget_contract": "shared_deadline_passed_end_to_end_bound_failed_eager_surface",
       "observed_p95_wall_latency_us": [
-        250525,
-        272911
+        239933,
+        265630
       ],
       "result": "metrics/ai/search_budget_knee_results.json",
-      "result_sha256": "8f8c1efe86735913859a84bd6a6212f3fa5580f61e13668385b32910acaf9af2"
+      "result_sha256": "d35d62d06b9aff91997eb69156e1c762d3c3362e5016ca614b8d5bf771eb39f2"
     }
   },
   "implemented_t4_tasks": [
@@ -77,9 +77,7 @@
     "T4.10"
   ],
   "promotion_blockers": [
-    "extract the production game runner from forge-testkit",
-    "enforce search wall time as one total decision deadline and rerun the ladder",
-    "correct converging-edge statistics and harden the transposition key",
+    "replace eager high-branching attack/block action products with hierarchical or lazy canonical subcontexts and rerun the ladder",
     "complete canonical human, AI, and benchmark Choice/Prompt adapters",
     "three materially different archetype tracks",
     "development, validation, and sealed Track A campaigns",

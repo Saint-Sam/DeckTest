@@ -75,8 +75,9 @@ onto identities.
 
 1. Product `316d9fd` has an extracted production runner, one pre-context shared
    search deadline, inline single-worker execution, action-edge statistics, and
-   collision-checked transposition buckets. All three exact policy/action
-   replays pass unchanged.
+   collision-checked transposition buckets. The 229-test local preflight,
+   WASM/Android compiles, clone guard, and all three exact policy/action replays
+   pass.
 2. The refreshed 1-4 ms ladder still measures approximately 240-266 ms p95
    because high-branching attack/block contexts eagerly materialize canonical
    action products before bounded search. Replace those with hierarchical or
