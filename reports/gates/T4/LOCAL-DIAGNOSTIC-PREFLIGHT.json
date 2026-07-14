@@ -1,41 +1,81 @@
 {
   "schema_version": 1,
   "tier": "T4",
-  "status": "local_diagnostic_preflight_passed_promotion_blocked",
+  "status": "exact_product_evidence_refreshed_preflight_pending",
   "verified_at": "2026-07-14",
   "verification_mode": "local_only_no_github_actions",
-  "product_commit": "592a02ab8d9ef9a4ab19d97114c589d2df0601f1",
-  "product_tree": "03378f918cb03f2ad5645c300f389b7ca80fff68",
+  "product_commit": "7bbeae0b24102c4b01755fceed3e00b639ab54b8",
+  "product_tree": "d658c12a9d78c1281e4ac1929c071abd1b5841fa",
   "gate_command": "scripts/gates/gate_T4.sh --preflight",
   "checks": {
-    "format": "passed",
-    "strict_clippy": "passed",
+    "format": "pending_exact_clean_preflight",
+    "strict_clippy": "pending_exact_clean_preflight",
     "tests": {
-      "passed": 216,
-      "failed": 0,
-      "ignored": 1,
+      "passed": null,
+      "failed": null,
+      "ignored": null,
       "ignored_reason": "requires local generated T3 translated-card output"
     },
-    "heuristic_exact_policy_and_typed_action_replay": "passed",
-    "random_legal_exact_policy_and_typed_action_replay": "passed",
-    "search_exact_policy_and_typed_action_replay": "passed",
-    "wasm32_unknown_unknown_compile": "passed",
-    "aarch64_linux_android_compile": "passed",
+    "heuristic_exact_policy_and_typed_action_replay": {
+      "status": "passed",
+      "replay_sha256": "283da047055475c9cb766517f79b42e199caa5fd63c6d0c8cd0dc565a733a2af",
+      "decisions": 16006,
+      "typed_actions": 18029,
+      "final_hash": "5970657412682018395"
+    },
+    "random_legal_exact_policy_and_typed_action_replay": {
+      "status": "passed",
+      "replay_sha256": "dfac16378feb61b0e10a1035b0c3e1b2f9b4e626eeb7757767523d837fa61395",
+      "decisions": 7679,
+      "typed_actions": 9433,
+      "final_hash": "6240307029735033340"
+    },
+    "search_exact_policy_and_typed_action_replay": {
+      "status": "passed",
+      "replay_sha256": "e16a9eba85e15dda31359574798c72b20a0a8ec3e6124aaaf3d371c5452d59f3",
+      "decisions": 16274,
+      "typed_actions": 18321,
+      "final_hash": "3933493530367397528"
+    },
+    "wasm32_unknown_unknown_compile": "pending_exact_clean_preflight",
+    "aarch64_linux_android_compile": "pending_exact_clean_preflight",
     "clone_surface_guard": {
       "status": "passed",
       "command": "scripts/review/clone_surface_guard.sh",
       "persistent_allocation_field_count": 32
     },
     "search_knee_smoke": {
-      "budgets_ms": [1, 2, 4],
+      "budgets_ms": [
+        1,
+        2,
+        4
+      ],
       "paired_b_vs_2b_comparisons": 2,
       "fixed_vs_adaptive_ablations": 3,
       "selected_budget_ms": null,
-      "strength_claim": false
+      "strength_claim": false,
+      "total_decision_budget_contract": "failed",
+      "observed_p95_wall_latency_us": [
+        250525,
+        272911
+      ],
+      "result": "metrics/ai/search_budget_knee_results.json",
+      "result_sha256": "8f8c1efe86735913859a84bd6a6212f3fa5580f61e13668385b32910acaf9af2"
     }
   },
-  "implemented_t4_tasks": ["T4.1", "T4.2", "T4.3", "T4.4", "T4.5", "T4.7", "T4.10"],
+  "implemented_t4_tasks": [
+    "T4.1",
+    "T4.2",
+    "T4.3",
+    "T4.4",
+    "T4.5",
+    "T4.7",
+    "T4.10"
+  ],
   "promotion_blockers": [
+    "extract the production game runner from forge-testkit",
+    "enforce search wall time as one total decision deadline and rerun the ladder",
+    "correct converging-edge statistics and harden the transposition key",
     "complete canonical human, AI, and benchmark Choice/Prompt adapters",
     "three materially different archetype tracks",
     "development, validation, and sealed Track A campaigns",

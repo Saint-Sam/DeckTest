@@ -1,0 +1,592 @@
+{
+  "schema_version": 1,
+  "status": "diagnostics_only_unpromoted",
+  "threshold_status": "owner_approved_provisional_2026-07-14",
+  "target_tier": "standard",
+  "budgets_ms": [
+    1,
+    2,
+    4
+  ],
+  "games_per_comparison": 2,
+  "jobs": 2,
+  "max_turns": 500,
+  "manifest": "assets/t3_9/integration_decks.json",
+  "matched_protocol": "Every B/2B and fixed/adaptive comparison reuses the same pod, physical seats, controller rotations, hidden-information seed derivation, legal-action generator, hardware, and worker configuration.",
+  "provisional_thresholds": {
+    "paired_win_rate_gain_lt_percentage_points": 1.0,
+    "estimated_elo_gain_lt_range": [
+      10.0,
+      15.0
+    ],
+    "ordinary_state_acceptable_action_agreement_at_least": 0.95,
+    "consecutive_budget_increases": 2,
+    "material_latency_and_cost_threshold": null
+  },
+  "comparisons": [
+    {
+      "lower_budget_ms": 1,
+      "upper_budget_ms": 2,
+      "paired_win_rate_improvement_percentage_points": 0.0,
+      "estimated_elo_improvement": 0.0,
+      "confidence_interval_improvement_percentage_points": [
+        -40.54687942657693,
+        40.54687942657693
+      ],
+      "gain_below_one_percentage_point_or_fifteen_elo": true,
+      "confidence_interval_includes_no_product_useful_improvement": true,
+      "catastrophic_blunder_rate_meaningfully_decreased": null,
+      "missed_win_or_required_defense_rate_meaningfully_decreased": null,
+      "ordinary_state_acceptable_action_agreement": null,
+      "lower_p95_wall_latency_us": 258470,
+      "upper_p95_wall_latency_us": 250553,
+      "p95_wall_latency_increased": false,
+      "measured_cpu_cost_increased_materially": null,
+      "all_acceptance_criteria_complete": false,
+      "plateau_acceptance_passed": false,
+      "arena": {
+        "rung": "standard-2ms-fixed-vs-standard-1ms-fixed",
+        "lower": "standard-1ms-fixed",
+        "upper": "standard-2ms-fixed",
+        "games": 2,
+        "pairs": 1,
+        "parallel_game_workers": 1,
+        "maximum_search_workers_per_game": 1,
+        "candidate_wins": 1,
+        "candidate_win_rate": 0.5,
+        "wilson_95": [
+          0.09453120573423074,
+          0.9054687942657693
+        ],
+        "controller_team_elo_estimate": 0.0,
+        "target_band": [
+          0.65,
+          0.75
+        ],
+        "target_band_met": false,
+        "candidate_sweeps": 0,
+        "split_pairs": 1,
+        "candidate_losses_both": 0,
+        "totals": {
+          "typed_actions": 36104,
+          "decisions": 32017,
+          "searched_decisions": 2086,
+          "singleton_bypasses": 1010,
+          "simulations": 123777,
+          "nodes": 1314,
+          "transposition_hits": 0,
+          "search_wall_latency_us": 97891808,
+          "search_wall_latency_mean_us": 46928,
+          "search_wall_latency_p50_us": 1606,
+          "search_wall_latency_p95_us": 257600,
+          "search_wall_latency_p99_us": 347939,
+          "search_wall_latency_p95_by_budget_ms": {
+            "1": 258470,
+            "2": 250553
+          },
+          "searched_decisions_by_budget_ms": {
+            "1": 1045,
+            "2": 1041
+          },
+          "adaptive_search_wall_latency_p95_by_budget_ms": {},
+          "adaptive_searched_decisions_by_budget_ms": {},
+          "wall_runtime_us": 152496198
+        },
+        "evidence": [
+          {
+            "pair_index": 0,
+            "rotation": 0,
+            "seed": 12162674026592864004,
+            "winner_seat": 0,
+            "candidate_won": true,
+            "turns": 243,
+            "final_hash": 6322675223438328041,
+            "typed_actions": 18118,
+            "decisions": 16072,
+            "searched_decisions": 1048,
+            "singleton_bypasses": 505,
+            "simulations": 64840,
+            "nodes": 669,
+            "transposition_hits": 0,
+            "maximum_depth": 3,
+            "search_wall_latency_us": 50238319,
+            "search_wall_latency_p95_us": 264169,
+            "wall_runtime_us": 78413502
+          },
+          {
+            "pair_index": 0,
+            "rotation": 1,
+            "seed": 12162674026592864004,
+            "winner_seat": 0,
+            "candidate_won": false,
+            "turns": 243,
+            "final_hash": 17280452797913615592,
+            "typed_actions": 17986,
+            "decisions": 15945,
+            "searched_decisions": 1038,
+            "singleton_bypasses": 505,
+            "simulations": 58937,
+            "nodes": 645,
+            "transposition_hits": 0,
+            "maximum_depth": 3,
+            "search_wall_latency_us": 47653489,
+            "search_wall_latency_p95_us": 250370,
+            "wall_runtime_us": 74082696
+          }
+        ]
+      }
+    },
+    {
+      "lower_budget_ms": 2,
+      "upper_budget_ms": 4,
+      "paired_win_rate_improvement_percentage_points": 0.0,
+      "estimated_elo_improvement": 0.0,
+      "confidence_interval_improvement_percentage_points": [
+        -40.54687942657693,
+        40.54687942657693
+      ],
+      "gain_below_one_percentage_point_or_fifteen_elo": true,
+      "confidence_interval_includes_no_product_useful_improvement": true,
+      "catastrophic_blunder_rate_meaningfully_decreased": null,
+      "missed_win_or_required_defense_rate_meaningfully_decreased": null,
+      "ordinary_state_acceptable_action_agreement": null,
+      "lower_p95_wall_latency_us": 261076,
+      "upper_p95_wall_latency_us": 270862,
+      "p95_wall_latency_increased": true,
+      "measured_cpu_cost_increased_materially": null,
+      "all_acceptance_criteria_complete": false,
+      "plateau_acceptance_passed": false,
+      "arena": {
+        "rung": "standard-4ms-fixed-vs-standard-2ms-fixed",
+        "lower": "standard-2ms-fixed",
+        "upper": "standard-4ms-fixed",
+        "games": 2,
+        "pairs": 1,
+        "parallel_game_workers": 1,
+        "maximum_search_workers_per_game": 1,
+        "candidate_wins": 1,
+        "candidate_win_rate": 0.5,
+        "wilson_95": [
+          0.09453120573423074,
+          0.9054687942657693
+        ],
+        "controller_team_elo_estimate": 0.0,
+        "target_band": [
+          0.65,
+          0.75
+        ],
+        "target_band_met": false,
+        "candidate_sweeps": 0,
+        "split_pairs": 1,
+        "candidate_losses_both": 0,
+        "totals": {
+          "typed_actions": 36183,
+          "decisions": 32096,
+          "searched_decisions": 2091,
+          "singleton_bypasses": 1008,
+          "simulations": 718841,
+          "nodes": 1628,
+          "transposition_hits": 0,
+          "search_wall_latency_us": 104139447,
+          "search_wall_latency_mean_us": 49803,
+          "search_wall_latency_p50_us": 2396,
+          "search_wall_latency_p95_us": 269344,
+          "search_wall_latency_p99_us": 360757,
+          "search_wall_latency_p95_by_budget_ms": {
+            "2": 261076,
+            "4": 270862
+          },
+          "searched_decisions_by_budget_ms": {
+            "2": 1045,
+            "4": 1046
+          },
+          "adaptive_search_wall_latency_p95_by_budget_ms": {},
+          "adaptive_searched_decisions_by_budget_ms": {},
+          "wall_runtime_us": 166440484
+        },
+        "evidence": [
+          {
+            "pair_index": 0,
+            "rotation": 0,
+            "seed": 12162674026592864004,
+            "winner_seat": 0,
+            "candidate_won": true,
+            "turns": 243,
+            "final_hash": 7219886712831786971,
+            "typed_actions": 18158,
+            "decisions": 16111,
+            "searched_decisions": 1054,
+            "singleton_bypasses": 503,
+            "simulations": 413372,
+            "nodes": 833,
+            "transposition_hits": 0,
+            "maximum_depth": 3,
+            "search_wall_latency_us": 54046099,
+            "search_wall_latency_p95_us": 272686,
+            "wall_runtime_us": 87036762
+          },
+          {
+            "pair_index": 0,
+            "rotation": 1,
+            "seed": 12162674026592864004,
+            "winner_seat": 0,
+            "candidate_won": false,
+            "turns": 243,
+            "final_hash": 11647717709704043339,
+            "typed_actions": 18025,
+            "decisions": 15985,
+            "searched_decisions": 1037,
+            "singleton_bypasses": 505,
+            "simulations": 305469,
+            "nodes": 795,
+            "transposition_hits": 0,
+            "maximum_depth": 3,
+            "search_wall_latency_us": 50093348,
+            "search_wall_latency_p95_us": 268966,
+            "wall_runtime_us": 79403722
+          }
+        ]
+      }
+    }
+  ],
+  "adaptive_ablations": [
+    {
+      "budget_ms": 1,
+      "adaptive_win_rate_delta_percentage_points": 0.0,
+      "adaptive_elo_delta": 0.0,
+      "confidence_interval_delta_percentage_points": [
+        -40.54687942657693,
+        40.54687942657693
+      ],
+      "fixed_p95_wall_latency_us": 263212,
+      "adaptive_p95_wall_latency_us": 272911,
+      "p95_wall_latency_reduction_fraction": -0.036848623922921445,
+      "measured_cpu_cost_reduction_fraction": null,
+      "no_practical_strength_decline_proven": false,
+      "tracks_a_b_c_complete": false,
+      "shipping_eligible": false,
+      "arena": {
+        "rung": "standard-1ms-adaptive-vs-standard-1ms-fixed",
+        "lower": "standard-1ms-fixed",
+        "upper": "standard-1ms-adaptive",
+        "games": 2,
+        "pairs": 1,
+        "parallel_game_workers": 1,
+        "maximum_search_workers_per_game": 1,
+        "candidate_wins": 1,
+        "candidate_win_rate": 0.5,
+        "wilson_95": [
+          0.09453120573423074,
+          0.9054687942657693
+        ],
+        "controller_team_elo_estimate": 0.0,
+        "target_band": [
+          0.65,
+          0.75
+        ],
+        "target_band_met": false,
+        "candidate_sweeps": 0,
+        "split_pairs": 1,
+        "candidate_losses_both": 0,
+        "totals": {
+          "typed_actions": 36983,
+          "decisions": 32887,
+          "searched_decisions": 2113,
+          "singleton_bypasses": 1006,
+          "simulations": 7167,
+          "nodes": 1163,
+          "transposition_hits": 0,
+          "search_wall_latency_us": 109491039,
+          "search_wall_latency_mean_us": 51817,
+          "search_wall_latency_p50_us": 1595,
+          "search_wall_latency_p95_us": 268574,
+          "search_wall_latency_p99_us": 393895,
+          "search_wall_latency_p95_by_budget_ms": {
+            "1": 263212
+          },
+          "searched_decisions_by_budget_ms": {
+            "1": 1058
+          },
+          "adaptive_search_wall_latency_p95_by_budget_ms": {
+            "1": 272911
+          },
+          "adaptive_searched_decisions_by_budget_ms": {
+            "1": 1055
+          },
+          "wall_runtime_us": 169312456
+        },
+        "evidence": [
+          {
+            "pair_index": 0,
+            "rotation": 0,
+            "seed": 12162674026592864004,
+            "winner_seat": 0,
+            "candidate_won": true,
+            "turns": 247,
+            "final_hash": 18321951315898868822,
+            "typed_actions": 18677,
+            "decisions": 16626,
+            "searched_decisions": 1061,
+            "singleton_bypasses": 506,
+            "simulations": 3299,
+            "nodes": 585,
+            "transposition_hits": 0,
+            "maximum_depth": 2,
+            "search_wall_latency_us": 55771983,
+            "search_wall_latency_p95_us": 270307,
+            "wall_runtime_us": 85255378
+          },
+          {
+            "pair_index": 0,
+            "rotation": 1,
+            "seed": 12162674026592864004,
+            "winner_seat": 0,
+            "candidate_won": false,
+            "turns": 243,
+            "final_hash": 8588096062228466937,
+            "typed_actions": 18306,
+            "decisions": 16261,
+            "searched_decisions": 1052,
+            "singleton_bypasses": 500,
+            "simulations": 3868,
+            "nodes": 578,
+            "transposition_hits": 0,
+            "maximum_depth": 1,
+            "search_wall_latency_us": 53719056,
+            "search_wall_latency_p95_us": 265826,
+            "wall_runtime_us": 84057078
+          }
+        ]
+      }
+    },
+    {
+      "budget_ms": 2,
+      "adaptive_win_rate_delta_percentage_points": 0.0,
+      "adaptive_elo_delta": 0.0,
+      "confidence_interval_delta_percentage_points": [
+        -40.54687942657693,
+        40.54687942657693
+      ],
+      "fixed_p95_wall_latency_us": 250525,
+      "adaptive_p95_wall_latency_us": 255955,
+      "p95_wall_latency_reduction_fraction": -0.021674483584472607,
+      "measured_cpu_cost_reduction_fraction": null,
+      "no_practical_strength_decline_proven": false,
+      "tracks_a_b_c_complete": false,
+      "shipping_eligible": false,
+      "arena": {
+        "rung": "standard-2ms-adaptive-vs-standard-2ms-fixed",
+        "lower": "standard-2ms-fixed",
+        "upper": "standard-2ms-adaptive",
+        "games": 2,
+        "pairs": 1,
+        "parallel_game_workers": 1,
+        "maximum_search_workers_per_game": 1,
+        "candidate_wins": 1,
+        "candidate_win_rate": 0.5,
+        "wilson_95": [
+          0.09453120573423074,
+          0.9054687942657693
+        ],
+        "controller_team_elo_estimate": 0.0,
+        "target_band": [
+          0.65,
+          0.75
+        ],
+        "target_band_met": false,
+        "candidate_sweeps": 0,
+        "split_pairs": 1,
+        "candidate_losses_both": 0,
+        "totals": {
+          "typed_actions": 36266,
+          "decisions": 32178,
+          "searched_decisions": 2090,
+          "singleton_bypasses": 1006,
+          "simulations": 191927,
+          "nodes": 1379,
+          "transposition_hits": 0,
+          "search_wall_latency_us": 98858365,
+          "search_wall_latency_mean_us": 47300,
+          "search_wall_latency_p50_us": 2382,
+          "search_wall_latency_p95_us": 254957,
+          "search_wall_latency_p99_us": 339134,
+          "search_wall_latency_p95_by_budget_ms": {
+            "2": 250525
+          },
+          "searched_decisions_by_budget_ms": {
+            "2": 1044
+          },
+          "adaptive_search_wall_latency_p95_by_budget_ms": {
+            "2": 255955
+          },
+          "adaptive_searched_decisions_by_budget_ms": {
+            "2": 1046
+          },
+          "wall_runtime_us": 170075740
+        },
+        "evidence": [
+          {
+            "pair_index": 0,
+            "rotation": 0,
+            "seed": 12162674026592864004,
+            "winner_seat": 0,
+            "candidate_won": true,
+            "turns": 243,
+            "final_hash": 10065904070608433641,
+            "typed_actions": 18124,
+            "decisions": 16078,
+            "searched_decisions": 1047,
+            "singleton_bypasses": 504,
+            "simulations": 99339,
+            "nodes": 694,
+            "transposition_hits": 0,
+            "maximum_depth": 3,
+            "search_wall_latency_us": 50152555,
+            "search_wall_latency_p95_us": 254957,
+            "wall_runtime_us": 86882418
+          },
+          {
+            "pair_index": 0,
+            "rotation": 1,
+            "seed": 12162674026592864004,
+            "winner_seat": 0,
+            "candidate_won": false,
+            "turns": 243,
+            "final_hash": 16794497359597747629,
+            "typed_actions": 18142,
+            "decisions": 16100,
+            "searched_decisions": 1043,
+            "singleton_bypasses": 502,
+            "simulations": 92588,
+            "nodes": 685,
+            "transposition_hits": 0,
+            "maximum_depth": 3,
+            "search_wall_latency_us": 48705810,
+            "search_wall_latency_p95_us": 251829,
+            "wall_runtime_us": 83193322
+          }
+        ]
+      }
+    },
+    {
+      "budget_ms": 4,
+      "adaptive_win_rate_delta_percentage_points": 0.0,
+      "adaptive_elo_delta": 0.0,
+      "confidence_interval_delta_percentage_points": [
+        -40.54687942657693,
+        40.54687942657693
+      ],
+      "fixed_p95_wall_latency_us": 264062,
+      "adaptive_p95_wall_latency_us": 265383,
+      "p95_wall_latency_reduction_fraction": -0.005002613022699214,
+      "measured_cpu_cost_reduction_fraction": null,
+      "no_practical_strength_decline_proven": false,
+      "tracks_a_b_c_complete": false,
+      "shipping_eligible": false,
+      "arena": {
+        "rung": "standard-4ms-adaptive-vs-standard-4ms-fixed",
+        "lower": "standard-4ms-fixed",
+        "upper": "standard-4ms-adaptive",
+        "games": 2,
+        "pairs": 1,
+        "parallel_game_workers": 1,
+        "maximum_search_workers_per_game": 1,
+        "candidate_wins": 1,
+        "candidate_win_rate": 0.5,
+        "wilson_95": [
+          0.09453120573423074,
+          0.9054687942657693
+        ],
+        "controller_team_elo_estimate": 0.0,
+        "target_band": [
+          0.65,
+          0.75
+        ],
+        "target_band_met": false,
+        "candidate_sweeps": 0,
+        "split_pairs": 1,
+        "candidate_losses_both": 0,
+        "totals": {
+          "typed_actions": 36240,
+          "decisions": 32152,
+          "searched_decisions": 2086,
+          "singleton_bypasses": 998,
+          "simulations": 1099612,
+          "nodes": 1775,
+          "transposition_hits": 0,
+          "search_wall_latency_us": 102887420,
+          "search_wall_latency_mean_us": 49322,
+          "search_wall_latency_p50_us": 4257,
+          "search_wall_latency_p95_us": 265103,
+          "search_wall_latency_p99_us": 352452,
+          "search_wall_latency_p95_by_budget_ms": {
+            "4": 264062
+          },
+          "searched_decisions_by_budget_ms": {
+            "4": 1044
+          },
+          "adaptive_search_wall_latency_p95_by_budget_ms": {
+            "4": 265383
+          },
+          "adaptive_searched_decisions_by_budget_ms": {
+            "4": 1042
+          },
+          "wall_runtime_us": 171596612
+        },
+        "evidence": [
+          {
+            "pair_index": 0,
+            "rotation": 0,
+            "seed": 12162674026592864004,
+            "winner_seat": 0,
+            "candidate_won": true,
+            "turns": 243,
+            "final_hash": 4173127024492598540,
+            "typed_actions": 18048,
+            "decisions": 16006,
+            "searched_decisions": 1040,
+            "singleton_bypasses": 500,
+            "simulations": 545205,
+            "nodes": 892,
+            "transposition_hits": 0,
+            "maximum_depth": 3,
+            "search_wall_latency_us": 50906393,
+            "search_wall_latency_p95_us": 264062,
+            "wall_runtime_us": 83213207
+          },
+          {
+            "pair_index": 0,
+            "rotation": 1,
+            "seed": 12162674026592864004,
+            "winner_seat": 0,
+            "candidate_won": false,
+            "turns": 243,
+            "final_hash": 11018981734783952105,
+            "typed_actions": 18192,
+            "decisions": 16146,
+            "searched_decisions": 1046,
+            "singleton_bypasses": 498,
+            "simulations": 554407,
+            "nodes": 883,
+            "transposition_hits": 0,
+            "maximum_depth": 3,
+            "search_wall_latency_us": 51981027,
+            "search_wall_latency_p95_us": 265584,
+            "wall_runtime_us": 88383405
+          }
+        ]
+      }
+    }
+  ],
+  "two_consecutive_complete_plateaus": false,
+  "provisional_knee_budget_ms": null,
+  "selected_standard_budget_ms": null,
+  "promotion_eligible": false,
+  "promotion_blockers": [
+    "Track B catastrophic-blunder and missed-win/required-defense labels are not sealed",
+    "ordinary benchmark-state acceptable-action agreement is not yet measured",
+    "the material CPU-cost threshold and process CPU adapter are not yet approved",
+    "the competence bar must pass before selecting the smallest pre-plateau Standard budget",
+    "three archetype tracks plus reference Android/WASM latency evidence remain required"
+  ]
+}

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "instrumentation_implemented_diagnostic_smoke_refreshed",
+  "status": "diagnostic_smoke_bound_total_budget_contract_failed",
   "threshold_status": "owner_approved_provisional_2026-07-14",
   "budgets_ms": [0, 10, 25, 50, 100, 250, 500, 1000],
   "comparison_rule": "Compare each positive budget B with the next tested budget 2B on identical states, decks, seats, determinizations, seeds, legal actions, hardware, and threads.",
@@ -61,6 +61,8 @@
   "promotion_authority": "DeckTest paired arena, decision benchmark, human trace review, latency, and measured cost evidence",
   "implementation_evidence": {
     "date": "2026-07-14",
+    "product_commit": "7bbeae0b24102c4b01755fceed3e00b639ab54b8",
+    "product_tree": "d658c12a9d78c1281e4ac1929c071abd1b5841fa",
     "policy": "determinized-uct-v1",
     "decision_families": ["main_phase", "declare_attackers", "declare_blockers"],
     "full_game_smoke": {
@@ -68,15 +70,19 @@
       "iterations": 2,
       "determinizations": 1,
       "workers": 1,
-      "turns": 45,
-      "canonical_decisions": 460,
-      "typed_actions": 3557,
-      "searched_decisions": 368,
-      "singleton_bypasses": 74,
-      "simulations": 736,
-      "nodes": 1104,
-      "winner_seat": 3,
-      "final_hash": 7929438623393444145,
+      "turns": 243,
+      "max_turns": 500,
+      "canonical_decisions": 16274,
+      "typed_actions": 18321,
+      "searched_decisions": 1032,
+      "singleton_bypasses": 489,
+      "simulations": 1086,
+      "nodes": 1629,
+      "maximum_depth": 1,
+      "winner_seat_zero_based": 0,
+      "final_hash": "3933493530367397528",
+      "replay": "reports/gates/T4.3/search-baseline.frsreplay",
+      "replay_sha256": "e16a9eba85e15dda31359574798c72b20a0a8ec3e6124aaaf3d371c5452d59f3",
       "exact_policy_replay_passed": true,
       "exact_typed_action_replay_passed": true,
       "canonical_legal_action_records_complete": true,
@@ -85,29 +91,57 @@
       "strength_claim": false
     },
     "release_search_knee_smoke": {
-      "command": "target/release/forge-arena --search-knee --tier standard --budgets 1,2,4 --games 2 --jobs 2 --output target/t4-search-knee-smoke.json",
+      "command": "target/release/forge-arena --search-knee --tier standard --budgets 1,2,4 --games 2 --jobs 2 --max-turns 500 --output metrics/ai/search_budget_knee_results.json",
+      "result": "metrics/ai/search_budget_knee_results.json",
+      "result_sha256": "8f8c1efe86735913859a84bd6a6212f3fa5580f61e13668385b32910acaf9af2",
       "profile": "release",
       "games_per_comparison": 2,
+      "max_turns": 500,
       "b_vs_2b": [
         {
           "lower_ms": 1,
           "upper_ms": 2,
           "paired_gain_percentage_points": 0.0,
-          "lower_p95_wall_us": 16293,
-          "upper_p95_wall_us": 16580
+          "estimated_elo_gain": 0.0,
+          "confidence_interval_percentage_points": [
+            -40.54687942657693,
+            40.54687942657693
+          ],
+          "lower_p95_wall_us": 258470,
+          "upper_p95_wall_us": 250553,
+          "acceptance_fields_complete": false,
+          "plateau_accepted": false
         },
         {
           "lower_ms": 2,
           "upper_ms": 4,
           "paired_gain_percentage_points": 0.0,
-          "lower_p95_wall_us": 16195,
-          "upper_p95_wall_us": 15621
+          "estimated_elo_gain": 0.0,
+          "confidence_interval_percentage_points": [
+            -40.54687942657693,
+            40.54687942657693
+          ],
+          "lower_p95_wall_us": 261076,
+          "upper_p95_wall_us": 270862,
+          "acceptance_fields_complete": false,
+          "plateau_accepted": false
         }
       ],
+      "adaptive_p95_wall_us": {
+        "1": 272911,
+        "2": 255955,
+        "4": 265383
+      },
       "fixed_adaptive_ablations_completed": 3,
       "fixed_checkpoint_history_unit_test": "passed",
       "confidence_or_strength_claim": false,
       "missing_authoritative_fields_remain_null": true
+    },
+    "total_decision_budget_semantics": {
+      "status": "not_satisfied",
+      "required": "one shared wall-clock deadline across all determinizations and workers for one decision",
+      "observed": "nominal 1-4 ms budgets produced approximately 250-273 ms p95 decision latency",
+      "next_action": "implement a shared total decision deadline, inline the single-worker path, then discard and rerun this smoke"
     }
   },
   "measurements": [],
