@@ -3951,6 +3951,8 @@ impl ActivatedAbilityDefinition {
 }
 
 /// Scope for a T2.5 activation cost modifier.
+// Predicates remain inline so this public value type stays Copy and allocation-free.
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum CostModifierScope {
     /// Applies to every activated ability.
@@ -4781,6 +4783,8 @@ impl ObjectCharacteristics {
 }
 
 /// Which objects a continuous effect can affect.
+// Predicates remain inline so this public value type stays Copy and allocation-free.
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum ContinuousEffectTarget {
     /// Only the named object is affected.
@@ -6058,6 +6062,8 @@ impl Zone {
 }
 
 /// One object slot as visible to a single observing player.
+// Known object records remain inline so this public value type stays Copy.
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ObjectView {
     /// A visible object with its public object record.
@@ -6925,6 +6931,8 @@ pub struct ActionList {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
+// The one-action representation intentionally avoids a heap allocation.
+#[allow(clippy::large_enum_variant)]
 enum ActionListStorage {
     #[default]
     Empty,
@@ -9840,7 +9848,7 @@ impl GameState {
     }
 
     fn cost_modifier_source_is_active(&self, modifier: CostModifierDefinition) -> bool {
-        modifier.source().is_none_or(|source| {
+        modifier.source().map_or(true, |source| {
             self.object_zone(source) == Some(ZoneId::new(None, ZoneKind::Battlefield))
         })
     }
@@ -13130,7 +13138,7 @@ impl GameState {
             return false;
         }
         if definition.duration() == ContinuousEffectDuration::WhileSourceOnBattlefield
-            && definition.source().is_none_or(|source| {
+            && definition.source().map_or(true, |source| {
                 self.object_zone(source) != Some(ZoneId::new(None, ZoneKind::Battlefield))
             })
         {
@@ -14137,7 +14145,7 @@ impl GameState {
     }
 
     fn restriction_source_is_active(&self, definition: RestrictionDefinition) -> bool {
-        definition.source().is_none_or(|source| {
+        definition.source().map_or(true, |source| {
             self.object_zone(source) == Some(ZoneId::new(None, ZoneKind::Battlefield))
         })
     }
