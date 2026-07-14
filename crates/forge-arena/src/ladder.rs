@@ -1,5 +1,5 @@
 use forge_ai::{AiPolicyFamily, AiTierSet, DifficultyTier, GuardrailProfile};
-use forge_testkit::t3_9_pod::{AiArena, AiArenaSummary, AiPolicyConfig};
+use forge_game_runner::{AiArena, AiArenaSummary, AiPolicyConfig};
 use serde::Serialize;
 use std::{
     collections::BTreeMap,

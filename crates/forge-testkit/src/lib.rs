@@ -9,9 +9,8 @@
 
 pub mod runtime_smoke;
 
-/// Deterministic four-player pod, prompted-human controller, and replay verifier.
-#[path = "../../../tests/t3_9/four_player_pod.rs"]
-pub mod t3_9_pod;
+/// Compatibility re-export of the production four-player runner.
+pub use forge_game_runner as t3_9_pod;
 
 use forge_core::{
     apply, auto_payment_plan, AbilityPlayer, Action, ActivatedAbilityDefinition,

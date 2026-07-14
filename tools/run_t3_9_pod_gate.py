@@ -148,7 +148,7 @@ def main() -> int:
                 "--jobs",
                 str(args.jobs),
                 "-p",
-                "forge-testkit",
+                "forge-game-runner",
                 "--bin",
                 "forge-t3-9-four-player-pod",
             ]

@@ -74,7 +74,7 @@ MUTANTS = (
     ),
     Mutant(
         "M03_CAMPAIGN_SEED_COLLAPSES_TO_CONSTANT",
-        "tests/t3_9/four_player_pod.rs",
+        "crates/forge-game-runner/src/lib.rs",
         """fn campaign_seed(base: u64, index: usize) -> u64 {
     let mut value = base ^ (index as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15);
     value = (value ^ (value >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
@@ -86,15 +86,15 @@ MUTANTS = (
     base
 }
 """,
-        "forge-testkit",
+        "forge-game-runner",
         "campaign_seed_schedule_is_deterministic_and_disperse",
     ),
     Mutant(
         "M04_IDENTITY_LEDGER_DROPS_EFFECT_ACTIONS",
-        "tests/t3_9/four_player_pod.rs",
+        "crates/forge-game-runner/src/lib.rs",
         "        self.effect_actions = self.effect_actions.saturating_add(other.effect_actions);\n",
         "        self.effect_actions = self.effect_actions.saturating_add(0);\n",
-        "forge-testkit",
+        "forge-game-runner",
         "identity_exercise_aggregation_preserves_every_counter",
     ),
     Mutant(

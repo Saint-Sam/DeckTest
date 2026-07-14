@@ -5,6 +5,7 @@ members = [
     "crates/forge-cardc",
     "crates/forge-cards",
     "crates/forge-ai",
+    "crates/forge-game-runner",
     "crates/forge-testkit",
     "crates/forge-arena",
     "crates/forge-cli",

@@ -7,7 +7,7 @@ rust-version.workspace = true
 
 [dependencies]
 forge-core = { path = "../forge-core" }
-forge-testkit = { path = "../forge-testkit" }
+forge-game-runner = { path = "../forge-game-runner" }
 
 [lints]
 workspace = true

@@ -130,7 +130,7 @@ fn human_play_command(
     if !(1..=4).contains(&seat) {
         return Err("--seat must be in 1..=4".to_owned());
     }
-    forge_testkit::t3_9_pod::run_prompted_game(
+    forge_game_runner::run_prompted_game(
         manifest,
         replay_out,
         seed,
@@ -273,24 +273,24 @@ fn ai_play_command(args: &[String]) -> Result<String, String> {
         return Err("--search and --random-legal cannot be combined".to_owned());
     }
     let policy = if search {
-        forge_testkit::t3_9_pod::AiPolicyConfig::Search {
+        forge_game_runner::AiPolicyConfig::Search {
             seed: policy_seed,
             iterations: search_iterations,
             determinizations: search_determinizations,
             workers: search_workers,
         }
     } else if random_legal {
-        forge_testkit::t3_9_pod::AiPolicyConfig::RandomLegal { seed: policy_seed }
+        forge_game_runner::AiPolicyConfig::RandomLegal { seed: policy_seed }
     } else {
-        forge_testkit::t3_9_pod::AiPolicyConfig::Heuristic {
+        forge_game_runner::AiPolicyConfig::Heuristic {
             seed: policy_seed,
             noise_span,
         }
     };
-    forge_testkit::t3_9_pod::run_ai_game(
+    forge_game_runner::run_ai_game(
         manifest,
         replay_out,
-        forge_testkit::t3_9_pod::AiGameOptions::new(seed, max_turns, policy),
+        forge_game_runner::AiGameOptions::new(seed, max_turns, policy),
     )
 }
 
@@ -341,7 +341,7 @@ fn replay_command(args: &[String]) -> Result<String, String> {
     let payload = fs::read_to_string(&args[0])
         .map_err(|error| format!("failed to read {}: {error}", args[0]))?;
     if payload.trim_start().starts_with('{') {
-        return forge_testkit::t3_9_pod::replay_json_file(&args[0]);
+        return forge_game_runner::replay_json_file(&args[0]);
     }
     let replay = Replay::parse(&payload)?;
     let report = run_replay(&replay)?;

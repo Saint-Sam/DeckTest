@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-//! Local T3.9 and CP-FOUR-PLAYER-POD integration runner.
+//! Production four-player game runner, human controller, AI adapter, and replay verifier.
 //!
 //! The controller is deliberately generic: deck contents come from a
 //! deterministic manifest, card behavior comes from `forge-cards::runtime`,
@@ -55,14 +55,6 @@ const PILOT_INTENTS_PATH: &str = "assets/ai/pilot_intents.json";
 const RETAINED_REPLAYS: usize = 10;
 const MAX_DIAGNOSTIC_COMBAT_OPTIONS: usize = 262_144;
 const MAX_CANONICAL_SPELL_OPTIONS: usize = 65_536;
-
-#[allow(dead_code)]
-fn main() {
-    if let Err(error) = run() {
-        eprintln!("T3.9 pod gate failed: {error}");
-        std::process::exit(1);
-    }
-}
 
 /// Runs the complete local T3.9 pod campaign from process arguments.
 pub fn run() -> Result<(), String> {

@@ -47,10 +47,10 @@ run_local_preflight() {
   check_contracts
   cargo fmt --all -- --check
   cargo clippy \
-    -p forge-core -p forge-ai -p forge-arena -p forge-testkit -p forge-cli \
+    -p forge-core -p forge-ai -p forge-game-runner -p forge-arena -p forge-testkit -p forge-cli \
     --all-targets --all-features --locked --offline -- -D warnings
   cargo test \
-    -p forge-core -p forge-ai -p forge-arena -p forge-testkit -p forge-cli \
+    -p forge-core -p forge-ai -p forge-game-runner -p forge-arena -p forge-testkit -p forge-cli \
     --locked --offline --no-fail-fast
   target/release/forge-cli replay reports/gates/T4.3/ai-baseline.frsreplay
   target/release/forge-cli replay reports/gates/T4.3/random-legal-baseline.frsreplay

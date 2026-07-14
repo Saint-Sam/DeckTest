@@ -224,7 +224,7 @@ dependencies = [
  "forge-carddef",
  "forge-cards",
  "forge-core",
- "forge-testkit",
+ "forge-game-runner",
  "serde",
  "serde_json",
 ]
@@ -265,7 +265,7 @@ name = "forge-cli"
 version = "0.0.0"
 dependencies = [
  "forge-core",
- "forge-testkit",
+ "forge-game-runner",
 ]
 
 [[package]]
@@ -273,6 +273,19 @@ name = "forge-core"
 version = "0.0.0"
 dependencies = [
  "criterion",
+]
+
+[[package]]
+name = "forge-game-runner"
+version = "0.0.0"
+dependencies = [
+ "forge-ai",
+ "forge-cardc",
+ "forge-carddef",
+ "forge-cards",
+ "forge-core",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -299,6 +312,7 @@ dependencies = [
  "forge-carddef",
  "forge-cards",
  "forge-core",
+ "forge-game-runner",
  "serde",
  "serde_json",
 ]

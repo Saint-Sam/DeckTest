@@ -7,7 +7,7 @@ cd "$ROOT"
 if [[ "${1:-}" == "--self-test" ]]; then
   [[ -f docs/specs/T1.R10.md ]]
   [[ -f reports/owner/brief-CP-HUMAN-PLAY-CLI.md ]]
-  rg -q 'run_prompted_game' tests/t3_9/four_player_pod.rs
+  rg -q 'pub fn run_prompted_game' crates/forge-game-runner/src/lib.rs
   echo "PASS gate_T1_R10.sh self-test"
   exit 0
 fi
@@ -32,9 +32,9 @@ fi
 
 export CARGO_NET_OFFLINE=true
 cargo fmt --all -- --check
-cargo test -p forge-testkit --lib t3_9_pod::tests --locked --offline
-cargo test -p forge-testkit --lib \
-  t3_9_pod::tests::scripted_human_game_completes_and_replays_exactly \
+cargo test -p forge-game-runner --lib tests --locked --offline
+cargo test -p forge-game-runner --lib \
+  tests::scripted_human_game_completes_and_replays_exactly \
   --locked --offline -- --ignored --exact
 cargo run -p forge-cli --locked --offline -- \
   replay target/t1-r10/scripted-human.frsreplay
