@@ -4,7 +4,7 @@ use forge_cards::runtime::{
     bind_activated_effect_actions, bind_program_actions, bind_triggered_ability_actions,
     compile_card_program, execute_program, ActivatedAbilityProgram, ActivatedEffectProgram,
     AlternateCostCondition, AlternateCostKind, AmountProgram, CardProgram, EffectProgram,
-    ExecutionBindings, ExecutionDiagnosticCode, ObjectSetProgram, PlayerBinding,
+    ExecutionBindings, ExecutionDiagnosticCode, ObjectSetProgram, PlayerBinding, ProgramKind,
     StaticAbilityProgram, TriggeredEventProgram,
 };
 use forge_core::{
@@ -5099,6 +5099,322 @@ fn purphoros_probe(program: &CardProgram) -> Option<serde_json::Value> {
     }))
 }
 
+fn bala_ged_modal_dfc_probe(program: &CardProgram) -> Option<serde_json::Value> {
+    if program.name() != "Bala Ged Recovery // Bala Ged Sanctuary" {
+        return None;
+    }
+    let back = program.modal_dfc_back()?;
+    let combined_capabilities = program
+        .capabilities()
+        .iter()
+        .map(|capability| capability.as_str())
+        .collect::<Vec<_>>();
+    let front_contract_exact = program.kind() == ProgramKind::Sorcery
+        && program.mana_cost().base_generic() == 2
+        && program.mana_cost().colored_pool() == ManaPool::of(ManaKind::Green, 1)
+        && program.activated_abilities().is_empty()
+        && program.activated_effects().is_empty()
+        && program.triggered_abilities().is_empty()
+        && program.static_abilities().is_empty()
+        && matches!(
+            program.effects(),
+            [EffectProgram::MoveTargetObject {
+                target: 0,
+                from: ZoneKind::Graveyard,
+                to: ZoneKind::Hand,
+                overload_predicate: None,
+            }]
+        )
+        && program.target_requirements().len() == 1
+        && program.target_requirements()[0].kind()
+            == TargetKind::ObjectInZoneKind(ZoneKind::Graveyard);
+    let [back_mana] = back.activated_abilities() else {
+        return Some(json!({
+            "setup_succeeded": false,
+            "observed_back_mana_ability_count": back.activated_abilities().len(),
+        }));
+    };
+    let back_contract_exact = back.kind() == ProgramKind::Land
+        && back.base_object().types() == ObjectTypes::none().with_land()
+        && back.base_object().enters_tapped()
+        && back.target_requirements().is_empty()
+        && back.effects().is_empty()
+        && back.activated_effects().is_empty()
+        && back.triggered_abilities().is_empty()
+        && back.static_abilities().is_empty()
+        && back.modal_dfc_back().is_none()
+        && back_mana.cost().mana() == ManaCost::new(0, 0, 0, 0, 0, 0)
+        && back_mana.cost().tap_source()
+        && !back_mana.cost().sacrifice_source()
+        && back_mana.output_choices().options() == [ManaPool::of(ManaKind::Green, 1)];
+
+    let mut front_state = GameState::new();
+    let controller = match apply(&mut front_state, Action::AddPlayer) {
+        Outcome::PlayerAdded(player) => player,
+        _ => return Some(json!({"setup_succeeded": false})),
+    };
+    let opponent = match apply(&mut front_state, Action::AddPlayer) {
+        Outcome::PlayerAdded(player) => player,
+        _ => return Some(json!({"setup_succeeded": false})),
+    };
+    let card_base =
+        BaseObjectCharacteristics::new(ObjectTypes::none().with_artifact(), ObjectColors::none());
+    let recovered = create_probe_object(
+        &mut front_state,
+        9_700_000,
+        controller,
+        controller,
+        ZoneId::new(Some(controller), ZoneKind::Graveyard),
+        card_base,
+        None,
+    )?;
+    let wrong_zone = create_probe_object(
+        &mut front_state,
+        9_700_001,
+        controller,
+        controller,
+        ZoneId::new(Some(controller), ZoneKind::Hand),
+        card_base,
+        None,
+    )?;
+    let opponent_card = create_probe_object(
+        &mut front_state,
+        9_700_002,
+        opponent,
+        opponent,
+        ZoneId::new(Some(opponent), ZoneKind::Graveyard),
+        card_base,
+        None,
+    )?;
+    let before_missing_target = front_state.deterministic_hash();
+    let missing_target_rejected_before_mutation = execute_program(
+        &mut front_state,
+        program,
+        &ExecutionBindings::new(controller, vec![opponent]),
+    )
+    .is_err()
+        && front_state.deterministic_hash() == before_missing_target;
+    let before_wrong_zone = front_state.deterministic_hash();
+    let wrong_zone_rejected_before_mutation = matches!(
+        execute_program(
+            &mut front_state,
+            program,
+            &ExecutionBindings::new(controller, vec![opponent])
+                .with_targets(vec![TargetChoice::Object(wrong_zone)]),
+        ),
+        Err(error) if error.code() == ExecutionDiagnosticCode::InvalidChoice
+    ) && front_state.deterministic_hash()
+        == before_wrong_zone;
+    let before_opponent_card = front_state.deterministic_hash();
+    let opponent_card_rejected_before_mutation = matches!(
+        execute_program(
+            &mut front_state,
+            program,
+            &ExecutionBindings::new(controller, vec![opponent])
+                .with_targets(vec![TargetChoice::Object(opponent_card)]),
+        ),
+        Err(error) if error.code() == ExecutionDiagnosticCode::InvalidChoice
+    ) && front_state.deterministic_hash()
+        == before_opponent_card;
+    let front_bindings = ExecutionBindings::new(controller, vec![opponent])
+        .with_targets(vec![TargetChoice::Object(recovered)]);
+    let front_actions = bind_program_actions(&front_state, program, &front_bindings).ok()?;
+    let front_action_exact = matches!(
+        front_actions.as_slice(),
+        [bound] if matches!(
+            bound.action(),
+            Action::MoveObject { object, to }
+                if *object == recovered
+                    && *to == ZoneId::new(Some(controller), ZoneKind::Hand)
+        )
+    );
+    let front_trace = execute_program(&mut front_state, program, &front_bindings).ok()?;
+    let recovered_to_hand = front_trace.records().len() == 1
+        && front_state.object_zone(recovered)
+            == Some(ZoneId::new(Some(controller), ZoneKind::Hand));
+    let unrelated_cards_unchanged = front_state.object_zone(wrong_zone)
+        == Some(ZoneId::new(Some(controller), ZoneKind::Hand))
+        && front_state.object_zone(opponent_card)
+            == Some(ZoneId::new(Some(opponent), ZoneKind::Graveyard));
+    let before_back_target = front_state.deterministic_hash();
+    let back_rejects_front_target_before_mutation = matches!(
+        bind_program_actions(
+            &front_state,
+            back,
+            &ExecutionBindings::new(controller, vec![opponent])
+                .with_targets(vec![TargetChoice::Object(recovered)]),
+        ),
+        Err(error) if error.code() == ExecutionDiagnosticCode::InvalidChoice
+    ) && front_state.deterministic_hash()
+        == before_back_target;
+
+    let mut back_state = GameState::new();
+    let land_controller = match apply(&mut back_state, Action::AddPlayer) {
+        Outcome::PlayerAdded(player) => player,
+        _ => return Some(json!({"setup_succeeded": false})),
+    };
+    let land_opponent = match apply(&mut back_state, Action::AddPlayer) {
+        Outcome::PlayerAdded(player) => player,
+        _ => return Some(json!({"setup_succeeded": false})),
+    };
+    let land = create_probe_object(
+        &mut back_state,
+        9_701_000,
+        land_controller,
+        land_controller,
+        ZoneId::new(Some(land_controller), ZoneKind::Hand),
+        back.base_object(),
+        back.base_creature(),
+    )?;
+    let front_copy = create_probe_object(
+        &mut back_state,
+        9_701_001,
+        land_controller,
+        land_controller,
+        ZoneId::new(Some(land_controller), ZoneKind::Hand),
+        program.base_object(),
+        program.base_creature(),
+    )?;
+    create_probe_object(
+        &mut back_state,
+        9_701_002,
+        land_controller,
+        land_controller,
+        ZoneId::new(Some(land_controller), ZoneKind::Library),
+        card_base,
+        None,
+    )?;
+    let land_window_ready = advance_to_precombat_main(&mut back_state, land_controller);
+    let before_front_land_play = back_state.deterministic_hash();
+    let front_not_playable_as_land = matches!(
+        apply(
+            &mut back_state,
+            Action::PlayLand {
+                player: land_controller,
+                object: front_copy,
+            },
+        ),
+        Outcome::Failed(StateError::ObjectNotPlayableAsLand(object)) if object == front_copy
+    ) && back_state.deterministic_hash() == before_front_land_play;
+    let land_played = matches!(
+        apply(
+            &mut back_state,
+            Action::PlayLand {
+                player: land_controller,
+                object: land,
+            },
+        ),
+        Outcome::Applied
+    );
+    let entered_battlefield_tapped = back_state.object_zone(land)
+        == Some(ZoneId::new(None, ZoneKind::Battlefield))
+        && back_state
+            .object(land)
+            .is_some_and(|record| record.tapped());
+    let green_output = ManaPool::of(ManaKind::Green, 1);
+    let mana_definition = back_mana.bind_selected(land_controller, land, green_output)?;
+    let registered_mana = match apply(
+        &mut back_state,
+        Action::RegisterActivatedAbility {
+            definition: mana_definition,
+        },
+    ) {
+        Outcome::ActivatedAbilityRegistered(ability) => Some(ability),
+        _ => None,
+    };
+    let zero_payment = auto_payment_plan(ManaPool::empty(), back_mana.cost().mana())
+        .ok()
+        .flatten()?;
+    let before_tapped_activation = back_state.deterministic_hash();
+    let tapped_land_activation_rejected_before_mutation = registered_mana.is_some_and(|ability| {
+        matches!(
+            apply(
+                &mut back_state,
+                Action::ActivateAbility {
+                    player: land_controller,
+                    ability,
+                    payment: zero_payment,
+                },
+            ),
+            Outcome::Failed(StateError::SourceAlreadyTapped(object)) if object == land
+        )
+    }) && back_state.deterministic_hash()
+        == before_tapped_activation;
+    let manually_untapped = matches!(
+        apply(
+            &mut back_state,
+            Action::SetObjectTapped {
+                object: land,
+                tapped: false,
+            },
+        ),
+        Outcome::Applied
+    );
+    let mana_activated = registered_mana.is_some_and(|ability| {
+        matches!(
+            apply(
+                &mut back_state,
+                Action::ActivateAbility {
+                    player: land_controller,
+                    ability,
+                    payment: zero_payment,
+                },
+            ),
+            Outcome::Applied
+        )
+    });
+    let added_exactly_green = back_state.mana_pool(land_controller).ok() == Some(green_output);
+    let land_tapped_for_mana = back_state
+        .object(land)
+        .is_some_and(|record| record.tapped());
+
+    Some(json!({
+        "setup_succeeded": true,
+        "contract": {
+            "combined_capabilities": combined_capabilities,
+            "front_contract_exact": front_contract_exact,
+            "back_contract_exact": back_contract_exact,
+        },
+        "front_face": {
+            "missing_target_rejected_before_mutation":
+                missing_target_rejected_before_mutation,
+            "wrong_zone_rejected_before_mutation": wrong_zone_rejected_before_mutation,
+            "opponent_card_rejected_before_mutation":
+                opponent_card_rejected_before_mutation,
+            "bound_action_count": front_actions.len(),
+            "bound_action_exact": front_action_exact,
+            "trace_record_count": front_trace.records().len(),
+            "recovered_to_controller_hand": recovered_to_hand,
+            "unrelated_cards_unchanged": unrelated_cards_unchanged,
+        },
+        "back_face": {
+            "land_window_ready": land_window_ready,
+            "land_played": land_played,
+            "entered_battlefield_tapped": entered_battlefield_tapped,
+            "mana_ability_registered": registered_mana.is_some(),
+            "tapped_activation_rejected_before_mutation":
+                tapped_land_activation_rejected_before_mutation,
+            "manually_untapped": manually_untapped,
+            "mana_activated": mana_activated,
+            "added_exactly_green": added_exactly_green,
+            "land_tapped_for_mana": land_tapped_for_mana,
+        },
+        "face_isolation": {
+            "front_has_no_land_type_or_mana_ability":
+                !program.base_object().types().land()
+                    && program.activated_abilities().is_empty(),
+            "back_has_no_spell_target_or_effect": back.target_requirements().is_empty()
+                && back.effects().is_empty(),
+            "back_rejects_front_target_before_mutation":
+                back_rejects_front_target_before_mutation,
+            "front_not_playable_as_land": front_not_playable_as_land,
+            "back_has_no_nested_face": back.modal_dfc_back().is_none(),
+            "opponent_player_unused_by_back_face":
+                back_state.players()[land_opponent.index()].life() == 20,
+        },
+    }))
+}
+
 fn semantic_probe(program: &CardProgram) -> serde_json::Value {
     let base_subtypes = program
         .base_object()
@@ -5137,6 +5453,7 @@ fn semantic_probe(program: &CardProgram) -> serde_json::Value {
         "reconnaissance_mission": reconnaissance_mission_probe(program),
         "smothering_tithe": smothering_tithe_probe(program),
         "purphoros": purphoros_probe(program),
+        "bala_ged_modal_dfc": bala_ged_modal_dfc_probe(program),
         "noncreature_counter": noncreature_counter_probe(program),
         "temporary_creature_protection": temporary_creature_protection_probe(program),
     })

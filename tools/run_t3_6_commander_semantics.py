@@ -23,6 +23,7 @@ PROBE_SOURCE = ROOT / "tests/t3_6/runtime_probe.rs"
 PROBE_NAME = "forge-t3-6-runtime-probe"
 
 ATOM_CAPABILITIES = {
+    "modal_dfc": "modal_dfc",
     "play_land": "land_play",
     "resolve_permanent": "permanent_spell",
     "activate_mana": "mana_ability",
@@ -144,6 +145,7 @@ def validate_expected_runtime(case: dict[str, Any]) -> None:
         if expected.get("destination") not in {
             "battlefield",
             "exile",
+            "modal_dfc_faces",
             "owner_graveyard",
         }:
             raise ValueError(f"{case['scenario_id']}: invalid card lifecycle destination")
@@ -360,7 +362,7 @@ def verify_observed(cases: dict[str, Any], observed: list[dict[str, Any]]) -> No
 def expected_mana_abilities(case: dict[str, Any]) -> list[dict[str, Any]]:
     expected: list[dict[str, Any]] = []
     for atom in case.get("semantic_atoms", []):
-        if atom.get("op") != "activate_mana":
+        if atom.get("op") != "activate_mana" or atom.get("face") == "back":
             continue
         groups = atom.get("abilities")
         if groups is None:
@@ -1508,6 +1510,81 @@ def expected_purphoros_probe(case: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
+def expected_bala_ged_modal_dfc_probe(case: dict[str, Any]) -> dict[str, Any] | None:
+    if case.get("scenario_id") != "T3.6-086":
+        return None
+    atoms = case.get("semantic_atoms", [])
+    if atoms != [
+        {
+            "faces": ["Bala Ged Recovery", "Bala Ged Sanctuary"],
+            "op": "modal_dfc",
+            "selection": "exclusive",
+        },
+        {
+            "destination": "controller_hand",
+            "face": "front",
+            "op": "move_zone",
+            "target": "card_you_own_in_graveyard",
+        },
+        {
+            "destination": "battlefield",
+            "enters_tapped": True,
+            "face": "back",
+            "op": "play_land",
+            "type_line": "Land",
+        },
+        {
+            "face": "back",
+            "legal_outputs": ["{G}"],
+            "op": "activate_mana",
+            "tap_source": True,
+        },
+    ]:
+        raise ValueError(f"{case['scenario_id']}: invalid modal DFC expectation")
+    return {
+        "setup_succeeded": True,
+        "contract": {
+            "combined_capabilities": [
+                "modal_dfc",
+                "move_zone",
+                "land_play",
+                "mana_ability",
+            ],
+            "front_contract_exact": True,
+            "back_contract_exact": True,
+        },
+        "front_face": {
+            "missing_target_rejected_before_mutation": True,
+            "wrong_zone_rejected_before_mutation": True,
+            "opponent_card_rejected_before_mutation": True,
+            "bound_action_count": 1,
+            "bound_action_exact": True,
+            "trace_record_count": 1,
+            "recovered_to_controller_hand": True,
+            "unrelated_cards_unchanged": True,
+        },
+        "back_face": {
+            "land_window_ready": True,
+            "land_played": True,
+            "entered_battlefield_tapped": True,
+            "mana_ability_registered": True,
+            "tapped_activation_rejected_before_mutation": True,
+            "manually_untapped": True,
+            "mana_activated": True,
+            "added_exactly_green": True,
+            "land_tapped_for_mana": True,
+        },
+        "face_isolation": {
+            "front_has_no_land_type_or_mana_ability": True,
+            "back_has_no_spell_target_or_effect": True,
+            "back_rejects_front_target_before_mutation": True,
+            "front_not_playable_as_land": True,
+            "back_has_no_nested_face": True,
+            "opponent_player_unused_by_back_face": True,
+        },
+    }
+
+
 def verify_semantic_probe(case: dict[str, Any], actual: dict[str, Any]) -> None:
     smothering_tithe = expected_smothering_tithe_probe(case)
     if case.get("status") != "semantic_case_ready" and smothering_tithe is None:
@@ -1665,6 +1742,13 @@ def verify_semantic_probe(case: dict[str, Any], actual: dict[str, Any]) -> None:
     purphoros = expected_purphoros_probe(case)
     if purphoros is not None and probe.get("purphoros") != purphoros:
         raise ValueError(f"{case['scenario_id']}: Purphoros semantic probe changed")
+
+    bala_ged_modal_dfc = expected_bala_ged_modal_dfc_probe(case)
+    if (
+        bala_ged_modal_dfc is not None
+        and probe.get("bala_ged_modal_dfc") != bala_ged_modal_dfc
+    ):
+        raise ValueError(f"{case['scenario_id']}: modal DFC semantic probe changed")
 
 
 

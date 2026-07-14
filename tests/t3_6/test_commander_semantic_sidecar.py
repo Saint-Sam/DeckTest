@@ -83,6 +83,9 @@ def observed_from_cases(cases: dict) -> list[dict]:
                 ),
                 "smothering_tithe": SEMANTICS.expected_smothering_tithe_probe(case),
                 "purphoros": SEMANTICS.expected_purphoros_probe(case),
+                "bala_ged_modal_dfc": (
+                    SEMANTICS.expected_bala_ged_modal_dfc_probe(case)
+                ),
                 "noncreature_counter": (
                     SEMANTICS.expected_noncreature_counter_probe(case)
                 ),
@@ -123,9 +126,9 @@ class CommanderSemanticSidecarTests(unittest.TestCase):
             self.cases["summary"],
             {
                 "candidate_count": 100,
-                "semantic_case_ready": 78,
+                "semantic_case_ready": 79,
                 "blocked_semantic_gap": 21,
-                "blocked_runtime": 1,
+                "blocked_runtime": 0,
             },
         )
 
@@ -642,6 +645,51 @@ class CommanderSemanticSidecarTests(unittest.TestCase):
         pump["payment_consumed"] = False
         pump["pump_expired_at_cleanup"] = False
         with self.assertRaisesRegex(ValueError, "Purphoros semantic probe changed"):
+            SEMANTICS.verify_observed(self.cases, observed)
+
+    def test_bala_ged_front_face_requires_owned_graveyard_target(self) -> None:
+        observed = observed_from_cases(self.cases)
+        bala_index = next(
+            index
+            for index, case in enumerate(self.cases["cases"])
+            if case["scenario_id"] == "T3.6-086"
+        )
+        front = observed[bala_index]["semantic_probe"]["bala_ged_modal_dfc"][
+            "front_face"
+        ]
+        front["wrong_zone_rejected_before_mutation"] = False
+        front["opponent_card_rejected_before_mutation"] = False
+        with self.assertRaisesRegex(ValueError, "modal DFC semantic probe changed"):
+            SEMANTICS.verify_observed(self.cases, observed)
+
+    def test_bala_ged_back_face_enters_tapped_and_produces_green(self) -> None:
+        observed = observed_from_cases(self.cases)
+        bala_index = next(
+            index
+            for index, case in enumerate(self.cases["cases"])
+            if case["scenario_id"] == "T3.6-086"
+        )
+        back = observed[bala_index]["semantic_probe"]["bala_ged_modal_dfc"][
+            "back_face"
+        ]
+        back["entered_battlefield_tapped"] = False
+        back["added_exactly_green"] = False
+        with self.assertRaisesRegex(ValueError, "modal DFC semantic probe changed"):
+            SEMANTICS.verify_observed(self.cases, observed)
+
+    def test_bala_ged_faces_remain_isolated(self) -> None:
+        observed = observed_from_cases(self.cases)
+        bala_index = next(
+            index
+            for index, case in enumerate(self.cases["cases"])
+            if case["scenario_id"] == "T3.6-086"
+        )
+        isolation = observed[bala_index]["semantic_probe"]["bala_ged_modal_dfc"][
+            "face_isolation"
+        ]
+        isolation["back_rejects_front_target_before_mutation"] = False
+        isolation["front_not_playable_as_land"] = False
+        with self.assertRaisesRegex(ValueError, "modal DFC semantic probe changed"):
             SEMANTICS.verify_observed(self.cases, observed)
 
     def test_incremental_report_keeps_checkpoint_open(self) -> None:
