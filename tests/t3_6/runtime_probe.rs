@@ -16,10 +16,10 @@ use forge_core::{
     ContinuousEffectDuration, ContinuousEffectOperation, ContinuousEffectTarget, CounterKind,
     CreatureKeywords, GameEvent, GameState, ManaCost, ManaKind, ManaPool, ObjectColors,
     ObjectSupertypes, ObjectTargetPredicate, ObjectTypes, Outcome, PlayerRule, PriorityOutcome,
-    ResolutionOutcome, RestrictionEffect, SpellTiming, StackObjectKind, StateError, Step,
-    TargetChoice, TargetControllerPredicate, TargetKind, TargetRequirement, TargetRestriction,
-    TargetRestrictionSubject, TriggerCondition, TriggerObjectFilter, TriggerPlayerFilter, ZoneId,
-    ZoneKind,
+    ResolutionOutcome, RestrictionDefinition, RestrictionEffect, SpellTiming, StackObjectKind,
+    StateError, Step, TargetChoice, TargetControllerPredicate, TargetKind, TargetRequirement,
+    TargetRestriction, TargetRestrictionSubject, TriggerCondition, TriggerObjectFilter,
+    TriggerPlayerFilter, ZoneId, ZoneKind,
 };
 use forge_testkit::runtime_smoke::{run_translated_card_runtime_smoke, RuntimeSmokeResult};
 use serde_json::json;
@@ -5415,6 +5415,351 @@ fn bala_ged_modal_dfc_probe(program: &CardProgram) -> Option<serde_json::Value> 
     }))
 }
 
+fn reveal_event_probe(program: &CardProgram) -> Option<serde_json::Value> {
+    let direct_reveal = program
+        .effects()
+        .iter()
+        .any(|effect| matches!(effect, EffectProgram::RevealChosenObjects { .. }));
+    let triggered = program.triggered_abilities().iter().find(|ability| {
+        ability
+            .effects()
+            .iter()
+            .any(|effect| matches!(effect, EffectProgram::RevealChosenObjects { .. }))
+    });
+    if !direct_reveal && triggered.is_none() {
+        return None;
+    }
+
+    let mut state = GameState::new();
+    let controller = match apply(&mut state, Action::AddPlayer) {
+        Outcome::PlayerAdded(player) => player,
+        _ => return Some(json!({"setup_succeeded": false})),
+    };
+    let opponent = match apply(&mut state, Action::AddPlayer) {
+        Outcome::PlayerAdded(player) => player,
+        _ => return Some(json!({"setup_succeeded": false})),
+    };
+    let source = create_probe_object(
+        &mut state,
+        9_990_000,
+        controller,
+        controller,
+        ZoneId::new(None, ZoneKind::Battlefield),
+        program.base_object(),
+        program.base_creature(),
+    )?;
+    let requirement = if direct_reveal {
+        *program.object_choice_requirements().first()?
+    } else {
+        *triggered?.object_choice_requirements().first()?
+    };
+    if requirement.zone() != ZoneKind::Library {
+        return Some(json!({"setup_succeeded": false, "phase": "choice_zone"}));
+    }
+    let mut types = requirement.required_types();
+    if requirement.required_any_types() != ObjectTypes::none() {
+        types = types.union(one_required_type(requirement.required_any_types()));
+    }
+    if types == ObjectTypes::none() && !requirement.required_subtypes().as_slice().is_empty() {
+        types = ObjectTypes::none().with_creature();
+    }
+    if types == ObjectTypes::none() || types.intersects(requirement.forbidden_types()) {
+        return Some(json!({"setup_succeeded": false, "phase": "choice_types"}));
+    }
+    let candidate_base = BaseObjectCharacteristics::new(types, ObjectColors::none())
+        .with_supertypes(requirement.required_supertypes())
+        .with_subtypes(requirement.required_subtypes());
+    let selected = create_probe_object(
+        &mut state,
+        9_990_001,
+        controller,
+        controller,
+        ZoneId::new(Some(controller), ZoneKind::Library),
+        candidate_base,
+        if types.creature() {
+            Some(BaseCreatureCharacteristics::new(2, 2))
+        } else {
+            None
+        },
+    )?;
+    let bindings = ExecutionBindings::new(controller, vec![opponent])
+        .with_source(source)
+        .with_object_choices(vec![vec![selected]]);
+    let actions = if direct_reveal {
+        bind_program_actions(&state, program, &bindings).ok()?
+    } else {
+        let ability = triggered?;
+        let bindings = bindings.with_optional_effect_choices(vec![true; ability.optional_choice_count()]);
+        bind_triggered_ability_actions(&state, ability, &bindings).ok()?
+    };
+    let reveal_index = actions.iter().position(|bound| {
+        matches!(
+            bound.action(),
+            Action::RevealObjects { objects } if objects.as_slice() == [selected]
+        )
+    });
+    let destination_index = actions.iter().position(|bound| {
+        matches!(
+            bound.action(),
+            Action::MoveObject { object, .. }
+                | Action::PutObjectOnTopOfLibrary { object, .. }
+                if *object == selected
+        )
+    });
+    let cursor = state.event_cursor();
+    let all_actions_applied = actions
+        .iter()
+        .all(|bound| matches!(apply(&mut state, bound.action().clone()), Outcome::Applied));
+    let revealed = state
+        .events_since(cursor)
+        .ok()?
+        .iter()
+        .filter_map(|record| match record.event() {
+            GameEvent::ObjectRevealed { object } => Some(object),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+
+    Some(json!({
+        "setup_succeeded": true,
+        "reveal_action_present": reveal_index.is_some(),
+        "destination_action_present": destination_index.is_some(),
+        "reveal_precedes_destination": matches!((reveal_index, destination_index), (Some(reveal), Some(destination)) if reveal < destination),
+        "public_reveal_event_emitted": revealed == vec![selected],
+        "all_actions_applied": all_actions_applied,
+    }))
+}
+
+fn regeneration_prohibition_probe(program: &CardProgram) -> Option<serde_json::Value> {
+    if !program.effects().iter().any(|effect| {
+        matches!(
+            effect,
+            EffectProgram::DestroyPermanentWithoutRegeneration { .. }
+        )
+    }) {
+        return None;
+    }
+    let mut state = GameState::new();
+    let controller = match apply(&mut state, Action::AddPlayer) {
+        Outcome::PlayerAdded(player) => player,
+        _ => return Some(json!({"setup_succeeded": false})),
+    };
+    let opponent = match apply(&mut state, Action::AddPlayer) {
+        Outcome::PlayerAdded(player) => player,
+        _ => return Some(json!({"setup_succeeded": false})),
+    };
+    let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+    let creature_base =
+        BaseObjectCharacteristics::new(ObjectTypes::none().with_creature(), ObjectColors::none());
+    let creature_stats = Some(BaseCreatureCharacteristics::new(3, 3));
+    let baseline = create_probe_object(
+        &mut state,
+        9_991_000,
+        opponent,
+        opponent,
+        battlefield,
+        creature_base,
+        creature_stats,
+    )?;
+    let target = create_probe_object(
+        &mut state,
+        9_991_001,
+        opponent,
+        opponent,
+        battlefield,
+        creature_base,
+        creature_stats,
+    )?;
+    for object in [baseline, target] {
+        if !matches!(
+            apply(
+                &mut state,
+                Action::RegisterRestriction {
+                    definition: RestrictionDefinition::new(
+                        opponent,
+                        RestrictionEffect::RegenerationShield { object },
+                    )
+                    .with_duration(ContinuousEffectDuration::UntilEndOfTurn),
+                },
+            ),
+            Outcome::RestrictionRegistered(_)
+        ) {
+            return Some(json!({"setup_succeeded": false, "phase": "shield"}));
+        }
+    }
+    let _ = apply(
+        &mut state,
+        Action::MarkDamageOnObject {
+            object: baseline,
+            amount: 2,
+        },
+    );
+    let normal_destroy_applied = matches!(
+        apply(
+            &mut state,
+            Action::DestroyPermanent { object: baseline },
+        ),
+        Outcome::Applied
+    );
+    let baseline_record = state.object(baseline)?;
+    let bindings = ExecutionBindings::new(controller, vec![opponent])
+        .with_targets(vec![TargetChoice::Object(target)]);
+    let actions = bind_program_actions(&state, program, &bindings).ok()?;
+    let no_regeneration_action_present = actions.iter().any(|bound| {
+        matches!(
+            bound.action(),
+            Action::DestroyPermanentWithoutRegeneration { object } if *object == target
+        )
+    });
+    let destruction_action_applied = actions
+        .iter()
+        .find(|bound| {
+            matches!(
+                bound.action(),
+                Action::DestroyPermanentWithoutRegeneration { object } if *object == target
+            )
+        })
+        .is_some_and(|bound| {
+            matches!(apply(&mut state, bound.action().clone()), Outcome::Applied)
+        });
+    let target_graveyard = ZoneId::new(Some(opponent), ZoneKind::Graveyard);
+
+    Some(json!({
+        "setup_succeeded": true,
+        "normal_destroy_applied": normal_destroy_applied,
+        "normal_destroy_replaced": state.object_zone(baseline) == Some(battlefield),
+        "normal_destroy_tapped": baseline_record.tapped(),
+        "normal_destroy_cleared_damage": baseline_record.damage_marked() == 0,
+        "no_regeneration_action_present": no_regeneration_action_present,
+        "destruction_action_applied": destruction_action_applied,
+        "shielded_target_destroyed": state.object_zone(target) == Some(target_graveyard),
+        "all_shields_consumed_or_expired": !state.restrictions().any(|(_, definition)| matches!(definition.effect(), RestrictionEffect::RegenerationShield { .. })),
+    }))
+}
+
+fn cast_or_copy_probe(program: &CardProgram) -> Option<serde_json::Value> {
+    let ability = program.triggered_abilities().iter().find(|ability| {
+        matches!(
+            ability.event(),
+            TriggeredEventProgram::ControllerCastsOrCopies(_)
+        )
+    })?;
+    let mut state = GameState::new();
+    let controller = match apply(&mut state, Action::AddPlayer) {
+        Outcome::PlayerAdded(player) => player,
+        _ => return Some(json!({"setup_succeeded": false})),
+    };
+    let opponent = match apply(&mut state, Action::AddPlayer) {
+        Outcome::PlayerAdded(player) => player,
+        _ => return Some(json!({"setup_succeeded": false})),
+    };
+    let source = create_probe_object(
+        &mut state,
+        9_992_000,
+        controller,
+        controller,
+        ZoneId::new(None, ZoneKind::Battlefield),
+        program.base_object(),
+        program.base_creature(),
+    )?;
+    let definition = ability.bind(controller, source);
+    let condition_exact = matches!(
+        definition.condition(),
+        TriggerCondition::StackEntryAddedOrCopied { .. }
+    );
+    let trigger = match apply(
+        &mut state,
+        Action::RegisterTriggeredAbility { definition },
+    ) {
+        Outcome::TriggerRegistered(trigger) => trigger,
+        _ => return Some(json!({"setup_succeeded": false, "phase": "register"})),
+    };
+    for salt in 0..2 {
+        let _ = apply(
+            &mut state,
+            Action::CreateObject {
+                card: CardId::new(9_992_010 + salt),
+                owner: controller,
+                controller,
+                zone: ZoneId::new(Some(controller), ZoneKind::Library),
+            },
+        );
+    }
+    let spell = create_probe_object(
+        &mut state,
+        9_992_020,
+        controller,
+        controller,
+        ZoneId::new(Some(controller), ZoneKind::Hand),
+        BaseObjectCharacteristics::new(
+            ObjectTypes::none().with_instant(),
+            ObjectColors::none(),
+        ),
+        None,
+    )?;
+    let priority_ready = prepare_stack_priority(&mut state, controller);
+    let original = match apply(
+        &mut state,
+        Action::PutSpellOnStack {
+            player: controller,
+            object: spell,
+            kind: StackObjectKind::InstantSpell,
+            hold_priority: true,
+        },
+    ) {
+        Outcome::StackEntryAdded(entry) => entry,
+        _ => return Some(json!({"setup_succeeded": false, "phase": "cast"})),
+    };
+    let cast_trigger_queued = state.pending_triggers().len() == 1
+        && state.pending_triggers()[0].trigger() == trigger;
+    let copy = match apply(
+        &mut state,
+        Action::CopyStackEntry {
+            player: controller,
+            entry: original,
+        },
+    ) {
+        Outcome::StackEntryAdded(entry) => entry,
+        _ => return Some(json!({"setup_succeeded": false, "phase": "copy"})),
+    };
+    let cast_and_copy_queued = state.pending_triggers().len() == 2
+        && state
+            .pending_triggers()
+            .iter()
+            .all(|pending| pending.trigger() == trigger);
+    let copy_provenance_exact = state
+        .stack_entries()
+        .iter()
+        .find(|entry| entry.id() == copy)
+        .and_then(|entry| entry.copy_info())
+        .is_some_and(|info| info.source_entry() == original && info.source_object() == Some(spell));
+    let bindings = ExecutionBindings::new(controller, vec![opponent]).with_source(source);
+    let actions = bind_triggered_ability_actions(&state, ability, &bindings).ok()?;
+    let draw_action_exact = matches!(
+        actions.as_slice(),
+        [bound]
+            if matches!(bound.action(), Action::DrawCards { player, count } if *player == controller && *count == 1)
+    );
+    let hand = ZoneId::new(Some(controller), ZoneKind::Hand);
+    let before = state.zone_objects(hand).map_or(0, <[forge_core::ObjectId]>::len);
+    let two_draw_resolutions = (0..2).all(|_| {
+        actions
+            .iter()
+            .all(|bound| matches!(apply(&mut state, bound.action().clone()), Outcome::Applied))
+    });
+    let after = state.zone_objects(hand).map_or(0, <[forge_core::ObjectId]>::len);
+
+    Some(json!({
+        "setup_succeeded": priority_ready,
+        "condition_exact": condition_exact,
+        "cast_trigger_queued": cast_trigger_queued,
+        "cast_and_copy_queued": cast_and_copy_queued,
+        "copy_provenance_exact": copy_provenance_exact,
+        "draw_action_exact": draw_action_exact,
+        "two_draw_resolutions": two_draw_resolutions && after == before.saturating_add(2),
+    }))
+}
+
 fn semantic_probe(program: &CardProgram) -> serde_json::Value {
     let base_subtypes = program
         .base_object()
@@ -5440,6 +5785,9 @@ fn semantic_probe(program: &CardProgram) -> serde_json::Value {
         "mana_abilities": mana_abilities,
         "token_mana_abilities": token_mana_abilities,
         "token_subtypes": token_subtype_sets(program),
+        "reveal_event": reveal_event_probe(program),
+        "regeneration_prohibition": regeneration_prohibition_probe(program),
+        "cast_or_copy": cast_or_copy_probe(program),
         "no_maximum_hand_size": no_maximum_hand_size_probe(program),
         "equipment": equipment_probe(program),
         "sacrifice_counter": sacrifice_counter_probe(program),

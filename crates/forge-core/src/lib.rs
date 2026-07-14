@@ -2250,6 +2250,8 @@ pub enum GameEventKind {
     NoncombatDamageDealt,
     /// A card was successfully drawn from a library.
     CardDrawn,
+    /// One object's identity was publicly revealed.
+    ObjectRevealed,
 }
 
 impl GameEventKind {
@@ -2325,6 +2327,7 @@ impl GameEventKind {
             Self::BaseObjectCharacteristicsSet => 67,
             Self::NoncombatDamageDealt => 68,
             Self::CardDrawn => 69,
+            Self::ObjectRevealed => 70,
         }
     }
 }
@@ -2877,7 +2880,7 @@ pub enum TriggerCondition {
         /// Required active player.
         player: TriggerPlayerFilter,
     },
-    /// Match a newly cast/copied stack object with closed type constraints.
+    /// Match a newly cast stack object with closed type constraints.
     StackEntryAdded {
         /// Required stack-entry controller.
         controller: TriggerPlayerFilter,
@@ -2905,6 +2908,17 @@ pub enum TriggerCondition {
         /// Whether the registered trigger source itself is excluded.
         exclude_source: bool,
     },
+    /// Match a newly cast spell or a copied stack object with closed type constraints.
+    StackEntryAddedOrCopied {
+        /// Required stack-entry controller.
+        controller: TriggerPlayerFilter,
+        /// Types the stack object's source card must contain.
+        required_types: ObjectTypes,
+        /// Type union from which the source card must match at least one.
+        required_any_types: ObjectTypes,
+        /// Types the source card must not contain.
+        forbidden_types: ObjectTypes,
+    },
 }
 
 impl TriggerCondition {
@@ -2925,6 +2939,7 @@ impl TriggerCondition {
             Self::CombatDamageToPlayer { .. } => GameEventKind::CombatDamageDealt,
             Self::PlayerDrewCard { .. } => GameEventKind::CardDrawn,
             Self::PermanentEnteredBattlefield { .. } => GameEventKind::ObjectMoved,
+            Self::StackEntryAddedOrCopied { .. } => GameEventKind::StackEntryAdded,
         }
     }
 
@@ -2943,6 +2958,7 @@ impl TriggerCondition {
             Self::CombatDamageToPlayer { .. } => 10,
             Self::PlayerDrewCard { .. } => 11,
             Self::PermanentEnteredBattlefield { .. } => 12,
+            Self::StackEntryAddedOrCopied { .. } => 13,
         }
     }
 }
@@ -3587,6 +3603,11 @@ pub enum RestrictionEffect {
         /// Permanent protected from destruction.
         object: ObjectId,
     },
+    /// One consumable regeneration shield on an exact permanent.
+    RegenerationShield {
+        /// Permanent protected by the shield.
+        object: ObjectId,
+    },
 }
 
 impl RestrictionEffect {
@@ -3596,6 +3617,7 @@ impl RestrictionEffect {
             Self::Combat { .. } => 1,
             Self::PlayerRule { .. } => 2,
             Self::Indestructible { .. } => 3,
+            Self::RegenerationShield { .. } => 4,
         }
     }
 }
@@ -6884,6 +6906,16 @@ pub enum Action {
         /// Stack entry to copy.
         entry: StackEntryId,
     },
+    /// Publicly reveal one or more existing objects without moving them.
+    RevealObjects {
+        /// Objects revealed in deterministic source order.
+        objects: Vec<ObjectId>,
+    },
+    /// Destroy one permanent without allowing a regeneration shield to replace it.
+    DestroyPermanentWithoutRegeneration {
+        /// Permanent to destroy.
+        object: ObjectId,
+    },
 }
 
 /// Ordered set of currently legal actions.
@@ -7308,7 +7340,7 @@ fn apply_fallback(state: &mut GameState, action: Action) -> Outcome {
             Ok(()) => Outcome::Applied,
             Err(error) => Outcome::Failed(error),
         },
-        Action::DestroyPermanent { object } => match state.destroy_permanent(object) {
+        Action::DestroyPermanent { object } => match state.destroy_permanent(object, true) {
             Ok(()) => Outcome::Applied,
             Err(error) => Outcome::Failed(error),
         },
@@ -7431,6 +7463,16 @@ fn apply_fallback(state: &mut GameState, action: Action) -> Outcome {
             Ok(copy) => Outcome::StackEntryAdded(copy),
             Err(error) => Outcome::Failed(error),
         },
+        Action::RevealObjects { objects } => match state.reveal_objects(&objects) {
+            Ok(()) => Outcome::Applied,
+            Err(error) => Outcome::Failed(error),
+        },
+        Action::DestroyPermanentWithoutRegeneration { object } => {
+            match state.destroy_permanent(object, false) {
+                Ok(()) => Outcome::Applied,
+                Err(error) => Outcome::Failed(error),
+            }
+        }
     }
 }
 
@@ -8043,6 +8085,11 @@ pub enum GameEvent {
         /// Object drawn.
         object: ObjectId,
     },
+    /// One object's identity was publicly revealed.
+    ObjectRevealed {
+        /// Revealed object.
+        object: ObjectId,
+    },
 }
 
 impl GameEvent {
@@ -8118,6 +8165,7 @@ impl GameEvent {
             Self::BaseObjectCharacteristicsSet { .. } => 67,
             Self::NoncombatDamageDealt { .. } => 68,
             Self::CardDrawn { .. } => 69,
+            Self::ObjectRevealed { .. } => 70,
         }
     }
 
@@ -8207,6 +8255,7 @@ impl GameEvent {
             }
             Self::NoncombatDamageDealt { .. } => GameEventKind::NoncombatDamageDealt,
             Self::CardDrawn { .. } => GameEventKind::CardDrawn,
+            Self::ObjectRevealed { .. } => GameEventKind::ObjectRevealed,
         }
     }
 }
@@ -9680,6 +9729,14 @@ impl GameState {
                     return Err(StateError::UnknownObject(object));
                 }
             }
+            RestrictionEffect::RegenerationShield { object } => {
+                if self.objects.get(object).is_none() {
+                    return Err(StateError::UnknownObject(object));
+                }
+                if self.object_zone(object) != Some(ZoneId::new(None, ZoneKind::Battlefield)) {
+                    return Err(StateError::ObjectNotOnBattlefield(object));
+                }
+            }
         }
         let id = RestrictionId(self.next_restriction);
         self.next_restriction = self.next_restriction.saturating_add(1);
@@ -10860,7 +10917,12 @@ impl GameState {
         let mut queued = Vec::new();
         let mut consumed_delayed = Vec::new();
         for subscription in &self.trigger_subscriptions {
-            if subscription.event_kind != record.event().kind() {
+            let event_kind_matches = subscription.event_kind == record.event().kind()
+                || (matches!(
+                    subscription.definition.condition(),
+                    TriggerCondition::StackEntryAddedOrCopied { .. }
+                ) && record.event().kind() == GameEventKind::StackEntryCopied);
+            if !event_kind_matches {
                 continue;
             }
             if !self.trigger_condition_matches(subscription.definition, record.event()) {
@@ -11004,6 +11066,46 @@ impl GameState {
                         predicate,
                         object,
                     ))
+            }
+            TriggerCondition::StackEntryAddedOrCopied {
+                controller,
+                required_types,
+                required_any_types,
+                forbidden_types,
+            } => {
+                let (event_controller, object) = match event {
+                    GameEvent::StackEntryAdded {
+                        controller,
+                        object: Some(object),
+                        ..
+                    } => (controller, object),
+                    GameEvent::StackEntryCopied {
+                        copy, controller, ..
+                    } => {
+                        let Some(object) = self
+                            .stack_entries
+                            .iter()
+                            .find(|entry| entry.id() == copy)
+                            .and_then(|entry| {
+                                entry.object().or_else(|| {
+                                    entry.copy_info().and_then(StackCopyInfo::source_object)
+                                })
+                            })
+                        else {
+                            return false;
+                        };
+                        (controller, object)
+                    }
+                    _ => return false,
+                };
+                let Ok(characteristics) = self.object_characteristics(object) else {
+                    return false;
+                };
+                self.trigger_player_matches(definition, controller, event_controller)
+                    && characteristics.types().contains_all(required_types)
+                    && (required_any_types == ObjectTypes::none()
+                        || characteristics.types().intersects(required_any_types))
+                    && !characteristics.types().intersects(forbidden_types)
             }
         }
     }
@@ -11839,6 +11941,13 @@ impl GameState {
         self.zone_mut(to)?.objects_mut().push(object);
         if from_zone_id == battlefield && to != battlefield {
             self.remove_object_from_combat(object);
+            self.restrictions.retain(|subscription| {
+                !matches!(
+                    subscription.definition.effect(),
+                    RestrictionEffect::RegenerationShield { object: protected }
+                        if protected == object
+                )
+            });
             if let Some(record) = self.objects.get_mut(object) {
                 record.damage_marked = 0;
                 record.deathtouch_damage_marked = false;
@@ -14288,11 +14397,30 @@ impl GameState {
         Ok(())
     }
 
-    fn destroy_permanent(&mut self, object: ObjectId) -> Result<(), StateError> {
+    fn destroy_permanent(
+        &mut self,
+        object: ObjectId,
+        allow_regeneration: bool,
+    ) -> Result<(), StateError> {
         if self.object_zone(object) != Some(ZoneId::new(None, ZoneKind::Battlefield)) {
             return Err(StateError::ObjectNotOnBattlefield(object));
         }
         if self.object_is_indestructible(object) {
+            return Ok(());
+        }
+        if allow_regeneration && self.consume_regeneration_shield(object) {
+            let record = self
+                .objects
+                .get_mut(object)
+                .ok_or(StateError::UnknownObject(object))?;
+            record.tapped = true;
+            record.damage_marked = 0;
+            record.deathtouch_damage_marked = false;
+            self.remove_object_from_combat(object);
+            self.emit_event(GameEvent::ObjectTapped {
+                object,
+                tapped: true,
+            });
             return Ok(());
         }
         let owner = self
@@ -14301,6 +14429,21 @@ impl GameState {
             .ok_or(StateError::UnknownObject(object))?
             .owner();
         self.move_object(object, ZoneId::new(Some(owner), ZoneKind::Graveyard))
+    }
+
+    fn consume_regeneration_shield(&mut self, object: ObjectId) -> bool {
+        let Some(index) = self.restrictions.iter().position(|subscription| {
+            self.restriction_source_is_active(subscription.definition)
+                && matches!(
+                    subscription.definition.effect(),
+                    RestrictionEffect::RegenerationShield { object: protected }
+                        if protected == object
+                )
+        }) else {
+            return false;
+        };
+        self.restrictions.remove(index);
+        true
     }
 
     fn map_payment_error(error: PaymentError) -> StateError {
@@ -14376,6 +14519,18 @@ impl GameState {
                     self.empty_library_draws_since_sba.push(player);
                 }
             }
+        }
+        Ok(())
+    }
+
+    fn reveal_objects(&mut self, objects: &[ObjectId]) -> Result<(), StateError> {
+        for object in objects {
+            if self.objects.get(*object).is_none() {
+                return Err(StateError::UnknownObject(*object));
+            }
+        }
+        for object in objects {
+            self.emit_event(GameEvent::ObjectRevealed { object: *object });
         }
         Ok(())
     }
@@ -15109,6 +15264,12 @@ impl Fnva64 {
                 required_types,
                 required_any_types,
                 forbidden_types,
+            }
+            | TriggerCondition::StackEntryAddedOrCopied {
+                controller,
+                required_types,
+                required_any_types,
+                forbidden_types,
             } => {
                 self.write_trigger_player_filter(controller);
                 self.write_object_types(required_types);
@@ -15341,7 +15502,8 @@ impl Fnva64 {
                 self.write_player_rule_subject(subject);
                 self.write_player_rule(rule);
             }
-            RestrictionEffect::Indestructible { object } => self.write_u32(object.0),
+            RestrictionEffect::Indestructible { object }
+            | RestrictionEffect::RegenerationShield { object } => self.write_u32(object.0),
         }
     }
 
@@ -15984,6 +16146,7 @@ impl Fnva64 {
                 self.write_u32(player.0);
                 self.write_u32(object.0);
             }
+            GameEvent::ObjectRevealed { object } => self.write_u32(object.0),
         }
     }
 
@@ -16453,6 +16616,12 @@ impl CanonicalBytes {
                 required_types,
                 required_any_types,
                 forbidden_types,
+            }
+            | TriggerCondition::StackEntryAddedOrCopied {
+                controller,
+                required_types,
+                required_any_types,
+                forbidden_types,
             } => {
                 self.write_trigger_player_filter(controller);
                 self.write_object_types(required_types);
@@ -16685,7 +16854,8 @@ impl CanonicalBytes {
                 self.write_player_rule_subject(subject);
                 self.write_player_rule(rule);
             }
-            RestrictionEffect::Indestructible { object } => self.write_u32(object.0),
+            RestrictionEffect::Indestructible { object }
+            | RestrictionEffect::RegenerationShield { object } => self.write_u32(object.0),
         }
     }
 
@@ -17328,6 +17498,7 @@ impl CanonicalBytes {
                 self.write_u32(player.0);
                 self.write_u32(object.0);
             }
+            GameEvent::ObjectRevealed { object } => self.write_u32(object.0),
         }
     }
 
@@ -17413,9 +17584,9 @@ mod tests {
         PlayerRule, PlayerRuleSubject, PriorityOutcome, ReplacementCondition,
         ReplacementDamageTargetFilter, ReplacementDefinition, ReplacementDuration,
         ReplacementEffectId, ReplacementOperation, ReplacementSourceFilter, ResolutionOutcome,
-        RestrictionDefinition, RestrictionEffect, SpellTiming, StackEntryId, StackObjectKind,
-        StateBasedActionKind, StateBasedActionReport, StateError, Step, TargetChoice,
-        TargetControllerPredicate, TargetKind, TargetRequirement, TargetRestriction,
+        RestrictionDefinition, RestrictionEffect, SpellTiming, StackEntryId, StackEntryRequest,
+        StackObjectKind, StateBasedActionKind, StateBasedActionReport, StateError, Step,
+        TargetChoice, TargetControllerPredicate, TargetKind, TargetRequirement, TargetRestriction,
         TargetRestrictionSubject, TriggerCondition, TriggerDefinition, TriggerInterveningIf,
         TriggerObjectFilter, TriggerPlayerFilter, TriggerZoneFilter, ZoneConservation, ZoneId,
         ZoneKind, EVENT_RING_CAPACITY, NORMAL_TURN_STEPS, OPENING_HAND_SIZE, PAYMENT_PLAN_LIMIT,
@@ -19462,6 +19633,192 @@ mod tests {
             state.validate_zone_conservation(),
             Ok(ZoneConservation { object_count: 4 })
         );
+    }
+
+    #[test]
+    fn reveal_objects_emits_public_events_without_moving_cards() {
+        let mut state = GameState::new();
+        let player = add_player_action(&mut state);
+        let library = ZoneId::new(Some(player), ZoneKind::Library);
+        seed_library_cards(&mut state, player, 8_125, 2);
+        let objects = state
+            .zone(library)
+            .unwrap_or_else(|| panic!("library zone missing"))
+            .objects()
+            .to_vec();
+        let cursor = state.event_cursor();
+
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::RevealObjects {
+                    objects: objects.clone(),
+                },
+            ),
+            Outcome::Applied
+        );
+        let revealed = state
+            .events_since(cursor)
+            .unwrap_or_else(|error| panic!("reveal event replay failed: {error:?}"))
+            .iter()
+            .filter_map(|record| match record.event() {
+                GameEvent::ObjectRevealed { object } => Some(object),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(revealed, objects);
+        assert_eq!(
+            state
+                .zone(library)
+                .unwrap_or_else(|| panic!("library zone missing"))
+                .objects(),
+            revealed.as_slice()
+        );
+    }
+
+    #[test]
+    fn cast_or_copy_trigger_observes_stack_copies_without_open_matching() {
+        let mut state = GameState::new();
+        let controller = add_player_action(&mut state);
+        let spell = state
+            .create_object(
+                CardId::new(8_140),
+                controller,
+                controller,
+                ZoneId::new(Some(controller), ZoneKind::Hand),
+            )
+            .unwrap_or_else(|error| panic!("spell create failed: {error:?}"));
+        state
+            .set_base_object_characteristics(
+                spell,
+                BaseObjectCharacteristics::new(
+                    ObjectTypes::none().with_instant(),
+                    ObjectColors::none(),
+                ),
+            )
+            .unwrap_or_else(|error| panic!("spell characteristics failed: {error:?}"));
+        let original = state.push_stack_entry(StackEntryRequest {
+            controller,
+            object: Some(spell),
+            trigger: None,
+            activated_ability: None,
+            kind: StackObjectKind::InstantSpell,
+            targets: Vec::new(),
+            payment: None,
+            copy_info: None,
+            kicked: false,
+            flashback: false,
+            split_second: false,
+        });
+        let matching_types = ObjectTypes::none()
+            .with_instant()
+            .union(ObjectTypes::none().with_sorcery());
+        let copy_trigger = state
+            .register_triggered_ability(TriggerDefinition::new(
+                controller,
+                TriggerCondition::StackEntryAddedOrCopied {
+                    controller: TriggerPlayerFilter::Controller,
+                    required_types: ObjectTypes::none(),
+                    required_any_types: matching_types,
+                    forbidden_types: ObjectTypes::none(),
+                },
+            ))
+            .unwrap_or_else(|error| panic!("copy trigger registration failed: {error:?}"));
+        state
+            .register_triggered_ability(TriggerDefinition::new(
+                controller,
+                TriggerCondition::StackEntryAdded {
+                    controller: TriggerPlayerFilter::Controller,
+                    required_types: ObjectTypes::none(),
+                    required_any_types: matching_types,
+                    forbidden_types: ObjectTypes::none(),
+                },
+            ))
+            .unwrap_or_else(|error| panic!("cast trigger registration failed: {error:?}"));
+
+        state
+            .copy_stack_entry(controller, original)
+            .unwrap_or_else(|error| panic!("stack copy failed: {error:?}"));
+
+        assert_eq!(state.pending_triggers().len(), 1);
+        assert_eq!(state.pending_triggers()[0].trigger(), copy_trigger);
+    }
+
+    #[test]
+    fn regeneration_shield_replaces_normal_but_not_prohibited_destruction() {
+        let mut state = GameState::new();
+        let controller = add_player_action(&mut state);
+        let creature = battlefield_creature(
+            &mut state,
+            controller,
+            8_145,
+            3,
+            3,
+            CreatureKeywords::none(),
+        );
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::MarkDamageOnObject {
+                    object: creature,
+                    amount: 2,
+                },
+            ),
+            Outcome::Applied
+        );
+        let shield = || {
+            RestrictionDefinition::new(
+                controller,
+                RestrictionEffect::RegenerationShield { object: creature },
+            )
+            .with_duration(ContinuousEffectDuration::UntilEndOfTurn)
+        };
+        assert!(matches!(
+            apply(
+                &mut state,
+                Action::RegisterRestriction {
+                    definition: shield(),
+                },
+            ),
+            Outcome::RestrictionRegistered(_)
+        ));
+
+        assert_eq!(
+            apply(&mut state, Action::DestroyPermanent { object: creature }),
+            Outcome::Applied
+        );
+        assert_eq!(
+            state.object_zone(creature),
+            Some(ZoneId::new(None, ZoneKind::Battlefield))
+        );
+        let record = state
+            .object(creature)
+            .unwrap_or_else(|| panic!("regenerated creature missing"));
+        assert!(record.tapped());
+        assert_eq!(record.damage_marked(), 0);
+        assert_eq!(state.restrictions().count(), 0);
+
+        assert!(matches!(
+            apply(
+                &mut state,
+                Action::RegisterRestriction {
+                    definition: shield(),
+                },
+            ),
+            Outcome::RestrictionRegistered(_)
+        ));
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::DestroyPermanentWithoutRegeneration { object: creature },
+            ),
+            Outcome::Applied
+        );
+        assert_eq!(
+            state.object_zone(creature),
+            Some(ZoneId::new(Some(controller), ZoneKind::Graveyard))
+        );
+        assert_eq!(state.restrictions().count(), 0);
     }
 
     #[test]

@@ -217,6 +217,8 @@ pub enum Capability {
     SplitSecond,
     /// Choose and execute either face of a modal double-faced card.
     ModalDfc,
+    /// Publicly reveal one or more explicitly chosen objects.
+    RevealObjects,
 }
 
 impl Capability {
@@ -257,6 +259,7 @@ impl Capability {
             Self::Overload => "overload",
             Self::SplitSecond => "split_second",
             Self::ModalDfc => "modal_dfc",
+            Self::RevealObjects => "reveal_objects",
         }
     }
 }
@@ -595,6 +598,11 @@ pub enum EffectProgram {
         /// Object target slot.
         target: usize,
     },
+    /// Destroy one targeted permanent without allowing regeneration.
+    DestroyPermanentWithoutRegeneration {
+        /// Object target slot.
+        target: usize,
+    },
     /// Exile one targeted object.
     ExileObject {
         /// Object target slot.
@@ -703,6 +711,11 @@ pub enum EffectProgram {
         /// Counter amount.
         amount: u32,
     },
+    /// Publicly reveal objects selected by a prior explicit choice.
+    RevealChosenObjects {
+        /// Object-choice slot containing the objects to reveal.
+        choice: usize,
+    },
 }
 
 /// One completely compiled triggered ability.
@@ -756,8 +769,10 @@ pub enum TriggeredEventProgram {
     AttachedObjectAttacks,
     /// This permanent's controller begins their upkeep.
     ControllerUpkeep,
-    /// This permanent's controller casts or copies a matching spell.
+    /// This permanent's controller casts a matching spell.
     ControllerCasts(ObjectTargetPredicate),
+    /// This permanent's controller casts or copies a matching spell.
+    ControllerCastsOrCopies(ObjectTargetPredicate),
     /// A matching permanent controlled by this source's controller deals combat damage to a player.
     ControllerPermanentDealsCombatDamageToPlayer(ObjectTargetPredicate),
     /// An opponent of this source's controller draws a card.
@@ -1197,6 +1212,14 @@ impl TriggeredAbilityProgram {
                     forbidden_types: predicate.forbidden_types(),
                 }
             }
+            TriggeredEventProgram::ControllerCastsOrCopies(predicate) => {
+                TriggerCondition::StackEntryAddedOrCopied {
+                    controller: TriggerPlayerFilter::Controller,
+                    required_types: predicate.required_types(),
+                    required_any_types: predicate.required_any_types(),
+                    forbidden_types: predicate.forbidden_types(),
+                }
+            }
             TriggeredEventProgram::ControllerPermanentDealsCombatDamageToPlayer(source) => {
                 TriggerCondition::CombatDamageToPlayer { source }
             }
@@ -1309,7 +1332,9 @@ impl EffectProgram {
             Self::DiscardHands { .. } => Capability::DiscardCards,
             Self::Scry { .. } => Capability::Scry,
             Self::ShuffleLibrary { .. } => Capability::ShuffleLibrary,
-            Self::DestroyPermanent { .. } => Capability::DestroyPermanent,
+            Self::DestroyPermanent { .. } | Self::DestroyPermanentWithoutRegeneration { .. } => {
+                Capability::DestroyPermanent
+            }
             Self::ExileObject { .. } => Capability::ExileObject,
             Self::CounterStackEntry { .. } => Capability::CounterStackEntry,
             Self::MoveTargetObject { .. } => Capability::MoveZone,
@@ -1326,6 +1351,7 @@ impl EffectProgram {
             Self::GrantIndestructible { .. } => Capability::Indestructible,
             Self::AttachSourceToTarget { .. } => Capability::AttachObject,
             Self::AddCountersToSource { .. } => Capability::AddCounters,
+            Self::RevealChosenObjects { .. } => Capability::RevealObjects,
         }
     }
 }
@@ -3142,21 +3168,20 @@ fn compile_trigger_event(
                     ));
                 }
             };
-            let controller_is_you = matches!(
-                controller,
+            match controller {
                 Expression::Call {
                     operation: Operation::You,
-                    arguments
-                } if arguments.is_empty()
-            ) || matches!(controller, Expression::Text(value) if value == "cast_or_copy:you");
-            if !controller_is_you {
-                return Err(CompileDiagnostic::new(
+                    arguments,
+                } if arguments.is_empty() => Ok(TriggeredEventProgram::ControllerCasts(predicate)),
+                Expression::Text(value) if value == "cast_or_copy:you" => {
+                    Ok(TriggeredEventProgram::ControllerCastsOrCopies(predicate))
+                }
+                _ => Err(CompileDiagnostic::new(
                     CompileDiagnosticCode::PlayerSelector,
                     format!("{path}.controller"),
                     "event_cast controller must be you() or exact cast_or_copy:you",
-                ));
+                )),
             }
-            Ok(TriggeredEventProgram::ControllerCasts(predicate))
         }
         Operation::EventDamage => {
             let [source, target, Expression::Text(mode)] = arguments.as_slice() else {
@@ -4524,14 +4549,33 @@ fn compile_effect(
             Ok(())
         }
         Operation::Destroy | Operation::Exile => {
-            let ([target] | [target, _]) = arguments.as_slice() else {
-                return Err(effect_arity(path, operation, "one target selector"));
+            let (target, prohibit_regeneration) = match (operation, arguments.as_slice()) {
+                (Operation::Destroy, [target]) | (Operation::Exile, [target]) => (target, false),
+                (Operation::Destroy, [target, Expression::Text(mode)])
+                    if mode == "cannot_regenerate" =>
+                {
+                    (target, true)
+                }
+                (Operation::Destroy, _) => {
+                    return Err(effect_arity(
+                        path,
+                        operation,
+                        "one target selector and optional exact cannot_regenerate marker",
+                    ));
+                }
+                (Operation::Exile, _) => {
+                    return Err(effect_arity(path, operation, "one target selector"));
+                }
+                _ => unreachable!("closed destroy/exile operation match"),
             };
             let target = compile_object_target(target, &format!("{path}.target"), compiler)?;
-            compiler.effects.push(if *operation == Operation::Destroy {
-                EffectProgram::DestroyPermanent { target }
-            } else {
-                EffectProgram::ExileObject { target }
+            compiler.effects.push(match operation {
+                Operation::Destroy if prohibit_regeneration => {
+                    EffectProgram::DestroyPermanentWithoutRegeneration { target }
+                }
+                Operation::Destroy => EffectProgram::DestroyPermanent { target },
+                Operation::Exile => EffectProgram::ExileObject { target },
+                _ => unreachable!("closed destroy/exile operation match"),
             });
             Ok(())
         }
@@ -4725,6 +4769,27 @@ fn compile_effect(
                 .push(EffectProgram::SearchLibrary { choice });
             Ok(())
         }
+        Operation::Reveal => {
+            let [selected] = arguments.as_slice() else {
+                return Err(effect_arity(path, operation, "one chosen object selector"));
+            };
+            let selector = chosen_selector(selected, &format!("{path}.chosen"))?;
+            let Some(choice) = compiler
+                .object_choices
+                .iter()
+                .position(|candidate| candidate.selector == *selector)
+            else {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::EffectArguments,
+                    format!("{path}.chosen"),
+                    "chosen selector has no preceding compiled search_library choice",
+                ));
+            };
+            compiler
+                .effects
+                .push(EffectProgram::RevealChosenObjects { choice });
+            Ok(())
+        }
         Operation::MoveZone => {
             let [selected, destination, count] = arguments.as_slice() else {
                 return Err(effect_arity(
@@ -4911,12 +4976,14 @@ fn compile_token_template(
         ));
     };
     if script == "c_a_treasure_sac" {
+        let subtypes = compile_exact_token_subtypes(&["Treasure"], path)?;
         return Ok(TokenTemplate {
             card: CardId::new(stable_runtime_id(script)),
             base_object: BaseObjectCharacteristics::new(
                 ObjectTypes::none().with_artifact(),
                 ObjectColors::none(),
-            ),
+            )
+            .with_subtypes(subtypes),
             base_creature: None,
             mana_ability: Some(ActivatedAbilityProgram {
                 cost: ActivationCost::new(ManaCost::new(0, 0, 0, 0, 0, 0))
@@ -4934,19 +5001,28 @@ fn compile_token_template(
             }),
         });
     }
-    let (colors, base_creature) = match script.as_str() {
+    let (colors, base_creature, subtype_names): (_, _, &[&str]) = match script.as_str() {
         "g_3_3_beast" | "g_3_3_elephant" | "g_3_3_ape" | "g_3_3_frog_lizard" => (
             ObjectColors::none().with_green(),
             BaseCreatureCharacteristics::new(3, 3),
+            match script.as_str() {
+                "g_3_3_beast" => &["Beast"],
+                "g_3_3_elephant" => &["Elephant"],
+                "g_3_3_ape" => &["Ape"],
+                "g_3_3_frog_lizard" => &["Frog", "Lizard"],
+                _ => &[],
+            },
         ),
         "u_2_2_bird_flying" => (
             ObjectColors::none().with_blue(),
             BaseCreatureCharacteristics::new(2, 2)
                 .with_keywords(CreatureKeywords::none().with_flying()),
+            &["Bird"],
         ),
         "b_2_2_zombie" => (
             ObjectColors::none().with_black(),
             BaseCreatureCharacteristics::new(2, 2),
+            &["Zombie"],
         ),
         _ => {
             return Err(CompileDiagnostic::new(
@@ -4956,12 +5032,38 @@ fn compile_token_template(
             ));
         }
     };
+    let subtypes = compile_exact_token_subtypes(subtype_names, path)?;
     Ok(TokenTemplate {
         card: CardId::new(stable_runtime_id(script)),
-        base_object: BaseObjectCharacteristics::new(ObjectTypes::none().with_creature(), colors),
+        base_object: BaseObjectCharacteristics::new(ObjectTypes::none().with_creature(), colors)
+            .with_subtypes(subtypes),
         base_creature: Some(base_creature),
         mana_ability: None,
     })
+}
+
+fn compile_exact_token_subtypes(
+    names: &[&str],
+    path: &str,
+) -> Result<ObjectSubtypes, CompileDiagnostic> {
+    let mut subtypes = ObjectSubtypes::none();
+    for (index, name) in names.iter().enumerate() {
+        let subtype = ObjectSubtype::parse(name).ok_or_else(|| {
+            CompileDiagnostic::new(
+                CompileDiagnosticCode::EffectArguments,
+                format!("{path}.subtypes[{index}]"),
+                format!("registered token subtype `{name}` is invalid"),
+            )
+        })?;
+        subtypes = subtypes.try_with(subtype).ok_or_else(|| {
+            CompileDiagnostic::new(
+                CompileDiagnosticCode::ProgramBounds,
+                format!("{path}.subtypes"),
+                "registered token subtype count exceeds the bounded runtime set",
+            )
+        })?;
+    }
+    Ok(subtypes)
 }
 
 fn compile_token_count(
@@ -7259,6 +7361,14 @@ fn bind_effect_actions(
                     },
                 });
             }
+            EffectProgram::DestroyPermanentWithoutRegeneration { target } => {
+                actions.push(BoundAction {
+                    effect_index,
+                    action: Action::DestroyPermanentWithoutRegeneration {
+                        object: resolve_object_target(bindings, *target, effect_index)?,
+                    },
+                });
+            }
             EffectProgram::ExileObject { target } => {
                 let object = resolve_object_target(bindings, *target, effect_index)?;
                 actions.push(BoundAction {
@@ -7422,6 +7532,23 @@ fn bind_effect_actions(
                 }
             }
             EffectProgram::SearchLibrary { .. } => {}
+            EffectProgram::RevealChosenObjects { choice } => {
+                let objects = bindings
+                    .object_choices
+                    .get(*choice)
+                    .cloned()
+                    .ok_or_else(|| {
+                        ExecutionDiagnostic::new(
+                            ExecutionDiagnosticCode::MissingChoice,
+                            Some(effect_index),
+                            format!("no object choice for reveal slot {choice}"),
+                        )
+                    })?;
+                actions.push(BoundAction {
+                    effect_index,
+                    action: Action::RevealObjects { objects },
+                });
+            }
             EffectProgram::MoveChosenObjects {
                 choice,
                 destination,
@@ -8016,14 +8143,15 @@ mod tests {
     use super::{
         bind_triggered_ability_actions, compile_card_program, execute_program,
         AlternateCostCondition, AlternateCostKind, Capability, CompileDiagnosticCode,
-        ExecutionBindings, ExecutionDiagnosticCode, PlayerBinding, ProgramKind,
+        EffectProgram, ExecutionBindings, ExecutionDiagnosticCode, PlayerBinding, ProgramKind,
         StaticAbilityProgram, TriggeredEventProgram,
     };
     use forge_core::{
         apply, Action, ActivationCondition, BaseCreatureCharacteristics, BaseObjectCharacteristics,
-        BasicLandTypes, CardId, GameState, ManaCost, ManaKind, ManaPool, ObjectColors,
-        ObjectSubtype, ObjectSupertypes, ObjectTargetPredicate, ObjectTypes, Outcome,
-        StackObjectKind, TargetChoice, TargetControllerPredicate, TargetKind, TargetRequirement,
+        BasicLandTypes, CardId, ContinuousEffectDuration, GameEvent, GameState, ManaCost, ManaKind,
+        ManaPool, ObjectColors, ObjectSubtype, ObjectSupertypes, ObjectTargetPredicate,
+        ObjectTypes, Outcome, RestrictionDefinition, RestrictionEffect, StackObjectKind,
+        TargetChoice, TargetControllerPredicate, TargetKind, TargetRequirement, TriggerCondition,
         ZoneId, ZoneKind,
     };
 
@@ -8039,6 +8167,41 @@ card "Swords to Plowshares" {
     keywords: []
     ability spell {
       effect: sequence(exile(target(permanents(type_is("creature")))), gain_life(power(target(any())), controller_of(target(any()))))
+    }
+  }
+}
+"#;
+    const TERMINATE: &str = r#"
+card "Terminate" {
+  id: "forge:test:terminate"
+  layout: normal
+  status: unverified_playable
+  face "Terminate" {
+    cost: "{B}{R}"
+    types: "Instant"
+    oracle: "Destroy target creature. It can't be regenerated."
+    keywords: []
+    ability spell {
+      effect: destroy(target(permanents(type_is("creature"))), "cannot_regenerate")
+    }
+  }
+}
+"#;
+    const ARCHMAGE_EMERITUS: &str = r#"
+card "Archmage Emeritus" {
+  id: "forge:test:archmage-emeritus"
+  layout: normal
+  status: unverified_playable
+  face "Archmage Emeritus" {
+    cost: "{2}{U}{U}"
+    types: "Creature - Human Wizard"
+    oracle: "Magecraft - Whenever you cast or copy an instant or sorcery spell, draw a card."
+    power: "2"
+    toughness: "2"
+    keywords: []
+    ability triggered {
+      event: event_cast(spells(or(type_is("instant"), type_is("sorcery"))), "cast_or_copy:you")
+      effect: draw(1, you())
     }
   }
 }
@@ -8344,7 +8507,7 @@ card "Eladamri's Call" {
     oracle: "Search your library for a creature card, reveal that card, put it into your hand, then shuffle."
     keywords: []
     ability spell {
-      effect: sequence(search_library(cards(and(type_is("creature"), zone_is("library"))), you(), 1), move_zone(chosen(cards(and(type_is("creature"), zone_is("library")))), "hand", 1), shuffle(you()))
+      effect: sequence(search_library(cards(and(type_is("creature"), zone_is("library"))), you(), 1), reveal(chosen(cards(and(type_is("creature"), zone_is("library"))))), move_zone(chosen(cards(and(type_is("creature"), zone_is("library")))), "hand", 1), shuffle(you()))
     }
   }
 }
@@ -8360,7 +8523,7 @@ card "Enlightened Tutor" {
     oracle: "Search your library for an artifact or enchantment card, reveal it, then shuffle and put that card on top."
     keywords: []
     ability spell {
-      effect: sequence(search_library(cards(and(or(type_is("artifact"), type_is("enchantment")), zone_is("library"))), you(), 1), shuffle(you()), move_zone(chosen(cards(and(or(type_is("artifact"), type_is("enchantment")), zone_is("library")))), "library_top", 1))
+      effect: sequence(search_library(cards(and(or(type_is("artifact"), type_is("enchantment")), zone_is("library"))), you(), 1), reveal(chosen(cards(and(or(type_is("artifact"), type_is("enchantment")), zone_is("library"))))), shuffle(you()), move_zone(chosen(cards(and(or(type_is("artifact"), type_is("enchantment")), zone_is("library")))), "library_top", 1))
     }
   }
 }
@@ -8775,17 +8938,114 @@ card "Purphoros, God of the Forge" {
         assert!(token.is_token());
         assert_eq!(token.owner(), opponent);
         assert_eq!(token.controller(), opponent);
+        let beast = ObjectSubtype::parse("Beast").expect("fixture subtype must parse");
         assert_eq!(
-            token.base_object(),
-            BaseObjectCharacteristics::new(
-                ObjectTypes::none().with_creature(),
-                ObjectColors::none().with_green(),
-            )
+            token.base_object().types(),
+            ObjectTypes::none().with_creature()
         );
+        assert_eq!(
+            token.base_object().colors(),
+            ObjectColors::none().with_green()
+        );
+        assert_eq!(token.base_object().subtypes().as_slice(), &[beast]);
         assert_eq!(
             token.base_creature(),
             Some(BaseCreatureCharacteristics::new(3, 3))
         );
+    }
+
+    #[test]
+    fn prohibited_regeneration_binds_to_distinct_destruction_action() {
+        let program = compile_card_program(&parse("terminate.frs", TERMINATE))
+            .unwrap_or_else(|error| panic!("unexpected compile error: {error}"));
+        assert!(matches!(
+            program.effects(),
+            [EffectProgram::DestroyPermanentWithoutRegeneration { target: 0 }]
+        ));
+        let mut state = GameState::new();
+        let caster = add_player(&mut state);
+        let opponent = add_player(&mut state);
+        let target = create_object(
+            &mut state,
+            CardId::new(2_012),
+            opponent,
+            ZoneId::new(None, ZoneKind::Battlefield),
+        );
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::SetBaseObjectCharacteristics {
+                    object: target,
+                    base: BaseObjectCharacteristics::new(
+                        ObjectTypes::none().with_creature(),
+                        ObjectColors::none(),
+                    ),
+                },
+            ),
+            Outcome::Applied
+        );
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::SetBaseCreatureCharacteristics {
+                    object: target,
+                    base: BaseCreatureCharacteristics::new(2, 2),
+                },
+            ),
+            Outcome::Applied
+        );
+        assert!(matches!(
+            apply(
+                &mut state,
+                Action::RegisterRestriction {
+                    definition: RestrictionDefinition::new(
+                        opponent,
+                        RestrictionEffect::RegenerationShield { object: target },
+                    )
+                    .with_duration(ContinuousEffectDuration::UntilEndOfTurn),
+                },
+            ),
+            Outcome::RestrictionRegistered(_)
+        ));
+
+        execute_program(
+            &mut state,
+            &program,
+            &ExecutionBindings::new(caster, vec![opponent])
+                .with_targets(vec![TargetChoice::Object(target)]),
+        )
+        .unwrap_or_else(|error| panic!("unexpected execution error: {error}"));
+
+        assert_eq!(
+            state.object_zone(target),
+            Some(ZoneId::new(Some(opponent), ZoneKind::Graveyard))
+        );
+        assert_eq!(state.restrictions().count(), 0);
+    }
+
+    #[test]
+    fn magecraft_compiles_to_cast_or_copy_trigger_condition() {
+        let program = compile_card_program(&parse("archmage_emeritus.frs", ARCHMAGE_EMERITUS))
+            .unwrap_or_else(|error| panic!("unexpected compile error: {error}"));
+        let [ability] = program.triggered_abilities() else {
+            panic!("expected one magecraft trigger");
+        };
+        assert!(matches!(
+            ability.event(),
+            TriggeredEventProgram::ControllerCastsOrCopies(_)
+        ));
+        let mut state = GameState::new();
+        let controller = add_player(&mut state);
+        let source = create_object(
+            &mut state,
+            CardId::new(2_013),
+            controller,
+            ZoneId::new(None, ZoneKind::Battlefield),
+        );
+        assert!(matches!(
+            ability.bind(controller, source).condition(),
+            TriggerCondition::StackEntryAddedOrCopied { .. }
+        ));
     }
 
     #[test]
@@ -8867,6 +9127,7 @@ card "Purphoros, God of the Forge" {
             program.capabilities(),
             vec![
                 Capability::SearchLibrary,
+                Capability::RevealObjects,
                 Capability::MoveZone,
                 Capability::ShuffleLibrary
             ]
@@ -8910,6 +9171,7 @@ card "Purphoros, God of the Forge" {
         assert!(invalid.is_err());
         assert_eq!(state.deterministic_hash(), before_invalid);
 
+        let cursor = state.event_cursor();
         execute_program(
             &mut state,
             &program,
@@ -8920,6 +9182,11 @@ card "Purphoros, God of the Forge" {
             state.object_zone(creature),
             Some(ZoneId::new(Some(caster), ZoneKind::Hand))
         );
+        assert!(state
+            .events_since(cursor)
+            .unwrap_or_else(|error| panic!("reveal event replay failed: {error:?}"))
+            .iter()
+            .any(|record| record.event() == GameEvent::ObjectRevealed { object: creature }));
     }
 
     #[test]

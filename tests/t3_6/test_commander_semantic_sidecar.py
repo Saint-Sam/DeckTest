@@ -49,7 +49,47 @@ def observed_from_cases(cases: dict) -> list[dict]:
                 "base_subtypes": SEMANTICS.expected_base_subtypes(case) or [],
                 "mana_abilities": mana,
                 "token_mana_abilities": [],
-                "token_subtypes": [],
+                "token_subtypes": SEMANTICS.expected_token_subtypes(case),
+                "reveal_event": (
+                    {
+                        "setup_succeeded": True,
+                        "reveal_action_present": True,
+                        "destination_action_present": True,
+                        "reveal_precedes_destination": True,
+                        "public_reveal_event_emitted": True,
+                        "all_actions_applied": True,
+                    }
+                    if SEMANTICS.expects_public_reveal(case)
+                    else None
+                ),
+                "regeneration_prohibition": (
+                    {
+                        "setup_succeeded": True,
+                        "normal_destroy_applied": True,
+                        "normal_destroy_replaced": True,
+                        "normal_destroy_tapped": True,
+                        "normal_destroy_cleared_damage": True,
+                        "no_regeneration_action_present": True,
+                        "destruction_action_applied": True,
+                        "shielded_target_destroyed": True,
+                        "all_shields_consumed_or_expired": True,
+                    }
+                    if SEMANTICS.expects_regeneration_prohibition(case)
+                    else None
+                ),
+                "cast_or_copy": (
+                    {
+                        "setup_succeeded": True,
+                        "condition_exact": True,
+                        "cast_trigger_queued": True,
+                        "cast_and_copy_queued": True,
+                        "copy_provenance_exact": True,
+                        "draw_action_exact": True,
+                        "two_draw_resolutions": True,
+                    }
+                    if SEMANTICS.expects_cast_or_copy(case)
+                    else None
+                ),
                 "no_maximum_hand_size": (
                     {
                         "setup_succeeded": True,
@@ -126,8 +166,8 @@ class CommanderSemanticSidecarTests(unittest.TestCase):
             self.cases["summary"],
             {
                 "candidate_count": 100,
-                "semantic_case_ready": 79,
-                "blocked_semantic_gap": 21,
+                "semantic_case_ready": 100,
+                "blocked_semantic_gap": 0,
                 "blocked_runtime": 0,
             },
         )
@@ -692,17 +732,27 @@ class CommanderSemanticSidecarTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "modal DFC semantic probe changed"):
             SEMANTICS.verify_observed(self.cases, observed)
 
-    def test_incremental_report_keeps_checkpoint_open(self) -> None:
+    def test_complete_report_closes_checkpoint(self) -> None:
         observed = observed_from_cases(self.cases)
         report = SEMANTICS.build_report(self.cases, observed)
+        self.assertEqual(report["status"], "pass_local")
+        self.assertEqual(report["checkpoint"]["status"], "passed")
+        self.assertEqual(report["checkpoint"]["semantic_verified"], 100)
+        self.assertEqual(report["checkpoint"]["remaining"], 0)
+        self.assertEqual(report["measured"]["runtime_smoke_passed"], 100)
+
+    def test_incremental_report_keeps_checkpoint_open(self) -> None:
+        cases = copy.deepcopy(self.cases)
+        cases["cases"][-1]["status"] = "blocked_semantic_gap"
+        cases["cases"][-1]["blockers"] = [
+            {"code": "TEST_SEMANTIC_GAP", "detail": "focused checkpoint test"}
+        ]
+        observed = observed_from_cases(cases)
+        report = SEMANTICS.build_report(cases, observed)
+        self.assertEqual(report["status"], "pass_incremental_semantic_slice")
         self.assertEqual(report["checkpoint"]["status"], "in_progress")
-        verified = self.cases["summary"]["semantic_case_ready"]
-        self.assertEqual(report["checkpoint"]["semantic_verified"], verified)
-        self.assertEqual(report["checkpoint"]["remaining"], 100 - verified)
-        self.assertEqual(
-            report["measured"]["runtime_smoke_passed"],
-            verified + self.cases["summary"]["blocked_semantic_gap"],
-        )
+        self.assertEqual(report["checkpoint"]["semantic_verified"], 99)
+        self.assertEqual(report["checkpoint"]["remaining"], 1)
 
 
 if __name__ == "__main__":

@@ -11138,6 +11138,7 @@ fn map_change_zone(
             "ChangeNum",
             "Tapped",
             "Reveal",
+            "NoReveal",
             "Shuffle",
             "ShuffleNonMandatory",
             "LibraryPosition",
@@ -11657,6 +11658,17 @@ fn map_library_search(
             return Err(unsupported_value("Reveal", value));
         }
     }
+    if let Some(value) = parameters.get("NoReveal") {
+        if value != "True" {
+            return Err(unsupported_value("NoReveal", value));
+        }
+    }
+    if parameters.contains_key("Reveal") && parameters.contains_key("NoReveal") {
+        return Err(diagnostic(
+            "UNSUPPORTED_PARAMETER",
+            "Reveal and NoReveal cannot both be present",
+        ));
+    }
     if let Some(value) = parameters.get("Shuffle") {
         if value != "False" && value != "True" {
             return Err(unsupported_value("Shuffle", value));
@@ -11764,11 +11776,16 @@ fn map_library_search(
             ),
         )
     };
+    let destination_value = required(parameters, "Destination")?;
+    let change_type = required(parameters, "ChangeType")?;
+    let reveal_by_default = destination_value != "Battlefield" && change_type != "Card";
     let mut effects = vec![search];
-    if parameters.contains_key("Reveal") {
+    if !parameters.contains_key("NoReveal")
+        && (parameters.contains_key("Reveal") || reveal_by_default)
+    {
         effects.push(call(Operation::Reveal, vec![chosen.clone()]));
     }
-    let destination = required(parameters, "Destination")?.to_ascii_lowercase();
+    let destination = destination_value.to_ascii_lowercase();
     if !matches!(
         destination.as_str(),
         "battlefield" | "graveyard" | "hand" | "exile" | "library"
@@ -22768,6 +22785,19 @@ mod tests {
         assert!(!expression_contains_operation(
             &typed_library_search.expression,
             Operation::SubtypeIs
+        ));
+        assert!(expression_contains_operation(
+            &typed_library_search.expression,
+            Operation::Reveal
+        ));
+
+        let hidden_library_search = map_line(
+            "A:SP$ ChangeZone | Origin$ Library | Destination$ Hand | ChangeType$ Creature | ChangeNum$ 1 | NoReveal$ True",
+        )
+        .unwrap_or_else(|error| panic!("hidden library search should map: {}", error.message));
+        assert!(!expression_contains_operation(
+            &hidden_library_search.expression,
+            Operation::Reveal
         ));
 
         for line in [

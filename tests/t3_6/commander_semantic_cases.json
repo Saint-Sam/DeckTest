@@ -599,13 +599,9 @@
       "translated_source_sha256": "4cfcbc8e4749591e86c50c3e548fa7cce0938c77633a4315730ddc40e152524a"
     },
     {
-      "blockers": [
-        {
-          "code": "TOKEN_SUBTYPE_STATE_MISSING",
-          "detail": "The 3/3 token is created without its Beast subtype."
-        }
-      ],
       "card_name": "Beast Within",
+      "claim_boundary": "one deterministic card-specific production path plus exact shared primitive validation",
+      "expected_behavior": "Destroy any target permanent; its controller creates exactly one 3/3 green Beast creature token with the Beast subtype.",
       "expected_runtime": {
         "capabilities": [
           "destroy_permanent",
@@ -614,7 +610,7 @@
         "destination": "owner_graveyard",
         "disposition": "passed",
         "effect_actions": 2,
-        "final_hash": "3609542925043614499",
+        "final_hash": "10283368881779575519",
         "final_life_totals": [
           20,
           20
@@ -627,19 +623,35 @@
       "oracle_id": "7735eeba-693b-47e2-bd51-414379cf1016",
       "oracle_text": "Destroy target permanent. Its controller creates a 3/3 green Beast creature token.",
       "scenario_id": "T3.6-013",
-      "status": "blocked_semantic_gap",
+      "semantic_atoms": [
+        {
+          "op": "destroy_permanent",
+          "target": "permanent"
+        },
+        {
+          "colors": [
+            "green"
+          ],
+          "controller": "destroyed_permanent_controller",
+          "count": 1,
+          "op": "create_token",
+          "power": 3,
+          "subtypes": [
+            "Beast"
+          ],
+          "token": "Beast",
+          "toughness": 3
+        }
+      ],
+      "status": "semantic_case_ready",
       "stratum": "targeted_permanent_interaction",
       "translated_path": "b/beast_within.frs",
       "translated_source_sha256": "6ae4c76618ea25bd801657cba5a2f6f6999606523491fca02d088335e50287c5"
     },
     {
-      "blockers": [
-        {
-          "code": "TOKEN_SUBTYPE_STATE_MISSING",
-          "detail": "The 3/3 token is created without its Elephant subtype."
-        }
-      ],
       "card_name": "Generous Gift",
+      "claim_boundary": "one deterministic card-specific production path plus exact shared primitive validation",
+      "expected_behavior": "Destroy any target permanent; its controller creates exactly one 3/3 green Elephant creature token with the Elephant subtype.",
       "expected_runtime": {
         "capabilities": [
           "destroy_permanent",
@@ -648,7 +660,7 @@
         "destination": "owner_graveyard",
         "disposition": "passed",
         "effect_actions": 2,
-        "final_hash": "18036634994235468889",
+        "final_hash": "17942692721988042745",
         "final_life_totals": [
           20,
           20
@@ -661,7 +673,27 @@
       "oracle_id": "fae37e28-e137-4177-b973-fa8b4dd8f409",
       "oracle_text": "Destroy target permanent. Its controller creates a 3/3 green Elephant creature token.",
       "scenario_id": "T3.6-014",
-      "status": "blocked_semantic_gap",
+      "semantic_atoms": [
+        {
+          "op": "destroy_permanent",
+          "target": "permanent"
+        },
+        {
+          "colors": [
+            "green"
+          ],
+          "controller": "destroyed_permanent_controller",
+          "count": 1,
+          "op": "create_token",
+          "power": 3,
+          "subtypes": [
+            "Elephant"
+          ],
+          "token": "Elephant",
+          "toughness": 3
+        }
+      ],
+      "status": "semantic_case_ready",
       "stratum": "targeted_permanent_interaction",
       "translated_path": "g/generous_gift.frs",
       "translated_source_sha256": "12eaf71870e7723bc780bc282863e9e7342456faa2ea00ad3812856a083cc487"
@@ -2294,13 +2326,9 @@
       "translated_source_sha256": "0a7bb07a2c6390a56f01986ecfab1cce2cd35cdb2c3f51870c5379705ef21e8e"
     },
     {
-      "blockers": [
-        {
-          "code": "REGENERATION_PROHIBITION_MISSING",
-          "detail": "The destroy action does not retain the card's cannot-regenerate rider."
-        }
-      ],
       "card_name": "Putrefy",
+      "claim_boundary": "one deterministic card-specific production path plus exact shared primitive validation",
+      "expected_behavior": "Destroy a target artifact or creature while a regeneration shield is present; the shield cannot replace this destruction.",
       "expected_runtime": {
         "capabilities": [
           "destroy_permanent"
@@ -2321,19 +2349,22 @@
       "oracle_id": "9b271430-f53d-42d6-a547-2f286dd9bcb6",
       "oracle_text": "Destroy target artifact or creature. It can't be regenerated.",
       "scenario_id": "T3.6-048",
-      "status": "blocked_semantic_gap",
+      "semantic_atoms": [
+        {
+          "op": "destroy_permanent",
+          "regeneration": "prohibited",
+          "target": "artifact|creature"
+        }
+      ],
+      "status": "semantic_case_ready",
       "stratum": "targeted_permanent_interaction",
       "translated_path": "p/putrefy.frs",
       "translated_source_sha256": "ff0a28101270869f17d9491cd1296d1909a6404b5a4bc96dcfa9959fa06690ed"
     },
     {
-      "blockers": [
-        {
-          "code": "REGENERATION_PROHIBITION_MISSING",
-          "detail": "The destroy action does not retain the card's cannot-regenerate rider."
-        }
-      ],
       "card_name": "Terminate",
+      "claim_boundary": "one deterministic card-specific production path plus exact shared primitive validation",
+      "expected_behavior": "Destroy a target creature while a regeneration shield is present; the shield cannot replace this destruction.",
       "expected_runtime": {
         "capabilities": [
           "destroy_permanent"
@@ -2354,7 +2385,14 @@
       "oracle_id": "6257c2fd-005f-41e3-8a72-af76df1eb134",
       "oracle_text": "Destroy target creature. It can't be regenerated.",
       "scenario_id": "T3.6-049",
-      "status": "blocked_semantic_gap",
+      "semantic_atoms": [
+        {
+          "op": "destroy_permanent",
+          "regeneration": "prohibited",
+          "target": "creature"
+        }
+      ],
+      "status": "semantic_case_ready",
       "stratum": "targeted_permanent_interaction",
       "translated_path": "t/terminate.frs",
       "translated_source_sha256": "98986ffa5a1c2752438415b359caf70b1c5aab7db0d62e42911ad06dc230fc27"
@@ -2430,17 +2468,9 @@
       "translated_source_sha256": "41455afa3e4433c0985cbf95276c5e8a48ce3b08cd5ae0d12830896303ea5610"
     },
     {
-      "blockers": [
-        {
-          "code": "TOKEN_SUBTYPE_STATE_MISSING",
-          "detail": "The 3/3 token is created without its Ape subtype."
-        },
-        {
-          "code": "REGENERATION_PROHIBITION_MISSING",
-          "detail": "The destroy action does not retain the card's cannot-regenerate rider."
-        }
-      ],
       "card_name": "Pongify",
+      "claim_boundary": "one deterministic card-specific production path plus exact shared primitive validation",
+      "expected_behavior": "Destroy a target creature without regeneration, then create exactly one 3/3 green Ape token for its controller.",
       "expected_runtime": {
         "capabilities": [
           "destroy_permanent",
@@ -2449,7 +2479,7 @@
         "destination": "owner_graveyard",
         "disposition": "passed",
         "effect_actions": 2,
-        "final_hash": "13901799249061593451",
+        "final_hash": "18211417928750510667",
         "final_life_totals": [
           20,
           20
@@ -2462,23 +2492,36 @@
       "oracle_id": "05849bd6-8f38-4031-be2b-e2aa03beb8cc",
       "oracle_text": "Destroy target creature. It can't be regenerated. Its controller creates a 3/3 green Ape creature token.",
       "scenario_id": "T3.6-052",
-      "status": "blocked_semantic_gap",
+      "semantic_atoms": [
+        {
+          "op": "destroy_permanent",
+          "regeneration": "prohibited",
+          "target": "creature"
+        },
+        {
+          "colors": [
+            "green"
+          ],
+          "controller": "destroyed_permanent_controller",
+          "count": 1,
+          "op": "create_token",
+          "power": 3,
+          "subtypes": [
+            "Ape"
+          ],
+          "token": "Ape",
+          "toughness": 3
+        }
+      ],
+      "status": "semantic_case_ready",
       "stratum": "token_and_sacrifice",
       "translated_path": "p/pongify.frs",
       "translated_source_sha256": "f09551590388b2ba2659e4445e906ba6cf3269a79163191d2161e729f387d8aa"
     },
     {
-      "blockers": [
-        {
-          "code": "TOKEN_SUBTYPE_STATE_MISSING",
-          "detail": "The 3/3 token is created without its Frog and Lizard subtypes."
-        },
-        {
-          "code": "REGENERATION_PROHIBITION_MISSING",
-          "detail": "The destroy action does not retain the card's cannot-regenerate rider."
-        }
-      ],
       "card_name": "Rapid Hybridization",
+      "claim_boundary": "one deterministic card-specific production path plus exact shared primitive validation",
+      "expected_behavior": "Destroy a target creature without regeneration, then create exactly one 3/3 green Frog Lizard token for its controller.",
       "expected_runtime": {
         "capabilities": [
           "destroy_permanent",
@@ -2487,7 +2530,7 @@
         "destination": "owner_graveyard",
         "disposition": "passed",
         "effect_actions": 2,
-        "final_hash": "9209099295530557276",
+        "final_hash": "12202431277641511376",
         "final_life_totals": [
           20,
           20
@@ -2500,19 +2543,37 @@
       "oracle_id": "06692cd9-ac2f-4a32-8fd1-043ba3c0fe71",
       "oracle_text": "Destroy target creature. It can't be regenerated. That creature's controller creates a 3/3 green Frog Lizard creature token.",
       "scenario_id": "T3.6-053",
-      "status": "blocked_semantic_gap",
+      "semantic_atoms": [
+        {
+          "op": "destroy_permanent",
+          "regeneration": "prohibited",
+          "target": "creature"
+        },
+        {
+          "colors": [
+            "green"
+          ],
+          "controller": "destroyed_permanent_controller",
+          "count": 1,
+          "op": "create_token",
+          "power": 3,
+          "subtypes": [
+            "Frog",
+            "Lizard"
+          ],
+          "token": "Frog Lizard",
+          "toughness": 3
+        }
+      ],
+      "status": "semantic_case_ready",
       "stratum": "token_and_sacrifice",
       "translated_path": "r/rapid_hybridization.frs",
       "translated_source_sha256": "3e5ef8afb5d03792cd6731c598608f4bab2b38c1ca0aae41f95158bcbcd6635e"
     },
     {
-      "blockers": [
-        {
-          "code": "TOKEN_SUBTYPE_STATE_MISSING",
-          "detail": "The flying 2/2 token is created without its Bird subtype."
-        }
-      ],
       "card_name": "Swan Song",
+      "claim_boundary": "one deterministic card-specific production path plus exact shared primitive validation",
+      "expected_behavior": "Counter a target enchantment, instant, or sorcery spell, then create one 2/2 blue flying Bird token for that spell's controller.",
       "expected_runtime": {
         "capabilities": [
           "counter_stack_entry",
@@ -2521,7 +2582,7 @@
         "destination": "owner_graveyard",
         "disposition": "passed",
         "effect_actions": 2,
-        "final_hash": "7495766175753201626",
+        "final_hash": "499161338364396216",
         "final_life_totals": [
           20,
           20
@@ -2534,19 +2595,38 @@
       "oracle_id": "8ddfc283-c9b4-41a5-af88-cf0068e986cc",
       "oracle_text": "Counter target enchantment, instant, or sorcery spell. Its controller creates a 2/2 blue Bird creature token with flying.",
       "scenario_id": "T3.6-054",
-      "status": "blocked_semantic_gap",
+      "semantic_atoms": [
+        {
+          "op": "counter_stack_entry",
+          "target": "enchantment|instant|sorcery spell"
+        },
+        {
+          "colors": [
+            "blue"
+          ],
+          "controller": "countered_spell_controller",
+          "count": 1,
+          "keywords": [
+            "flying"
+          ],
+          "op": "create_token",
+          "power": 2,
+          "subtypes": [
+            "Bird"
+          ],
+          "token": "Bird",
+          "toughness": 2
+        }
+      ],
+      "status": "semantic_case_ready",
       "stratum": "stack_interaction_and_protection",
       "translated_path": "s/swan_song.frs",
       "translated_source_sha256": "c0298e763ceb011894e427bde258b6bb0ba59a875f5bb9e5b0b44ff79ce6d797"
     },
     {
-      "blockers": [
-        {
-          "code": "TOKEN_SUBTYPE_STATE_MISSING",
-          "detail": "The created artifact tokens have their mana abilities but do not carry the Treasure subtype."
-        }
-      ],
       "card_name": "An Offer You Can't Refuse",
+      "claim_boundary": "one deterministic card-specific production path plus exact shared primitive validation",
+      "expected_behavior": "Counter a target noncreature spell, then create two Treasure artifact tokens for that spell's controller.",
       "expected_runtime": {
         "capabilities": [
           "counter_stack_entry",
@@ -2555,7 +2635,7 @@
         "destination": "owner_graveyard",
         "disposition": "passed",
         "effect_actions": 2,
-        "final_hash": "11923548196479954046",
+        "final_hash": "17212411059380135356",
         "final_life_totals": [
           20,
           20
@@ -2568,7 +2648,35 @@
       "oracle_id": "234a734b-ba28-4f1b-9d01-3c3e7d516590",
       "oracle_text": "Counter target noncreature spell. Its controller creates two Treasure tokens. (They're artifacts with \"{T}, Sacrifice this token: Add one mana of any color.\")",
       "scenario_id": "T3.6-055",
-      "status": "blocked_semantic_gap",
+      "semantic_atoms": [
+        {
+          "op": "counter_stack_entry",
+          "target": "noncreature_spell"
+        },
+        {
+          "controller": "countered_spell_controller",
+          "count": 2,
+          "mana_ability": {
+            "activation_cost": [
+              "tap_source",
+              "sacrifice_source"
+            ],
+            "legal_outputs": [
+              "{W}",
+              "{U}",
+              "{B}",
+              "{R}",
+              "{G}"
+            ]
+          },
+          "op": "create_token",
+          "subtypes": [
+            "Treasure"
+          ],
+          "token": "Treasure"
+        }
+      ],
+      "status": "semantic_case_ready",
       "stratum": "stack_interaction_and_protection",
       "translated_path": "a/an_offer_you_cant_refuse.frs",
       "translated_source_sha256": "69e781595bdbe8a09089face0930e2e2fb7c876fbd1a56847432af5690ebdefc"
@@ -3126,12 +3234,12 @@
         "destination": "battlefield",
         "disposition": "passed",
         "effect_actions": 1,
-        "final_hash": "8781711444584650747",
+        "final_hash": "9847231882384415800",
         "final_life_totals": [
           20,
           19
         ],
-        "production_actions": 61
+        "production_actions": 62
       },
       "freeze_rank": 66,
       "legacy_source_path": "r/reconnaissance_mission.txt",
@@ -3390,13 +3498,9 @@
       "translated_source_sha256": "1d703adca892c5c775b9b76cc8f2eed9b86de184e71eb8906172220b32113c5a"
     },
     {
-      "blockers": [
-        {
-          "code": "TOKEN_SUBTYPE_STATE_MISSING",
-          "detail": "The two created artifact tokens have their mana abilities but do not carry the Treasure subtype."
-        }
-      ],
       "card_name": "Big Score",
+      "claim_boundary": "one deterministic card-specific production path plus exact shared primitive validation",
+      "expected_behavior": "Pay the additional discard cost, draw two cards, and create two Treasure artifact tokens.",
       "expected_runtime": {
         "capabilities": [
           "draw_cards",
@@ -3405,7 +3509,7 @@
         "destination": "owner_graveyard",
         "disposition": "passed",
         "effect_actions": 2,
-        "final_hash": "10132830449011066286",
+        "final_hash": "15009024014771681300",
         "final_life_totals": [
           20,
           20
@@ -3418,19 +3522,32 @@
       "oracle_id": "a5cbd257-c836-493e-bb1a-76242619dea2",
       "oracle_text": "As an additional cost to cast this spell, discard a card.\nDraw two cards and create two Treasure tokens. (They're artifacts with \"{T}, Sacrifice this token: Add one mana of any color.\")",
       "scenario_id": "T3.6-072",
-      "status": "blocked_semantic_gap",
+      "semantic_atoms": [
+        {
+          "additional_cost": "discard one card",
+          "count": 2,
+          "op": "draw_cards",
+          "player": "controller"
+        },
+        {
+          "controller": "controller",
+          "count": 2,
+          "op": "create_token",
+          "subtypes": [
+            "Treasure"
+          ],
+          "token": "Treasure"
+        }
+      ],
+      "status": "semantic_case_ready",
       "stratum": "token_and_sacrifice",
       "translated_path": "b/big_score.frs",
       "translated_source_sha256": "4f793dcd6741910def68cc0ee6090f0ab534e93ed895d324937151130c667a61"
     },
     {
-      "blockers": [
-        {
-          "code": "TOKEN_SUBTYPE_STATE_MISSING",
-          "detail": "The two created artifact tokens have their mana abilities but do not carry the Treasure subtype."
-        }
-      ],
       "card_name": "Unexpected Windfall",
+      "claim_boundary": "one deterministic card-specific production path plus exact shared primitive validation",
+      "expected_behavior": "Pay the additional discard cost, draw two cards, and create two Treasure artifact tokens.",
       "expected_runtime": {
         "capabilities": [
           "draw_cards",
@@ -3439,7 +3556,7 @@
         "destination": "owner_graveyard",
         "disposition": "passed",
         "effect_actions": 2,
-        "final_hash": "11023666739397736565",
+        "final_hash": "7721431299380069807",
         "final_life_totals": [
           20,
           20
@@ -3452,19 +3569,32 @@
       "oracle_id": "498c10c9-253d-4b15-b48c-1509381b17e8",
       "oracle_text": "As an additional cost to cast this spell, discard a card.\nDraw two cards and create two Treasure tokens. (They're artifacts with \"{T}, Sacrifice this token: Add one mana of any color.\")",
       "scenario_id": "T3.6-073",
-      "status": "blocked_semantic_gap",
+      "semantic_atoms": [
+        {
+          "additional_cost": "discard one card",
+          "count": 2,
+          "op": "draw_cards",
+          "player": "controller"
+        },
+        {
+          "controller": "controller",
+          "count": 2,
+          "op": "create_token",
+          "subtypes": [
+            "Treasure"
+          ],
+          "token": "Treasure"
+        }
+      ],
+      "status": "semantic_case_ready",
       "stratum": "token_and_sacrifice",
       "translated_path": "u/unexpected_windfall.frs",
       "translated_source_sha256": "bbe5815a116b3a3a23d1a6e3a48e89fcaa69d812087dc1aadb5b6df87e1e1cb7"
     },
     {
-      "blockers": [
-        {
-          "code": "TOKEN_SUBTYPE_STATE_MISSING",
-          "detail": "The created artifact token has its mana ability but does not carry the Treasure subtype."
-        }
-      ],
       "card_name": "Seize the Spoils",
+      "claim_boundary": "one deterministic card-specific production path plus exact shared primitive validation",
+      "expected_behavior": "Pay the additional discard cost, draw two cards, and create one Treasure artifact token.",
       "expected_runtime": {
         "capabilities": [
           "draw_cards",
@@ -3473,7 +3603,7 @@
         "destination": "owner_graveyard",
         "disposition": "passed",
         "effect_actions": 2,
-        "final_hash": "11054964561826040472",
+        "final_hash": "4309531831151550104",
         "final_life_totals": [
           20,
           20
@@ -3486,19 +3616,32 @@
       "oracle_id": "58f83528-9110-4895-b5ea-51b90af30a8d",
       "oracle_text": "As an additional cost to cast this spell, discard a card.\nDraw two cards and create a Treasure token. (It's an artifact with \"{T}, Sacrifice this token: Add one mana of any color.\")",
       "scenario_id": "T3.6-074",
-      "status": "blocked_semantic_gap",
+      "semantic_atoms": [
+        {
+          "additional_cost": "discard one card",
+          "count": 2,
+          "op": "draw_cards",
+          "player": "controller"
+        },
+        {
+          "controller": "controller",
+          "count": 1,
+          "op": "create_token",
+          "subtypes": [
+            "Treasure"
+          ],
+          "token": "Treasure"
+        }
+      ],
+      "status": "semantic_case_ready",
       "stratum": "token_and_sacrifice",
       "translated_path": "s/seize_the_spoils.frs",
       "translated_source_sha256": "6dd16da2cd40cfaab057591b7df54b1bfea5332952dcbe504698d4886fb249ec"
     },
     {
-      "blockers": [
-        {
-          "code": "COPY_TRIGGER_EVENT_MISSING",
-          "detail": "The runtime exercises controller casts, but the translated cast_or_copy trigger does not represent or replay the copy-spell half of magecraft."
-        }
-      ],
       "card_name": "Archmage Emeritus",
+      "claim_boundary": "one deterministic card-specific production path plus exact shared primitive validation",
+      "expected_behavior": "Resolve Archmage Emeritus, then queue and resolve its draw trigger once for an instant cast and once for a copy of that spell.",
       "expected_runtime": {
         "capabilities": [
           "permanent_spell",
@@ -3507,12 +3650,12 @@
         "destination": "battlefield",
         "disposition": "passed",
         "effect_actions": 1,
-        "final_hash": "10485462898257279934",
+        "final_hash": "9803115972984659090",
         "final_life_totals": [
           20,
           20
         ],
-        "production_actions": 48
+        "production_actions": 56
       },
       "freeze_rank": 75,
       "legacy_source_path": "a/archmage_emeritus.txt",
@@ -3520,7 +3663,24 @@
       "oracle_id": "8305d576-21d8-4ce7-8eda-a7cd9793aca5",
       "oracle_text": "Magecraft \u2014 Whenever you cast or copy an instant or sorcery spell, draw a card.",
       "scenario_id": "T3.6-075",
-      "status": "blocked_semantic_gap",
+      "semantic_atoms": [
+        {
+          "destination": "battlefield",
+          "op": "resolve_permanent",
+          "subtypes": [
+            "Human",
+            "Wizard"
+          ],
+          "type_line": "Creature - Human Wizard"
+        },
+        {
+          "count": 1,
+          "op": "draw_cards",
+          "player": "source_controller",
+          "trigger": "controller_cast_or_copy_instant_or_sorcery"
+        }
+      ],
+      "status": "semantic_case_ready",
       "stratum": "triggered_synergies",
       "translated_path": "a/archmage_emeritus.frs",
       "translated_source_sha256": "16f16663117ac2f949b33bb0f8fc57e749073a2de6db938886a02ecac55bbd58"
@@ -3703,13 +3863,9 @@
       "translated_source_sha256": "d7ca57d63eb2d8ce1d9e7ba311c47f1c5cba9f6c2c22c765af2b3ea3988a3c55"
     },
     {
-      "blockers": [
-        {
-          "code": "TOKEN_SUBTYPE_STATE_MISSING",
-          "detail": "The four created 2/2 black creature tokens do not carry the Zombie subtype."
-        }
-      ],
       "card_name": "Grave Titan",
+      "claim_boundary": "one deterministic card-specific production path plus exact shared primitive validation",
+      "expected_behavior": "Resolve Grave Titan with deathtouch; both its enter and attack triggers create two 2/2 black Zombie tokens with the Zombie subtype.",
       "expected_runtime": {
         "capabilities": [
           "permanent_spell",
@@ -3719,7 +3875,7 @@
         "destination": "battlefield",
         "disposition": "passed",
         "effect_actions": 2,
-        "final_hash": "2501733441540831685",
+        "final_hash": "12911212036658501527",
         "final_life_totals": [
           20,
           20
@@ -3732,7 +3888,50 @@
       "oracle_id": "f3abd4d1-a975-4e85-8684-aa0fce029670",
       "oracle_text": "Deathtouch\nWhenever Grave Titan enters or attacks, create two 2/2 black Zombie creature tokens.",
       "scenario_id": "T3.6-079",
-      "status": "blocked_semantic_gap",
+      "semantic_atoms": [
+        {
+          "destination": "battlefield",
+          "keywords": [
+            "deathtouch"
+          ],
+          "op": "resolve_permanent",
+          "subtypes": [
+            "Giant"
+          ],
+          "type_line": "Creature - Giant"
+        },
+        {
+          "colors": [
+            "black"
+          ],
+          "controller": "source_controller",
+          "count": 2,
+          "op": "create_token",
+          "power": 2,
+          "subtypes": [
+            "Zombie"
+          ],
+          "token": "Zombie",
+          "toughness": 2,
+          "trigger": "source_enters"
+        },
+        {
+          "colors": [
+            "black"
+          ],
+          "controller": "source_controller",
+          "count": 2,
+          "op": "create_token",
+          "power": 2,
+          "subtypes": [
+            "Zombie"
+          ],
+          "token": "Zombie",
+          "toughness": 2,
+          "trigger": "source_attacks"
+        }
+      ],
+      "status": "semantic_case_ready",
       "stratum": "token_and_sacrifice",
       "translated_path": "g/grave_titan.frs",
       "translated_source_sha256": "c676496b280e4cc5769c2476ac978f55e8c08869ec8db59c6efc80ab472bbfb8"
@@ -4134,15 +4333,9 @@
       "translated_source_sha256": "88680bc2f4f68343e8c0b30e32385ee9e28c313135cb7fc8d87b3616c763965c"
     },
     {
-      "blockers": [
-        {
-          "code": "TOKEN_SUBTYPE_STATE_MISSING",
-          "detail": "The exact opponent-draw and unless-paid branches replay correctly, but the created artifact token still lacks the Treasure subtype."
-        }
-      ],
       "card_name": "Smothering Tithe",
-      "claim_boundary": "focused opponent-draw and exact unless-paid branches are replay-bound, but full semantic promotion remains blocked on Treasure subtype state",
-      "expected_behavior": "Resolve Smothering Tithe, queue one trigger for each card an opponent successfully draws but none for controller or failed draws, then create exactly one Treasure on decline or consume the triggering opponent's exact {2} payment and suppress the Treasure.",
+      "claim_boundary": "one deterministic card-specific production path plus exact shared primitive validation",
+      "expected_behavior": "Resolve Smothering Tithe; each opponent card draw offers the triggering opponent the exact {2} payment and otherwise creates one Treasure token.",
       "expected_runtime": {
         "capabilities": [
           "permanent_spell",
@@ -4151,7 +4344,7 @@
         "destination": "battlefield",
         "disposition": "passed",
         "effect_actions": 1,
-        "final_hash": "16112865310567409704",
+        "final_hash": "2907546886426573296",
         "final_life_totals": [
           20,
           20
@@ -4186,6 +4379,9 @@
             ]
           },
           "op": "create_token",
+          "subtypes": [
+            "Treasure"
+          ],
           "token": "Treasure",
           "trigger": "each_opponent_card_drawn",
           "unless_paid": {
@@ -4194,19 +4390,15 @@
           }
         }
       ],
-      "status": "blocked_semantic_gap",
+      "status": "semantic_case_ready",
       "stratum": "token_and_sacrifice",
       "translated_path": "s/smothering_tithe.frs",
       "translated_source_sha256": "fb0f5a25fee2fe040f9431516c27347b15ceadfd55988a1a5900027eaf843207"
     },
     {
-      "blockers": [
-        {
-          "code": "TOKEN_SUBTYPE_STATE_MISSING",
-          "detail": "The dynamically counted artifact tokens have their mana abilities but do not carry the Treasure subtype."
-        }
-      ],
       "card_name": "Dockside Extortionist",
+      "claim_boundary": "one deterministic card-specific production path plus exact shared primitive validation",
+      "expected_behavior": "Resolve Dockside Extortionist and create one Treasure for each artifact and enchantment opponents control, with Treasure subtype and mana ability intact.",
       "expected_runtime": {
         "capabilities": [
           "permanent_spell",
@@ -4215,7 +4407,7 @@
         "destination": "battlefield",
         "disposition": "passed",
         "effect_actions": 1,
-        "final_hash": "16785205203061673789",
+        "final_hash": "2050461665219275799",
         "final_life_totals": [
           20,
           20
@@ -4228,7 +4420,28 @@
       "oracle_id": "697bcfe1-ecbf-42a1-bfc7-0766d48ca56b",
       "oracle_text": "When Dockside Extortionist enters, create X Treasure tokens, where X is the number of artifacts and enchantments your opponents control. (Treasure tokens are artifacts with \"{T}, Sacrifice this token: Add one mana of any color.\")",
       "scenario_id": "T3.6-088",
-      "status": "blocked_semantic_gap",
+      "semantic_atoms": [
+        {
+          "destination": "battlefield",
+          "op": "resolve_permanent",
+          "subtypes": [
+            "Goblin",
+            "Pirate"
+          ],
+          "type_line": "Creature - Goblin Pirate"
+        },
+        {
+          "controller": "source_controller",
+          "count": "opponents_artifacts_and_enchantments",
+          "op": "create_token",
+          "subtypes": [
+            "Treasure"
+          ],
+          "token": "Treasure",
+          "trigger": "source_enters"
+        }
+      ],
+      "status": "semantic_case_ready",
       "stratum": "token_and_sacrifice",
       "translated_path": "d/dockside_extortionist.frs",
       "translated_source_sha256": "c671cd1f66eb4ea5c416732aa4d479f3cb88e4c23869634501e090909bba71df"
@@ -4282,28 +4495,25 @@
       "translated_source_sha256": "a4683b58048d5b1540e231ffb5422257a1e45a1c4bd6916bace8e71020507ddc"
     },
     {
-      "blockers": [
-        {
-          "code": "REVEAL_KNOWLEDGE_EVENT_MISSING",
-          "detail": "The selected hidden card moves correctly, but no public reveal/known-information event is emitted."
-        }
-      ],
       "card_name": "Mystical Tutor",
+      "claim_boundary": "one deterministic card-specific production path plus exact shared primitive validation",
+      "expected_behavior": "Search for one instant or sorcery card, publicly reveal it, shuffle, and put that exact card on top of its owner's library.",
       "expected_runtime": {
         "capabilities": [
           "search_library",
+          "reveal_objects",
           "shuffle_library",
           "move_zone"
         ],
         "destination": "owner_graveyard",
         "disposition": "passed",
-        "effect_actions": 3,
-        "final_hash": "8808842937805768189",
+        "effect_actions": 4,
+        "final_hash": "16503655492182732186",
         "final_life_totals": [
           20,
           20
         ],
-        "production_actions": 35
+        "production_actions": 36
       },
       "freeze_rank": 90,
       "legacy_source_path": "m/mystical_tutor.txt",
@@ -4311,34 +4521,54 @@
       "oracle_id": "fb81f95c-70f8-4eb7-8d15-15d0ae23ec03",
       "oracle_text": "Search your library for an instant or sorcery card, reveal it, then shuffle and put that card on top.",
       "scenario_id": "T3.6-090",
-      "status": "blocked_semantic_gap",
-      "stratum": "library_and_graveyard_access",
-      "translated_path": "m/mystical_tutor.frs",
-      "translated_source_sha256": "e46cb977e9fe468d9a90f8fed6a17c850ccb38208c0ed762ffb735ea1adeecf4"
-    },
-    {
-      "blockers": [
+      "semantic_atoms": [
         {
-          "code": "REVEAL_KNOWLEDGE_EVENT_MISSING",
-          "detail": "The selected hidden card moves correctly, but no public reveal/known-information event is emitted."
+          "maximum": 1,
+          "op": "search_library",
+          "player": "controller",
+          "selector": "instant|sorcery"
+        },
+        {
+          "objects": "search_result",
+          "op": "reveal_objects",
+          "visibility": "public"
+        },
+        {
+          "op": "shuffle_library",
+          "player": "controller"
+        },
+        {
+          "chosen": "search_result",
+          "destination": "library_top",
+          "maximum": 1,
+          "op": "move_zone"
         }
       ],
+      "status": "semantic_case_ready",
+      "stratum": "library_and_graveyard_access",
+      "translated_path": "m/mystical_tutor.frs",
+      "translated_source_sha256": "69d202fea0dac57494f466de90305e940bee85fa0b0b2556ed08d68b8139ef3e"
+    },
+    {
       "card_name": "Enlightened Tutor",
+      "claim_boundary": "one deterministic card-specific production path plus exact shared primitive validation",
+      "expected_behavior": "Search for one artifact or enchantment card, publicly reveal it, shuffle, and put that exact card on top of its owner's library.",
       "expected_runtime": {
         "capabilities": [
           "search_library",
+          "reveal_objects",
           "shuffle_library",
           "move_zone"
         ],
         "destination": "owner_graveyard",
         "disposition": "passed",
-        "effect_actions": 3,
-        "final_hash": "14310347065516204612",
+        "effect_actions": 4,
+        "final_hash": "13592764669296420489",
         "final_life_totals": [
           20,
           20
         ],
-        "production_actions": 35
+        "production_actions": 36
       },
       "freeze_rank": 91,
       "legacy_source_path": "e/enlightened_tutor.txt",
@@ -4346,34 +4576,54 @@
       "oracle_id": "c5229c17-b7be-4b05-b683-f2277edc4849",
       "oracle_text": "Search your library for an artifact or enchantment card, reveal it, then shuffle and put that card on top.",
       "scenario_id": "T3.6-091",
-      "status": "blocked_semantic_gap",
-      "stratum": "library_and_graveyard_access",
-      "translated_path": "e/enlightened_tutor.frs",
-      "translated_source_sha256": "5deeb96b804f381fe27ca682e51e3a9c289666feb991e6708266a2127ebee090"
-    },
-    {
-      "blockers": [
+      "semantic_atoms": [
         {
-          "code": "REVEAL_KNOWLEDGE_EVENT_MISSING",
-          "detail": "The selected hidden card moves correctly, but no public reveal/known-information event is emitted."
+          "maximum": 1,
+          "op": "search_library",
+          "player": "controller",
+          "selector": "artifact|enchantment"
+        },
+        {
+          "objects": "search_result",
+          "op": "reveal_objects",
+          "visibility": "public"
+        },
+        {
+          "op": "shuffle_library",
+          "player": "controller"
+        },
+        {
+          "chosen": "search_result",
+          "destination": "library_top",
+          "maximum": 1,
+          "op": "move_zone"
         }
       ],
+      "status": "semantic_case_ready",
+      "stratum": "library_and_graveyard_access",
+      "translated_path": "e/enlightened_tutor.frs",
+      "translated_source_sha256": "18a2af37f4cf1f76143930f5094fa8686226a93886085a06f356cfa1609f67e7"
+    },
+    {
       "card_name": "Worldly Tutor",
+      "claim_boundary": "one deterministic card-specific production path plus exact shared primitive validation",
+      "expected_behavior": "Search for one creature card, publicly reveal it, shuffle, and put that exact card on top of its owner's library.",
       "expected_runtime": {
         "capabilities": [
           "search_library",
+          "reveal_objects",
           "shuffle_library",
           "move_zone"
         ],
         "destination": "owner_graveyard",
         "disposition": "passed",
-        "effect_actions": 3,
-        "final_hash": "11834153176261826216",
+        "effect_actions": 4,
+        "final_hash": "1364819032397390520",
         "final_life_totals": [
           20,
           20
         ],
-        "production_actions": 36
+        "production_actions": 37
       },
       "freeze_rank": 92,
       "legacy_source_path": "w/worldly_tutor.txt",
@@ -4381,34 +4631,54 @@
       "oracle_id": "e8863518-0bfa-49c3-8c6e-6c9116a81051",
       "oracle_text": "Search your library for a creature card, reveal it, then shuffle and put the card on top.",
       "scenario_id": "T3.6-092",
-      "status": "blocked_semantic_gap",
-      "stratum": "library_and_graveyard_access",
-      "translated_path": "w/worldly_tutor.frs",
-      "translated_source_sha256": "14a7729860f3723cce3b094af8f65130f36c11a885737d1228286506b50e4fb2"
-    },
-    {
-      "blockers": [
+      "semantic_atoms": [
         {
-          "code": "REVEAL_KNOWLEDGE_EVENT_MISSING",
-          "detail": "The selected hidden card moves correctly, but no public reveal/known-information event is emitted."
+          "maximum": 1,
+          "op": "search_library",
+          "player": "controller",
+          "selector": "creature"
+        },
+        {
+          "objects": "search_result",
+          "op": "reveal_objects",
+          "visibility": "public"
+        },
+        {
+          "op": "shuffle_library",
+          "player": "controller"
+        },
+        {
+          "chosen": "search_result",
+          "destination": "library_top",
+          "maximum": 1,
+          "op": "move_zone"
         }
       ],
+      "status": "semantic_case_ready",
+      "stratum": "library_and_graveyard_access",
+      "translated_path": "w/worldly_tutor.frs",
+      "translated_source_sha256": "44ba24df3908484d03e1a74ca6ebe2eab3311085dfe65a7dc84a73398e49098a"
+    },
+    {
       "card_name": "Eladamri's Call",
+      "claim_boundary": "one deterministic card-specific production path plus exact shared primitive validation",
+      "expected_behavior": "Search for one creature card, publicly reveal it, put that exact card into hand, then shuffle the library.",
       "expected_runtime": {
         "capabilities": [
           "search_library",
+          "reveal_objects",
           "move_zone",
           "shuffle_library"
         ],
         "destination": "owner_graveyard",
         "disposition": "passed",
-        "effect_actions": 3,
-        "final_hash": "3095068159535126575",
+        "effect_actions": 4,
+        "final_hash": "13812506586565458529",
         "final_life_totals": [
           20,
           20
         ],
-        "production_actions": 36
+        "production_actions": 37
       },
       "freeze_rank": 93,
       "legacy_source_path": "e/eladamris_call.txt",
@@ -4416,34 +4686,54 @@
       "oracle_id": "4acb6612-54e8-428d-acb6-c7259a5ad6a8",
       "oracle_text": "Search your library for a creature card, reveal that card, put it into your hand, then shuffle.",
       "scenario_id": "T3.6-093",
-      "status": "blocked_semantic_gap",
-      "stratum": "library_and_graveyard_access",
-      "translated_path": "e/eladamris_call.frs",
-      "translated_source_sha256": "62d57726d92ca162531d144ce41f1b52c901f57b27398ca882586440185ede1d"
-    },
-    {
-      "blockers": [
+      "semantic_atoms": [
         {
-          "code": "REVEAL_KNOWLEDGE_EVENT_MISSING",
-          "detail": "The selected hidden card moves correctly, but no public reveal/known-information event is emitted."
+          "maximum": 1,
+          "op": "search_library",
+          "player": "controller",
+          "selector": "creature"
+        },
+        {
+          "objects": "search_result",
+          "op": "reveal_objects",
+          "visibility": "public"
+        },
+        {
+          "chosen": "search_result",
+          "destination": "hand",
+          "maximum": 1,
+          "op": "move_zone"
+        },
+        {
+          "op": "shuffle_library",
+          "player": "controller"
         }
       ],
+      "status": "semantic_case_ready",
+      "stratum": "library_and_graveyard_access",
+      "translated_path": "e/eladamris_call.frs",
+      "translated_source_sha256": "a89a97e83971d00adcd46c7703713f36bf023a9f6b9728834992c25edf472bc0"
+    },
+    {
       "card_name": "Fabricate",
+      "claim_boundary": "one deterministic card-specific production path plus exact shared primitive validation",
+      "expected_behavior": "Search for one artifact card, publicly reveal it, put that exact card into hand, then shuffle the library.",
       "expected_runtime": {
         "capabilities": [
           "search_library",
+          "reveal_objects",
           "move_zone",
           "shuffle_library"
         ],
         "destination": "owner_graveyard",
         "disposition": "passed",
-        "effect_actions": 3,
-        "final_hash": "5307622495253216913",
+        "effect_actions": 4,
+        "final_hash": "823771064309835998",
         "final_life_totals": [
           20,
           20
         ],
-        "production_actions": 40
+        "production_actions": 41
       },
       "freeze_rank": 94,
       "legacy_source_path": "f/fabricate.txt",
@@ -4451,10 +4741,33 @@
       "oracle_id": "422e1869-134f-463d-9fa1-86b66a998b3e",
       "oracle_text": "Search your library for an artifact card, reveal it, put it into your hand, then shuffle.",
       "scenario_id": "T3.6-094",
-      "status": "blocked_semantic_gap",
+      "semantic_atoms": [
+        {
+          "maximum": 1,
+          "op": "search_library",
+          "player": "controller",
+          "selector": "artifact"
+        },
+        {
+          "objects": "search_result",
+          "op": "reveal_objects",
+          "visibility": "public"
+        },
+        {
+          "chosen": "search_result",
+          "destination": "hand",
+          "maximum": 1,
+          "op": "move_zone"
+        },
+        {
+          "op": "shuffle_library",
+          "player": "controller"
+        }
+      ],
+      "status": "semantic_case_ready",
       "stratum": "library_and_graveyard_access",
       "translated_path": "f/fabricate.frs",
-      "translated_source_sha256": "fb5bc809e8d5aa83f924c045376bd04e23aca1e02f65d952108853cebbe8cf08"
+      "translated_source_sha256": "7e755bab3d08e795ab0020a0756d24653c17e5cb2a29bee3798acf3d21db9591"
     },
     {
       "card_name": "Goblin Chieftain",
@@ -4572,29 +4885,26 @@
       "translated_source_sha256": "cd218b6fe8633a9d6131aa42516386961b9499ecf0828f7e64133550a34d67d1"
     },
     {
-      "blockers": [
-        {
-          "code": "REVEAL_KNOWLEDGE_EVENT_MISSING",
-          "detail": "The chosen Goblin moves to hand, but no public reveal/known-information event is emitted."
-        }
-      ],
       "card_name": "Goblin Matron",
+      "claim_boundary": "one deterministic card-specific production path plus exact shared primitive validation",
+      "expected_behavior": "Resolve Goblin Matron; on entry, optionally search for one Goblin card, publicly reveal it, put it into hand, and shuffle.",
       "expected_runtime": {
         "capabilities": [
           "permanent_spell",
           "search_library",
+          "reveal_objects",
           "move_zone",
           "shuffle_library"
         ],
         "destination": "battlefield",
         "disposition": "passed",
-        "effect_actions": 3,
-        "final_hash": "9117011774820681145",
+        "effect_actions": 4,
+        "final_hash": "8273859114590190045",
         "final_life_totals": [
           20,
           20
         ],
-        "production_actions": 46
+        "production_actions": 47
       },
       "freeze_rank": 97,
       "legacy_source_path": "g/goblin_matron.txt",
@@ -4602,10 +4912,45 @@
       "oracle_id": "145737a7-c597-4dec-b752-207c2d0501e3",
       "oracle_text": "When Goblin Matron enters, you may search your library for a Goblin card, reveal that card, put it into your hand, then shuffle.",
       "scenario_id": "T3.6-097",
-      "status": "blocked_semantic_gap",
+      "semantic_atoms": [
+        {
+          "destination": "battlefield",
+          "op": "resolve_permanent",
+          "subtypes": [
+            "Goblin"
+          ],
+          "type_line": "Creature - Goblin"
+        },
+        {
+          "maximum": 1,
+          "op": "search_library",
+          "optional": true,
+          "player": "source_controller",
+          "selector": "Goblin",
+          "trigger": "source_enters"
+        },
+        {
+          "objects": "search_result",
+          "op": "reveal_objects",
+          "visibility": "public"
+        },
+        {
+          "chosen": "search_result",
+          "destination": "hand",
+          "maximum": 1,
+          "op": "move_zone",
+          "trigger": "source_enters"
+        },
+        {
+          "op": "shuffle_library",
+          "player": "source_controller",
+          "trigger": "source_enters"
+        }
+      ],
+      "status": "semantic_case_ready",
       "stratum": "triggered_synergies",
       "translated_path": "g/goblin_matron.frs",
-      "translated_source_sha256": "a4d30999f5dbefe81f20dae55ace8769dbd9a866db671e2ab69ea8466ac898a9"
+      "translated_source_sha256": "67aa80c9bcffa04c269790dee7aec61eddfe4a6eec57f974800e289761bda64b"
     },
     {
       "card_name": "Purphoros, God of the Forge",
@@ -4812,13 +5157,13 @@
   ],
   "claim_boundary": "Only semantic_case_ready entries can be promoted by a passing replay and any required card-specific semantic probe. Runtime-smoke success alone never promotes a known gap.",
   "generated_at": "2026-07-13",
-  "payload_sha256": "202dc206805d14e4ea25915c34c19602188f9e3fd4a8642af678846a8e493095",
+  "payload_sha256": "1c6d2839e49e559e4a897d66b14a1824c82a22064b65d4891f9174589d529540",
   "product_source_commit": "15adf70c3f525908e9aa7ba09ec4ff85021f5eae",
   "schema_version": 2,
   "summary": {
     "blocked_runtime": 0,
-    "blocked_semantic_gap": 21,
+    "blocked_semantic_gap": 0,
     "candidate_count": 100,
-    "semantic_case_ready": 79
+    "semantic_case_ready": 100
   }
 }

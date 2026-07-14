@@ -41,6 +41,7 @@ ATOM_CAPABILITIES = {
     "counter_stack_entry": "counter_stack_entry",
     "move_zone": "move_zone",
     "create_token": "create_token",
+    "reveal_objects": "reveal_objects",
     "search_library": "search_library",
     "tap_object": "tap_object",
     "discard_cards": "discard_cards",
@@ -407,6 +408,73 @@ def expected_base_subtypes(case: dict[str, Any]) -> list[str] | None:
             raise ValueError(f"{case['scenario_id']}: invalid subtype expectation")
         return sorted(value.casefold() for value in subtypes)
     return None
+
+
+def expected_token_subtypes(case: dict[str, Any]) -> list[list[str]]:
+    expected: list[list[str]] = []
+    for atom in case.get("semantic_atoms", []):
+        if atom.get("op") != "create_token":
+            continue
+        subtypes = atom.get("subtypes")
+        if subtypes is None:
+            continue
+        if not isinstance(subtypes, list) or not subtypes or not all(
+            isinstance(value, str) and value for value in subtypes
+        ):
+            raise ValueError(f"{case['scenario_id']}: invalid token subtype expectation")
+        expected.append(sorted(value.casefold() for value in subtypes))
+    return expected
+
+
+def expects_public_reveal(case: dict[str, Any]) -> bool:
+    reveals = [
+        atom for atom in case.get("semantic_atoms", []) if atom.get("op") == "reveal_objects"
+    ]
+    if not reveals:
+        return False
+    if reveals != [
+        {
+            "objects": "search_result",
+            "op": "reveal_objects",
+            "visibility": "public",
+        }
+    ]:
+        raise ValueError(f"{case['scenario_id']}: invalid public reveal expectation")
+    return True
+
+
+def expects_regeneration_prohibition(case: dict[str, Any]) -> bool:
+    destructive = [
+        atom
+        for atom in case.get("semantic_atoms", [])
+        if atom.get("op") == "destroy_permanent"
+        and atom.get("regeneration") is not None
+    ]
+    if not destructive:
+        return False
+    if len(destructive) != 1 or destructive[0].get("regeneration") != "prohibited":
+        raise ValueError(f"{case['scenario_id']}: invalid regeneration expectation")
+    return True
+
+
+def expects_cast_or_copy(case: dict[str, Any]) -> bool:
+    triggers = [
+        atom
+        for atom in case.get("semantic_atoms", [])
+        if atom.get("trigger") == "controller_cast_or_copy_instant_or_sorcery"
+    ]
+    if not triggers:
+        return False
+    if triggers != [
+        {
+            "count": 1,
+            "op": "draw_cards",
+            "player": "source_controller",
+            "trigger": "controller_cast_or_copy_instant_or_sorcery",
+        }
+    ]:
+        raise ValueError(f"{case['scenario_id']}: invalid cast-or-copy expectation")
+    return True
 
 
 def expected_equipment_probe(case: dict[str, Any]) -> dict[str, Any] | None:
@@ -1306,6 +1374,7 @@ def expected_smothering_tithe_probe(case: dict[str, Any]) -> dict[str, Any] | No
                 "legal_outputs": ["{W}", "{U}", "{B}", "{R}", "{G}"],
             },
             "op": "create_token",
+            "subtypes": ["Treasure"],
             "token": "Treasure",
             "trigger": "each_opponent_card_drawn",
             "unless_paid": {"cost": "{2}", "payer": "triggering_opponent"},
@@ -1367,7 +1436,7 @@ def expected_smothering_tithe_probe(case: dict[str, Any]) -> dict[str, Any] | No
             "exact_payment_total": 2,
             "effect_exact": True,
             "artifact_token_template_exact": True,
-            "treasure_subtype_present": False,
+            "treasure_subtype_present": True,
             "treasure_mana_ability_exact": True,
             "treasure_mana_outputs": ["{W}", "{U}", "{B}", "{R}", "{G}"],
             "no_targets_or_choices": True,
@@ -1639,6 +1708,64 @@ def verify_semantic_probe(case: dict[str, Any], actual: dict[str, Any]) -> None:
                 f"expected={expected_subtypes}, actual={observed_subtypes}"
             )
 
+    expected_token_sets = expected_token_subtypes(case)
+    if expected_token_sets:
+        observed_token_sets = probe.get("token_subtypes")
+        if not isinstance(observed_token_sets, list):
+            raise ValueError(f"{case['scenario_id']}: token subtype probe is missing")
+        normalized = []
+        for subtype_set in observed_token_sets:
+            if not isinstance(subtype_set, list) or not all(
+                isinstance(value, str) for value in subtype_set
+            ):
+                raise ValueError(f"{case['scenario_id']}: invalid token subtype probe")
+            normalized.append(sorted(value.casefold() for value in subtype_set))
+        if normalized != expected_token_sets:
+            raise ValueError(
+                f"{case['scenario_id']}: token subtype state changed; "
+                f"expected={expected_token_sets}, actual={normalized}"
+            )
+
+    if expects_public_reveal(case):
+        required_reveal = {
+            "setup_succeeded": True,
+            "reveal_action_present": True,
+            "destination_action_present": True,
+            "reveal_precedes_destination": True,
+            "public_reveal_event_emitted": True,
+            "all_actions_applied": True,
+        }
+        if probe.get("reveal_event") != required_reveal:
+            raise ValueError(f"{case['scenario_id']}: public reveal replay changed")
+
+    if expects_regeneration_prohibition(case):
+        required_regeneration = {
+            "setup_succeeded": True,
+            "normal_destroy_applied": True,
+            "normal_destroy_replaced": True,
+            "normal_destroy_tapped": True,
+            "normal_destroy_cleared_damage": True,
+            "no_regeneration_action_present": True,
+            "destruction_action_applied": True,
+            "shielded_target_destroyed": True,
+            "all_shields_consumed_or_expired": True,
+        }
+        if probe.get("regeneration_prohibition") != required_regeneration:
+            raise ValueError(f"{case['scenario_id']}: regeneration prohibition replay changed")
+
+    if expects_cast_or_copy(case):
+        required_cast_or_copy = {
+            "setup_succeeded": True,
+            "condition_exact": True,
+            "cast_trigger_queued": True,
+            "cast_and_copy_queued": True,
+            "copy_provenance_exact": True,
+            "draw_action_exact": True,
+            "two_draw_resolutions": True,
+        }
+        if probe.get("cast_or_copy") != required_cast_or_copy:
+            raise ValueError(f"{case['scenario_id']}: cast-or-copy replay changed")
+
     player_rule_atoms = [
         atom
         for atom in case.get("semantic_atoms", [])
@@ -1801,20 +1928,33 @@ def build_report(cases: dict[str, Any], observed: list[dict[str, Any]]) -> dict[
     runtime_passed = sum(
         case["expected_runtime"]["disposition"] == "passed" for case in cases["cases"]
     )
+    checkpoint_passed = (
+        len(verified) == 100
+        and runtime_passed == 100
+        and not semantic_blocked
+        and not runtime_blocked
+    )
+    if checkpoint_passed:
+        claim_boundary = (
+            "All 100 frozen identities have one card-specific expected production path, exact "
+            "shared-primitive validation, and deterministic replay. CP-CARD-SEMANTICS-100 passed."
+        )
+    else:
+        claim_boundary = (
+            f"{len(verified)} identities have one card-specific expected production path and exact "
+            f"deterministic replay. The other {100 - len(verified)} remain reason-coded and are not "
+            "semantic_verified; CP-CARD-SEMANTICS-100 remains open."
+        )
     return {
         "schema_version": 2,
         "generated_at": "2026-07-13",
         "task": "T3.6-B",
-        "status": "pass_incremental_semantic_slice",
+        "status": "pass_local" if checkpoint_passed else "pass_incremental_semantic_slice",
         "verification_mode": "local_only",
-        "claim_boundary": (
-            f"{len(verified)} identities have one card-specific expected production path and exact "
-            f"deterministic replay. The other {100 - len(verified)} remain reason-coded and are not "
-            "semantic_verified; CP-CARD-SEMANTICS-100 remains open."
-        ),
+        "claim_boundary": claim_boundary,
         "checkpoint": {
             "id": "CP-CARD-SEMANTICS-100",
-            "status": "in_progress",
+            "status": "passed" if checkpoint_passed else "in_progress",
             "required": 100,
             "semantic_verified": len(verified),
             "remaining": 100 - len(verified),

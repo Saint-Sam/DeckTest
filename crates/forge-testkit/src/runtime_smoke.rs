@@ -484,6 +484,18 @@ fn compile_smoke(definition: &CardDefinition) -> Result<CompiledSmoke, RuntimeSm
             .iter()
             .map(|ability| (ability.effects(), ability.target_requirements())),
     );
+    effect_groups.extend(
+        program
+            .triggered_abilities()
+            .iter()
+            .filter(|ability| {
+                matches!(
+                    ability.event(),
+                    TriggeredEventProgram::ControllerCastsOrCopies(_)
+                )
+            })
+            .map(|ability| (ability.effects(), ability.target_requirements())),
+    );
     let activation_life_cost = program
         .activated_effects()
         .iter()
@@ -626,6 +638,7 @@ fn compile_life_totals(
                 | EffectProgram::Scry { .. }
                 | EffectProgram::ShuffleLibrary { .. }
                 | EffectProgram::DestroyPermanent { .. }
+                | EffectProgram::DestroyPermanentWithoutRegeneration { .. }
                 | EffectProgram::ExileObject { .. }
                 | EffectProgram::CounterStackEntry { .. }
                 | EffectProgram::MoveTargetObject { .. }
@@ -640,7 +653,8 @@ fn compile_life_totals(
                 | EffectProgram::GrantTargetingRestriction { .. }
                 | EffectProgram::GrantIndestructible { .. }
                 | EffectProgram::AttachSourceToTarget { .. }
-                | EffectProgram::AddCountersToSource { .. } => continue,
+                | EffectProgram::AddCountersToSource { .. }
+                | EffectProgram::RevealChosenObjects { .. } => continue,
             };
             for (player, selected) in players.into_iter().enumerate() {
                 if selected {
@@ -754,6 +768,7 @@ fn compile_library_reserve(
                 | EffectProgram::DiscardHands { .. }
                 | EffectProgram::ShuffleLibrary { .. }
                 | EffectProgram::DestroyPermanent { .. }
+                | EffectProgram::DestroyPermanentWithoutRegeneration { .. }
                 | EffectProgram::ExileObject { .. }
                 | EffectProgram::CounterStackEntry { .. }
                 | EffectProgram::MoveTargetObject { .. }
@@ -768,7 +783,8 @@ fn compile_library_reserve(
                 | EffectProgram::GrantTargetingRestriction { .. }
                 | EffectProgram::GrantIndestructible { .. }
                 | EffectProgram::AttachSourceToTarget { .. }
-                | EffectProgram::AddCountersToSource { .. } => {}
+                | EffectProgram::AddCountersToSource { .. }
+                | EffectProgram::RevealChosenObjects { .. } => {}
             }
         }
     }
@@ -1883,6 +1899,7 @@ fn setup_dynamic_amount_state(
             EffectProgram::DiscardHands { .. }
             | EffectProgram::ShuffleLibrary { .. }
             | EffectProgram::DestroyPermanent { .. }
+            | EffectProgram::DestroyPermanentWithoutRegeneration { .. }
             | EffectProgram::ExileObject { .. }
             | EffectProgram::CounterStackEntry { .. }
             | EffectProgram::MoveTargetObject { .. }
@@ -1895,7 +1912,8 @@ fn setup_dynamic_amount_state(
             | EffectProgram::GrantTargetingRestriction { .. }
             | EffectProgram::GrantIndestructible { .. }
             | EffectProgram::AttachSourceToTarget { .. }
-            | EffectProgram::AddCountersToSource { .. } => [None, None],
+            | EffectProgram::AddCountersToSource { .. }
+            | EffectProgram::RevealChosenObjects { .. } => [None, None],
         };
         for amount in amounts.into_iter().flatten() {
             if let AmountProgram::CountPermanents(predicate) = amount {
@@ -1985,17 +2003,26 @@ fn execute_controller_cast_triggers(
     base_card_id: u32,
     hand_delta: &mut [i64; PLAYER_COUNT],
 ) -> Result<(), RuntimeSmokeFailure> {
-    let predicates = program
+    let trigger_specs = program
         .triggered_abilities()
         .iter()
         .filter_map(|ability| match ability.event() {
-            TriggeredEventProgram::ControllerCasts(predicate) => Some(predicate),
+            TriggeredEventProgram::ControllerCasts(predicate) => Some((predicate, false)),
+            TriggeredEventProgram::ControllerCastsOrCopies(predicate) => Some((predicate, true)),
             _ => None,
         })
         .collect::<Vec<_>>();
-    if predicates.is_empty() {
+    if trigger_specs.is_empty() {
         return Ok(());
     }
+    let predicates = trigger_specs
+        .iter()
+        .map(|(predicate, _)| *predicate)
+        .collect::<Vec<_>>();
+    let copy_trigger_count = trigger_specs
+        .iter()
+        .filter(|(_, includes_copies)| *includes_copies)
+        .count();
 
     let mut types = ObjectTypes::none();
     let mut forbidden = ObjectTypes::none();
@@ -2119,6 +2146,32 @@ fn execute_controller_cast_triggers(
         None,
         hand_delta,
     )?;
+    if copy_trigger_count != 0 {
+        let outcome = execution.dispatch(
+            "trigger.controller_cast.copy",
+            Action::CopyStackEntry {
+                player: caster,
+                entry: test_spell,
+            },
+        )?;
+        let Outcome::StackEntryAdded(copy) = outcome else {
+            return Err(unexpected_outcome("trigger.controller_cast.copy", outcome));
+        };
+        execute_pending_triggers(
+            execution,
+            program,
+            registered,
+            copy_trigger_count,
+            "trigger.controller_copy",
+            caster,
+            opponent,
+            base_card_id.wrapping_add(920_000),
+            Some(source),
+            None,
+            hand_delta,
+        )?;
+        resolve_stack_entry(execution, copy)?;
+    }
     resolve_stack_entry(execution, test_spell)?;
     Ok(())
 }
@@ -3271,6 +3324,7 @@ fn prepare_effect_bindings_and_hand_delta(
             | EffectProgram::DealDamageToPlayers { .. }
             | EffectProgram::ShuffleLibrary { .. }
             | EffectProgram::DestroyPermanent { .. }
+            | EffectProgram::DestroyPermanentWithoutRegeneration { .. }
             | EffectProgram::ExileObject { .. }
             | EffectProgram::CounterStackEntry { .. }
             | EffectProgram::SacrificeSource
@@ -3283,7 +3337,8 @@ fn prepare_effect_bindings_and_hand_delta(
             | EffectProgram::GrantTargetingRestriction { .. }
             | EffectProgram::GrantIndestructible { .. }
             | EffectProgram::AttachSourceToTarget { .. }
-            | EffectProgram::AddCountersToSource { .. } => {}
+            | EffectProgram::AddCountersToSource { .. }
+            | EffectProgram::RevealChosenObjects { .. } => {}
         }
     }
     Ok(bindings)
@@ -4267,6 +4322,25 @@ card "Event Trigger Source" {
   }
 }
 "#;
+    const CAST_OR_COPY_TRIGGER_SOURCE: &str = r#"
+card "Cast or Copy Trigger Source" {
+  id: "forge:testkit:runtime:cast-or-copy"
+  layout: normal
+  status: unverified_playable
+  face "Cast or Copy Trigger Source" {
+    cost: "{B}{G}"
+    types: "Creature - Human Druid"
+    oracle: "Whenever you cast or copy an instant or sorcery spell, each opponent loses 1 life and you gain 1 life."
+    power: "2"
+    toughness: "2"
+    keywords: []
+    ability triggered {
+      event: event_cast(spells(or(type_is("instant"), type_is("sorcery"))), "cast_or_copy:you")
+      effect: sequence(lose_life(1, opponent()), gain_life(1, you()))
+    }
+  }
+}
+"#;
     const EQUIPMENT_TRIGGER_SOURCE: &str = r#"
 card "Equipment Trigger Source" {
   id: "forge:testkit:runtime:equipment-trigger"
@@ -4530,6 +4604,20 @@ card "Opponent Draw Upkeep Source" {
                 RuntimeSmokeCapability::DrawCards,
             ]
         );
+        assert_eq!(pass.destination(), "battlefield");
+    }
+
+    #[test]
+    fn cast_or_copy_trigger_executes_and_accounts_for_both_events() {
+        let definition = parse(
+            "cast_or_copy_trigger_source.frs",
+            CAST_OR_COPY_TRIGGER_SOURCE,
+        );
+        let report = run_translated_card_runtime_smoke(&definition);
+        let RuntimeSmokeResult::Passed(pass) = report.result() else {
+            panic!("expected pass, found {:?}", report.result());
+        };
+        assert_eq!(pass.final_life_totals(), [22, 18]);
         assert_eq!(pass.destination(), "battlefield");
     }
 
