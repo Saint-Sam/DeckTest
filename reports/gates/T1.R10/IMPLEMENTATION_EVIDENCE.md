@@ -2,7 +2,7 @@
 
 Date: 2026-07-14
 
-Status: implementation verified locally; CP-HUMAN-PLAY-CLI Owner game pending.
+Status: implementation and CP-HUMAN-PLAY-CLI verified locally.
 
 ## Product Path
 
@@ -24,6 +24,16 @@ Status: implementation verified locally; CP-HUMAN-PLAY-CLI Owner game pending.
   exactly.
 - GitHub Actions, network access, downloads, installs, pushes, and PRs: none.
 
-The scripted run proves implementation readiness only. It does not satisfy the
-Owner checkpoint. T4 remains blocked until the Owner completes the command in
-`reports/owner/brief-CP-HUMAN-PLAY-CLI.md` and its replay verifies exactly.
+## Owner Checkpoint
+
+- Real Owner game completed on 2026-07-14.
+- Seed: `17306488943054686736`.
+- Human decisions: 56.
+- Typed actions: 4,901.
+- Winner: seat 1.
+- Final hash: `7878648484579518403`.
+- Decision and typed-action replay: exact match.
+- Replay SHA-256:
+  `8d639f5794bff1dafcd53f6e327bd1fd9fa30670b8a874f90c8766659e0f1ae0`.
+
+CP-HUMAN-PLAY-CLI passes. T4.1-T4.3 may begin.

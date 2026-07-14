@@ -5,8 +5,8 @@ Forge 2.0 is a GPL-3.0-only Rust rebuild of Forge, guided by
 
 Current generated readiness and card-maturity counts are in `STATUS.md`.
 
-This repository has completed T0-T3 and is preparing the T1.R10 prompted-human
-checkpoint before Tier 4 AI work. The Orchestrator-owned state is
+This repository has completed T0-T3 and T1.R10/CP-HUMAN-PLAY-CLI. Tier 4 AI
+work is active. The Orchestrator-owned state is
 `PLAN_STATE.json`; Owner-facing updates live under `reports/owner/`.
 
 ## Fresh Checkout Setup

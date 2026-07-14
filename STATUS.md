@@ -73,10 +73,9 @@ onto identities.
 
 ## Next Gates
 
-1. T1.R10 implementation is locally green; the Owner must complete
-   CP-HUMAN-PLAY-CLI before T4 starts.
-2. After that checkpoint, begin T4.1-T4.3 on the exact card-driven runtime
-   proven by Tier 3, then proceed to T4.4+ search and calibration.
+1. CP-HUMAN-PLAY-CLI passed with a real Owner game and exact replay. Begin
+   T4.1-T4.3 on the exact card-driven runtime proven by Tier 3.
+2. After the baseline AI is green, proceed to T4.4+ search and calibration.
 3. Reopen T3 only for a concrete T4 blocker, fix the smallest shared primitive,
    add semantic regressions, and resume T4. Broad mapper expansion remains closed.
 
