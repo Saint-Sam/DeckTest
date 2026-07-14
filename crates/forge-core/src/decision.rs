@@ -229,10 +229,24 @@ pub enum DecisionDescriptor {
         /// Attack declarations for this option.
         attacks: Vec<AttackDeclaration>,
     },
+    /// Assign one attacker while building a complete declaration hierarchically.
+    AssignAttacker {
+        /// Creature currently being assigned.
+        attacker: ObjectId,
+        /// Defending player, or `None` when this creature does not attack.
+        defender: Option<PlayerId>,
+    },
     /// Declare a complete blocker set.
     DeclareBlockers {
         /// Block declarations for this option.
         blocks: Vec<BlockDeclaration>,
+    },
+    /// Assign one blocker while building a complete declaration hierarchically.
+    AssignBlocker {
+        /// Creature currently being assigned.
+        blocker: ObjectId,
+        /// Attacker to block, or `None` when this creature does not block.
+        attacker: Option<ObjectId>,
     },
     /// Move a commander to the command zone.
     MoveCommanderToCommand {
@@ -383,12 +397,28 @@ impl DecisionDescriptor {
                     bytes.player(attack.defending_player());
                 }
             }
+            Self::AssignAttacker { attacker, defender } => {
+                bytes.u8(22);
+                bytes.object(*attacker);
+                bytes.optional_player(*defender);
+            }
             Self::DeclareBlockers { blocks } => {
                 bytes.u8(7);
                 bytes.u32(blocks.len() as u32);
                 for block in blocks {
                     bytes.object(block.blocker());
                     bytes.object(block.attacker());
+                }
+            }
+            Self::AssignBlocker { blocker, attacker } => {
+                bytes.u8(23);
+                bytes.object(*blocker);
+                match attacker {
+                    Some(attacker) => {
+                        bytes.u8(1);
+                        bytes.object(*attacker);
+                    }
+                    None => bytes.u8(0),
                 }
             }
             Self::MoveCommanderToCommand { object } => {
@@ -545,6 +575,7 @@ pub struct DecisionContext {
     step: Option<Step>,
     priority: Option<PlayerId>,
     stack_depth: u32,
+    path_discriminator: Option<u64>,
     options: Vec<DecisionOption>,
     groups: Vec<DecisionGroup>,
 }
@@ -555,8 +586,35 @@ impl DecisionContext {
         kind: DecisionKind,
         actor: PlayerId,
         view: &PlayerView,
+        options: Vec<DecisionOption>,
+        groups: Vec<DecisionGroup>,
+    ) -> Result<Self, DecisionContextError> {
+        Self::build(kind, actor, view, options, groups, None)
+    }
+
+    /// Builds a hierarchical subcontext bound to its prior canonical choices.
+    ///
+    /// The discriminator must be derived only from typed, actor-visible path
+    /// state. It prevents two otherwise identical subprompts from sharing a
+    /// benchmark key when they were reached through different legal choices.
+    pub fn new_scoped(
+        kind: DecisionKind,
+        actor: PlayerId,
+        view: &PlayerView,
+        options: Vec<DecisionOption>,
+        groups: Vec<DecisionGroup>,
+        path_discriminator: u64,
+    ) -> Result<Self, DecisionContextError> {
+        Self::build(kind, actor, view, options, groups, Some(path_discriminator))
+    }
+
+    fn build(
+        kind: DecisionKind,
+        actor: PlayerId,
+        view: &PlayerView,
         mut options: Vec<DecisionOption>,
         groups: Vec<DecisionGroup>,
+        path_discriminator: Option<u64>,
     ) -> Result<Self, DecisionContextError> {
         if view.observer() != actor {
             return Err(DecisionContextError::ObserverMismatch {
@@ -601,12 +659,20 @@ impl DecisionContext {
         for option in &options {
             canonical.u128(option.id().get());
         }
+        if let Some(discriminator) = path_discriminator {
+            canonical.u8(1);
+            canonical.u64(discriminator);
+        }
         let id = DecisionContextId(stable_hash(b"forge-context-v1", &canonical.0));
         let mut state_key_bytes = CanonicalDecisionBytes::default();
         state_key_bytes.u64(player_view_hash.get());
         state_key_bytes.u32(options.len() as u32);
         for option in &options {
             state_key_bytes.u128(option.id().get());
+        }
+        if let Some(discriminator) = path_discriminator {
+            state_key_bytes.u8(1);
+            state_key_bytes.u64(discriminator);
         }
         let state_key =
             DecisionStateKey(stable_hash(b"forge-decision-state-v1", &state_key_bytes.0));
@@ -621,6 +687,7 @@ impl DecisionContext {
             step: view.current_step(),
             priority: view.priority_player(),
             stack_depth,
+            path_discriminator,
             options,
             groups,
         })
@@ -684,6 +751,12 @@ impl DecisionContext {
     #[must_use]
     pub const fn stack_depth(&self) -> u32 {
         self.stack_depth
+    }
+
+    /// Returns the hierarchical path binding, when this is a subcontext.
+    #[must_use]
+    pub const fn path_discriminator(&self) -> Option<u64> {
+        self.path_discriminator
     }
 
     /// Returns every canonical legal option in stable ID order.
@@ -906,6 +979,51 @@ mod tests {
     }
 
     #[test]
+    fn scoped_contexts_bind_identical_options_to_their_visible_choice_path() {
+        let (state, player) = setup_view();
+        let view = state
+            .player_view(player)
+            .unwrap_or_else(|error| panic!("view failed: {error:?}"));
+        let pass = DecisionOption::new(
+            DecisionDescriptor::PassPriority,
+            vec![Action::PassPriority { player }],
+        );
+        let first = DecisionContext::new_scoped(
+            DecisionKind::Priority,
+            player,
+            &view,
+            vec![pass.clone()],
+            Vec::new(),
+            7,
+        )
+        .unwrap_or_else(|error| panic!("first scoped context failed: {error}"));
+        let same = DecisionContext::new_scoped(
+            DecisionKind::Priority,
+            player,
+            &view,
+            vec![pass.clone()],
+            Vec::new(),
+            7,
+        )
+        .unwrap_or_else(|error| panic!("same scoped context failed: {error}"));
+        let different = DecisionContext::new_scoped(
+            DecisionKind::Priority,
+            player,
+            &view,
+            vec![pass],
+            Vec::new(),
+            8,
+        )
+        .unwrap_or_else(|error| panic!("different scoped context failed: {error}"));
+
+        assert_eq!(first.id(), same.id());
+        assert_eq!(first.state_key(), same.state_key());
+        assert_eq!(first.path_discriminator(), Some(7));
+        assert_ne!(first.id(), different.id());
+        assert_ne!(first.state_key(), different.state_key());
+    }
+
+    #[test]
     fn stable_ids_use_typed_fields_not_display_text() {
         let first = DecisionOption::new(
             DecisionDescriptor::PlayLand {
@@ -1018,8 +1136,16 @@ mod tests {
             DecisionDescriptor::DeclareAttackers {
                 attacks: vec![AttackDeclaration::new(object, opponent)],
             },
+            DecisionDescriptor::AssignAttacker {
+                attacker: object,
+                defender: Some(opponent),
+            },
             DecisionDescriptor::DeclareBlockers {
                 blocks: vec![BlockDeclaration::new(object, object)],
+            },
+            DecisionDescriptor::AssignBlocker {
+                blocker: object,
+                attacker: Some(object),
             },
             DecisionDescriptor::MoveCommanderToCommand { object },
             DecisionDescriptor::LeaveCommander {
@@ -1058,6 +1184,6 @@ mod tests {
             .into_iter()
             .map(|descriptor| DecisionOption::new(descriptor, Vec::new()).id())
             .collect::<std::collections::BTreeSet<_>>();
-        assert_eq!(ids.len(), 22);
+        assert_eq!(ids.len(), 24);
     }
 }

@@ -60,14 +60,15 @@ threshold. A measured threshold requires Owner-approved plan change before it
 can become promotion-authoritative.
 
 The product-bound local 1/2/4 ms, two-game smoke completed both B/2B
-comparisons and all three fixed/adaptive ablations. It also exposed a blocking
-implementation defect: measured p95 latency was approximately 250-273 ms
-because the configured budget was applied independently inside each tree and
-did not bound total decision work. The report is retained as defect evidence
-only. A shared total-decision deadline and edge-safe transposition accounting
-are now implemented locally; the smoke must be discarded and rerun on the next
-frozen product commit. Its confidence intervals and missing benchmark fields would
-still prohibit any strength or plateau claim even if timing were correct.
+comparisons and all three fixed/adaptive ablations. The first artifact exposed
+per-tree deadline multiplication. Product 316d9fd corrected that contract and
+edge accounting, then measured approximately 240-266 ms p95 because eager
+high-branching adapter work and duplicate full-state construction remained
+non-preemptible. Both reports are defect evidence only. The next source product
+uses hierarchical combat subcontexts and constructs one determinized state per
+sample; it must rerun the same ladder before timing can be interpreted. Missing
+Track B labels, CPU cost, reference devices, and wide confidence intervals
+would still prohibit a strength or plateau claim even if timing passes.
 
 The supporting design reference is *Learning to Stop: Dynamic Simulation
 Monte-Carlo Tree Search* (arXiv:2012.07910). DeckTest's own paired arena,

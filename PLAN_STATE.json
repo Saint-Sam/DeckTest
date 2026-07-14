@@ -11,8 +11,8 @@
   },
   "tier": 4,
   "execution_flow": {
-    "current": "replace eager high-branching action products with hierarchical canonical decision subcontexts after the corrected search deadline exposed their p95 cost",
-    "next": "complete canonical decision adapters and CPU/memory telemetry, then run CP-AI-BENCH calibration and search-knee campaigns",
+    "current": "freeze and remeasure hierarchical combat decisions plus single-construction determinization",
+    "next": "complete the remaining canonical decision adapters and CPU/memory telemetry, then run CP-AI-BENCH calibration and search-knee campaigns",
     "targeted_fallback": "When T4 discovers a concrete coverage blocker, fix the smallest shared T3 primitive, add semantic regression tests, and resume T4. Do not reopen broad mapper expansion."
   },
   "t4_diagnostic_product": {
@@ -383,13 +383,13 @@
       "status": "verified_local_diagnostics",
       "branch": "task/T4.4-determinized-mcts-v1",
       "attempts": 0,
-      "verification": "Root-parallel determinized UCT passes the unchanged exact full-game replay at corrected product 316d9fd: 16,274 canonical decisions, 1,032 searched decisions, 1,086 simulations, and 1,629 nodes. Action-edge statistics prevent converging actions from sharing evidence, and every wide-key hit requires full canonical-state equivalence; focused convergence and deliberate-collision regressions pass. Useful production search depth remains pending."
+      "verification": "Root-parallel determinized UCT passes the unchanged exact full-game replay at corrected product 316d9fd: 16,274 canonical decisions, 1,032 searched decisions, 1,086 simulations, and 1,629 nodes. Action-edge statistics and collision-checked wide-key buckets pass focused regressions. The next source product carries hierarchical attacker/blocker assignments through deeper typed search states and awaits exact replay regeneration."
     },
     "T4.5": {
-      "status": "verified_local_shared_deadline_eager_surface_blocked",
+      "status": "implemented_local_hierarchical_exact_refresh_pending",
       "branch": "task/T4.5-search-upgrades",
       "attempts": 0,
-      "verification": "Product 316d9fd creates one deadline from the caller's pre-context decision start, shares it across every determinization and worker, stops later sequential determinizations after expiry, and runs workers=1 inline. Exact heuristic, random, and search replays pass unchanged. The refreshed 1-4 ms ladder still measures approximately 240-266 ms p95 because eager high-branching contexts are non-preemptible, so it remains diagnostic defect evidence and no knee is claimed."
+      "verification": "Product 316d9fd proves the shared deadline and records the remaining 240-266 ms p95 defect. The next source product replaces exponential combat products with scoped per-object subcontexts, preserves split attacks and menace completion, and constructs each sampled GameState once instead of cloning then replacing it. Focused tests and strict clippy pass; a same-seed release smoke preserved 18,321 typed actions and final hash 3933493530367397528 while reducing searched-decision p95 from about 221 ms to 2.6 ms. Exact replay and ladder artifacts remain pending."
     },
     "T4.6": {
       "status": "blocked_on_decision_surface_cost_and_promotion_evidence",

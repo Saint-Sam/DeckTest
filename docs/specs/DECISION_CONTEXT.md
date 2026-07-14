@@ -36,8 +36,12 @@ contribute canonical typed bytes. `DecisionContextId` is derived from the
 schema version, `PlayerViewHash`, visible context metadata, and sorted
 canonical action IDs. Selecting an ID not present in the context fails closed.
 Duplicate IDs and grouping references outside the legal set also fail closed.
-`DecisionStateKey` contains exactly `PlayerViewHash` plus those sorted action
-IDs and is the machine key for Track B near-state deduplication.
+`DecisionStateKey` contains `PlayerViewHash` plus those sorted action IDs and is
+the machine key for Track B near-state deduplication. Hierarchical subcontexts
+also carry a typed-path discriminator derived only from actor-visible prior
+choices. That discriminator participates in both the context ID and state key,
+so identical-looking later prompts reached through different declarations are
+not collapsed.
 
 Adding a `DecisionDescriptor` variant requires updating its exhaustive
 canonical encoder; otherwise compilation fails. The contract test constructs
@@ -67,19 +71,21 @@ The T4.3-T4.5 diagnostics path currently adapts:
   and exact decision/action replay;
 - every live human and AI priority window, with legal normal-cost instants and
   a forced-pass fast path that does not invoke search or one-ply evaluation;
-- complete player-defender attack assignment products, including split attacks,
-  up to an explicit fail-closed option ceiling;
-- complete blocker assignments for every attacked player, submitted in
-  deterministic APNAP order and accumulated by the kernel, up to the same
-  ceiling;
+- complete player-defender attack assignments, including split attacks, built
+  as one bounded canonical subcontext per attacker rather than an exponential
+  Cartesian product;
+- complete blocker assignments for every attacked player, built as one bounded
+  subcontext per blocker, menace-completion checked, submitted in deterministic
+  APNAP order, and accumulated by the kernel;
 - complete canonical commander move-or-leave choices for both human and AI
   controllers, with selected-ID membership and telemetry regression coverage;
 - one shared sorted context for the live human and AI main-phase, attacker,
   blocker, and commander-zone adapters; presentation labels are derived from
   those typed options rather than independently enumerated menus;
 - canonical seeded random-legal and deterministic/noisy one-ply policies;
-- root-parallel determinized search over the main, attacker, and blocker
-  contexts, with every selected ID revalidated against its supplied context.
+- root-parallel determinized search over main and hierarchical attacker/blocker
+  contexts, with every selected ID revalidated against its supplied context and
+  only the final complete combat declaration dispatched to the kernel.
 
 The current path remains `limited` and diagnostics-only because it does not yet
 canonicalize the full Commander prompt surface: unsupported activation cost

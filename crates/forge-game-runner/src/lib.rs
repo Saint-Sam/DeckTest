@@ -53,7 +53,6 @@ const HUMAN_REPLAY_MAGIC: &str = "forge-human-play-replay-v1";
 const AI_REPLAY_MAGIC: &str = "forge-ai-baseline-replay-v1";
 const PILOT_INTENTS_PATH: &str = "assets/ai/pilot_intents.json";
 const RETAINED_REPLAYS: usize = 10;
-const MAX_DIAGNOSTIC_COMBAT_OPTIONS: usize = 262_144;
 const MAX_CANONICAL_SPELL_OPTIONS: usize = 65_536;
 
 /// Runs the complete local T3.9 pod campaign from process arguments.
@@ -1449,10 +1448,20 @@ struct MainSearchDomain<'a> {
     guardrail_profile: GuardrailProfile,
 }
 
-#[derive(Clone, Copy)]
-enum CombatSearchKind {
-    Attackers { active: PlayerId },
-    Blockers { defending: PlayerId },
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum CombatSearchProgress {
+    Attackers {
+        active: PlayerId,
+        objects: Arc<Vec<ObjectId>>,
+        cursor: usize,
+        declarations: Vec<AttackDeclaration>,
+    },
+    Blockers {
+        defending: PlayerId,
+        objects: Arc<Vec<ObjectId>>,
+        cursor: usize,
+        declarations: Vec<BlockDeclaration>,
+    },
 }
 
 #[derive(Clone)]
@@ -1460,21 +1469,15 @@ struct CombatSearchState {
     driver: GameDriver,
     finished: bool,
     terminal_prior: i64,
-    legal_actions: Arc<Vec<CanonicalActionId>>,
-    options: Arc<HashMap<CanonicalActionId, CombatSearchOption>>,
-}
-
-#[derive(Clone)]
-struct CombatSearchOption {
-    actions: Vec<Action>,
-    prior: i64,
+    progress: CombatSearchProgress,
+    context: Option<Arc<DecisionContext>>,
 }
 
 struct CombatSearchDomain<'a> {
     root: &'a GameDriver,
     actor: PlayerId,
     weights: AiWeights,
-    kind: CombatSearchKind,
+    progress: CombatSearchProgress,
     guardrail_profile: GuardrailProfile,
 }
 
@@ -1892,16 +1895,32 @@ impl GameDriver {
         Ok(object)
     }
 
-    fn search_clone(&self) -> Self {
-        let mut clone = self.clone();
-        clone.trace = TraceMode::Off;
-        clone.coverage_target = None;
-        clone.metrics = GameMetrics::default();
-        clone.actions.clear();
-        clone.ai_decisions.clear();
-        clone.next_hidden_check_action = u64::MAX;
-        clone.next_invariant_check_action = u64::MAX;
-        clone
+    fn search_clone_with_state(&self, state: GameState) -> Self {
+        Self {
+            state,
+            players: self.players.clone(),
+            programs: Arc::clone(&self.programs),
+            deck_models: Arc::clone(&self.deck_models),
+            card_definitions: Arc::clone(&self.card_definitions),
+            guardrails: Arc::clone(&self.guardrails),
+            commanders: self.commanders.clone(),
+            trigger_programs: self.trigger_programs.clone(),
+            activated_abilities: self.activated_abilities.clone(),
+            pending_activated_resolution: self.pending_activated_resolution.clone(),
+            pending_triggered_resolution: self.pending_triggered_resolution.clone(),
+            triggers_registered_for: self.triggers_registered_for.clone(),
+            permanent_runtime_registered_for: self.permanent_runtime_registered_for.clone(),
+            commander_zone_decisions: self.commander_zone_decisions.clone(),
+            current_attacks: self.current_attacks.clone(),
+            coverage_target: None,
+            metrics: GameMetrics::default(),
+            trace: TraceMode::Off,
+            actions: Vec::new(),
+            ai_decisions: Vec::new(),
+            next_hidden_check_action: u64::MAX,
+            next_invariant_check_action: u64::MAX,
+            seed: self.seed,
+        }
     }
 
     fn determinize_for_search(&self, observer: PlayerId, seed: u64) -> Result<Self, String> {
@@ -1953,8 +1972,7 @@ impl GameDriver {
             program_updates.push((object, Arc::clone(&definition.program)));
         }
 
-        let mut clone = self.search_clone();
-        clone.state = self
+        let state = self
             .state
             .determinized_clone(observer, &slots)
             .map_err(|error| {
@@ -1963,6 +1981,7 @@ impl GameDriver {
                     self.seed
                 )
             })?;
+        let mut clone = self.search_clone_with_state(state);
         let programs = Arc::make_mut(&mut clone.programs);
         for (object, program) in program_updates {
             programs.insert(object, program);
@@ -3636,6 +3655,21 @@ impl GameDriver {
             .map_err(|error| format!("seed {} decision context failed: {error}", self.seed))
     }
 
+    fn scoped_decision_context(
+        &self,
+        kind: DecisionKind,
+        actor: PlayerId,
+        options: Vec<DecisionOption>,
+        path_discriminator: u64,
+    ) -> Result<DecisionContext, String> {
+        let view = self
+            .state
+            .player_view(actor)
+            .map_err(|error| format!("seed {} player view failed: {error:?}", self.seed))?;
+        DecisionContext::new_scoped(kind, actor, &view, options, Vec::new(), path_discriminator)
+            .map_err(|error| format!("seed {} scoped decision context failed: {error}", self.seed))
+    }
+
     fn policy_candidates(
         &self,
         context: &DecisionContext,
@@ -4781,42 +4815,217 @@ impl GameDriver {
         Ok(())
     }
 
-    fn attack_decision_context(&self, active: PlayerId) -> Result<DecisionContext, String> {
-        let options = self
-            .diagnostic_attack_candidates(active)?
-            .into_iter()
-            .map(|attacks| {
-                DecisionOption::new(
-                    DecisionDescriptor::DeclareAttackers {
-                        attacks: attacks.clone(),
-                    },
-                    vec![Action::DeclareAttackers {
-                        player: active,
-                        attacks,
-                    }],
-                )
+    fn attack_assignment_objects(&self, active: PlayerId) -> Result<Vec<ObjectId>, String> {
+        let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+        let defenders = self.live_opponents(active);
+        let mut objects = self
+            .state
+            .zone_objects(battlefield)
+            .ok_or_else(|| format!("seed {} missing battlefield", self.seed))?
+            .iter()
+            .copied()
+            .filter(|object| self.state.object_controller(*object) == Ok(active))
+            .filter(|object| {
+                defenders.iter().copied().any(|defender| {
+                    self.state
+                        .can_attack(active, AttackDeclaration::new(*object, defender))
+                })
             })
-            .collect();
-        self.decision_context(DecisionKind::DeclareAttackers, active, options)
+            .collect::<Vec<_>>();
+        objects.sort_by_key(|object| object.index());
+        Ok(objects)
     }
 
-    fn block_decision_context(&self, defending: PlayerId) -> Result<DecisionContext, String> {
-        let options = self
-            .diagnostic_block_candidates(defending)?
-            .into_iter()
-            .map(|blocks| {
+    fn attack_assignment_context(
+        &self,
+        active: PlayerId,
+        objects: &[ObjectId],
+        cursor: usize,
+        declarations: &[AttackDeclaration],
+    ) -> Result<DecisionContext, String> {
+        let attacker = objects.get(cursor).copied().ok_or_else(|| {
+            format!(
+                "seed {} attack assignment cursor is out of range",
+                self.seed
+            )
+        })?;
+        let mut options = vec![DecisionOption::new(
+            DecisionDescriptor::AssignAttacker {
+                attacker,
+                defender: None,
+            },
+            Vec::new(),
+        )];
+        options.extend(
+            self.live_opponents(active)
+                .into_iter()
+                .filter(|defender| {
+                    self.state
+                        .can_attack(active, AttackDeclaration::new(attacker, *defender))
+                })
+                .map(|defender| {
+                    DecisionOption::new(
+                        DecisionDescriptor::AssignAttacker {
+                            attacker,
+                            defender: Some(defender),
+                        },
+                        Vec::new(),
+                    )
+                }),
+        );
+        self.scoped_decision_context(
+            DecisionKind::DeclareAttackers,
+            active,
+            options,
+            attack_path_discriminator(active, cursor, declarations),
+        )
+    }
+
+    fn block_assignment_objects(
+        &self,
+        defending_player: PlayerId,
+    ) -> Result<Vec<ObjectId>, String> {
+        let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+        let mut objects = self
+            .state
+            .zone_objects(battlefield)
+            .ok_or_else(|| format!("seed {} missing battlefield", self.seed))?
+            .iter()
+            .copied()
+            .filter(|object| self.state.object_controller(*object) == Ok(defending_player))
+            .filter(|object| {
+                self.current_attacks
+                    .iter()
+                    .filter(|attack| attack.defending_player() == defending_player)
+                    .any(|attack| {
+                        self.state.can_block(
+                            defending_player,
+                            BlockDeclaration::new(*object, attack.attacker()),
+                        )
+                    })
+            })
+            .collect::<Vec<_>>();
+        objects.sort_by_key(|object| object.index());
+        Ok(objects)
+    }
+
+    fn block_assignment_context(
+        &self,
+        defending_player: PlayerId,
+        objects: &[ObjectId],
+        cursor: usize,
+        declarations: &[BlockDeclaration],
+    ) -> Result<DecisionContext, String> {
+        let blocker = objects
+            .get(cursor)
+            .copied()
+            .ok_or_else(|| format!("seed {} block assignment cursor is out of range", self.seed))?;
+        let remaining = objects.get(cursor + 1..).unwrap_or_default();
+        let candidates = std::iter::once(None).chain(
+            self.current_attacks
+                .iter()
+                .filter(|attack| attack.defending_player() == defending_player)
+                .map(|attack| attack.attacker())
+                .filter(|attacker| {
+                    self.state
+                        .can_block(defending_player, BlockDeclaration::new(blocker, *attacker))
+                })
+                .map(Some),
+        );
+        let options = candidates
+            .filter(|attacker| {
+                let mut next = declarations.to_vec();
+                if let Some(attacker) = attacker {
+                    next.push(BlockDeclaration::new(blocker, *attacker));
+                }
+                self.block_prefix_has_completion(defending_player, &next, remaining)
+            })
+            .map(|attacker| {
                 DecisionOption::new(
-                    DecisionDescriptor::DeclareBlockers {
-                        blocks: blocks.clone(),
-                    },
-                    vec![Action::DeclareBlockers {
-                        defending_player: defending,
-                        blocks,
-                    }],
+                    DecisionDescriptor::AssignBlocker { blocker, attacker },
+                    Vec::new(),
                 )
             })
-            .collect();
-        self.decision_context(DecisionKind::DeclareBlockers, defending, options)
+            .collect::<Vec<_>>();
+        self.scoped_decision_context(
+            DecisionKind::DeclareBlockers,
+            defending_player,
+            options,
+            block_path_discriminator(defending_player, cursor, declarations),
+        )
+    }
+
+    fn block_prefix_has_completion(
+        &self,
+        defending_player: PlayerId,
+        declarations: &[BlockDeclaration],
+        remaining_blockers: &[ObjectId],
+    ) -> bool {
+        fn match_needs(
+            driver: &GameDriver,
+            defending_player: PlayerId,
+            needs: &[ObjectId],
+            remaining_blockers: &[ObjectId],
+            need_index: usize,
+            used: &mut [bool],
+        ) -> bool {
+            if need_index == needs.len() {
+                return true;
+            }
+            remaining_blockers
+                .iter()
+                .copied()
+                .enumerate()
+                .any(|(index, blocker)| {
+                    if used[index]
+                        || !driver.state.can_block(
+                            defending_player,
+                            BlockDeclaration::new(blocker, needs[need_index]),
+                        )
+                    {
+                        return false;
+                    }
+                    used[index] = true;
+                    let matched = match_needs(
+                        driver,
+                        defending_player,
+                        needs,
+                        remaining_blockers,
+                        need_index + 1,
+                        used,
+                    );
+                    used[index] = false;
+                    matched
+                })
+        }
+
+        let needs = self
+            .current_attacks
+            .iter()
+            .filter(|attack| attack.defending_player() == defending_player)
+            .filter(|attack| {
+                self.state
+                    .creature_characteristics(attack.attacker())
+                    .is_ok_and(|creature| creature.keywords().menace())
+            })
+            .filter(|attack| {
+                declarations
+                    .iter()
+                    .filter(|block| block.attacker() == attack.attacker())
+                    .count()
+                    == 1
+            })
+            .map(|attack| attack.attacker())
+            .collect::<Vec<_>>();
+        let mut used = vec![false; remaining_blockers.len()];
+        match_needs(
+            self,
+            defending_player,
+            &needs,
+            remaining_blockers,
+            0,
+            &mut used,
+        )
     }
 
     fn main_action_prior(
@@ -4868,6 +5077,16 @@ impl GameDriver {
                 );
                 (base, ActionRisks::none())
             }
+            DecisionDescriptor::AssignAttacker { attacker, defender } => {
+                let attacks = (*defender)
+                    .map(|defender| vec![AttackDeclaration::new(*attacker, defender)])
+                    .unwrap_or_default();
+                return self.combat_action_prior(
+                    &DecisionDescriptor::DeclareAttackers { attacks },
+                    weights,
+                    profile,
+                );
+            }
             DecisionDescriptor::DeclareBlockers { blocks } => {
                 let mut prevented_power = 0_i64;
                 let mut favorable_trades = 0_i64;
@@ -4898,6 +5117,16 @@ impl GameDriver {
                     risks,
                 )
             }
+            DecisionDescriptor::AssignBlocker { blocker, attacker } => {
+                let blocks = (*attacker)
+                    .map(|attacker| vec![BlockDeclaration::new(*blocker, attacker)])
+                    .unwrap_or_default();
+                return self.combat_action_prior(
+                    &DecisionDescriptor::DeclareBlockers { blocks },
+                    weights,
+                    profile,
+                );
+            }
             _ => (0, ActionRisks::none()),
         };
         base.saturating_add(self.guardrails.penalty(profile, risks))
@@ -4908,87 +5137,110 @@ impl GameDriver {
         active: PlayerId,
         policy: AiController,
     ) -> Result<(), String> {
-        let decision_started = Instant::now();
-        let context = self.attack_decision_context(active)?;
-        let (selected_id, decision, policy_name, candidates, search_report) = match policy {
-            AiController::Search(controller) => {
-                let decision_index = self.ai_decisions.len() as u64;
-                let domain = CombatSearchDomain {
-                    root: self,
-                    actor: active,
-                    weights: controller.weights,
-                    kind: CombatSearchKind::Attackers { active },
-                    guardrail_profile: controller.guardrail_profile,
-                };
-                let config = controller
-                    .config(decision_index)
-                    .with_decision_started(decision_started);
-                let report = SearchEngine::search(&domain, &context, &config)
-                    .map_err(|error| format!("seed {} attack search failed: {error}", self.seed))?;
-                (
-                    report.selected_action(),
-                    None,
-                    "determinized-uct-v1",
-                    Vec::new(),
-                    Some(report),
-                )
-            }
-            AiController::Heuristic(_) | AiController::Random(_) => {
-                let candidates = match policy.candidate_weights() {
-                    Some(weights) => {
-                        let profile = policy.guardrail_profile().ok_or_else(|| {
-                            format!("seed {} combat policy has no guardrail profile", self.seed)
+        let objects = Arc::new(self.attack_assignment_objects(active)?);
+        let mut attacks = Vec::new();
+        for (cursor, attacker) in objects.iter().copied().enumerate() {
+            let decision_started = Instant::now();
+            let context = self.attack_assignment_context(active, &objects, cursor, &attacks)?;
+            let (selected_id, decision, policy_name, candidates, search_report) = match policy {
+                AiController::Search(controller) => {
+                    let decision_index = self.ai_decisions.len() as u64;
+                    let domain = CombatSearchDomain {
+                        root: self,
+                        actor: active,
+                        weights: controller.weights,
+                        progress: CombatSearchProgress::Attackers {
+                            active,
+                            objects: Arc::clone(&objects),
+                            cursor,
+                            declarations: attacks.clone(),
+                        },
+                        guardrail_profile: controller.guardrail_profile,
+                    };
+                    let config = controller
+                        .config(decision_index)
+                        .with_decision_started(decision_started);
+                    let report =
+                        SearchEngine::search(&domain, &context, &config).map_err(|error| {
+                            format!("seed {} attack search failed: {error}", self.seed)
                         })?;
-                        self.policy_candidates(&context, active, |option| {
-                            self.combat_action_prior(option.descriptor(), weights, profile)
-                        })?
-                    }
-                    None => Vec::new(),
-                };
-                let (selected_id, decision, policy_name) =
-                    self.select_ai_action(policy, &context, &candidates, "attack")?;
-                (selected_id, decision, policy_name, candidates, None)
+                    (
+                        report.selected_action(),
+                        None,
+                        "determinized-uct-v1",
+                        Vec::new(),
+                        Some(report),
+                    )
+                }
+                AiController::Heuristic(_) | AiController::Random(_) => {
+                    let candidates = match policy.candidate_weights() {
+                        Some(weights) => {
+                            let profile = policy.guardrail_profile().ok_or_else(|| {
+                                format!("seed {} combat policy has no guardrail profile", self.seed)
+                            })?;
+                            self.policy_candidates(&context, active, |option| {
+                                self.combat_action_prior(option.descriptor(), weights, profile)
+                            })?
+                        }
+                        None => Vec::new(),
+                    };
+                    let (selected_id, decision, policy_name) =
+                        self.select_ai_action(policy, &context, &candidates, "attack")?;
+                    (selected_id, decision, policy_name, candidates, None)
+                }
+            };
+            let selected = context.select(selected_id).map_err(|error| {
+                format!(
+                    "seed {} AI selected illegal attacker assignment: {error}",
+                    self.seed
+                )
+            })?;
+            if let Some(report) = search_report.as_ref() {
+                self.record_search_decision(
+                    "declare_attackers",
+                    policy_name,
+                    &context,
+                    report,
+                    matches!(policy, AiController::Search(controller) if controller.adaptive),
+                    elapsed_us(decision_started),
+                );
+            } else {
+                self.record_ai_decision(AiDecisionTelemetry {
+                    kind: "declare_attackers",
+                    policy: policy_name,
+                    context: &context,
+                    action_id: selected_id,
+                    decision,
+                    evaluated_candidates: candidates.len(),
+                    wall_latency_us: elapsed_us(decision_started),
+                    score_override: None,
+                    stop_reason: if decision.is_some() {
+                        "one_ply_complete"
+                    } else {
+                        "random_legal_selection"
+                    },
+                });
             }
-        };
-        let selected = context.select(selected_id).map_err(|error| {
-            format!(
-                "seed {} AI selected illegal attack action: {error}",
-                self.seed
-            )
-        })?;
-        if let Some(report) = search_report.as_ref() {
-            self.record_search_decision(
-                "declare_attackers",
-                policy_name,
-                &context,
-                report,
-                matches!(policy, AiController::Search(controller) if controller.adaptive),
-                elapsed_us(decision_started),
-            );
-        } else {
-            self.record_ai_decision(AiDecisionTelemetry {
-                kind: "declare_attackers",
-                policy: policy_name,
-                context: &context,
-                action_id: selected_id,
-                decision,
-                evaluated_candidates: candidates.len(),
-                wall_latency_us: elapsed_us(decision_started),
-                score_override: None,
-                stop_reason: if decision.is_some() {
-                    "one_ply_complete"
-                } else {
-                    "random_legal_selection"
-                },
-            });
+            let DecisionDescriptor::AssignAttacker {
+                attacker: selected_attacker,
+                defender,
+            } = selected.descriptor()
+            else {
+                return Err(format!(
+                    "seed {} attack subcontext returned a non-assignment descriptor",
+                    self.seed
+                ));
+            };
+            if *selected_attacker != attacker {
+                return Err(format!(
+                    "seed {} attack subcontext assigned the wrong object",
+                    self.seed
+                ));
+            }
+            if let Some(defender) = defender {
+                attacks.push(AttackDeclaration::new(attacker, *defender));
+            }
         }
-        let DecisionDescriptor::DeclareAttackers { attacks } = selected.descriptor() else {
-            return Err(format!(
-                "seed {} attack context returned a non-attack descriptor",
-                self.seed
-            ));
-        };
-        let attacks = attacks.clone();
         self.dispatch(Action::DeclareAttackers {
             player: active,
             attacks: attacks.clone(),
@@ -4996,66 +5248,6 @@ impl GameDriver {
         self.current_attacks = attacks;
         self.metrics.combat_declarations = self.metrics.combat_declarations.saturating_add(1);
         Ok(())
-    }
-
-    fn diagnostic_attack_candidates(
-        &self,
-        active: PlayerId,
-    ) -> Result<Vec<Vec<AttackDeclaration>>, String> {
-        let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
-        let mut objects = self
-            .state
-            .zone_objects(battlefield)
-            .ok_or_else(|| format!("seed {} missing battlefield", self.seed))?
-            .iter()
-            .copied()
-            .filter(|object| self.state.object_controller(*object) == Ok(active))
-            .collect::<Vec<_>>();
-        objects.sort_by_key(|object| object.index());
-        let defenders = self.live_opponents(active);
-        let mut candidates = vec![Vec::new()];
-        for object in objects {
-            let legal = defenders
-                .iter()
-                .copied()
-                .map(|defender| AttackDeclaration::new(object, defender))
-                .filter(|attack| self.state.can_attack(active, *attack))
-                .collect::<Vec<_>>();
-            if legal.is_empty() {
-                continue;
-            }
-            let existing = candidates.len();
-            let additional = existing.checked_mul(legal.len()).ok_or_else(|| {
-                format!("seed {} attack surface option count overflowed", self.seed)
-            })?;
-            if existing.saturating_add(additional) > MAX_DIAGNOSTIC_COMBAT_OPTIONS {
-                return Err(format!(
-                    "seed {} attack surface exceeds the diagnostics-only limit of {} options",
-                    self.seed, MAX_DIAGNOSTIC_COMBAT_OPTIONS
-                ));
-            }
-            candidates.reserve(additional);
-            for index in 0..existing {
-                for attack in &legal {
-                    let mut with_attack = candidates[index].clone();
-                    with_attack.push(*attack);
-                    candidates.push(with_attack);
-                }
-            }
-        }
-        candidates.retain(|attacks| {
-            self.action_is_legal(&Action::DeclareAttackers {
-                player: active,
-                attacks: attacks.clone(),
-            })
-        });
-        if candidates.is_empty() {
-            return Err(format!(
-                "seed {} attack surface has no legal fallback",
-                self.seed
-            ));
-        }
-        Ok(candidates)
     }
 
     fn declare_human_attackers(
@@ -5066,30 +5258,47 @@ impl GameDriver {
         if source.is_legacy_replay() {
             return self.declare_legacy_human_attackers(active, source);
         }
-        let context = self.attack_decision_context(active)?;
-        let labels = context
-            .options()
-            .iter()
-            .map(|option| self.attack_choice_label(option.descriptor()))
-            .collect::<Result<Vec<_>, _>>()?;
-        let selected_id =
-            self.prompt_context_choice(source, "Choose attackers", &context, &labels)?;
-        let selected = context.select(selected_id).map_err(|error| {
-            format!(
-                "seed {} human selected illegal attack action: {error}",
-                self.seed
-            )
-        })?;
-        let DecisionDescriptor::DeclareAttackers { attacks } = selected.descriptor() else {
-            return Err(format!(
-                "seed {} attack context returned a non-attack descriptor",
-                self.seed
-            ));
-        };
-        let attacks = attacks.clone();
-        for action in selected.actions().to_vec() {
-            self.dispatch(action)?;
+        let objects = self.attack_assignment_objects(active)?;
+        let mut attacks = Vec::new();
+        for (cursor, attacker) in objects.iter().copied().enumerate() {
+            let context = self.attack_assignment_context(active, &objects, cursor, &attacks)?;
+            let labels = context
+                .options()
+                .iter()
+                .map(|option| self.attack_choice_label(option.descriptor()))
+                .collect::<Result<Vec<_>, _>>()?;
+            let selected_id =
+                self.prompt_context_choice(source, "Assign attacker", &context, &labels)?;
+            let selected = context.select(selected_id).map_err(|error| {
+                format!(
+                    "seed {} human selected illegal attacker assignment: {error}",
+                    self.seed
+                )
+            })?;
+            let DecisionDescriptor::AssignAttacker {
+                attacker: selected_attacker,
+                defender,
+            } = selected.descriptor()
+            else {
+                return Err(format!(
+                    "seed {} attack subcontext returned a non-assignment descriptor",
+                    self.seed
+                ));
+            };
+            if *selected_attacker != attacker {
+                return Err(format!(
+                    "seed {} attack subcontext assigned the wrong object",
+                    self.seed
+                ));
+            }
+            if let Some(defender) = defender {
+                attacks.push(AttackDeclaration::new(attacker, *defender));
+            }
         }
+        self.dispatch(Action::DeclareAttackers {
+            player: active,
+            attacks: attacks.clone(),
+        })?;
         self.current_attacks = attacks;
         self.metrics.combat_declarations = self.metrics.combat_declarations.saturating_add(1);
         Ok(())
@@ -5168,27 +5377,39 @@ impl GameDriver {
     }
 
     fn attack_choice_label(&self, descriptor: &DecisionDescriptor) -> Result<String, String> {
-        let DecisionDescriptor::DeclareAttackers { attacks } = descriptor else {
-            return Err(format!(
-                "seed {} attack prompt cannot label descriptor {descriptor:?}",
-                self.seed
+        if let DecisionDescriptor::AssignAttacker { attacker, defender } = descriptor {
+            return Ok(defender.map_or_else(
+                || format!("Do not attack with {}", self.object_name(*attacker)),
+                |defender| {
+                    format!(
+                        "Attack seat {} with {}",
+                        defender.index() + 1,
+                        self.object_name(*attacker)
+                    )
+                },
             ));
-        };
-        if attacks.is_empty() {
-            return Ok("Attack no one".to_owned());
         }
-        let declarations = attacks
-            .iter()
-            .map(|attack| {
-                format!(
-                    "{} -> seat {}",
-                    self.object_name(attack.attacker()),
-                    attack.defending_player().index() + 1
-                )
-            })
-            .collect::<Vec<_>>()
-            .join(", ");
-        Ok(format!("Attack with {declarations}"))
+        if let DecisionDescriptor::DeclareAttackers { attacks } = descriptor {
+            if attacks.is_empty() {
+                return Ok("Attack no one".to_owned());
+            }
+            let declarations = attacks
+                .iter()
+                .map(|attack| {
+                    format!(
+                        "{} -> seat {}",
+                        self.object_name(attack.attacker()),
+                        attack.defending_player().index() + 1
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+            return Ok(format!("Attack with {declarations}"));
+        }
+        Err(format!(
+            "seed {} attack prompt cannot label descriptor {descriptor:?}",
+            self.seed
+        ))
     }
 
     fn declare_attackers(&mut self, active: PlayerId) -> Result<(), String> {
@@ -5286,150 +5507,116 @@ impl GameDriver {
         defending_player: PlayerId,
         policy: AiController,
     ) -> Result<(), String> {
-        let decision_started = Instant::now();
-        let context = self.block_decision_context(defending_player)?;
-        let (selected_id, decision, policy_name, candidates, search_report) = match policy {
-            AiController::Search(controller) => {
-                let decision_index = self.ai_decisions.len() as u64;
-                let domain = CombatSearchDomain {
-                    root: self,
-                    actor: defending_player,
-                    weights: controller.weights,
-                    kind: CombatSearchKind::Blockers {
-                        defending: defending_player,
-                    },
-                    guardrail_profile: controller.guardrail_profile,
-                };
-                let config = controller
-                    .config(decision_index)
-                    .with_decision_started(decision_started);
-                let report = SearchEngine::search(&domain, &context, &config)
-                    .map_err(|error| format!("seed {} block search failed: {error}", self.seed))?;
-                (
-                    report.selected_action(),
-                    None,
-                    "determinized-uct-v1",
-                    Vec::new(),
-                    Some(report),
-                )
-            }
-            AiController::Heuristic(_) | AiController::Random(_) => {
-                let candidates = match policy.candidate_weights() {
-                    Some(weights) => {
-                        let profile = policy.guardrail_profile().ok_or_else(|| {
-                            format!("seed {} combat policy has no guardrail profile", self.seed)
+        let objects = Arc::new(self.block_assignment_objects(defending_player)?);
+        let mut blocks = Vec::new();
+        for (cursor, blocker) in objects.iter().copied().enumerate() {
+            let decision_started = Instant::now();
+            let context =
+                self.block_assignment_context(defending_player, &objects, cursor, &blocks)?;
+            let (selected_id, decision, policy_name, candidates, search_report) = match policy {
+                AiController::Search(controller) => {
+                    let decision_index = self.ai_decisions.len() as u64;
+                    let domain = CombatSearchDomain {
+                        root: self,
+                        actor: defending_player,
+                        weights: controller.weights,
+                        progress: CombatSearchProgress::Blockers {
+                            defending: defending_player,
+                            objects: Arc::clone(&objects),
+                            cursor,
+                            declarations: blocks.clone(),
+                        },
+                        guardrail_profile: controller.guardrail_profile,
+                    };
+                    let config = controller
+                        .config(decision_index)
+                        .with_decision_started(decision_started);
+                    let report =
+                        SearchEngine::search(&domain, &context, &config).map_err(|error| {
+                            format!("seed {} block search failed: {error}", self.seed)
                         })?;
-                        self.policy_candidates(&context, defending_player, |option| {
-                            self.combat_action_prior(option.descriptor(), weights, profile)
-                        })?
-                    }
-                    None => Vec::new(),
-                };
-                let (selected_id, decision, policy_name) =
-                    self.select_ai_action(policy, &context, &candidates, "block")?;
-                (selected_id, decision, policy_name, candidates, None)
-            }
-        };
-        let selected = context.select(selected_id).map_err(|error| {
-            format!(
-                "seed {} AI selected illegal block action: {error}",
-                self.seed
-            )
-        })?;
-        if let Some(report) = search_report.as_ref() {
-            self.record_search_decision(
-                "declare_blockers",
-                policy_name,
-                &context,
-                report,
-                matches!(policy, AiController::Search(controller) if controller.adaptive),
-                elapsed_us(decision_started),
-            );
-        } else {
-            self.record_ai_decision(AiDecisionTelemetry {
-                kind: "declare_blockers",
-                policy: policy_name,
-                context: &context,
-                action_id: selected_id,
-                decision,
-                evaluated_candidates: candidates.len(),
-                wall_latency_us: elapsed_us(decision_started),
-                score_override: None,
-                stop_reason: if decision.is_some() {
-                    "one_ply_complete"
-                } else {
-                    "random_legal_selection"
-                },
-            });
-        }
-        let DecisionDescriptor::DeclareBlockers { blocks } = selected.descriptor() else {
-            return Err(format!(
-                "seed {} block context returned a non-block descriptor",
-                self.seed
-            ));
-        };
-        self.dispatch(Action::DeclareBlockers {
-            defending_player,
-            blocks: blocks.clone(),
-        })?;
-        Ok(())
-    }
-
-    fn diagnostic_block_candidates(
-        &self,
-        defending_player: PlayerId,
-    ) -> Result<Vec<Vec<BlockDeclaration>>, String> {
-        let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
-        let mut blockers = self
-            .state
-            .zone_objects(battlefield)
-            .ok_or_else(|| format!("seed {} missing battlefield", self.seed))?
-            .iter()
-            .copied()
-            .filter(|object| self.state.object_controller(*object) == Ok(defending_player))
-            .collect::<Vec<_>>();
-        blockers.sort_by_key(|object| object.index());
-        let mut variants = vec![Vec::new()];
-        for blocker in blockers {
-            let legal = self
-                .current_attacks
-                .iter()
-                .filter(|attack| attack.defending_player() == defending_player)
-                .map(|attack| BlockDeclaration::new(blocker, attack.attacker()))
-                .filter(|block| self.state.can_block(defending_player, *block))
-                .collect::<Vec<_>>();
-            let existing = variants.len();
-            let additional = existing.checked_mul(legal.len()).ok_or_else(|| {
-                format!("seed {} block surface option count overflowed", self.seed)
+                    (
+                        report.selected_action(),
+                        None,
+                        "determinized-uct-v1",
+                        Vec::new(),
+                        Some(report),
+                    )
+                }
+                AiController::Heuristic(_) | AiController::Random(_) => {
+                    let candidates = match policy.candidate_weights() {
+                        Some(weights) => {
+                            let profile = policy.guardrail_profile().ok_or_else(|| {
+                                format!("seed {} combat policy has no guardrail profile", self.seed)
+                            })?;
+                            self.policy_candidates(&context, defending_player, |option| {
+                                self.combat_action_prior(option.descriptor(), weights, profile)
+                            })?
+                        }
+                        None => Vec::new(),
+                    };
+                    let (selected_id, decision, policy_name) =
+                        self.select_ai_action(policy, &context, &candidates, "block")?;
+                    (selected_id, decision, policy_name, candidates, None)
+                }
+            };
+            let selected = context.select(selected_id).map_err(|error| {
+                format!(
+                    "seed {} AI selected illegal blocker assignment: {error}",
+                    self.seed
+                )
             })?;
-            if existing.saturating_add(additional) > MAX_DIAGNOSTIC_COMBAT_OPTIONS {
+            if let Some(report) = search_report.as_ref() {
+                self.record_search_decision(
+                    "declare_blockers",
+                    policy_name,
+                    &context,
+                    report,
+                    matches!(policy, AiController::Search(controller) if controller.adaptive),
+                    elapsed_us(decision_started),
+                );
+            } else {
+                self.record_ai_decision(AiDecisionTelemetry {
+                    kind: "declare_blockers",
+                    policy: policy_name,
+                    context: &context,
+                    action_id: selected_id,
+                    decision,
+                    evaluated_candidates: candidates.len(),
+                    wall_latency_us: elapsed_us(decision_started),
+                    score_override: None,
+                    stop_reason: if decision.is_some() {
+                        "one_ply_complete"
+                    } else {
+                        "random_legal_selection"
+                    },
+                });
+            }
+            let DecisionDescriptor::AssignBlocker {
+                blocker: selected_blocker,
+                attacker,
+            } = selected.descriptor()
+            else {
                 return Err(format!(
-                    "seed {} block surface exceeds the diagnostics-only limit of {} options",
-                    self.seed, MAX_DIAGNOSTIC_COMBAT_OPTIONS
+                    "seed {} block subcontext returned a non-assignment descriptor",
+                    self.seed
+                ));
+            };
+            if *selected_blocker != blocker {
+                return Err(format!(
+                    "seed {} block subcontext assigned the wrong object",
+                    self.seed
                 ));
             }
-            variants.reserve(additional);
-            for index in 0..existing {
-                for block in &legal {
-                    let mut with_block = variants[index].clone();
-                    with_block.push(*block);
-                    variants.push(with_block);
-                }
+            if let Some(attacker) = attacker {
+                blocks.push(BlockDeclaration::new(blocker, *attacker));
             }
         }
-        variants.retain(|blocks| {
-            self.action_is_legal(&Action::DeclareBlockers {
-                defending_player,
-                blocks: blocks.clone(),
-            })
-        });
-        if variants.is_empty() {
-            return Err(format!(
-                "seed {} block surface has no legal fallback",
-                self.seed
-            ));
-        }
-        Ok(variants)
+        self.dispatch(Action::DeclareBlockers {
+            defending_player,
+            blocks,
+        })?;
+        Ok(())
     }
 
     fn declare_human_blocks(
@@ -5440,23 +5627,48 @@ impl GameDriver {
         if source.is_legacy_replay() {
             return self.declare_legacy_human_blocks(defending_player, source);
         }
-        let context = self.block_decision_context(defending_player)?;
-        let labels = context
-            .options()
-            .iter()
-            .map(|option| self.block_choice_label(option.descriptor()))
-            .collect::<Result<Vec<_>, _>>()?;
-        let selected_id =
-            self.prompt_context_choice(source, "Choose blockers", &context, &labels)?;
-        let selected = context.select(selected_id).map_err(|error| {
-            format!(
-                "seed {} human selected illegal block action: {error}",
-                self.seed
-            )
-        })?;
-        for action in selected.actions().to_vec() {
-            self.dispatch(action)?;
+        let objects = self.block_assignment_objects(defending_player)?;
+        let mut blocks = Vec::new();
+        for (cursor, blocker) in objects.iter().copied().enumerate() {
+            let context =
+                self.block_assignment_context(defending_player, &objects, cursor, &blocks)?;
+            let labels = context
+                .options()
+                .iter()
+                .map(|option| self.block_choice_label(option.descriptor()))
+                .collect::<Result<Vec<_>, _>>()?;
+            let selected_id =
+                self.prompt_context_choice(source, "Assign blocker", &context, &labels)?;
+            let selected = context.select(selected_id).map_err(|error| {
+                format!(
+                    "seed {} human selected illegal blocker assignment: {error}",
+                    self.seed
+                )
+            })?;
+            let DecisionDescriptor::AssignBlocker {
+                blocker: selected_blocker,
+                attacker,
+            } = selected.descriptor()
+            else {
+                return Err(format!(
+                    "seed {} block subcontext returned a non-assignment descriptor",
+                    self.seed
+                ));
+            };
+            if *selected_blocker != blocker {
+                return Err(format!(
+                    "seed {} block subcontext assigned the wrong object",
+                    self.seed
+                ));
+            }
+            if let Some(attacker) = attacker {
+                blocks.push(BlockDeclaration::new(blocker, *attacker));
+            }
         }
+        self.dispatch(Action::DeclareBlockers {
+            defending_player,
+            blocks,
+        })?;
         Ok(())
     }
 
@@ -5547,27 +5759,39 @@ impl GameDriver {
     }
 
     fn block_choice_label(&self, descriptor: &DecisionDescriptor) -> Result<String, String> {
-        let DecisionDescriptor::DeclareBlockers { blocks } = descriptor else {
-            return Err(format!(
-                "seed {} block prompt cannot label descriptor {descriptor:?}",
-                self.seed
+        if let DecisionDescriptor::AssignBlocker { blocker, attacker } = descriptor {
+            return Ok(attacker.map_or_else(
+                || format!("Do not block with {}", self.object_name(*blocker)),
+                |attacker| {
+                    format!(
+                        "Block {} with {}",
+                        self.object_name(attacker),
+                        self.object_name(*blocker)
+                    )
+                },
             ));
-        };
-        if blocks.is_empty() {
-            return Ok("Block no attackers".to_owned());
         }
-        let declarations = blocks
-            .iter()
-            .map(|block| {
-                format!(
-                    "{} -> {}",
-                    self.object_name(block.blocker()),
-                    self.object_name(block.attacker())
-                )
-            })
-            .collect::<Vec<_>>()
-            .join(", ");
-        Ok(format!("Block with {declarations}"))
+        if let DecisionDescriptor::DeclareBlockers { blocks } = descriptor {
+            if blocks.is_empty() {
+                return Ok("Block no attackers".to_owned());
+            }
+            let declarations = blocks
+                .iter()
+                .map(|block| {
+                    format!(
+                        "{} -> {}",
+                        self.object_name(block.blocker()),
+                        self.object_name(block.attacker())
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+            return Ok(format!("Block with {declarations}"));
+        }
+        Err(format!(
+            "seed {} block prompt cannot label descriptor {descriptor:?}",
+            self.seed
+        ))
     }
 
     fn declare_blocks(&mut self, defending_player: PlayerId) -> Result<(), String> {
@@ -6254,14 +6478,127 @@ fn bounded_object_combinations(
     Ok(output)
 }
 
-impl CombatSearchDomain<'_> {
+impl CombatSearchProgress {
     fn context(&self, driver: &GameDriver) -> Result<DecisionContext, String> {
-        match self.kind {
-            CombatSearchKind::Attackers { active } => driver.attack_decision_context(active),
-            CombatSearchKind::Blockers { defending } => driver.block_decision_context(defending),
+        match self {
+            Self::Attackers {
+                active,
+                objects,
+                cursor,
+                declarations,
+            } => driver.attack_assignment_context(*active, objects, *cursor, declarations),
+            Self::Blockers {
+                defending,
+                objects,
+                cursor,
+                declarations,
+            } => driver.block_assignment_context(*defending, objects, *cursor, declarations),
         }
     }
 
+    fn apply_descriptor(&mut self, descriptor: &DecisionDescriptor) -> Result<bool, String> {
+        match self {
+            Self::Attackers {
+                objects,
+                cursor,
+                declarations,
+                ..
+            } => {
+                let expected = objects
+                    .get(*cursor)
+                    .copied()
+                    .ok_or_else(|| "attack search progress is already complete".to_owned())?;
+                let DecisionDescriptor::AssignAttacker { attacker, defender } = descriptor else {
+                    return Err("attack search received a non-assignment descriptor".to_owned());
+                };
+                if *attacker != expected {
+                    return Err("attack search assignment object does not match cursor".to_owned());
+                }
+                if let Some(defender) = defender {
+                    declarations.push(AttackDeclaration::new(expected, *defender));
+                }
+                *cursor += 1;
+                Ok(*cursor == objects.len())
+            }
+            Self::Blockers {
+                objects,
+                cursor,
+                declarations,
+                ..
+            } => {
+                let expected = objects
+                    .get(*cursor)
+                    .copied()
+                    .ok_or_else(|| "block search progress is already complete".to_owned())?;
+                let DecisionDescriptor::AssignBlocker { blocker, attacker } = descriptor else {
+                    return Err("block search received a non-assignment descriptor".to_owned());
+                };
+                if *blocker != expected {
+                    return Err("block search assignment object does not match cursor".to_owned());
+                }
+                if let Some(attacker) = attacker {
+                    declarations.push(BlockDeclaration::new(expected, *attacker));
+                }
+                *cursor += 1;
+                Ok(*cursor == objects.len())
+            }
+        }
+    }
+
+    fn commit(&self, driver: &mut GameDriver) -> Result<(), String> {
+        match self {
+            Self::Attackers {
+                active,
+                objects,
+                cursor,
+                declarations,
+            } => {
+                if *cursor != objects.len() {
+                    return Err("attack search committed an incomplete declaration".to_owned());
+                }
+                driver.dispatch(Action::DeclareAttackers {
+                    player: *active,
+                    attacks: declarations.clone(),
+                })?;
+                driver.current_attacks.clone_from(declarations);
+            }
+            Self::Blockers {
+                defending,
+                objects,
+                cursor,
+                declarations,
+            } => {
+                if *cursor != objects.len() {
+                    return Err("block search committed an incomplete declaration".to_owned());
+                }
+                driver.dispatch(Action::DeclareBlockers {
+                    defending_player: *defending,
+                    blocks: declarations.clone(),
+                })?;
+            }
+        }
+        Ok(())
+    }
+
+    fn fingerprint(&self) -> u64 {
+        match self {
+            Self::Attackers {
+                active,
+                cursor,
+                declarations,
+                ..
+            } => attack_path_discriminator(*active, *cursor, declarations),
+            Self::Blockers {
+                defending,
+                cursor,
+                declarations,
+                ..
+            } => block_path_discriminator(*defending, *cursor, declarations),
+        }
+    }
+}
+
+impl CombatSearchDomain<'_> {
     fn value(&self, state: &CombatSearchState) -> i64 {
         state
             .driver
@@ -6279,35 +6616,14 @@ impl SearchDomain for CombatSearchDomain<'_> {
 
     fn determinize(&self, seed: u64) -> Result<Self::State, String> {
         let driver = self.root.determinize_for_search(self.actor, seed)?;
-        let context = self.context(&driver)?;
-        let legal_actions = context
-            .options()
-            .iter()
-            .map(|option| option.id())
-            .collect::<Vec<_>>();
-        let options = context
-            .options()
-            .iter()
-            .map(|option| {
-                (
-                    option.id(),
-                    CombatSearchOption {
-                        actions: option.actions().to_vec(),
-                        prior: driver.combat_action_prior(
-                            option.descriptor(),
-                            self.weights,
-                            self.guardrail_profile,
-                        ),
-                    },
-                )
-            })
-            .collect::<HashMap<_, _>>();
+        let progress = self.progress.clone();
+        let context = progress.context(&driver)?;
         Ok(CombatSearchState {
             driver,
             finished: false,
             terminal_prior: 0,
-            legal_actions: Arc::new(legal_actions),
-            options: Arc::new(options),
+            progress,
+            context: Some(Arc::new(context)),
         })
     }
 
@@ -6315,7 +6631,11 @@ impl SearchDomain for CombatSearchDomain<'_> {
         if state.finished {
             return Ok(Vec::new());
         }
-        Ok(state.legal_actions.as_ref().clone())
+        let context = state
+            .context
+            .as_ref()
+            .ok_or_else(|| "unfinished combat search state has no context".to_owned())?;
+        Ok(context.options().iter().map(DecisionOption::id).collect())
     }
 
     fn apply_action(
@@ -6323,18 +6643,30 @@ impl SearchDomain for CombatSearchDomain<'_> {
         state: &Self::State,
         action: CanonicalActionId,
     ) -> Result<Self::State, String> {
-        let selected = state
-            .options
-            .get(&action)
-            .ok_or_else(|| format!("combat search selected illegal action {action}"))?;
-        let terminal_prior = selected.prior;
-        let actions = selected.actions.clone();
         let mut next = state.clone();
-        for action in actions {
-            next.driver.dispatch(action)?;
+        let context = next
+            .context
+            .as_ref()
+            .ok_or_else(|| "combat search selected an action after completion".to_owned())?;
+        let selected = context
+            .select(action)
+            .map_err(|error| format!("combat search selected illegal action: {error}"))?;
+        let prior = next.driver.combat_action_prior(
+            selected.descriptor(),
+            self.weights,
+            self.guardrail_profile,
+        );
+        let descriptor = selected.descriptor().clone();
+        let complete = next.progress.apply_descriptor(&descriptor)?;
+        next.terminal_prior = next.terminal_prior.saturating_add(prior);
+        if complete {
+            let progress = next.progress.clone();
+            progress.commit(&mut next.driver)?;
+            next.finished = true;
+            next.context = None;
+        } else {
+            next.context = Some(Arc::new(next.progress.context(&next.driver)?));
         }
-        next.finished = true;
-        next.terminal_prior = terminal_prior;
         Ok(next)
     }
 
@@ -6348,22 +6680,44 @@ impl SearchDomain for CombatSearchDomain<'_> {
 
     fn rollout_action(
         &self,
-        _state: &Self::State,
+        state: &Self::State,
         actions: &[CanonicalActionId],
         _seed: u64,
     ) -> Result<CanonicalActionId, String> {
         actions
-            .first()
+            .iter()
             .copied()
+            .max_by_key(|action| {
+                (
+                    self.action_prior(state, *action),
+                    std::cmp::Reverse(*action),
+                )
+            })
             .ok_or_else(|| "combat search rollout received no legal actions".to_owned())
     }
 
     fn action_prior(&self, state: &Self::State, action: CanonicalActionId) -> i64 {
-        state.options.get(&action).map_or(0, |option| option.prior)
+        state
+            .context
+            .as_ref()
+            .and_then(|context| context.select(action).ok())
+            .map_or(0, |option| {
+                state.driver.combat_action_prior(
+                    option.descriptor(),
+                    self.weights,
+                    self.guardrail_profile,
+                )
+            })
     }
 
     fn state_key(&self, state: &Self::State) -> Option<SearchStateKey> {
-        let discriminator = state.terminal_prior as u64
+        let context = state.context.as_ref().map_or(0, |context| {
+            let id = context.id().get();
+            (id as u64) ^ ((id >> 64) as u64)
+        });
+        let discriminator = context
+            ^ state.progress.fingerprint()
+            ^ state.terminal_prior as u64
             ^ if state.finished {
                 0xe703_7ed1_a0b4_28db
             } else {
@@ -6378,7 +6732,9 @@ impl SearchDomain for CombatSearchDomain<'_> {
     fn transposition_equivalent(&self, left: &Self::State, right: &Self::State) -> bool {
         left.finished == right.finished
             && left.terminal_prior == right.terminal_prior
-            && left.legal_actions == right.legal_actions
+            && left.progress == right.progress
+            && left.context.as_ref().map(|context| context.id())
+                == right.context.as_ref().map(|context| context.id())
             && left
                 .driver
                 .state
@@ -6515,6 +6871,40 @@ fn elapsed_us(started: Instant) -> u64 {
     started.elapsed().as_micros().min(u128::from(u64::MAX)) as u64
 }
 
+fn combat_path_mix(state: u64, value: u64) -> u64 {
+    (state ^ value)
+        .wrapping_mul(0x9e37_79b9_7f4a_7c15)
+        .rotate_left(27)
+}
+
+fn attack_path_discriminator(
+    active: PlayerId,
+    cursor: usize,
+    declarations: &[AttackDeclaration],
+) -> u64 {
+    let mut state = combat_path_mix(0x6174_7461_636b_0001, active.index() as u64);
+    state = combat_path_mix(state, cursor as u64);
+    for attack in declarations {
+        state = combat_path_mix(state, attack.attacker().index() as u64);
+        state = combat_path_mix(state, attack.defending_player().index() as u64);
+    }
+    state
+}
+
+fn block_path_discriminator(
+    defending: PlayerId,
+    cursor: usize,
+    declarations: &[BlockDeclaration],
+) -> u64 {
+    let mut state = combat_path_mix(0x626c_6f63_6b00_0001, defending.index() as u64);
+    state = combat_path_mix(state, cursor as u64);
+    for block in declarations {
+        state = combat_path_mix(state, block.blocker().index() as u64);
+        state = combat_path_mix(state, block.attacker().index() as u64);
+    }
+    state
+}
+
 fn canonical_legal_actions(context: &DecisionContext) -> Vec<AiLegalAction> {
     context
         .options()
@@ -6583,12 +6973,22 @@ fn decision_descriptor_value(descriptor: &DecisionDescriptor) -> Value {
                 "defending_seat": attack.defending_player().index()
             })).collect::<Vec<_>>()
         }),
+        DecisionDescriptor::AssignAttacker { attacker, defender } => json!({
+            "kind": "assign_attacker",
+            "attacker_object_id": attacker.index(),
+            "defending_seat": defender.map(PlayerId::index)
+        }),
         DecisionDescriptor::DeclareBlockers { blocks } => json!({
             "kind": "declare_blockers",
             "blocks": blocks.iter().map(|block| json!({
                 "blocker_object_id": block.blocker().index(),
                 "attacker_object_id": block.attacker().index()
             })).collect::<Vec<_>>()
+        }),
+        DecisionDescriptor::AssignBlocker { blocker, attacker } => json!({
+            "kind": "assign_blocker",
+            "blocker_object_id": blocker.index(),
+            "attacker_object_id": attacker.map(ObjectId::index)
         }),
         DecisionDescriptor::MoveCommanderToCommand { object } => json!({
             "kind": "move_commander_to_command",
@@ -7847,10 +8247,10 @@ mod tests {
     use forge_cards::runtime::compile_card_program;
     use forge_core::{
         apply, Action, AttackDeclaration, BaseCreatureCharacteristics, BaseObjectCharacteristics,
-        BasicLandTypes, CardId, CombatDamageTarget, DecisionContext, DecisionDescriptor,
-        DecisionKind, DecisionOption, GameState, ManaPool, ObjectColors, ObjectId,
-        ObjectSupertypes, ObjectTypes, Outcome, PlayerId, PlayerView, ResolutionOutcome, Step,
-        TargetChoice, ZoneId, ZoneKind,
+        BasicLandTypes, BlockDeclaration, CardId, CombatDamageTarget, CreatureKeywords,
+        DecisionContext, DecisionDescriptor, DecisionKind, DecisionOption, GameState, ManaPool,
+        ObjectColors, ObjectId, ObjectSupertypes, ObjectTypes, Outcome, PlayerId, PlayerView,
+        ResolutionOutcome, Step, TargetChoice, ZoneId, ZoneKind,
     };
     use std::{
         collections::{BTreeSet, HashMap, HashSet},
@@ -8057,28 +8457,111 @@ mod tests {
     }
 
     #[test]
-    fn attack_context_exposes_split_defender_assignments() {
+    fn attack_subcontexts_expose_split_defenders_without_a_cartesian_product() {
         let (driver, active, defenders, pieces) = combat_decision_driver();
-        let candidates = driver
-            .diagnostic_attack_candidates(active)
-            .unwrap_or_else(|error| panic!("split attack candidates should exist: {error}"));
+        let objects = driver
+            .attack_assignment_objects(active)
+            .unwrap_or_else(|error| panic!("attack assignments should exist: {error}"));
+        assert_eq!(objects, pieces[..2]);
 
-        assert_eq!(candidates.len(), 16);
-        assert!(candidates.iter().any(|attacks| {
-            attacks
-                == &vec![
-                    AttackDeclaration::new(pieces[0], defenders[0]),
-                    AttackDeclaration::new(pieces[1], defenders[1]),
-                ]
+        let first = driver
+            .attack_assignment_context(active, &objects, 0, &[])
+            .unwrap_or_else(|error| panic!("first attack subcontext should exist: {error}"));
+        assert_eq!(first.options().len(), defenders.len() + 1);
+        assert!(first.options().iter().any(|option| {
+            option.descriptor()
+                == &DecisionDescriptor::AssignAttacker {
+                    attacker: pieces[0],
+                    defender: Some(defenders[0]),
+                }
         }));
-        assert!(candidates.iter().all(|attacks| {
-            attacks
-                .iter()
-                .map(|attack| attack.attacker())
-                .collect::<BTreeSet<_>>()
-                .len()
-                == attacks.len()
+
+        let partial = vec![AttackDeclaration::new(pieces[0], defenders[0])];
+        let second = driver
+            .attack_assignment_context(active, &objects, 1, &partial)
+            .unwrap_or_else(|error| panic!("second attack subcontext should exist: {error}"));
+        assert!(second.options().iter().any(|option| {
+            option.descriptor()
+                == &DecisionDescriptor::AssignAttacker {
+                    attacker: pieces[1],
+                    defender: Some(defenders[1]),
+                }
         }));
+        let alternate = driver
+            .attack_assignment_context(
+                active,
+                &objects,
+                1,
+                &[AttackDeclaration::new(pieces[0], defenders[2])],
+            )
+            .unwrap_or_else(|error| panic!("alternate attack path should exist: {error}"));
+        assert_ne!(second.state_key(), alternate.state_key());
+
+        let split = vec![
+            AttackDeclaration::new(pieces[0], defenders[0]),
+            AttackDeclaration::new(pieces[1], defenders[1]),
+        ];
+        assert!(driver.action_is_legal(&Action::DeclareAttackers {
+            player: active,
+            attacks: split,
+        }));
+    }
+
+    #[test]
+    fn block_subcontexts_preserve_menace_completion_legality() {
+        let (mut driver, active, defenders, pieces) = combat_decision_driver();
+        assert_eq!(
+            apply(
+                &mut driver.state,
+                Action::SetBaseCreatureCharacteristics {
+                    object: pieces[0],
+                    base: BaseCreatureCharacteristics::new(2, 2)
+                        .with_keywords(CreatureKeywords::none().with_menace()),
+                },
+            ),
+            Outcome::Applied
+        );
+        let second_blocker = create_test_creature(&mut driver.state, defenders[0], 804, 2, 2);
+        let attacks = vec![AttackDeclaration::new(pieces[0], defenders[0])];
+        driver
+            .dispatch(Action::DeclareAttackers {
+                player: active,
+                attacks: attacks.clone(),
+            })
+            .unwrap_or_else(|error| panic!("menace attack should apply: {error}"));
+        driver.current_attacks = attacks;
+        assert!(matches!(
+            driver.dispatch(Action::AdvanceStep),
+            Ok(Outcome::StepAdvanced(Step::DeclareBlockers))
+        ));
+
+        let blockers = driver
+            .block_assignment_objects(defenders[0])
+            .unwrap_or_else(|error| panic!("block assignments should exist: {error}"));
+        assert_eq!(blockers, vec![pieces[2], second_blocker]);
+        let first = driver
+            .block_assignment_context(defenders[0], &blockers, 0, &[])
+            .unwrap_or_else(|error| panic!("first block subcontext should exist: {error}"));
+        assert!(first.options().iter().any(|option| {
+            option.descriptor()
+                == &DecisionDescriptor::AssignBlocker {
+                    blocker: pieces[2],
+                    attacker: Some(pieces[0]),
+                }
+        }));
+
+        let partial = vec![BlockDeclaration::new(pieces[2], pieces[0])];
+        let second = driver
+            .block_assignment_context(defenders[0], &blockers, 1, &partial)
+            .unwrap_or_else(|error| panic!("second block subcontext should exist: {error}"));
+        assert_eq!(second.options().len(), 1);
+        assert_eq!(
+            second.options()[0].descriptor(),
+            &DecisionDescriptor::AssignBlocker {
+                blocker: second_blocker,
+                attacker: Some(pieces[0]),
+            }
+        );
     }
 
     #[test]

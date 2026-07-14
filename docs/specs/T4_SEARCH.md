@@ -45,8 +45,14 @@ The current four-player product adapter searches:
 
 - main-phase land, mana-activation, autonomous permanent-cast, and finish
   sequences;
-- complete single-defender attacker declarations;
-- complete blocker declarations for that defender.
+- bounded per-attacker choices across every legal player defender, carrying the
+  partial declaration through deeper search states;
+- bounded per-blocker choices for each attacked defender, including fail-closed
+  menace-completion viability before a branch is offered.
+
+The typed kernel still receives one complete declaration. Hierarchical path
+bindings participate in decision-state keys and transposition equivalence, so
+the smaller action surface does not merge different partial declarations.
 
 Opening hands use the typed mulligan policy. Other currently adapted policy
 surfaces retain the deterministic rollout policy. Missing production prompt
@@ -74,6 +80,12 @@ default disables sharing. Regression tests cover converging edges, deliberate
 key collisions, shared total deadlines, caller-side context time, and inline
 single-worker expiry.
 
+The production determinization adapter constructs the sampled `GameState`
+once. It no longer clones the live state into a temporary `GameDriver` and then
+immediately replaces it with a second determinized clone. This preserves exact
+sample semantics while removing a full-state copy from every searched
+decision.
+
 Adaptive leader/gap/uncertainty stopping remains experimental. It cannot ship
 until paired ablation against fixed budgets passes Tracks A, B, and C under
 `T4_SEARCH_KNEE.md`.
@@ -97,5 +109,8 @@ playing strength. T4 promotion still requires sealed benchmark evidence,
 paired arena calibration, three archetype decks, at least 400 games per rung,
 latency evidence on required reference platforms, full shipped-card support,
 and Owner CP-AI-LADDER review. No broad T3 reopening is authorized.
-The prior 1/2/4 ms ladder artifact predates the corrected budget contract and
-must be replaced before any latency or knee interpretation.
+The product-316d9fd 1/2/4 ms ladder proved the shared deadline but retained a
+roughly 240-266 ms p95 tail from non-preemptible adapter work. Hierarchical
+combat contexts and single-construction determinization are implemented in the
+next source product; exact ladder replacement remains required before any
+latency or knee interpretation.

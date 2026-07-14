@@ -78,10 +78,11 @@ onto identities.
    collision-checked transposition buckets. The 229-test local preflight,
    WASM/Android compiles, clone guard, and all three exact policy/action replays
    pass.
-2. The refreshed 1-4 ms ladder still measures approximately 240-266 ms p95
-   because high-branching attack/block contexts eagerly materialize canonical
-   action products before bounded search. Replace those with hierarchical or
-   lazy subcontexts and rerun; no search knee is claimed.
+2. Hierarchical per-attacker/per-blocker contexts and single-construction
+   determinization pass focused tests. A same-seed release smoke preserved the
+   18,321-action final game hash while reducing searched-decision p95 from about
+   221 ms to 2.6 ms. Freeze, regenerate exact replays, and rerun the 1-4 ms
+   ladder; no search knee is claimed yet.
 3. Complete canonical Choice/Prompt adapters and T4.9 CPU/memory telemetry, then
    run the three-track development, validation, and sealed CP-AI-BENCH campaigns.
 4. Complete Owner CP-AI-LADDER and CP-NN-GO decisions. Reopen T3 only for a concrete T4 blocker, fix the smallest shared primitive,
