@@ -5405,6 +5405,8 @@ pub struct CombatState {
     attackers: Vec<AttackingCreature>,
     // clone_surface: current-combat blocking records are cleared between combats.
     blockers: Vec<BlockingCreature>,
+    // clone_surface: one player ID per attacked defender that submitted blocks.
+    blockers_declared_by: Vec<PlayerId>,
     // clone_surface: damage records are Copy records for the current combat step.
     damage_records: Vec<CombatDamageRecord>,
     damage_step: Option<CombatDamageStepKind>,
@@ -5419,6 +5421,7 @@ impl CombatState {
         Self {
             attackers: Vec::new(),
             blockers: Vec::new(),
+            blockers_declared_by: Vec::new(),
             damage_records: Vec::new(),
             damage_step: None,
             first_strike_participants: Vec::new(),
@@ -5435,6 +5438,12 @@ impl CombatState {
     #[must_use]
     pub fn blockers(&self) -> &[BlockingCreature] {
         &self.blockers
+    }
+
+    /// Returns attacked defenders who have completed blocker declaration.
+    #[must_use]
+    pub fn blockers_declared_by(&self) -> &[PlayerId] {
+        &self.blockers_declared_by
     }
 
     /// Returns combat damage records in deal order.
@@ -6694,6 +6703,10 @@ pub enum StateError {
         /// Attacking creature.
         attacker: ObjectId,
     },
+    /// One defending player tried to declare blockers more than once.
+    BlockersAlreadyDeclared(PlayerId),
+    /// Combat cannot advance until every attacked player declares blockers.
+    BlockerDeclarationsPending,
     /// A damage assignment was missing for a source that must assign damage.
     MissingCombatDamageAssignment(ObjectId),
     /// A damage assignment is illegal for its source or target set.
@@ -11962,6 +11975,12 @@ impl GameState {
 
     fn advance_step_after_empty_stack(&mut self) -> Result<Step, StateError> {
         let current = self.current_step.ok_or(StateError::TurnNotStarted)?;
+        if current == Step::DeclareBlockers
+            && !self.combat.attackers.is_empty()
+            && !self.all_attacked_defenders_declared_blockers()
+        {
+            return Err(StateError::BlockerDeclarationsPending);
+        }
         self.end_step(current);
         let next = match current {
             Step::Cleanup if self.cleanup_repeat_pending => {
@@ -12074,6 +12093,17 @@ impl GameState {
         if self.active_player == Some(defending_player) {
             return Err(StateError::InvalidCombatPlayer(defending_player));
         }
+        if !self
+            .combat
+            .attackers
+            .iter()
+            .any(|attacker| attacker.defending_player == defending_player)
+        {
+            return Err(StateError::InvalidCombatPlayer(defending_player));
+        }
+        if self.combat.blockers_declared_by.contains(&defending_player) {
+            return Err(StateError::BlockersAlreadyDeclared(defending_player));
+        }
         let mut seen_blockers = Vec::with_capacity(blocks.len());
         for block in blocks {
             if seen_blockers.contains(&block.blocker()) {
@@ -12084,11 +12114,6 @@ impl GameState {
         }
         self.validate_menace_blocks(blocks)?;
 
-        self.combat.blockers.clear();
-        for attacker in &mut self.combat.attackers {
-            attacker.blockers.clear();
-            attacker.blocked = false;
-        }
         self.emit_event(GameEvent::BlockersDeclared {
             defending_player,
             count: blocks.len() as u32,
@@ -12112,8 +12137,19 @@ impl GameState {
                 attacker: block.attacker(),
             });
         }
-        self.grant_priority_to(self.active_player)?;
+        self.combat.blockers_declared_by.push(defending_player);
+        if self.all_attacked_defenders_declared_blockers() {
+            self.grant_priority_to(self.active_player)?;
+        }
         Ok(())
+    }
+
+    fn all_attacked_defenders_declared_blockers(&self) -> bool {
+        self.combat.attackers.iter().all(|attacker| {
+            self.combat
+                .blockers_declared_by
+                .contains(&attacker.defending_player)
+        })
     }
 
     /// Assigns and deals combat damage for the current combat damage step.
@@ -16778,6 +16814,10 @@ impl Fnva64 {
         for participant in &combat.first_strike_participants {
             self.write_u32(participant.0);
         }
+        self.write_u32(combat.blockers_declared_by.len() as u32);
+        for defender in &combat.blockers_declared_by {
+            self.write_u32(defender.0);
+        }
     }
 }
 
@@ -18130,6 +18170,10 @@ impl CanonicalBytes {
         self.write_u32(combat.first_strike_participants.len() as u32);
         for participant in &combat.first_strike_participants {
             self.write_u32(participant.0);
+        }
+        self.write_u32(combat.blockers_declared_by.len() as u32);
+        for defender in &combat.blockers_declared_by {
+            self.write_u32(defender.0);
         }
     }
 }
@@ -21847,6 +21891,101 @@ mod tests {
         assert_eq!(
             state.deterministic_hash(),
             state.deterministic_hash_streaming()
+        );
+    }
+
+    #[test]
+    fn multiplayer_blocker_declarations_accumulate_before_combat_advances() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let first_defender = state.add_player();
+        let second_defender = state.add_player();
+        let first_attacker =
+            battlefield_creature(&mut state, active, 240, 2, 2, CreatureKeywords::none());
+        let second_attacker =
+            battlefield_creature(&mut state, active, 241, 3, 3, CreatureKeywords::none());
+        let first_blocker = battlefield_creature(
+            &mut state,
+            first_defender,
+            242,
+            1,
+            1,
+            CreatureKeywords::none(),
+        );
+        let second_blocker = battlefield_creature(
+            &mut state,
+            second_defender,
+            243,
+            2,
+            2,
+            CreatureKeywords::none(),
+        );
+        start_declare_attackers(&mut state, active);
+        state
+            .declare_attackers(
+                active,
+                &[
+                    AttackDeclaration::new(first_attacker, first_defender),
+                    AttackDeclaration::new(second_attacker, second_defender),
+                ],
+            )
+            .unwrap_or_else(|error| panic!("unexpected split attack error: {error:?}"));
+        assert_eq!(
+            state
+                .advance_step()
+                .unwrap_or_else(|error| panic!("unexpected blockers advance error: {error:?}")),
+            Step::DeclareBlockers
+        );
+        assert_eq!(
+            state.advance_step(),
+            Err(StateError::BlockerDeclarationsPending)
+        );
+
+        state
+            .declare_blockers(
+                first_defender,
+                &[BlockDeclaration::new(first_blocker, first_attacker)],
+            )
+            .unwrap_or_else(|error| panic!("unexpected first defender block error: {error:?}"));
+        assert_eq!(
+            state.combat_state().blockers_declared_by(),
+            &[first_defender]
+        );
+        assert_eq!(state.combat_state().blockers().len(), 1);
+        assert_eq!(
+            state.advance_step(),
+            Err(StateError::BlockerDeclarationsPending)
+        );
+        assert_eq!(
+            state.declare_blockers(first_defender, &[]),
+            Err(StateError::BlockersAlreadyDeclared(first_defender))
+        );
+
+        state
+            .declare_blockers(
+                second_defender,
+                &[BlockDeclaration::new(second_blocker, second_attacker)],
+            )
+            .unwrap_or_else(|error| panic!("unexpected second defender block error: {error:?}"));
+        assert_eq!(
+            state.combat_state().blockers_declared_by(),
+            &[first_defender, second_defender]
+        );
+        assert_eq!(state.combat_state().blockers().len(), 2);
+        assert!(state
+            .combat_state()
+            .attackers()
+            .iter()
+            .all(|attacker| attacker.blocked()));
+        assert_eq!(
+            state.deterministic_hash(),
+            state.deterministic_hash_streaming()
+        );
+        assert_eq!(
+            state
+                .advance_step()
+                .unwrap_or_else(|error| panic!("unexpected damage advance error: {error:?}")),
+            Step::CombatDamage
         );
     }
 
