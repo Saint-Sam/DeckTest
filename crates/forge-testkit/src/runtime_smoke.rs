@@ -1993,6 +1993,7 @@ fn setup_activation_conditions(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn execute_controller_cast_triggers(
     execution: &mut Execution,
     program: &CardProgram,
@@ -2176,6 +2177,7 @@ fn execute_controller_cast_triggers(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn execute_turn_triggers(
     execution: &mut Execution,
     program: &CardProgram,
@@ -2558,7 +2560,13 @@ fn execute_opponent_draw_triggers(
             )?,
         )?;
         if payment_choice == Some(true) {
-            let unless_paid = abilities[0].1.unless_paid().expect("checked above");
+            let Some(unless_paid) = abilities[0].1.unless_paid() else {
+                return Err(RuntimeSmokeFailure::new(
+                    RuntimeSmokeFailureCode::UnexpectedOutcome,
+                    "trigger.opponent_draw.setup",
+                    "paid branch has no compiled unless-payment program",
+                ));
+            };
             execution.dispatch(
                 "trigger.opponent_draw.clear_mana",
                 Action::ClearManaPool { player: opponent },
@@ -2654,6 +2662,7 @@ fn record_hand_size_change(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn execute_pending_triggers(
     execution: &mut Execution,
     program: &CardProgram,
