@@ -1965,6 +1965,11 @@ impl GameDriver {
         let mut attackers_done = BTreeSet::<u32>::new();
         let mut blockers_done = BTreeSet::<u32>::new();
         let mut damage_done = BTreeSet::<(u32, CombatDamageStepKind)>::new();
+        let repeat_main_actions = ai_policies.is_some()
+            || (human.is_some()
+                && decisions
+                    .as_ref()
+                    .is_some_and(|source| !source.is_legacy_replay()));
 
         while self.state.game_outcome() == GameOutcome::InProgress {
             let turn = self.state.turn_number();
@@ -2017,7 +2022,9 @@ impl GameDriver {
 
             let active_has_priority = self.state.priority_player() == Some(active);
             match step {
-                Step::PrecombatMain if active_has_priority && main_done.insert(turn) => {
+                Step::PrecombatMain
+                    if active_has_priority && (repeat_main_actions || main_done.insert(turn)) =>
+                {
                     self.check_hidden_information()?;
                     if human == Some(active) {
                         let source = decisions
@@ -2080,10 +2087,18 @@ impl GameDriver {
                             self.choose_dead_commanders()?;
                         }
                     } else {
-                        self.pass_priority()?;
+                        self.take_controlled_priority_action(
+                            human,
+                            &mut decisions,
+                            ai_policies.as_ref(),
+                        )?;
                     }
                 }
-                _ => self.pass_priority()?,
+                _ => self.take_controlled_priority_action(
+                    human,
+                    &mut decisions,
+                    ai_policies.as_ref(),
+                )?,
             }
 
             while self.metrics.actions >= self.next_hidden_check_action {
@@ -2314,6 +2329,122 @@ impl GameDriver {
         }
     }
 
+    fn take_human_priority_action(
+        &mut self,
+        player: PlayerId,
+        source: &mut dyn DecisionSource,
+    ) -> Result<(), String> {
+        let (context, mappings) = self.priority_decision_context(player)?;
+        let labels = context
+            .options()
+            .iter()
+            .map(|option| match option.descriptor() {
+                DecisionDescriptor::PassPriority => Ok("Pass priority".to_owned()),
+                descriptor => self.main_choice_label(descriptor),
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let selected_id =
+            self.prompt_context_choice(source, "Choose a priority action", &context, &labels)?;
+        let choice = mappings
+            .iter()
+            .find_map(|(id, choice)| (*id == selected_id).then(|| choice.clone()))
+            .ok_or_else(|| {
+                format!(
+                    "seed {} human priority action {selected_id} has no typed adapter",
+                    self.seed
+                )
+            })?;
+        self.apply_main_choice(player, choice)?;
+        Ok(())
+    }
+
+    fn take_ai_priority_action(
+        &mut self,
+        player: PlayerId,
+        policy: AiController,
+    ) -> Result<(), String> {
+        let decision_started = Instant::now();
+        let (context, mappings) = self.priority_decision_context(player)?;
+        let (selected_id, decision, policy_name, candidates) = if context.options().len() == 1 {
+            (context.options()[0].id(), None, "forced-v1", Vec::new())
+        } else {
+            let profile = policy
+                .guardrail_profile()
+                .unwrap_or(GuardrailProfile::Standard);
+            let candidates = if matches!(policy, AiController::Random(_)) {
+                Vec::new()
+            } else {
+                self.policy_candidates(&context, player, |option| {
+                    self.main_action_prior(&context, option.descriptor(), profile)
+                })?
+            };
+            let (selected_id, decision, policy_name) =
+                self.select_ai_action(policy, &context, &candidates, "priority")?;
+            (selected_id, decision, policy_name, candidates)
+        };
+        context.select(selected_id).map_err(|error| {
+            format!(
+                "seed {} AI selected illegal priority action: {error}",
+                self.seed
+            )
+        })?;
+        self.record_ai_decision(AiDecisionTelemetry {
+            kind: "priority",
+            policy: policy_name,
+            context: &context,
+            action_id: selected_id,
+            decision,
+            evaluated_candidates: candidates.len(),
+            wall_latency_us: elapsed_us(decision_started),
+            score_override: None,
+            stop_reason: if context.options().len() == 1 {
+                "single_legal_action"
+            } else if decision.is_some() {
+                "one_ply_complete"
+            } else {
+                "random_legal_selection"
+            },
+        });
+        let choice = mappings
+            .iter()
+            .find_map(|(id, choice)| (*id == selected_id).then(|| choice.clone()))
+            .ok_or_else(|| {
+                format!(
+                    "seed {} AI priority action {selected_id} has no typed adapter",
+                    self.seed
+                )
+            })?;
+        self.apply_main_choice(player, choice)?;
+        Ok(())
+    }
+
+    fn take_controlled_priority_action(
+        &mut self,
+        human: Option<PlayerId>,
+        decisions: &mut Option<&mut dyn DecisionSource>,
+        ai_policies: Option<&SeatPolicies>,
+    ) -> Result<(), String> {
+        let player = self
+            .state
+            .priority_player()
+            .ok_or_else(|| format!("seed {} cannot choose without priority", self.seed))?;
+        if human == Some(player) {
+            let source = decisions
+                .as_deref_mut()
+                .ok_or_else(|| "human game is missing a decision source".to_owned())?;
+            if source.is_legacy_replay() {
+                self.pass_priority()
+            } else {
+                self.take_human_priority_action(player, source)
+            }
+        } else if let Some(policies) = ai_policies {
+            let policy = self.policy_for(player, policies)?;
+            self.take_ai_priority_action(player, policy)
+        } else {
+            self.pass_priority()
+        }
+    }
+
     fn main_choice_label(&self, descriptor: &DecisionDescriptor) -> Result<String, String> {
         match descriptor {
             DecisionDescriptor::PlayLand { object } => {
@@ -2327,17 +2458,70 @@ impl GameDriver {
                 payment.waste_score()
             )),
             DecisionDescriptor::CastSpell {
-                object, payment, ..
-            } => Ok(format!(
-                "Cast: {} (payment waste {})",
-                self.object_name(*object),
-                payment.waste_score()
-            )),
+                object,
+                payment,
+                targets,
+                modes,
+                optional,
+            } => {
+                let mut details = vec![format!("payment waste {}", payment.waste_score())];
+                if !targets.is_empty() {
+                    details.push(format!(
+                        "targets {}",
+                        targets
+                            .iter()
+                            .copied()
+                            .map(|target| self.target_choice_label(target))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ));
+                }
+                if !modes.is_empty() {
+                    details.push(format!(
+                        "mode {}",
+                        modes
+                            .iter()
+                            .map(|mode| mode.saturating_add(1).to_string())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ));
+                }
+                if !optional.is_empty() {
+                    details.push(format!(
+                        "optional {}",
+                        optional
+                            .iter()
+                            .map(|accept| if *accept { "yes" } else { "no" })
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ));
+                }
+                Ok(format!(
+                    "Cast: {} ({})",
+                    self.object_name(*object),
+                    details.join("; ")
+                ))
+            }
             DecisionDescriptor::PassPriority => Ok("Finish main phase".to_owned()),
             other => Err(format!(
                 "seed {} main prompt cannot label descriptor {other:?}",
                 self.seed
             )),
+        }
+    }
+
+    fn target_choice_label(&self, target: TargetChoice) -> String {
+        match target {
+            TargetChoice::Player(player) => self
+                .players
+                .iter()
+                .position(|candidate| *candidate == player)
+                .map_or_else(
+                    || format!("player {}", player.index()),
+                    |seat| format!("seat {}", seat + 1),
+                ),
+            TargetChoice::Object(object) => self.object_name(object),
+            TargetChoice::StackEntry(entry) => format!("stack entry {}", entry.index()),
         }
     }
 
@@ -2390,7 +2574,10 @@ impl GameDriver {
                 self.cast_program_with_choices(player, object, payment, targets, mode, optional)?;
                 Ok(true)
             }
-            MainChoice::Finish => Ok(true),
+            MainChoice::Finish => {
+                self.pass_priority()?;
+                Ok(true)
+            }
         }
     }
 
@@ -2603,6 +2790,105 @@ impl GameDriver {
             .collect())
     }
 
+    fn legal_cast_choices(&self, player: PlayerId) -> Result<Vec<MainChoice>, String> {
+        let seat = self
+            .players
+            .iter()
+            .position(|candidate| *candidate == player)
+            .ok_or_else(|| format!("seed {} unknown casting player", self.seed))?;
+        let commander = self.commanders[seat];
+        let mut candidates = Vec::new();
+        if self.state.object_zone(commander) == Some(ZoneId::new(None, ZoneKind::Command)) {
+            candidates.push(commander);
+        }
+        let hand = ZoneId::new(Some(player), ZoneKind::Hand);
+        let mut hand_objects = self
+            .state
+            .zone_objects(hand)
+            .ok_or_else(|| format!("seed {} missing hand zone", self.seed))?
+            .to_vec();
+        hand_objects.sort_by_key(|object| object.index());
+        candidates.extend(hand_objects);
+
+        let mut choices = Vec::new();
+        for object in candidates {
+            let Some(program) = self.programs.get(&object) else {
+                continue;
+            };
+            if !self.normal_spell_timing_available(player, program.kind()) {
+                continue;
+            }
+            let cost = self
+                .state
+                .effective_spell_cost(player, object, program.mana_cost())
+                .map_err(|error| format!("seed {} spell cost failed: {error:?}", self.seed))?;
+            let payments = self
+                .state
+                .payment_plans_for_player(player, cost)
+                .map_err(|error| {
+                    format!("seed {} payment enumeration failed: {error:?}", self.seed)
+                })?;
+            let spell_bindings = self.spell_choice_bindings(player, object, program)?;
+            let option_count = payments
+                .plans()
+                .len()
+                .checked_mul(spell_bindings.len())
+                .ok_or_else(|| format!("seed {} spell option count overflow", self.seed))?;
+            if option_count > MAX_CANONICAL_SPELL_OPTIONS {
+                return Err(format!(
+                    "seed {} spell {} exceeds the {}-option canonical cap after payments",
+                    self.seed,
+                    program.name(),
+                    MAX_CANONICAL_SPELL_OPTIONS
+                ));
+            }
+            for binding in spell_bindings {
+                for payment in payments.plans().iter().copied() {
+                    let request = self.spell_request(
+                        program,
+                        payment,
+                        &binding.targets,
+                        binding.mode,
+                        &binding.optional,
+                    )?;
+                    let action = Action::CastSpell {
+                        player,
+                        object,
+                        request,
+                    };
+                    if self.action_is_legal(&action) {
+                        choices.push(MainChoice::Cast {
+                            object,
+                            payment,
+                            targets: binding.targets.clone(),
+                            mode: binding.mode,
+                            optional: binding.optional.clone(),
+                        });
+                    }
+                }
+            }
+        }
+        Ok(choices)
+    }
+
+    fn normal_spell_timing_available(&self, player: PlayerId, kind: ProgramKind) -> bool {
+        if self.state.priority_player() != Some(player) {
+            return false;
+        }
+        match kind {
+            ProgramKind::Instant => true,
+            ProgramKind::Permanent | ProgramKind::Sorcery => {
+                self.state.active_player() == Some(player)
+                    && matches!(
+                        self.state.current_step(),
+                        Some(Step::PrecombatMain | Step::PostcombatMain)
+                    )
+                    && self.state.stack_entries().is_empty()
+            }
+            ProgramKind::Land => false,
+        }
+    }
+
     fn spell_request(
         &self,
         program: &CardProgram,
@@ -2728,78 +3014,12 @@ impl GameDriver {
             }
         }
 
-        let seat = self
-            .players
-            .iter()
-            .position(|candidate| *candidate == player)
-            .ok_or_else(|| format!("seed {} unknown active player", self.seed))?;
-        let commander = self.commanders[seat];
-        let mut cast_candidates = Vec::new();
-        if self.state.object_zone(commander) == Some(ZoneId::new(None, ZoneKind::Command)) {
-            cast_candidates.push(commander);
-        }
-        cast_candidates.extend(hand_objects);
-        for object in cast_candidates {
-            let Some(program) = self.programs.get(&object) else {
-                continue;
+        for choice in self.legal_cast_choices(player)? {
+            let MainChoice::Cast { object, .. } = &choice else {
+                unreachable!("legal cast enumeration returned a non-cast choice");
             };
-            if program.kind() == ProgramKind::Land {
-                continue;
-            }
-            let cost = self
-                .state
-                .effective_spell_cost(player, object, program.mana_cost())
-                .map_err(|error| format!("seed {} spell cost failed: {error:?}", self.seed))?;
-            let payments = self
-                .state
-                .payment_plans_for_player(player, cost)
-                .map_err(|error| {
-                    format!("seed {} payment enumeration failed: {error:?}", self.seed)
-                })?;
-            let spell_bindings = self.spell_choice_bindings(player, object, program)?;
-            let option_count = payments
-                .plans()
-                .len()
-                .checked_mul(spell_bindings.len())
-                .ok_or_else(|| format!("seed {} spell option count overflow", self.seed))?;
-            if option_count > MAX_CANONICAL_SPELL_OPTIONS {
-                return Err(format!(
-                    "seed {} spell {} exceeds the {}-option canonical cap after payments",
-                    self.seed,
-                    program.name(),
-                    MAX_CANONICAL_SPELL_OPTIONS
-                ));
-            }
-            for binding in spell_bindings {
-                for payment in payments.plans().iter().copied() {
-                    let request = self.spell_request(
-                        program,
-                        payment,
-                        &binding.targets,
-                        binding.mode,
-                        &binding.optional,
-                    )?;
-                    let action = Action::CastSpell {
-                        player,
-                        object,
-                        request,
-                    };
-                    if self.action_is_legal(&action) {
-                        labels.push(format!(
-                            "Cast: {} (payment waste {})",
-                            program.name(),
-                            payment.waste_score()
-                        ));
-                        choices.push(MainChoice::Cast {
-                            object,
-                            payment,
-                            targets: binding.targets.clone(),
-                            mode: binding.mode,
-                            optional: binding.optional.clone(),
-                        });
-                    }
-                }
-            }
+            labels.push(format!("Cast: {}", self.object_name(*object)));
+            choices.push(choice);
         }
 
         labels.push("Finish main phase".to_owned());
@@ -3072,6 +3292,23 @@ impl GameDriver {
             options.push(option);
         }
         let context = self.decision_context(DecisionKind::MainPhase, player, options)?;
+        Ok((context, mappings))
+    }
+
+    fn priority_decision_context(
+        &self,
+        player: PlayerId,
+    ) -> Result<(DecisionContext, Vec<(CanonicalActionId, MainChoice)>), String> {
+        let mut choices = self.legal_cast_choices(player)?;
+        choices.push(MainChoice::Finish);
+        let mut mappings = Vec::with_capacity(choices.len());
+        let mut options = Vec::with_capacity(choices.len());
+        for choice in choices {
+            let option = self.main_choice_option(player, choice.clone())?;
+            mappings.push((option.id(), choice));
+            options.push(option);
+        }
+        let context = self.decision_context(DecisionKind::Priority, player, options)?;
         Ok((context, mappings))
     }
 
@@ -7283,6 +7520,53 @@ mod tests {
             action,
             Action::GainLife { player, amount } if *player == caster && *amount == 3
         )));
+    }
+
+    #[test]
+    fn priority_adapter_exposes_exact_instant_choices_without_duplicate_labels() {
+        let (driver, caster, opponent, spell) = modal_spell_driver();
+        let (context, mappings) = driver
+            .priority_decision_context(caster)
+            .unwrap_or_else(|error| panic!("priority context should exist: {error}"));
+        assert_eq!(context.kind(), DecisionKind::Priority);
+        assert_eq!(context.options().len(), 5);
+        assert_eq!(mappings.len(), context.options().len());
+        assert_eq!(
+            context
+                .options()
+                .iter()
+                .filter(|option| matches!(option.descriptor(), DecisionDescriptor::PassPriority))
+                .count(),
+            1
+        );
+        assert!(context.options().iter().any(|option| matches!(
+            option.descriptor(),
+            DecisionDescriptor::CastSpell {
+                object,
+                targets,
+                modes,
+                ..
+            } if *object == spell
+                && targets == &vec![TargetChoice::Player(opponent)]
+                && modes == &vec![0]
+        )));
+
+        let labels = context
+            .options()
+            .iter()
+            .map(|option| match option.descriptor() {
+                DecisionDescriptor::PassPriority => "Pass priority".to_owned(),
+                descriptor => driver
+                    .main_choice_label(descriptor)
+                    .unwrap_or_else(|error| panic!("priority label should exist: {error}")),
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(labels.iter().collect::<BTreeSet<_>>().len(), labels.len());
+        assert!(labels.iter().any(|label| {
+            label.contains("Boros Charm")
+                && label.contains("targets seat 2")
+                && label.contains("mode 1")
+        }));
     }
 
     #[test]
