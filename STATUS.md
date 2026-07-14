@@ -73,14 +73,16 @@ onto identities.
 
 ## Next Gates
 
-1. T4.1-T4.5, T4.7, and T4.10 diagnostic implementations are locally green;
-   split player-defender attacks, all-defender blocking, typed program-bound
-   non-mana activations, and activated/triggered resolution-time searches are live.
-   Complete the remaining canonical Choice/Prompt adapters, non-player combat
-   defenders, strategic damage prompts, and CP-AI-BENCH evidence.
-2. Finish T4.6 calibration and T4.9 CPU/memory/reference-device latency without
-   promoting a search knee or tier from incomplete Track A/B/C evidence.
-3. Complete Owner CP-AI-LADDER and CP-NN-GO decisions. Reopen T3 only for a concrete T4 blocker, fix the smallest shared primitive,
+1. Product `7bbeae0` is rebound to exact local evidence: 226 tests, three exact
+   policy/action replays, WASM/Android compiles, and clone-surface guard pass.
+   Extract the production game runner from `forge-testkit` before expanding AI use.
+2. Repair T4.5 search correctness before calibration: enforce one total decision
+   deadline, inline the single-worker path, use edge statistics for converging
+   actions, and harden transposition keys. The current 1-4 ms smoke is diagnostic
+   defect evidence because measured p95 latency is roughly 250-273 ms.
+3. Complete canonical Choice/Prompt adapters and T4.9 CPU/memory telemetry, then
+   run the three-track development, validation, and sealed CP-AI-BENCH campaigns.
+4. Complete Owner CP-AI-LADDER and CP-NN-GO decisions. Reopen T3 only for a concrete T4 blocker, fix the smallest shared primitive,
    add semantic regressions, and resume T4. Broad mapper expansion remains closed.
 
 Per-identity generated detail: `target/card-maturity/identities.json` (untracked,

@@ -26,18 +26,19 @@ its sampled behavior rather than the live state's hidden program.
 
 ## Search v1
 
-`SearchEngine` runs one independent UCT tree per determinization and aggregates
-concrete root actions by visit sum. Fixed-iteration configurations are used for
-development and exact replay. A wall-time limit exists for product experiments,
-but is not yet the replay-authoritative CLI mode.
+`SearchEngine` currently runs one independent UCT tree per determinization and
+aggregates concrete root actions. Fixed-iteration configurations are used for
+development and exact replay. A wall-time limit exists for diagnostics, but is
+not yet the replay-authoritative CLI mode or a valid product decision budget.
 
-The wall deadline starts before determinization and root construction and is
-checked during tree descent and every rollout ply. A single typed transition is
-not preemptible, so actual latency may exceed the configured budget; telemetry
-records that overrun. When setup consumes the budget before any simulation, the
-engine selects the highest prior-ordered legal action rather than an arbitrary
-canonical-ID order. Product adapters cache each root decision context, mapping,
-and prior once per determinized state.
+The current implementation creates a separate deadline inside each
+determinization tree. It therefore multiplies the configured wall time by the
+number of trees and excludes material determinization, thread, cloning, and
+aggregation overhead. The refreshed 1/2/4 ms smoke measured approximately
+250-273 ms p95 decision latency. This is a failed total-budget contract, not an
+acceptable non-preemptible-transition overrun. T4.5 must create one deadline
+before all decision work, share it across determinizations and workers, inline
+the one-worker path, and record setup/search/aggregation time separately.
 
 The current four-player product adapter searches:
 
@@ -63,6 +64,13 @@ The tree supports:
 - unique groups in the current product adapters until a cheap typed
   equivalence proof replaces the removed transition-cloning implementation;
 - fixed-visit adaptive checkpoints and forced/singleton bypasses.
+
+The current transposition table stores visit/value totals on shared child
+nodes. Converging root actions can therefore inherit each other's evidence.
+Promotion requires action-edge visit/value statistics with transposition nodes
+holding state/value information, plus a wider or collision-checked state key.
+The current diagnostics remain valid execution evidence but not search-quality
+or calibration evidence.
 
 Adaptive leader/gap/uncertainty stopping remains experimental. It cannot ship
 until paired ablation against fixed budgets passes Tracks A, B, and C under

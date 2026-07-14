@@ -59,9 +59,14 @@ The material latency/cost rise criterion intentionally has no invented numeric
 threshold. A measured threshold requires Owner-approved plan change before it
 can become promotion-authoritative.
 
-The local 1/2/4 ms, two-game smoke is execution evidence only. It completed all
-two B/2B comparisons and all three fixed/adaptive ablations, but its confidence
-intervals and missing benchmark fields prohibit any strength or plateau claim.
+The product-bound local 1/2/4 ms, two-game smoke completed both B/2B
+comparisons and all three fixed/adaptive ablations. It also exposed a blocking
+implementation defect: measured p95 latency was approximately 250-273 ms
+because the configured budget was applied independently inside each tree and
+did not bound total decision work. The report is retained as defect evidence
+only. It must be discarded and rerun after one shared total-decision deadline
+is implemented. Its confidence intervals and missing benchmark fields would
+still prohibit any strength or plateau claim even if timing were correct.
 
 The supporting design reference is *Learning to Stop: Dynamic Simulation
 Monte-Carlo Tree Search* (arXiv:2012.07910). DeckTest's own paired arena,

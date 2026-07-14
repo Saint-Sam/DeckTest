@@ -11,14 +11,16 @@
   },
   "tier": 4,
   "execution_flow": {
-    "current": "T4.6 calibration evidence, T4.9 platform latency, and CP-AI-BENCH completion",
-    "next": "CP-AI-LADDER Owner review, then CP-NN-GO",
+    "current": "T4 production-runner extraction and search correctness remediation from the 2026-07-14 engineering assessment",
+    "next": "complete canonical decision adapters and cost telemetry, then run CP-AI-BENCH calibration and search-knee campaigns",
     "targeted_fallback": "When T4 discovers a concrete coverage blocker, fix the smallest shared T3 primitive, add semantic regression tests, and resume T4. Do not reopen broad mapper expansion."
   },
   "t4_diagnostic_product": {
     "status": "local_preflight_passed_promotion_blocked",
-    "commit": "592a02ab8d9ef9a4ab19d97114c589d2df0601f1",
-    "tree": "03378f918cb03f2ad5645c300f389b7ca80fff68",
+    "commit": "7bbeae0b24102c4b01755fceed3e00b639ab54b8",
+    "tree": "d658c12a9d78c1281e4ac1929c071abd1b5841fa",
+    "preflight_evidence_commit": "20100af465e4da7606c424100c18a82fafda5ba2",
+    "preflight_evidence_tree": "e557699d76ca7bc4e319eeadf5c695b6a9482200",
     "evidence": "reports/gates/T4/LOCAL-DIAGNOSTIC-PREFLIGHT.json",
     "promotion_gate": "scripts/gates/gate_T4.sh"
   },
@@ -375,25 +377,25 @@
       "status": "verified_local_diagnostics",
       "branch": "task/T4.3-heuristic-policy",
       "attempts": 0,
-      "verification": "Seeded random-legal, deterministic/noisy one-ply heuristic, mulligan, threat/target helpers, and exact release-profile policy/action replay pass. Refreshed heuristic and random replays persist complete canonical legal descriptors, PlayerView hashes, and DecisionStateKeys. Player-defender attack choices now include the complete capped split-allocation product, and every attacked player declares blockers in deterministic APNAP order without overwriting prior declarations."
+      "verification": "Seeded random-legal, deterministic/noisy one-ply heuristic, mulligan, threat/target helpers, and exact release-profile policy/action replay pass at product 7bbeae0. Refreshed heuristic and random replays cover 16,006 and 7,679 canonical decisions and persist complete legal descriptors, PlayerView hashes, and DecisionStateKeys. Player-defender attack choices include the capped split-allocation product, every attacked player declares blockers in deterministic APNAP order, program-bound activations are canonical, and activated/triggered resolution-time searches fail closed outside the implemented surface."
     },
     "T4.4": {
       "status": "verified_local_diagnostics",
       "branch": "task/T4.4-determinized-mcts-v1",
       "attempts": 0,
-      "verification": "Root-parallel determinized UCT with visit-sum selection passes deterministic search and exact full-game replay. The refreshed split-combat release diagnostic searched 368 decisions with 736 simulations and 1,104 nodes."
+      "verification": "Root-parallel determinized UCT passes deterministic search and exact full-game replay at product 7bbeae0: 16,274 canonical decisions, 1,032 searched decisions, 1,086 simulations, and 1,629 nodes. Promotion is blocked because converging actions still read child-node statistics instead of edge statistics, the state key needs collision hardening, and useful search depth remains shallow."
     },
     "T4.5": {
-      "status": "verified_local_diagnostics",
+      "status": "in_progress_correctness_remediation",
       "branch": "task/T4.5-search-upgrades",
       "attempts": 0,
-      "verification": "Transposition sharing, deterministic progressive widening, time budgets, wall-deadline enforcement across determinization, prior-ordered fallback, fixed checkpoint telemetry, fail-closed adaptive thresholds, and paired fixed/adaptive search-knee harness pass local tests. Adaptive stopping remains unpromoted pending Track A/B/C ablation evidence."
+      "verification": "Transposition sharing, deterministic progressive widening, prior-ordered fallback, fixed checkpoint telemetry, fail-closed adaptive thresholds, and the paired fixed/adaptive harness pass local tests. The refreshed 1-4 ms smoke exposed a failed contract: observed p95 decision latency was approximately 250-273 ms because the budget is applied per determinization tree and excludes material orchestration overhead. Implement one shared total-decision deadline, inline the single-worker path, correct edge statistics, harden keys, and discard/rerun the current knee smoke before calibration."
     },
     "T4.6": {
-      "status": "in_progress_promotion_evidence_pending",
+      "status": "blocked_on_search_correctness_and_promotion_evidence",
       "branch": "task/T4.6-difficulty-calibration",
       "attempts": 0,
-      "verification": "Versioned provisional tier definitions and paired seat-swapped ladder/calibration/search-knee infrastructure are implemented. No tier or Standard knee is promoted because development, validation, sealed, three-archetype, acceptable-action, CPU-cost, and Owner play evidence remain incomplete."
+      "verification": "Versioned provisional tier definitions and paired seat-swapped ladder/calibration/search-knee infrastructure are implemented. Calibration is paused until T4.5 enforces a true total decision deadline and T4.9 records CPU/memory. No tier or Standard knee is promoted because development, validation, sealed, three-archetype, acceptable-action, CPU-cost, and Owner play evidence remain incomplete."
     },
     "T4.7": {
       "status": "verified_local_diagnostics",

@@ -1,19 +1,23 @@
 {
   "schema_version": 1,
   "tier": "T4",
-  "status": "exact_product_evidence_refreshed_preflight_pending",
+  "status": "local_diagnostic_preflight_passed_promotion_blocked",
   "verified_at": "2026-07-14",
   "verification_mode": "local_only_no_github_actions",
   "product_commit": "7bbeae0b24102c4b01755fceed3e00b639ab54b8",
   "product_tree": "d658c12a9d78c1281e4ac1929c071abd1b5841fa",
+  "preflight_evidence_commit": "20100af465e4da7606c424100c18a82fafda5ba2",
+  "preflight_evidence_tree": "e557699d76ca7bc4e319eeadf5c695b6a9482200",
   "gate_command": "scripts/gates/gate_T4.sh --preflight",
+  "gate_log": "reports/gates/T4/commands/00-preflight.log",
+  "gate_log_sha256": "c9bbcb01c5966ee0cebfe98944cc8026e97b82e02b384dbb7cf2ab82d6a19a6b",
   "checks": {
-    "format": "pending_exact_clean_preflight",
-    "strict_clippy": "pending_exact_clean_preflight",
+    "format": "passed",
+    "strict_clippy": "passed",
     "tests": {
-      "passed": null,
-      "failed": null,
-      "ignored": null,
+      "passed": 226,
+      "failed": 0,
+      "ignored": 1,
       "ignored_reason": "requires local generated T3 translated-card output"
     },
     "heuristic_exact_policy_and_typed_action_replay": {
@@ -37,8 +41,8 @@
       "typed_actions": 18321,
       "final_hash": "3933493530367397528"
     },
-    "wasm32_unknown_unknown_compile": "pending_exact_clean_preflight",
-    "aarch64_linux_android_compile": "pending_exact_clean_preflight",
+    "wasm32_unknown_unknown_compile": "passed",
+    "aarch64_linux_android_compile": "passed",
     "clone_surface_guard": {
       "status": "passed",
       "command": "scripts/review/clone_surface_guard.sh",
