@@ -3314,6 +3314,77 @@ impl ReplacementChoiceOrder {
     }
 }
 
+/// Maximum number of optional answers carried by one stack object.
+pub const MAX_STACK_OPTIONAL_CHOICES: usize = u64::BITS as usize;
+
+/// Compact typed choices announced for a spell or ability on the stack.
+///
+/// Targets and mana payments retain their dedicated kernel representations.
+/// This payload carries the remaining currently supported announcement choices
+/// without adding heap allocations to persistent stack state.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub struct StackDecisionBindings {
+    mode: Option<u32>,
+    optional_count: u8,
+    optional_accept_mask: u64,
+}
+
+impl StackDecisionBindings {
+    /// Creates one bounded stack-choice payload.
+    pub fn new(mode: Option<u32>, optional: &[bool]) -> Result<Self, StateError> {
+        if optional.len() > MAX_STACK_OPTIONAL_CHOICES {
+            return Err(StateError::StackOptionalChoiceCountOverflow {
+                maximum: MAX_STACK_OPTIONAL_CHOICES as u32,
+                supplied: u32::try_from(optional.len()).unwrap_or(u32::MAX),
+            });
+        }
+        let optional_accept_mask =
+            optional
+                .iter()
+                .enumerate()
+                .fold(0_u64, |mask, (index, accept)| {
+                    if *accept {
+                        mask | (1_u64 << index)
+                    } else {
+                        mask
+                    }
+                });
+        Ok(Self {
+            mode,
+            optional_count: optional.len() as u8,
+            optional_accept_mask,
+        })
+    }
+
+    /// Returns the announced zero-based mode index, when present.
+    #[must_use]
+    pub const fn mode(self) -> Option<u32> {
+        self.mode
+    }
+
+    /// Returns the number of ordered optional answers.
+    #[must_use]
+    pub const fn optional_choice_count(self) -> usize {
+        self.optional_count as usize
+    }
+
+    /// Returns one ordered optional answer.
+    #[must_use]
+    pub const fn optional_choice(self, index: usize) -> Option<bool> {
+        if index >= self.optional_count as usize {
+            None
+        } else {
+            Some((self.optional_accept_mask & (1_u64 << index)) != 0)
+        }
+    }
+
+    /// Iterates over the ordered optional answers.
+    pub fn optional_choices(self) -> impl ExactSizeIterator<Item = bool> {
+        (0..self.optional_count as usize)
+            .map(move |index| (self.optional_accept_mask & (1_u64 << index)) != 0)
+    }
+}
+
 /// Request object for casting one spell.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CastSpellRequest {
@@ -3327,6 +3398,7 @@ pub struct CastSpellRequest {
     split_second: bool,
     target_requirements: Vec<TargetRequirement>,
     target_choices: Vec<TargetChoice>,
+    decisions: StackDecisionBindings,
 }
 
 impl CastSpellRequest {
@@ -3349,6 +3421,7 @@ impl CastSpellRequest {
             split_second: false,
             target_requirements: Vec::new(),
             target_choices: Vec::new(),
+            decisions: StackDecisionBindings::default(),
         }
     }
 
@@ -3361,6 +3434,13 @@ impl CastSpellRequest {
     ) -> Self {
         self.target_requirements = target_requirements;
         self.target_choices = target_choices;
+        self
+    }
+
+    /// Carries modal and optional answers announced for this spell.
+    #[must_use]
+    pub const fn with_decisions(mut self, decisions: StackDecisionBindings) -> Self {
+        self.decisions = decisions;
         self
     }
 
@@ -3456,6 +3536,12 @@ impl CastSpellRequest {
     #[must_use]
     pub fn target_choices(&self) -> &[TargetChoice] {
         &self.target_choices
+    }
+
+    /// Returns modal and optional answers announced for this spell.
+    #[must_use]
+    pub const fn decisions(&self) -> StackDecisionBindings {
+        self.decisions
     }
 }
 
@@ -4099,6 +4185,7 @@ pub struct StackEntry {
     kicked: bool,
     flashback: bool,
     split_second: bool,
+    decisions: StackDecisionBindings,
 }
 
 impl StackEntry {
@@ -4173,6 +4260,12 @@ impl StackEntry {
     pub const fn split_second(&self) -> bool {
         self.split_second
     }
+
+    /// Returns modal and optional answers announced for this entry.
+    #[must_use]
+    pub const fn decisions(&self) -> StackDecisionBindings {
+        self.decisions
+    }
 }
 
 /// Record of a stack object that resolved.
@@ -4193,6 +4286,7 @@ pub struct ResolutionRecord {
     kicked: bool,
     flashback: bool,
     split_second: bool,
+    decisions: StackDecisionBindings,
 }
 
 impl ResolutionRecord {
@@ -4273,6 +4367,12 @@ impl ResolutionRecord {
     pub const fn split_second(&self) -> bool {
         self.split_second
     }
+
+    /// Returns modal and optional answers announced for the resolved entry.
+    #[must_use]
+    pub const fn decisions(&self) -> StackDecisionBindings {
+        self.decisions
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -4288,6 +4388,7 @@ struct StackEntryRequest {
     kicked: bool,
     flashback: bool,
     split_second: bool,
+    decisions: StackDecisionBindings,
 }
 
 /// Combat-relevant static keywords tracked by the T1.6 kernel.
@@ -6669,6 +6770,13 @@ pub enum StateError {
         required: u32,
         /// Number of targets selected by the player.
         selected: u32,
+    },
+    /// A stack choice payload exceeded its fixed optional-answer capacity.
+    StackOptionalChoiceCountOverflow {
+        /// Maximum supported optional answers.
+        maximum: u32,
+        /// Number of answers supplied by the caller.
+        supplied: u32,
     },
     /// A selected target is not legal while the spell is being announced.
     IllegalTarget {
@@ -10289,6 +10397,7 @@ impl GameState {
                 kicked: false,
                 flashback: false,
                 split_second: false,
+                decisions: StackDecisionBindings::default(),
             });
             self.after_priority_action(player, true)?;
             Ok(Some(id))
@@ -11157,6 +11266,7 @@ impl GameState {
             kicked: request.kicked(),
             flashback: request.flashback().is_some(),
             split_second: request.split_second(),
+            decisions: request.decisions(),
         });
         self.after_priority_action(player, true)?;
         Ok(id)
@@ -11233,6 +11343,7 @@ impl GameState {
             kicked: false,
             flashback: false,
             split_second: false,
+            decisions: StackDecisionBindings::default(),
         });
         self.after_priority_action(player, hold_priority)?;
         Ok(id)
@@ -11259,6 +11370,7 @@ impl GameState {
             kicked: false,
             flashback: false,
             split_second: false,
+            decisions: StackDecisionBindings::default(),
         });
         self.after_priority_action(player, hold_priority)?;
         Ok(id)
@@ -11294,6 +11406,7 @@ impl GameState {
                         kicked: false,
                         flashback: false,
                         split_second: false,
+                        decisions: StackDecisionBindings::default(),
                     }));
                 }
             }
@@ -11357,6 +11470,7 @@ impl GameState {
                         kicked: false,
                         flashback: false,
                         split_second: false,
+                        decisions: StackDecisionBindings::default(),
                     });
                     self.emit_event_without_triggers(GameEvent::TriggeredAbilityPutOnStack {
                         trigger: trigger.trigger(),
@@ -12391,6 +12505,7 @@ impl GameState {
             kicked: source.kicked(),
             flashback: source.flashback(),
             split_second: source.split_second(),
+            decisions: source.decisions(),
         });
         self.emit_event(GameEvent::StackEntryCopied {
             source: entry,
@@ -14721,8 +14836,10 @@ impl GameState {
     ) -> bool {
         match snapshot.choice {
             TargetChoice::Player(player) => {
-                snapshot.requirement.kind() == TargetKind::Player
-                    && self.require_player(player).is_ok()
+                matches!(
+                    snapshot.requirement.kind(),
+                    TargetKind::Player | TargetKind::PlayerOrPermanent
+                ) && self.require_player(player).is_ok()
                     && self.is_target_legal_at_cast(
                         controller,
                         source,
@@ -14768,6 +14885,7 @@ impl GameState {
             kicked,
             flashback,
             split_second,
+            decisions,
         } = request;
         let id = StackEntryId(self.next_stack_entry);
         self.next_stack_entry = self.next_stack_entry.saturating_add(1);
@@ -14784,6 +14902,7 @@ impl GameState {
             kicked,
             flashback,
             split_second,
+            decisions,
         });
         self.emit_event(GameEvent::StackEntryAdded {
             entry: id,
@@ -14877,6 +14996,7 @@ impl GameState {
             kicked: entry.kicked(),
             flashback: entry.flashback(),
             split_second: entry.split_second(),
+            decisions: entry.decisions(),
         });
         self.emit_event(GameEvent::StackEntryResolved {
             entry: entry.id(),
@@ -14926,6 +15046,7 @@ impl GameState {
             kicked: entry.kicked(),
             flashback: entry.flashback(),
             split_second: entry.split_second(),
+            decisions: entry.decisions(),
         });
         self.emit_event(GameEvent::StackEntryResolved {
             entry: entry.id(),
@@ -16287,6 +16408,9 @@ impl Fnva64 {
         self.write_bool(entry.kicked);
         self.write_bool(entry.flashback);
         self.write_bool(entry.split_second);
+        self.write_optional_u32(entry.decisions.mode);
+        self.write_u8(entry.decisions.optional_count);
+        self.write_u64(entry.decisions.optional_accept_mask);
     }
 
     fn write_resolution_record(&mut self, record: &ResolutionRecord) {
@@ -16309,6 +16433,9 @@ impl Fnva64 {
         self.write_bool(record.kicked);
         self.write_bool(record.flashback);
         self.write_bool(record.split_second);
+        self.write_optional_u32(record.decisions.mode);
+        self.write_u8(record.decisions.optional_count);
+        self.write_u64(record.decisions.optional_accept_mask);
     }
 
     fn write_event_record(&mut self, record: EventRecord) {
@@ -17644,6 +17771,9 @@ impl CanonicalBytes {
         self.write_bool(entry.kicked);
         self.write_bool(entry.flashback);
         self.write_bool(entry.split_second);
+        self.write_optional_u32(entry.decisions.mode);
+        self.write_u8(entry.decisions.optional_count);
+        self.write_u64(entry.decisions.optional_accept_mask);
     }
 
     fn write_resolution_record(&mut self, record: &ResolutionRecord) {
@@ -17666,6 +17796,9 @@ impl CanonicalBytes {
         self.write_bool(record.kicked);
         self.write_bool(record.flashback);
         self.write_bool(record.split_second);
+        self.write_optional_u32(record.decisions.mode);
+        self.write_u8(record.decisions.optional_count);
+        self.write_u64(record.decisions.optional_accept_mask);
     }
 
     fn write_event_record(&mut self, record: EventRecord) {
@@ -18198,12 +18331,13 @@ mod tests {
         PriorityOutcome, ReplacementCondition, ReplacementDamageTargetFilter,
         ReplacementDefinition, ReplacementDuration, ReplacementEffectId, ReplacementOperation,
         ReplacementSourceFilter, ResolutionOutcome, RestrictionDefinition, RestrictionEffect,
-        SpellTiming, StackEntryId, StackEntryRequest, StackObjectKind, StateBasedActionKind,
-        StateBasedActionReport, StateError, Step, TargetChoice, TargetControllerPredicate,
-        TargetKind, TargetRequirement, TargetRestriction, TargetRestrictionSubject,
-        TriggerCondition, TriggerDefinition, TriggerInterveningIf, TriggerObjectFilter,
-        TriggerPlayerFilter, TriggerZoneFilter, ZoneConservation, ZoneId, ZoneKind,
-        EVENT_RING_CAPACITY, NORMAL_TURN_STEPS, OPENING_HAND_SIZE, PAYMENT_PLAN_LIMIT,
+        SpellTiming, StackDecisionBindings, StackEntryId, StackEntryRequest, StackObjectKind,
+        StateBasedActionKind, StateBasedActionReport, StateError, Step, TargetChoice,
+        TargetControllerPredicate, TargetKind, TargetRequirement, TargetRestriction,
+        TargetRestrictionSubject, TriggerCondition, TriggerDefinition, TriggerInterveningIf,
+        TriggerObjectFilter, TriggerPlayerFilter, TriggerZoneFilter, ZoneConservation, ZoneId,
+        ZoneKind, EVENT_RING_CAPACITY, MAX_STACK_OPTIONAL_CHOICES, NORMAL_TURN_STEPS,
+        OPENING_HAND_SIZE, PAYMENT_PLAN_LIMIT,
     };
 
     #[test]
@@ -20581,6 +20715,7 @@ mod tests {
             kicked: false,
             flashback: false,
             split_second: false,
+            decisions: super::StackDecisionBindings::default(),
         });
         let matching_types = ObjectTypes::none()
             .with_instant()
@@ -21636,6 +21771,43 @@ mod tests {
     }
 
     #[test]
+    fn player_or_permanent_player_target_remains_legal_on_resolution() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let responder = state.add_player();
+        let hand = ZoneId::new(Some(active), ZoneKind::Hand);
+        let spell = state
+            .create_object(CardId::new(103), active, active, hand)
+            .unwrap_or_else(|error| panic!("unexpected spell create error: {error:?}"));
+        start_upkeep(&mut state, active);
+        let cost = ManaCost::new(0, 0, 0, 0, 0, 0);
+        let entry = state
+            .cast_spell(
+                active,
+                spell,
+                CastSpellRequest::new(
+                    StackObjectKind::InstantSpell,
+                    SpellTiming::Instant,
+                    cost,
+                    zero_payment(cost),
+                )
+                .with_targets(
+                    vec![TargetRequirement::new(TargetKind::PlayerOrPermanent)],
+                    vec![TargetChoice::Player(responder)],
+                ),
+            )
+            .unwrap_or_else(|error| panic!("unexpected cast error: {error:?}"));
+
+        pass_round(&mut state, active, responder, entry);
+
+        assert_eq!(
+            state.resolution_log()[0].outcome(),
+            ResolutionOutcome::Resolved
+        );
+        assert_eq!(state.resolution_log()[0].legal_targets(), &[true]);
+    }
+
+    #[test]
     fn target_choices_affect_canonical_hash() {
         let mut left = GameState::new();
         let left_active = left.add_player();
@@ -21694,6 +21866,97 @@ mod tests {
             right.deterministic_hash_streaming()
         );
         assert_eq!(cost.generic_total(), Ok(0));
+    }
+
+    #[test]
+    fn stack_decision_bindings_are_bounded_and_ordered() {
+        let answers = (0..MAX_STACK_OPTIONAL_CHOICES)
+            .map(|index| index % 3 == 0)
+            .collect::<Vec<_>>();
+        let decisions = StackDecisionBindings::new(Some(2), &answers)
+            .unwrap_or_else(|error| panic!("bounded decisions should exist: {error:?}"));
+        assert_eq!(decisions.mode(), Some(2));
+        assert_eq!(decisions.optional_choice_count(), answers.len());
+        assert_eq!(decisions.optional_choices().collect::<Vec<_>>(), answers);
+        assert_eq!(decisions.optional_choice(MAX_STACK_OPTIONAL_CHOICES), None);
+
+        let overflow = vec![true; MAX_STACK_OPTIONAL_CHOICES + 1];
+        assert_eq!(
+            StackDecisionBindings::new(None, &overflow),
+            Err(StateError::StackOptionalChoiceCountOverflow {
+                maximum: MAX_STACK_OPTIONAL_CHOICES as u32,
+                supplied: (MAX_STACK_OPTIONAL_CHOICES + 1) as u32,
+            })
+        );
+    }
+
+    #[test]
+    fn stack_decisions_affect_hash_and_survive_copy_resolution() {
+        let mut base = GameState::new();
+        let active = base.add_player();
+        let hand = ZoneId::new(Some(active), ZoneKind::Hand);
+        let spell = base
+            .create_object(CardId::new(106), active, active, hand)
+            .unwrap_or_else(|error| panic!("unexpected spell create error: {error:?}"));
+        start_upkeep(&mut base, active);
+        let cost = ManaCost::new(0, 0, 0, 0, 0, 0);
+        let left_decisions = StackDecisionBindings::new(Some(0), &[false, true])
+            .unwrap_or_else(|error| panic!("left decisions should exist: {error:?}"));
+        let right_decisions = StackDecisionBindings::new(Some(1), &[false, true])
+            .unwrap_or_else(|error| panic!("right decisions should exist: {error:?}"));
+
+        let mut left = base.clone();
+        let entry = left
+            .cast_spell(
+                active,
+                spell,
+                CastSpellRequest::new(
+                    StackObjectKind::InstantSpell,
+                    SpellTiming::Instant,
+                    cost,
+                    zero_payment(cost),
+                )
+                .with_decisions(left_decisions),
+            )
+            .unwrap_or_else(|error| panic!("left spell should cast: {error:?}"));
+        let mut right = base;
+        right
+            .cast_spell(
+                active,
+                spell,
+                CastSpellRequest::new(
+                    StackObjectKind::InstantSpell,
+                    SpellTiming::Instant,
+                    cost,
+                    zero_payment(cost),
+                )
+                .with_decisions(right_decisions),
+            )
+            .unwrap_or_else(|error| panic!("right spell should cast: {error:?}"));
+
+        assert_ne!(left.deterministic_hash(), right.deterministic_hash());
+        assert_eq!(
+            left.stack_top().map(|top| top.decisions()),
+            Some(left_decisions)
+        );
+        let copied = left
+            .copy_stack_entry(active, entry)
+            .unwrap_or_else(|error| panic!("stack copy should succeed: {error:?}"));
+        assert_eq!(
+            left.stack_top().map(|top| top.decisions()),
+            Some(left_decisions)
+        );
+        assert_eq!(left.resolve_top_stack_entry(), Ok(copied));
+        assert_eq!(
+            left.resolution_log()
+                .last()
+                .map(|record| record.decisions()),
+            Some(left_decisions)
+        );
+        assert_eq!(
+            left.deterministic_hash(),
+            left.deterministic_hash_streaming()
+        );
     }
 
     #[test]

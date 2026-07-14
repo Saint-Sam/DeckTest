@@ -13,8 +13,8 @@ use forge_ai::{
     SearchEngine, SearchLimit, SearchReport, SearchStopReason,
 };
 use forge_cards::runtime::{
-    bind_triggered_ability_actions, compile_card_program, CardProgram, ExecutionBindings,
-    ProgramKind, TriggeredAbilityProgram,
+    bind_program_actions, bind_triggered_ability_actions, compile_card_program, CardProgram,
+    ExecutionBindings, ProgramKind, TriggeredAbilityProgram,
 };
 use forge_core::{
     apply, Action, ActivatedAbilityId, AttackDeclaration, BlockDeclaration, CanonicalActionId,
@@ -22,8 +22,9 @@ use forge_core::{
     CombatDamageStepKind, CombatDamageTarget, DecisionContext, DecisionDescriptor, DecisionKind,
     DecisionOption, GameOutcome, GameState, HiddenCardDefinition, HiddenSlotDefinition, ManaKind,
     ObjectColors, ObjectId, ObjectView, Outcome, PaymentPlan, PlayerId, PlayerView,
-    PriorityOutcome, SpellTiming, StackEntryId, StackObjectKind, Step, TargetChoice, TriggerId,
-    ZoneId, ZoneKind,
+    PriorityOutcome, ResolutionOutcome, SpellTiming, StackDecisionBindings, StackEntryId,
+    StackObjectKind, Step, TargetChoice, TargetKind, TargetRequirement, TriggerId, ZoneId,
+    ZoneKind,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -52,6 +53,7 @@ const AI_REPLAY_MAGIC: &str = "forge-ai-baseline-replay-v1";
 const PILOT_INTENTS_PATH: &str = "assets/ai/pilot_intents.json";
 const RETAINED_REPLAYS: usize = 10;
 const MAX_DIAGNOSTIC_COMBAT_OPTIONS: usize = 262_144;
+const MAX_CANONICAL_SPELL_OPTIONS: usize = 65_536;
 
 #[allow(dead_code)]
 fn main() {
@@ -1268,7 +1270,7 @@ struct TriggerRuntime {
     source: ObjectId,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 enum MainChoice {
     PlayLand(ObjectId),
     ActivateAll,
@@ -1280,8 +1282,18 @@ enum MainChoice {
     Cast {
         object: ObjectId,
         payment: PaymentPlan,
+        targets: Vec<TargetChoice>,
+        mode: Option<u32>,
+        optional: Vec<bool>,
     },
     Finish,
+}
+
+#[derive(Clone)]
+struct SpellChoiceBinding {
+    targets: Vec<TargetChoice>,
+    mode: Option<u32>,
+    optional: Vec<bool>,
 }
 
 #[derive(Clone, Copy)]
@@ -2274,7 +2286,7 @@ impl GameDriver {
             )?;
             let choice = mappings
                 .iter()
-                .find_map(|(id, choice)| (*id == selected_id).then_some(*choice))
+                .find_map(|(id, choice)| (*id == selected_id).then(|| choice.clone()))
                 .ok_or_else(|| {
                     format!(
                         "seed {} human main action {selected_id} has no typed adapter",
@@ -2296,7 +2308,7 @@ impl GameDriver {
             let (labels, choices) = self.legacy_human_main_choices(player)?;
             let selected =
                 self.prompt_legacy_choice(player, source, "Choose a main-phase action", &labels)?;
-            if self.apply_main_choice(player, choices[selected])? {
+            if self.apply_main_choice(player, choices[selected].clone())? {
                 return Ok(());
             }
         }
@@ -2368,12 +2380,269 @@ impl GameDriver {
                 }
                 Ok(false)
             }
-            MainChoice::Cast { object, payment } => {
-                self.cast_permanent_with_payment(player, object, payment)?;
+            MainChoice::Cast {
+                object,
+                payment,
+                targets,
+                mode,
+                optional,
+            } => {
+                self.cast_program_with_choices(player, object, payment, targets, mode, optional)?;
                 Ok(true)
             }
             MainChoice::Finish => Ok(true),
         }
+    }
+
+    fn spell_choice_bindings(
+        &self,
+        player: PlayerId,
+        object: ObjectId,
+        program: &CardProgram,
+    ) -> Result<Vec<SpellChoiceBinding>, String> {
+        if !program.additional_costs().is_empty() {
+            return Err(format!(
+                "seed {} spell {} requires an additional-cost adapter",
+                self.seed,
+                program.name()
+            ));
+        }
+        let mut bindings = Vec::new();
+        if program.spell_modes().is_empty() {
+            self.extend_spell_branch_bindings(
+                player,
+                object,
+                program.name(),
+                None,
+                program.target_requirements(),
+                program.object_choice_requirements().len(),
+                program.optional_choice_count(),
+                &mut bindings,
+            )?;
+        } else {
+            for (mode_index, mode) in program.spell_modes().iter().enumerate() {
+                let mode_index = u32::try_from(mode_index)
+                    .map_err(|_| format!("seed {} spell mode index overflow", self.seed))?;
+                self.extend_spell_branch_bindings(
+                    player,
+                    object,
+                    program.name(),
+                    Some(mode_index),
+                    mode.target_requirements(),
+                    mode.object_choice_requirements().len(),
+                    mode.optional_choice_count(),
+                    &mut bindings,
+                )?;
+            }
+        }
+        Ok(bindings)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn extend_spell_branch_bindings(
+        &self,
+        player: PlayerId,
+        object: ObjectId,
+        card_name: &str,
+        mode: Option<u32>,
+        requirements: &[TargetRequirement],
+        object_choice_count: usize,
+        optional_count: usize,
+        output: &mut Vec<SpellChoiceBinding>,
+    ) -> Result<(), String> {
+        if object_choice_count != 0 {
+            return Err(format!(
+                "seed {} spell {card_name} requires {object_choice_count} resolution-time object choice(s)",
+                self.seed
+            ));
+        }
+        let targets = self.target_bindings(player, object, requirements)?;
+        let optionals = self.optional_bindings(card_name, optional_count)?;
+        let branch_count = targets
+            .len()
+            .checked_mul(optionals.len())
+            .ok_or_else(|| format!("seed {} spell option count overflow", self.seed))?;
+        if output.len().saturating_add(branch_count) > MAX_CANONICAL_SPELL_OPTIONS {
+            return Err(format!(
+                "seed {} spell {card_name} exceeds the {}-option canonical cap",
+                self.seed, MAX_CANONICAL_SPELL_OPTIONS
+            ));
+        }
+        for target_binding in targets {
+            for optional in &optionals {
+                output.push(SpellChoiceBinding {
+                    targets: target_binding.clone(),
+                    mode,
+                    optional: optional.clone(),
+                });
+            }
+        }
+        Ok(())
+    }
+
+    fn target_bindings(
+        &self,
+        player: PlayerId,
+        source: ObjectId,
+        requirements: &[TargetRequirement],
+    ) -> Result<Vec<Vec<TargetChoice>>, String> {
+        let mut bindings = vec![Vec::new()];
+        for requirement in requirements {
+            let choices = self.legal_targets_for(player, source, *requirement);
+            if choices.is_empty() {
+                return Ok(Vec::new());
+            }
+            let next_len = bindings
+                .len()
+                .checked_mul(choices.len())
+                .ok_or_else(|| format!("seed {} target option count overflow", self.seed))?;
+            if next_len > MAX_CANONICAL_SPELL_OPTIONS {
+                return Err(format!(
+                    "seed {} target choices exceed the {}-option canonical cap",
+                    self.seed, MAX_CANONICAL_SPELL_OPTIONS
+                ));
+            }
+            let mut next = Vec::with_capacity(next_len);
+            for prefix in &bindings {
+                for choice in &choices {
+                    let mut binding = prefix.clone();
+                    binding.push(*choice);
+                    next.push(binding);
+                }
+            }
+            bindings = next;
+        }
+        Ok(bindings)
+    }
+
+    fn legal_targets_for(
+        &self,
+        player: PlayerId,
+        source: ObjectId,
+        requirement: TargetRequirement,
+    ) -> Vec<TargetChoice> {
+        let mut choices = Vec::new();
+        if matches!(
+            requirement.kind(),
+            TargetKind::Player | TargetKind::PlayerOrPermanent
+        ) {
+            choices.extend(
+                self.state
+                    .players()
+                    .iter()
+                    .copied()
+                    .map(|candidate| TargetChoice::Player(candidate.id())),
+            );
+        }
+        match requirement.kind() {
+            TargetKind::Permanent | TargetKind::PlayerOrPermanent => {
+                self.extend_object_targets(ZoneId::new(None, ZoneKind::Battlefield), &mut choices);
+            }
+            TargetKind::ObjectInZone(zone) => self.extend_object_targets(zone, &mut choices),
+            TargetKind::ObjectInZoneKind(kind) => {
+                self.extend_object_targets(ZoneId::new(None, kind), &mut choices);
+                for candidate in self.state.players().iter().copied() {
+                    self.extend_object_targets(
+                        ZoneId::new(Some(candidate.id()), kind),
+                        &mut choices,
+                    );
+                }
+            }
+            TargetKind::StackEntry => choices.extend(
+                self.state
+                    .stack_entries()
+                    .iter()
+                    .map(|entry| TargetChoice::StackEntry(entry.id())),
+            ),
+            TargetKind::Player => {}
+        }
+        choices.retain(|choice| {
+            self.state
+                .can_target(player, Some(source), requirement, *choice)
+        });
+        choices.sort_by_key(|choice| match choice {
+            TargetChoice::Player(target) => (0_u8, target.index()),
+            TargetChoice::Object(target) => (1_u8, target.index()),
+            TargetChoice::StackEntry(target) => (2_u8, target.index()),
+        });
+        choices.dedup();
+        choices
+    }
+
+    fn extend_object_targets(&self, zone: ZoneId, output: &mut Vec<TargetChoice>) {
+        if let Some(objects) = self.state.zone_objects(zone) {
+            output.extend(objects.iter().copied().map(TargetChoice::Object));
+        }
+    }
+
+    fn optional_bindings(
+        &self,
+        card_name: &str,
+        optional_count: usize,
+    ) -> Result<Vec<Vec<bool>>, String> {
+        let shift = u32::try_from(optional_count)
+            .map_err(|_| format!("seed {} optional choice count overflow", self.seed))?;
+        let count = 1_usize.checked_shl(shift).ok_or_else(|| {
+            format!(
+                "seed {} spell {card_name} has too many optional choices",
+                self.seed
+            )
+        })?;
+        if count > MAX_CANONICAL_SPELL_OPTIONS {
+            return Err(format!(
+                "seed {} spell {card_name} optional choices exceed the {}-option canonical cap",
+                self.seed, MAX_CANONICAL_SPELL_OPTIONS
+            ));
+        }
+        Ok((0..count)
+            .map(|mask| {
+                (0..optional_count)
+                    .map(|index| (mask & (1_usize << index)) != 0)
+                    .collect()
+            })
+            .collect())
+    }
+
+    fn spell_request(
+        &self,
+        program: &CardProgram,
+        payment: PaymentPlan,
+        targets: &[TargetChoice],
+        mode: Option<u32>,
+        optional: &[bool],
+    ) -> Result<CastSpellRequest, String> {
+        let (kind, timing) = match program.kind() {
+            ProgramKind::Permanent => (StackObjectKind::PermanentSpell, SpellTiming::Sorcery),
+            ProgramKind::Instant => (StackObjectKind::InstantSpell, SpellTiming::Instant),
+            ProgramKind::Sorcery => (StackObjectKind::SorcerySpell, SpellTiming::Sorcery),
+            ProgramKind::Land => {
+                return Err(format!("seed {} cannot cast a land as a spell", self.seed));
+            }
+        };
+        let requirements = match mode {
+            Some(mode) => program
+                .spell_modes()
+                .get(mode as usize)
+                .ok_or_else(|| format!("seed {} invalid spell mode {mode}", self.seed))?
+                .target_requirements(),
+            None if program.spell_modes().is_empty() => program.target_requirements(),
+            None => {
+                return Err(format!(
+                    "seed {} modal spell {} has no mode binding",
+                    self.seed,
+                    program.name()
+                ));
+            }
+        };
+        let decisions = StackDecisionBindings::new(mode, optional)
+            .map_err(|error| format!("seed {} stack choices failed: {error:?}", self.seed))?;
+        let mut request = CastSpellRequest::new(kind, timing, program.mana_cost(), payment)
+            .with_targets(requirements.to_vec(), targets.to_vec())
+            .with_decisions(decisions);
+        if program.split_second() {
+            request = request.with_split_second();
+        }
+        Ok(request)
     }
 
     fn human_main_choices(
@@ -2474,12 +2743,7 @@ impl GameDriver {
             let Some(program) = self.programs.get(&object) else {
                 continue;
             };
-            if program.kind() != ProgramKind::Permanent
-                || !program.target_requirements().is_empty()
-                || !program.object_choice_requirements().is_empty()
-                || !program.spell_modes().is_empty()
-                || program.optional_choice_count() != 0
-            {
+            if program.kind() == ProgramKind::Land {
                 continue;
             }
             let cost = self
@@ -2492,24 +2756,48 @@ impl GameDriver {
                 .map_err(|error| {
                     format!("seed {} payment enumeration failed: {error:?}", self.seed)
                 })?;
-            for payment in payments.plans().iter().copied() {
-                let action = Action::CastSpell {
-                    player,
-                    object,
-                    request: CastSpellRequest::new(
-                        StackObjectKind::PermanentSpell,
-                        SpellTiming::Sorcery,
-                        program.mana_cost(),
+            let spell_bindings = self.spell_choice_bindings(player, object, program)?;
+            let option_count = payments
+                .plans()
+                .len()
+                .checked_mul(spell_bindings.len())
+                .ok_or_else(|| format!("seed {} spell option count overflow", self.seed))?;
+            if option_count > MAX_CANONICAL_SPELL_OPTIONS {
+                return Err(format!(
+                    "seed {} spell {} exceeds the {}-option canonical cap after payments",
+                    self.seed,
+                    program.name(),
+                    MAX_CANONICAL_SPELL_OPTIONS
+                ));
+            }
+            for binding in spell_bindings {
+                for payment in payments.plans().iter().copied() {
+                    let request = self.spell_request(
+                        program,
                         payment,
-                    ),
-                };
-                if self.action_is_legal(&action) {
-                    labels.push(format!(
-                        "Cast: {} (payment waste {})",
-                        program.name(),
-                        payment.waste_score()
-                    ));
-                    choices.push(MainChoice::Cast { object, payment });
+                        &binding.targets,
+                        binding.mode,
+                        &binding.optional,
+                    )?;
+                    let action = Action::CastSpell {
+                        player,
+                        object,
+                        request,
+                    };
+                    if self.action_is_legal(&action) {
+                        labels.push(format!(
+                            "Cast: {} (payment waste {})",
+                            program.name(),
+                            payment.waste_score()
+                        ));
+                        choices.push(MainChoice::Cast {
+                            object,
+                            payment,
+                            targets: binding.targets.clone(),
+                            mode: binding.mode,
+                            optional: binding.optional.clone(),
+                        });
+                    }
                 }
             }
         }
@@ -2654,7 +2942,13 @@ impl GameDriver {
             };
             if self.action_is_legal(&action) {
                 labels.push(format!("Cast: {}", program.name()));
-                choices.push(MainChoice::Cast { object, payment });
+                choices.push(MainChoice::Cast {
+                    object,
+                    payment,
+                    targets: Vec::new(),
+                    mode: None,
+                    optional: Vec::new(),
+                });
             }
         }
 
@@ -2749,7 +3043,7 @@ impl GameDriver {
             }
             let choice = mappings
                 .iter()
-                .find_map(|(id, choice)| (*id == selected_id).then_some(*choice))
+                .find_map(|(id, choice)| (*id == selected_id).then(|| choice.clone()))
                 .ok_or_else(|| {
                     format!(
                         "seed {} AI main action {selected_id} has no typed adapter",
@@ -2770,10 +3064,10 @@ impl GameDriver {
         let mut mappings = Vec::new();
         let mut options = Vec::new();
         for choice in choices {
-            if matches!(choice, MainChoice::ActivateAll) {
+            if matches!(&choice, MainChoice::ActivateAll) {
                 continue;
             }
-            let option = self.main_choice_option(player, choice)?;
+            let option = self.main_choice_option(player, choice.clone())?;
             mappings.push((option.id(), choice));
             options.push(option);
         }
@@ -2807,27 +3101,29 @@ impl GameDriver {
                     payment,
                 }],
             )),
-            MainChoice::Cast { object, payment } => {
+            MainChoice::Cast {
+                object,
+                payment,
+                targets,
+                mode,
+                optional,
+            } => {
                 let program = self.programs.get(&object).ok_or_else(|| {
                     format!("seed {} missing program for AI cast option", self.seed)
                 })?;
+                let request = self.spell_request(program, payment, &targets, mode, &optional)?;
                 Ok(DecisionOption::new(
                     DecisionDescriptor::CastSpell {
                         object,
                         payment,
-                        targets: Vec::new(),
-                        modes: Vec::new(),
-                        optional: Vec::new(),
+                        targets,
+                        modes: mode.into_iter().collect(),
+                        optional,
                     },
                     vec![Action::CastSpell {
                         player,
                         object,
-                        request: CastSpellRequest::new(
-                            StackObjectKind::PermanentSpell,
-                            SpellTiming::Sorcery,
-                            program.mana_cost(),
-                            payment,
-                        ),
+                        request,
                     }],
                 ))
             }
@@ -3240,28 +3536,33 @@ impl GameDriver {
             else {
                 continue;
             };
-            return self.cast_permanent_with_payment(player, object, payment);
+            return self.cast_program_with_choices(
+                player,
+                object,
+                payment,
+                Vec::new(),
+                None,
+                Vec::new(),
+            );
         }
         Ok(())
     }
 
-    fn cast_permanent_with_payment(
+    fn cast_program_with_choices(
         &mut self,
         player: PlayerId,
         object: ObjectId,
         payment: PaymentPlan,
+        targets: Vec<TargetChoice>,
+        mode: Option<u32>,
+        optional: Vec<bool>,
     ) -> Result<(), String> {
         let program = self
             .programs
             .get(&object)
             .cloned()
             .ok_or_else(|| format!("seed {} missing program for cast object", self.seed))?;
-        let request = CastSpellRequest::new(
-            StackObjectKind::PermanentSpell,
-            SpellTiming::Sorcery,
-            program.mana_cost(),
-            payment,
-        );
+        let request = self.spell_request(&program, payment, &targets, mode, &optional)?;
         let was_commander = self.commanders.contains(&object);
         self.dispatch(Action::CastSpell {
             player,
@@ -3379,6 +3680,16 @@ impl GameDriver {
         let controller = record.controller();
         let object = record.object();
         let trigger = record.trigger();
+        let outcome = record.outcome();
+        let targets = record
+            .targets()
+            .iter()
+            .map(|target| target.choice())
+            .collect::<Vec<_>>();
+        let decisions = record.decisions();
+        if outcome != ResolutionOutcome::Resolved {
+            return Ok(());
+        }
         if let Some(trigger) = trigger {
             return self.execute_trigger(controller, trigger);
         }
@@ -3398,21 +3709,28 @@ impl GameDriver {
         {
             self.register_permanent_runtime(controller, object)?;
         }
-        if !program.effects().is_empty() {
-            let bindings = ExecutionBindings::new(controller, self.live_opponents(controller))
-                .with_source(object);
-            let trace = forge_cards::runtime::execute_program(&mut self.state, &program, &bindings)
-                .map_err(|error| {
-                    format!("seed {} interpreter execution failed: {error}", self.seed)
+        if !program.effects().is_empty() || !program.spell_modes().is_empty() {
+            let mut bindings = ExecutionBindings::new(controller, self.live_opponents(controller))
+                .with_source(object)
+                .with_targets(targets)
+                .with_optional_effect_choices(decisions.optional_choices().collect());
+            if let Some(mode) = decisions.mode() {
+                bindings = bindings.with_spell_mode(mode as usize);
+            }
+            let actions =
+                bind_program_actions(&self.state, &program, &bindings).map_err(|error| {
+                    format!("seed {} interpreter binding failed: {error}", self.seed)
                 })?;
+            let action_count = actions.len() as u64;
+            for action in actions {
+                self.dispatch(action.action().clone())?;
+            }
             self.metrics.interpreter_actions = self
                 .metrics
                 .interpreter_actions
-                .saturating_add(trace.records().len() as u64);
+                .saturating_add(action_count);
             if let Some(exercise) = self.identity_exercise_mut(object) {
-                exercise.effect_actions = exercise
-                    .effect_actions
-                    .saturating_add(trace.records().len() as u64);
+                exercise.effect_actions = exercise.effect_actions.saturating_add(action_count);
             }
         }
         Ok(())
@@ -4795,7 +5113,7 @@ impl SearchDomain for MainSearchDomain<'_> {
         let choice = state
             .mappings
             .iter()
-            .find_map(|(id, choice)| (*id == action).then_some(*choice))
+            .find_map(|(id, choice)| (*id == action).then(|| choice.clone()))
             .ok_or_else(|| format!("search action {action} has no typed main-phase adapter"))?;
         let mut next = state.clone();
         next.finished = next.driver.apply_main_choice(self.actor, choice)?;
@@ -6426,14 +6744,15 @@ mod tests {
         campaign_seed, legacy_human_summary_matches, player_view_fingerprint,
         replay_captured_actions, replay_human_file, run_prompted_game, snapshot_prompt,
         AiController, DecisionPrompt, DecisionSource, GameDriver, GameMetrics, GameSummary,
-        HeuristicPolicy, IdentityExercise, ReplayDecisionSource, TraceMode, TraceRecord,
-        PLAYER_COUNT,
+        HeuristicPolicy, IdentityExercise, MainChoice, ReplayDecisionSource, TraceMode,
+        TraceRecord, PLAYER_COUNT,
     };
     use forge_ai::{AiWeights, GuardrailTable};
     use forge_core::{
         apply, Action, AttackDeclaration, BaseCreatureCharacteristics, CardId, DecisionContext,
-        DecisionDescriptor, DecisionKind, DecisionOption, GameState, ObjectColors, ObjectId,
-        Outcome, PlayerId, PlayerView, Step, ZoneId, ZoneKind,
+        DecisionDescriptor, DecisionKind, DecisionOption, GameState, ManaPool, ObjectColors,
+        ObjectId, Outcome, PlayerId, PlayerView, ResolutionOutcome, Step, TargetChoice, ZoneId,
+        ZoneKind,
     };
     use std::{
         collections::{BTreeSet, HashMap, HashSet},
@@ -6782,6 +7101,191 @@ mod tests {
     }
 
     #[test]
+    fn modal_targeted_spell_choices_survive_canonical_cast_and_resolution() {
+        let (mut driver, caster, opponent, spell) = modal_spell_driver();
+        let (context, mappings) = driver
+            .main_decision_context(caster)
+            .unwrap_or_else(|error| panic!("modal main context should exist: {error}"));
+        let selected = context
+            .options()
+            .iter()
+            .find(|option| {
+                matches!(
+                    option.descriptor(),
+                    DecisionDescriptor::CastSpell {
+                        object,
+                        targets,
+                        modes,
+                        optional,
+                        ..
+                    } if *object == spell
+                        && targets == &vec![TargetChoice::Player(opponent)]
+                        && modes == &vec![0]
+                        && optional.is_empty()
+                )
+            })
+            .unwrap_or_else(|| panic!("opponent damage mode should be canonical"));
+        let choice = mappings
+            .iter()
+            .find_map(|(id, choice)| (*id == selected.id()).then(|| choice.clone()))
+            .unwrap_or_else(|| panic!("selected modal option should have a typed adapter"));
+
+        assert!(matches!(
+            &choice,
+            MainChoice::Cast {
+                mode: Some(0),
+                targets,
+                optional,
+                ..
+            } if targets == &vec![TargetChoice::Player(opponent)] && optional.is_empty()
+        ));
+        assert_eq!(driver.apply_main_choice(caster, choice), Ok(true));
+        let stack = driver
+            .state
+            .stack_top()
+            .unwrap_or_else(|| panic!("modal spell should be on the stack"));
+        assert_eq!(stack.decisions().mode(), Some(0));
+        assert_eq!(
+            stack
+                .targets()
+                .iter()
+                .map(|target| target.choice())
+                .collect::<Vec<_>>(),
+            vec![TargetChoice::Player(opponent)]
+        );
+
+        driver
+            .pass_priority()
+            .unwrap_or_else(|error| panic!("caster pass should succeed: {error}"));
+        driver
+            .pass_priority()
+            .unwrap_or_else(|error| panic!("opponent pass should resolve: {error}"));
+        assert_eq!(
+            driver
+                .state
+                .resolution_log()
+                .last()
+                .map(|record| record.outcome()),
+            Some(ResolutionOutcome::Resolved)
+        );
+        assert_eq!(
+            driver
+                .state
+                .resolution_log()
+                .last()
+                .map(|record| record.decisions().mode()),
+            Some(Some(0))
+        );
+        assert!(
+            driver.actions.iter().any(|action| matches!(
+                action,
+                Action::DealDamage {
+                    target: forge_core::CombatDamageTarget::Player(player),
+                    amount: 4,
+                    ..
+                } if *player == opponent
+            )),
+            "resolved modal action missing from {:?}",
+            driver.actions
+        );
+        assert_eq!(driver.state.players()[opponent.index()].life(), 16);
+    }
+
+    #[test]
+    fn optional_spell_choices_survive_canonical_cast_and_resolution() {
+        let source = r#"card "Healing Choice" {
+  id: "f16f5077-392e-4606-8e48-b1ec2350cdb1"
+  layout: normal
+  status: unverified_playable
+  face "Healing Choice" {
+    cost: "{R}{W}"
+    types: "Instant"
+    oracle: "You may gain 3 life."
+    keywords: []
+    ability spell {
+      effect: choose_up_to(1, gain_life(3, you()))
+    }
+  }
+}"#;
+        let definition = forge_cardc::parse_card_named("healing_choice.frs", source)
+            .unwrap_or_else(|error| panic!("optional fixture should parse: {error}"));
+        let program = Arc::new(
+            forge_cards::runtime::compile_card_program(&definition)
+                .unwrap_or_else(|error| panic!("optional fixture should compile: {error}")),
+        );
+        let (mut driver, caster, _opponent, spell) = modal_spell_driver();
+        Arc::make_mut(&mut driver.programs).insert(spell, program);
+
+        let (context, mappings) = driver
+            .main_decision_context(caster)
+            .unwrap_or_else(|error| panic!("optional main context should exist: {error}"));
+        let optional_values = context
+            .options()
+            .iter()
+            .filter_map(|option| match option.descriptor() {
+                DecisionDescriptor::CastSpell {
+                    object, optional, ..
+                } if *object == spell => Some(optional.clone()),
+                _ => None,
+            })
+            .collect::<BTreeSet<_>>();
+        assert_eq!(optional_values, BTreeSet::from([vec![false], vec![true]]));
+        let selected = context
+            .options()
+            .iter()
+            .find(|option| {
+                matches!(
+                    option.descriptor(),
+                    DecisionDescriptor::CastSpell {
+                        object,
+                        optional,
+                        modes,
+                        targets,
+                        ..
+                    } if *object == spell
+                        && optional == &vec![true]
+                        && modes.is_empty()
+                        && targets.is_empty()
+                )
+            })
+            .unwrap_or_else(|| panic!("accepted optional effect should be canonical"));
+        let choice = mappings
+            .iter()
+            .find_map(|(id, choice)| (*id == selected.id()).then(|| choice.clone()))
+            .unwrap_or_else(|| panic!("optional option should have a typed adapter"));
+
+        assert_eq!(driver.apply_main_choice(caster, choice), Ok(true));
+        let stack = driver
+            .state
+            .stack_top()
+            .unwrap_or_else(|| panic!("optional spell should be on the stack"));
+        assert_eq!(
+            stack.decisions().optional_choices().collect::<Vec<_>>(),
+            vec![true]
+        );
+
+        driver
+            .pass_priority()
+            .unwrap_or_else(|error| panic!("caster pass should succeed: {error}"));
+        driver
+            .pass_priority()
+            .unwrap_or_else(|error| panic!("opponent pass should resolve: {error}"));
+        assert_eq!(driver.state.players()[caster.index()].life(), 23);
+        assert_eq!(
+            driver
+                .state
+                .resolution_log()
+                .last()
+                .map(|record| record.decisions().optional_choices().collect::<Vec<_>>()),
+            Some(vec![true])
+        );
+        assert!(driver.actions.iter().any(|action| matches!(
+            action,
+            Action::GainLife { player, amount } if *player == caster && *amount == 3
+        )));
+    }
+
+    #[test]
     #[ignore = "requires the local T3 translated-card output"]
     fn scripted_human_game_completes_and_replays_exactly() {
         let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
@@ -6911,6 +7415,117 @@ mod tests {
             seed: 17,
         };
         (driver, owner, commander, graveyard)
+    }
+
+    fn modal_spell_driver() -> (GameDriver, PlayerId, PlayerId, ObjectId) {
+        let source = r#"card "Boros Charm" {
+  id: "2679d0dd-ba30-4a1c-b6a0-b3ac6c790496"
+  layout: normal
+  status: unverified_playable
+  face "Boros Charm" {
+    cost: "{R}{W}"
+    types: "Instant"
+    oracle: "Choose one"
+    keywords: []
+    ability spell {
+      effect: choose_one(deal_damage(target(all(any(), permanents(type_is("planeswalker")))), 4), grant_keyword(permanents(controlled_by(you())), "indestructible", "until_end_of_turn"), grant_keyword(target(permanents(type_is("creature"))), "double_strike", "until_end_of_turn"))
+    }
+  }
+}"#;
+        let definition = forge_cardc::parse_card_named("boros_charm.frs", source)
+            .unwrap_or_else(|error| panic!("modal fixture should parse: {error}"));
+        let program = Arc::new(
+            forge_cards::runtime::compile_card_program(&definition)
+                .unwrap_or_else(|error| panic!("modal fixture should compile: {error}")),
+        );
+        let mut state = GameState::new();
+        let caster = match apply(&mut state, Action::AddPlayer) {
+            Outcome::PlayerAdded(player) => player,
+            other => panic!("unexpected caster setup outcome: {other:?}"),
+        };
+        let opponent = match apply(&mut state, Action::AddPlayer) {
+            Outcome::PlayerAdded(player) => player,
+            other => panic!("unexpected opponent setup outcome: {other:?}"),
+        };
+        let spell = match apply(
+            &mut state,
+            Action::CreateObject {
+                card: CardId::new(900),
+                owner: caster,
+                controller: caster,
+                zone: ZoneId::new(Some(caster), ZoneKind::Hand),
+            },
+        ) {
+            Outcome::ObjectCreated(object) => object,
+            other => panic!("unexpected spell setup outcome: {other:?}"),
+        };
+        let creature = create_test_creature(&mut state, opponent, 901, 2, 2);
+        assert!(matches!(
+            apply(
+                &mut state,
+                Action::CreateObject {
+                    card: CardId::new(902),
+                    owner: caster,
+                    controller: caster,
+                    zone: ZoneId::new(Some(caster), ZoneKind::Library),
+                }
+            ),
+            Outcome::ObjectCreated(_)
+        ));
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::StartTurn {
+                    active_player: caster
+                }
+            ),
+            Outcome::Applied
+        );
+        while state.current_step() != Some(Step::PrecombatMain) {
+            assert!(matches!(
+                apply(&mut state, Action::AdvanceStep),
+                Outcome::StepAdvanced(_)
+            ));
+        }
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::AddManaToPool {
+                    player: caster,
+                    mana: ManaPool::new(1, 0, 0, 1, 0, 0),
+                }
+            ),
+            Outcome::Applied
+        );
+        let mut programs = HashMap::new();
+        programs.insert(spell, program);
+        let driver = GameDriver {
+            state,
+            players: vec![caster, opponent],
+            programs: Arc::new(programs),
+            deck_models: Arc::new(Vec::new()),
+            card_definitions: Arc::new(HashMap::new()),
+            guardrails: Arc::new(
+                GuardrailTable::bundled()
+                    .unwrap_or_else(|error| panic!("guardrails should load: {error}")),
+            ),
+            commanders: vec![spell, creature],
+            trigger_programs: HashMap::new(),
+            mana_abilities: Vec::new(),
+            triggers_registered_for: HashSet::new(),
+            permanent_runtime_registered_for: HashSet::new(),
+            commander_zone_decisions: HashMap::new(),
+            current_attacks: Vec::new(),
+            coverage_target: None,
+            metrics: GameMetrics::default(),
+            trace: TraceMode::Off,
+            actions: Vec::new(),
+            ai_decisions: Vec::new(),
+            next_hidden_check_action: u64::MAX,
+            next_invariant_check_action: u64::MAX,
+            seed: 17,
+        };
+        (driver, caster, opponent, spell)
     }
 
     fn combat_decision_driver() -> (GameDriver, PlayerId, [PlayerId; 3], [ObjectId; 4]) {
