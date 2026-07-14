@@ -17,8 +17,8 @@
   },
   "t4_diagnostic_product": {
     "status": "local_preflight_passed_promotion_blocked",
-    "commit": "df32b4a778426f1c269a666ea98032ce93f5f0b7",
-    "tree": "630fcd24c1a9a3cc972815a207133eb23c3dc309",
+    "commit": "592a02ab8d9ef9a4ab19d97114c589d2df0601f1",
+    "tree": "03378f918cb03f2ad5645c300f389b7ca80fff68",
     "evidence": "reports/gates/T4/LOCAL-DIAGNOSTIC-PREFLIGHT.json",
     "promotion_gate": "scripts/gates/gate_T4.sh"
   },

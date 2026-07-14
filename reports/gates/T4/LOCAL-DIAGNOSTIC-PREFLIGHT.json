@@ -4,14 +4,14 @@
   "status": "local_diagnostic_preflight_passed_promotion_blocked",
   "verified_at": "2026-07-14",
   "verification_mode": "local_only_no_github_actions",
-  "product_commit": "df32b4a778426f1c269a666ea98032ce93f5f0b7",
-  "product_tree": "630fcd24c1a9a3cc972815a207133eb23c3dc309",
+  "product_commit": "592a02ab8d9ef9a4ab19d97114c589d2df0601f1",
+  "product_tree": "03378f918cb03f2ad5645c300f389b7ca80fff68",
   "gate_command": "scripts/gates/gate_T4.sh --preflight",
   "checks": {
     "format": "passed",
     "strict_clippy": "passed",
     "tests": {
-      "passed": 209,
+      "passed": 216,
       "failed": 0,
       "ignored": 1,
       "ignored_reason": "requires local generated T3 translated-card output"
@@ -23,7 +23,8 @@
     "aarch64_linux_android_compile": "passed",
     "clone_surface_guard": {
       "status": "passed",
-      "persistent_allocation_field_count": 31
+      "command": "scripts/review/clone_surface_guard.sh",
+      "persistent_allocation_field_count": 32
     },
     "search_knee_smoke": {
       "budgets_ms": [1, 2, 4],
