@@ -885,6 +885,32 @@ mod tests {
     }
 
     #[test]
+    fn concession_context_maps_to_the_typed_kernel_action() {
+        let (state, player) = setup_view();
+        let view = state
+            .player_view(player)
+            .unwrap_or_else(|error| panic!("view failed: {error:?}"));
+        let concede = DecisionOption::new(
+            DecisionDescriptor::Concede,
+            vec![Action::Concede { player }],
+        );
+        let context = DecisionContext::new(
+            DecisionKind::Concession,
+            player,
+            &view,
+            vec![concede.clone()],
+            Vec::new(),
+        )
+        .unwrap_or_else(|error| panic!("context failed: {error}"));
+
+        let selected = context
+            .select(concede.id())
+            .unwrap_or_else(|error| panic!("selection failed: {error}"));
+        assert_eq!(selected.descriptor(), &DecisionDescriptor::Concede);
+        assert_eq!(selected.actions(), &[Action::Concede { player }]);
+    }
+
+    #[test]
     fn descriptor_contract_covers_every_prompt_family() {
         let (mut state, player) = setup_view();
         let opponent = match apply(&mut state, Action::AddPlayer) {

@@ -2260,6 +2260,8 @@ pub enum GameEventKind {
     CardDrawn,
     /// One object's identity was publicly revealed.
     ObjectRevealed,
+    /// A player conceded the game.
+    PlayerConceded,
 }
 
 impl GameEventKind {
@@ -2336,6 +2338,7 @@ impl GameEventKind {
             Self::NoncombatDamageDealt => 68,
             Self::CardDrawn => 69,
             Self::ObjectRevealed => 70,
+            Self::PlayerConceded => 71,
         }
     }
 }
@@ -6429,6 +6432,8 @@ impl ZoneConservation {
 pub enum StateError {
     /// The requested player ID does not exist.
     UnknownPlayer(PlayerId),
+    /// A player who has already lost cannot concede again.
+    PlayerAlreadyLost(PlayerId),
     /// The requested object ID does not exist.
     UnknownObject(ObjectId),
     /// The requested zone ID does not exist.
@@ -6747,6 +6752,11 @@ pub enum Action {
         player: PlayerId,
         /// New life total.
         life: i32,
+    },
+    /// Concede the game for one player.
+    Concede {
+        /// Player conceding.
+        player: PlayerId,
     },
     /// Make a player lose life.
     LoseLife {
@@ -7364,6 +7374,10 @@ fn apply_fallback(state: &mut GameState, action: Action) -> Outcome {
             Err(error) => Outcome::Failed(error),
         },
         Action::SetPlayerLife { player, life } => match state.set_player_life(player, life) {
+            Ok(()) => Outcome::Applied,
+            Err(error) => Outcome::Failed(error),
+        },
+        Action::Concede { player } => match state.concede(player) {
             Ok(()) => Outcome::Applied,
             Err(error) => Outcome::Failed(error),
         },
@@ -8345,6 +8359,11 @@ pub enum GameEvent {
         /// Revealed object.
         object: ObjectId,
     },
+    /// A player conceded the game.
+    PlayerConceded {
+        /// Player who conceded.
+        player: PlayerId,
+    },
 }
 
 impl GameEvent {
@@ -8421,6 +8440,7 @@ impl GameEvent {
             Self::NoncombatDamageDealt { .. } => 68,
             Self::CardDrawn { .. } => 69,
             Self::ObjectRevealed { .. } => 70,
+            Self::PlayerConceded { .. } => 71,
         }
     }
 
@@ -8511,6 +8531,7 @@ impl GameEvent {
             Self::NoncombatDamageDealt { .. } => GameEventKind::NoncombatDamageDealt,
             Self::CardDrawn { .. } => GameEventKind::CardDrawn,
             Self::ObjectRevealed { .. } => GameEventKind::ObjectRevealed,
+            Self::PlayerConceded { .. } => GameEventKind::PlayerConceded,
         }
     }
 }
@@ -9227,6 +9248,21 @@ impl GameState {
             .ok_or(StateError::UnknownPlayer(player))?;
         player_state.life = life;
         self.emit_event(GameEvent::LifeTotalSet { player, life });
+        Ok(())
+    }
+
+    /// Makes one player concede and immediately refreshes the game outcome.
+    fn concede(&mut self, player: PlayerId) -> Result<(), StateError> {
+        let player_state = self
+            .players
+            .get_mut(player.index())
+            .ok_or(StateError::UnknownPlayer(player))?;
+        if player_state.lost {
+            return Err(StateError::PlayerAlreadyLost(player));
+        }
+        player_state.lost = true;
+        self.emit_event(GameEvent::PlayerConceded { player });
+        self.refresh_game_outcome();
         Ok(())
     }
 
@@ -16678,6 +16714,7 @@ impl Fnva64 {
                 self.write_u32(object.0);
             }
             GameEvent::ObjectRevealed { object } => self.write_u32(object.0),
+            GameEvent::PlayerConceded { player } => self.write_u32(player.0),
         }
     }
 
@@ -18030,6 +18067,7 @@ impl CanonicalBytes {
                 self.write_u32(object.0);
             }
             GameEvent::ObjectRevealed { object } => self.write_u32(object.0),
+            GameEvent::PlayerConceded { player } => self.write_u32(player.0),
         }
     }
 
@@ -22290,6 +22328,35 @@ mod tests {
         assert!(!state.players()[opponent.index()].lost());
         assert_eq!(state.game_outcome(), GameOutcome::Won(opponent));
         assert_eq!(state.priority_player(), None);
+    }
+
+    #[test]
+    fn concession_is_typed_immediate_and_canonical() {
+        let mut state = GameState::new();
+        let conceding = add_player_action(&mut state);
+        let winner = add_player_action(&mut state);
+        let before = state.deterministic_hash();
+
+        assert_eq!(
+            apply(&mut state, Action::Concede { player: conceding }),
+            Outcome::Applied
+        );
+        assert!(state.players()[conceding.index()].lost());
+        assert_eq!(state.game_outcome(), GameOutcome::Won(winner));
+        assert_eq!(state.priority_player(), None);
+        assert_ne!(state.deterministic_hash(), before);
+        assert_eq!(
+            state.deterministic_hash(),
+            state.deterministic_hash_streaming()
+        );
+        assert!(state
+            .turn_events
+            .iter()
+            .any(|record| { record.event() == GameEvent::PlayerConceded { player: conceding } }));
+        assert_eq!(
+            apply(&mut state, Action::Concede { player: conceding }),
+            Outcome::Failed(StateError::PlayerAlreadyLost(conceding))
+        );
     }
 
     #[test]
