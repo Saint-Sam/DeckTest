@@ -287,15 +287,15 @@
       "verification": "PASS local exact integration product 5ea7d39: 11,382/33,290 complete legacy scripts emitted as canonical .frs (34.1904%), with 21,908 fail-closed file quarantines and compiler roundtrips against 38,306 identities and 113,234 printings. All 365 Owner-priority names resolve and 195/365 emit. The 24-worker materialized pass and 12-worker hash-only replay matched fingerprint ad4f8341306fb321f2759655b86300a9 plus deterministic quarantine and priority reports; the 6-worker and 1-worker blocker plans also matched. The full local checkpoint completed in 132 seconds with a 39-second accelerated core phase and 88-second full-workspace verification, including full workspace tests, clippy -D warnings, compiler/database validation, 235 oracle scenarios plus gated subsets, nightmare/smoke checks, and workspace line coverage 27,840/34,370 (81.0009%), with no GitHub Actions."
     },
     "T3.5": {
-      "status": "in_progress_interpreter_slice_verified",
+      "status": "verified_local",
       "branch": "task/T3.5-capability-runtime-smoke",
       "attempts": 0,
       "allocation_percent": 30,
-      "source_commit": "0fea82bcfbf6e1fcbacdd8eb56c5912018d3813e",
-      "exact_integration_product": "4e53dc59c9af194deea99a7aa4732381b1726172",
+      "source_commit": "741bf5c174b7e62021f25ddb83c87f69f4adbe43",
+      "exact_integration_product": "reports/gates/T3.5/runtime-interpreter-final-2026-07-13.json",
       "architecture": "docs/adr/0013-data-driven-card-runtime-interpreter.md",
-      "verification": "The Owner-approved data-driven interpreter architecture is implemented incrementally in forge-cards and all state mutation crosses typed forge-core actions. Land play, fixed mana abilities, exact registered vanilla-token creation, closed stack-spell type predicates, and explicit typed controller-library searches now execute through production actions. All five supertypes and five basic land types are canonical runtime characteristics. Search choices are validated for ownership, zone, cardinality, uniqueness, and effective type line before mutation; unknown subtype and selector forms fail closed. Focused tests and strict local gates pass. The current translated corpus audit classifies all 20,082 definitions: 605 pass runtime smoke, 19,477 are typed unsupported, and 0 fail, a gain of 226 genuine executions over the prior 379-card baseline. Forty frozen semantic-set cards pass runtime smoke, 60 remain typed unsupported, and zero fail. This is capability runtime evidence only; it promotes no card to semantic_verified and does not close T3.5.",
-      "next": "Begin card-specific deterministic T3.6 scenarios for the 40 runtime-ready frozen identities while continuing the vertical interpreter lane for frozen-set and four-deck blockers, especially activated abilities, triggers, keywords, and remaining effect operations."
+      "verification": "PASS local-only. The Owner-approved data-driven interpreter architecture classifies all 20,082 compiler-valid translated definitions through a typed fail-closed runtime smoke: 3,122 execute through production actions, 16,960 are reason-coded unsupported, and 0 fail. The exact frozen Commander set is 100/100 runtime-smoke passed with 0 unsupported and 0 failed. Focused local tests pass: forge-core 109, forge-cards 32, forge-testkit 31 library tests and 12 CLI tests, plus doc tests. Unsupported classifications are not passes, and T3.5 promotes no card to semantic_verified. Evidence is recorded in reports/gates/T3.5/runtime-interpreter-final-2026-07-13.json; no GitHub Actions, network, downloads, installs, or push were used.",
+      "next": "Complete T3.6 card-specific deterministic semantic verification and replay for all 100 frozen Commander identities."
     },
     "T3.6": {
       "status": "in_progress_candidate_set_frozen",
