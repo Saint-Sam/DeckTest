@@ -69,12 +69,21 @@ if [[ -d "${evidence_dir}/fuzz" ]]; then
   cp -R "${evidence_dir}/fuzz/." "$bundle/fuzz/"
 fi
 
+if [[ -d "${evidence_dir}/mutations" ]]; then
+  mkdir -p "$bundle/mutations"
+  cp -R "${evidence_dir}/mutations/." "$bundle/mutations/"
+fi
+
 if [[ -f "metrics/coverage.json" ]]; then
   cp "metrics/coverage.json" "$bundle/coverage.json"
 fi
 
 if [[ -f "metrics/local_fuzz.json" ]]; then
   cp "metrics/local_fuzz.json" "$bundle/local_fuzz.json"
+fi
+
+if [[ -f "metrics/t3_mutation.json" ]]; then
+  cp "metrics/t3_mutation.json" "$bundle/t3_mutation.json"
 fi
 
 if [[ -f "metrics/clone_surface.json" ]]; then

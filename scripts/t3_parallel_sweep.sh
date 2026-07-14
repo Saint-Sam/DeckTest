@@ -301,8 +301,7 @@ if [[ "$mode" == "checkpoint" ]]; then
 fi
 python3 tools/write_t3_parallel_metrics.py "${metrics_args[@]}"
 if [[ "$mode" == "checkpoint" ]]; then
-  python3 tools/write_card_maturity.py
-  python3 tools/write_project_status.py
+  echo "T3 checkpoint core complete; card-stage and maturity evidence follow in gate_T3.sh"
 fi
 
 active_pids=()

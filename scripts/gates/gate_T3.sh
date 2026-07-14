@@ -10,7 +10,10 @@ if [[ "${1:-}" == "--self-test" ]]; then
   [[ -x "$ROOT/scripts/t3_parallel_sweep.sh" ]]
   [[ -x "$ROOT/scripts/check_coverage.sh" ]]
   [[ -f "$ROOT/tools/run_t3_6_commander_semantics.py" ]]
+  [[ -f "$ROOT/tools/run_t3_card_stage_gate.py" ]]
+  [[ -f "$ROOT/tools/run_t3_mutation_gate.py" ]]
   [[ -f "$ROOT/tools/run_t3_9_pod_gate.py" ]]
+  [[ -f "$ROOT/tools/write_t3_fuzz_report.py" ]]
   [[ -f "$ROOT/tools/write_pod_integration.py" ]]
   echo "PASS gate_T3.sh self-test"
   exit 0
@@ -24,22 +27,28 @@ for command in git jq python3 shasum; do
 done
 
 if [[ "${1:-}" == "--run-exact" ]]; then
-  reviewed_commit="$(jq -er '.reviewed_commit' metrics/coverage.json)"
-  if [[ "$(git rev-parse HEAD)" != "$reviewed_commit" ]]; then
-    echo "ERROR: --run-exact requires HEAD to equal the bound product commit" >&2
+  if [[ -n "$(git status --porcelain --untracked-files=no --ignore-submodules=all)" ]]; then
+    echo "ERROR: --run-exact requires a tracked-clean product checkout at start" >&2
     exit 1
   fi
   FORGE_T3_TOTAL_WORKERS="${FORGE_T3_TOTAL_WORKERS:-24}" \
     CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-24}" \
     "$ROOT/scripts/t3_parallel_sweep.sh" checkpoint
-  CARGO_NET_OFFLINE=true python3 tools/run_t3_6_commander_semantics.py \
+  CARGO_NET_OFFLINE=true python3 tools/run_t3_card_stage_gate.py \
     --translated-root target/translated-cards \
-    --cargo-target-dir target \
-    --report reports/gates/T3.9/t3-6-semantic-revalidation.json
+    --cargo-target-dir target
   python3 tools/run_t3_9_pod_gate.py \
     --games 1000 --jobs 24 \
     --report reports/gates/T3.9/cp-four-player-pod-2026-07-13.json \
     --replay-dir reports/gates/T3.9/replays
+  python3 tools/run_local_fuzz.py \
+    --seconds 450 --workers 8 --sanitizer address \
+    --minimum-total-worker-seconds 3600 \
+    --evidence-dir reports/gates/T3/fuzz
+  python3 tools/write_t3_fuzz_report.py
+  python3 tools/run_t3_mutation_gate.py --jobs 8
+  python3 tools/write_card_maturity.py
+  python3 tools/write_project_status.py
 elif [[ -n "${1:-}" ]]; then
   echo "usage: scripts/gates/gate_T3.sh [--run-exact|--self-test]" >&2
   exit 2
@@ -53,13 +62,18 @@ required_files=(
   metrics/card_runtime_smoke.json
   metrics/card_semantics_100.json
   metrics/pod_integration.json
+  metrics/t3_mutation.json
   metrics/card_maturity.json
   metrics/primitive_tickets.json
   metrics/local_fuzz.json
   reports/gates/T3.5/runtime-interpreter-final-2026-07-13.json
+  reports/gates/T3.5/runtime-smoke-corpus.json
+  reports/gates/T3.5/runtime-smoke-frozen-100.json
   reports/gates/T3.9/t3-6-semantic-revalidation.json
   reports/gates/T3.9/cp-four-player-pod-2026-07-13.json
   reports/gates/T3/fuzz_report.md
+  reports/gates/T3/mutation_test_report.md
+  reports/gates/T3/test_log.txt
 )
 for path in "${required_files[@]}"; do
   if [[ ! -f "$path" ]]; then
@@ -157,8 +171,10 @@ for stage_file in \
   jq -e --arg commit "$reviewed_commit" --arg tree "$reviewed_tree" '
     .schema_version == 1 and
     .passed == true and
+    .generator == "tools/run_t3_card_stage_gate.py" and
     .product_commit == $commit and
     .product_tree == $tree and
+    (.evidence_sha256 | type == "string" and length == 64) and
     (.identity_ids | length) > 0
   ' "$stage_file" >/dev/null
 done
@@ -172,8 +188,12 @@ jq -e --arg commit "$reviewed_commit" --arg tree "$reviewed_tree" '
   (.action_replays | length) == 10
 ' metrics/pod_integration.json >/dev/null
 
-jq -e '
+jq -e --arg commit "$reviewed_commit" --arg tree "$reviewed_tree" '
+  .schema_version == 2 and
   .status == "pass_local" and
+  .generator == "tools/run_t3_card_stage_gate.py" and
+  .source_commit == $commit and
+  .source_tree == $tree and
   .translated_corpus.total >= 20082 and
   .translated_corpus.passed + .translated_corpus.unsupported_setup ==
     .translated_corpus.total and
@@ -236,10 +256,16 @@ jq -e --arg commit "$reviewed_commit" --arg tree "$reviewed_tree" '
   .constraints.push_performed == false and
   .resources.workers_used <= 24 and
   .resources.logical_cpu_count >= .resources.workers_used and
+  .resources.measurement_scope == "pod_process_only" and
   .resources.wall_seconds > 0 and
+  .resources.wall_seconds <= .resources.maximum_wall_seconds and
+  .resources.maximum_wall_seconds <= 300 and
   .resources.child_user_cpu_seconds > 0 and
   .resources.child_max_rss_bytes > 0 and
-  .resources.disk_free_headroom_bytes > 0
+  .resources.child_max_rss_bytes <= .resources.maximum_rss_bytes and
+  .resources.maximum_rss_bytes <= 2147483648 and
+  .resources.disk_free_headroom_bytes >= .resources.minimum_disk_free_headroom_bytes and
+  .resources.minimum_disk_free_headroom_bytes >= 5368709120
 ' reports/gates/T3.9/cp-four-player-pod-2026-07-13.json >/dev/null
 
 for replay in reports/gates/T3.9/replays/pod-seed-*.frsreplay; do
@@ -279,6 +305,19 @@ jq -e '
   .implementation_maturity.cumulative_counts.semantic_verified == 100 and
   .implementation_maturity.cumulative_counts.pod_integration_verified == 21
 ' metrics/card_maturity.json >/dev/null
+jq -e --arg commit "$reviewed_commit" --arg tree "$reviewed_tree" '
+  .schema_version == 1 and
+  .generator == "tools/run_t3_mutation_gate.py" and
+  .reviewed_commit == $commit and
+  .reviewed_tree == $tree and
+  .mutants_total >= 4 and
+  .mutants_killed == .mutants_total and
+  .surviving_mutants == [] and
+  .mutation_score_percent == 100 and
+  .minimum_score_percent == 100 and
+  ([.baseline[]] | all(.return_code == 0)) and
+  ([.mutants[]] | all(.status == "killed" and .return_code != 0))
+' metrics/t3_mutation.json >/dev/null
 jq -e '
   .schema_version == 1 and
   .reason_code == "NEEDS_NEW_PRIMITIVE" and
@@ -287,8 +326,16 @@ jq -e '
 ' metrics/primitive_tickets.json >/dev/null
 
 python3 tools/run_t3_6_commander_semantics.py --validate-only >/dev/null
+python3 tools/run_t3_card_stage_gate.py --check >/dev/null
+python3 tools/run_t3_mutation_gate.py --check >/dev/null
+python3 tools/write_t3_fuzz_report.py --check >/dev/null
 python3 tools/write_pod_integration.py --check >/dev/null
 python3 tools/write_card_maturity.py --check >/dev/null
 python3 tools/write_project_status.py --check >/dev/null
 
-echo "PASS gate_T3.sh: structural=60.3244% semantic=100/100 pod=1000/1000 coverage=80.3087%"
+structural_percent="$(jq -r '.emitted_percent' metrics/translation.json)"
+semantic_count="$(jq -r '.identity_ids | length' metrics/card_semantics_100.json)"
+pod_games="$(jq -r '.results.games_completed' reports/gates/T3.9/cp-four-player-pod-2026-07-13.json)"
+coverage_percent="$(jq -r '.lines.percent' metrics/coverage.json)"
+printf 'PASS gate_T3.sh: structural=%.4f%% semantic=%s/100 pod=%s/1000 coverage=%.4f%%\n' \
+  "$structural_percent" "$semantic_count" "$pod_games" "$coverage_percent"
