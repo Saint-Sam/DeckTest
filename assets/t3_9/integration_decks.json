@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "source_root": "target/translated-cards",
+  "semantic_registry": "metrics/card_semantics_100.json",
+  "decks": [
+    {
+      "id": "mono-white-isamaru",
+      "name": "Isamaru Integration",
+      "color_identity": ["W"],
+      "commander": "i/isamaru_hound_of_konda.frs",
+      "cards": [
+        {"path": "s/sol_ring.frs", "count": 1},
+        {"path": "m/mind_stone.frs", "count": 1},
+        {"path": "t/thought_vessel.frs", "count": 1},
+        {"path": "s/swiftfoot_boots.frs", "count": 1},
+        {"path": "l/lightning_greaves.frs", "count": 1},
+        {"path": "w/wayfarers_bauble.frs", "count": 1},
+        {"path": "b/burnished_hart.frs", "count": 1},
+        {"path": "s/sword_of_the_animist.frs", "count": 1},
+        {"path": "e/evolving_wilds.frs", "count": 1},
+        {"path": "t/terramorphic_expanse.frs", "count": 1},
+        {"path": "r/reliquary_tower.frs", "count": 1},
+        {"path": "t/temple_of_the_false_god.frs", "count": 1},
+        {"path": "s/smothering_tithe.frs", "count": 1},
+        {"path": "p/plains.frs", "count": 70},
+        {"path": "w/wastes.frs", "count": 16}
+      ]
+    },
+    {
+      "id": "azorius-tobias",
+      "name": "Tobias Integration",
+      "color_identity": ["W", "U"],
+      "commander": "t/tobias_andrion.frs",
+      "cards": [
+        {"path": "s/sol_ring.frs", "count": 1},
+        {"path": "m/mind_stone.frs", "count": 1},
+        {"path": "t/thought_vessel.frs", "count": 1},
+        {"path": "s/swiftfoot_boots.frs", "count": 1},
+        {"path": "l/lightning_greaves.frs", "count": 1},
+        {"path": "w/wayfarers_bauble.frs", "count": 1},
+        {"path": "b/burnished_hart.frs", "count": 1},
+        {"path": "s/sword_of_the_animist.frs", "count": 1},
+        {"path": "e/evolving_wilds.frs", "count": 1},
+        {"path": "t/terramorphic_expanse.frs", "count": 1},
+        {"path": "r/reliquary_tower.frs", "count": 1},
+        {"path": "t/temple_of_the_false_god.frs", "count": 1},
+        {"path": "s/smothering_tithe.frs", "count": 1},
+        {"path": "m/mulldrifter.frs", "count": 1},
+        {"path": "p/plains.frs", "count": 35},
+        {"path": "i/island.frs", "count": 34},
+        {"path": "w/wastes.frs", "count": 16}
+      ]
+    },
+    {
+      "id": "mono-black-yargle",
+      "name": "Yargle Integration",
+      "color_identity": ["B"],
+      "commander": "y/yargle_glutton_of_urborg.frs",
+      "cards": [
+        {"path": "s/sol_ring.frs", "count": 1},
+        {"path": "m/mind_stone.frs", "count": 1},
+        {"path": "t/thought_vessel.frs", "count": 1},
+        {"path": "s/swiftfoot_boots.frs", "count": 1},
+        {"path": "l/lightning_greaves.frs", "count": 1},
+        {"path": "w/wayfarers_bauble.frs", "count": 1},
+        {"path": "b/burnished_hart.frs", "count": 1},
+        {"path": "s/sword_of_the_animist.frs", "count": 1},
+        {"path": "e/evolving_wilds.frs", "count": 1},
+        {"path": "t/terramorphic_expanse.frs", "count": 1},
+        {"path": "r/reliquary_tower.frs", "count": 1},
+        {"path": "t/temple_of_the_false_god.frs", "count": 1},
+        {"path": "g/grave_titan.frs", "count": 1},
+        {"path": "s/swamp.frs", "count": 70},
+        {"path": "w/wastes.frs", "count": 16}
+      ]
+    },
+    {
+      "id": "mono-red-rorix",
+      "name": "Rorix Integration",
+      "color_identity": ["R"],
+      "commander": "r/rorix_bladewing.frs",
+      "cards": [
+        {"path": "s/sol_ring.frs", "count": 1},
+        {"path": "m/mind_stone.frs", "count": 1},
+        {"path": "t/thought_vessel.frs", "count": 1},
+        {"path": "s/swiftfoot_boots.frs", "count": 1},
+        {"path": "l/lightning_greaves.frs", "count": 1},
+        {"path": "w/wayfarers_bauble.frs", "count": 1},
+        {"path": "b/burnished_hart.frs", "count": 1},
+        {"path": "s/sword_of_the_animist.frs", "count": 1},
+        {"path": "e/evolving_wilds.frs", "count": 1},
+        {"path": "t/terramorphic_expanse.frs", "count": 1},
+        {"path": "r/reliquary_tower.frs", "count": 1},
+        {"path": "t/temple_of_the_false_god.frs", "count": 1},
+        {"path": "p/purphoros_god_of_the_forge.frs", "count": 1},
+        {"path": "m/mountain.frs", "count": 70},
+        {"path": "w/wastes.frs", "count": 16}
+      ]
+    }
+  ]
+}

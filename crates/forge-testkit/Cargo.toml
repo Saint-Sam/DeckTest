@@ -18,5 +18,11 @@ path = "../../tests/t3_6/runtime_probe.rs"
 test = false
 bench = false
 
+[[bin]]
+name = "forge-t3-9-four-player-pod"
+path = "../../tests/t3_9/four_player_pod.rs"
+test = false
+bench = false
+
 [lints]
 workspace = true

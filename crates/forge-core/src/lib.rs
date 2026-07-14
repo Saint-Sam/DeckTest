@@ -12371,7 +12371,10 @@ impl GameState {
         self.emit_event(GameEvent::StepBegan { step });
         self.expire_step_begin_markers(step);
         match step {
-            Step::Untap => self.priority_player = None,
+            Step::Untap => {
+                self.untap_active_player_permanents()?;
+                self.priority_player = None;
+            }
             Step::Draw => {
                 if !self.should_skip_first_turn_draw() {
                     self.draw_turn_card()?;
@@ -12389,6 +12392,33 @@ impl GameState {
             }
             Step::Cleanup => self.begin_cleanup_step()?,
             _ => self.assign_normal_priority(step)?,
+        }
+        Ok(())
+    }
+
+    fn untap_active_player_permanents(&mut self) -> Result<(), StateError> {
+        let active = self.active_player.ok_or(StateError::TurnNotStarted)?;
+        let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+        let objects = self
+            .zone_objects(battlefield)
+            .ok_or(StateError::UnknownZone(battlefield))?
+            .to_vec();
+        for object in objects {
+            let should_untap = self
+                .objects
+                .get(object)
+                .is_some_and(|record| record.controller() == active && record.tapped());
+            if !should_untap {
+                continue;
+            }
+            self.objects
+                .get_mut(object)
+                .ok_or(StateError::UnknownObject(object))?
+                .tapped = false;
+            self.emit_event(GameEvent::ObjectTapped {
+                object,
+                tapped: false,
+            });
         }
         Ok(())
     }
@@ -12425,6 +12455,10 @@ impl GameState {
         self.cleanup_iteration = 0;
         self.attackers_declared_this_combat = false;
         self.combat = CombatState::new();
+        self.loyalty_activations_this_turn.clear();
+        for player in &mut self.players {
+            player.lands_played_this_turn = 0;
+        }
         self.reset_turn_events();
         self.emit_event(GameEvent::TurnStarted {
             turn: self.turn_number,
@@ -20545,6 +20579,44 @@ mod tests {
             state.deterministic_hash(),
             state.deterministic_hash_streaming()
         );
+
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::SetObjectTapped {
+                    object: first,
+                    tapped: true,
+                },
+            ),
+            Outcome::Applied
+        );
+        ensure_library_card(&mut state, active);
+        while state.turn_number() < 2 || state.current_step() != Some(Step::PrecombatMain) {
+            if let Some(player) = state.priority_player() {
+                assert!(matches!(
+                    apply(&mut state, Action::PassPriority { player }),
+                    Outcome::Priority(_)
+                ));
+            } else {
+                assert!(matches!(
+                    apply(&mut state, Action::AdvanceStep),
+                    Outcome::StepAdvanced(_)
+                ));
+            }
+        }
+        assert!(state.object(first).is_some_and(|record| !record.tapped()));
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::PlayLand {
+                    player: active,
+                    object: second,
+                },
+            ),
+            Outcome::Applied
+        );
+        assert_eq!(state.object_zone(second), Some(battlefield));
+        assert_eq!(state.players()[active.index()].lands_played_this_turn(), 1);
     }
 
     #[test]
@@ -20998,10 +21070,10 @@ mod tests {
         let active = state.add_player();
         let defender = state.add_player();
         let tapped = battlefield_creature(&mut state, active, 202, 2, 2, CreatureKeywords::none());
+        start_declare_attackers(&mut state, active);
         state
             .set_object_tapped(tapped, true)
             .unwrap_or_else(|error| panic!("unexpected tap error: {error:?}"));
-        start_declare_attackers(&mut state, active);
         let before = state.canonical_bytes();
 
         assert_eq!(
