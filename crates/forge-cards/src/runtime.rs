@@ -426,6 +426,8 @@ pub enum PlayerBinding {
 }
 
 /// A nonnegative effect amount resolved during prebinding.
+// Closed predicates remain inline so this public value type stays Copy.
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AmountProgram {
     /// Literal amount embedded in the definition.
@@ -437,6 +439,8 @@ pub enum AmountProgram {
 }
 
 /// One closed object set resolved when an effect is bound to a game state.
+// Closed predicates remain inline so this public value type stays Copy.
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ObjectSetProgram {
     /// One announced object target slot.
@@ -871,6 +875,8 @@ pub enum StaticAbilityProgram {
 }
 
 /// One completely compiled additional spell cost.
+// Closed predicates remain inline so this public value type stays Copy.
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SpellAdditionalCostProgram {
     /// Discard exactly this many cards from the caster's hand.
@@ -2340,7 +2346,13 @@ fn compile_spell_alternate_cost(
                     "intrinsic alternate cost must be bound to source()",
                 ));
             }
-            let kind = alternate_keyword.expect("guarded intrinsic alternate cost");
+            let kind = alternate_keyword.ok_or_else(|| {
+                CompileDiagnostic::new(
+                    CompileDiagnosticCode::AbilityShape,
+                    format!("{path}.effect"),
+                    "intrinsic alternate cost requires a recognized keyword",
+                )
+            })?;
             let condition = match kind {
                 AlternateCostKind::Flashback => AlternateCostCondition::SourceInControllerGraveyard,
                 AlternateCostKind::Evoke | AlternateCostKind::Overload => {
@@ -5743,21 +5755,20 @@ struct LibraryChoiceConstraints {
     library_zone: bool,
 }
 
+type LibraryChoiceSelector = (
+    ObjectTypes,
+    ObjectTypes,
+    ObjectTypes,
+    ObjectSupertypes,
+    BasicLandTypes,
+    BasicLandTypes,
+    ObjectSubtypes,
+);
+
 fn compile_library_choice_selector(
     selector: &Expression,
     path: &str,
-) -> Result<
-    (
-        ObjectTypes,
-        ObjectTypes,
-        ObjectTypes,
-        ObjectSupertypes,
-        BasicLandTypes,
-        BasicLandTypes,
-        ObjectSubtypes,
-    ),
-    CompileDiagnostic,
-> {
+) -> Result<LibraryChoiceSelector, CompileDiagnostic> {
     let Expression::Call {
         operation: Operation::Cards,
         arguments,
@@ -8938,7 +8949,9 @@ card "Purphoros, God of the Forge" {
         assert!(token.is_token());
         assert_eq!(token.owner(), opponent);
         assert_eq!(token.controller(), opponent);
-        let beast = ObjectSubtype::parse("Beast").expect("fixture subtype must parse");
+        let Some(beast) = ObjectSubtype::parse("Beast") else {
+            panic!("fixture subtype must parse");
+        };
         assert_eq!(
             token.base_object().types(),
             ObjectTypes::none().with_creature()
@@ -9302,7 +9315,9 @@ card "Purphoros, God of the Forge" {
         let program = compile_card_program(&definition)
             .unwrap_or_else(|error| panic!("unexpected compile error: {error}"));
         let requirement = program.object_choice_requirements()[0];
-        let elf = ObjectSubtype::parse("Elf").expect("fixture subtype is valid");
+        let Some(elf) = ObjectSubtype::parse("Elf") else {
+            panic!("fixture subtype is valid");
+        };
         assert!(requirement.required_subtypes().contains(elf));
     }
 
@@ -9647,7 +9662,9 @@ card "Purphoros, God of the Forge" {
         assert_eq!(program.target_requirements().len(), 1);
 
         let invalid = KROSAN_GRIP.replace("types: \"Instant\"", "types: \"Artifact\"");
-        let error = compile_card_program(&parse("invalid_split_second.frs", &invalid)).unwrap_err();
+        let Err(error) = compile_card_program(&parse("invalid_split_second.frs", &invalid)) else {
+            panic!("split second on a permanent must be rejected");
+        };
         assert_eq!(error.code(), CompileDiagnosticCode::KeywordSemantics);
     }
 
@@ -9743,7 +9760,9 @@ card "Purphoros, God of the Forge" {
                 Capability::ManaAbility,
             ]
         );
-        let back = program.modal_dfc_back().expect("compiled back face");
+        let Some(back) = program.modal_dfc_back() else {
+            panic!("expected compiled back face");
+        };
         assert_eq!(back.kind(), ProgramKind::Land);
         assert!(back.base_object().enters_tapped());
         let [mana_ability] = back.activated_abilities() else {
@@ -9783,7 +9802,9 @@ card "Purphoros, God of the Forge" {
             if state.current_step() == Some(forge_core::Step::PrecombatMain) {
                 break;
             }
-            let player = state.priority_player().expect("priority player");
+            let Some(player) = state.priority_player() else {
+                panic!("expected priority player");
+            };
             assert!(matches!(
                 apply(&mut state, Action::PassPriority { player }),
                 Outcome::Priority(_)
@@ -9866,7 +9887,9 @@ card "Purphoros, God of the Forge" {
             panic!("expected one draw trigger");
         };
         assert_eq!(ability.event(), TriggeredEventProgram::OpponentDrawsCard);
-        let unless_paid = ability.unless_paid().expect("expected exact unless branch");
+        let Some(unless_paid) = ability.unless_paid() else {
+            panic!("expected exact unless branch");
+        };
         assert_eq!(unless_paid.payer(), PlayerBinding::TriggeringPlayer);
         assert_eq!(unless_paid.mana_cost(), ManaCost::new(0, 0, 0, 0, 0, 2));
         assert_eq!(unless_paid.exact_payment(), ManaPool::new(0, 0, 0, 0, 0, 2));
@@ -9876,8 +9899,9 @@ card "Purphoros, God of the Forge" {
         let opponent = add_player(&mut state);
         let base =
             ExecutionBindings::new(controller, vec![opponent]).with_triggering_player(opponent);
-        let missing = bind_triggered_ability_actions(&state, ability, &base)
-            .expect_err("payment decision must be explicit");
+        let Err(missing) = bind_triggered_ability_actions(&state, ability, &base) else {
+            panic!("payment decision must be explicit");
+        };
         assert_eq!(missing.code(), ExecutionDiagnosticCode::MissingChoice);
 
         let decline = bind_triggered_ability_actions(
@@ -9951,12 +9975,15 @@ card "Purphoros, God of the Forge" {
             ),
             Outcome::Applied
         );
+        let Some(base_creature) = program.base_creature() else {
+            panic!("expected creature base");
+        };
         assert_eq!(
             apply(
                 &mut state,
                 Action::SetBaseCreatureCharacteristics {
                     object: source,
-                    base: program.base_creature().expect("creature base"),
+                    base: base_creature,
                 },
             ),
             Outcome::Applied
