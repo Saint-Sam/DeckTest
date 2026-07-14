@@ -1295,6 +1295,12 @@ struct PendingActivatedResolution {
 }
 
 #[derive(Clone)]
+struct PendingTriggeredResolution {
+    controller: PlayerId,
+    runtime: TriggerRuntime,
+}
+
+#[derive(Clone)]
 enum MainChoice {
     PlayLand(ObjectId),
     ActivateAll,
@@ -1419,6 +1425,7 @@ struct GameDriver {
     trigger_programs: HashMap<TriggerId, TriggerRuntime>,
     activated_abilities: Vec<RegisteredAbility>,
     pending_activated_resolution: Option<PendingActivatedResolution>,
+    pending_triggered_resolution: Option<PendingTriggeredResolution>,
     triggers_registered_for: HashSet<ObjectId>,
     permanent_runtime_registered_for: HashSet<ObjectId>,
     commander_zone_decisions: HashMap<ObjectId, ZoneId>,
@@ -1515,6 +1522,7 @@ impl GameDriver {
             trigger_programs: HashMap::new(),
             activated_abilities: Vec::new(),
             pending_activated_resolution: None,
+            pending_triggered_resolution: None,
             triggers_registered_for: HashSet::new(),
             permanent_runtime_registered_for: HashSet::new(),
             commander_zone_decisions: HashMap::new(),
@@ -2007,6 +2015,14 @@ impl GameDriver {
         while self.state.game_outcome() == GameOutcome::InProgress {
             if self.pending_activated_resolution.is_some() {
                 self.complete_pending_activated_resolution(
+                    human,
+                    &mut decisions,
+                    ai_policies.as_ref(),
+                )?;
+                continue;
+            }
+            if self.pending_triggered_resolution.is_some() {
+                self.complete_pending_triggered_resolution(
                     human,
                     &mut decisions,
                     ai_policies.as_ref(),
@@ -4357,18 +4373,16 @@ impl GameDriver {
             .join(" | "))
     }
 
-    fn complete_pending_activated_resolution(
+    fn select_resolution_choice(
         &mut self,
+        context: &DecisionContext,
+        chooser: PlayerId,
         human: Option<PlayerId>,
         decisions: &mut Option<&mut dyn DecisionSource>,
         ai_policies: Option<&SeatPolicies>,
-    ) -> Result<(), String> {
-        let pending = self
-            .pending_activated_resolution
-            .take()
-            .ok_or_else(|| format!("seed {} has no pending activated resolution", self.seed))?;
-        let context = self.pending_activated_context(&pending)?;
-        let selected_id = if human == Some(pending.controller) {
+        telemetry_kind: &'static str,
+    ) -> Result<CanonicalActionId, String> {
+        if human == Some(chooser) {
             let labels = context
                 .options()
                 .iter()
@@ -4377,24 +4391,26 @@ impl GameDriver {
             let source = decisions.as_deref_mut().ok_or_else(|| {
                 "human game is missing a decision source for a resolution choice".to_owned()
             })?;
-            self.prompt_context_choice(source, "Choose cards while resolving", &context, &labels)?
-        } else if let Some(policies) = ai_policies {
+            return self.prompt_context_choice(
+                source,
+                "Choose cards while resolving",
+                context,
+                &labels,
+            );
+        }
+        if let Some(policies) = ai_policies {
             let decision_started = Instant::now();
-            let policy = self.policy_for(pending.controller, policies)?;
+            let policy = self.policy_for(chooser, policies)?;
             let (selected_id, decision, policy_name, candidates) = if context.options().len() == 1 {
                 (context.options()[0].id(), None, "forced-v1", Vec::new())
             } else {
                 let candidates = if matches!(policy, AiController::Random(_)) {
                     Vec::new()
                 } else {
-                    self.policy_candidates(&context, pending.controller, |_| 0)?
+                    self.policy_candidates(context, chooser, |_| 0)?
                 };
-                let (selected_id, decision, policy_name) = self.select_ai_action(
-                    policy,
-                    &context,
-                    &candidates,
-                    "resolution object choice",
-                )?;
+                let (selected_id, decision, policy_name) =
+                    self.select_ai_action(policy, context, &candidates, telemetry_kind)?;
                 (selected_id, decision, policy_name, candidates)
             };
             context.select(selected_id).map_err(|error| {
@@ -4404,9 +4420,9 @@ impl GameDriver {
                 )
             })?;
             self.record_ai_decision(AiDecisionTelemetry {
-                kind: "resolution_object_choice",
+                kind: telemetry_kind,
                 policy: policy_name,
-                context: &context,
+                context,
                 action_id: selected_id,
                 decision,
                 evaluated_candidates: candidates.len(),
@@ -4420,20 +4436,40 @@ impl GameDriver {
                     "random_legal_selection"
                 },
             });
-            selected_id
-        } else {
-            context
-                .options()
-                .iter()
-                .max_by_key(|option| match option.descriptor() {
-                    DecisionDescriptor::ChooseResolutionObjects { choices } => {
-                        choices.iter().map(Vec::len).sum::<usize>()
-                    }
-                    _ => 0,
-                })
-                .map(DecisionOption::id)
-                .ok_or_else(|| format!("seed {} has no autonomous resolution choice", self.seed))?
-        };
+            return Ok(selected_id);
+        }
+        context
+            .options()
+            .iter()
+            .max_by_key(|option| match option.descriptor() {
+                DecisionDescriptor::ChooseResolutionObjects { choices } => {
+                    choices.iter().map(Vec::len).sum::<usize>()
+                }
+                _ => 0,
+            })
+            .map(DecisionOption::id)
+            .ok_or_else(|| format!("seed {} has no autonomous resolution choice", self.seed))
+    }
+
+    fn complete_pending_activated_resolution(
+        &mut self,
+        human: Option<PlayerId>,
+        decisions: &mut Option<&mut dyn DecisionSource>,
+        ai_policies: Option<&SeatPolicies>,
+    ) -> Result<(), String> {
+        let pending = self
+            .pending_activated_resolution
+            .take()
+            .ok_or_else(|| format!("seed {} has no pending activated resolution", self.seed))?;
+        let context = self.pending_activated_context(&pending)?;
+        let selected_id = self.select_resolution_choice(
+            &context,
+            pending.controller,
+            human,
+            decisions,
+            ai_policies,
+            "resolution_object_choice",
+        )?;
         let actions = context
             .select(selected_id)
             .map_err(|error| format!("seed {} resolution choice failed: {error}", self.seed))?
@@ -4449,6 +4485,125 @@ impl GameDriver {
             .saturating_add(action_count);
         if let Some(exercise) = self.identity_exercise_mut(pending.runtime.source) {
             exercise.effect_actions = exercise.effect_actions.saturating_add(action_count);
+        }
+        Ok(())
+    }
+
+    fn pending_triggered_actions(
+        &self,
+        pending: &PendingTriggeredResolution,
+        object_choices: Vec<Vec<ObjectId>>,
+    ) -> Result<Vec<Action>, String> {
+        let ability = pending
+            .runtime
+            .program
+            .triggered_abilities()
+            .get(pending.runtime.ability_index)
+            .ok_or_else(|| {
+                format!(
+                    "seed {} missing triggered runtime {} on {}",
+                    self.seed,
+                    pending.runtime.ability_index,
+                    pending.runtime.program.name()
+                )
+            })?;
+        let mut bindings =
+            ExecutionBindings::new(pending.controller, self.live_opponents(pending.controller))
+                .with_source(pending.runtime.source)
+                .with_object_choices(object_choices)
+                .with_optional_effect_choices(vec![true; ability.optional_choice_count()]);
+        if ability.unless_paid().is_some() {
+            bindings = bindings.with_unless_payment(false);
+        }
+        bind_triggered_ability_actions(&self.state, ability, &bindings)
+            .map(|actions| {
+                actions
+                    .into_iter()
+                    .map(|action| action.action().clone())
+                    .collect()
+            })
+            .map_err(|error| format!("seed {} trigger binding failed: {error}", self.seed))
+    }
+
+    fn pending_triggered_context(
+        &self,
+        pending: &PendingTriggeredResolution,
+    ) -> Result<DecisionContext, String> {
+        let ability = pending
+            .runtime
+            .program
+            .triggered_abilities()
+            .get(pending.runtime.ability_index)
+            .ok_or_else(|| {
+                format!(
+                    "seed {} missing triggered runtime {} on {}",
+                    self.seed,
+                    pending.runtime.ability_index,
+                    pending.runtime.program.name()
+                )
+            })?;
+        let choices =
+            self.object_choice_bindings(pending.controller, ability.object_choice_requirements())?;
+        let mut options = Vec::with_capacity(choices.len());
+        for choice in choices {
+            let actions = self.pending_triggered_actions(pending, choice.clone())?;
+            options.push(DecisionOption::new(
+                DecisionDescriptor::ChooseResolutionObjects { choices: choice },
+                actions,
+            ));
+        }
+        let kind = if ability
+            .object_choice_requirements()
+            .iter()
+            .any(|requirement| requirement.zone() == ZoneKind::Library)
+        {
+            DecisionKind::Search
+        } else {
+            DecisionKind::HiddenChoice
+        };
+        self.decision_context(kind, pending.controller, options)
+    }
+
+    fn complete_pending_triggered_resolution(
+        &mut self,
+        human: Option<PlayerId>,
+        decisions: &mut Option<&mut dyn DecisionSource>,
+        ai_policies: Option<&SeatPolicies>,
+    ) -> Result<(), String> {
+        let pending = self
+            .pending_triggered_resolution
+            .take()
+            .ok_or_else(|| format!("seed {} has no pending triggered resolution", self.seed))?;
+        let context = self.pending_triggered_context(&pending)?;
+        let selected_id = self.select_resolution_choice(
+            &context,
+            pending.controller,
+            human,
+            decisions,
+            ai_policies,
+            "trigger_resolution_object_choice",
+        )?;
+        let actions = context
+            .select(selected_id)
+            .map_err(|error| {
+                format!(
+                    "seed {} trigger resolution choice failed: {error}",
+                    self.seed
+                )
+            })?
+            .actions()
+            .to_vec();
+        let action_count = actions.len() as u64;
+        for action in actions {
+            self.dispatch(action)?;
+        }
+        self.metrics.interpreter_actions = self
+            .metrics
+            .interpreter_actions
+            .saturating_add(action_count);
+        self.metrics.triggers_resolved = self.metrics.triggers_resolved.saturating_add(1);
+        if let Some(exercise) = self.identity_exercise_mut(pending.runtime.source) {
+            exercise.trigger_resolutions = exercise.trigger_resolutions.saturating_add(1);
         }
         Ok(())
     }
@@ -4519,9 +4674,11 @@ impl GameDriver {
                 decisions,
             };
             if requires_object_choices {
-                if self.pending_activated_resolution.is_some() {
+                if self.pending_activated_resolution.is_some()
+                    || self.pending_triggered_resolution.is_some()
+                {
                     return Err(format!(
-                        "seed {} attempted to overlap activated resolution choices",
+                        "seed {} attempted to overlap deferred resolution choices",
                         self.seed
                     ));
                 }
@@ -4596,21 +4753,35 @@ impl GameDriver {
             .triggered_abilities()
             .get(runtime.ability_index)
             .ok_or_else(|| format!("seed {} missing trigger ability", self.seed))?;
-        ensure_trigger_is_autonomous(ability, runtime.program.name())?;
-        let mut bindings = ExecutionBindings::new(controller, self.live_opponents(controller))
-            .with_source(runtime.source)
-            .with_optional_effect_choices(vec![true; ability.optional_choice_count()]);
-        if ability.unless_paid().is_some() {
-            bindings = bindings.with_unless_payment(false);
+        ensure_trigger_targets_are_autonomous(ability, runtime.program.name())?;
+        let requires_object_choices = !ability.object_choice_requirements().is_empty();
+        let pending = PendingTriggeredResolution {
+            controller,
+            runtime,
+        };
+        if requires_object_choices {
+            if self.pending_activated_resolution.is_some()
+                || self.pending_triggered_resolution.is_some()
+            {
+                return Err(format!(
+                    "seed {} attempted to overlap deferred resolution choices",
+                    self.seed
+                ));
+            }
+            self.pending_triggered_resolution = Some(pending);
+            return Ok(());
         }
-        let actions = bind_triggered_ability_actions(&self.state, ability, &bindings)
-            .map_err(|error| format!("seed {} trigger binding failed: {error}", self.seed))?;
+        let actions = self.pending_triggered_actions(&pending, Vec::new())?;
+        let action_count = actions.len() as u64;
         for action in actions {
-            self.dispatch(action.action().clone())?;
-            self.metrics.interpreter_actions = self.metrics.interpreter_actions.saturating_add(1);
+            self.dispatch(action)?;
         }
+        self.metrics.interpreter_actions = self
+            .metrics
+            .interpreter_actions
+            .saturating_add(action_count);
         self.metrics.triggers_resolved = self.metrics.triggers_resolved.saturating_add(1);
-        if let Some(exercise) = self.identity_exercise_mut(runtime.source) {
+        if let Some(exercise) = self.identity_exercise_mut(pending.runtime.source) {
             exercise.trigger_resolutions = exercise.trigger_resolutions.saturating_add(1);
         }
         Ok(())
@@ -6212,18 +6383,13 @@ fn damage_step_eligible(
     }
 }
 
-fn ensure_trigger_is_autonomous(
+fn ensure_trigger_targets_are_autonomous(
     ability: &TriggeredAbilityProgram,
     card_name: &str,
 ) -> Result<(), String> {
     if !ability.target_requirements().is_empty() {
         return Err(format!(
-            "trigger on {card_name} requires target prompts not supplied by this random-legal controller"
-        ));
-    }
-    if !ability.object_choice_requirements().is_empty() {
-        return Err(format!(
-            "trigger on {card_name} requires hidden-zone choices not supplied by this controller"
+            "trigger on {card_name} requires target prompts not supplied by this canonical controller"
         ));
     }
     Ok(())
@@ -8517,6 +8683,154 @@ mod tests {
     }
 
     #[test]
+    fn sword_of_the_animist_trigger_search_uses_the_canonical_resolution_choice() {
+        let source = r#"card "Sword of the Animist" {
+  id: "d79cbc61-6c15-48ea-bbba-3cffb819ccba"
+  layout: normal
+  status: unverified_playable
+  face "Sword of the Animist" {
+    cost: "{2}"
+    types: "Legendary Artifact - Equipment"
+    oracle: "Whenever equipped creature attacks, you may search your library for a basic land card, put it onto the battlefield tapped, then shuffle."
+    keywords: [equip]
+    ability activated {
+      costs: [mana_cost("{2}")]
+      timing: timing_sorcery()
+      effect: attach(source(), target(permanents(and(type_is("creature"), controlled_by(you())))))
+    }
+    ability static {
+      effect: continuous(equipped_object(source()), modify_pt(any(), 1, 1))
+    }
+    ability triggered {
+      event: event_attacks(equipped_object(source()))
+      effect: choose_up_to(1, sequence(search_library(cards(and(and(type_is("land"), supertype_is("basic")), zone_is("library"))), you(), 1), move_zone(chosen(cards(and(and(type_is("land"), supertype_is("basic")), zone_is("library")))), "battlefield", 1), tap(chosen(cards(and(and(type_is("land"), supertype_is("basic")), zone_is("library"))))), shuffle(you())))
+    }
+  }
+}"#;
+        let definition = forge_cardc::parse_card_named("sword_of_the_animist.frs", source)
+            .unwrap_or_else(|error| panic!("Sword should parse: {error}"));
+        let program = Arc::new(
+            compile_card_program(&definition)
+                .unwrap_or_else(|error| panic!("Sword should compile: {error}")),
+        );
+        let (mut driver, controller, _opponent, sword) = modal_spell_driver();
+        Arc::make_mut(&mut driver.programs).insert(sword, Arc::clone(&program));
+        driver
+            .dispatch(Action::SetBaseObjectCharacteristics {
+                object: sword,
+                base: program.base_object(),
+            })
+            .unwrap_or_else(|error| panic!("Sword characteristics should apply: {error}"));
+        driver
+            .dispatch(Action::MoveObject {
+                object: sword,
+                to: ZoneId::new(None, ZoneKind::Battlefield),
+            })
+            .unwrap_or_else(|error| panic!("Sword should enter the battlefield: {error}"));
+
+        let library = ZoneId::new(Some(controller), ZoneKind::Library);
+        let nonbasic = match driver
+            .dispatch(Action::CreateObject {
+                card: CardId::new(905),
+                owner: controller,
+                controller,
+                zone: library,
+            })
+            .unwrap_or_else(|error| panic!("nonbasic setup should succeed: {error}"))
+        {
+            Outcome::ObjectCreated(object) => object,
+            other => panic!("unexpected nonbasic setup outcome: {other:?}"),
+        };
+        let basic = match driver
+            .dispatch(Action::CreateObject {
+                card: CardId::new(906),
+                owner: controller,
+                controller,
+                zone: library,
+            })
+            .unwrap_or_else(|error| panic!("basic setup should succeed: {error}"))
+        {
+            Outcome::ObjectCreated(object) => object,
+            other => panic!("unexpected basic setup outcome: {other:?}"),
+        };
+        let forest = BasicLandTypes::none().with_forest();
+        for (object, supertypes) in [
+            (nonbasic, ObjectSupertypes::none()),
+            (basic, ObjectSupertypes::none().with_basic()),
+        ] {
+            driver
+                .dispatch(Action::SetBaseObjectCharacteristics {
+                    object,
+                    base: BaseObjectCharacteristics::new(
+                        ObjectTypes::none().with_land(),
+                        ObjectColors::none(),
+                    )
+                    .with_supertypes(supertypes)
+                    .with_basic_land_types(forest),
+                })
+                .unwrap_or_else(|error| panic!("land characteristics should apply: {error}"));
+        }
+        driver
+            .register_triggers(controller, sword, &program)
+            .unwrap_or_else(|error| panic!("Sword trigger should register: {error}"));
+        driver
+            .register_permanent_runtime(controller, sword)
+            .unwrap_or_else(|error| panic!("Sword runtime should register: {error}"));
+        let trigger = driver
+            .trigger_programs
+            .keys()
+            .copied()
+            .next()
+            .unwrap_or_else(|| panic!("Sword trigger should register"));
+        driver
+            .execute_trigger(controller, trigger)
+            .unwrap_or_else(|error| panic!("Sword trigger should await a search: {error}"));
+        let pending = driver
+            .pending_triggered_resolution
+            .as_ref()
+            .unwrap_or_else(|| panic!("Sword should await its search choice"));
+        let search = driver
+            .pending_triggered_context(pending)
+            .unwrap_or_else(|error| panic!("Sword search context should exist: {error}"));
+        assert_eq!(search.kind(), DecisionKind::Search);
+        assert_eq!(search.options().len(), 2);
+        assert!(search.options().iter().any(|option| matches!(
+            option.descriptor(),
+            DecisionDescriptor::ChooseResolutionObjects { choices }
+                if choices == &vec![vec![basic]]
+        )));
+        assert!(search
+            .options()
+            .iter()
+            .all(|option| match option.descriptor() {
+                DecisionDescriptor::ChooseResolutionObjects { choices } => {
+                    !choices.iter().flatten().any(|object| *object == nonbasic)
+                }
+                _ => false,
+            }));
+
+        let mut source = PickNonEmptyResolutionChoice;
+        let mut decisions = Some(&mut source as &mut dyn DecisionSource);
+        driver
+            .complete_pending_triggered_resolution(Some(controller), &mut decisions, None)
+            .unwrap_or_else(|error| panic!("Sword search should complete: {error}"));
+        assert!(driver.pending_triggered_resolution.is_none());
+        assert_eq!(
+            driver.state.object_zone(basic),
+            Some(ZoneId::new(None, ZoneKind::Battlefield))
+        );
+        assert!(driver
+            .state
+            .object(basic)
+            .is_some_and(|record| record.tapped()));
+        assert_eq!(driver.state.object_zone(nonbasic), Some(library));
+        assert!(driver.actions.iter().any(|action| matches!(
+            action,
+            Action::ShuffleLibrary { player } if *player == controller
+        )));
+    }
+
+    #[test]
     #[ignore = "requires the local T3 translated-card output"]
     fn scripted_human_game_completes_and_replays_exactly() {
         let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
@@ -8645,6 +8959,7 @@ mod tests {
             trigger_programs: HashMap::new(),
             activated_abilities: Vec::new(),
             pending_activated_resolution: None,
+            pending_triggered_resolution: None,
             triggers_registered_for: HashSet::new(),
             permanent_runtime_registered_for: HashSet::new(),
             commander_zone_decisions: HashMap::new(),
@@ -8757,6 +9072,7 @@ mod tests {
             trigger_programs: HashMap::new(),
             activated_abilities: Vec::new(),
             pending_activated_resolution: None,
+            pending_triggered_resolution: None,
             triggers_registered_for: HashSet::new(),
             permanent_runtime_registered_for: HashSet::new(),
             commander_zone_decisions: HashMap::new(),
@@ -8828,6 +9144,7 @@ mod tests {
             trigger_programs: HashMap::new(),
             activated_abilities: Vec::new(),
             pending_activated_resolution: None,
+            pending_triggered_resolution: None,
             triggers_registered_for: HashSet::new(),
             permanent_runtime_registered_for: HashSet::new(),
             commander_zone_decisions: HashMap::new(),

@@ -204,18 +204,26 @@ real action sequence.
 `ChooseResolutionObjects` is an append-only composite decision descriptor for
 zero, one, many, or multiple ordered choice slots. This avoids overloading the
 older singular search descriptor and keeps replay IDs structural. Evolving
-Wilds is the first real vertical regression: its activation sacrifices the
+Wilds is the first real activated vertical regression: its activation sacrifices the
 source, resolves through priority, excludes a nonbasic land, offers the legal
 empty and matching-basic choices, moves the selected basic to the battlefield
 tapped, and shuffles through kernel actions. A four-seat AI diagnostic then
 completed 241 turns, 18,035 typed actions, and 16,000 canonical decisions with
 an exact replay match after exercising the same adapter.
 
+Triggered programs use the same delayed choice contract. Sword of the Animist
+has a focused regression that resolves its attack trigger into a canonical
+library-search context, excludes a nonbasic Forest, retains the legal
+fail-to-find branch, moves the selected basic land to the battlefield tapped,
+and shuffles through production actions. Trigger targets, ordering, and
+deferred optional prompts remain separate fail-closed work.
+
 This extension is not a claim that every search or activated cost is complete.
-Unsupported extra costs still fail closed, and spell, triggered-ability,
-multi-zone, and large combinatorial choice families remain explicit T4 decision
-surface gaps. Exact promotion evidence must be regenerated from the final clean
-T4 product commit rather than inherited from an earlier diagnostic tree.
+Unsupported extra costs still fail closed, and spell-resolution choices,
+trigger targets/order/optionals, multi-zone, and large combinatorial choice
+families remain explicit T4 decision-surface gaps. Exact promotion evidence
+must be regenerated from the final clean T4 product commit rather than inherited
+from an earlier diagnostic tree.
 
 ## Consequences
 

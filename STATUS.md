@@ -75,7 +75,7 @@ onto identities.
 
 1. T4.1-T4.5, T4.7, and T4.10 diagnostic implementations are locally green;
    split player-defender attacks, all-defender blocking, typed program-bound
-   non-mana activations, and activated resolution-time searches are live.
+   non-mana activations, and activated/triggered resolution-time searches are live.
    Complete the remaining canonical Choice/Prompt adapters, non-player combat
    defenders, strategic damage prompts, and CP-AI-BENCH evidence.
 2. Finish T4.6 calibration and T4.9 CPU/memory/reference-device latency without

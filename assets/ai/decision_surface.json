@@ -90,17 +90,17 @@
     },
     {
       "kind": "hidden_choice",
-      "human": "descriptor_only",
-      "ai": "descriptor_only",
-      "benchmark": "descriptor_only",
-      "note": "Typed hidden-slot IDs exist; teacher-corpus-safe production prompting remains open."
+      "human": "partial",
+      "ai": "partial",
+      "benchmark": "partial",
+      "note": "Bounded interpreter object-choice products now use one canonical context for activated and triggered resolution, including authorized human labels and real AI successor actions. Non-library coverage, multi-zone choices, trigger targets, and teacher-corpus fixtures remain incomplete."
     },
     {
       "kind": "search",
       "human": "partial",
       "ai": "partial",
       "benchmark": "partial",
-      "note": "Typed program-bound activated abilities now defer object selection until successful resolution, enumerate exact bounded legal products including fail-to-find, filter through the interpreter's authoritative predicate, expose authorized labels to humans, evaluate real bound actions for AI, and replay canonically. Spell, trigger, multi-zone, and sealed benchmark coverage remain open."
+      "note": "Typed program-bound activated and triggered abilities now defer object selection until successful resolution, enumerate exact bounded legal products including fail-to-find, filter through the interpreter's authoritative predicate, expose authorized labels to humans, evaluate real bound actions for AI, and replay canonically. Spell-resolution, trigger-target, multi-zone, and sealed benchmark coverage remain open."
     },
     {
       "kind": "combat_damage",

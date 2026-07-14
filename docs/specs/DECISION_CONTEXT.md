@@ -60,7 +60,8 @@ The T4.3-T4.5 diagnostics path currently adapts:
 - typed program-bound non-mana activations with exact payments, targets, and
   optional answers announced through the kernel stack, followed by interpreter
   effect binding only after successful resolution;
-- bounded resolution-time object products for those activated abilities,
+- bounded resolution-time object products for program-bound activated and
+  triggered abilities,
   including legal fail-to-find branches, authoritative characteristic
   filtering, human search labels, AI successor evaluation, canonical telemetry,
   and exact decision/action replay;
@@ -83,11 +84,12 @@ The T4.3-T4.5 diagnostics path currently adapts:
 The current path remains `limited` and diagnostics-only because it does not yet
 canonicalize the full Commander prompt surface: unsupported activation cost
 families, target distribution, X, additional and alternative costs, trigger
-order, spell and trigger resolution-time choices, non-player combat defenders,
+order, spell resolution-time choices, triggered targets and deferred optionals,
+non-player combat defenders,
 and strategic damage ordering. Normal spells and the current typed activated
-slice cover targets, optional effects, payments, and activated library searches,
-but those prompt families remain partial until their remaining triggered,
-spell-resolution, and multi-zone forms use the same boundary.
+slice cover targets, optional effects, payments, and activated/triggered object
+searches, but those prompt families remain partial until their remaining
+trigger-target, spell-resolution, and multi-zone forms use the same boundary.
 A typed immediate concession action and event exist, but the always-available
 human/AI/benchmark prompt adapter remains open. These gaps cannot be silently
 skipped for CP-AI-BENCH,
