@@ -3955,7 +3955,7 @@
         "destination": "battlefield",
         "disposition": "passed",
         "effect_actions": 8,
-        "final_hash": "10842175203352119959",
+        "final_hash": "4241557153947084651",
         "final_life_totals": [
           20,
           20
@@ -5157,7 +5157,7 @@
   ],
   "claim_boundary": "Only semantic_case_ready entries can be promoted by a passing replay and any required card-specific semantic probe. Runtime-smoke success alone never promotes a known gap.",
   "generated_at": "2026-07-13",
-  "payload_sha256": "94575c43fe71f369148d228401d0ac9b12869d6945662659e0b97a96cc6d50dc",
+  "payload_sha256": "179b3f7b2b0802d216edd3a08924376bb4a4444c0a604d508d2ca01e753cbc14",
   "product_source_commit": "06b31aef6cc0e30ed3c1b72cc2e1ab2b194fbb11",
   "schema_version": 2,
   "summary": {
