@@ -54,9 +54,11 @@ The T4.3-T4.5 diagnostics path currently adapts:
   AI seats;
 - main-phase land plays, autonomous permanent casts, mana activations, every
   enumerated mana payment, and priority pass;
-- complete single-defender attack subsets up to an explicit fail-closed option
+- complete player-defender attack assignment products, including split attacks,
+  up to an explicit fail-closed option ceiling;
+- complete blocker assignments for every attacked player, submitted in
+  deterministic APNAP order and accumulated by the kernel, up to the same
   ceiling;
-- complete blocker assignments for that defender up to the same ceiling;
 - complete canonical commander move-or-leave choices for both human and AI
   controllers, with selected-ID membership and telemetry regression coverage;
 - one shared sorted context for the live human and AI main-phase, attacker,
@@ -69,7 +71,8 @@ The T4.3-T4.5 diagnostics path currently adapts:
 The current path remains `limited` and diagnostics-only because it does not yet
 canonicalize the full Commander prompt surface: arbitrary priority
 responses, targets, modes, X, optional and alternative costs, trigger order,
-searches, all hidden choices, split multiplayer attacks, and damage ordering.
+searches, all hidden choices, non-player combat defenders, and strategic damage
+ordering.
 A typed immediate concession action and event exist, but the always-available
 human/AI/benchmark prompt adapter remains open. These gaps cannot be silently
 skipped for CP-AI-BENCH,

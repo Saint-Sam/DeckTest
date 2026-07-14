@@ -718,7 +718,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 21,
+      "wall_latency_us": 27,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -765,7 +765,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 19,
+      "wall_latency_us": 15,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -835,7 +835,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 66,
+      "wall_latency_us": 42,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -881,7 +881,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 13,
+      "wall_latency_us": 12,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -928,7 +928,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 12,
+      "wall_latency_us": 15,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -990,7 +990,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 68,
+      "wall_latency_us": 29,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -1037,7 +1037,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 16,
+      "wall_latency_us": 13,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -1107,7 +1107,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 62,
+      "wall_latency_us": 36,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -1154,7 +1154,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 23,
+      "wall_latency_us": 13,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -1246,7 +1246,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 57,
+      "wall_latency_us": 35,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -1322,7 +1322,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 19,
+      "wall_latency_us": 20,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -1369,7 +1369,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 22,
+      "wall_latency_us": 15,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -1431,7 +1431,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 51,
+      "wall_latency_us": 29,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -1507,7 +1507,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 20,
+      "wall_latency_us": 19,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -1553,7 +1553,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 23,
+      "wall_latency_us": 13,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -1600,7 +1600,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 23,
+      "wall_latency_us": 16,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -1662,7 +1662,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 43,
+      "wall_latency_us": 29,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -1709,7 +1709,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 23,
+      "wall_latency_us": 15,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -1779,7 +1779,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 74,
+      "wall_latency_us": 38,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -1855,7 +1855,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 35,
+      "wall_latency_us": 20,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -1901,7 +1901,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 25,
+      "wall_latency_us": 13,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -1948,7 +1948,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 21,
+      "wall_latency_us": 16,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -2040,7 +2040,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 58,
+      "wall_latency_us": 37,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -2146,7 +2146,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 49,
+      "wall_latency_us": 25,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -2269,7 +2269,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 22,
+      "wall_latency_us": 17,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -2361,7 +2361,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 71,
+      "wall_latency_us": 37,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -2423,7 +2423,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 49,
+      "wall_latency_us": 32,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -2499,7 +2499,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 48,
+      "wall_latency_us": 21,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -2545,7 +2545,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 20,
+      "wall_latency_us": 13,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -2592,7 +2592,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 17,
+      "wall_latency_us": 19,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -2654,7 +2654,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 69,
+      "wall_latency_us": 32,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -2701,7 +2701,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 22,
+      "wall_latency_us": 17,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -2801,7 +2801,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 72,
+      "wall_latency_us": 48,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -2907,7 +2907,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 53,
+      "wall_latency_us": 26,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -2983,7 +2983,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 29,
+      "wall_latency_us": 21,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -3029,7 +3029,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 19,
+      "wall_latency_us": 14,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -3076,7 +3076,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 20,
+      "wall_latency_us": 19,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -3198,7 +3198,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 71,
+      "wall_latency_us": 46,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -3334,7 +3334,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 69,
+      "wall_latency_us": 32,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -3440,7 +3440,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 37,
+      "wall_latency_us": 26,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -3580,7 +3580,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 66,
+      "wall_latency_us": 34,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -3690,7 +3690,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 41,
+      "wall_latency_us": 26,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -3737,7 +3737,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 37,
+      "wall_latency_us": 22,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -3851,7 +3851,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 72,
+      "wall_latency_us": 40,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -3898,7 +3898,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 22,
+      "wall_latency_us": 21,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -3960,7 +3960,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 60,
+      "wall_latency_us": 35,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -4007,7 +4007,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 26,
+      "wall_latency_us": 19,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -4137,7 +4137,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 85,
+      "wall_latency_us": 59,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -4343,7 +4343,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 64,
+      "wall_latency_us": 30,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -4572,7 +4572,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 332,
+      "wall_latency_us": 61,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -4619,7 +4619,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 19,
+      "wall_latency_us": 20,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -4741,7 +4741,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 52,
+      "wall_latency_us": 48,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -4877,7 +4877,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 33,
+      "wall_latency_us": 34,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -4924,7 +4924,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 18,
+      "wall_latency_us": 22,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -5032,7 +5032,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 15,
+      "wall_latency_us": 16,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -5079,7 +5079,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 16,
+      "wall_latency_us": 21,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -5239,7 +5239,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 66,
+      "wall_latency_us": 122,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -5286,7 +5286,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 17,
+      "wall_latency_us": 30,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -5468,7 +5468,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 59,
+      "wall_latency_us": 126,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -5515,7 +5515,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 18,
+      "wall_latency_us": 30,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -5659,7 +5659,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 43,
+      "wall_latency_us": 64,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -5773,7 +5773,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 39,
+      "wall_latency_us": 54,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -5909,7 +5909,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 33,
+      "wall_latency_us": 44,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -5956,7 +5956,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 19,
+      "wall_latency_us": 28,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -6010,7 +6010,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 26,
+      "wall_latency_us": 34,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -6057,7 +6057,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 17,
+      "wall_latency_us": 23,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -6217,7 +6217,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 63,
+      "wall_latency_us": 72,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -6347,7 +6347,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 58,
+      "wall_latency_us": 70,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -6394,7 +6394,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 18,
+      "wall_latency_us": 26,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -6576,7 +6576,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 59,
+      "wall_latency_us": 71,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -6728,7 +6728,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 53,
+      "wall_latency_us": 58,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -6882,7 +6882,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 57,
+      "wall_latency_us": 63,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -6929,7 +6929,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 21,
+      "wall_latency_us": 33,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -7103,7 +7103,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 54,
+      "wall_latency_us": 66,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -7247,7 +7247,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 47,
+      "wall_latency_us": 63,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -7294,7 +7294,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 21,
+      "wall_latency_us": 35,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -7348,7 +7348,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 28,
+      "wall_latency_us": 37,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -7395,7 +7395,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 19,
+      "wall_latency_us": 28,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -7555,7 +7555,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 70,
+      "wall_latency_us": 90,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -7721,7 +7721,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 41,
+      "wall_latency_us": 54,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -7857,7 +7857,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 36,
+      "wall_latency_us": 45,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -7963,7 +7963,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 30,
+      "wall_latency_us": 37,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -8039,7 +8039,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 26,
+      "wall_latency_us": 30,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -8086,7 +8086,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 21,
+      "wall_latency_us": 34,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -8268,7 +8268,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 66,
+      "wall_latency_us": 93,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -8464,7 +8464,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 50,
+      "wall_latency_us": 60,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -8630,7 +8630,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 41,
+      "wall_latency_us": 61,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -8766,7 +8766,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 36,
+      "wall_latency_us": 51,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -8872,7 +8872,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 31,
+      "wall_latency_us": 44,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -8919,7 +8919,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 23,
+      "wall_latency_us": 37,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -9093,7 +9093,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 54,
+      "wall_latency_us": 66,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -9269,7 +9269,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 58,
+      "wall_latency_us": 68,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -9316,7 +9316,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 23,
+      "wall_latency_us": 35,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -9370,7 +9370,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 30,
+      "wall_latency_us": 38,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -9417,7 +9417,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 20,
+      "wall_latency_us": 32,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -9599,7 +9599,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 68,
+      "wall_latency_us": 86,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -9795,7 +9795,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 48,
+      "wall_latency_us": 60,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -9961,7 +9961,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 42,
+      "wall_latency_us": 53,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -10129,7 +10129,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 47,
+      "wall_latency_us": 56,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -10299,7 +10299,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 50,
+      "wall_latency_us": 58,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -10439,7 +10439,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 44,
+      "wall_latency_us": 54,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -10486,7 +10486,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 23,
+      "wall_latency_us": 35,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -10698,7 +10698,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 74,
+      "wall_latency_us": 98,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -10880,7 +10880,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 67,
+      "wall_latency_us": 87,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -10927,7 +10927,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 24,
+      "wall_latency_us": 37,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -11101,7 +11101,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 54,
+      "wall_latency_us": 66,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -11245,7 +11245,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 50,
+      "wall_latency_us": 58,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -11359,7 +11359,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 45,
+      "wall_latency_us": 54,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -11443,7 +11443,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 39,
+      "wall_latency_us": 48,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -11490,7 +11490,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 23,
+      "wall_latency_us": 36,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -11544,7 +11544,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 31,
+      "wall_latency_us": 38,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -11620,7 +11620,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 25,
+      "wall_latency_us": 30,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -11698,7 +11698,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 39,
+      "wall_latency_us": 47,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -11745,7 +11745,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 22,
+      "wall_latency_us": 36,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -11957,7 +11957,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 73,
+      "wall_latency_us": 83,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -12139,7 +12139,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 68,
+      "wall_latency_us": 75,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -12323,7 +12323,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 71,
+      "wall_latency_us": 79,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -12521,7 +12521,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 54,
+      "wall_latency_us": 60,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -12568,7 +12568,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 25,
+      "wall_latency_us": 35,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -12780,7 +12780,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 76,
+      "wall_latency_us": 85,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -12962,7 +12962,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 70,
+      "wall_latency_us": 77,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -13158,7 +13158,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 50,
+      "wall_latency_us": 55,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -13324,7 +13324,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 44,
+      "wall_latency_us": 49,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -13460,7 +13460,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 40,
+      "wall_latency_us": 44,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -13566,7 +13566,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 33,
+      "wall_latency_us": 37,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -13674,7 +13674,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 42,
+      "wall_latency_us": 44,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -13784,7 +13784,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 47,
+      "wall_latency_us": 56,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -13831,7 +13831,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 27,
+      "wall_latency_us": 39,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -14005,7 +14005,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 59,
+      "wall_latency_us": 67,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -14149,7 +14149,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 53,
+      "wall_latency_us": 59,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -14315,7 +14315,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 44,
+      "wall_latency_us": 50,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -14483,7 +14483,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 51,
+      "wall_latency_us": 55,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -14653,7 +14653,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 56,
+      "wall_latency_us": 60,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -14700,7 +14700,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 25,
+      "wall_latency_us": 37,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -14784,7 +14784,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 40,
+      "wall_latency_us": 49,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -14831,7 +14831,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 23,
+      "wall_latency_us": 149,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -15081,7 +15081,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 100,
+      "wall_latency_us": 166,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -15301,7 +15301,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 93,
+      "wall_latency_us": 123,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -15523,7 +15523,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 97,
+      "wall_latency_us": 192,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -15715,7 +15715,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 95,
+      "wall_latency_us": 126,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -15909,7 +15909,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 101,
+      "wall_latency_us": 135,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -15956,7 +15956,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 41,
+      "wall_latency_us": 46,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -16198,7 +16198,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 134,
+      "wall_latency_us": 105,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -16410,7 +16410,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 104,
+      "wall_latency_us": 102,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -16592,7 +16592,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 115,
+      "wall_latency_us": 93,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -16678,7 +16678,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 103,
+      "wall_latency_us": 99,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -16725,7 +16725,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 44,
+      "wall_latency_us": 41,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -16929,7 +16929,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 88,
+      "wall_latency_us": 79,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -17103,7 +17103,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 82,
+      "wall_latency_us": 72,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -17279,7 +17279,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 82,
+      "wall_latency_us": 73,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -17477,7 +17477,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 77,
+      "wall_latency_us": 62,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -17677,7 +17677,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 78,
+      "wall_latency_us": 70,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -17724,7 +17724,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 36,
+      "wall_latency_us": 49,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -17808,7 +17808,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 71,
+      "wall_latency_us": 52,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -17855,7 +17855,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 37,
+      "wall_latency_us": 42,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -18135,7 +18135,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 148,
+      "wall_latency_us": 135,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -18421,7 +18421,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 115,
+      "wall_latency_us": 82,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -18677,7 +18677,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 83,
+      "wall_latency_us": 72,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -18903,7 +18903,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 83,
+      "wall_latency_us": 70,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -19099,7 +19099,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 73,
+      "wall_latency_us": 62,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -19265,7 +19265,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 63,
+      "wall_latency_us": 59,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -19401,7 +19401,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 55,
+      "wall_latency_us": 51,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -19448,7 +19448,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 40,
+      "wall_latency_us": 48,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -19690,7 +19690,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 138,
+      "wall_latency_us": 104,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -19946,7 +19946,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 86,
+      "wall_latency_us": 70,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -20032,7 +20032,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 286,
+      "wall_latency_us": 123,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -20079,7 +20079,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 56,
+      "wall_latency_us": 44,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -20313,7 +20313,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 110,
+      "wall_latency_us": 99,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -20691,7 +20691,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 76,
+      "wall_latency_us": 74,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -20887,7 +20887,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 57,
+      "wall_latency_us": 65,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -21053,7 +21053,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 50,
+      "wall_latency_us": 58,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -21189,7 +21189,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 44,
+      "wall_latency_us": 48,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -21295,7 +21295,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 38,
+      "wall_latency_us": 41,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -21403,7 +21403,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 54,
+      "wall_latency_us": 56,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -21513,7 +21513,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 62,
+      "wall_latency_us": 70,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -21599,7 +21599,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 96,
+      "wall_latency_us": 112,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -21646,7 +21646,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 45,
+      "wall_latency_us": 48,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -21730,7 +21730,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 61,
+      "wall_latency_us": 55,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -21777,7 +21777,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 29,
+      "wall_latency_us": 44,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -22087,7 +22087,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 134,
+      "wall_latency_us": 153,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -22367,7 +22367,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 125,
+      "wall_latency_us": 140,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -22617,7 +22617,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 125,
+      "wall_latency_us": 140,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -22873,7 +22873,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 76,
+      "wall_latency_us": 79,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -23099,7 +23099,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 64,
+      "wall_latency_us": 69,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -23295,7 +23295,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 58,
+      "wall_latency_us": 60,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -23493,7 +23493,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 72,
+      "wall_latency_us": 90,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -23540,7 +23540,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 36,
+      "wall_latency_us": 54,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -23820,7 +23820,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 128,
+      "wall_latency_us": 143,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -24070,7 +24070,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 123,
+      "wall_latency_us": 135,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -24290,7 +24290,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 117,
+      "wall_latency_us": 132,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -24480,7 +24480,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 113,
+      "wall_latency_us": 131,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -24676,7 +24676,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 56,
+      "wall_latency_us": 61,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -24842,7 +24842,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 51,
+      "wall_latency_us": 60,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -24978,7 +24978,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 45,
+      "wall_latency_us": 48,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -25084,7 +25084,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 38,
+      "wall_latency_us": 43,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -25160,7 +25160,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 33,
+      "wall_latency_us": 43,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -25206,7 +25206,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 24,
+      "wall_latency_us": 29,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -25292,7 +25292,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 101,
+      "wall_latency_us": 132,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -25339,7 +25339,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 79,
+      "wall_latency_us": 53,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -25603,7 +25603,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 164,
+      "wall_latency_us": 107,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -25889,7 +25889,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 106,
+      "wall_latency_us": 90,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -26145,7 +26145,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 102,
+      "wall_latency_us": 88,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -26371,7 +26371,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 84,
+      "wall_latency_us": 77,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -26733,7 +26733,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 72,
+      "wall_latency_us": 58,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -26819,7 +26819,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 122,
+      "wall_latency_us": 129,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -26866,7 +26866,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 54,
+      "wall_latency_us": 52,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -26958,7 +26958,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 96,
+      "wall_latency_us": 82,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -27064,7 +27064,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 52,
+      "wall_latency_us": 41,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -27172,7 +27172,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 60,
+      "wall_latency_us": 58,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -27219,7 +27219,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 36,
+      "wall_latency_us": 53,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -27559,7 +27559,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 185,
+      "wall_latency_us": 183,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -27869,7 +27869,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 174,
+      "wall_latency_us": 170,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -28149,7 +28149,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 168,
+      "wall_latency_us": 149,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -28235,7 +28235,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 129,
+      "wall_latency_us": 132,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -28282,7 +28282,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 66,
+      "wall_latency_us": 54,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -28592,7 +28592,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 172,
+      "wall_latency_us": 156,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -28872,7 +28872,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 158,
+      "wall_latency_us": 146,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -29122,7 +29122,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 161,
+      "wall_latency_us": 148,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -29342,7 +29342,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 154,
+      "wall_latency_us": 144,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -29532,7 +29532,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 151,
+      "wall_latency_us": 148,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -29692,7 +29692,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 141,
+      "wall_latency_us": 133,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -29822,7 +29822,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 125,
+      "wall_latency_us": 118,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -29922,7 +29922,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 122,
+      "wall_latency_us": 114,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -30028,7 +30028,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 49,
+      "wall_latency_us": 43,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -30104,7 +30104,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 48,
+      "wall_latency_us": 37,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -30190,7 +30190,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 131,
+      "wall_latency_us": 133,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -30237,7 +30237,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 69,
+      "wall_latency_us": 55,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -30531,7 +30531,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 120,
+      "wall_latency_us": 105,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -30847,7 +30847,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 91,
+      "wall_latency_us": 88,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -31133,7 +31133,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 94,
+      "wall_latency_us": 85,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -31389,7 +31389,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 85,
+      "wall_latency_us": 88,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -31475,7 +31475,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 125,
+      "wall_latency_us": 151,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -31597,7 +31597,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 91,
+      "wall_latency_us": 94,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -31733,7 +31733,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 60,
+      "wall_latency_us": 55,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -31839,7 +31839,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 67,
+      "wall_latency_us": 50,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -31915,7 +31915,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 43,
+      "wall_latency_us": 40,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -32001,7 +32001,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 142,
+      "wall_latency_us": 143,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -32048,7 +32048,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 64,
+      "wall_latency_us": 61,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -32388,7 +32388,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 181,
+      "wall_latency_us": 192,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -32698,7 +32698,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 176,
+      "wall_latency_us": 177,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -32978,7 +32978,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 167,
+      "wall_latency_us": 166,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -33228,7 +33228,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 172,
+      "wall_latency_us": 342,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -33484,7 +33484,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 92,
+      "wall_latency_us": 194,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -33570,7 +33570,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 132,
+      "wall_latency_us": 215,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -33630,7 +33630,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 86,
+      "wall_latency_us": 126,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -33970,7 +33970,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 207,
+      "wall_latency_us": 218,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -34056,7 +34056,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 132,
+      "wall_latency_us": 179,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -34380,7 +34380,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 119,
+      "wall_latency_us": 157,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -34674,7 +34674,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 116,
+      "wall_latency_us": 157,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -34938,7 +34938,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 99,
+      "wall_latency_us": 122,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -35224,7 +35224,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 89,
+      "wall_latency_us": 121,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -35480,7 +35480,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 102,
+      "wall_latency_us": 158,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -35706,7 +35706,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 76,
+      "wall_latency_us": 160,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -35902,7 +35902,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 73,
+      "wall_latency_us": 123,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -36068,7 +36068,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 73,
+      "wall_latency_us": 128,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -36290,7 +36290,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 126,
+      "wall_latency_us": 210,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -36337,7 +36337,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 54,
+      "wall_latency_us": 65,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -36489,7 +36489,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 108,
+      "wall_latency_us": 131,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -36611,7 +36611,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 91,
+      "wall_latency_us": 144,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -36747,7 +36747,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 46,
+      "wall_latency_us": 64,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -36853,7 +36853,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 41,
+      "wall_latency_us": 88,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -36939,7 +36939,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 109,
+      "wall_latency_us": 202,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -36999,7 +36999,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 78,
+      "wall_latency_us": 93,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -37436,7 +37436,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 187,
+      "wall_latency_us": 253,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -37812,7 +37812,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 93,
+      "wall_latency_us": 121,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -38158,7 +38158,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 89,
+      "wall_latency_us": 145,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -38474,7 +38474,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 85,
+      "wall_latency_us": 205,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -38760,7 +38760,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 81,
+      "wall_latency_us": 196,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -39016,7 +39016,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 75,
+      "wall_latency_us": 173,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -39242,7 +39242,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 69,
+      "wall_latency_us": 171,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -39438,7 +39438,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 62,
+      "wall_latency_us": 129,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -39604,7 +39604,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 58,
+      "wall_latency_us": 144,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -39740,7 +39740,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 50,
+      "wall_latency_us": 75,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -39846,7 +39846,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 43,
+      "wall_latency_us": 110,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -39932,7 +39932,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 117,
+      "wall_latency_us": 202,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -39979,7 +39979,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 54,
+      "wall_latency_us": 64,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -40319,7 +40319,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 157,
+      "wall_latency_us": 228,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -40629,7 +40629,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 150,
+      "wall_latency_us": 186,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -40715,7 +40715,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 114,
+      "wall_latency_us": 183,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -40762,7 +40762,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 53,
+      "wall_latency_us": 63,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -41116,7 +41116,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 114,
+      "wall_latency_us": 163,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -41440,7 +41440,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 108,
+      "wall_latency_us": 135,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -41526,7 +41526,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 115,
+      "wall_latency_us": 239,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -41708,7 +41708,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 103,
+      "wall_latency_us": 169,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -41860,7 +41860,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 96,
+      "wall_latency_us": 131,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -41907,7 +41907,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 37,
+      "wall_latency_us": 69,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -42315,7 +42315,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 192,
+      "wall_latency_us": 251,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -42693,7 +42693,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 190,
+      "wall_latency_us": 243,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -43041,7 +43041,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 183,
+      "wall_latency_us": 320,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -43359,7 +43359,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 179,
+      "wall_latency_us": 196,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -43647,7 +43647,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 172,
+      "wall_latency_us": 186,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -43905,7 +43905,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 167,
+      "wall_latency_us": 175,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -44161,7 +44161,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 75,
+      "wall_latency_us": 82,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -44387,7 +44387,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 73,
+      "wall_latency_us": 71,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -44885,7 +44885,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 51,
+      "wall_latency_us": 50,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -44971,7 +44971,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 120,
+      "wall_latency_us": 143,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -45018,7 +45018,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 58,
+      "wall_latency_us": 62,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -45358,7 +45358,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 158,
+      "wall_latency_us": 177,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -45668,7 +45668,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 151,
+      "wall_latency_us": 158,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -45948,7 +45948,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 170,
+      "wall_latency_us": 153,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -46198,7 +46198,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 174,
+      "wall_latency_us": 152,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -46418,7 +46418,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 148,
+      "wall_latency_us": 155,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -46608,7 +46608,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 157,
+      "wall_latency_us": 146,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -46768,7 +46768,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 164,
+      "wall_latency_us": 144,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -46904,7 +46904,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 64,
+      "wall_latency_us": 56,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -47010,7 +47010,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 51,
+      "wall_latency_us": 49,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -47086,7 +47086,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 46,
+      "wall_latency_us": 41,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -47132,7 +47132,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 30,
+      "wall_latency_us": 32,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -47218,7 +47218,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 170,
+      "wall_latency_us": 149,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -47265,7 +47265,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 65,
+      "wall_latency_us": 59,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -47619,7 +47619,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 138,
+      "wall_latency_us": 128,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -47943,7 +47943,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 157,
+      "wall_latency_us": 125,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -48237,7 +48237,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 144,
+      "wall_latency_us": 117,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -48501,7 +48501,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 124,
+      "wall_latency_us": 110,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -48735,7 +48735,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 111,
+      "wall_latency_us": 109,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -48939,7 +48939,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 100,
+      "wall_latency_us": 102,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -49113,7 +49113,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 102,
+      "wall_latency_us": 93,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -49330,7 +49330,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 114,
+      "wall_latency_us": 120,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -49377,7 +49377,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 81,
+      "wall_latency_us": 64,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -49559,7 +49559,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 133,
+      "wall_latency_us": 120,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -49606,7 +49606,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 40,
+      "wall_latency_us": 64,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -50044,7 +50044,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 270,
+      "wall_latency_us": 233,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -50452,7 +50452,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 236,
+      "wall_latency_us": 301,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -50525,7 +50525,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 98,
+      "wall_latency_us": 144,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -50572,7 +50572,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 62,
+      "wall_latency_us": 70,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -50904,7 +50904,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 183,
+      "wall_latency_us": 195,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -51206,7 +51206,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 149,
+      "wall_latency_us": 165,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -51279,7 +51279,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 92,
+      "wall_latency_us": 130,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -51326,7 +51326,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 59,
+      "wall_latency_us": 71,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -51680,7 +51680,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 119,
+      "wall_latency_us": 130,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -52004,7 +52004,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 115,
+      "wall_latency_us": 122,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -52298,7 +52298,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 107,
+      "wall_latency_us": 125,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -52562,7 +52562,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 101,
+      "wall_latency_us": 113,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -52796,7 +52796,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 96,
+      "wall_latency_us": 103,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -53000,7 +53000,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 90,
+      "wall_latency_us": 100,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -53226,7 +53226,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 70,
+      "wall_latency_us": 78,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -53422,7 +53422,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 67,
+      "wall_latency_us": 68,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -53588,7 +53588,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 60,
+      "wall_latency_us": 62,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -53724,7 +53724,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 53,
+      "wall_latency_us": 56,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -53797,7 +53797,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 96,
+      "wall_latency_us": 123,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -53844,7 +53844,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 61,
+      "wall_latency_us": 64,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -54026,7 +54026,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 106,
+      "wall_latency_us": 123,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -54178,7 +54178,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 129,
+      "wall_latency_us": 110,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -54225,7 +54225,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 42,
+      "wall_latency_us": 64,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -54663,7 +54663,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 224,
+      "wall_latency_us": 232,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -55071,7 +55071,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 215,
+      "wall_latency_us": 221,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -55449,7 +55449,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 210,
+      "wall_latency_us": 225,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -55825,7 +55825,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 106,
+      "wall_latency_us": 111,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -56171,7 +56171,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 108,
+      "wall_latency_us": 107,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -56487,7 +56487,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 98,
+      "wall_latency_us": 103,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -56773,7 +56773,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 92,
+      "wall_latency_us": 89,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -57029,7 +57029,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 86,
+      "wall_latency_us": 84,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -57255,7 +57255,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 75,
+      "wall_latency_us": 77,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -57753,7 +57753,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 55,
+      "wall_latency_us": 57,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -57859,7 +57859,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 47,
+      "wall_latency_us": 51,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -57935,7 +57935,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 42,
+      "wall_latency_us": 44,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -57981,7 +57981,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 32,
+      "wall_latency_us": 33,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -58054,7 +58054,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 105,
+      "wall_latency_us": 123,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -58386,7 +58386,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 150,
+      "wall_latency_us": 151,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -58459,7 +58459,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 99,
+      "wall_latency_us": 135,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -58843,7 +58843,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 139,
+      "wall_latency_us": 148,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -59197,7 +59197,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 128,
+      "wall_latency_us": 152,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -59521,7 +59521,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 123,
+      "wall_latency_us": 145,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -59815,7 +59815,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 117,
+      "wall_latency_us": 142,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -60079,7 +60079,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 110,
+      "wall_latency_us": 131,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -60313,7 +60313,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 102,
+      "wall_latency_us": 118,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -60517,7 +60517,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 95,
+      "wall_latency_us": 155,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -60691,7 +60691,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 88,
+      "wall_latency_us": 184,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -60835,7 +60835,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 82,
+      "wall_latency_us": 120,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -60949,7 +60949,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 75,
+      "wall_latency_us": 103,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -61085,7 +61085,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 53,
+      "wall_latency_us": 71,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -61191,7 +61191,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 47,
+      "wall_latency_us": 63,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -61267,7 +61267,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 41,
+      "wall_latency_us": 51,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -61313,7 +61313,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 33,
+      "wall_latency_us": 43,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -61386,7 +61386,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 104,
+      "wall_latency_us": 159,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -61433,7 +61433,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 67,
+      "wall_latency_us": 85,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -61615,7 +61615,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 116,
+      "wall_latency_us": 166,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -61811,7 +61811,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 67,
+      "wall_latency_us": 85,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -61977,7 +61977,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 61,
+      "wall_latency_us": 83,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -62113,7 +62113,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 54,
+      "wall_latency_us": 71,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -62251,7 +62251,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 80,
+      "wall_latency_us": 93,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -62391,7 +62391,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 99,
+      "wall_latency_us": 118,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -62438,7 +62438,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 45,
+      "wall_latency_us": 75,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -62906,7 +62906,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 243,
+      "wall_latency_us": 283,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -63344,7 +63344,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 234,
+      "wall_latency_us": 285,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -63752,7 +63752,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 228,
+      "wall_latency_us": 265,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -64130,7 +64130,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 223,
+      "wall_latency_us": 255,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -64478,7 +64478,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 216,
+      "wall_latency_us": 276,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -64796,7 +64796,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 208,
+      "wall_latency_us": 261,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -65084,7 +65084,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 197,
+      "wall_latency_us": 236,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -65342,7 +65342,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 190,
+      "wall_latency_us": 229,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -65570,7 +65570,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 183,
+      "wall_latency_us": 218,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -65796,7 +65796,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 75,
+      "wall_latency_us": 87,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -65992,7 +65992,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 69,
+      "wall_latency_us": 82,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -66158,7 +66158,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 67,
+      "wall_latency_us": 75,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -66294,7 +66294,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 58,
+      "wall_latency_us": 64,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -66400,7 +66400,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 50,
+      "wall_latency_us": 55,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -66476,7 +66476,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 42,
+      "wall_latency_us": 47,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -66522,7 +66522,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 34,
+      "wall_latency_us": 38,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -66595,7 +66595,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 112,
+      "wall_latency_us": 152,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -66642,7 +66642,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 69,
+      "wall_latency_us": 82,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -66974,7 +66974,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 154,
+      "wall_latency_us": 181,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -67276,7 +67276,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 146,
+      "wall_latency_us": 175,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -67548,7 +67548,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 141,
+      "wall_latency_us": 165,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -67790,7 +67790,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 137,
+      "wall_latency_us": 167,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -68002,7 +68002,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 131,
+      "wall_latency_us": 249,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -68228,7 +68228,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 78,
+      "wall_latency_us": 91,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -68424,7 +68424,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 71,
+      "wall_latency_us": 82,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -68590,7 +68590,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 65,
+      "wall_latency_us": 68,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -68726,7 +68726,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 58,
+      "wall_latency_us": 62,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -68832,7 +68832,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 50,
+      "wall_latency_us": 72,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -68905,7 +68905,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 109,
+      "wall_latency_us": 139,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -68952,7 +68952,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 70,
+      "wall_latency_us": 74,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -69366,7 +69366,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 143,
+      "wall_latency_us": 188,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -69802,7 +69802,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 114,
+      "wall_latency_us": 151,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -69875,7 +69875,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 104,
+      "wall_latency_us": 159,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -69922,7 +69922,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 66,
+      "wall_latency_us": 79,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -70126,7 +70126,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 92,
+      "wall_latency_us": 111,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -70300,7 +70300,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 86,
+      "wall_latency_us": 106,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -70444,7 +70444,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 81,
+      "wall_latency_us": 100,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -70558,7 +70558,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 76,
+      "wall_latency_us": 90,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -70644,7 +70644,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 128,
+      "wall_latency_us": 178,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -70691,7 +70691,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 67,
+      "wall_latency_us": 79,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -71189,7 +71189,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 238,
+      "wall_latency_us": 320,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -71657,7 +71657,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 236,
+      "wall_latency_us": 297,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -72095,7 +72095,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 227,
+      "wall_latency_us": 286,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -72531,7 +72531,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 118,
+      "wall_latency_us": 140,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -72937,7 +72937,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 114,
+      "wall_latency_us": 147,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -73313,7 +73313,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 106,
+      "wall_latency_us": 140,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -73659,7 +73659,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 105,
+      "wall_latency_us": 136,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -73975,7 +73975,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 104,
+      "wall_latency_us": 113,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -74261,7 +74261,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 93,
+      "wall_latency_us": 106,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -74517,7 +74517,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 87,
+      "wall_latency_us": 104,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -74743,7 +74743,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 78,
+      "wall_latency_us": 91,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -74939,7 +74939,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 71,
+      "wall_latency_us": 86,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -75105,7 +75105,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 64,
+      "wall_latency_us": 78,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -75241,7 +75241,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 58,
+      "wall_latency_us": 69,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -75347,7 +75347,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 50,
+      "wall_latency_us": 59,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -75423,7 +75423,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 42,
+      "wall_latency_us": 53,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -75469,7 +75469,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 33,
+      "wall_latency_us": 38,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -75529,7 +75529,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 74,
+      "wall_latency_us": 115,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -75576,7 +75576,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 68,
+      "wall_latency_us": 79,
       "stop_reason": "singleton_legal_action"
     },
     {
@@ -75938,7 +75938,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 153,
+      "wall_latency_us": 182,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -76270,7 +76270,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 147,
+      "wall_latency_us": 182,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -76572,7 +76572,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 143,
+      "wall_latency_us": 174,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -76888,7 +76888,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 91,
+      "wall_latency_us": 108,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -76948,7 +76948,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 73,
+      "wall_latency_us": 115,
       "stop_reason": "random_legal_selection"
     },
     {
@@ -76995,7 +76995,7 @@
       "actual_cpu_time_us": null,
       "memory_delta_bytes": null,
       "considered_actions": [],
-      "wall_latency_us": 69,
+      "wall_latency_us": 82,
       "stop_reason": "singleton_legal_action"
     }
   ],
@@ -77003,7 +77003,7 @@
     "seed": 17306488943054686737,
     "winner": 2,
     "turns": 81,
-    "final_hash": 689878398876510485,
+    "final_hash": 10388195985164245093,
     "final_life": [
       -6,
       -4,

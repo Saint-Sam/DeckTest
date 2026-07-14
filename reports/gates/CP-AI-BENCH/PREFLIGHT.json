@@ -22,11 +22,13 @@
     "frozen development, validation, and sealed split specification",
     "versioned learning record schemas",
     "versioned PilotIntent records for all four integration decks",
-    "canonical human and AI commander-zone move-or-leave adapter"
+    "canonical human and AI commander-zone move-or-leave adapter",
+    "split multiplayer player-defender attack assignment product",
+    "APNAP-ordered blocker decisions for every attacked player with kernel accumulation"
   ],
   "blocking_for_pass": [
     "complete production Choice/Prompt adapters",
-    "complete multiplayer combat decision surface",
+    "complete non-player combat-defender and strategic combat-damage prompt surface",
     "immutable manifest hashes generated from a clean product commit",
     "near-state and replay-family leakage audit",
     "sealed hidden canaries",

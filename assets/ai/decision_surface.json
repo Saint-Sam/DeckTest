@@ -30,14 +30,14 @@
       "human": "partial",
       "ai": "partial",
       "benchmark": "partial",
-      "note": "Human and AI consume the same complete canonical subsets for one defending player; split multiplayer allocation remains unsupported."
+      "note": "Human and AI consume the same capped canonical Cartesian product assigning each legal attacker to no attack or any legal live player defender, including split multiplayer attacks; non-player defenders and sealed benchmark fixtures remain open."
     },
     {
       "kind": "declare_blockers",
       "human": "partial",
       "ai": "partial",
       "benchmark": "partial",
-      "note": "Human and AI consume the same complete canonical blocker combinations for the current defender; full multiplayer combat sequencing remains open."
+      "note": "Human and AI consume complete capped canonical blocker combinations for every attacked player in deterministic APNAP order, with declarations accumulated by the kernel; strategic damage ordering and sealed benchmark fixtures remain open."
     },
     {
       "kind": "commander_zone",

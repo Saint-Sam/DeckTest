@@ -74,7 +74,9 @@ onto identities.
 ## Next Gates
 
 1. T4.1-T4.5, T4.7, and T4.10 diagnostic implementations are locally green;
-   complete the canonical Choice/Prompt adapters and CP-AI-BENCH evidence.
+   split player-defender attacks and all-defender blocking are live. Complete
+   the remaining canonical Choice/Prompt adapters, non-player combat defenders,
+   strategic damage prompts, and CP-AI-BENCH evidence.
 2. Finish T4.6 calibration and T4.9 CPU/memory/reference-device latency without
    promoting a search knee or tier from incomplete Track A/B/C evidence.
 3. Complete Owner CP-AI-LADDER and CP-NN-GO decisions. Reopen T3 only for a concrete T4 blocker, fix the smallest shared primitive,

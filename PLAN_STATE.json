@@ -375,13 +375,13 @@
       "status": "verified_local_diagnostics",
       "branch": "task/T4.3-heuristic-policy",
       "attempts": 0,
-      "verification": "Seeded random-legal, deterministic/noisy one-ply heuristic, mulligan, threat/target helpers, and exact release-profile policy/action replay pass. Refreshed heuristic and random replays persist complete canonical legal descriptors, PlayerView hashes, and DecisionStateKeys."
+      "verification": "Seeded random-legal, deterministic/noisy one-ply heuristic, mulligan, threat/target helpers, and exact release-profile policy/action replay pass. Refreshed heuristic and random replays persist complete canonical legal descriptors, PlayerView hashes, and DecisionStateKeys. Player-defender attack choices now include the complete capped split-allocation product, and every attacked player declares blockers in deterministic APNAP order without overwriting prior declarations."
     },
     "T4.4": {
       "status": "verified_local_diagnostics",
       "branch": "task/T4.4-determinized-mcts-v1",
       "attempts": 0,
-      "verification": "Root-parallel determinized UCT with visit-sum selection passes deterministic search and exact full-game replay. The release diagnostic searched 491 decisions with 838 simulations and 1,257 nodes."
+      "verification": "Root-parallel determinized UCT with visit-sum selection passes deterministic search and exact full-game replay. The refreshed split-combat release diagnostic searched 368 decisions with 736 simulations and 1,104 nodes."
     },
     "T4.5": {
       "status": "verified_local_diagnostics",

@@ -1379,7 +1379,6 @@ struct GameDriver {
     permanent_runtime_registered_for: HashSet<ObjectId>,
     commander_zone_decisions: HashMap<ObjectId, ZoneId>,
     current_attacks: Vec<AttackDeclaration>,
-    current_defender: Option<PlayerId>,
     coverage_target: Option<String>,
     metrics: GameMetrics,
     trace: TraceMode,
@@ -1475,7 +1474,6 @@ impl GameDriver {
             permanent_runtime_registered_for: HashSet::new(),
             commander_zone_decisions: HashMap::new(),
             current_attacks: Vec::new(),
-            current_defender: None,
             coverage_target,
             metrics: GameMetrics::default(),
             trace,
@@ -2037,19 +2035,18 @@ impl GameDriver {
                 }
                 Step::DeclareBlockers if active_has_priority && blockers_done.insert(turn) => {
                     self.check_hidden_information()?;
-                    let defender = self.current_defending_player(active);
-                    if defender.is_some() && defender == human {
-                        let source = decisions
-                            .as_deref_mut()
-                            .ok_or_else(|| "human game is missing a decision source".to_owned())?;
-                        self.declare_human_blocks(active, source)?;
-                    } else if let (Some(policies), Some(defender)) =
-                        (ai_policies.as_ref(), defender)
-                    {
-                        let policy = self.policy_for(defender, policies)?;
-                        self.declare_ai_blocks(active, policy)?;
-                    } else {
-                        self.declare_blocks(active)?;
+                    for defender in self.current_defending_players(active) {
+                        if Some(defender) == human {
+                            let source = decisions.as_deref_mut().ok_or_else(|| {
+                                "human game is missing a decision source".to_owned()
+                            })?;
+                            self.declare_human_blocks(defender, source)?;
+                        } else if let Some(policies) = ai_policies.as_ref() {
+                            let policy = self.policy_for(defender, policies)?;
+                            self.declare_ai_blocks(defender, policy)?;
+                        } else {
+                            self.declare_blocks(defender)?;
+                        }
                     }
                 }
                 Step::CombatDamage if active_has_priority => {
@@ -3514,21 +3511,30 @@ impl GameDriver {
     ) -> i64 {
         let (base, risks) = match descriptor {
             DecisionDescriptor::DeclareAttackers { attacks } => {
-                let total_power = attacks
-                    .iter()
-                    .map(|attack| {
-                        self.state
-                            .creature_characteristics(attack.attacker())
-                            .map_or(0, |creature| i64::from(creature.power().max(0)))
-                    })
-                    .sum();
-                let defender_life = attacks.first().map_or(40, |attack| {
-                    self.state.players()[attack.defending_player().index()].life()
-                });
-                (
-                    weights.attack_prior(total_power, attacks.len() as i64, defender_life),
-                    ActionRisks::none(),
-                )
+                let mut by_defender = BTreeMap::<usize, (PlayerId, i64, i64)>::new();
+                for attack in attacks {
+                    let power = self
+                        .state
+                        .creature_characteristics(attack.attacker())
+                        .map_or(0, |creature| i64::from(creature.power().max(0)));
+                    let entry = by_defender
+                        .entry(attack.defending_player().index())
+                        .or_insert((attack.defending_player(), 0, 0));
+                    entry.1 = entry.1.saturating_add(power);
+                    entry.2 = entry.2.saturating_add(1);
+                }
+                let base = by_defender.values().fold(
+                    0_i64,
+                    |score, (defender, total_power, attacker_count)| {
+                        let defender_life = self.state.players()[defender.index()].life();
+                        score.saturating_add(weights.attack_prior(
+                            *total_power,
+                            *attacker_count,
+                            defender_life,
+                        ))
+                    },
+                );
+                (base, ActionRisks::none())
             }
             DecisionDescriptor::DeclareBlockers { blocks } => {
                 let mut prevented_power = 0_i64;
@@ -3655,7 +3661,6 @@ impl GameDriver {
             player: active,
             attacks: attacks.clone(),
         })?;
-        self.current_defender = attacks.first().map(|attack| attack.defending_player());
         self.current_attacks = attacks;
         self.metrics.combat_declarations = self.metrics.combat_declarations.saturating_add(1);
         Ok(())
@@ -3675,44 +3680,47 @@ impl GameDriver {
             .filter(|object| self.state.object_controller(*object) == Ok(active))
             .collect::<Vec<_>>();
         objects.sort_by_key(|object| object.index());
+        let defenders = self.live_opponents(active);
         let mut candidates = vec![Vec::new()];
-        for defender in self.live_opponents(active) {
-            let legal = objects
+        for object in objects {
+            let legal = defenders
                 .iter()
                 .copied()
-                .map(|object| AttackDeclaration::new(object, defender))
+                .map(|defender| AttackDeclaration::new(object, defender))
                 .filter(|attack| self.state.can_attack(active, *attack))
                 .collect::<Vec<_>>();
-            let mut variants = vec![Vec::new()];
-            for attack in legal {
-                let existing = variants.len();
-                if existing.saturating_mul(2) > MAX_DIAGNOSTIC_COMBAT_OPTIONS {
-                    return Err(format!(
-                        "seed {} attack surface exceeds the diagnostics-only limit of {} options",
-                        self.seed, MAX_DIAGNOSTIC_COMBAT_OPTIONS
-                    ));
-                }
-                for index in 0..existing {
-                    let mut with_attack = variants[index].clone();
-                    with_attack.push(attack);
-                    variants.push(with_attack);
-                }
+            if legal.is_empty() {
+                continue;
             }
-            for attacks in variants.into_iter().skip(1) {
-                let action = Action::DeclareAttackers {
-                    player: active,
-                    attacks: attacks.clone(),
-                };
-                if self.action_is_legal(&action) {
-                    candidates.push(attacks);
-                }
-            }
-            if candidates.len() > MAX_DIAGNOSTIC_COMBAT_OPTIONS {
+            let existing = candidates.len();
+            let additional = existing.checked_mul(legal.len()).ok_or_else(|| {
+                format!("seed {} attack surface option count overflowed", self.seed)
+            })?;
+            if existing.saturating_add(additional) > MAX_DIAGNOSTIC_COMBAT_OPTIONS {
                 return Err(format!(
                     "seed {} attack surface exceeds the diagnostics-only limit of {} options",
                     self.seed, MAX_DIAGNOSTIC_COMBAT_OPTIONS
                 ));
             }
+            for index in 0..existing {
+                for attack in &legal {
+                    let mut with_attack = candidates[index].clone();
+                    with_attack.push(*attack);
+                    candidates.push(with_attack);
+                }
+            }
+        }
+        candidates.retain(|attacks| {
+            self.action_is_legal(&Action::DeclareAttackers {
+                player: active,
+                attacks: attacks.clone(),
+            })
+        });
+        if candidates.is_empty() {
+            return Err(format!(
+                "seed {} attack surface has no legal fallback",
+                self.seed
+            ));
         }
         Ok(candidates)
     }
@@ -3749,7 +3757,6 @@ impl GameDriver {
         for action in selected.actions().to_vec() {
             self.dispatch(action)?;
         }
-        self.current_defender = attacks.first().map(|attack| attack.defending_player());
         self.current_attacks = attacks;
         self.metrics.combat_declarations = self.metrics.combat_declarations.saturating_add(1);
         Ok(())
@@ -3822,7 +3829,6 @@ impl GameDriver {
             player: active,
             attacks: attacks.clone(),
         })?;
-        self.current_defender = attacks.first().map(|attack| attack.defending_player());
         self.current_attacks = attacks;
         self.metrics.combat_declarations = self.metrics.combat_declarations.saturating_add(1);
         Ok(())
@@ -3889,7 +3895,6 @@ impl GameDriver {
             attacks: attacks.clone(),
         })?;
         self.current_attacks = attacks;
-        self.current_defender = Some(defender);
         self.metrics.combat_declarations = self.metrics.combat_declarations.saturating_add(1);
         Ok(())
     }
@@ -3929,20 +3934,26 @@ impl GameDriver {
         })
     }
 
-    fn current_defending_player(&self, active: PlayerId) -> Option<PlayerId> {
-        self.current_defender.or_else(|| {
-            self.current_attacks
-                .first()
-                .map(|attack| attack.defending_player())
-                .or_else(|| self.next_live_opponent(active))
-        })
+    fn current_defending_players(&self, active: PlayerId) -> Vec<PlayerId> {
+        let Some(start) = self.players.iter().position(|player| *player == active) else {
+            return Vec::new();
+        };
+        (1..self.players.len())
+            .map(|offset| self.players[(start + offset) % self.players.len()])
+            .filter(|defender| {
+                self.current_attacks
+                    .iter()
+                    .any(|attack| attack.defending_player() == *defender)
+            })
+            .collect()
     }
 
-    fn declare_ai_blocks(&mut self, active: PlayerId, policy: AiController) -> Result<(), String> {
+    fn declare_ai_blocks(
+        &mut self,
+        defending_player: PlayerId,
+        policy: AiController,
+    ) -> Result<(), String> {
         let decision_started = Instant::now();
-        let Some(defending_player) = self.current_defending_player(active) else {
-            return Ok(());
-        };
         let context = self.block_decision_context(defending_player)?;
         let (selected_id, decision, policy_name, candidates, search_report) = match policy {
             AiController::Search(controller) => {
@@ -4086,15 +4097,12 @@ impl GameDriver {
 
     fn declare_human_blocks(
         &mut self,
-        active: PlayerId,
+        defending_player: PlayerId,
         source: &mut dyn DecisionSource,
     ) -> Result<(), String> {
         if source.is_legacy_replay() {
-            return self.declare_legacy_human_blocks(active, source);
+            return self.declare_legacy_human_blocks(defending_player, source);
         }
-        let defending_player = self
-            .current_defending_player(active)
-            .ok_or_else(|| format!("seed {} missing human defending player", self.seed))?;
         let context = self.block_decision_context(defending_player)?;
         let labels = context
             .options()
@@ -4117,12 +4125,9 @@ impl GameDriver {
 
     fn declare_legacy_human_blocks(
         &mut self,
-        active: PlayerId,
+        defending_player: PlayerId,
         source: &mut dyn DecisionSource,
     ) -> Result<(), String> {
-        let defending_player = self
-            .current_defending_player(active)
-            .ok_or_else(|| format!("seed {} missing human defending player", self.seed))?;
         let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
         let blockers = self
             .state
@@ -4137,7 +4142,11 @@ impl GameDriver {
         let mut seen = BTreeSet::new();
 
         for blocker in blockers.iter().copied() {
-            for attack in &self.current_attacks {
+            for attack in self
+                .current_attacks
+                .iter()
+                .filter(|attack| attack.defending_player() == defending_player)
+            {
                 let blocks = vec![BlockDeclaration::new(blocker, attack.attacker())];
                 let action = Action::DeclareBlockers {
                     defending_player,
@@ -4224,60 +4233,62 @@ impl GameDriver {
         Ok(format!("Block with {declarations}"))
     }
 
-    fn declare_blocks(&mut self, active: PlayerId) -> Result<(), String> {
-        let defender = self.current_defending_player(active);
-        if let Some(defending_player) = defender {
-            if self.metrics.commander_zone_returns > 0 {
-                self.dispatch(Action::DeclareBlockers {
-                    defending_player,
-                    blocks: Vec::new(),
-                })?;
-                return Ok(());
-            }
-            let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
-            let mut blockers = self
-                .state
-                .zone_objects(battlefield)
-                .ok_or_else(|| format!("seed {} missing battlefield", self.seed))?
-                .iter()
-                .copied()
-                .filter(|object| self.state.object_controller(*object) == Ok(defending_player))
-                .collect::<Vec<_>>();
-            blockers.sort_by_key(|object| (!self.commanders.contains(object), object.index()));
-            let mut attacks = self.current_attacks.clone();
-            attacks.sort_by_key(|attack| {
-                (
-                    !self.commanders.contains(&attack.attacker()),
-                    attack.attacker().index(),
-                )
-            });
-            let mut blocks = Vec::new();
-            'attacks: for attack in attacks {
-                if !self.commanders.contains(&attack.attacker()) {
-                    continue;
-                }
-                let Ok(attacker) = self.state.creature_characteristics(attack.attacker()) else {
-                    continue;
-                };
-                for blocker in &blockers {
-                    let Ok(characteristics) = self.state.creature_characteristics(*blocker) else {
-                        continue;
-                    };
-                    let declaration = BlockDeclaration::new(*blocker, attack.attacker());
-                    if self.state.can_block(defending_player, declaration)
-                        && (characteristics.power() >= attacker.toughness()
-                            || characteristics.keywords().deathtouch())
-                    {
-                        blocks.push(declaration);
-                        break 'attacks;
-                    }
-                }
-            }
+    fn declare_blocks(&mut self, defending_player: PlayerId) -> Result<(), String> {
+        if self.metrics.commander_zone_returns > 0 {
             self.dispatch(Action::DeclareBlockers {
                 defending_player,
-                blocks: blocks.clone(),
+                blocks: Vec::new(),
             })?;
+            return Ok(());
         }
+        let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+        let mut blockers = self
+            .state
+            .zone_objects(battlefield)
+            .ok_or_else(|| format!("seed {} missing battlefield", self.seed))?
+            .iter()
+            .copied()
+            .filter(|object| self.state.object_controller(*object) == Ok(defending_player))
+            .collect::<Vec<_>>();
+        blockers.sort_by_key(|object| (!self.commanders.contains(object), object.index()));
+        let mut attacks = self
+            .current_attacks
+            .iter()
+            .copied()
+            .filter(|attack| attack.defending_player() == defending_player)
+            .collect::<Vec<_>>();
+        attacks.sort_by_key(|attack| {
+            (
+                !self.commanders.contains(&attack.attacker()),
+                attack.attacker().index(),
+            )
+        });
+        let mut blocks = Vec::new();
+        'attacks: for attack in attacks {
+            if !self.commanders.contains(&attack.attacker()) {
+                continue;
+            }
+            let Ok(attacker) = self.state.creature_characteristics(attack.attacker()) else {
+                continue;
+            };
+            for blocker in &blockers {
+                let Ok(characteristics) = self.state.creature_characteristics(*blocker) else {
+                    continue;
+                };
+                let declaration = BlockDeclaration::new(*blocker, attack.attacker());
+                if self.state.can_block(defending_player, declaration)
+                    && (characteristics.power() >= attacker.toughness()
+                        || characteristics.keywords().deathtouch())
+                {
+                    blocks.push(declaration);
+                    break 'attacks;
+                }
+            }
+        }
+        self.dispatch(Action::DeclareBlockers {
+            defending_player,
+            blocks,
+        })?;
         Ok(())
     }
 
@@ -6420,8 +6431,9 @@ mod tests {
     };
     use forge_ai::{AiWeights, GuardrailTable};
     use forge_core::{
-        apply, Action, CardId, DecisionContext, DecisionDescriptor, DecisionKind, DecisionOption,
-        GameState, ObjectColors, ObjectId, Outcome, PlayerId, PlayerView, ZoneId, ZoneKind,
+        apply, Action, AttackDeclaration, BaseCreatureCharacteristics, CardId, DecisionContext,
+        DecisionDescriptor, DecisionKind, DecisionOption, GameState, ObjectColors, ObjectId,
+        Outcome, PlayerId, PlayerView, Step, ZoneId, ZoneKind,
     };
     use std::{
         collections::{BTreeSet, HashMap, HashSet},
@@ -6628,6 +6640,75 @@ mod tests {
     }
 
     #[test]
+    fn attack_context_exposes_split_defender_assignments() {
+        let (driver, active, defenders, pieces) = combat_decision_driver();
+        let candidates = driver
+            .diagnostic_attack_candidates(active)
+            .unwrap_or_else(|error| panic!("split attack candidates should exist: {error}"));
+
+        assert_eq!(candidates.len(), 16);
+        assert!(candidates.iter().any(|attacks| {
+            attacks
+                == &vec![
+                    AttackDeclaration::new(pieces[0], defenders[0]),
+                    AttackDeclaration::new(pieces[1], defenders[1]),
+                ]
+        }));
+        assert!(candidates.iter().all(|attacks| {
+            attacks
+                .iter()
+                .map(|attack| attack.attacker())
+                .collect::<BTreeSet<_>>()
+                .len()
+                == attacks.len()
+        }));
+    }
+
+    #[test]
+    fn driver_preserves_blocks_from_every_attacked_defender() {
+        let (mut driver, active, defenders, pieces) = combat_decision_driver();
+        let attacks = vec![
+            AttackDeclaration::new(pieces[0], defenders[0]),
+            AttackDeclaration::new(pieces[1], defenders[1]),
+        ];
+        driver
+            .dispatch(Action::DeclareAttackers {
+                player: active,
+                attacks: attacks.clone(),
+            })
+            .unwrap_or_else(|error| panic!("split attacks should apply: {error}"));
+        driver.current_attacks = attacks;
+        assert!(matches!(
+            driver.dispatch(Action::AdvanceStep),
+            Ok(Outcome::StepAdvanced(Step::DeclareBlockers))
+        ));
+
+        let declaration_order = driver.current_defending_players(active);
+        assert_eq!(declaration_order, defenders[..2]);
+        for defender in declaration_order {
+            driver
+                .declare_blocks(defender)
+                .unwrap_or_else(|error| panic!("defender blocks should apply: {error}"));
+        }
+
+        let combat = driver.state.combat_state();
+        assert_eq!(combat.blockers_declared_by(), &defenders[..2]);
+        assert_eq!(combat.blockers().len(), 2);
+        assert!(combat
+            .blockers()
+            .iter()
+            .any(|block| block.object() == pieces[2] && block.attacker() == pieces[0]));
+        assert!(combat
+            .blockers()
+            .iter()
+            .any(|block| block.object() == pieces[3] && block.attacker() == pieces[1]));
+        assert!(matches!(
+            driver.dispatch(Action::AdvanceStep),
+            Ok(Outcome::StepAdvanced(Step::CombatDamage))
+        ));
+    }
+
+    #[test]
     fn commander_zone_adapter_exposes_both_legal_choices_and_ai_records_membership() {
         let (mut driver, owner, commander, graveyard) = commander_decision_driver();
         let context = driver
@@ -6820,7 +6901,6 @@ mod tests {
             permanent_runtime_registered_for: HashSet::new(),
             commander_zone_decisions: HashMap::new(),
             current_attacks: Vec::new(),
-            current_defender: None,
             coverage_target: None,
             metrics: GameMetrics::default(),
             trace: TraceMode::Off,
@@ -6831,5 +6911,117 @@ mod tests {
             seed: 17,
         };
         (driver, owner, commander, graveyard)
+    }
+
+    fn combat_decision_driver() -> (GameDriver, PlayerId, [PlayerId; 3], [ObjectId; 4]) {
+        let mut state = GameState::new();
+        let players = (0..PLAYER_COUNT)
+            .map(|_| match apply(&mut state, Action::AddPlayer) {
+                Outcome::PlayerAdded(player) => player,
+                other => panic!("unexpected player setup outcome: {other:?}"),
+            })
+            .collect::<Vec<_>>();
+        let active = players[0];
+        let defenders = [players[1], players[2], players[3]];
+        let first_attacker = create_test_creature(&mut state, active, 800, 2, 2);
+        let second_attacker = create_test_creature(&mut state, active, 801, 2, 2);
+        let first_blocker = create_test_creature(&mut state, defenders[0], 802, 3, 3);
+        let second_blocker = create_test_creature(&mut state, defenders[1], 803, 3, 3);
+        assert!(matches!(
+            apply(
+                &mut state,
+                Action::CreateObject {
+                    card: CardId::new(899),
+                    owner: active,
+                    controller: active,
+                    zone: ZoneId::new(Some(active), ZoneKind::Library),
+                }
+            ),
+            Outcome::ObjectCreated(_)
+        ));
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::StartTurn {
+                    active_player: active
+                }
+            ),
+            Outcome::Applied
+        );
+        while state.current_step() != Some(Step::DeclareAttackers) {
+            assert!(matches!(
+                apply(&mut state, Action::AdvanceStep),
+                Outcome::StepAdvanced(_)
+            ));
+        }
+        let driver = GameDriver {
+            state,
+            players,
+            programs: Arc::new(HashMap::new()),
+            deck_models: Arc::new(Vec::new()),
+            card_definitions: Arc::new(HashMap::new()),
+            guardrails: Arc::new(
+                GuardrailTable::bundled()
+                    .unwrap_or_else(|error| panic!("guardrails should load: {error}")),
+            ),
+            commanders: vec![first_attacker, second_attacker],
+            trigger_programs: HashMap::new(),
+            mana_abilities: Vec::new(),
+            triggers_registered_for: HashSet::new(),
+            permanent_runtime_registered_for: HashSet::new(),
+            commander_zone_decisions: HashMap::new(),
+            current_attacks: Vec::new(),
+            coverage_target: None,
+            metrics: GameMetrics::default(),
+            trace: TraceMode::Off,
+            actions: Vec::new(),
+            ai_decisions: Vec::new(),
+            next_hidden_check_action: u64::MAX,
+            next_invariant_check_action: u64::MAX,
+            seed: 17,
+        };
+        (
+            driver,
+            active,
+            defenders,
+            [
+                first_attacker,
+                second_attacker,
+                first_blocker,
+                second_blocker,
+            ],
+        )
+    }
+
+    fn create_test_creature(
+        state: &mut GameState,
+        controller: PlayerId,
+        card: u32,
+        power: i32,
+        toughness: i32,
+    ) -> ObjectId {
+        let object = match apply(
+            state,
+            Action::CreateObject {
+                card: CardId::new(card),
+                owner: controller,
+                controller,
+                zone: ZoneId::new(None, ZoneKind::Battlefield),
+            },
+        ) {
+            Outcome::ObjectCreated(object) => object,
+            other => panic!("unexpected creature setup outcome: {other:?}"),
+        };
+        assert_eq!(
+            apply(
+                state,
+                Action::SetBaseCreatureCharacteristics {
+                    object,
+                    base: BaseCreatureCharacteristics::new(power, toughness),
+                }
+            ),
+            Outcome::Applied
+        );
+        object
     }
 }
