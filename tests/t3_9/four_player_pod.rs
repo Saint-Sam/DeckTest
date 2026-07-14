@@ -826,8 +826,22 @@ struct DecisionPrompt<'a> {
     options: &'a [String],
 }
 
+struct LegacyDecisionPrompt<'a> {
+    kind: &'static str,
+    view: &'a PlayerView,
+    options: &'a [String],
+}
+
 trait DecisionSource {
     fn choose(&mut self, prompt: &DecisionPrompt<'_>) -> Result<usize, String>;
+
+    fn is_legacy_replay(&self) -> bool {
+        false
+    }
+
+    fn choose_legacy(&mut self, _prompt: &LegacyDecisionPrompt<'_>) -> Result<usize, String> {
+        Err("legacy decisions are available only while replaying a legacy artifact".to_owned())
+    }
 }
 
 struct TerminalDecisionSource<'a> {
@@ -928,13 +942,19 @@ impl DecisionSource for TerminalDecisionSource<'_> {
 struct ReplayDecisionSource {
     decisions: Vec<HumanDecisionRecord>,
     cursor: usize,
+    legacy: bool,
 }
 
 impl ReplayDecisionSource {
     fn new(decisions: Vec<HumanDecisionRecord>) -> Self {
+        let legacy = !decisions.is_empty()
+            && decisions
+                .iter()
+                .all(|decision| decision.context_id.is_empty());
         Self {
             decisions,
             cursor: 0,
+            legacy,
         }
     }
 
@@ -975,6 +995,59 @@ impl DecisionSource for ReplayDecisionSource {
         self.cursor = self.cursor.saturating_add(1);
         Ok(expected.selected)
     }
+
+    fn is_legacy_replay(&self) -> bool {
+        self.legacy
+    }
+
+    fn choose_legacy(&mut self, prompt: &LegacyDecisionPrompt<'_>) -> Result<usize, String> {
+        if !self.legacy {
+            return Err("a canonical replay cannot enter the legacy decision adapter".to_owned());
+        }
+        let expected = self
+            .decisions
+            .get(self.cursor)
+            .ok_or_else(|| format!("unexpected replay prompt `{}`", prompt.kind))?;
+        let actual_step = prompt
+            .view
+            .current_step()
+            .map_or_else(|| "none".to_owned(), |step| format!("{step:?}"));
+        let options_match = expected.options.len() == prompt.options.len()
+            && expected
+                .options
+                .iter()
+                .zip(prompt.options)
+                .all(|(expected, actual)| legacy_option_key(expected) == legacy_option_key(actual));
+        if expected.prompt != prompt.kind
+            || expected.turn != prompt.view.turn_number()
+            || expected.step != actual_step
+            || !options_match
+        {
+            return Err(format!(
+                "legacy decision replay diverged at prompt {}: expected {expected:?}, got kind={}, turn={}, step={}, options={:?}",
+                self.cursor,
+                prompt.kind,
+                prompt.view.turn_number(),
+                actual_step,
+                prompt.options
+            ));
+        }
+        if expected.selected >= prompt.options.len() {
+            return Err(format!(
+                "legacy decision replay selection {} is outside {} options",
+                expected.selected,
+                prompt.options.len()
+            ));
+        }
+        self.cursor = self.cursor.saturating_add(1);
+        Ok(expected.selected)
+    }
+}
+
+fn legacy_option_key(label: &str) -> &str {
+    label
+        .split_once(" (payment waste ")
+        .map_or(label, |(prefix, _)| prefix)
 }
 
 fn snapshot_prompt(
@@ -1371,6 +1444,20 @@ impl GameDriver {
         trace: TraceMode,
         opening_policies: Option<SeatPolicies>,
     ) -> Result<Self, String> {
+        Self::setup_with_human_opening(pod, seed, coverage_target, trace, opening_policies, None)
+    }
+
+    fn setup_with_human_opening(
+        pod: &PodTemplate,
+        seed: u64,
+        coverage_target: Option<String>,
+        trace: TraceMode,
+        opening_policies: Option<SeatPolicies>,
+        human_opening: Option<(usize, &mut dyn DecisionSource)>,
+    ) -> Result<Self, String> {
+        if opening_policies.is_some() && human_opening.is_some() {
+            return Err("opening hands cannot use both AI and human policies".to_owned());
+        }
         let mut driver = Self {
             state: GameState::new(),
             players: Vec::with_capacity(PLAYER_COUNT),
@@ -1478,7 +1565,9 @@ impl GameDriver {
         }
         driver.dispatch(Action::DrawOpeningHands)?;
         driver.check_initial_hidden_information()?;
-        if let Some(policies) = opening_policies {
+        if let Some((human_seat, source)) = human_opening {
+            driver.resolve_human_opening_hand(human_seat, source)?;
+        } else if let Some(policies) = opening_policies {
             driver.resolve_ai_opening_hands(policies)?;
         } else {
             for player in driver.players.clone() {
@@ -1629,6 +1718,74 @@ impl GameDriver {
                     stop_reason,
                 });
                 for action in actions {
+                    self.dispatch(action)?;
+                }
+                if kept {
+                    break;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn resolve_human_opening_hand(
+        &mut self,
+        human_seat: usize,
+        source: &mut dyn DecisionSource,
+    ) -> Result<(), String> {
+        if human_seat >= self.players.len() {
+            return Err(format!(
+                "seed {} human opening seat {} is outside {} players",
+                self.seed,
+                human_seat + 1,
+                self.players.len()
+            ));
+        }
+        for (seat, player) in self.players.clone().into_iter().enumerate() {
+            if seat != human_seat {
+                self.dispatch(Action::KeepOpeningHand {
+                    player,
+                    bottom: Vec::new(),
+                })?;
+                continue;
+            }
+            loop {
+                let context = self.opening_hand_context(player)?;
+                let labels = context
+                    .options()
+                    .iter()
+                    .map(|option| match option.descriptor() {
+                        DecisionDescriptor::TakeMulligan => Ok("Take a mulligan".to_owned()),
+                        DecisionDescriptor::KeepOpeningHand { bottom } if bottom.is_empty() => {
+                            Ok("Keep this opening hand".to_owned())
+                        }
+                        DecisionDescriptor::KeepOpeningHand { bottom } => Ok(format!(
+                            "Keep and put on bottom, in order: {}",
+                            bottom
+                                .iter()
+                                .map(|object| self.object_name(*object))
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        )),
+                        descriptor => Err(format!(
+                            "seed {} opening prompt cannot label descriptor {descriptor:?}",
+                            self.seed
+                        )),
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                let selected_id =
+                    self.prompt_context_choice(source, "Choose opening hand", &context, &labels)?;
+                let selected = context.select(selected_id).map_err(|error| {
+                    format!(
+                        "seed {} human selected illegal opening action: {error}",
+                        self.seed
+                    )
+                })?;
+                let kept = matches!(
+                    selected.descriptor(),
+                    DecisionDescriptor::KeepOpeningHand { .. }
+                );
+                for action in selected.actions().to_vec() {
                     self.dispatch(action)?;
                 }
                 if kept {
@@ -2071,11 +2228,40 @@ impl GameDriver {
         Ok(selected.id())
     }
 
+    fn prompt_legacy_choice(
+        &self,
+        player: PlayerId,
+        source: &mut dyn DecisionSource,
+        kind: &'static str,
+        options: &[String],
+    ) -> Result<usize, String> {
+        let view = self
+            .state
+            .player_view(player)
+            .map_err(|error| format!("seed {} player view failed: {error:?}", self.seed))?;
+        let selected = source.choose_legacy(&LegacyDecisionPrompt {
+            kind,
+            view: &view,
+            options,
+        })?;
+        if selected >= options.len() {
+            return Err(format!(
+                "seed {} legacy prompt `{kind}` returned option {selected} outside {} choices",
+                self.seed,
+                options.len()
+            ));
+        }
+        Ok(selected)
+    }
+
     fn take_human_main_phase_actions(
         &mut self,
         player: PlayerId,
         source: &mut dyn DecisionSource,
     ) -> Result<(), String> {
+        if source.is_legacy_replay() {
+            return self.take_legacy_human_main_phase_actions(player, source);
+        }
         loop {
             let (context, mappings) = self.main_decision_context(player)?;
             let labels = context
@@ -2099,6 +2285,21 @@ impl GameDriver {
                     )
                 })?;
             if self.apply_main_choice(player, choice)? {
+                return Ok(());
+            }
+        }
+    }
+
+    fn take_legacy_human_main_phase_actions(
+        &mut self,
+        player: PlayerId,
+        source: &mut dyn DecisionSource,
+    ) -> Result<(), String> {
+        loop {
+            let (labels, choices) = self.legacy_human_main_choices(player)?;
+            let selected =
+                self.prompt_legacy_choice(player, source, "Choose a main-phase action", &labels)?;
+            if self.apply_main_choice(player, choices[selected])? {
                 return Ok(());
             }
         }
@@ -2313,6 +2514,150 @@ impl GameDriver {
                     ));
                     choices.push(MainChoice::Cast { object, payment });
                 }
+            }
+        }
+
+        labels.push("Finish main phase".to_owned());
+        choices.push(MainChoice::Finish);
+        Ok((labels, choices))
+    }
+
+    // Frozen adapter for exact replay of forge-human-play-replay-v1 artifacts
+    // recorded before canonical contexts enumerated every payment plan.
+    fn legacy_human_main_choices(
+        &self,
+        player: PlayerId,
+    ) -> Result<(Vec<String>, Vec<MainChoice>), String> {
+        let mut labels = Vec::new();
+        let mut choices = Vec::new();
+        let hand = ZoneId::new(Some(player), ZoneKind::Hand);
+        let mut hand_objects = self
+            .state
+            .zone_objects(hand)
+            .ok_or_else(|| format!("seed {} missing hand zone", self.seed))?
+            .to_vec();
+        hand_objects.sort_by_key(|object| object.index());
+
+        if self.state.players()[player.index()].lands_played_this_turn() == 0 {
+            let mut seen_land_identities = BTreeSet::new();
+            for object in hand_objects.iter().copied() {
+                let Some(program) = self.programs.get(&object) else {
+                    continue;
+                };
+                if program.kind() != ProgramKind::Land
+                    || !seen_land_identities.insert(program.oracle_id().to_owned())
+                {
+                    continue;
+                }
+                let action = Action::PlayLand { player, object };
+                if self.action_is_legal(&action) {
+                    labels.push(format!("Play land: {}", self.object_name(object)));
+                    choices.push(MainChoice::PlayLand(object));
+                }
+            }
+        }
+
+        let mut activations = Vec::new();
+        for (ability_source, controller, ability) in self.mana_abilities.iter().copied() {
+            if controller != player
+                || self.state.object_zone(ability_source)
+                    != Some(ZoneId::new(None, ZoneKind::Battlefield))
+                || self
+                    .state
+                    .object(ability_source)
+                    .map_or(true, |record| record.tapped())
+            {
+                continue;
+            }
+            let cost = self
+                .state
+                .effective_activation_cost(ability)
+                .map_err(|error| format!("seed {} activation cost failed: {error:?}", self.seed))?;
+            let Some(payment) = self
+                .state
+                .payment_plans_for_player(player, cost.mana())
+                .map_err(|error| {
+                    format!("seed {} payment enumeration failed: {error:?}", self.seed)
+                })?
+                .best()
+            else {
+                continue;
+            };
+            let action = Action::ActivateAbility {
+                player,
+                ability,
+                payment,
+            };
+            if self.action_is_legal(&action) {
+                activations.push((ability_source, ability, payment));
+            }
+        }
+        if !activations.is_empty() {
+            labels.push("Activate all available mana sources".to_owned());
+            choices.push(MainChoice::ActivateAll);
+            for (ability_source, ability, payment) in activations {
+                labels.push(format!(
+                    "Activate ability: {}",
+                    self.object_name(ability_source)
+                ));
+                choices.push(MainChoice::Activate {
+                    source: ability_source,
+                    ability,
+                    payment,
+                });
+            }
+        }
+
+        let seat = self
+            .players
+            .iter()
+            .position(|candidate| *candidate == player)
+            .ok_or_else(|| format!("seed {} unknown active player", self.seed))?;
+        let commander = self.commanders[seat];
+        let mut cast_candidates = Vec::new();
+        if self.state.object_zone(commander) == Some(ZoneId::new(None, ZoneKind::Command)) {
+            cast_candidates.push(commander);
+        }
+        cast_candidates.extend(hand_objects);
+        for object in cast_candidates {
+            let Some(program) = self.programs.get(&object) else {
+                continue;
+            };
+            if program.kind() != ProgramKind::Permanent
+                || !program.target_requirements().is_empty()
+                || !program.object_choice_requirements().is_empty()
+                || !program.spell_modes().is_empty()
+                || program.optional_choice_count() != 0
+            {
+                continue;
+            }
+            let cost = self
+                .state
+                .effective_spell_cost(player, object, program.mana_cost())
+                .map_err(|error| format!("seed {} spell cost failed: {error:?}", self.seed))?;
+            let Some(payment) = self
+                .state
+                .payment_plans_for_player(player, cost)
+                .map_err(|error| {
+                    format!("seed {} payment enumeration failed: {error:?}", self.seed)
+                })?
+                .best()
+            else {
+                continue;
+            };
+            let action = Action::CastSpell {
+                player,
+                object,
+                request: CastSpellRequest::new(
+                    StackObjectKind::PermanentSpell,
+                    SpellTiming::Sorcery,
+                    program.mana_cost(),
+                    payment,
+                ),
+            };
+            if self.action_is_legal(&action) {
+                labels.push(format!("Cast: {}", program.name()));
+                choices.push(MainChoice::Cast { object, payment });
             }
         }
 
@@ -3377,6 +3722,9 @@ impl GameDriver {
         active: PlayerId,
         source: &mut dyn DecisionSource,
     ) -> Result<(), String> {
+        if source.is_legacy_replay() {
+            return self.declare_legacy_human_attackers(active, source);
+        }
         let context = self.attack_decision_context(active)?;
         let labels = context
             .options()
@@ -3401,6 +3749,79 @@ impl GameDriver {
         for action in selected.actions().to_vec() {
             self.dispatch(action)?;
         }
+        self.current_defender = attacks.first().map(|attack| attack.defending_player());
+        self.current_attacks = attacks;
+        self.metrics.combat_declarations = self.metrics.combat_declarations.saturating_add(1);
+        Ok(())
+    }
+
+    fn declare_legacy_human_attackers(
+        &mut self,
+        active: PlayerId,
+        source: &mut dyn DecisionSource,
+    ) -> Result<(), String> {
+        let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+        let objects = self
+            .state
+            .zone_objects(battlefield)
+            .ok_or_else(|| format!("seed {} missing battlefield", self.seed))?
+            .iter()
+            .copied()
+            .filter(|object| self.state.object_controller(*object) == Ok(active))
+            .collect::<Vec<_>>();
+        let mut labels = Vec::new();
+        let mut candidates = Vec::<Vec<AttackDeclaration>>::new();
+        let mut seen = BTreeSet::new();
+        for defender in self.live_opponents(active) {
+            let legal = objects
+                .iter()
+                .copied()
+                .map(|object| AttackDeclaration::new(object, defender))
+                .filter(|attack| self.state.can_attack(active, *attack))
+                .collect::<Vec<_>>();
+            if legal.is_empty() {
+                continue;
+            }
+            let mut variants = Vec::with_capacity(legal.len() + 1);
+            variants.push(legal.clone());
+            variants.extend(legal.iter().copied().map(|attack| vec![attack]));
+            for attacks in variants {
+                let key = format!("{attacks:?}");
+                let action = Action::DeclareAttackers {
+                    player: active,
+                    attacks: attacks.clone(),
+                };
+                if !seen.insert(key) || !self.action_is_legal(&action) {
+                    continue;
+                }
+                let names = attacks
+                    .iter()
+                    .map(|attack| self.object_name(attack.attacker()))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                labels.push(format!("Attack seat {} with {names}", defender.index() + 1));
+                candidates.push(attacks);
+            }
+        }
+        let no_attacks = Vec::new();
+        let no_attack_action = Action::DeclareAttackers {
+            player: active,
+            attacks: no_attacks.clone(),
+        };
+        if !self.action_is_legal(&no_attack_action) {
+            return Err(format!(
+                "seed {} kernel rejected the no-attack fallback",
+                self.seed
+            ));
+        }
+        labels.push("Attack no one".to_owned());
+        candidates.push(no_attacks);
+        let selected = self.prompt_legacy_choice(active, source, "Choose attackers", &labels)?;
+        let attacks = candidates[selected].clone();
+        self.dispatch(Action::DeclareAttackers {
+            player: active,
+            attacks: attacks.clone(),
+        })?;
         self.current_defender = attacks.first().map(|attack| attack.defending_player());
         self.current_attacks = attacks;
         self.metrics.combat_declarations = self.metrics.combat_declarations.saturating_add(1);
@@ -3668,6 +4089,9 @@ impl GameDriver {
         active: PlayerId,
         source: &mut dyn DecisionSource,
     ) -> Result<(), String> {
+        if source.is_legacy_replay() {
+            return self.declare_legacy_human_blocks(active, source);
+        }
         let defending_player = self
             .current_defending_player(active)
             .ok_or_else(|| format!("seed {} missing human defending player", self.seed))?;
@@ -3688,6 +4112,91 @@ impl GameDriver {
         for action in selected.actions().to_vec() {
             self.dispatch(action)?;
         }
+        Ok(())
+    }
+
+    fn declare_legacy_human_blocks(
+        &mut self,
+        active: PlayerId,
+        source: &mut dyn DecisionSource,
+    ) -> Result<(), String> {
+        let defending_player = self
+            .current_defending_player(active)
+            .ok_or_else(|| format!("seed {} missing human defending player", self.seed))?;
+        let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+        let blockers = self
+            .state
+            .zone_objects(battlefield)
+            .ok_or_else(|| format!("seed {} missing battlefield", self.seed))?
+            .iter()
+            .copied()
+            .filter(|object| self.state.object_controller(*object) == Ok(defending_player))
+            .collect::<Vec<_>>();
+        let mut labels = Vec::new();
+        let mut candidates = Vec::<Vec<BlockDeclaration>>::new();
+        let mut seen = BTreeSet::new();
+
+        for blocker in blockers.iter().copied() {
+            for attack in &self.current_attacks {
+                let blocks = vec![BlockDeclaration::new(blocker, attack.attacker())];
+                let action = Action::DeclareBlockers {
+                    defending_player,
+                    blocks: blocks.clone(),
+                };
+                let key = format!("{blocks:?}");
+                if seen.insert(key) && self.action_is_legal(&action) {
+                    labels.push(format!(
+                        "Block {} with {}",
+                        self.object_name(attack.attacker()),
+                        self.object_name(blocker)
+                    ));
+                    candidates.push(blocks);
+                }
+            }
+        }
+
+        let mut greedy = Vec::new();
+        for blocker in blockers {
+            if let Some(attack) = self.current_attacks.iter().find(|attack| {
+                self.state.can_block(
+                    defending_player,
+                    BlockDeclaration::new(blocker, attack.attacker()),
+                )
+            }) {
+                greedy.push(BlockDeclaration::new(blocker, attack.attacker()));
+            }
+        }
+        if greedy.len() > 1 {
+            let action = Action::DeclareBlockers {
+                defending_player,
+                blocks: greedy.clone(),
+            };
+            let key = format!("{greedy:?}");
+            if seen.insert(key) && self.action_is_legal(&action) {
+                labels.insert(0, "Use all available blockers".to_owned());
+                candidates.insert(0, greedy);
+            }
+        }
+
+        let no_blocks = Vec::new();
+        let no_block_action = Action::DeclareBlockers {
+            defending_player,
+            blocks: no_blocks.clone(),
+        };
+        if !self.action_is_legal(&no_block_action) {
+            return Err(format!(
+                "seed {} kernel rejected the no-block fallback",
+                self.seed
+            ));
+        }
+        labels.push("Block no attackers".to_owned());
+        candidates.push(no_blocks);
+        let selected =
+            self.prompt_legacy_choice(defending_player, source, "Choose blockers", &labels)?;
+        self.dispatch(Action::DeclareBlockers {
+            defending_player,
+            blocks: candidates[selected].clone(),
+        })?;
         Ok(())
     }
 
@@ -3909,6 +4418,50 @@ impl GameDriver {
             self.commander_zone_decisions.insert(commander, zone);
             let context = self.commander_zone_context(owner, commander, zone)?;
             if owner == human {
+                if source.is_legacy_replay() {
+                    let labels = vec![
+                        format!("Move {} to the command zone", self.object_name(commander)),
+                        format!("Leave {} in {zone:?}", self.object_name(commander)),
+                    ];
+                    let selected = self.prompt_legacy_choice(
+                        human,
+                        source,
+                        "Choose whether to move your commander",
+                        &labels,
+                    )?;
+                    let selected = context
+                        .options()
+                        .iter()
+                        .find(|option| match (selected, option.descriptor()) {
+                            (0, DecisionDescriptor::MoveCommanderToCommand { object }) => {
+                                *object == commander
+                            }
+                            (
+                                1,
+                                DecisionDescriptor::LeaveCommander {
+                                    object,
+                                    zone: choice,
+                                },
+                            ) => *object == commander && *choice == zone,
+                            _ => false,
+                        })
+                        .ok_or_else(|| {
+                            format!("seed {} legacy commander option disappeared", self.seed)
+                        })?;
+                    let moved = matches!(
+                        selected.descriptor(),
+                        DecisionDescriptor::MoveCommanderToCommand { object }
+                            if *object == commander
+                    );
+                    for action in selected.actions().to_vec() {
+                        self.dispatch(action)?;
+                    }
+                    if moved {
+                        self.metrics.commander_zone_returns =
+                            self.metrics.commander_zone_returns.saturating_add(1);
+                    }
+                    continue;
+                }
                 let labels = context
                     .options()
                     .iter()
@@ -4888,9 +5441,16 @@ pub fn run_prompted_game(
     writeln!(output, "Choose numbered legal actions. Enter q to stop.")
         .map_err(|error| format!("failed to write game introduction: {error}"))?;
 
-    let driver = GameDriver::setup(&pod, seed, None, TraceMode::Record(Vec::new()), None)?;
-    let human = driver.players[human_seat];
     let mut terminal = TerminalDecisionSource::new(input, output);
+    let driver = GameDriver::setup_with_human_opening(
+        &pod,
+        seed,
+        None,
+        TraceMode::Record(Vec::new()),
+        None,
+        Some((human_seat, &mut terminal)),
+    )?;
+    let human = driver.players[human_seat];
     let primary = driver.run_human(max_turns, human, &mut terminal)?;
     let decisions = terminal.into_decisions();
     let actions = primary
@@ -4898,7 +5458,8 @@ pub fn run_prompted_game(
         .clone()
         .ok_or_else(|| "human game did not retain an action trace".to_owned())?;
 
-    let verify_driver = GameDriver::setup(
+    let mut replay_source = ReplayDecisionSource::new(decisions.clone());
+    let verify_driver = GameDriver::setup_with_human_opening(
         &pod,
         seed,
         None,
@@ -4907,9 +5468,9 @@ pub fn run_prompted_game(
             cursor: 0,
         },
         None,
+        Some((human_seat, &mut replay_source)),
     )?;
     let verify_human = verify_driver.players[human_seat];
-    let mut replay_source = ReplayDecisionSource::new(decisions.clone());
     let verified = verify_driver.run_human(max_turns, verify_human, &mut replay_source)?;
     replay_source.finish()?;
     if verified.summary != primary.summary {
@@ -5538,21 +6099,37 @@ pub fn replay_human_file(path: impl AsRef<Path>) -> Result<String, String> {
         return Err(format!("human replay seat must be in 1..={PLAYER_COUNT}"));
     }
     let pod = PodTemplate::load(&replay.manifest)?;
-    let driver = GameDriver::setup(
-        &pod,
-        replay.seed,
-        None,
-        TraceMode::Verify {
-            expected: replay.actions.clone(),
-            cursor: 0,
-        },
-        None,
-    )?;
-    let human = driver.players[replay.human_seat];
     let mut decisions = ReplayDecisionSource::new(replay.decisions.clone());
+    let legacy = decisions.is_legacy_replay();
+    let trace = TraceMode::Verify {
+        expected: replay.actions.clone(),
+        cursor: 0,
+    };
+    let driver = if replay
+        .decisions
+        .first()
+        .is_some_and(|record| record.prompt == "Choose opening hand")
+    {
+        GameDriver::setup_with_human_opening(
+            &pod,
+            replay.seed,
+            None,
+            trace,
+            None,
+            Some((replay.human_seat, &mut decisions)),
+        )?
+    } else {
+        GameDriver::setup(&pod, replay.seed, None, trace, None)?
+    };
+    let human = driver.players[replay.human_seat];
     let run = driver.run_human(replay.max_turns, human, &mut decisions)?;
     decisions.finish()?;
-    if run.summary != replay.expected {
+    let summary_matches = if legacy {
+        legacy_human_summary_matches(&replay.expected, &run.summary)
+    } else {
+        run.summary == replay.expected
+    };
+    if !summary_matches {
         return Err(format!(
             "human replay summary diverged: {:?} != {:?}",
             replay.expected, run.summary
@@ -5570,6 +6147,15 @@ pub fn replay_human_file(path: impl AsRef<Path>) -> Result<String, String> {
         run.summary.final_hash,
         run.summary.winner + 1
     ))
+}
+
+fn legacy_human_summary_matches(expected: &GameSummary, actual: &GameSummary) -> bool {
+    if actual.metrics.hidden_information_checks < expected.metrics.hidden_information_checks {
+        return false;
+    }
+    let mut normalized = actual.clone();
+    normalized.metrics.hidden_information_checks = expected.metrics.hidden_information_checks;
+    &normalized == expected
 }
 
 /// Replays a recorded T3.9 pod action stream and verifies every state transition.
@@ -5826,10 +6412,11 @@ fn build_report(
 #[cfg(test)]
 mod tests {
     use super::{
-        campaign_seed, player_view_fingerprint, replay_captured_actions, replay_human_file,
-        run_prompted_game, snapshot_prompt, AiController, DecisionPrompt, DecisionSource,
-        GameDriver, GameMetrics, HeuristicPolicy, IdentityExercise, ReplayDecisionSource,
-        TraceMode, TraceRecord, PLAYER_COUNT,
+        campaign_seed, legacy_human_summary_matches, player_view_fingerprint,
+        replay_captured_actions, replay_human_file, run_prompted_game, snapshot_prompt,
+        AiController, DecisionPrompt, DecisionSource, GameDriver, GameMetrics, GameSummary,
+        HeuristicPolicy, IdentityExercise, ReplayDecisionSource, TraceMode, TraceRecord,
+        PLAYER_COUNT,
     };
     use forge_ai::{AiWeights, GuardrailTable};
     use forge_core::{
@@ -6000,6 +6587,30 @@ mod tests {
     }
 
     #[test]
+    fn legacy_summary_allows_only_monotonic_instrumentation_growth() {
+        let expected = GameSummary {
+            seed: 17,
+            winner: 2,
+            turns: 40,
+            final_hash: 99,
+            final_life: [0, 0, 12, 0],
+            metrics: GameMetrics {
+                hidden_information_checks: 100,
+                ..GameMetrics::default()
+            },
+        };
+        let mut instrumented = expected.clone();
+        instrumented.metrics.hidden_information_checks = 104;
+        assert!(legacy_human_summary_matches(&expected, &instrumented));
+
+        instrumented.final_hash = 100;
+        assert!(!legacy_human_summary_matches(&expected, &instrumented));
+        instrumented.final_hash = expected.final_hash;
+        instrumented.metrics.hidden_information_checks = 99;
+        assert!(!legacy_human_summary_matches(&expected, &instrumented));
+    }
+
+    #[test]
     fn prompt_fingerprint_cannot_see_opponent_hidden_card_identity() {
         let first_hidden = hidden_card_view(11, false);
         let second_hidden = hidden_card_view(99, false);
@@ -6102,7 +6713,7 @@ mod tests {
             Path::new("target/translated-cards/i/isamaru_hound_of_konda.frs").is_file(),
             "run scripts/t3_parallel_sweep.sh development first"
         );
-        let mut input = Cursor::new("1\n".repeat(20_000));
+        let mut input = Cursor::new(format!("2\n{}", "1\n".repeat(20_000)));
         let mut output = Vec::new();
         let report = match run_prompted_game(
             manifest,

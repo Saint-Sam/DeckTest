@@ -50,7 +50,8 @@ hashes when a visible identity changes.
 
 The T4.3-T4.5 diagnostics path currently adapts:
 
-- typed London mulligan/keep/bottom decisions;
+- typed London mulligan/keep/ordered-bottom decisions for both live human and
+  AI seats;
 - main-phase land plays, autonomous permanent casts, mana activations, every
   enumerated mana payment, and priority pass;
 - complete single-defender attack subsets up to an explicit fail-closed option
@@ -89,6 +90,10 @@ fingerprint remain only for presentation and backward replay compatibility.
 Existing and new Owner human replays remain valid CP-HUMAN-PLAY-CLI evidence
 and D0_raw only; they are not promoted to the versioned learning schemas under
 `schemas/learning/v1/` until the full prompt surface and CP-HUMAN-TRACE pass.
+Pre-canonical v1 artifacts run through a frozen compatibility adapter that
+reconstructs their original menus and payment policy. Their recorded typed
+action stream, state hashes, winner, life totals, and final hash remain exact;
+new instrumentation counters are not allowed to weaken those semantic checks.
 
 ## Promotion Rule
 
