@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "status": "diagnostics_only",
+  "generated_at": "2026-07-14",
+  "decision_context_schema": 1,
+  "player_view_hash_schema": 1,
+  "near_state_key": "PlayerViewHash plus sorted canonical legal-action IDs",
+  "paired_seed": "17306488943054686737",
+  "policy_seed": "11601272640106397697",
+  "deck_manifest": {
+    "path": "assets/t3_9/integration_decks.json",
+    "sha256": "0ed6260e37d1f62ad3d5463bbe9235730a31860d2c1c69c4b69f0735979c40c1"
+  },
+  "weights": {
+    "path": "assets/ai/ai_weights.ron",
+    "sha256": "b3faed3b58079afada848920789e86669508fc8271f38a287bd1312a0fa26dc1"
+  },
+  "pilot_intents": {
+    "path": "assets/ai/pilot_intents.json",
+    "sha256": "2a5b412096c65830b0a20a4860404da50eaf04a0562a9832f5c008b41a306a3d",
+    "limited_decks": 4
+  },
+  "benchmark_splits": {
+    "path": "assets/ai/benchmark_splits.json",
+    "sha256": "1f093eff54284c44bf63104eb1d56c3efae925ec038a57344965b9a961526f3f"
+  },
+  "runs": [
+    {
+      "policy": "heuristic-v1",
+      "profile": "release",
+      "replay": "reports/gates/T4.3/ai-baseline.frsreplay",
+      "replay_sha256": "81a1f50bf358974b54e9e633672ce9ff33eee8523b455ecde89ed49609dd32db",
+      "decisions": 463,
+      "typed_actions": 3729,
+      "turns": 49,
+      "winner_seat_zero_based": 2,
+      "final_hash": "12736564549147033191",
+      "canonical_legal_action_records": 463,
+      "player_view_hash_records": 463,
+      "decision_state_key_records": 463,
+      "exact_policy_replay": true,
+      "exact_typed_action_replay": true
+    },
+    {
+      "policy": "random-legal-v1",
+      "profile": "release",
+      "replay": "reports/gates/T4.3/random-legal-baseline.frsreplay",
+      "replay_sha256": "823dca8156b625e881ea82729e35b65ecb5b2fec5827d5db6d8400a260702f7a",
+      "decisions": 469,
+      "typed_actions": 4687,
+      "turns": 81,
+      "winner_seat_zero_based": 2,
+      "final_hash": "689878398876510485",
+      "canonical_legal_action_records": 469,
+      "player_view_hash_records": 469,
+      "decision_state_key_records": 469,
+      "exact_policy_replay": true,
+      "exact_typed_action_replay": true
+    },
+    {
+      "policy": "determinized-uct-v1",
+      "profile": "release",
+      "budget": {
+        "iterations_per_determinization": 2,
+        "determinizations": 1,
+        "workers": 1
+      },
+      "replay": "reports/gates/T4.3/search-baseline.frsreplay",
+      "replay_sha256": "890034ca9db0c8b356aa66fbe4b9ad51fb314da83dddba0ec27ea38cd0cf4d0a",
+      "decisions": 510,
+      "searched_decisions": 491,
+      "typed_actions": 3790,
+      "simulations": 838,
+      "nodes": 1257,
+      "turns": 49,
+      "winner_seat_zero_based": 2,
+      "final_hash": "17353811766705246570",
+      "canonical_legal_action_records": 510,
+      "player_view_hash_records": 510,
+      "decision_state_key_records": 510,
+      "exact_policy_replay": true,
+      "exact_typed_action_replay": true
+    }
+  ],
+  "near_state_dedup_audit": "not_run",
+  "replay_family_leakage_audit": "not_run",
+  "promotion_eligible": false,
+  "reasons": [
+    "single paired diagnostic seed, not a development/validation/sealed campaign",
+    "full Commander Choice/Prompt adapter surface is not complete",
+    "split multiplayer attack declarations are not yet supported by the diagnostics driver",
+    "acceptable-action, catastrophic-blunder, and bounded win/defense labels are not sealed",
+    "search counters and wall percentiles are recorded, but per-decision CPU and memory adapters remain unavailable"
+  ]
+}

@@ -13,7 +13,7 @@ literal units; compiler success is not semantic or product readiness.
 
 | Track | Current state |
 | --- | --- |
-| Forge Standalone / Local Trainer | T3 card factory active; focused Trainer and human play remain gated |
+| Forge Standalone / Local Trainer | T3 complete and human CLI passed; T4 AI engineering baseline/search is locally verified but unpromoted |
 | PodBench | Private report-only roadmap bridge; no real worker, customer exposure, training, or launch authorized |
 
 ## Catalog Scope
@@ -73,10 +73,11 @@ onto identities.
 
 ## Next Gates
 
-1. CP-HUMAN-PLAY-CLI passed with a real Owner game and exact replay. Begin
-   T4.1-T4.3 on the exact card-driven runtime proven by Tier 3.
-2. After the baseline AI is green, proceed to T4.4+ search and calibration.
-3. Reopen T3 only for a concrete T4 blocker, fix the smallest shared primitive,
+1. T4.1-T4.5, T4.7, and T4.10 diagnostic implementations are locally green;
+   complete the canonical Choice/Prompt adapters and CP-AI-BENCH evidence.
+2. Finish T4.6 calibration and T4.9 CPU/memory/reference-device latency without
+   promoting a search knee or tier from incomplete Track A/B/C evidence.
+3. Complete Owner CP-AI-LADDER and CP-NN-GO decisions. Reopen T3 only for a concrete T4 blocker, fix the smallest shared primitive,
    add semantic regressions, and resume T4. Broad mapper expansion remains closed.
 
 Per-identity generated detail: `target/card-maturity/identities.json` (untracked,

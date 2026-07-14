@@ -1,0 +1,10 @@
+(
+    // Penalties only. Search and one-ply policy may still override every row.
+    schema_version: 1,
+    calibration_status: "provisional_unpromoted",
+    risk_order: "friendly_harm,opponent_benefit,unnecessary_sacrifice,missed_required_defense,unfavorable_combat_trade,pass_with_development,nonterminal_concession",
+    novice: (-50, -50, -25, -500, -20, -10, -1000),
+    standard: (-500, -500, -250, -5000, -100, -50, -10000),
+    expert: (-5000, -5000, -2500, -50000, -500, -200, -100000),
+    master: (-10000, -10000, -5000, -100000, -1000, -300, -200000),
+)

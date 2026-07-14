@@ -33,7 +33,7 @@
   "full_state_snapshot_surface": false,
   "game_state_debug": false,
   "guard": "static persistent allocation field count",
-  "persistent_allocation_field_count": 30,
+  "persistent_allocation_field_count": 31,
   "persistent_allocation_fields": [
     {
       "field": "targets",
@@ -118,6 +118,12 @@
       "reason": "fixed shared zones plus per-player copy-on-write memberships",
       "struct": "GameState",
       "type": "Arc<Vec<Zone>>"
+    },
+    {
+      "field": "known_objects",
+      "reason": "sorted copy-on-write observer/object pairs bounded by revealed hidden identities",
+      "struct": "GameState",
+      "type": "Arc<Vec<KnownObject>>"
     },
     {
       "field": "duration_markers",

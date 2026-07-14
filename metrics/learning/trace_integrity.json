@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "status": "preflight",
+  "schemas": {
+    "game_manifest": {
+      "path": "schemas/learning/v1/game_manifest.schema.json",
+      "sha256": "e2b4eda1d768214f72c718999ce8bf598b1e19cb832d1db42eaa101b5b7cfee6"
+    },
+    "decision_record": {
+      "path": "schemas/learning/v1/decision_record.schema.json",
+      "sha256": "2663dbd21eda4119626e0b20e8a5e75a162e617c1fe901650f3a5956712eb07f"
+    },
+    "post_game_review": {
+      "path": "schemas/learning/v1/post_game_review.schema.json",
+      "sha256": "f7f489ad7df5e78a10b6c8925acaf78b3ece67aff2bf7ed44fda89bc136072a6"
+    }
+  },
+  "dataset_lifecycle": "D0_raw only",
+  "replay_family_splits": "assets/ai/benchmark_splits.json",
+  "leakage_check": "not_run",
+  "near_state_key_implementation": "passed_hidden_identity_poison_and_visible_identity_sensitivity_tests",
+  "near_state_dedup": "not_run",
+  "sealed_split_opened": false,
+  "human_derived_training_permitted": false,
+  "required_gates": [
+    "CP-AI-BENCH", "CP-HUMAN-TRACE", "CP-TEACHER-CORPUS-ALPHA", "V00"
+  ]
+}

@@ -22,6 +22,7 @@ pub const fn crate_ready() -> bool {
 ///
 /// Supported commands:
 /// - `play --human [--seed N] [--seat 1..4] [--replay-out PATH]`
+/// - `play --ai [--random-legal | --search] [--seed N] [--policy-seed N]`
 /// - `play --demo [--seed N] [--replay-out PATH]`
 /// - `demo [--seed N] [--replay-out PATH]`
 /// - `replay PATH`
@@ -58,7 +59,7 @@ pub fn run_cli_with_io(
 }
 
 fn usage() -> String {
-    "forge-cli commands:\n  play --human [--seed N] [--seat 1..4] [--manifest PATH] [--replay-out PATH] [--max-turns N]\n  play --demo [--seed N] [--replay-out PATH]\n  demo [--seed N] [--replay-out PATH]\n  replay PATH\n  roundtrip PATH\n"
+    "forge-cli commands:\n  play --human [--seed N] [--seat 1..4] [--manifest PATH] [--replay-out PATH] [--max-turns N]\n  play --ai [--random-legal | --search] [--search-iterations N] [--determinizations N] [--search-workers N] [--seed N] [--policy-seed N] [--noise-span N] [--manifest PATH] [--replay-out PATH] [--max-turns N]\n  play --demo [--seed N] [--replay-out PATH]\n  demo [--seed N] [--replay-out PATH]\n  replay PATH\n  roundtrip PATH\n"
         .to_owned()
 }
 
@@ -141,6 +142,9 @@ fn human_play_command(
 }
 
 fn play_command(args: &[String]) -> Result<String, String> {
+    if args.iter().any(|argument| argument == "--ai") {
+        return ai_play_command(args);
+    }
     let mut forwarded = Vec::new();
     let mut saw_demo = false;
     for arg in args {
@@ -154,6 +158,140 @@ fn play_command(args: &[String]) -> Result<String, String> {
         return Err("play currently requires --demo for the T1.11 starter client".to_owned());
     }
     demo_command(&forwarded)
+}
+
+fn ai_play_command(args: &[String]) -> Result<String, String> {
+    let mut seed = 0xF02D_0000_0000_0A11_u64;
+    let mut policy_seed = 0xA1_0000_0000_0001_u64;
+    let mut noise_span = 0_i64;
+    let mut manifest = PathBuf::from("assets/t3_9/integration_decks.json");
+    let mut replay_out = PathBuf::from("reports/gates/T4.3/ai-baseline.frsreplay");
+    let mut max_turns = 160_u32;
+    let mut random_legal = false;
+    let mut search = false;
+    let mut search_iterations = 16_u32;
+    let mut search_determinizations = 4_u32;
+    let mut search_workers = 4_u32;
+    let mut saw_ai = false;
+    let mut index = 0;
+    while let Some(argument) = args.get(index) {
+        match argument.as_str() {
+            "--ai" => saw_ai = true,
+            "--random-legal" => random_legal = true,
+            "--search" => search = true,
+            "--search-iterations" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "--search-iterations requires a value".to_owned())?;
+                search_iterations = value.parse::<u32>().map_err(|error| {
+                    format!("invalid --search-iterations value `{value}`: {error}")
+                })?;
+                search = true;
+                index += 1;
+            }
+            "--determinizations" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "--determinizations requires a value".to_owned())?;
+                search_determinizations = value.parse::<u32>().map_err(|error| {
+                    format!("invalid --determinizations value `{value}`: {error}")
+                })?;
+                search = true;
+                index += 1;
+            }
+            "--search-workers" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "--search-workers requires a value".to_owned())?;
+                search_workers = value.parse::<u32>().map_err(|error| {
+                    format!("invalid --search-workers value `{value}`: {error}")
+                })?;
+                search = true;
+                index += 1;
+            }
+            "--seed" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "--seed requires a value".to_owned())?;
+                seed = value
+                    .parse::<u64>()
+                    .map_err(|error| format!("invalid --seed value `{value}`: {error}"))?;
+                index += 1;
+            }
+            "--policy-seed" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "--policy-seed requires a value".to_owned())?;
+                policy_seed = value
+                    .parse::<u64>()
+                    .map_err(|error| format!("invalid --policy-seed value `{value}`: {error}"))?;
+                index += 1;
+            }
+            "--noise-span" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "--noise-span requires a value".to_owned())?;
+                noise_span = value
+                    .parse::<i64>()
+                    .map_err(|error| format!("invalid --noise-span value `{value}`: {error}"))?;
+                index += 1;
+            }
+            "--manifest" => {
+                manifest = PathBuf::from(
+                    args.get(index + 1)
+                        .ok_or_else(|| "--manifest requires a path".to_owned())?,
+                );
+                index += 1;
+            }
+            "--replay-out" => {
+                replay_out = PathBuf::from(
+                    args.get(index + 1)
+                        .ok_or_else(|| "--replay-out requires a path".to_owned())?,
+                );
+                index += 1;
+            }
+            "--max-turns" => {
+                let value = args
+                    .get(index + 1)
+                    .ok_or_else(|| "--max-turns requires a value".to_owned())?;
+                max_turns = value
+                    .parse::<u32>()
+                    .map_err(|error| format!("invalid --max-turns value `{value}`: {error}"))?;
+                index += 1;
+            }
+            "--human" | "--demo" => {
+                return Err("choose exactly one of --ai, --human, or --demo".to_owned());
+            }
+            other => return Err(format!("unknown AI-play option `{other}`")),
+        }
+        index += 1;
+    }
+    if !saw_ai {
+        return Err("AI play requires --ai".to_owned());
+    }
+    if search && random_legal {
+        return Err("--search and --random-legal cannot be combined".to_owned());
+    }
+    let policy = if search {
+        forge_testkit::t3_9_pod::AiPolicyConfig::Search {
+            seed: policy_seed,
+            iterations: search_iterations,
+            determinizations: search_determinizations,
+            workers: search_workers,
+        }
+    } else if random_legal {
+        forge_testkit::t3_9_pod::AiPolicyConfig::RandomLegal { seed: policy_seed }
+    } else {
+        forge_testkit::t3_9_pod::AiPolicyConfig::Heuristic {
+            seed: policy_seed,
+            noise_span,
+        }
+    };
+    forge_testkit::t3_9_pod::run_ai_game(
+        manifest,
+        replay_out,
+        forge_testkit::t3_9_pod::AiGameOptions::new(seed, max_turns, policy),
+    )
 }
 
 fn demo_command(args: &[String]) -> Result<String, String> {

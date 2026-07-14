@@ -6,6 +6,7 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+forge-ai = { path = "../forge-ai" }
 forge-cardc = { path = "../forge-cardc" }
 forge-carddef = { path = "../forge-carddef" }
 forge-cards = { path = "../forge-cards" }

@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "status": "d0_raw_only",
+  "source": "reports/gates/T1.R10/owner-game.frsreplay",
+  "source_sha256": "8d639f5794bff1dafcd53f6e327bd1fd9fa30670b8a874f90c8766659e0f1ae0",
+  "cp_human_play_cli_valid": true,
+  "training_eligible": false,
+  "reasons": [
+    "the T1.R10 replay predates canonical DecisionContext v1",
+    "menu labels and Debug-derived fingerprints are non-authoritative",
+    "full human Choice/Prompt coverage and CP-HUMAN-TRACE are not complete"
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "status": "frozen_preflight",
+  "seed_algorithm": "splitmix64(base XOR index*0x9e3779b97f4a7c15)",
+  "pairing": "Every compared policy receives the same game seed, seat rotation, deck manifest, and PilotIntent version.",
+  "replay_family_key": [
+    "deck_manifest_sha256",
+    "pilot_intent_sha256",
+    "game_seed",
+    "seat_rotation",
+    "decision_context_schema"
+  ],
+  "splits": {
+    "development": {
+      "base_seed": "0x4d34000000000001",
+      "games": 400,
+      "promotion_eligible": false
+    },
+    "validation": {
+      "base_seed": "0x4d34000000010001",
+      "games": 400,
+      "promotion_eligible": true
+    },
+    "sealed": {
+      "base_seed": "0x4d34000000020001",
+      "games": 400,
+      "promotion_eligible": true,
+      "open_only_after": "development and validation choices are frozen"
+    }
+  },
+  "near_state_dedup": {
+    "required": true,
+    "key": "player-view hash plus sorted canonical legal-action IDs",
+    "key_schema": "forge-decision-state-v1",
+    "implementation_status": "implemented_and_unit_tested",
+    "audit_status": "not_run"
+  },
+  "hidden_canaries": {
+    "required": true,
+    "identity_poison_unit_test": "passed",
+    "sealed_arena_canaries": "not_run"
+  }
+}

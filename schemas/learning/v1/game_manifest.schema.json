@@ -1,0 +1,149 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "forge://learning/v1/game-manifest",
+  "title": "Forge GameManifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "session_id", "episode_id", "engine", "rules",
+    "card_database", "decks", "controllers", "seed", "pilot_intent",
+    "participants", "capture_mode", "provenance", "timestamps",
+    "terminal", "replay_sha256", "split", "retention"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "session_id": {"type": "string", "minLength": 1},
+    "episode_id": {"type": "string", "minLength": 1},
+    "engine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "tree"],
+      "properties": {
+        "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "tree": {"type": "string", "pattern": "^[0-9a-f]{40}$"}
+      }
+    },
+    "rules": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["snapshot_id", "configuration_sha256"],
+      "properties": {
+        "snapshot_id": {"type": "string", "minLength": 1},
+        "configuration_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "card_database": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "sha256"],
+      "properties": {
+        "schema_version": {"type": "integer", "minimum": 1},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "decks": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["seat", "deck_id", "deck_sha256", "commander_ids"],
+        "properties": {
+          "seat": {"type": "integer", "minimum": 0},
+          "deck_id": {"type": "string", "minLength": 1},
+          "deck_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "commander_ids": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {"type": "string", "minLength": 1}
+          }
+        }
+      }
+    },
+    "controllers": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["seat", "controller_type", "policy_id", "model_id", "search_budget"],
+        "properties": {
+          "seat": {"type": "integer", "minimum": 0},
+          "controller_type": {"enum": ["human", "ai"]},
+          "policy_id": {"type": ["string", "null"]},
+          "model_id": {"type": ["string", "null"]},
+          "search_budget": {
+            "type": ["object", "null"],
+            "additionalProperties": false,
+            "required": ["wall_ms", "cpu_ms", "determinizations", "workers", "adaptive"],
+            "properties": {
+              "wall_ms": {"type": "integer", "minimum": 0},
+              "cpu_ms": {"type": ["integer", "null"], "minimum": 0},
+              "determinizations": {"type": "integer", "minimum": 0},
+              "workers": {"type": "integer", "minimum": 0},
+              "adaptive": {"type": "boolean"}
+            }
+          }
+        }
+      }
+    },
+    "seed": {"type": "string", "pattern": "^[0-9]+$"},
+    "pilot_intent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "sha256", "confirmed"],
+      "properties": {
+        "schema_version": {"type": "integer", "minimum": 1},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "confirmed": {"type": "boolean"}
+      }
+    },
+    "participants": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["seat", "pseudonymous_id"],
+        "properties": {
+          "seat": {"type": "integer", "minimum": 0},
+          "pseudonymous_id": {"type": ["string", "null"]}
+        }
+      }
+    },
+    "capture_mode": {"enum": ["arena", "human_unassisted", "human_assisted", "diagnostic"]},
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_classification", "consent_classification", "license_classification"],
+      "properties": {
+        "source_classification": {"type": "string", "minLength": 1},
+        "consent_classification": {"type": "string", "minLength": 1},
+        "license_classification": {"type": "string", "minLength": 1}
+      }
+    },
+    "timestamps": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["started_at", "ended_at"],
+      "properties": {
+        "started_at": {"type": "string", "format": "date-time"},
+        "ended_at": {"type": "string", "format": "date-time"}
+      }
+    },
+    "terminal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["result", "winner_seat", "reason"],
+      "properties": {
+        "result": {"enum": ["won", "draw", "turn_cap", "conceded", "aborted"]},
+        "winner_seat": {"type": ["integer", "null"], "minimum": 0},
+        "reason": {"type": "string", "minLength": 1}
+      }
+    },
+    "replay_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "split": {"enum": ["development", "validation", "sealed", "d0_raw"]},
+    "retention": {"enum": ["ephemeral", "retained-private", "retained-public", "deleted"]}
+  }
+}

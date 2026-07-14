@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "decision_context_schema": 1,
+  "gate_status": "blocked_incomplete_adapters",
+  "allowed_statuses": ["complete", "partial", "descriptor_only"],
+  "families": [
+    {
+      "kind": "opening_hand",
+      "human": "complete",
+      "ai": "complete",
+      "benchmark": "partial",
+      "note": "Typed London mulligan, keep, and ordered bottom options are live; sealed benchmark fixtures remain absent."
+    },
+    {
+      "kind": "priority",
+      "human": "partial",
+      "ai": "partial",
+      "benchmark": "descriptor_only",
+      "note": "The diagnostics driver handles routine passes but not every human or AI instant-speed window."
+    },
+    {
+      "kind": "main_phase",
+      "human": "partial",
+      "ai": "partial",
+      "benchmark": "partial",
+      "note": "Land, mana activation, autonomous permanent cast, and finish are canonical; choice-bearing spells and abilities remain closed."
+    },
+    {
+      "kind": "declare_attackers",
+      "human": "partial",
+      "ai": "partial",
+      "benchmark": "partial",
+      "note": "Complete subsets are canonical for one defending player; split multiplayer allocation remains unsupported."
+    },
+    {
+      "kind": "declare_blockers",
+      "human": "partial",
+      "ai": "partial",
+      "benchmark": "partial",
+      "note": "Complete blocker combinations are canonical for the current defender; full multiplayer combat sequencing remains open."
+    },
+    {
+      "kind": "commander_zone",
+      "human": "complete",
+      "ai": "complete",
+      "benchmark": "descriptor_only",
+      "note": "The live human and AI paths enumerate, validate, dispatch, replay, and record both canonical move-or-leave options; sealed benchmark fixtures remain absent."
+    },
+    {
+      "kind": "target",
+      "human": "descriptor_only",
+      "ai": "descriptor_only",
+      "benchmark": "descriptor_only",
+      "note": "Typed IDs exist; no complete production prompt adapter is claimed."
+    },
+    {
+      "kind": "mode",
+      "human": "descriptor_only",
+      "ai": "descriptor_only",
+      "benchmark": "descriptor_only",
+      "note": "Typed IDs exist; no complete production prompt adapter is claimed."
+    },
+    {
+      "kind": "numeric_value",
+      "human": "descriptor_only",
+      "ai": "descriptor_only",
+      "benchmark": "descriptor_only",
+      "note": "Typed IDs exist; no complete production prompt adapter is claimed."
+    },
+    {
+      "kind": "payment",
+      "human": "partial",
+      "ai": "partial",
+      "benchmark": "descriptor_only",
+      "note": "Current main-phase options bind explicit mana plans; general strategic payment prompts remain open."
+    },
+    {
+      "kind": "optional",
+      "human": "descriptor_only",
+      "ai": "descriptor_only",
+      "benchmark": "descriptor_only",
+      "note": "Typed IDs exist; no complete production prompt adapter is claimed."
+    },
+    {
+      "kind": "trigger_order",
+      "human": "descriptor_only",
+      "ai": "descriptor_only",
+      "benchmark": "descriptor_only",
+      "note": "The current diagnostics driver permits only autonomous triggers."
+    },
+    {
+      "kind": "hidden_choice",
+      "human": "descriptor_only",
+      "ai": "descriptor_only",
+      "benchmark": "descriptor_only",
+      "note": "Typed hidden-slot IDs exist; teacher-corpus-safe production prompting remains open."
+    },
+    {
+      "kind": "search",
+      "human": "descriptor_only",
+      "ai": "descriptor_only",
+      "benchmark": "descriptor_only",
+      "note": "Interpreter choices exist in semantic probes; no complete live-game adapter is claimed."
+    },
+    {
+      "kind": "combat_damage",
+      "human": "descriptor_only",
+      "ai": "descriptor_only",
+      "benchmark": "descriptor_only",
+      "note": "Automatic legal damage is exercised, but strategic order and assignment prompts remain open."
+    },
+    {
+      "kind": "concession",
+      "human": "descriptor_only",
+      "ai": "descriptor_only",
+      "benchmark": "descriptor_only",
+      "note": "The canonical descriptor exists; product termination prompting remains open."
+    }
+  ]
+}

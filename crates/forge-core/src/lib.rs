@@ -9,6 +9,14 @@
 
 use std::sync::Arc;
 
+mod decision;
+
+pub use decision::{
+    CanonicalActionId, DecisionContext, DecisionContextError, DecisionContextId,
+    DecisionDescriptor, DecisionGroup, DecisionKind, DecisionOption, DecisionStateKey,
+    DECISION_CONTEXT_SCHEMA_VERSION,
+};
+
 /// Returns true when the bootstrap crate is linked correctly.
 #[must_use]
 pub const fn crate_ready() -> bool {
@@ -5838,6 +5846,99 @@ pub struct ObjectRecord {
     commander_cast_count: u32,
 }
 
+/// Printed definition used to populate one hidden slot in an AI simulation.
+///
+/// This value contains no object identity, controller state, counters, or zone
+/// metadata. [`GameState::determinized_clone`] applies it only to a slot that
+/// is redacted from the supplied observer.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct HiddenCardDefinition {
+    card: CardId,
+    base_object: BaseObjectCharacteristics,
+    base_creature: Option<BaseCreatureCharacteristics>,
+    color_identity: ObjectColors,
+}
+
+impl HiddenCardDefinition {
+    /// Creates one complete printed hidden-card definition.
+    #[must_use]
+    pub const fn new(
+        card: CardId,
+        base_object: BaseObjectCharacteristics,
+        base_creature: Option<BaseCreatureCharacteristics>,
+        color_identity: ObjectColors,
+    ) -> Self {
+        Self {
+            card,
+            base_object,
+            base_creature,
+            color_identity,
+        }
+    }
+
+    /// Returns the sampled card-definition ID.
+    #[must_use]
+    pub const fn card(self) -> CardId {
+        self.card
+    }
+
+    /// Returns the sampled printed object characteristics.
+    #[must_use]
+    pub const fn base_object(self) -> BaseObjectCharacteristics {
+        self.base_object
+    }
+
+    /// Returns the sampled printed creature characteristics, when present.
+    #[must_use]
+    pub const fn base_creature(self) -> Option<BaseCreatureCharacteristics> {
+        self.base_creature
+    }
+
+    /// Returns the sampled Commander color identity.
+    #[must_use]
+    pub const fn color_identity(self) -> ObjectColors {
+        self.color_identity
+    }
+}
+
+/// One validated hidden-zone slot assignment for an AI simulation.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct HiddenSlotDefinition {
+    zone: ZoneId,
+    slot: u32,
+    definition: HiddenCardDefinition,
+}
+
+impl HiddenSlotDefinition {
+    /// Creates an assignment for a zero-based visible-zone slot.
+    #[must_use]
+    pub const fn new(zone: ZoneId, slot: u32, definition: HiddenCardDefinition) -> Self {
+        Self {
+            zone,
+            slot,
+            definition,
+        }
+    }
+
+    /// Returns the assigned hidden zone.
+    #[must_use]
+    pub const fn zone(self) -> ZoneId {
+        self.zone
+    }
+
+    /// Returns the zero-based slot within the visible zone projection.
+    #[must_use]
+    pub const fn slot(self) -> u32 {
+        self.slot
+    }
+
+    /// Returns the printed definition sampled for this slot.
+    #[must_use]
+    pub const fn definition(self) -> HiddenCardDefinition {
+        self.definition
+    }
+}
+
 impl ObjectRecord {
     /// Returns the stable object ID.
     #[must_use]
@@ -6070,6 +6171,8 @@ pub enum ObjectView {
     Known {
         /// Visible object record.
         object: ObjectRecord,
+        /// Effective characteristics after continuous effects.
+        characteristics: ObjectCharacteristics,
     },
     /// A hidden object placeholder. Count and zone position are visible, identity is not.
     Hidden,
@@ -6080,7 +6183,18 @@ impl ObjectView {
     #[must_use]
     pub const fn known(self) -> Option<ObjectRecord> {
         match self {
-            Self::Known { object } => Some(object),
+            Self::Known { object, .. } => Some(object),
+            Self::Hidden => None,
+        }
+    }
+
+    /// Returns effective characteristics when this object is known.
+    #[must_use]
+    pub const fn characteristics(self) -> Option<ObjectCharacteristics> {
+        match self {
+            Self::Known {
+                characteristics, ..
+            } => Some(characteristics),
             Self::Hidden => None,
         }
     }
@@ -6130,7 +6244,81 @@ pub struct PlayerView {
     zones: Vec<ZoneView>,
 }
 
+/// Current canonical redacted-player-view schema version.
+pub const PLAYER_VIEW_SCHEMA_VERSION: u32 = 1;
+
+/// Deterministic hash of exactly one observer's redacted state projection.
+///
+/// Hidden object identities never contribute to this value. Revealed or
+/// otherwise visible identities, characteristics, zone order, and public
+/// scalar state do contribute.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct PlayerViewHash(u64);
+
+impl PlayerViewHash {
+    /// Returns the raw 64-bit FNV hash value.
+    #[must_use]
+    pub const fn get(self) -> u64 {
+        self.0
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+struct KnownObject {
+    observer: PlayerId,
+    object: ObjectId,
+}
+
 impl PlayerView {
+    /// Computes the canonical hash of this redacted projection.
+    ///
+    /// The hash is suitable for benchmark pairing and near-state
+    /// deduplication. It is not a full-information game-state hash.
+    #[must_use]
+    pub fn deterministic_hash(&self) -> PlayerViewHash {
+        let mut hash = Fnva64::new();
+        for byte in b"forge-player-view" {
+            hash.write_u8(*byte);
+        }
+        hash.write_u32(PLAYER_VIEW_SCHEMA_VERSION);
+        hash.write_u32(self.observer.0);
+        hash.write_u32(self.turn_number);
+        hash.write_game_outcome(self.outcome);
+        hash.write_optional_player(self.starting_player);
+        hash.write_bool(self.opening_hands_drawn);
+        hash.write_u32(self.turn_order.len() as u32);
+        for player in &self.turn_order {
+            hash.write_u32(player.0);
+        }
+        hash.write_u8(self.range_of_influence.canonical_code());
+        hash.write_optional_player(self.active_player);
+        hash.write_optional_player(self.priority_player);
+        hash.write_optional_step(self.current_step);
+        hash.write_u32(self.players.len() as u32);
+        for player in &self.players {
+            hash.write_player_state(*player);
+        }
+        hash.write_u32(self.zones.len() as u32);
+        for zone in &self.zones {
+            hash.write_zone_id(zone.id);
+            hash.write_u32(zone.objects.len() as u32);
+            for object in &zone.objects {
+                match object {
+                    ObjectView::Hidden => hash.write_u8(0),
+                    ObjectView::Known {
+                        object,
+                        characteristics,
+                    } => {
+                        hash.write_u8(1);
+                        hash.write_object_record(*object);
+                        hash.write_object_characteristics(*characteristics);
+                    }
+                }
+            }
+        }
+        PlayerViewHash(hash.finish())
+    }
+
     /// Returns the player this projection is for.
     #[must_use]
     pub const fn observer(&self) -> PlayerId {
@@ -6245,6 +6433,38 @@ pub enum StateError {
     UnknownObject(ObjectId),
     /// The requested zone ID does not exist.
     UnknownZone(ZoneId),
+    /// AI determinization may assign only hidden hand or library slots.
+    InvalidDeterminizationZone(ZoneId),
+    /// An AI determinization slot lies outside the selected zone.
+    DeterminizationSlotOutOfBounds {
+        /// Zone containing the requested slot.
+        zone: ZoneId,
+        /// Zero-based requested slot.
+        slot: u32,
+    },
+    /// An AI determinization attempted to replace an identity known to the observer.
+    DeterminizationSlotKnown {
+        /// Zone containing the known slot.
+        zone: ZoneId,
+        /// Zero-based known slot.
+        slot: u32,
+    },
+    /// An AI determinization assigned one hidden slot more than once.
+    DuplicateDeterminizationSlot {
+        /// Zone containing the duplicate slot.
+        zone: ZoneId,
+        /// Zero-based duplicate slot.
+        slot: u32,
+    },
+    /// An AI determinization did not cover every and only hidden slot.
+    DeterminizationSlotCountMismatch {
+        /// Hidden slots visible to the observer.
+        expected: u32,
+        /// Unique valid assignments supplied.
+        actual: u32,
+    },
+    /// Tokens and copy objects cannot be rebound as sampled deck cards.
+    InvalidDeterminizationObject(ObjectId),
     /// A player-owned zone was requested without a valid owner.
     InvalidZoneOwner(ZoneId),
     /// A zone contains an object ID that is not in the object arena.
@@ -8456,6 +8676,8 @@ pub struct GameState {
     objects: ObjectArena,
     // clone_surface: fixed shared zones plus per-player zones; membership IDs live in Zone.
     zones: Arc<Vec<Zone>>,
+    // clone_surface: sorted per-observer identities retained across hidden-zone moves.
+    known_objects: Arc<Vec<KnownObject>>,
     next_duration_marker: u32,
     // clone_surface: duration markers are Copy records, bounded by active effects.
     duration_markers: Vec<DurationMarker>,
@@ -8522,6 +8744,7 @@ impl Clone for GameState {
             turn_order: self.turn_order.clone(),
             objects: self.objects.clone(),
             zones: Arc::clone(&self.zones),
+            known_objects: Arc::clone(&self.known_objects),
             next_duration_marker: self.next_duration_marker,
             duration_markers: self.duration_markers.clone(),
             next_stack_entry: self.next_stack_entry,
@@ -8603,6 +8826,7 @@ impl GameState {
                     objects: Arc::new(Vec::new()),
                 },
             ]),
+            known_objects: Arc::new(Vec::new()),
             next_duration_marker: 0,
             duration_markers: Vec::new(),
             next_stack_entry: 0,
@@ -10562,10 +10786,14 @@ impl GameState {
                         zone: zone.id,
                         object: *object,
                     })?;
-                if hidden_from_observer {
+                let remembered = self.knows_object(observer, *object);
+                if hidden_from_observer && !remembered {
                     objects.push(ObjectView::Hidden);
                 } else {
-                    objects.push(ObjectView::Known { object: record });
+                    objects.push(ObjectView::Known {
+                        object: record,
+                        characteristics: self.object_characteristics(*object)?,
+                    });
                 }
             }
             zones.push(ZoneView {
@@ -10587,6 +10815,129 @@ impl GameState {
             players: self.players.clone(),
             zones,
         })
+    }
+
+    /// Clones this state and populates every card identity hidden from `observer`.
+    ///
+    /// The live state is never mutated. Assignments must cover every redacted
+    /// hand and library slot exactly once, and may not replace identities that
+    /// the observer already knows. This is the only supported bridge from a
+    /// hidden-information sample into a search-only [`GameState`] clone.
+    pub fn determinized_clone(
+        &self,
+        observer: PlayerId,
+        assignments: &[HiddenSlotDefinition],
+    ) -> Result<Self, StateError> {
+        self.require_player(observer)?;
+        let expected = self
+            .zones
+            .iter()
+            .filter(|zone| {
+                zone.id.kind() == ZoneKind::Library
+                    || (zone.id.kind() == ZoneKind::Hand && zone.id.owner() != Some(observer))
+            })
+            .flat_map(|zone| zone.objects.iter())
+            .filter(|object| !self.knows_object(observer, **object))
+            .count();
+        let mut slots = Vec::with_capacity(assignments.len());
+        for assignment in assignments {
+            let zone = assignment.zone();
+            if !matches!(zone.kind(), ZoneKind::Hand | ZoneKind::Library) {
+                return Err(StateError::InvalidDeterminizationZone(zone));
+            }
+            let slot = assignment.slot();
+            let slot_index = slot as usize;
+            let zone_record = self
+                .zones
+                .iter()
+                .find(|candidate| candidate.id == zone)
+                .ok_or(StateError::UnknownZone(zone))?;
+            let object = zone_record
+                .objects
+                .get(slot_index)
+                .ok_or(StateError::DeterminizationSlotOutOfBounds { zone, slot })?;
+            let hidden_from_observer = zone.kind() == ZoneKind::Library
+                || (zone.kind() == ZoneKind::Hand && zone.owner() != Some(observer));
+            if !hidden_from_observer || self.knows_object(observer, *object) {
+                return Err(StateError::DeterminizationSlotKnown { zone, slot });
+            }
+            slots.push((zone, slot));
+        }
+        slots.sort_unstable();
+        if let Some(duplicate) = slots.windows(2).find(|pair| pair[0] == pair[1]) {
+            let (zone, slot) = duplicate[0];
+            return Err(StateError::DuplicateDeterminizationSlot { zone, slot });
+        }
+        if expected != assignments.len() {
+            return Err(StateError::DeterminizationSlotCountMismatch {
+                expected: u32::try_from(expected).unwrap_or(u32::MAX),
+                actual: u32::try_from(assignments.len()).unwrap_or(u32::MAX),
+            });
+        }
+
+        let mut clone = self.clone();
+        for assignment in assignments {
+            let zone = assignment.zone();
+            let object = self
+                .zone_objects(zone)
+                .and_then(|objects| objects.get(assignment.slot() as usize))
+                .copied()
+                .ok_or(StateError::DeterminizationSlotOutOfBounds {
+                    zone,
+                    slot: assignment.slot(),
+                })?;
+            let record = clone
+                .objects
+                .get_mut(object)
+                .ok_or(StateError::UnknownObject(object))?;
+            if record.is_token() || record.is_copy() {
+                return Err(StateError::InvalidDeterminizationObject(object));
+            }
+            let definition = assignment.definition();
+            record.card = definition.card();
+            record.base_object = definition.base_object();
+            record.base_creature = definition.base_creature();
+            record.color_identity = definition.color_identity();
+        }
+        Ok(clone)
+    }
+
+    const fn zone_hides_identity(zone: ZoneId) -> bool {
+        matches!(zone.kind(), ZoneKind::Hand | ZoneKind::Library)
+    }
+
+    fn knows_object(&self, observer: PlayerId, object: ObjectId) -> bool {
+        self.known_objects
+            .binary_search(&KnownObject { observer, object })
+            .is_ok()
+    }
+
+    fn remember_object(&mut self, observer: PlayerId, object: ObjectId) {
+        let known = KnownObject { observer, object };
+        let entries = Arc::make_mut(&mut self.known_objects);
+        if let Err(index) = entries.binary_search(&known) {
+            entries.insert(index, known);
+        }
+    }
+
+    fn remember_hidden_transition(&mut self, object: ObjectId, from: ZoneId, to: ZoneId) {
+        if !Self::zone_hides_identity(to) {
+            return;
+        }
+        if !Self::zone_hides_identity(from) {
+            let observers = self
+                .players
+                .iter()
+                .map(|player| player.id())
+                .collect::<Vec<_>>();
+            for observer in observers {
+                self.remember_object(observer, object);
+            }
+        } else if from.kind() == ZoneKind::Hand {
+            if let Some(owner) = from.owner() {
+                self.remember_object(owner, object);
+            }
+        }
     }
 
     /// Starts a turn for the chosen active player at the untap step.
@@ -11992,6 +12343,7 @@ impl GameState {
         if from_zone_id == to {
             return Ok(());
         }
+        self.remember_hidden_transition(object, from_zone_id, to);
         let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
         let from_position = self.zones[from_index]
             .objects
@@ -12274,6 +12626,14 @@ impl GameState {
         for player in &self.empty_library_draws_since_sba {
             bytes.write_u32(player.0);
         }
+        if !self.known_objects.is_empty() {
+            bytes.write_u32(0x4b4e_4f57);
+            bytes.write_u32(self.known_objects.len() as u32);
+            for known in self.known_objects.iter() {
+                bytes.write_u32(known.observer.0);
+                bytes.write_u32(known.object.0);
+            }
+        }
         bytes.finish()
     }
 
@@ -12416,6 +12776,14 @@ impl GameState {
         hash.write_u32(self.empty_library_draws_since_sba.len() as u32);
         for player in &self.empty_library_draws_since_sba {
             hash.write_u32(player.0);
+        }
+        if !self.known_objects.is_empty() {
+            hash.write_u32(0x4b4e_4f57);
+            hash.write_u32(self.known_objects.len() as u32);
+            for known in self.known_objects.iter() {
+                hash.write_u32(known.observer.0);
+                hash.write_u32(known.object.0);
+            }
         }
 
         StateHash(hash.finish())
@@ -14627,6 +14995,14 @@ impl GameState {
             }
         }
         for object in objects {
+            let observers = self
+                .players
+                .iter()
+                .map(|player| player.id())
+                .collect::<Vec<_>>();
+            for observer in observers {
+                self.remember_object(observer, *object);
+            }
             self.emit_event(GameEvent::ObjectRevealed { object: *object });
         }
         Ok(())
@@ -14655,6 +15031,7 @@ impl GameState {
                     player,
                     object: *object,
                 })?;
+            self.remember_hidden_transition(*object, hand, library);
             moved.push(
                 Arc::make_mut(&mut self.zones)[hand_index]
                     .objects_mut()
@@ -14694,6 +15071,7 @@ impl GameState {
         else {
             return Ok(None);
         };
+        self.remember_hidden_transition(object, from, to);
         let to_index = self.zone_index(to).ok_or(StateError::UnknownZone(to))?;
         Arc::make_mut(&mut self.zones)[to_index]
             .objects_mut()
@@ -14705,12 +15083,17 @@ impl GameState {
     fn shuffle_zone(&mut self, zone: ZoneId) -> Result<(), StateError> {
         self.require_zone(zone)?;
         let zone_index = self.zone_index(zone).ok_or(StateError::UnknownZone(zone))?;
+        let shuffled_objects = self.zones[zone_index].objects.as_ref().clone();
         let len = self.zones[zone_index].objects.len();
         for index in (1..len).rev() {
             let swap_with = self.random_below(index + 1);
             Arc::make_mut(&mut self.zones)[zone_index]
                 .objects_mut()
                 .swap(index, swap_with);
+        }
+        if Self::zone_hides_identity(zone) {
+            Arc::make_mut(&mut self.known_objects)
+                .retain(|known| !shuffled_objects.contains(&known.object));
         }
         self.emit_event(GameEvent::ZoneShuffled { zone });
         Ok(())
@@ -15035,6 +15418,57 @@ impl Fnva64 {
         for amount in pool.amounts {
             self.write_u32(amount);
         }
+    }
+
+    fn write_player_state(&mut self, player: PlayerState) {
+        self.write_u32(player.id.0);
+        self.write_i32(player.life);
+        self.write_u32(player.poison);
+        self.write_bool(player.lost);
+        self.write_u32(player.max_hand_size);
+        self.write_u32(player.mulligans_taken);
+        self.write_bool(player.opening_hand_kept);
+        self.write_mana_pool(player.mana_pool);
+        self.write_u32(player.lands_played_this_turn);
+    }
+
+    fn write_object_record(&mut self, object: ObjectRecord) {
+        self.write_u32(object.id.0);
+        self.write_u32(object.card.0);
+        self.write_u32(object.owner.0);
+        self.write_u32(object.controller.0);
+        self.write_bool(object.tapped);
+        self.write_base_object_characteristics(object.base_object);
+        self.write_optional_base_creature_characteristics(object.base_creature);
+        self.write_u32(object.damage_marked);
+        self.write_bool(object.deathtouch_damage_marked);
+        self.write_optional_i32(object.loyalty);
+        self.write_bool(object.token);
+        self.write_optional_object(object.copy_source);
+        self.write_optional_object(object.attached_to);
+        self.write_u32(object.controlled_since_turn);
+        self.write_object_colors(object.color_identity);
+        self.write_bool(object.commander);
+        self.write_u32(object.commander_cast_count);
+    }
+
+    fn write_object_characteristics(&mut self, characteristics: ObjectCharacteristics) {
+        self.write_u32(characteristics.controller.0);
+        self.write_object_colors(characteristics.colors);
+        self.write_object_types(characteristics.types);
+        self.write_object_supertypes(characteristics.supertypes);
+        self.write_basic_land_types(characteristics.basic_land_types);
+        self.write_object_subtypes(characteristics.subtypes);
+        match characteristics.creature {
+            Some(creature) => {
+                self.write_u8(1);
+                self.write_i32(creature.power);
+                self.write_i32(creature.toughness);
+                self.write_creature_keywords(creature.keywords);
+            }
+            None => self.write_u8(0),
+        }
+        self.write_u32(characteristics.text_marker);
     }
 
     fn write_counter_kind(&mut self, kind: CounterKind) {
@@ -17675,18 +18109,19 @@ mod tests {
         ContinuousEffectDefinition, ContinuousEffectDuration, ContinuousEffectId,
         ContinuousEffectOperation, ContinuousEffectTarget, CostModifierDefinition,
         CostModifierOperation, CostModifierScope, CreatureCharacteristics, CreatureKeywords,
-        EffectDuration, EventReplayError, GameEvent, GameOutcome, GameState, ManaCost, ManaKind,
-        ManaPool, ManaSource, ObjectColors, ObjectSubtype, ObjectSubtypes, ObjectSupertypes,
-        ObjectTargetPredicate, ObjectTypes, ObjectView, Outcome, PaymentError, Phase, PlayerId,
-        PlayerRule, PlayerRuleSubject, PriorityOutcome, ReplacementCondition,
-        ReplacementDamageTargetFilter, ReplacementDefinition, ReplacementDuration,
-        ReplacementEffectId, ReplacementOperation, ReplacementSourceFilter, ResolutionOutcome,
-        RestrictionDefinition, RestrictionEffect, SpellTiming, StackEntryId, StackEntryRequest,
-        StackObjectKind, StateBasedActionKind, StateBasedActionReport, StateError, Step,
-        TargetChoice, TargetControllerPredicate, TargetKind, TargetRequirement, TargetRestriction,
-        TargetRestrictionSubject, TriggerCondition, TriggerDefinition, TriggerInterveningIf,
-        TriggerObjectFilter, TriggerPlayerFilter, TriggerZoneFilter, ZoneConservation, ZoneId,
-        ZoneKind, EVENT_RING_CAPACITY, NORMAL_TURN_STEPS, OPENING_HAND_SIZE, PAYMENT_PLAN_LIMIT,
+        EffectDuration, EventReplayError, GameEvent, GameOutcome, GameState, HiddenCardDefinition,
+        HiddenSlotDefinition, ManaCost, ManaKind, ManaPool, ManaSource, ObjectColors,
+        ObjectSubtype, ObjectSubtypes, ObjectSupertypes, ObjectTargetPredicate, ObjectTypes,
+        ObjectView, Outcome, PaymentError, Phase, PlayerId, PlayerRule, PlayerRuleSubject,
+        PriorityOutcome, ReplacementCondition, ReplacementDamageTargetFilter,
+        ReplacementDefinition, ReplacementDuration, ReplacementEffectId, ReplacementOperation,
+        ReplacementSourceFilter, ResolutionOutcome, RestrictionDefinition, RestrictionEffect,
+        SpellTiming, StackEntryId, StackEntryRequest, StackObjectKind, StateBasedActionKind,
+        StateBasedActionReport, StateError, Step, TargetChoice, TargetControllerPredicate,
+        TargetKind, TargetRequirement, TargetRestriction, TargetRestrictionSubject,
+        TriggerCondition, TriggerDefinition, TriggerInterveningIf, TriggerObjectFilter,
+        TriggerPlayerFilter, TriggerZoneFilter, ZoneConservation, ZoneId, ZoneKind,
+        EVENT_RING_CAPACITY, NORMAL_TURN_STEPS, OPENING_HAND_SIZE, PAYMENT_PLAN_LIMIT,
     };
 
     #[test]
@@ -19222,29 +19657,88 @@ mod tests {
             .zone(battlefield)
             .unwrap_or_else(|| panic!("missing battlefield view"));
 
+        assert_eq!(alice_hand_view.objects().len(), 1);
         assert_eq!(
-            alice_hand_view.objects(),
-            &[ObjectView::Known {
-                object: state
-                    .objects()
-                    .get(alice_hand_object)
-                    .unwrap_or_else(|| panic!("missing alice hand object"))
-            }]
+            alice_hand_view.objects()[0].known(),
+            state.objects().get(alice_hand_object)
+        );
+        assert_eq!(
+            alice_hand_view.objects()[0].characteristics(),
+            Some(
+                state
+                    .object_characteristics(alice_hand_object)
+                    .unwrap_or_else(|error| panic!(
+                        "missing alice hand characteristics: {error:?}"
+                    ))
+            )
         );
         assert_eq!(alice_library_view.objects(), &[ObjectView::Hidden]);
         assert_eq!(bob_hand_view.objects(), &[ObjectView::Hidden]);
         assert_eq!(bob_library_view.objects(), &[ObjectView::Hidden]);
+        assert_eq!(battlefield_view.objects().len(), 1);
         assert_eq!(
-            battlefield_view.objects(),
-            &[ObjectView::Known {
-                object: state
-                    .objects()
-                    .get(battlefield_object)
-                    .unwrap_or_else(|| panic!("missing battlefield object"))
-            }]
+            battlefield_view.objects()[0].known(),
+            state.objects().get(battlefield_object)
+        );
+        assert_eq!(
+            battlefield_view.objects()[0].characteristics(),
+            Some(
+                state
+                    .object_characteristics(battlefield_object)
+                    .unwrap_or_else(|error| {
+                        panic!("missing battlefield characteristics: {error:?}")
+                    })
+            )
         );
         assert!(bob_hand_view.objects()[0].is_hidden());
         assert_eq!(bob_hand_view.objects()[0].known(), None);
+    }
+
+    #[test]
+    fn player_view_hash_ignores_hidden_identity_and_tracks_visible_identity() {
+        let mut state = GameState::new();
+        let alice = add_player_action(&mut state);
+        let bob = add_player_action(&mut state);
+        let hidden = create_object_action(
+            &mut state,
+            CardId::new(720),
+            bob,
+            ZoneId::new(Some(bob), ZoneKind::Hand),
+        );
+        let visible = create_object_action(
+            &mut state,
+            CardId::new(721),
+            bob,
+            ZoneId::new(None, ZoneKind::Battlefield),
+        );
+        let baseline = state
+            .player_view(alice)
+            .unwrap_or_else(|error| panic!("baseline view failed: {error:?}"))
+            .deterministic_hash();
+
+        let mut hidden_poisoned = state.clone();
+        hidden_poisoned
+            .objects
+            .get_mut(hidden)
+            .unwrap_or_else(|| panic!("missing hidden object"))
+            .card = CardId::new(999_720);
+        let hidden_poisoned_hash = hidden_poisoned
+            .player_view(alice)
+            .unwrap_or_else(|error| panic!("hidden-poison view failed: {error:?}"))
+            .deterministic_hash();
+        assert_eq!(baseline, hidden_poisoned_hash);
+
+        let mut visible_changed = state.clone();
+        visible_changed
+            .objects
+            .get_mut(visible)
+            .unwrap_or_else(|| panic!("missing visible object"))
+            .card = CardId::new(999_721);
+        let visible_changed_hash = visible_changed
+            .player_view(alice)
+            .unwrap_or_else(|error| panic!("visible-change view failed: {error:?}"))
+            .deterministic_hash();
+        assert_ne!(baseline, visible_changed_hash);
     }
 
     #[test]
@@ -19254,6 +19748,205 @@ mod tests {
         assert_eq!(
             state.player_view(PlayerId(99)),
             Err(StateError::UnknownPlayer(PlayerId(99)))
+        );
+    }
+
+    #[test]
+    fn player_view_retains_known_hidden_identity_until_library_shuffle() {
+        let mut state = GameState::new();
+        let alice = add_player_action(&mut state);
+        let bob = add_player_action(&mut state);
+        let bob_library = ZoneId::new(Some(bob), ZoneKind::Library);
+        let object = match apply(
+            &mut state,
+            Action::CreateObject {
+                card: CardId::new(714),
+                owner: bob,
+                controller: bob,
+                zone: bob_library,
+            },
+        ) {
+            Outcome::ObjectCreated(object) => object,
+            other => panic!("unexpected hidden object outcome: {other:?}"),
+        };
+
+        let hidden = state
+            .player_view(alice)
+            .unwrap_or_else(|error| panic!("unexpected hidden view error: {error:?}"));
+        assert!(hidden
+            .zone(bob_library)
+            .unwrap_or_else(|| panic!("missing library"))
+            .objects()[0]
+            .is_hidden());
+
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::RevealObjects {
+                    objects: vec![object],
+                }
+            ),
+            Outcome::Applied
+        );
+        let revealed = state
+            .player_view(alice)
+            .unwrap_or_else(|error| panic!("unexpected revealed view error: {error:?}"));
+        assert_eq!(
+            revealed
+                .zone(bob_library)
+                .unwrap_or_else(|| panic!("missing revealed library"))
+                .objects()[0]
+                .known()
+                .map(|record| record.card()),
+            Some(CardId::new(714))
+        );
+
+        assert_eq!(
+            apply(&mut state, Action::ShuffleLibrary { player: bob }),
+            Outcome::Applied
+        );
+        let shuffled = state
+            .player_view(alice)
+            .unwrap_or_else(|error| panic!("unexpected shuffled view error: {error:?}"));
+        assert!(shuffled
+            .zone(bob_library)
+            .unwrap_or_else(|| panic!("missing shuffled library"))
+            .objects()[0]
+            .is_hidden());
+        assert_eq!(
+            state.deterministic_hash(),
+            state.deterministic_hash_streaming()
+        );
+    }
+
+    #[test]
+    fn determinized_clone_rebinds_only_complete_hidden_slots() {
+        let mut state = GameState::new();
+        let alice = add_player_action(&mut state);
+        let bob = add_player_action(&mut state);
+        let bob_library = ZoneId::new(Some(bob), ZoneKind::Library);
+        let first = create_object_action(&mut state, CardId::new(801), bob, bob_library);
+        let second = create_object_action(&mut state, CardId::new(802), bob, bob_library);
+        let creature = BaseCreatureCharacteristics::new(3, 4);
+        let red = ObjectColors::none().with_red();
+        let green = ObjectColors::none().with_green();
+        let first_definition = HiddenCardDefinition::new(
+            CardId::new(901),
+            BaseObjectCharacteristics::new(ObjectTypes::none().with_creature(), red),
+            Some(creature),
+            red,
+        );
+        let second_definition = HiddenCardDefinition::new(
+            CardId::new(902),
+            BaseObjectCharacteristics::new(ObjectTypes::none().with_land(), green),
+            None,
+            green,
+        );
+
+        let sampled = state
+            .determinized_clone(
+                alice,
+                &[
+                    HiddenSlotDefinition::new(bob_library, 0, first_definition),
+                    HiddenSlotDefinition::new(bob_library, 1, second_definition),
+                ],
+            )
+            .unwrap_or_else(|error| panic!("unexpected determinization error: {error:?}"));
+
+        assert_eq!(
+            state.object(first).map(|object| object.card()),
+            Some(CardId::new(801))
+        );
+        assert_eq!(
+            state.object(second).map(|object| object.card()),
+            Some(CardId::new(802))
+        );
+        let sampled_first = sampled
+            .object(first)
+            .unwrap_or_else(|| panic!("missing first sampled object"));
+        let sampled_second = sampled
+            .object(second)
+            .unwrap_or_else(|| panic!("missing second sampled object"));
+        assert_eq!(sampled_first.card(), CardId::new(901));
+        assert_eq!(sampled_first.base_creature(), Some(creature));
+        assert_eq!(sampled_second.card(), CardId::new(902));
+        assert_eq!(sampled_second.base_creature(), None);
+        assert_ne!(state.deterministic_hash(), sampled.deterministic_hash());
+        assert_eq!(
+            sampled.deterministic_hash(),
+            sampled.deterministic_hash_streaming()
+        );
+    }
+
+    #[test]
+    fn determinized_clone_rejects_partial_duplicate_and_known_assignments() {
+        let mut state = GameState::new();
+        let alice = add_player_action(&mut state);
+        let bob = add_player_action(&mut state);
+        let bob_library = ZoneId::new(Some(bob), ZoneKind::Library);
+        let object = create_object_action(&mut state, CardId::new(811), bob, bob_library);
+        let _other = create_object_action(&mut state, CardId::new(812), bob, bob_library);
+        let definition = HiddenCardDefinition::new(
+            CardId::new(911),
+            BaseObjectCharacteristics::new(
+                ObjectTypes::none().with_artifact(),
+                ObjectColors::none(),
+            ),
+            None,
+            ObjectColors::none(),
+        );
+
+        assert_eq!(
+            state
+                .determinized_clone(
+                    alice,
+                    &[HiddenSlotDefinition::new(bob_library, 0, definition)]
+                )
+                .err(),
+            Some(StateError::DeterminizationSlotCountMismatch {
+                expected: 2,
+                actual: 1,
+            })
+        );
+        assert_eq!(
+            state
+                .determinized_clone(
+                    alice,
+                    &[
+                        HiddenSlotDefinition::new(bob_library, 0, definition),
+                        HiddenSlotDefinition::new(bob_library, 0, definition),
+                    ],
+                )
+                .err(),
+            Some(StateError::DuplicateDeterminizationSlot {
+                zone: bob_library,
+                slot: 0,
+            })
+        );
+
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::RevealObjects {
+                    objects: vec![object],
+                }
+            ),
+            Outcome::Applied
+        );
+        assert_eq!(
+            state
+                .determinized_clone(
+                    alice,
+                    &[
+                        HiddenSlotDefinition::new(bob_library, 0, definition),
+                        HiddenSlotDefinition::new(bob_library, 1, definition),
+                    ],
+                )
+                .err(),
+            Some(StateError::DeterminizationSlotKnown {
+                zone: bob_library,
+                slot: 0,
+            })
         );
     }
 
@@ -22907,6 +23600,26 @@ mod tests {
         match apply(state, Action::AddPlayer) {
             Outcome::PlayerAdded(player) => player,
             other => panic!("unexpected add-player outcome: {other:?}"),
+        }
+    }
+
+    fn create_object_action(
+        state: &mut GameState,
+        card: CardId,
+        owner: PlayerId,
+        zone: ZoneId,
+    ) -> super::ObjectId {
+        match apply(
+            state,
+            Action::CreateObject {
+                card,
+                owner,
+                controller: owner,
+                zone,
+            },
+        ) {
+            Outcome::ObjectCreated(object) => object,
+            other => panic!("unexpected create-object outcome: {other:?}"),
         }
     }
 

@@ -1,7 +1,40 @@
 #![deny(missing_docs)]
 #![forbid(unsafe_code)]
 
-//! AI policy, search, and difficulty ladder crate for Forge 2.0.
+//! Hidden-information-safe AI primitives for Forge 2.0.
+//!
+//! Production APIs consume [`forge_core::PlayerView`] projections and explicit
+//! deck models. They never accept a full [`forge_core::GameState`].
+
+mod api;
+mod determinization;
+mod evaluation;
+mod guardrail;
+mod mulligan;
+mod policy;
+mod random;
+mod search;
+mod target;
+mod tier;
+
+pub use api::{ConsideredAction, LastDecisionReport};
+pub use determinization::{
+    DeckModel, Determinization, DeterminizationError, Determinizer, HiddenAssignment,
+};
+pub use evaluation::{AiWeights, Evaluation, EvaluationError, FeatureVector};
+pub use guardrail::{ActionRisk, ActionRisks, GuardrailError, GuardrailProfile, GuardrailTable};
+pub use mulligan::{MulliganDecision, MulliganError, MulliganPolicy};
+pub use policy::{HeuristicPolicy, PolicyCandidate, PolicyDecision, PolicyError, PolicyMode};
+pub use random::{RandomLegalPolicy, RandomPolicyError};
+pub use search::{
+    AdaptiveStopping, BoundedSolution, ProgressiveWidening, SearchActionReport, SearchCheckpoint,
+    SearchConfig, SearchDomain, SearchEngine, SearchError, SearchLimit, SearchReport,
+    SearchStopReason,
+};
+pub use target::{TargetDecision, TargetIntent, TargetPolicy, TargetPolicyError};
+pub use tier::{
+    AiPolicyFamily, AiTierDefinition, AiTierError, AiTierSet, DifficultyTier, MulliganQuality,
+};
 
 use forge_core::PlayerView;
 

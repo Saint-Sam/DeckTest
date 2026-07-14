@@ -1,0 +1,115 @@
+{
+  "schema_version": 1,
+  "status": "instrumentation_implemented_diagnostic_smoke_refreshed",
+  "threshold_status": "owner_approved_provisional_2026-07-14",
+  "budgets_ms": [0, 10, 25, 50, 100, 250, 500, 1000],
+  "comparison_rule": "Compare each positive budget B with the next tested budget 2B on identical states, decks, seats, determinizations, seeds, legal actions, hardware, and threads.",
+  "provisional_knee_requires_two_consecutive_increases": {
+    "paired_win_rate_gain_lt_percentage_points": 1.0,
+    "estimated_elo_gain_lt_range": [10, 15],
+    "confidence_interval_includes_no_product_useful_gain": true,
+    "catastrophic_blunder_rate_materially_lower": false,
+    "missed_win_or_required_defense_rate_materially_lower": false,
+    "ordinary_state_acceptable_action_agreement_at_least": 0.95,
+    "p95_latency_and_cost_continue_to_rise_materially": true
+  },
+  "selection_rule": "Choose the smallest Standard budget that clears the competence bar before the plateau; never assume the largest budget is best.",
+  "adaptive_checkpoint_fields": [
+    "leading_action_id",
+    "leading_action_visit_share",
+    "value_gap",
+    "visit_gap",
+    "ranking_stability",
+    "policy_entropy_or_uncertainty",
+    "bounded_solver_state",
+    "stop_reason"
+  ],
+  "adaptive_stops": [
+    "singleton_legal_action",
+    "forced_action",
+    "certified_win",
+    "certified_required_defense",
+    "stable_leader_across_checkpoints",
+    "calibrated_value_or_visit_gap",
+    "calibrated_low_uncertainty"
+  ],
+  "adaptive_stop_shipping_rule": "Ablate every stop against the paired fixed-budget baseline and require lower CPU cost with no statistically or practically meaningful decline across Tracks A, B, and C.",
+  "never_full_budget": [
+    "routine_priority_pass",
+    "forced_trigger_handling",
+    "obvious_mana_production",
+    "singleton_legal_action"
+  ],
+  "illustrative_cost_per_100_pods_usd_at_0_05_per_vcpu_hour": [
+    {"mean_search_ms": 10, "cost_usd": 0.006},
+    {"mean_search_ms": 25, "cost_usd": 0.014},
+    {"mean_search_ms": 50, "cost_usd": 0.028},
+    {"mean_search_ms": 100, "cost_usd": 0.056},
+    {"mean_search_ms": 250, "cost_usd": 0.139},
+    {"mean_search_ms": 500, "cost_usd": 0.278},
+    {"mean_search_ms": 1000, "cost_usd": 0.556}
+  ],
+  "cost_table_is_authoritative": false,
+  "measured_cost_replacements_required": [
+    "searched_decisions_per_pod",
+    "cpu_ms_per_decision",
+    "worker_price",
+    "failed_or_replacement_pod_overhead",
+    "worker_utilization"
+  ],
+  "supporting_reference": "Learning to Stop: Dynamic Simulation Monte-Carlo Tree Search, arXiv:2012.07910",
+  "promotion_authority": "DeckTest paired arena, decision benchmark, human trace review, latency, and measured cost evidence",
+  "implementation_evidence": {
+    "date": "2026-07-14",
+    "policy": "determinized-uct-v1",
+    "decision_families": ["main_phase", "declare_attackers", "declare_blockers"],
+    "full_game_smoke": {
+      "budget_kind": "fixed_iterations_per_determinization",
+      "iterations": 2,
+      "determinizations": 1,
+      "workers": 1,
+      "turns": 49,
+      "canonical_decisions": 510,
+      "typed_actions": 3790,
+      "searched_decisions": 491,
+      "singleton_bypasses": 72,
+      "simulations": 838,
+      "nodes": 1257,
+      "winner_seat": 3,
+      "final_hash": 17353811766705246570,
+      "exact_policy_replay_passed": true,
+      "exact_typed_action_replay_passed": true,
+      "canonical_legal_action_records_complete": true,
+      "player_view_hash_records_complete": true,
+      "decision_state_key_records_complete": true,
+      "strength_claim": false
+    },
+    "release_search_knee_smoke": {
+      "command": "target/release/forge-arena --search-knee --tier standard --budgets 1,2,4 --games 2 --jobs 2 --output target/t4-search-knee-smoke.json",
+      "profile": "release",
+      "games_per_comparison": 2,
+      "b_vs_2b": [
+        {
+          "lower_ms": 1,
+          "upper_ms": 2,
+          "paired_gain_percentage_points": 0.0,
+          "lower_p95_wall_us": 16293,
+          "upper_p95_wall_us": 16580
+        },
+        {
+          "lower_ms": 2,
+          "upper_ms": 4,
+          "paired_gain_percentage_points": 0.0,
+          "lower_p95_wall_us": 16195,
+          "upper_p95_wall_us": 15621
+        }
+      ],
+      "fixed_adaptive_ablations_completed": 3,
+      "fixed_checkpoint_history_unit_test": "passed",
+      "confidence_or_strength_claim": false,
+      "missing_authoritative_fields_remain_null": true
+    }
+  },
+  "measurements": [],
+  "selected_budget_ms": null
+}

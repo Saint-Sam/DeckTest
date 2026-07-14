@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "forge://learning/v1/post-game-review",
+  "title": "Forge PostGameReview v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "episode_id", "reviewer_id", "outcome_review",
+    "pilot_intent_match", "decision_reviews", "limitations"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "episode_id": {"type": "string", "minLength": 1},
+    "reviewer_id": {"type": "string", "minLength": 1},
+    "outcome_review": {"enum": ["valid", "invalid", "uncertain"]},
+    "pilot_intent_match": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+    "decision_reviews": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "decision_index", "assessment", "preferred_action_ids",
+          "acceptable_action_ids", "questionable_action_ids",
+          "catastrophic_action_ids", "reason_tags", "confidence",
+          "hindsight_used", "intended_deck_line", "social_constraint",
+          "rationale"
+        ],
+        "properties": {
+          "decision_index": {"type": "integer", "minimum": 0},
+          "assessment": {"enum": ["preferred", "acceptable", "questionable", "mistake", "uncertain"]},
+          "preferred_action_ids": {
+            "type": "array", "uniqueItems": true,
+            "items": {"type": "string", "pattern": "^[0-9a-f]{32}$"}
+          },
+          "acceptable_action_ids": {
+            "type": "array", "uniqueItems": true,
+            "items": {"type": "string", "pattern": "^[0-9a-f]{32}$"}
+          },
+          "questionable_action_ids": {
+            "type": "array", "uniqueItems": true,
+            "items": {"type": "string", "pattern": "^[0-9a-f]{32}$"}
+          },
+          "catastrophic_action_ids": {
+            "type": "array", "uniqueItems": true,
+            "items": {"type": "string", "pattern": "^[0-9a-f]{32}$"}
+          },
+          "reason_tags": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+          "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+          "hindsight_used": {"type": "boolean"},
+          "intended_deck_line": {"type": ["string", "null"]},
+          "social_constraint": {"type": ["string", "null"]},
+          "rationale": {"type": "string"}
+        }
+      }
+    },
+    "limitations": {"type": "array", "items": {"type": "string"}}
+  }
+}

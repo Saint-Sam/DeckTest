@@ -80,6 +80,7 @@ allowed = {
     ("GameState", "turn_order"): "explicit player ID turn ring bounded by player count",
     ("GameState", "objects"): "ObjectArena wrapper with one copy-on-write Copy-record arena",
     ("GameState", "zones"): "fixed shared zones plus per-player copy-on-write memberships",
+    ("GameState", "known_objects"): "sorted copy-on-write observer/object pairs bounded by revealed hidden identities",
     ("GameState", "duration_markers"): "Copy records bounded by active effects",
     ("GameState", "stack_entries"): "bounded by current stack depth",
     ("GameState", "resolution_log"): "deterministic replay audit log",

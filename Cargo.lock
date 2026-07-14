@@ -219,10 +219,14 @@ version = "0.0.0"
 name = "forge-arena"
 version = "0.0.0"
 dependencies = [
+ "forge-ai",
  "forge-cardc",
  "forge-carddef",
  "forge-cards",
  "forge-core",
+ "forge-testkit",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -290,6 +294,7 @@ dependencies = [
 name = "forge-testkit"
 version = "0.0.0"
 dependencies = [
+ "forge-ai",
  "forge-cardc",
  "forge-carddef",
  "forge-cards",

@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "status": "diagnostic_wall_latency_only",
+  "required_budgets_ms": [0, 10, 25, 50, 100, 250, 500, 1000],
+  "required_fields": [
+    "decision_kind", "policy", "wall_latency_us", "cpu_time_us", "nodes",
+    "determinizations", "legal_actions", "selected_action_id", "early_stop_reason"
+  ],
+  "diagnostic_environment": {
+    "profile": "release",
+    "paired_game_seed": "17306488943054686737",
+    "policy_seed": "11601272640106397697",
+    "hardware_and_threads_frozen_within_each_run": true,
+    "cpu_time_measured": false,
+    "resident_memory_measured": false,
+    "worker_price_measured": false
+  },
+  "diagnostic_runs": [
+    {
+      "policy": "heuristic-v1",
+      "decisions": 463,
+      "mean_wall_latency_us": 1837.682505399568,
+      "p50_wall_latency_us": 309,
+      "p95_wall_latency_us": 1317,
+      "p99_wall_latency_us": 2926,
+      "max_wall_latency_us": 458811,
+      "mean_legal_actions": 13.676025917926566,
+      "max_legal_actions": 2048,
+      "singleton_early_stops": 71
+    },
+    {
+      "policy": "random-legal-v1",
+      "decisions": 469,
+      "mean_wall_latency_us": 81.98294243070363,
+      "p50_wall_latency_us": 69,
+      "p95_wall_latency_us": 183,
+      "p99_wall_latency_us": 236,
+      "max_wall_latency_us": 332,
+      "mean_legal_actions": 5.697228144989339,
+      "max_legal_actions": 19,
+      "singleton_early_stops": 86
+    },
+    {
+      "policy": "determinized-uct-v1",
+      "budget_kind": "fixed_iterations_per_determinization",
+      "iterations": 2,
+      "determinizations": 1,
+      "workers": 1,
+      "decisions": 510,
+      "searched_decisions": 491,
+      "mean_wall_latency_us": 5919.270588235294,
+      "p50_wall_latency_us": 3664,
+      "p95_wall_latency_us": 15594,
+      "p99_wall_latency_us": 23097,
+      "max_wall_latency_us": 335378,
+      "mean_legal_actions": 13.035294117647059,
+      "max_legal_actions": 2048,
+      "singleton_early_stops": 72
+    }
+  ],
+  "release_search_knee_smoke": {
+    "profile": "release",
+    "hardware_and_threads_frozen_within_each_pair": true,
+    "cpu_time_measured": false,
+    "campaigns": [
+      {
+        "budgets_ms": [1, 2],
+        "searched_decisions": 1513,
+        "mean_wall_latency_us": 6749,
+        "p50_wall_latency_us": 5649,
+        "p95_wall_latency_us": 16547,
+        "p99_wall_latency_us": 20931
+      },
+      {
+        "budgets_ms": [2, 4],
+        "searched_decisions": 1369,
+        "mean_wall_latency_us": 6846,
+        "p50_wall_latency_us": 6001,
+        "p95_wall_latency_us": 15710,
+        "p99_wall_latency_us": 19221
+      }
+    ],
+    "product_latency_claim": false
+  },
+  "cross_target_compile_evidence": {
+    "forge_ai_wasm32_unknown_unknown": "passed_local_2026-07-14",
+    "forge_ai_aarch64_linux_android": "passed_local_2026-07-14",
+    "reference_device_latency_measured": false
+  },
+  "note": "Release diagnostics and exact replay pass. CPU, memory, Track B, archetype, and reference-device evidence remain mandatory before any product latency, cost, or knee claim."
+}

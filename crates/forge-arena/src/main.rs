@@ -3,6 +3,8 @@
 
 //! Headless arena smoke CLI.
 
+mod ladder;
+
 use forge_carddef::{AbilityKind, CardDefinition, Color, Expression, ManaSymbol, Operation};
 use forge_core::{
     apply, legal_actions, validate_payment_plan, Action, BaseCreatureCharacteristics, CardId,
@@ -75,9 +77,13 @@ fn run(args: Vec<String>) -> Result<(), String> {
         return Ok(());
     }
     if args.iter().any(|arg| arg == "--ladder") {
-        let games = value_after(&args, "--games")?.unwrap_or(2_000);
-        println!("SKIP arena ladder: T4 ladder engine is not active yet ({games} requested games)");
-        return Ok(());
+        return ladder::run(&args);
+    }
+    if args.iter().any(|arg| arg == "--calibrate") {
+        return ladder::calibrate(&args);
+    }
+    if args.iter().any(|arg| arg == "--search-knee") {
+        return ladder::search_knee(&args);
     }
     if args.iter().any(|arg| arg == "--nightmare-suite") {
         let games = value_after(&args, "--games")?.unwrap_or(DEFAULT_NIGHTMARE_GAMES);
@@ -91,7 +97,15 @@ fn run(args: Vec<String>) -> Result<(), String> {
 fn print_help() {
     println!("forge-arena --smoke <games> --random [--max-turns <turns>]");
     println!("forge-arena --nightmare-suite [--games <games>] [--max-turns <turns>]");
-    println!("forge-arena --ladder --games <games>");
+    println!(
+        "forge-arena --ladder [--games <even games/rung>] [--jobs <jobs>] [--rung <name>] [--manifest <path>] [--output <path>]"
+    );
+    println!(
+        "forge-arena --calibrate [--tier expert|master] [--budgets 10,25,50,...] [--games <even games/budget>] [--jobs <jobs>]"
+    );
+    println!(
+        "forge-arena --search-knee [--tier standard|expert|master] [--budgets 10,20,40,...] [--games <even games/comparison>] [--jobs <jobs>] [--skip-adaptive-ablation]"
+    );
 }
 
 fn parse_smoke_args(args: &[String]) -> Result<SmokeConfig, String> {
@@ -1692,13 +1706,26 @@ mod tests {
     }
 
     #[test]
-    fn ladder_placeholder_is_non_failing() {
-        run(vec![
+    fn ladder_rejects_invalid_campaign_instead_of_skipping() {
+        let error = match run(vec![
             "--ladder".to_string(),
             "--games".to_string(),
             "1".to_string(),
-        ])
-        .unwrap_or_else(|error| panic!("unexpected ladder placeholder failure: {error}"));
+        ]) {
+            Err(error) => error,
+            Ok(()) => panic!("odd ladder campaign should fail"),
+        };
+        assert!(error.contains("even integer"));
+
+        let error = match run(vec![
+            "--calibrate".to_string(),
+            "--tier".to_string(),
+            "invalid".to_string(),
+        ]) {
+            Err(error) => error,
+            Ok(()) => panic!("unknown calibration tier must fail closed"),
+        };
+        assert!(error.contains("unsupported calibration tier"));
     }
 
     #[test]

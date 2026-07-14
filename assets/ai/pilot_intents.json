@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "decks": [
+    {
+      "deck_id": "mono-white-isamaru",
+      "classification": "limited",
+      "primary_plan": "Develop mana, cast Isamaru early, and convert efficient combat damage into player eliminations.",
+      "secondary_plan": "Use equipment and mana development to preserve pressure after commander removal.",
+      "win_conditions": ["commander combat damage", "ordinary combat damage"],
+      "combos": [],
+      "mulligan_priorities": ["two or more mana sources", "an early commander cast", "a development permanent"],
+      "commander_role": "Early pressure and repeatable commander-damage threat.",
+      "tutor_priorities": [],
+      "interaction_posture": "Diagnostics-only proactive combat; no unsupported reactive line is implied.",
+      "protected_cards": ["Isamaru, Hound of Konda"],
+      "avoided_lines": ["spending resources without improving development or pressure"],
+      "social_constraints": ["normal Commander rules", "no hidden-information access"]
+    },
+    {
+      "deck_id": "azorius-tobias",
+      "classification": "limited",
+      "primary_plan": "Develop both colors, deploy durable material, and win through sustained creature combat.",
+      "secondary_plan": "Use card advantage and commander recasts to outlast faster seats.",
+      "win_conditions": ["ordinary combat damage", "commander combat damage"],
+      "combos": [],
+      "mulligan_priorities": ["white and blue access", "two or more mana sources", "card development"],
+      "commander_role": "Stable battlefield material rather than a combo engine.",
+      "tutor_priorities": [],
+      "interaction_posture": "Limited until the canonical reactive target and priority surface is complete.",
+      "protected_cards": ["Tobias Andrion"],
+      "avoided_lines": ["generic aggression that sacrifices material without a race advantage"],
+      "social_constraints": ["normal Commander rules", "no hidden-information access"]
+    },
+    {
+      "deck_id": "mono-black-yargle",
+      "classification": "limited",
+      "primary_plan": "Accelerate into Yargle and other large threats, then force high-damage combat exchanges.",
+      "secondary_plan": "Rebuild with mana rocks and Grave Titan after commander removal.",
+      "win_conditions": ["large-creature combat damage", "commander combat damage"],
+      "combos": [],
+      "mulligan_priorities": ["three mana sources or acceleration", "a castable development permanent", "black access"],
+      "commander_role": "High-power combat finisher.",
+      "tutor_priorities": [],
+      "interaction_posture": "Diagnostics-only proactive combat; future removal priorities require typed target support.",
+      "protected_cards": ["Yargle, Glutton of Urborg", "Grave Titan"],
+      "avoided_lines": ["losing Yargle in combat without lethal pressure or a favorable trade"],
+      "social_constraints": ["normal Commander rules", "no hidden-information access"]
+    },
+    {
+      "deck_id": "mono-red-rorix",
+      "classification": "limited",
+      "primary_plan": "Accelerate into Rorix and use haste to pressure the most vulnerable opponent immediately.",
+      "secondary_plan": "Build a creature board that turns Purphoros triggers and combat into reach.",
+      "win_conditions": ["commander combat damage", "ordinary combat damage", "Purphoros damage triggers"],
+      "combos": [],
+      "mulligan_priorities": ["three mana sources or acceleration", "red access", "a development permanent"],
+      "commander_role": "Hasty pressure and commander-damage finisher.",
+      "tutor_priorities": [],
+      "interaction_posture": "Diagnostics-only aggression until complete reactive choices are canonicalized.",
+      "protected_cards": ["Rorix Bladewing", "Purphoros, God of the Forge"],
+      "avoided_lines": ["attacking a defended seat when an equivalent safer pressure line exists"],
+      "social_constraints": ["normal Commander rules", "no hidden-information access"]
+    }
+  ]
+}

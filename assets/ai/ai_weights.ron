@@ -1,0 +1,29 @@
+(
+    // Seed provenance: vendor/legacy-forge/forge-ai/.../GameStateEvaluator.java.
+    // Legacy uses life=2, own hand=5, land/mana development near 100, and
+    // noncreature permanents at 50 + 30*mana value. Remaining multiplayer,
+    // keyword, tempo, stack, and combat-prior weights are explicit v1 additions
+    // and require arena calibration before promotion.
+    terminal_win: 1000000,
+    terminal_loss: -1000000,
+    life_delta: 2,
+    poison_delta: 40,
+    hand_delta: 5,
+    creature_power_delta: 18,
+    creature_toughness_delta: 12,
+    keyword_delta: 14,
+    noncreature_permanent_delta: 50,
+    noncreature_mana_value_delta: 30,
+    pending_permanent_delta: 50,
+    pending_mana_value_delta: 30,
+    land_delta: 100,
+    untapped_land_delta: 8,
+    floating_mana_delta: 12,
+    tempo_delta: 10,
+    attack_power_prior: 24,
+    attack_body_prior: 8,
+    low_life_pressure_prior: 3,
+    block_prevent_prior: 20,
+    block_favorable_trade_prior: 30,
+    block_losing_trade_prior: -12,
+)

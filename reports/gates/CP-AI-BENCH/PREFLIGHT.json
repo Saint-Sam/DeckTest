@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "checkpoint": "CP-AI-BENCH",
+  "status": "not_run",
+  "implemented": [
+    "PlayerView-only AI boundary",
+    "persistent revealed-card knowledge and shuffle invalidation",
+    "deck-consistent deterministic hidden-slot sampling",
+    "poisoned hidden-identity unit canary",
+    "versioned canonical DecisionContext and stable action IDs",
+    "versioned canonical redacted PlayerViewHash with hidden-identity poisoning coverage",
+    "exact DecisionStateKey for PlayerViewHash plus sorted canonical legal-action IDs",
+    "seeded random-legal policy",
+    "data-driven one-ply heuristic and noise knob",
+    "paired exact diagnostic replays",
+    "root-parallel determinized UCT over main and combat decisions",
+    "fail-closed hidden-slot simulation clone and typed program rebinding",
+    "transposition table and deterministic progressive widening",
+    "per-search wall latency, node, depth, gap, uncertainty, and stop telemetry",
+    "full fixed-checkpoint search history persisted in genuine search decision records",
+    "Owner-approved provisional search-knee and adaptive-stop thresholds",
+    "frozen development, validation, and sealed split specification",
+    "versioned learning record schemas",
+    "versioned PilotIntent records for all four integration decks",
+    "canonical human and AI commander-zone move-or-leave adapter"
+  ],
+  "blocking_for_pass": [
+    "complete production Choice/Prompt adapters",
+    "complete multiplayer combat decision surface",
+    "immutable manifest hashes generated from a clean product commit",
+    "near-state and replay-family leakage audit",
+    "sealed hidden canaries",
+    "platform CPU-time and resident-memory measurement adapters",
+    "paired development and validation campaigns",
+    "catastrophic and acceptable-action review labels"
+  ],
+  "promotion_eligible": false,
+  "plan_change_required": false,
+  "note": "Implementation continues under the ratified T4 order; no acceptance criterion was silently weakened."
+}

@@ -11,8 +11,8 @@
   },
   "tier": 4,
   "execution_flow": {
-    "current": "T4.1-T4.3 baseline AI",
-    "next": "T4.4+ search and calibration",
+    "current": "T4.6 calibration evidence, T4.9 platform latency, and CP-AI-BENCH completion",
+    "next": "CP-AI-LADDER Owner review, then CP-NN-GO",
     "targeted_fallback": "When T4 discovers a concrete coverage blocker, fix the smallest shared T3 primitive, add semantic regression tests, and resume T4. Do not reopen broad mapper expansion."
   },
   "tasks": {
@@ -352,20 +352,66 @@
       "verification": "PASS local-only exact product 7bbbafa376a5222c3a335a744b5b942898c67a84. Four legal 100-card Commander decks use 396 semantic-verified mainboard slots across 21 required semantic identities and four compiled commanders. The 24-worker checkpoint completed 1,000 four-seat 40-life card-driven games and directly reapplied every typed action stream: 1,000/1,000 replay matches, 10/10 retained transition and CLI replays, 3,000 eliminations, 0 draws, 0 invariant violations, and 0 hidden-information-canary violations across 1,385,060 checks. Production traffic included 14,248 casts, 5,002 commander casts, 1,012 organic commander-zone returns, 1,012 taxed recasts, 16,450 resolved triggers, 42,883 combat-damage events, and 2,494,768 priority passes. Full translation/planner replay, format, lint, workspace tests, semantic 100/100 revalidation, 3,608 AddressSanitizer worker-seconds, 5/5 mutation kills, clean post-gate product sources, and 80.3761% line coverage passed without GitHub Actions, network, installs, or push."
     },
     "T4.1": {
-      "status": "in_progress",
+      "status": "verified_local_diagnostics",
       "branch": "task/T4.1-player-view-determinizer",
       "attempts": 0,
-      "entry_condition": "CP-HUMAN-PLAY-CLI passed with an exact Owner game replay"
+      "entry_condition": "CP-HUMAN-PLAY-CLI passed with an exact Owner game replay",
+      "verification": "PlayerView-only AI boundary, persistent known-information tracking, deck-consistent deterministic hidden-slot sampling, fail-closed determinized clones, canonical versioned PlayerViewHash, hidden-identity poisoning equality, visible-identity sensitivity, WASM compile, and Android arm64 compile all pass locally."
     },
     "T4.2": {
-      "status": "pending",
+      "status": "verified_local_diagnostics",
       "branch": "task/T4.2-evaluation-v1",
-      "attempts": 0
+      "attempts": 0,
+      "verification": "Deterministic data-driven evaluation covers life, poison, visible board material and effective characteristics, cards, mana development, tempo, and Commander metadata. Bundled weights parse fail-closed and remain data rather than code."
     },
     "T4.3": {
-      "status": "pending",
+      "status": "verified_local_diagnostics",
       "branch": "task/T4.3-heuristic-policy",
-      "attempts": 0
+      "attempts": 0,
+      "verification": "Seeded random-legal, deterministic/noisy one-ply heuristic, mulligan, threat/target helpers, and exact release-profile policy/action replay pass. Refreshed heuristic and random replays persist complete canonical legal descriptors, PlayerView hashes, and DecisionStateKeys."
+    },
+    "T4.4": {
+      "status": "verified_local_diagnostics",
+      "branch": "task/T4.4-determinized-mcts-v1",
+      "attempts": 0,
+      "verification": "Root-parallel determinized UCT with visit-sum selection passes deterministic search and exact full-game replay. The release diagnostic searched 491 decisions with 838 simulations and 1,257 nodes."
+    },
+    "T4.5": {
+      "status": "verified_local_diagnostics",
+      "branch": "task/T4.5-search-upgrades",
+      "attempts": 0,
+      "verification": "Transposition sharing, deterministic progressive widening, time budgets, wall-deadline enforcement across determinization, prior-ordered fallback, fixed checkpoint telemetry, fail-closed adaptive thresholds, and paired fixed/adaptive search-knee harness pass local tests. Adaptive stopping remains unpromoted pending Track A/B/C ablation evidence."
+    },
+    "T4.6": {
+      "status": "in_progress_promotion_evidence_pending",
+      "branch": "task/T4.6-difficulty-calibration",
+      "attempts": 0,
+      "verification": "Versioned provisional tier definitions and paired seat-swapped ladder/calibration/search-knee infrastructure are implemented. No tier or Standard knee is promoted because development, validation, sealed, three-archetype, acceptable-action, CPU-cost, and Owner play evidence remain incomplete."
+    },
+    "T4.7": {
+      "status": "verified_local_diagnostics",
+      "branch": "task/T4.7-behavioral-guardrails",
+      "attempts": 0,
+      "verification": "Tiered data-driven risk profiles apply soft action-prior penalties and fail closed on malformed positive values; search can override penalties."
+    },
+    "T4.8": {
+      "status": "owner_decision_pending",
+      "branch": "task/T4.8-optional-neural-path",
+      "attempts": 0,
+      "checkpoint": "CP-NN-GO",
+      "verification": "No learned model training or dependency addition has been authorized."
+    },
+    "T4.9": {
+      "status": "in_progress_reference_devices_pending",
+      "branch": "task/T4.9-ai-latency-harness",
+      "attempts": 0,
+      "verification": "Release desktop wall-latency percentiles and paired B/2B diagnostics are recorded; forge-ai compiles for wasm32-unknown-unknown and aarch64-linux-android. CPU time, resident memory, worker price, and physical Android/WASM reference-device latency remain missing."
+    },
+    "T4.10": {
+      "status": "verified_local_diagnostics",
+      "branch": "task/T4.10-explainability-hooks",
+      "attempts": 0,
+      "verification": "LastDecisionReport exposes the selected canonical action and top three concrete alternatives with visits, mean values, value deltas, simulations, nodes, determinizations, wall time, and stop reason; focused search coverage passes."
     }
   },
   "gates_passed": [

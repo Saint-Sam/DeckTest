@@ -1,0 +1,11 @@
+(
+    // These values are provisional implementation defaults. They are not a
+    // calibrated ladder and cannot be promoted until the required campaigns.
+    schema_version: 1,
+    calibration_status: "provisional_unpromoted",
+    random: ("random_legal", 0, 1, 1, 0, "random"),
+    novice: ("heuristic", 0, 1, 1, 5000, "baseline"),
+    standard: ("heuristic", 0, 1, 1, 0, "baseline"),
+    expert: ("timed_search", 25, 2, 2, 0, "baseline"),
+    master: ("timed_search", 100, 4, 4, 0, "baseline"),
+)

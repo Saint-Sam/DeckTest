@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "status": "diagnostics_only",
+  "required_campaign": "400+ paired games per ladder rung on aggro, midrange, and control archetypes",
+  "completed_diagnostics": {
+    "single_policy_exact_games": 3,
+    "search_knee_pair_games": 10,
+    "policies": ["random-legal-v1", "heuristic-v1", "determinized-uct-v1"],
+    "exact_policy_replays": 3,
+    "exact_typed_action_replays": 3,
+    "invariant_violations": 0,
+    "hidden_information_canary_violations": 0
+  },
+  "development_campaign": "not_run",
+  "validation_campaign": "not_run",
+  "sealed_campaign": "not_run",
+  "promotion_eligible": false
+}
