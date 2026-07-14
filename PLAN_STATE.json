@@ -11,8 +11,8 @@
   },
   "tier": 4,
   "execution_flow": {
-    "current": "freeze and remeasure the extracted production runner plus corrected total-budget and edge-safe search product",
-    "next": "complete canonical decision adapters and cost telemetry, then run CP-AI-BENCH calibration and search-knee campaigns",
+    "current": "replace eager high-branching action products with hierarchical canonical decision subcontexts after the corrected search deadline exposed their p95 cost",
+    "next": "complete canonical decision adapters and CPU/memory telemetry, then run CP-AI-BENCH calibration and search-knee campaigns",
     "targeted_fallback": "When T4 discovers a concrete coverage blocker, fix the smallest shared T3 primitive, add semantic regression tests, and resume T4. Do not reopen broad mapper expansion."
   },
   "t4_diagnostic_product": {
@@ -383,13 +383,13 @@
       "status": "verified_local_diagnostics",
       "branch": "task/T4.4-determinized-mcts-v1",
       "attempts": 0,
-      "verification": "Root-parallel determinized UCT passes deterministic search and exact full-game replay at product 7bbeae0: 16,274 canonical decisions, 1,032 searched decisions, 1,086 simulations, and 1,629 nodes. The next product replaces child-derived action totals with edge statistics and requires canonical-state equivalence after every wide-key hit; focused convergence and deliberate-collision regressions pass. Useful production search depth and the refreshed exact replay remain pending."
+      "verification": "Root-parallel determinized UCT passes the unchanged exact full-game replay at corrected product 316d9fd: 16,274 canonical decisions, 1,032 searched decisions, 1,086 simulations, and 1,629 nodes. Action-edge statistics prevent converging actions from sharing evidence, and every wide-key hit requires full canonical-state equivalence; focused convergence and deliberate-collision regressions pass. Useful production search depth remains pending."
     },
     "T4.5": {
-      "status": "implemented_local_exact_refresh_pending",
+      "status": "verified_local_shared_deadline_eager_surface_blocked",
       "branch": "task/T4.5-search-upgrades",
       "attempts": 0,
-      "verification": "The corrected source creates one deadline from the caller's pre-context decision start, shares it across every determinization and worker, stops later sequential determinizations after expiry, and runs workers=1 inline. Action-edge statistics prevent converging actions from sharing evidence, and wide-key buckets require full canonical-state equivalence. Focused tests and strict clippy pass. The old 1-4 ms smoke remains invalid and must be replaced by an exact-product rerun before calibration."
+      "verification": "Product 316d9fd creates one deadline from the caller's pre-context decision start, shares it across every determinization and worker, stops later sequential determinizations after expiry, and runs workers=1 inline. Exact heuristic, random, and search replays pass unchanged. The refreshed 1-4 ms ladder still measures approximately 240-266 ms p95 because eager high-branching contexts are non-preemptible, so it remains diagnostic defect evidence and no knee is claimed."
     },
     "T4.6": {
       "status": "blocked_on_search_correctness_and_promotion_evidence",

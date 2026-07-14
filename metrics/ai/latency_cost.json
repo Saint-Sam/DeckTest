@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
-  "status": "diagnostic_exact_replays_bound_total_budget_contract_failed",
+  "status": "diagnostic_exact_replays_bound_shared_deadline_eager_surface_unbounded",
   "generated_at": "2026-07-14",
   "artifact_classification": "diagnostic_not_promotion_eligible",
-  "product_commit": "7bbeae0b24102c4b01755fceed3e00b639ab54b8",
-  "product_tree": "d658c12a9d78c1281e4ac1929c071abd1b5841fa",
+  "product_commit": "316d9fd5f39a4a6542521cb01d6e006e9387f04c",
+  "product_tree": "154f823f910745301a49c99bdd7c36e9f74856fa",
   "required_budgets_ms": [
     0,
     10,
@@ -106,7 +106,7 @@
   ],
   "release_search_knee_smoke": {
     "result_path": "metrics/ai/search_budget_knee_results.json",
-    "result_sha256": "8f8c1efe86735913859a84bd6a6212f3fa5580f61e13668385b32910acaf9af2",
+    "result_sha256": "d35d62d06b9aff91997eb69156e1c762d3c3362e5016ca614b8d5bf771eb39f2",
     "command": "target/release/forge-arena --search-knee --tier standard --budgets 1,2,4 --games 2 --jobs 2 --max-turns 500 --output metrics/ai/search_budget_knee_results.json",
     "profile": "release",
     "hardware_and_threads_frozen_within_each_pair": true,
@@ -115,49 +115,51 @@
       {
         "lower_budget_ms": 1,
         "upper_budget_ms": 2,
-        "lower_p95_wall_latency_us": 258470,
-        "upper_p95_wall_latency_us": 250553
+        "lower_p95_wall_latency_us": 257616,
+        "upper_p95_wall_latency_us": 254377
       },
       {
         "lower_budget_ms": 2,
         "upper_budget_ms": 4,
-        "lower_p95_wall_latency_us": 261076,
-        "upper_p95_wall_latency_us": 270862
+        "lower_p95_wall_latency_us": 250427,
+        "upper_p95_wall_latency_us": 250010
       }
     ],
     "adaptive_ablations": [
       {
         "budget_ms": 1,
-        "fixed_p95_wall_latency_us": 263212,
-        "adaptive_p95_wall_latency_us": 272911
+        "fixed_p95_wall_latency_us": 240849,
+        "adaptive_p95_wall_latency_us": 239933
       },
       {
         "budget_ms": 2,
-        "fixed_p95_wall_latency_us": 250525,
-        "adaptive_p95_wall_latency_us": 255955
+        "fixed_p95_wall_latency_us": 265630,
+        "adaptive_p95_wall_latency_us": 260048
       },
       {
         "budget_ms": 4,
-        "fixed_p95_wall_latency_us": 264062,
-        "adaptive_p95_wall_latency_us": 265383
+        "fixed_p95_wall_latency_us": 246807,
+        "adaptive_p95_wall_latency_us": 247496
       }
     ],
     "product_latency_claim": false
   },
   "total_decision_budget_contract": {
     "required_semantics": "one wall-clock deadline shared by all determinizations and workers for one decision",
-    "current_semantics": "the configured wall-time budget is applied independently to each determinization tree and excludes material orchestration and cloning overhead",
-    "status": "failed",
+    "current_semantics": "one pre-context deadline is shared by every determinization and worker; expired sequential work is skipped and the single-worker path is inline, but eager legal-action materialization remains non-preemptible",
+    "source_deadline_status": "passed",
+    "end_to_end_bounded_latency_status": "failed_eager_decision_surface",
+    "status": "shared_deadline_satisfied_end_to_end_bound_failed",
     "observed_nominal_budgets_ms": [
       1,
       2,
       4
     ],
     "observed_p95_wall_latency_range_us": [
-      250525,
-      272911
+      239933,
+      265630
     ],
-    "promotion_effect": "blocks latency, cost, search-knee, and adaptive-stopping claims until the shared deadline is implemented and remeasured"
+    "promotion_effect": "blocks latency, cost, search-knee, and adaptive-stopping claims until high-branching decision contexts are hierarchical or lazy and the ladder is remeasured"
   },
   "cross_target_compile_evidence": {
     "forge_ai_wasm32_unknown_unknown": "passed_local_2026-07-14",
@@ -172,5 +174,5 @@
     "physical Android reference-device latency",
     "physical WASM reference-device latency"
   ],
-  "note": "Exact product-bound replay diagnostics pass. The nominal wall-time ladder does not yet enforce a total decision deadline, so it is retained only as defect evidence. CPU, memory, Track B, archetype, and reference-device evidence remain mandatory before any product latency, cost, or knee claim."
+  "note": "Exact product-bound replay diagnostics pass, and search now shares one deadline across all trees. The refreshed 1-4 ms ladder still measures approximately 240-266 ms p95 because eager high-branching decision contexts are constructed before bounded search can proceed. It is retained as defect evidence, not a knee. CPU, memory, Track B, archetype, and reference-device evidence remain mandatory before any product latency, cost, or knee claim."
 }

@@ -73,14 +73,14 @@ onto identities.
 
 ## Next Gates
 
-1. Product `7bbeae0` is rebound to exact local evidence: 226 tests, three exact
-   policy/action replays, WASM/Android compiles, and clone-surface guard pass.
-   Extract the production game runner from `forge-testkit` before expanding AI use.
-2. T4.5 search correctness is implemented locally: one pre-context total
-   decision deadline, inline single-worker execution, action-edge statistics,
-   and collision-checked transposition buckets pass focused tests. Freeze and
-   rerun exact replay/latency evidence; the prior 1-4 ms smoke remains defect
-   evidence and cannot support a knee claim.
+1. Product `316d9fd` has an extracted production runner, one pre-context shared
+   search deadline, inline single-worker execution, action-edge statistics, and
+   collision-checked transposition buckets. All three exact policy/action
+   replays pass unchanged.
+2. The refreshed 1-4 ms ladder still measures approximately 240-266 ms p95
+   because high-branching attack/block contexts eagerly materialize canonical
+   action products before bounded search. Replace those with hierarchical or
+   lazy subcontexts and rerun; no search knee is claimed.
 3. Complete canonical Choice/Prompt adapters and T4.9 CPU/memory telemetry, then
    run the three-track development, validation, and sealed CP-AI-BENCH campaigns.
 4. Complete Owner CP-AI-LADDER and CP-NN-GO decisions. Reopen T3 only for a concrete T4 blocker, fix the smallest shared primitive,

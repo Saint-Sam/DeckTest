@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "diagnostic_smoke_bound_total_budget_contract_failed",
+  "status": "diagnostic_smoke_shared_deadline_eager_surface_unbounded",
   "threshold_status": "owner_approved_provisional_2026-07-14",
   "budgets_ms": [0, 10, 25, 50, 100, 250, 500, 1000],
   "comparison_rule": "Compare each positive budget B with the next tested budget 2B on identical states, decks, seats, determinizations, seeds, legal actions, hardware, and threads.",
@@ -61,8 +61,8 @@
   "promotion_authority": "DeckTest paired arena, decision benchmark, human trace review, latency, and measured cost evidence",
   "implementation_evidence": {
     "date": "2026-07-14",
-    "product_commit": "7bbeae0b24102c4b01755fceed3e00b639ab54b8",
-    "product_tree": "d658c12a9d78c1281e4ac1929c071abd1b5841fa",
+    "product_commit": "316d9fd5f39a4a6542521cb01d6e006e9387f04c",
+    "product_tree": "154f823f910745301a49c99bdd7c36e9f74856fa",
     "policy": "determinized-uct-v1",
     "decision_families": ["main_phase", "declare_attackers", "declare_blockers"],
     "full_game_smoke": {
@@ -93,7 +93,7 @@
     "release_search_knee_smoke": {
       "command": "target/release/forge-arena --search-knee --tier standard --budgets 1,2,4 --games 2 --jobs 2 --max-turns 500 --output metrics/ai/search_budget_knee_results.json",
       "result": "metrics/ai/search_budget_knee_results.json",
-      "result_sha256": "8f8c1efe86735913859a84bd6a6212f3fa5580f61e13668385b32910acaf9af2",
+      "result_sha256": "d35d62d06b9aff91997eb69156e1c762d3c3362e5016ca614b8d5bf771eb39f2",
       "profile": "release",
       "games_per_comparison": 2,
       "max_turns": 500,
@@ -107,8 +107,8 @@
             -40.54687942657693,
             40.54687942657693
           ],
-          "lower_p95_wall_us": 258470,
-          "upper_p95_wall_us": 250553,
+          "lower_p95_wall_us": 257616,
+          "upper_p95_wall_us": 254377,
           "acceptance_fields_complete": false,
           "plateau_accepted": false
         },
@@ -121,16 +121,16 @@
             -40.54687942657693,
             40.54687942657693
           ],
-          "lower_p95_wall_us": 261076,
-          "upper_p95_wall_us": 270862,
+          "lower_p95_wall_us": 250427,
+          "upper_p95_wall_us": 250010,
           "acceptance_fields_complete": false,
           "plateau_accepted": false
         }
       ],
       "adaptive_p95_wall_us": {
-        "1": 272911,
-        "2": 255955,
-        "4": 265383
+        "1": 239933,
+        "2": 260048,
+        "4": 247496
       },
       "fixed_adaptive_ablations_completed": 3,
       "fixed_checkpoint_history_unit_test": "passed",
@@ -138,10 +138,10 @@
       "missing_authoritative_fields_remain_null": true
     },
     "total_decision_budget_semantics": {
-      "status": "not_satisfied",
+      "status": "shared_deadline_satisfied_end_to_end_boundedness_not_satisfied",
       "required": "one shared wall-clock deadline across all determinizations and workers for one decision",
-      "observed": "nominal 1-4 ms budgets produced approximately 250-273 ms p95 decision latency",
-      "next_action": "implement a shared total decision deadline, inline the single-worker path, then discard and rerun this smoke"
+      "observed": "the shared deadline and inline single-worker path pass focused tests, but nominal 1-4 ms budgets still produce approximately 240-266 ms p95 end-to-end decision latency because eager high-branching contexts are non-preemptible",
+      "next_action": "replace eager attack/block Cartesian products with hierarchical or lazy canonical decision subcontexts, then rerun this smoke"
     }
   },
   "measurements": [],

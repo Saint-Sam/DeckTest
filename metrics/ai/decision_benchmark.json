@@ -3,8 +3,8 @@
   "status": "diagnostics_only",
   "generated_at": "2026-07-14",
   "artifact_classification": "diagnostic_not_promotion_eligible",
-  "product_commit": "7bbeae0b24102c4b01755fceed3e00b639ab54b8",
-  "product_tree": "d658c12a9d78c1281e4ac1929c071abd1b5841fa",
+  "product_commit": "316d9fd5f39a4a6542521cb01d6e006e9387f04c",
+  "product_tree": "154f823f910745301a49c99bdd7c36e9f74856fa",
   "environment": {
     "platform": "Darwin 23.6.0 arm64",
     "cpu": "Apple M2 Ultra",
@@ -105,11 +105,10 @@
   "promotion_eligible": false,
   "reasons": [
     "single paired diagnostic seed, not a development/validation/sealed campaign",
-    "production game-runner behavior is still embedded in forge-testkit and must be extracted before promotion",
     "full Commander Choice/Prompt adapter surface is not complete",
     "non-player combat defenders and strategic combat-damage prompts remain incomplete",
     "acceptable-action, catastrophic-blunder, and bounded win/defense labels are not sealed",
-    "the configured search wall time is not yet enforced as one total decision deadline",
+    "search shares one pre-context deadline, but eager high-branching decision materialization still prevents an end-to-end bounded wall-time claim",
     "search counters and wall percentiles are recorded, but per-decision CPU and memory adapters remain unavailable"
   ]
 }
