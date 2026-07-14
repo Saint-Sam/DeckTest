@@ -23,21 +23,21 @@
       "human": "partial",
       "ai": "partial",
       "benchmark": "partial",
-      "note": "Land, mana activation, autonomous permanent cast, and finish are canonical; choice-bearing spells and abilities remain closed."
+      "note": "Human and AI consume the same canonical land, mana activation, autonomous permanent cast, and finish options; choice-bearing spells and abilities remain closed."
     },
     {
       "kind": "declare_attackers",
       "human": "partial",
       "ai": "partial",
       "benchmark": "partial",
-      "note": "Complete subsets are canonical for one defending player; split multiplayer allocation remains unsupported."
+      "note": "Human and AI consume the same complete canonical subsets for one defending player; split multiplayer allocation remains unsupported."
     },
     {
       "kind": "declare_blockers",
       "human": "partial",
       "ai": "partial",
       "benchmark": "partial",
-      "note": "Complete blocker combinations are canonical for the current defender; full multiplayer combat sequencing remains open."
+      "note": "Human and AI consume the same complete canonical blocker combinations for the current defender; full multiplayer combat sequencing remains open."
     },
     {
       "kind": "commander_zone",

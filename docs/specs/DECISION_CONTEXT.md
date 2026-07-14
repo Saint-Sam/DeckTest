@@ -58,6 +58,9 @@ The T4.3-T4.5 diagnostics path currently adapts:
 - complete blocker assignments for that defender up to the same ceiling;
 - complete canonical commander move-or-leave choices for both human and AI
   controllers, with selected-ID membership and telemetry regression coverage;
+- one shared sorted context for the live human and AI main-phase, attacker,
+  blocker, and commander-zone adapters; presentation labels are derived from
+  those typed options rather than independently enumerated menus;
 - canonical seeded random-legal and deterministic/noisy one-ply policies;
 - root-parallel determinized search over the main, attacker, and blocker
   contexts, with every selected ID revalidated against its supplied context.
@@ -65,8 +68,10 @@ The T4.3-T4.5 diagnostics path currently adapts:
 The current path remains `limited` and diagnostics-only because it does not yet
 canonicalize the full Commander prompt surface: arbitrary priority
 responses, targets, modes, X, optional and alternative costs, trigger order,
-searches, all hidden choices, split multiplayer attacks, damage ordering, and
-concessions. These gaps cannot be silently skipped for CP-AI-BENCH,
+searches, all hidden choices, split multiplayer attacks, and damage ordering.
+A typed immediate concession action and event exist, but the always-available
+human/AI/benchmark prompt adapter remains open. These gaps cannot be silently
+skipped for CP-AI-BENCH,
 CP-HUMAN-TRACE, teacher-corpus eligibility, or product-strength claims.
 
 ## Replay And Data Boundary
@@ -77,9 +82,13 @@ game inputs, search checkpoint history, and expected final state. Exact replay
 regenerates decisions and typed actions from the same seeds and rejects any
 divergence.
 
-The existing Owner human replay remains valid CP-HUMAN-PLAY-CLI evidence and
-D0_raw only. Its menu labels and `Debug` fingerprint are not promoted to the
-versioned learning schemas under `schemas/learning/v1/`.
+New T1.R10 human replay decisions additively persist the canonical context ID,
+`DecisionStateKey`, `PlayerViewHash`, complete typed legal descriptors, and
+selected action ID. The display labels, selected index, and legacy `Debug`
+fingerprint remain only for presentation and backward replay compatibility.
+Existing and new Owner human replays remain valid CP-HUMAN-PLAY-CLI evidence
+and D0_raw only; they are not promoted to the versioned learning schemas under
+`schemas/learning/v1/` until the full prompt surface and CP-HUMAN-TRACE pass.
 
 ## Promotion Rule
 

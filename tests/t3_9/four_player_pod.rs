@@ -671,6 +671,18 @@ struct HumanDecisionRecord {
     view_fingerprint: String,
     options: Vec<String>,
     selected: usize,
+    #[serde(default)]
+    decision_context_schema: u32,
+    #[serde(default)]
+    context_id: String,
+    #[serde(default)]
+    decision_state_key: String,
+    #[serde(default)]
+    player_view_hash: String,
+    #[serde(default)]
+    canonical_legal_actions: Vec<AiLegalAction>,
+    #[serde(default)]
+    selected_action_id: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -810,6 +822,7 @@ struct AiDecisionTelemetry<'a> {
 struct DecisionPrompt<'a> {
     kind: &'static str,
     view: &'a PlayerView,
+    context: &'a DecisionContext,
     options: &'a [String],
 }
 
@@ -842,6 +855,7 @@ impl DecisionSource for TerminalDecisionSource<'_> {
         if prompt.options.is_empty() {
             return Err(format!("{} prompt has no legal options", prompt.kind));
         }
+        validate_decision_prompt(prompt)?;
         let observer = prompt.view.observer();
         writeln!(
             self.output,
@@ -939,12 +953,13 @@ impl ReplayDecisionSource {
 
 impl DecisionSource for ReplayDecisionSource {
     fn choose(&mut self, prompt: &DecisionPrompt<'_>) -> Result<usize, String> {
+        validate_decision_prompt(prompt)?;
         let expected = self
             .decisions
             .get(self.cursor)
             .ok_or_else(|| format!("unexpected replay prompt `{}`", prompt.kind))?;
         let actual = snapshot_prompt(expected.index, prompt, expected.selected);
-        if &actual != expected {
+        if !human_decision_matches(expected, &actual) {
             return Err(format!(
                 "decision replay diverged at prompt {}: expected {expected:?}, got {actual:?}",
                 self.cursor
@@ -967,6 +982,11 @@ fn snapshot_prompt(
     prompt: &DecisionPrompt<'_>,
     selected: usize,
 ) -> HumanDecisionRecord {
+    let selected_action_id = prompt
+        .context
+        .options()
+        .get(selected)
+        .map_or_else(String::new, |option| option.id().to_string());
     HumanDecisionRecord {
         index,
         prompt: prompt.kind.to_owned(),
@@ -978,7 +998,59 @@ fn snapshot_prompt(
         view_fingerprint: player_view_fingerprint(prompt.view),
         options: prompt.options.to_vec(),
         selected,
+        decision_context_schema: prompt.context.schema_version(),
+        context_id: prompt.context.id().to_string(),
+        decision_state_key: prompt.context.state_key().to_string(),
+        player_view_hash: format!("{:016x}", prompt.context.player_view_hash().get()),
+        canonical_legal_actions: prompt
+            .context
+            .options()
+            .iter()
+            .map(|option| AiLegalAction {
+                action_id: option.id().to_string(),
+                descriptor_schema_version: 1,
+                descriptor: decision_descriptor_value(option.descriptor()),
+            })
+            .collect(),
+        selected_action_id,
     }
+}
+
+fn validate_decision_prompt(prompt: &DecisionPrompt<'_>) -> Result<(), String> {
+    if prompt.context.actor() != prompt.view.observer() {
+        return Err(format!(
+            "{} prompt actor does not match its PlayerView observer",
+            prompt.kind
+        ));
+    }
+    if prompt.context.player_view_hash() != prompt.view.deterministic_hash() {
+        return Err(format!(
+            "{} prompt context does not match its PlayerView",
+            prompt.kind
+        ));
+    }
+    if prompt.options.len() != prompt.context.options().len() {
+        return Err(format!(
+            "{} prompt has {} labels for {} canonical actions",
+            prompt.kind,
+            prompt.options.len(),
+            prompt.context.options().len()
+        ));
+    }
+    Ok(())
+}
+
+fn human_decision_matches(expected: &HumanDecisionRecord, actual: &HumanDecisionRecord) -> bool {
+    if !expected.context_id.is_empty() {
+        return expected == actual;
+    }
+    expected.index == actual.index
+        && expected.prompt == actual.prompt
+        && expected.turn == actual.turn
+        && expected.step == actual.step
+        && expected.view_fingerprint == actual.view_fingerprint
+        && expected.options == actual.options
+        && expected.selected == actual.selected
 }
 
 fn player_view_fingerprint(view: &PlayerView) -> String {
@@ -1959,20 +2031,21 @@ impl GameDriver {
         self.cast_one_permanent(player)
     }
 
-    fn prompt_choice(
+    fn prompt_context_choice(
         &self,
-        player: PlayerId,
         source: &mut dyn DecisionSource,
         kind: &'static str,
+        context: &DecisionContext,
         options: &[String],
-    ) -> Result<usize, String> {
+    ) -> Result<CanonicalActionId, String> {
         let view = self
             .state
-            .player_view(player)
+            .player_view(context.actor())
             .map_err(|error| format!("seed {} player view failed: {error:?}", self.seed))?;
         let selected = source.choose(&DecisionPrompt {
             kind,
             view: &view,
+            context,
             options,
         })?;
         if selected >= options.len() {
@@ -1982,7 +2055,20 @@ impl GameDriver {
                 options.len()
             ));
         }
-        Ok(selected)
+        let selected = context.options().get(selected).ok_or_else(|| {
+            format!(
+                "seed {} prompt `{kind}` selected canonical option {selected} outside {} choices",
+                self.seed,
+                context.options().len()
+            )
+        })?;
+        context.select(selected.id()).map_err(|error| {
+            format!(
+                "seed {} prompt `{kind}` selected an illegal canonical action: {error}",
+                self.seed
+            )
+        })?;
+        Ok(selected.id())
     }
 
     fn take_human_main_phase_actions(
@@ -1991,12 +2077,57 @@ impl GameDriver {
         source: &mut dyn DecisionSource,
     ) -> Result<(), String> {
         loop {
-            let (labels, choices) = self.human_main_choices(player)?;
-            let selected =
-                self.prompt_choice(player, source, "Choose a main-phase action", &labels)?;
-            if self.apply_main_choice(player, choices[selected])? {
+            let (context, mappings) = self.main_decision_context(player)?;
+            let labels = context
+                .options()
+                .iter()
+                .map(|option| self.main_choice_label(option.descriptor()))
+                .collect::<Result<Vec<_>, _>>()?;
+            let selected_id = self.prompt_context_choice(
+                source,
+                "Choose a main-phase action",
+                &context,
+                &labels,
+            )?;
+            let choice = mappings
+                .iter()
+                .find_map(|(id, choice)| (*id == selected_id).then_some(*choice))
+                .ok_or_else(|| {
+                    format!(
+                        "seed {} human main action {selected_id} has no typed adapter",
+                        self.seed
+                    )
+                })?;
+            if self.apply_main_choice(player, choice)? {
                 return Ok(());
             }
+        }
+    }
+
+    fn main_choice_label(&self, descriptor: &DecisionDescriptor) -> Result<String, String> {
+        match descriptor {
+            DecisionDescriptor::PlayLand { object } => {
+                Ok(format!("Play land: {}", self.object_name(*object)))
+            }
+            DecisionDescriptor::ActivateAbility {
+                source, payment, ..
+            } => Ok(format!(
+                "Activate ability: {} (payment waste {})",
+                self.object_name(*source),
+                payment.waste_score()
+            )),
+            DecisionDescriptor::CastSpell {
+                object, payment, ..
+            } => Ok(format!(
+                "Cast: {} (payment waste {})",
+                self.object_name(*object),
+                payment.waste_score()
+            )),
+            DecisionDescriptor::PassPriority => Ok("Finish main phase".to_owned()),
+            other => Err(format!(
+                "seed {} main prompt cannot label descriptor {other:?}",
+                self.seed
+            )),
         }
     }
 
@@ -3246,72 +3377,58 @@ impl GameDriver {
         active: PlayerId,
         source: &mut dyn DecisionSource,
     ) -> Result<(), String> {
-        let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
-        let objects = self
-            .state
-            .zone_objects(battlefield)
-            .ok_or_else(|| format!("seed {} missing battlefield", self.seed))?
+        let context = self.attack_decision_context(active)?;
+        let labels = context
+            .options()
             .iter()
-            .copied()
-            .filter(|object| self.state.object_controller(*object) == Ok(active))
-            .collect::<Vec<_>>();
-        let mut labels = Vec::new();
-        let mut candidates = Vec::<Vec<AttackDeclaration>>::new();
-        let mut seen = BTreeSet::new();
-        for defender in self.live_opponents(active) {
-            let legal = objects
-                .iter()
-                .copied()
-                .map(|object| AttackDeclaration::new(object, defender))
-                .filter(|attack| self.state.can_attack(active, *attack))
-                .collect::<Vec<_>>();
-            if legal.is_empty() {
-                continue;
-            }
-            let mut variants = Vec::with_capacity(legal.len() + 1);
-            variants.push(legal.clone());
-            variants.extend(legal.iter().copied().map(|attack| vec![attack]));
-            for attacks in variants {
-                let key = format!("{attacks:?}");
-                let action = Action::DeclareAttackers {
-                    player: active,
-                    attacks: attacks.clone(),
-                };
-                if !seen.insert(key) || !self.action_is_legal(&action) {
-                    continue;
-                }
-                let names = attacks
-                    .iter()
-                    .map(|attack| self.object_name(attack.attacker()))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                labels.push(format!("Attack seat {} with {names}", defender.index() + 1));
-                candidates.push(attacks);
-            }
-        }
-        let no_attacks = Vec::new();
-        let no_attack_action = Action::DeclareAttackers {
-            player: active,
-            attacks: no_attacks.clone(),
-        };
-        if !self.action_is_legal(&no_attack_action) {
+            .map(|option| self.attack_choice_label(option.descriptor()))
+            .collect::<Result<Vec<_>, _>>()?;
+        let selected_id =
+            self.prompt_context_choice(source, "Choose attackers", &context, &labels)?;
+        let selected = context.select(selected_id).map_err(|error| {
+            format!(
+                "seed {} human selected illegal attack action: {error}",
+                self.seed
+            )
+        })?;
+        let DecisionDescriptor::DeclareAttackers { attacks } = selected.descriptor() else {
             return Err(format!(
-                "seed {} kernel rejected the no-attack fallback",
+                "seed {} attack context returned a non-attack descriptor",
                 self.seed
             ));
+        };
+        let attacks = attacks.clone();
+        for action in selected.actions().to_vec() {
+            self.dispatch(action)?;
         }
-        labels.push("Attack no one".to_owned());
-        candidates.push(no_attacks);
-        let selected = self.prompt_choice(active, source, "Choose attackers", &labels)?;
-        let attacks = candidates[selected].clone();
-        self.dispatch(Action::DeclareAttackers {
-            player: active,
-            attacks: attacks.clone(),
-        })?;
         self.current_defender = attacks.first().map(|attack| attack.defending_player());
         self.current_attacks = attacks;
         self.metrics.combat_declarations = self.metrics.combat_declarations.saturating_add(1);
         Ok(())
+    }
+
+    fn attack_choice_label(&self, descriptor: &DecisionDescriptor) -> Result<String, String> {
+        let DecisionDescriptor::DeclareAttackers { attacks } = descriptor else {
+            return Err(format!(
+                "seed {} attack prompt cannot label descriptor {descriptor:?}",
+                self.seed
+            ));
+        };
+        if attacks.is_empty() {
+            return Ok("Attack no one".to_owned());
+        }
+        let declarations = attacks
+            .iter()
+            .map(|attack| {
+                format!(
+                    "{} -> seat {}",
+                    self.object_name(attack.attacker()),
+                    attack.defending_player().index() + 1
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        Ok(format!("Attack with {declarations}"))
     }
 
     fn declare_attackers(&mut self, active: PlayerId) -> Result<(), String> {
@@ -3554,80 +3671,48 @@ impl GameDriver {
         let defending_player = self
             .current_defending_player(active)
             .ok_or_else(|| format!("seed {} missing human defending player", self.seed))?;
-        let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
-        let blockers = self
-            .state
-            .zone_objects(battlefield)
-            .ok_or_else(|| format!("seed {} missing battlefield", self.seed))?
+        let context = self.block_decision_context(defending_player)?;
+        let labels = context
+            .options()
             .iter()
-            .copied()
-            .filter(|object| self.state.object_controller(*object) == Ok(defending_player))
-            .collect::<Vec<_>>();
-        let mut labels = Vec::new();
-        let mut candidates = Vec::<Vec<BlockDeclaration>>::new();
-        let mut seen = BTreeSet::new();
-
-        for blocker in blockers.iter().copied() {
-            for attack in &self.current_attacks {
-                let blocks = vec![BlockDeclaration::new(blocker, attack.attacker())];
-                let action = Action::DeclareBlockers {
-                    defending_player,
-                    blocks: blocks.clone(),
-                };
-                let key = format!("{blocks:?}");
-                if seen.insert(key) && self.action_is_legal(&action) {
-                    labels.push(format!(
-                        "Block {} with {}",
-                        self.object_name(attack.attacker()),
-                        self.object_name(blocker)
-                    ));
-                    candidates.push(blocks);
-                }
-            }
+            .map(|option| self.block_choice_label(option.descriptor()))
+            .collect::<Result<Vec<_>, _>>()?;
+        let selected_id =
+            self.prompt_context_choice(source, "Choose blockers", &context, &labels)?;
+        let selected = context.select(selected_id).map_err(|error| {
+            format!(
+                "seed {} human selected illegal block action: {error}",
+                self.seed
+            )
+        })?;
+        for action in selected.actions().to_vec() {
+            self.dispatch(action)?;
         }
+        Ok(())
+    }
 
-        let mut greedy = Vec::new();
-        for blocker in blockers {
-            if let Some(attack) = self.current_attacks.iter().find(|attack| {
-                self.state.can_block(
-                    defending_player,
-                    BlockDeclaration::new(blocker, attack.attacker()),
-                )
-            }) {
-                greedy.push(BlockDeclaration::new(blocker, attack.attacker()));
-            }
-        }
-        if greedy.len() > 1 {
-            let action = Action::DeclareBlockers {
-                defending_player,
-                blocks: greedy.clone(),
-            };
-            let key = format!("{greedy:?}");
-            if seen.insert(key) && self.action_is_legal(&action) {
-                labels.insert(0, "Use all available blockers".to_owned());
-                candidates.insert(0, greedy);
-            }
-        }
-
-        let no_blocks = Vec::new();
-        let no_block_action = Action::DeclareBlockers {
-            defending_player,
-            blocks: no_blocks.clone(),
-        };
-        if !self.action_is_legal(&no_block_action) {
+    fn block_choice_label(&self, descriptor: &DecisionDescriptor) -> Result<String, String> {
+        let DecisionDescriptor::DeclareBlockers { blocks } = descriptor else {
             return Err(format!(
-                "seed {} kernel rejected the no-block fallback",
+                "seed {} block prompt cannot label descriptor {descriptor:?}",
                 self.seed
             ));
+        };
+        if blocks.is_empty() {
+            return Ok("Block no attackers".to_owned());
         }
-        labels.push("Block no attackers".to_owned());
-        candidates.push(no_blocks);
-        let selected = self.prompt_choice(defending_player, source, "Choose blockers", &labels)?;
-        self.dispatch(Action::DeclareBlockers {
-            defending_player,
-            blocks: candidates[selected].clone(),
-        })?;
-        Ok(())
+        let declarations = blocks
+            .iter()
+            .map(|block| {
+                format!(
+                    "{} -> {}",
+                    self.object_name(block.blocker()),
+                    self.object_name(block.attacker())
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        Ok(format!("Block with {declarations}"))
     }
 
     fn declare_blocks(&mut self, active: PlayerId) -> Result<(), String> {
@@ -3824,20 +3909,30 @@ impl GameDriver {
             self.commander_zone_decisions.insert(commander, zone);
             let context = self.commander_zone_context(owner, commander, zone)?;
             if owner == human {
-                let labels = vec![
-                    format!("Move {} to the command zone", self.object_name(commander)),
-                    format!("Leave {} in {zone:?}", self.object_name(commander)),
-                ];
-                let selected = self.prompt_choice(
-                    human,
+                let labels = context
+                    .options()
+                    .iter()
+                    .map(|option| match option.descriptor() {
+                        DecisionDescriptor::MoveCommanderToCommand { object } => Ok(format!(
+                            "Move {} to the command zone",
+                            self.object_name(*object)
+                        )),
+                        DecisionDescriptor::LeaveCommander { object, zone } => {
+                            Ok(format!("Leave {} in {zone:?}", self.object_name(*object)))
+                        }
+                        descriptor => Err(format!(
+                            "seed {} commander prompt cannot label descriptor {descriptor:?}",
+                            self.seed
+                        )),
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                let selected_id = self.prompt_context_choice(
                     source,
                     "Choose whether to move your commander",
+                    &context,
                     &labels,
                 )?;
-                let selected = context.options().get(selected).ok_or_else(|| {
-                    format!("seed {} commander-zone option disappeared", self.seed)
-                })?;
-                context.select(selected.id()).map_err(|error| {
+                let selected = context.select(selected_id).map_err(|error| {
                     format!(
                         "seed {} illegal commander-zone selection: {error}",
                         self.seed
@@ -5738,8 +5833,8 @@ mod tests {
     };
     use forge_ai::{AiWeights, GuardrailTable};
     use forge_core::{
-        apply, Action, CardId, DecisionDescriptor, DecisionKind, GameState, ObjectColors, ObjectId,
-        Outcome, PlayerId, PlayerView, ZoneId, ZoneKind,
+        apply, Action, CardId, DecisionContext, DecisionDescriptor, DecisionKind, DecisionOption,
+        GameState, ObjectColors, ObjectId, Outcome, PlayerId, PlayerView, ZoneId, ZoneKind,
     };
     use std::{
         collections::{BTreeSet, HashMap, HashSet},
@@ -5814,13 +5909,44 @@ mod tests {
     #[test]
     fn decision_replay_binds_view_options_and_selection() {
         let view = hidden_card_view(7, false);
+        let context = DecisionContext::new(
+            DecisionKind::Optional,
+            view.observer(),
+            &view,
+            vec![
+                DecisionOption::new(
+                    DecisionDescriptor::ChooseOptional {
+                        prompt: 0,
+                        accept: false,
+                    },
+                    Vec::new(),
+                ),
+                DecisionOption::new(
+                    DecisionDescriptor::ChooseOptional {
+                        prompt: 0,
+                        accept: true,
+                    },
+                    Vec::new(),
+                ),
+            ],
+            Vec::new(),
+        )
+        .unwrap_or_else(|error| panic!("decision context should exist: {error}"));
         let options = vec!["First legal action".to_owned(), "Pass".to_owned()];
         let prompt = DecisionPrompt {
             kind: "Choose",
             view: &view,
+            context: &context,
             options: &options,
         };
         let record = snapshot_prompt(0, &prompt, 1);
+        assert_eq!(record.context_id, context.id().to_string());
+        assert_eq!(record.decision_state_key, context.state_key().to_string());
+        assert_eq!(record.canonical_legal_actions.len(), 2);
+        assert_eq!(
+            record.selected_action_id,
+            context.options()[1].id().to_string()
+        );
         let mut replay = ReplayDecisionSource::new(vec![record]);
         assert_eq!(replay.choose(&prompt), Ok(1));
         assert!(replay.finish().is_ok());
@@ -5829,11 +5955,48 @@ mod tests {
         let changed_prompt = DecisionPrompt {
             kind: "Choose",
             view: &view,
+            context: &context,
             options: &changed_options,
         };
         let record = snapshot_prompt(0, &prompt, 1);
         let mut replay = ReplayDecisionSource::new(vec![record]);
         assert!(replay.choose(&changed_prompt).is_err());
+    }
+
+    #[test]
+    fn legacy_human_decision_record_remains_replayable() {
+        let view = hidden_card_view(7, false);
+        let context = DecisionContext::new(
+            DecisionKind::Concession,
+            view.observer(),
+            &view,
+            vec![DecisionOption::new(
+                DecisionDescriptor::Concede,
+                vec![Action::Concede {
+                    player: view.observer(),
+                }],
+            )],
+            Vec::new(),
+        )
+        .unwrap_or_else(|error| panic!("decision context should exist: {error}"));
+        let labels = vec!["Concede".to_owned()];
+        let prompt = DecisionPrompt {
+            kind: "Choose",
+            view: &view,
+            context: &context,
+            options: &labels,
+        };
+        let mut legacy = snapshot_prompt(0, &prompt, 0);
+        legacy.decision_context_schema = 0;
+        legacy.context_id.clear();
+        legacy.decision_state_key.clear();
+        legacy.player_view_hash.clear();
+        legacy.canonical_legal_actions.clear();
+        legacy.selected_action_id.clear();
+
+        let mut replay = ReplayDecisionSource::new(vec![legacy]);
+        assert_eq!(replay.choose(&prompt), Ok(0));
+        assert!(replay.finish().is_ok());
     }
 
     #[test]
