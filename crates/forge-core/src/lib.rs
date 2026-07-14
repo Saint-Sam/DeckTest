@@ -12761,6 +12761,16 @@ impl GameState {
         StateHash(hash.finish())
     }
 
+    /// Returns whether two states have identical full-information canonical bytes.
+    ///
+    /// This is a collision verifier for deterministic replay and search
+    /// transposition tables. Player-facing code must continue to use redacted
+    /// [`PlayerView`] projections rather than this full-state comparison.
+    #[must_use]
+    pub fn canonically_equivalent(&self, other: &Self) -> bool {
+        self.canonical_bytes() == other.canonical_bytes()
+    }
+
     /// Returns the full-information canonical byte representation.
     ///
     /// This is for deterministic replay, tests, and diagnostics. Player-facing

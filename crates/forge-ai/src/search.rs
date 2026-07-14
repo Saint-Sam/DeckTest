@@ -9,13 +9,47 @@ use std::{
 const VALUE_LIMIT: i64 = 1_000_000_000;
 const PPM: f64 = 1_000_000.0;
 
-/// Search work limit for one determinization tree.
+/// Search work limit for one complete decision.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SearchLimit {
     /// Deterministic development/replay limit.
     Iterations(u32),
     /// Product-facing wall-time limit.
     WallTime(Duration),
+}
+
+/// Wide deterministic lookup key for one opaque search state.
+///
+/// A matching key is only a bucket candidate. Search also calls
+/// [`SearchDomain::transposition_equivalent`] before sharing a node, so hash
+/// collisions cannot merge distinct states.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct SearchStateKey {
+    primary: u64,
+    discriminator: u64,
+}
+
+impl SearchStateKey {
+    /// Creates a key from a canonical state hash and domain discriminator.
+    #[must_use]
+    pub const fn new(primary: u64, discriminator: u64) -> Self {
+        Self {
+            primary,
+            discriminator,
+        }
+    }
+
+    /// Returns the canonical state-hash component.
+    #[must_use]
+    pub const fn primary(self) -> u64 {
+        self.primary
+    }
+
+    /// Returns the domain-specific discriminator component.
+    #[must_use]
+    pub const fn discriminator(self) -> u64 {
+        self.discriminator
+    }
 }
 
 /// Deterministic progressive-widening schedule for large action sets.
@@ -107,6 +141,7 @@ pub struct SearchConfig {
     determinizations: u32,
     workers: u32,
     limit: SearchLimit,
+    decision_started: Option<Instant>,
     rollout_depth: u32,
     exploration_milli: u32,
     progressive_widening: Option<ProgressiveWidening>,
@@ -122,6 +157,7 @@ impl SearchConfig {
             determinizations,
             workers: determinizations.max(1),
             limit: SearchLimit::Iterations(iterations),
+            decision_started: None,
             rollout_depth: 24,
             exploration_milli: 1_414,
             progressive_widening: Some(ProgressiveWidening::new(8, 2)),
@@ -137,6 +173,7 @@ impl SearchConfig {
             determinizations,
             workers: determinizations.max(1),
             limit: SearchLimit::WallTime(Duration::from_millis(think_ms)),
+            decision_started: None,
             rollout_depth: 24,
             exploration_milli: 1_414,
             progressive_widening: Some(ProgressiveWidening::new(8, 2)),
@@ -148,6 +185,16 @@ impl SearchConfig {
     #[must_use]
     pub const fn with_workers(mut self, workers: u32) -> Self {
         self.workers = workers;
+        self
+    }
+
+    /// Includes caller-side legal-action construction in the decision budget.
+    ///
+    /// Product adapters should capture this instant before constructing the
+    /// canonical context. Fixed-iteration replay remains iteration-authoritative.
+    #[must_use]
+    pub fn with_decision_started(mut self, started: Instant) -> Self {
+        self.decision_started = Some(started);
         self
     }
 
@@ -200,7 +247,7 @@ impl SearchConfig {
         self.workers
     }
 
-    /// Returns the work limit applied to each tree.
+    /// Returns the work limit applied to the complete decision.
     #[must_use]
     pub const fn limit(&self) -> SearchLimit {
         self.limit
@@ -295,8 +342,16 @@ pub trait SearchDomain: Sync {
     ///
     /// Domains that cannot provide a complete key return `None`; search then
     /// retains tree semantics and reports zero transposition hits.
-    fn state_key(&self, _state: &Self::State) -> Option<u64> {
+    fn state_key(&self, _state: &Self::State) -> Option<SearchStateKey> {
         None
+    }
+
+    /// Proves whether two states in the same key bucket are identical.
+    ///
+    /// The fail-closed default disables node sharing. Domains that opt into
+    /// transpositions must compare complete search-relevant state, not hashes.
+    fn transposition_equivalent(&self, _left: &Self::State, _right: &Self::State) -> bool {
+        false
     }
 
     /// Runs an optional exact bounded win/defense solver at the root.
@@ -456,7 +511,7 @@ impl SearchReport {
         &self.actions
     }
 
-    /// Returns the configured per-tree work limit.
+    /// Returns the configured total-decision work limit.
     #[must_use]
     pub const fn configured_limit(&self) -> SearchLimit {
         self.configured_limit
@@ -558,7 +613,11 @@ impl SearchEngine {
         config: &SearchConfig,
     ) -> Result<SearchReport, SearchError> {
         validate_config(config)?;
-        let started = Instant::now();
+        let started = config.decision_started.unwrap_or_else(Instant::now);
+        let deadline = match config.limit {
+            SearchLimit::WallTime(duration) => started.checked_add(duration),
+            SearchLimit::Iterations(_) => None,
+        };
         let legal = context
             .options()
             .iter()
@@ -592,42 +651,78 @@ impl SearchEngine {
         }
 
         let worker_count = config.workers.min(config.determinizations).max(1);
-        let batches = thread::scope(|scope| {
-            let mut handles = Vec::with_capacity(worker_count as usize);
-            for worker in 0..worker_count {
-                let legal = &legal;
-                handles.push(scope.spawn(move || {
-                    let mut results = Vec::new();
-                    for index in (worker..config.determinizations).step_by(worker_count as usize) {
-                        let seed = tree_seed(config.seed, index);
-                        results.push((index, run_tree(domain, legal, seed, config)));
-                    }
-                    results
-                }));
-            }
-            handles
-                .into_iter()
-                .map(|handle| handle.join().map_err(|_| SearchError::WorkerPanicked))
-                .collect::<Result<Vec<_>, _>>()
-        })?;
-        let mut trees = Vec::<Option<TreeReport>>::new();
-        trees.resize_with(config.determinizations as usize, || None);
+        let batches = if worker_count == 1 {
+            vec![run_worker_batch(
+                domain,
+                &legal,
+                config,
+                0,
+                worker_count,
+                deadline,
+            )]
+        } else {
+            thread::scope(|scope| {
+                let mut handles = Vec::with_capacity(worker_count as usize);
+                for worker in 0..worker_count {
+                    let legal = &legal;
+                    handles.push(scope.spawn(move || {
+                        run_worker_batch(domain, legal, config, worker, worker_count, deadline)
+                    }));
+                }
+                handles
+                    .into_iter()
+                    .map(|handle| handle.join().map_err(|_| SearchError::WorkerPanicked))
+                    .collect::<Result<Vec<_>, _>>()
+            })?
+        };
+        let mut trees = Vec::new();
         for batch in batches {
             for (index, result) in batch {
-                trees[index as usize] =
-                    Some(result.map_err(|message| SearchError::DomainFailure {
-                        determinization: index,
-                        message,
-                    })?);
+                let tree = result.map_err(|message| SearchError::DomainFailure {
+                    determinization: index,
+                    message,
+                })?;
+                trees.push((index, tree));
             }
         }
-        let trees = trees
-            .into_iter()
-            .enumerate()
-            .map(|(index, tree)| tree.ok_or(SearchError::MissingTree(index as u32)))
-            .collect::<Result<Vec<_>, _>>()?;
+        trees.sort_by_key(|(index, _)| *index);
+        if matches!(config.limit, SearchLimit::Iterations(_))
+            && trees.len() != config.determinizations as usize
+        {
+            let present = trees
+                .iter()
+                .map(|(index, _)| *index)
+                .collect::<BTreeSet<_>>();
+            let missing = (0..config.determinizations)
+                .find(|index| !present.contains(index))
+                .unwrap_or(config.determinizations);
+            return Err(SearchError::MissingTree(missing));
+        }
+        if trees.is_empty() {
+            return Err(SearchError::MissingTree(0));
+        }
         aggregate(legal, trees, config, worker_count, elapsed_us(started))
     }
+}
+
+fn run_worker_batch<D: SearchDomain>(
+    domain: &D,
+    legal: &[CanonicalActionId],
+    config: &SearchConfig,
+    worker: u32,
+    worker_count: u32,
+    deadline: Option<Instant>,
+) -> Vec<(u32, Result<TreeReport, String>)> {
+    let mut results = Vec::new();
+    for index in (worker..config.determinizations).step_by(worker_count as usize) {
+        let deadline_expired = deadline.is_some_and(|deadline| Instant::now() >= deadline);
+        if deadline_expired && (worker != 0 || !results.is_empty()) {
+            break;
+        }
+        let seed = tree_seed(config.seed, index);
+        results.push((index, run_tree(domain, legal, seed, config, deadline)));
+    }
+    results
 }
 
 struct Node<S> {
@@ -635,10 +730,17 @@ struct Node<S> {
     terminal: Option<i64>,
     actions: Vec<CanonicalActionId>,
     expansion_order: Vec<usize>,
-    children: Vec<Option<usize>>,
+    edges: Vec<Edge>,
     visits: u32,
     total_value: i128,
     depth: u32,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct Edge {
+    child: Option<usize>,
+    visits: u32,
+    total_value: i128,
 }
 
 #[derive(Clone, Copy)]
@@ -664,12 +766,8 @@ fn run_tree<D: SearchDomain>(
     expected_legal: &[CanonicalActionId],
     seed: u64,
     config: &SearchConfig,
+    deadline: Option<Instant>,
 ) -> Result<TreeReport, String> {
-    let started = Instant::now();
-    let deadline = match config.limit {
-        SearchLimit::WallTime(duration) => started.checked_add(duration),
-        SearchLimit::Iterations(_) => None,
-    };
     let root = domain.determinize(seed)?;
     let root_actions = canonical_actions(domain.legal_actions(&root)?)?;
     if root_actions != expected_legal {
@@ -716,9 +814,9 @@ fn run_tree<D: SearchDomain>(
         deadline,
         Some(root_actions),
     )?];
-    let mut transpositions = HashMap::new();
+    let mut transpositions = HashMap::<SearchStateKey, Vec<usize>>::new();
     if let Some(key) = domain.state_key(&arena[0].state) {
-        transpositions.insert(key, 0_usize);
+        transpositions.insert(key, vec![0_usize]);
     }
     let mut transposition_hits = 0_u64;
     let mut simulations = 0_u32;
@@ -732,7 +830,7 @@ fn run_tree<D: SearchDomain>(
     loop {
         let limit_reached = match config.limit {
             SearchLimit::Iterations(iterations) => simulations >= iterations,
-            SearchLimit::WallTime(duration) => started.elapsed() >= duration,
+            SearchLimit::WallTime(_) => deadline.is_some_and(|deadline| Instant::now() >= deadline),
         };
         if limit_reached {
             break;
@@ -792,18 +890,12 @@ fn run_tree<D: SearchDomain>(
         .copied()
         .enumerate()
         .map(|(index, action)| {
-            arena[0].children[index].map_or(
-                TreeActionReport {
-                    action,
-                    visits: 0,
-                    total_value: 0,
-                },
-                |child| TreeActionReport {
-                    action,
-                    visits: arena[child].visits,
-                    total_value: arena[child].total_value,
-                },
-            )
+            let edge = arena[0].edges[index];
+            TreeActionReport {
+                action,
+                visits: edge.visits,
+                total_value: edge.total_value,
+            }
         })
         .collect();
     let maximum_depth = arena.iter().map(|node| node.depth).max().unwrap_or(0);
@@ -835,7 +927,7 @@ fn new_node<D: SearchDomain>(
     } else {
         canonical_actions(domain.legal_actions(&state)?)?
     };
-    let children = vec![None; actions.len()];
+    let edges = vec![Edge::default(); actions.len()];
     let mut prior_order = (0..actions.len())
         .map(|index| (domain.action_prior(&state, actions[index]), index))
         .collect::<Vec<_>>();
@@ -874,7 +966,7 @@ fn new_node<D: SearchDomain>(
         terminal,
         actions,
         expansion_order,
-        children,
+        edges,
         visits: 0,
         total_value: 0,
         depth,
@@ -884,16 +976,17 @@ fn new_node<D: SearchDomain>(
 fn simulate<D: SearchDomain>(
     domain: &D,
     arena: &mut Vec<Node<D::State>>,
-    transpositions: &mut HashMap<u64, usize>,
+    transpositions: &mut HashMap<SearchStateKey, Vec<usize>>,
     transposition_hits: &mut u64,
     seed: u64,
     config: &SearchConfig,
     deadline: Option<Instant>,
 ) -> Result<(), String> {
-    let mut path = Vec::new();
+    let mut node_path = Vec::new();
+    let mut edge_path = Vec::new();
     let mut current = 0_usize;
     let value = loop {
-        path.push(current);
+        node_path.push(current);
         if deadline.is_some_and(|deadline| Instant::now() >= deadline) {
             break clamp_value(domain.evaluate(&arena[current].state));
         }
@@ -907,7 +1000,13 @@ fn simulate<D: SearchDomain>(
             let action = arena[current].actions[action_index];
             let next = domain.apply_action(&arena[current].state, action)?;
             let key = domain.state_key(&next);
-            let child = key.and_then(|key| transpositions.get(&key).copied());
+            let child = key.and_then(|key| {
+                transpositions.get(&key).and_then(|bucket| {
+                    bucket.iter().copied().find(|candidate| {
+                        domain.transposition_equivalent(&arena[*candidate].state, &next)
+                    })
+                })
+            });
             let child = if let Some(child) = child {
                 *transposition_hits = transposition_hits.saturating_add(1);
                 child
@@ -916,15 +1015,16 @@ fn simulate<D: SearchDomain>(
                 let depth = arena[current].depth.saturating_add(1);
                 arena.push(new_node(domain, next, depth, config, deadline, None)?);
                 if let Some(key) = key {
-                    transpositions.insert(key, child);
+                    transpositions.entry(key).or_default().push(child);
                 }
                 child
             };
-            arena[current].children[action_index] = Some(child);
-            if path.contains(&child) {
+            arena[current].edges[action_index].child = Some(child);
+            edge_path.push((current, action_index));
+            if node_path.contains(&child) {
                 break clamp_value(domain.evaluate(&arena[child].state));
             }
-            path.push(child);
+            node_path.push(child);
             break rollout(
                 domain,
                 &arena[child].state,
@@ -933,12 +1033,18 @@ fn simulate<D: SearchDomain>(
                 deadline,
             )?;
         }
-        let child = select_uct_child(domain, &arena[current], arena, config)?;
+        let (action_index, child) = select_uct_child(domain, &arena[current], config)?;
+        edge_path.push((current, action_index));
         current = child;
     };
-    for node in path {
+    for node in node_path {
         arena[node].visits = arena[node].visits.saturating_add(1);
         arena[node].total_value = arena[node].total_value.saturating_add(i128::from(value));
+    }
+    for (node, action_index) in edge_path {
+        let edge = &mut arena[node].edges[action_index];
+        edge.visits = edge.visits.saturating_add(1);
+        edge.total_value = edge.total_value.saturating_add(i128::from(value));
     }
     Ok(())
 }
@@ -957,7 +1063,7 @@ fn best_unexpanded<S>(node: &Node<S>, config: &SearchConfig) -> Option<usize> {
         .iter()
         .copied()
         .take(active)
-        .find(|index| node.children[*index].is_none())
+        .find(|index| node.edges[*index].child.is_none())
 }
 
 const fn integer_sqrt(value: u32) -> u32 {
@@ -981,21 +1087,20 @@ const fn integer_sqrt(value: u32) -> u32 {
 fn select_uct_child<D: SearchDomain>(
     domain: &D,
     node: &Node<D::State>,
-    arena: &[Node<D::State>],
     config: &SearchConfig,
-) -> Result<usize, String> {
+) -> Result<(usize, usize), String> {
     let sign = f64::from(domain.selection_sign(&node.state).clamp(-1, 1));
     let parent_log = f64::from(node.visits.max(1)).ln();
     let exploration = f64::from(config.exploration_milli) / 1_000.0;
-    node.children
+    node.edges
         .iter()
         .copied()
         .enumerate()
-        .filter_map(|(index, child)| child.map(|child| (index, child)))
-        .max_by(|(left_index, left), (right_index, right)| {
-            let score = |index: usize, child: usize| {
-                let visits = arena[child].visits.max(1);
-                let mean = arena[child].total_value as f64 / f64::from(visits);
+        .filter_map(|(index, edge)| edge.child.map(|child| (index, child, edge)))
+        .max_by(|(left_index, _, left), (right_index, _, right)| {
+            let score = |index: usize, edge: Edge| {
+                let visits = edge.visits.max(1);
+                let mean = edge.total_value as f64 / f64::from(visits);
                 let explore = exploration * (parent_log / f64::from(visits)).sqrt();
                 let prior = domain.action_prior(&node.state, node.actions[index]) as f64 / 1_000.0;
                 sign * mean + explore + prior
@@ -1004,7 +1109,7 @@ fn select_uct_child<D: SearchDomain>(
                 .total_cmp(&score(*right_index, *right))
                 .then_with(|| node.actions[*right_index].cmp(&node.actions[*left_index]))
         })
-        .map(|(_, child)| child)
+        .map(|(index, child, _)| (index, child))
         .ok_or_else(|| "fully expanded node has no child".to_owned())
 }
 
@@ -1055,18 +1160,12 @@ fn tree_root_stats<S>(arena: &[Node<S>]) -> Vec<TreeActionReport> {
         .copied()
         .enumerate()
         .map(|(index, action)| {
-            root.children[index].map_or(
-                TreeActionReport {
-                    action,
-                    visits: 0,
-                    total_value: 0,
-                },
-                |child| TreeActionReport {
-                    action,
-                    visits: arena[child].visits,
-                    total_value: arena[child].total_value,
-                },
-            )
+            let edge = root.edges[index];
+            TreeActionReport {
+                action,
+                visits: edge.visits,
+                total_value: edge.total_value,
+            }
         })
         .collect::<Vec<_>>();
     stats.sort_by(|left, right| {
@@ -1111,11 +1210,12 @@ fn summarize_tree_stats(stats: &[TreeActionReport]) -> StatsSummary {
 
 fn aggregate(
     legal: Vec<CanonicalActionId>,
-    trees: Vec<TreeReport>,
+    trees: Vec<(u32, TreeReport)>,
     config: &SearchConfig,
     workers: u32,
     actual_wall_time_us: u64,
 ) -> Result<SearchReport, SearchError> {
+    let completed_determinizations = trees.len() as u32;
     let mut actions = legal
         .into_iter()
         .map(|action| SearchActionReport {
@@ -1132,7 +1232,7 @@ fn aggregate(
     let mut checkpoints = Vec::new();
     let mut stop_reasons = BTreeSet::new();
     let mut fallback_votes = HashMap::<CanonicalActionId, u32>::new();
-    for (index, tree) in trees.into_iter().enumerate() {
+    for (index, tree) in trees {
         simulations = simulations.saturating_add(u64::from(tree.simulations));
         nodes = nodes.saturating_add(u64::from(tree.nodes));
         maximum_depth = maximum_depth.max(tree.maximum_depth);
@@ -1149,7 +1249,7 @@ fn aggregate(
             target.total_value = target.total_value.saturating_add(report.total_value);
         }
         checkpoints.extend(tree.checkpoints.into_iter().map(|mut checkpoint| {
-            checkpoint.determinization = index as u32;
+            checkpoint.determinization = index;
             checkpoint
         }));
     }
@@ -1205,7 +1305,7 @@ fn aggregate(
         selected_action: first.action,
         actions,
         configured_limit: config.limit,
-        determinizations: config.determinizations,
+        determinizations: completed_determinizations,
         workers,
         simulations,
         nodes,
@@ -1408,8 +1508,8 @@ impl Error for SearchError {}
 #[cfg(test)]
 mod tests {
     use super::{
-        best_unexpanded, AdaptiveStopping, Node, ProgressiveWidening, SearchConfig, SearchDomain,
-        SearchEngine, SearchError, SearchStopReason,
+        best_unexpanded, AdaptiveStopping, Edge, Node, ProgressiveWidening, SearchConfig,
+        SearchDomain, SearchEngine, SearchError, SearchStateKey, SearchStopReason,
     };
     use crate::LastDecisionReport;
     use forge_core::{
@@ -1419,7 +1519,7 @@ mod tests {
     use std::{
         sync::atomic::{AtomicU32, Ordering},
         thread,
-        time::Duration,
+        time::{Duration, Instant},
     };
 
     #[derive(Clone)]
@@ -1435,6 +1535,7 @@ mod tests {
         converge: bool,
         right_prior: i64,
         determinization_delay_ms: u64,
+        key_collision: bool,
     }
 
     impl SearchDomain for ToyDomain {
@@ -1494,8 +1595,17 @@ mod tests {
                 .ok_or_else(|| "no action".to_owned())
         }
 
-        fn state_key(&self, state: &Self::State) -> Option<u64> {
-            Some((u64::from(state.depth) << 56) ^ (state.value as u64))
+        fn state_key(&self, state: &Self::State) -> Option<SearchStateKey> {
+            let primary = if self.key_collision {
+                1
+            } else {
+                (u64::from(state.depth) << 56) ^ (state.value as u64)
+            };
+            Some(SearchStateKey::new(primary, u64::from(state.depth)))
+        }
+
+        fn transposition_equivalent(&self, left: &Self::State, right: &Self::State) -> bool {
+            left.depth == right.depth && left.value == right.value
         }
 
         fn action_prior(&self, _state: &Self::State, action: CanonicalActionId) -> i64 {
@@ -1548,6 +1658,7 @@ mod tests {
             converge: false,
             right_prior: 0,
             determinization_delay_ms: 0,
+            key_collision: false,
         };
         let report =
             SearchEngine::search(&domain, &context, &SearchConfig::fixed_iterations(7, 4, 32))
@@ -1567,6 +1678,7 @@ mod tests {
             converge: false,
             right_prior: 0,
             determinization_delay_ms: 0,
+            key_collision: false,
         };
         let config = SearchConfig::fixed_iterations(11, 4, 64).with_workers(4);
         let first = SearchEngine::search(&domain, &context, &config)
@@ -1595,6 +1707,7 @@ mod tests {
             converge: true,
             right_prior: 0,
             determinization_delay_ms: 0,
+            key_collision: false,
         };
         let report =
             SearchEngine::search(&domain, &context, &SearchConfig::fixed_iterations(19, 1, 4))
@@ -1602,6 +1715,35 @@ mod tests {
 
         assert!(report.transposition_hits() >= 1);
         assert!(report.nodes() < report.simulations().saturating_add(1));
+        assert_eq!(
+            report
+                .actions()
+                .iter()
+                .map(|action| action.visits())
+                .sum::<u64>(),
+            report.simulations()
+        );
+    }
+
+    #[test]
+    fn colliding_keys_do_not_merge_non_equivalent_states() {
+        let (context, ids) = context(2);
+        let domain = ToyDomain {
+            left: ids[0],
+            right: ids[1],
+            determinizations: AtomicU32::new(0),
+            converge: false,
+            right_prior: 0,
+            determinization_delay_ms: 0,
+            key_collision: true,
+        };
+        let report =
+            SearchEngine::search(&domain, &context, &SearchConfig::fixed_iterations(21, 1, 8))
+                .unwrap_or_else(|error| panic!("search failed: {error}"));
+
+        assert_eq!(report.selected_action(), ids[0]);
+        assert_eq!(report.transposition_hits(), 0);
+        assert_eq!(report.nodes(), 3);
     }
 
     #[test]
@@ -1614,6 +1756,7 @@ mod tests {
             converge: false,
             right_prior: 100,
             determinization_delay_ms: 5,
+            key_collision: false,
         };
         let report = SearchEngine::search(
             &domain,
@@ -1628,6 +1771,57 @@ mod tests {
     }
 
     #[test]
+    fn total_wall_budget_does_not_start_sequential_determinizations_after_expiry() {
+        let (context, ids) = context(2);
+        let domain = ToyDomain {
+            left: ids[0],
+            right: ids[1],
+            determinizations: AtomicU32::new(0),
+            converge: false,
+            right_prior: 100,
+            determinization_delay_ms: 5,
+            key_collision: false,
+        };
+        let report = SearchEngine::search(
+            &domain,
+            &context,
+            &SearchConfig::wall_time(25, 4, 1).with_workers(1),
+        )
+        .unwrap_or_else(|error| panic!("search failed: {error}"));
+
+        assert_eq!(report.determinizations(), 1);
+        assert_eq!(domain.determinizations.load(Ordering::Relaxed), 1);
+        assert_eq!(report.simulations(), 0);
+        assert_eq!(report.stop_reason(), SearchStopReason::WallTimeBudget);
+    }
+
+    #[test]
+    fn caller_side_context_time_counts_against_the_total_budget() {
+        let (context, ids) = context(2);
+        let domain = ToyDomain {
+            left: ids[0],
+            right: ids[1],
+            determinizations: AtomicU32::new(0),
+            converge: false,
+            right_prior: 100,
+            determinization_delay_ms: 0,
+            key_collision: false,
+        };
+        let started = Instant::now()
+            .checked_sub(Duration::from_millis(10))
+            .unwrap_or_else(Instant::now);
+        let config = SearchConfig::wall_time(27, 1, 1)
+            .with_workers(1)
+            .with_decision_started(started);
+        let report = SearchEngine::search(&domain, &context, &config)
+            .unwrap_or_else(|error| panic!("search failed: {error}"));
+
+        assert_eq!(report.simulations(), 0);
+        assert!(report.actual_wall_time_us() >= 10_000);
+        assert_eq!(report.selected_action(), ids[1]);
+    }
+
+    #[test]
     fn progressive_widening_opens_prior_order_by_sqrt_visits() {
         let (_, ids) = context(8);
         let mut node = Node {
@@ -1635,7 +1829,7 @@ mod tests {
             terminal: None,
             actions: ids,
             expansion_order: (0..8).collect(),
-            children: vec![None; 8],
+            edges: vec![Edge::default(); 8],
             visits: 0,
             total_value: 0,
             depth: 0,
@@ -1644,9 +1838,9 @@ mod tests {
             .with_progressive_widening(Some(ProgressiveWidening::new(2, 1)));
 
         assert_eq!(best_unexpanded(&node, &config), Some(0));
-        node.children[0] = Some(1);
+        node.edges[0].child = Some(1);
         assert_eq!(best_unexpanded(&node, &config), Some(1));
-        node.children[1] = Some(2);
+        node.edges[1].child = Some(2);
         assert_eq!(best_unexpanded(&node, &config), None);
         node.visits = 4;
         assert_eq!(best_unexpanded(&node, &config), Some(2));
@@ -1662,6 +1856,7 @@ mod tests {
             converge: false,
             right_prior: 0,
             determinization_delay_ms: 0,
+            key_collision: false,
         };
         let config = SearchConfig::fixed_iterations(29, 1, 128).with_adaptive_stopping(
             AdaptiveStopping::experimental(vec![16, 32, 64, 128], 1, 0, 0, 0, 1_000_000),
@@ -1701,6 +1896,7 @@ mod tests {
             converge: false,
             right_prior: 0,
             determinization_delay_ms: 0,
+            key_collision: false,
         };
         let invalid = [
             AdaptiveStopping::experimental(Vec::new(), 1, 0, 0, 0, 1_000_000),

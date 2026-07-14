@@ -11,7 +11,7 @@
   },
   "tier": 4,
   "execution_flow": {
-    "current": "T4 production-runner extraction and search correctness remediation from the 2026-07-14 engineering assessment",
+    "current": "freeze and remeasure the extracted production runner plus corrected total-budget and edge-safe search product",
     "next": "complete canonical decision adapters and cost telemetry, then run CP-AI-BENCH calibration and search-knee campaigns",
     "targeted_fallback": "When T4 discovers a concrete coverage blocker, fix the smallest shared T3 primitive, add semantic regression tests, and resume T4. Do not reopen broad mapper expansion."
   },
@@ -383,13 +383,13 @@
       "status": "verified_local_diagnostics",
       "branch": "task/T4.4-determinized-mcts-v1",
       "attempts": 0,
-      "verification": "Root-parallel determinized UCT passes deterministic search and exact full-game replay at product 7bbeae0: 16,274 canonical decisions, 1,032 searched decisions, 1,086 simulations, and 1,629 nodes. Promotion is blocked because converging actions still read child-node statistics instead of edge statistics, the state key needs collision hardening, and useful search depth remains shallow."
+      "verification": "Root-parallel determinized UCT passes deterministic search and exact full-game replay at product 7bbeae0: 16,274 canonical decisions, 1,032 searched decisions, 1,086 simulations, and 1,629 nodes. The next product replaces child-derived action totals with edge statistics and requires canonical-state equivalence after every wide-key hit; focused convergence and deliberate-collision regressions pass. Useful production search depth and the refreshed exact replay remain pending."
     },
     "T4.5": {
-      "status": "in_progress_correctness_remediation",
+      "status": "implemented_local_exact_refresh_pending",
       "branch": "task/T4.5-search-upgrades",
       "attempts": 0,
-      "verification": "Transposition sharing, deterministic progressive widening, prior-ordered fallback, fixed checkpoint telemetry, fail-closed adaptive thresholds, and the paired fixed/adaptive harness pass local tests. The refreshed 1-4 ms smoke exposed a failed contract: observed p95 decision latency was approximately 250-273 ms because the budget is applied per determinization tree and excludes material orchestration overhead. Implement one shared total-decision deadline, inline the single-worker path, correct edge statistics, harden keys, and discard/rerun the current knee smoke before calibration."
+      "verification": "The corrected source creates one deadline from the caller's pre-context decision start, shares it across every determinization and worker, stops later sequential determinizations after expiry, and runs workers=1 inline. Action-edge statistics prevent converging actions from sharing evidence, and wide-key buckets require full canonical-state equivalence. Focused tests and strict clippy pass. The old 1-4 ms smoke remains invalid and must be replaced by an exact-product rerun before calibration."
     },
     "T4.6": {
       "status": "blocked_on_search_correctness_and_promotion_evidence",

@@ -10,7 +10,7 @@ use forge_ai::{
     ActionRisk, ActionRisks, AdaptiveStopping, AiWeights, DeckModel, Determinizer,
     GuardrailProfile, GuardrailTable, HeuristicPolicy, LastDecisionReport, MulliganPolicy,
     PolicyCandidate, PolicyDecision, PolicyMode, RandomLegalPolicy, SearchConfig, SearchDomain,
-    SearchEngine, SearchLimit, SearchReport, SearchStopReason,
+    SearchEngine, SearchLimit, SearchReport, SearchStateKey, SearchStopReason,
 };
 use forge_cards::runtime::{
     bind_activated_effect_actions, bind_program_actions, bind_triggered_ability_actions,
@@ -3398,11 +3398,13 @@ impl GameDriver {
                         rollout_seed: controller.seed ^ decision_index,
                         guardrail_profile: controller.guardrail_profile,
                     };
+                    let config = controller
+                        .config(decision_index)
+                        .with_decision_started(decision_started);
                     let report =
-                        SearchEngine::search(&domain, &context, &controller.config(decision_index))
-                            .map_err(|error| {
-                                format!("seed {} main search failed: {error}", self.seed)
-                            })?;
+                        SearchEngine::search(&domain, &context, &config).map_err(|error| {
+                            format!("seed {} main search failed: {error}", self.seed)
+                        })?;
                     (
                         report.selected_action(),
                         None,
@@ -4918,11 +4920,11 @@ impl GameDriver {
                     kind: CombatSearchKind::Attackers { active },
                     guardrail_profile: controller.guardrail_profile,
                 };
-                let report =
-                    SearchEngine::search(&domain, &context, &controller.config(decision_index))
-                        .map_err(|error| {
-                            format!("seed {} attack search failed: {error}", self.seed)
-                        })?;
+                let config = controller
+                    .config(decision_index)
+                    .with_decision_started(decision_started);
+                let report = SearchEngine::search(&domain, &context, &config)
+                    .map_err(|error| format!("seed {} attack search failed: {error}", self.seed))?;
                 (
                     report.selected_action(),
                     None,
@@ -5032,6 +5034,7 @@ impl GameDriver {
                     self.seed, MAX_DIAGNOSTIC_COMBAT_OPTIONS
                 ));
             }
+            candidates.reserve(additional);
             for index in 0..existing {
                 for attack in &legal {
                     let mut with_attack = candidates[index].clone();
@@ -5297,11 +5300,11 @@ impl GameDriver {
                     },
                     guardrail_profile: controller.guardrail_profile,
                 };
-                let report =
-                    SearchEngine::search(&domain, &context, &controller.config(decision_index))
-                        .map_err(|error| {
-                            format!("seed {} block search failed: {error}", self.seed)
-                        })?;
+                let config = controller
+                    .config(decision_index)
+                    .with_decision_started(decision_started);
+                let report = SearchEngine::search(&domain, &context, &config)
+                    .map_err(|error| format!("seed {} block search failed: {error}", self.seed))?;
                 (
                     report.selected_action(),
                     None,
@@ -5395,16 +5398,20 @@ impl GameDriver {
                 .map(|attack| BlockDeclaration::new(blocker, attack.attacker()))
                 .filter(|block| self.state.can_block(defending_player, *block))
                 .collect::<Vec<_>>();
-            let existing = variants.clone();
-            for blocks in existing {
+            let existing = variants.len();
+            let additional = existing.checked_mul(legal.len()).ok_or_else(|| {
+                format!("seed {} block surface option count overflowed", self.seed)
+            })?;
+            if existing.saturating_add(additional) > MAX_DIAGNOSTIC_COMBAT_OPTIONS {
+                return Err(format!(
+                    "seed {} block surface exceeds the diagnostics-only limit of {} options",
+                    self.seed, MAX_DIAGNOSTIC_COMBAT_OPTIONS
+                ));
+            }
+            variants.reserve(additional);
+            for index in 0..existing {
                 for block in &legal {
-                    if variants.len() >= MAX_DIAGNOSTIC_COMBAT_OPTIONS {
-                        return Err(format!(
-                            "seed {} block surface exceeds the diagnostics-only limit of {} options",
-                            self.seed, MAX_DIAGNOSTIC_COMBAT_OPTIONS
-                        ));
-                    }
-                    let mut with_block = blocks.clone();
+                    let mut with_block = variants[index].clone();
                     with_block.push(*block);
                     variants.push(with_block);
                 }
@@ -6175,20 +6182,28 @@ impl SearchDomain for MainSearchDomain<'_> {
         state.priors.get(&action).copied().unwrap_or(0)
     }
 
-    fn state_key(&self, state: &Self::State) -> Option<u64> {
-        let terminal_marker = if state.finished {
-            0xa076_1d64_78bd_642f
-        } else {
-            0
-        };
-        Some(
-            state
+    fn state_key(&self, state: &Self::State) -> Option<SearchStateKey> {
+        let context = state.context.id().get();
+        let discriminator = (context as u64)
+            ^ ((context >> 64) as u64)
+            ^ if state.finished {
+                0xa076_1d64_78bd_642f
+            } else {
+                0
+            };
+        Some(SearchStateKey::new(
+            state.driver.state.deterministic_hash().get(),
+            discriminator,
+        ))
+    }
+
+    fn transposition_equivalent(&self, left: &Self::State, right: &Self::State) -> bool {
+        left.finished == right.finished
+            && left.context.id() == right.context.id()
+            && left
                 .driver
                 .state
-                .deterministic_hash()
-                .get()
-                .wrapping_add(terminal_marker),
-        )
+                .canonically_equivalent(&right.driver.state)
     }
 }
 
@@ -6347,20 +6362,27 @@ impl SearchDomain for CombatSearchDomain<'_> {
         state.options.get(&action).map_or(0, |option| option.prior)
     }
 
-    fn state_key(&self, state: &Self::State) -> Option<u64> {
-        Some(
-            state
+    fn state_key(&self, state: &Self::State) -> Option<SearchStateKey> {
+        let discriminator = state.terminal_prior as u64
+            ^ if state.finished {
+                0xe703_7ed1_a0b4_28db
+            } else {
+                0
+            };
+        Some(SearchStateKey::new(
+            state.driver.state.deterministic_hash().get(),
+            discriminator,
+        ))
+    }
+
+    fn transposition_equivalent(&self, left: &Self::State, right: &Self::State) -> bool {
+        left.finished == right.finished
+            && left.terminal_prior == right.terminal_prior
+            && left.legal_actions == right.legal_actions
+            && left
                 .driver
                 .state
-                .deterministic_hash()
-                .get()
-                .wrapping_add(state.terminal_prior as u64)
-                .wrapping_add(if state.finished {
-                    0xe703_7ed1_a0b4_28db
-                } else {
-                    0
-                }),
-        )
+                .canonically_equivalent(&right.driver.state)
     }
 }
 

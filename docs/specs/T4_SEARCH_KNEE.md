@@ -64,8 +64,9 @@ comparisons and all three fixed/adaptive ablations. It also exposed a blocking
 implementation defect: measured p95 latency was approximately 250-273 ms
 because the configured budget was applied independently inside each tree and
 did not bound total decision work. The report is retained as defect evidence
-only. It must be discarded and rerun after one shared total-decision deadline
-is implemented. Its confidence intervals and missing benchmark fields would
+only. A shared total-decision deadline and edge-safe transposition accounting
+are now implemented locally; the smoke must be discarded and rerun on the next
+frozen product commit. Its confidence intervals and missing benchmark fields would
 still prohibit any strength or plateau claim even if timing were correct.
 
 The supporting design reference is *Learning to Stop: Dynamic Simulation

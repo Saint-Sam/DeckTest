@@ -29,7 +29,7 @@ pub use random::{RandomLegalPolicy, RandomPolicyError};
 pub use search::{
     AdaptiveStopping, BoundedSolution, ProgressiveWidening, SearchActionReport, SearchCheckpoint,
     SearchConfig, SearchDomain, SearchEngine, SearchError, SearchLimit, SearchReport,
-    SearchStopReason,
+    SearchStateKey, SearchStopReason,
 };
 pub use target::{TargetDecision, TargetIntent, TargetPolicy, TargetPolicyError};
 pub use tier::{

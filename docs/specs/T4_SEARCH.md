@@ -31,14 +31,15 @@ aggregates concrete root actions. Fixed-iteration configurations are used for
 development and exact replay. A wall-time limit exists for diagnostics, but is
 not yet the replay-authoritative CLI mode or a valid product decision budget.
 
-The current implementation creates a separate deadline inside each
-determinization tree. It therefore multiplies the configured wall time by the
-number of trees and excludes material determinization, thread, cloning, and
-aggregation overhead. The refreshed 1/2/4 ms smoke measured approximately
-250-273 ms p95 decision latency. This is a failed total-budget contract, not an
-acceptable non-preemptible-transition overrun. T4.5 must create one deadline
-before all decision work, share it across determinizations and workers, inline
-the one-worker path, and record setup/search/aggregation time separately.
+The product adapter captures one decision start before canonical context and
+legal-action construction. `SearchEngine` derives one deadline from that start
+and shares it across every determinization and worker. It does not start later
+sequential determinizations after expiry, and `workers=1` executes inline
+without thread creation. A single context build, determinization, or typed
+transition remains non-preemptible, so measured wall time may exceed the
+budget by that operation; the budget can no longer be multiplied by a sequence
+of independently timed trees. Setup/search/aggregation phase telemetry remains
+open T4.9 work.
 
 The current four-player product adapter searches:
 
@@ -65,12 +66,13 @@ The tree supports:
   equivalence proof replaces the removed transition-cloning implementation;
 - fixed-visit adaptive checkpoints and forced/singleton bypasses.
 
-The current transposition table stores visit/value totals on shared child
-nodes. Converging root actions can therefore inherit each other's evidence.
-Promotion requires action-edge visit/value statistics with transposition nodes
-holding state/value information, plus a wider or collision-checked state key.
-The current diagnostics remain valid execution evidence but not search-quality
-or calibration evidence.
+Visit/value totals now live on action edges while transposition nodes retain
+state-level totals. Converging actions therefore keep independent evidence.
+Lookup uses a wide domain key only to select a bucket, then requires the domain
+to prove complete canonical-state equivalence before sharing. The fail-closed
+default disables sharing. Regression tests cover converging edges, deliberate
+key collisions, shared total deadlines, caller-side context time, and inline
+single-worker expiry.
 
 Adaptive leader/gap/uncertainty stopping remains experimental. It cannot ship
 until paired ablation against fixed budgets passes Tracks A, B, and C under
@@ -95,3 +97,5 @@ playing strength. T4 promotion still requires sealed benchmark evidence,
 paired arena calibration, three archetype decks, at least 400 games per rung,
 latency evidence on required reference platforms, full shipped-card support,
 and Owner CP-AI-LADDER review. No broad T3 reopening is authorized.
+The prior 1/2/4 ms ladder artifact predates the corrected budget contract and
+must be replaced before any latency or knee interpretation.

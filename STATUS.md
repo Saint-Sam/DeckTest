@@ -76,10 +76,11 @@ onto identities.
 1. Product `7bbeae0` is rebound to exact local evidence: 226 tests, three exact
    policy/action replays, WASM/Android compiles, and clone-surface guard pass.
    Extract the production game runner from `forge-testkit` before expanding AI use.
-2. Repair T4.5 search correctness before calibration: enforce one total decision
-   deadline, inline the single-worker path, use edge statistics for converging
-   actions, and harden transposition keys. The current 1-4 ms smoke is diagnostic
-   defect evidence because measured p95 latency is roughly 250-273 ms.
+2. T4.5 search correctness is implemented locally: one pre-context total
+   decision deadline, inline single-worker execution, action-edge statistics,
+   and collision-checked transposition buckets pass focused tests. Freeze and
+   rerun exact replay/latency evidence; the prior 1-4 ms smoke remains defect
+   evidence and cannot support a knee claim.
 3. Complete canonical Choice/Prompt adapters and T4.9 CPU/memory telemetry, then
    run the three-track development, validation, and sealed CP-AI-BENCH campaigns.
 4. Complete Owner CP-AI-LADDER and CP-NN-GO decisions. Reopen T3 only for a concrete T4 blocker, fix the smallest shared primitive,
