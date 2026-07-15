@@ -17,6 +17,7 @@ check_contracts() {
   require_json assets/ai/decision_surface.json
   require_json assets/ai/benchmark_splits.json
   require_json metrics/ai/decision_benchmark.json
+  require_json metrics/ai/decision_state_audit.json
   require_json metrics/ai/latency_cost.json
   require_json metrics/ai/arena_results.json
   require_json metrics/ai/search_budget_knee.json
@@ -36,6 +37,23 @@ check_contracts() {
     (.near_state_dedup_audit | type == "string") and
     (.replay_family_leakage_audit | type == "string")
   ' metrics/ai/decision_benchmark.json >/dev/null
+  jq -s -e '
+    .[0].status == "passed" and
+    .[0].near_state_dedup_audit == "passed_exact_baseline_isomorphism" and
+    .[0].product_commit == .[1].product_commit and
+    .[0].product_tree == .[1].product_tree
+  ' metrics/ai/decision_state_audit.json metrics/ai/decision_benchmark.json >/dev/null
+  local product_commit product_tree
+  product_commit="$(jq -r '.product_commit' metrics/ai/decision_benchmark.json)"
+  product_tree="$(jq -r '.product_tree' metrics/ai/decision_benchmark.json)"
+  python3 tools/audit_t4_decision_keys.py \
+    --check \
+    --product-commit "$product_commit" \
+    --product-tree "$product_tree" \
+    --output metrics/ai/decision_state_audit.json \
+    reports/gates/T4.3/ai-baseline.frsreplay \
+    reports/gates/T4.3/random-legal-baseline.frsreplay \
+    reports/gates/T4.3/search-baseline.frsreplay
   jq -e '
     (.selected_budget_ms == null or .selected_budget_ms >= 0) and
     .cost_table_is_authoritative == false

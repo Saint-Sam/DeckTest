@@ -672,6 +672,8 @@ struct HumanDecisionRecord {
     #[serde(default)]
     decision_state_key: String,
     #[serde(default)]
+    path_discriminator: Option<u64>,
+    #[serde(default)]
     player_view_hash: String,
     #[serde(default)]
     canonical_legal_actions: Vec<AiLegalAction>,
@@ -719,6 +721,8 @@ struct AiDecisionRecord {
     context_id: String,
     #[serde(default)]
     decision_state_key: String,
+    #[serde(default)]
+    path_discriminator: Option<u64>,
     #[serde(default)]
     player_view_hash: String,
     action_id: String,
@@ -1068,6 +1072,7 @@ fn snapshot_prompt(
         decision_context_schema: prompt.context.schema_version(),
         context_id: prompt.context.id().to_string(),
         decision_state_key: prompt.context.state_key().to_string(),
+        path_discriminator: prompt.context.path_discriminator(),
         player_view_hash: format!("{:016x}", prompt.context.player_view_hash().get()),
         canonical_legal_actions: prompt
             .context
@@ -3764,6 +3769,7 @@ impl GameDriver {
             policy: policy.to_owned(),
             context_id: context.id().to_string(),
             decision_state_key: context.state_key().to_string(),
+            path_discriminator: context.path_discriminator(),
             player_view_hash: format!("{:016x}", context.player_view_hash().get()),
             action_id: action_id.to_string(),
             canonical_legal_actions: canonical_legal_actions(context),
@@ -3857,6 +3863,7 @@ impl GameDriver {
             policy: policy.to_owned(),
             context_id: context.id().to_string(),
             decision_state_key: context.state_key().to_string(),
+            path_discriminator: context.path_discriminator(),
             player_view_hash: format!("{:016x}", context.player_view_hash().get()),
             action_id: report.selected_action().to_string(),
             canonical_legal_actions: canonical_legal_actions(context),
