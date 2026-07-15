@@ -662,6 +662,138 @@ struct PodReplay {
     expected: GameSummary,
 }
 
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+struct DecisionEpisodeMetadata {
+    #[serde(default)]
+    decision_episode_id: String,
+    #[serde(default)]
+    root_context_id: String,
+    #[serde(default)]
+    parent_context_id: Option<String>,
+    #[serde(default)]
+    path_depth: u32,
+    #[serde(default)]
+    is_forced: bool,
+    #[serde(default)]
+    is_strategic_root: bool,
+    #[serde(default)]
+    is_terminal_subchoice: bool,
+    #[serde(default)]
+    final_concrete_action_id: String,
+}
+
+impl DecisionEpisodeMetadata {
+    fn root(seed: u64, ordinal: u64, context: &DecisionContext, terminal: bool) -> Self {
+        let root_context_id = context.id().to_string();
+        Self {
+            decision_episode_id: stable_record_id(
+                b"forge-decision-episode-v1",
+                seed,
+                ordinal,
+                [root_context_id.as_str()],
+            ),
+            root_context_id,
+            parent_context_id: None,
+            path_depth: 0,
+            is_forced: context.options().len() == 1,
+            is_strategic_root: context.options().len() > 1,
+            is_terminal_subchoice: terminal,
+            final_concrete_action_id: String::new(),
+        }
+    }
+
+    fn child(&self, parent_context_id: String, context: &DecisionContext) -> Self {
+        Self {
+            decision_episode_id: self.decision_episode_id.clone(),
+            root_context_id: self.root_context_id.clone(),
+            parent_context_id: Some(parent_context_id),
+            path_depth: self.path_depth.saturating_add(1),
+            is_forced: context.options().len() == 1,
+            is_strategic_root: false,
+            is_terminal_subchoice: false,
+            final_concrete_action_id: String::new(),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct DecisionEpisodePath {
+    metadata: DecisionEpisodeMetadata,
+    last_context_id: String,
+    selected_action_ids: Vec<String>,
+}
+
+impl DecisionEpisodePath {
+    fn root(seed: u64, ordinal: u64, context: &DecisionContext) -> Self {
+        let metadata = DecisionEpisodeMetadata::root(seed, ordinal, context, false);
+        Self {
+            last_context_id: context.id().to_string(),
+            metadata,
+            selected_action_ids: Vec::new(),
+        }
+    }
+
+    fn root_metadata(&self) -> DecisionEpisodeMetadata {
+        self.metadata.clone()
+    }
+
+    fn child_metadata(&self, context: &DecisionContext) -> DecisionEpisodeMetadata {
+        self.metadata.child(self.last_context_id.clone(), context)
+    }
+
+    fn record_selection(
+        &mut self,
+        context: &DecisionContext,
+        action: CanonicalActionId,
+        path_depth: u32,
+    ) {
+        self.last_context_id = context.id().to_string();
+        self.metadata.path_depth = path_depth;
+        self.selected_action_ids.push(action.to_string());
+    }
+
+    fn final_action_id(&self) -> String {
+        if self.selected_action_ids.len() == 1 {
+            return self.selected_action_ids[0].clone();
+        }
+        stable_record_id(
+            b"forge-concrete-decision-path-v1",
+            0,
+            self.selected_action_ids.len() as u64,
+            self.selected_action_ids.iter().map(String::as_str),
+        )
+    }
+}
+
+fn stable_record_id<'a>(
+    domain: &[u8],
+    seed: u64,
+    ordinal: u64,
+    values: impl IntoIterator<Item = &'a str>,
+) -> String {
+    let mut low = 0xcbf2_9ce4_8422_2325_u64 ^ seed;
+    let mut high = 0x8422_2325_cbf2_9ce4_u64 ^ ordinal.rotate_left(29);
+    let mut mix = |byte: u8| {
+        low ^= u64::from(byte);
+        low = low.wrapping_mul(0x0000_0100_0000_01b3);
+        high ^= u64::from(byte).rotate_left(1);
+        high = high.wrapping_mul(0x9e37_79b1_85eb_ca87);
+    };
+    for byte in domain {
+        mix(*byte);
+    }
+    for byte in seed.to_le_bytes().into_iter().chain(ordinal.to_le_bytes()) {
+        mix(byte);
+    }
+    for value in values {
+        mix(0xff);
+        for byte in value.as_bytes() {
+            mix(*byte);
+        }
+    }
+    format!("{high:016x}{low:016x}")
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 struct HumanDecisionRecord {
     index: u64,
@@ -685,6 +817,8 @@ struct HumanDecisionRecord {
     canonical_legal_actions: Vec<AiLegalAction>,
     #[serde(default)]
     selected_action_id: String,
+    #[serde(flatten)]
+    episode: DecisionEpisodeMetadata,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -732,6 +866,8 @@ struct AiDecisionRecord {
     #[serde(default)]
     player_view_hash: String,
     action_id: String,
+    #[serde(flatten)]
+    episode: DecisionEpisodeMetadata,
     #[serde(default)]
     canonical_legal_actions: Vec<AiLegalAction>,
     evaluation: i64,
@@ -821,6 +957,7 @@ struct AiDecisionTelemetry<'a> {
     wall_latency_us: u64,
     score_override: Option<i64>,
     stop_reason: &'static str,
+    episode: Option<DecisionEpisodeMetadata>,
 }
 
 struct DecisionPrompt<'a> {
@@ -829,6 +966,7 @@ struct DecisionPrompt<'a> {
     context: &'a DecisionContext,
     options: &'a [String],
     allow_concession: bool,
+    episode: DecisionEpisodeMetadata,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -851,6 +989,18 @@ struct LegacyDecisionPrompt<'a> {
 
 trait DecisionSource {
     fn choose(&mut self, prompt: &DecisionPrompt<'_>) -> Result<DecisionSelection, String>;
+
+    fn decision_count(&self) -> u64 {
+        0
+    }
+
+    fn complete_episode(
+        &mut self,
+        _decision_episode_id: &str,
+        _final_concrete_action_id: &str,
+    ) -> Result<(), String> {
+        Ok(())
+    }
 
     fn choose_concession(&mut self, prompt: &DecisionPrompt<'_>) -> Result<usize, String> {
         match self.choose(prompt)? {
@@ -891,6 +1041,35 @@ impl<'a> TerminalDecisionSource<'a> {
 }
 
 impl DecisionSource for TerminalDecisionSource<'_> {
+    fn decision_count(&self) -> u64 {
+        self.decisions.len() as u64
+    }
+
+    fn complete_episode(
+        &mut self,
+        decision_episode_id: &str,
+        final_concrete_action_id: &str,
+    ) -> Result<(), String> {
+        let mut matched = self
+            .decisions
+            .iter_mut()
+            .filter(|decision| decision.episode.decision_episode_id == decision_episode_id)
+            .collect::<Vec<_>>();
+        if matched.is_empty() {
+            return Err(format!(
+                "cannot complete unknown human decision episode {decision_episode_id}"
+            ));
+        }
+        for decision in &mut matched {
+            decision.episode.is_terminal_subchoice = false;
+            decision.episode.final_concrete_action_id = final_concrete_action_id.to_owned();
+        }
+        if let Some(last) = matched.last_mut() {
+            last.episode.is_terminal_subchoice = true;
+        }
+        Ok(())
+    }
+
     fn choose(&mut self, prompt: &DecisionPrompt<'_>) -> Result<DecisionSelection, String> {
         if prompt.options.is_empty() {
             return Err(format!("{} prompt has no legal options", prompt.kind));
@@ -1031,6 +1210,46 @@ impl ReplayDecisionSource {
 }
 
 impl DecisionSource for ReplayDecisionSource {
+    fn decision_count(&self) -> u64 {
+        self.cursor as u64
+    }
+
+    fn complete_episode(
+        &mut self,
+        decision_episode_id: &str,
+        final_concrete_action_id: &str,
+    ) -> Result<(), String> {
+        let matched = self.decisions[..self.cursor]
+            .iter()
+            .filter(|decision| decision.episode.decision_episode_id == decision_episode_id)
+            .collect::<Vec<_>>();
+        if matched.is_empty() {
+            return Ok(());
+        }
+        if matched
+            .iter()
+            .any(|decision| decision.episode.final_concrete_action_id != final_concrete_action_id)
+        {
+            return Err(format!(
+                "decision replay episode {decision_episode_id} has a different final concrete action"
+            ));
+        }
+        if matched
+            .iter()
+            .filter(|decision| decision.episode.is_terminal_subchoice)
+            .count()
+            != 1
+            || !matched
+                .last()
+                .is_some_and(|decision| decision.episode.is_terminal_subchoice)
+        {
+            return Err(format!(
+                "decision replay episode {decision_episode_id} has an invalid terminal subchoice"
+            ));
+        }
+        Ok(())
+    }
+
     fn choose(&mut self, prompt: &DecisionPrompt<'_>) -> Result<DecisionSelection, String> {
         validate_decision_prompt(prompt)?;
         let expected = self
@@ -1126,6 +1345,12 @@ fn snapshot_prompt(
         .options()
         .get(selected)
         .map_or_else(String::new, |option| option.id().to_string());
+    let mut episode = prompt.episode.clone();
+    if episode.is_terminal_subchoice {
+        episode
+            .final_concrete_action_id
+            .clone_from(&selected_action_id);
+    }
     HumanDecisionRecord {
         index,
         prompt: prompt.kind.to_owned(),
@@ -1153,6 +1378,7 @@ fn snapshot_prompt(
             })
             .collect(),
         selected_action_id,
+        episode,
     }
 }
 
@@ -1182,7 +1408,18 @@ fn validate_decision_prompt(prompt: &DecisionPrompt<'_>) -> Result<(), String> {
 
 fn human_decision_matches(expected: &HumanDecisionRecord, actual: &HumanDecisionRecord) -> bool {
     if !expected.context_id.is_empty() {
-        return expected == actual;
+        let mut normalized_actual = actual.clone();
+        if expected.episode.decision_episode_id.is_empty() {
+            normalized_actual.episode = DecisionEpisodeMetadata::default();
+        } else {
+            normalized_actual.episode.is_terminal_subchoice =
+                expected.episode.is_terminal_subchoice;
+            normalized_actual
+                .episode
+                .final_concrete_action_id
+                .clone_from(&expected.episode.final_concrete_action_id);
+        }
+        return expected == &normalized_actual;
     }
     expected.index == actual.index
         && expected.prompt == actual.prompt
@@ -1957,6 +2194,7 @@ impl GameDriver {
                     wall_latency_us: elapsed_us(decision_started),
                     score_override: score,
                     stop_reason,
+                    episode: None,
                 });
                 for action in actions {
                     self.dispatch(action)?;
@@ -2504,7 +2742,7 @@ impl GameDriver {
         context: &DecisionContext,
         options: &[String],
     ) -> Result<CanonicalActionId, String> {
-        match self.prompt_context_selection(source, kind, context, options, false)? {
+        match self.prompt_context_selection(source, kind, context, options, false, None)? {
             CanonicalPromptSelection::Option(selected) => Ok(selected),
             CanonicalPromptSelection::RequestConcession => Err(format!(
                 "seed {} prompt `{kind}` accepted concession outside a main or priority window",
@@ -2513,14 +2751,40 @@ impl GameDriver {
         }
     }
 
-    fn prompt_context_choice_allowing_concession(
+    fn prompt_context_choice_in_episode(
         &self,
         source: &mut dyn DecisionSource,
         kind: &'static str,
         context: &DecisionContext,
         options: &[String],
+        episode: DecisionEpisodeMetadata,
+    ) -> Result<CanonicalActionId, String> {
+        match self.prompt_context_selection(source, kind, context, options, false, Some(episode))? {
+            CanonicalPromptSelection::Option(selected) => Ok(selected),
+            CanonicalPromptSelection::RequestConcession => Err(format!(
+                "seed {} prompt `{kind}` accepted concession inside a decision episode",
+                self.seed
+            )),
+        }
+    }
+
+    fn prompt_context_selection_in_episode(
+        &self,
+        source: &mut dyn DecisionSource,
+        kind: &'static str,
+        context: &DecisionContext,
+        options: &[String],
+        allow_concession: bool,
+        episode: DecisionEpisodeMetadata,
     ) -> Result<CanonicalPromptSelection, String> {
-        self.prompt_context_selection(source, kind, context, options, true)
+        self.prompt_context_selection(
+            source,
+            kind,
+            context,
+            options,
+            allow_concession,
+            Some(episode),
+        )
     }
 
     fn prompt_context_selection(
@@ -2530,17 +2794,22 @@ impl GameDriver {
         context: &DecisionContext,
         options: &[String],
         allow_concession: bool,
+        episode: Option<DecisionEpisodeMetadata>,
     ) -> Result<CanonicalPromptSelection, String> {
         let view = self
             .state
             .player_view(context.actor())
             .map_err(|error| format!("seed {} player view failed: {error:?}", self.seed))?;
+        let episode = episode.unwrap_or_else(|| {
+            DecisionEpisodeMetadata::root(self.seed, source.decision_count(), context, true)
+        });
         let selected = source.choose(&DecisionPrompt {
             kind,
             view: &view,
             context,
             options,
             allow_concession,
+            episode,
         })?;
         let DecisionSelection::Option(selected) = selected else {
             return Ok(CanonicalPromptSelection::RequestConcession);
@@ -2594,6 +2863,53 @@ impl GameDriver {
         Ok(selected)
     }
 
+    fn begin_controlled_episode(
+        &self,
+        controller: PlayerId,
+        human: Option<PlayerId>,
+        decisions: &Option<&mut dyn DecisionSource>,
+        ai_policies: Option<&SeatPolicies>,
+        context: &DecisionContext,
+    ) -> Result<Option<DecisionEpisodePath>, String> {
+        let ordinal = if human == Some(controller) {
+            decisions
+                .as_deref()
+                .ok_or_else(|| "human game is missing a decision source".to_owned())?
+                .decision_count()
+        } else if ai_policies.is_some() {
+            self.ai_decisions.len() as u64
+        } else {
+            return Ok(None);
+        };
+        Ok(Some(DecisionEpisodePath::root(self.seed, ordinal, context)))
+    }
+
+    fn complete_controlled_episode(
+        &mut self,
+        controller: PlayerId,
+        human: Option<PlayerId>,
+        decisions: &mut Option<&mut dyn DecisionSource>,
+        ai_policies: Option<&SeatPolicies>,
+        episode: Option<&DecisionEpisodePath>,
+    ) -> Result<(), String> {
+        let Some(episode) = episode else {
+            return Ok(());
+        };
+        if human == Some(controller) {
+            decisions
+                .as_deref_mut()
+                .ok_or_else(|| "human game is missing a decision source".to_owned())?
+                .complete_episode(
+                    &episode.metadata.decision_episode_id,
+                    &episode.final_action_id(),
+                )
+        } else if ai_policies.is_some() {
+            self.complete_ai_episode(episode)
+        } else {
+            Ok(())
+        }
+    }
+
     fn take_human_main_phase_actions(
         &mut self,
         player: PlayerId,
@@ -2604,16 +2920,20 @@ impl GameDriver {
         }
         loop {
             let (context, mappings) = self.main_decision_context(player)?;
+            let mut episode =
+                DecisionEpisodePath::root(self.seed, source.decision_count(), &context);
             let labels = context
                 .options()
                 .iter()
                 .map(|option| self.main_choice_label(option.descriptor()))
                 .collect::<Result<Vec<_>, _>>()?;
-            let selected_id = match self.prompt_context_choice_allowing_concession(
+            let selected_id = match self.prompt_context_selection_in_episode(
                 source,
                 "Choose a main-phase action",
                 &context,
                 &labels,
+                true,
+                episode.root_metadata(),
             )? {
                 CanonicalPromptSelection::Option(selected) => selected,
                 CanonicalPromptSelection::RequestConcession => {
@@ -2621,6 +2941,7 @@ impl GameDriver {
                     return Ok(());
                 }
             };
+            episode.record_selection(&context, selected_id, 0);
             let choice = mappings
                 .iter()
                 .find_map(|(id, choice)| (*id == selected_id).then(|| choice.clone()))
@@ -2630,7 +2951,7 @@ impl GameDriver {
                         self.seed
                     )
                 })?;
-            if self.finish_human_main_choice(player, source, choice)? {
+            if self.finish_human_main_choice_in_episode(player, source, choice, Some(episode))? {
                 return Ok(());
             }
         }
@@ -2657,6 +2978,7 @@ impl GameDriver {
         source: &mut dyn DecisionSource,
     ) -> Result<(), String> {
         let (context, mappings) = self.priority_decision_context(player)?;
+        let mut episode = DecisionEpisodePath::root(self.seed, source.decision_count(), &context);
         let labels = context
             .options()
             .iter()
@@ -2665,11 +2987,13 @@ impl GameDriver {
                 descriptor => self.main_choice_label(descriptor),
             })
             .collect::<Result<Vec<_>, _>>()?;
-        let selected_id = match self.prompt_context_choice_allowing_concession(
+        let selected_id = match self.prompt_context_selection_in_episode(
             source,
             "Choose a priority action",
             &context,
             &labels,
+            true,
+            episode.root_metadata(),
         )? {
             CanonicalPromptSelection::Option(selected) => selected,
             CanonicalPromptSelection::RequestConcession => {
@@ -2677,6 +3001,7 @@ impl GameDriver {
                 return Ok(());
             }
         };
+        episode.record_selection(&context, selected_id, 0);
         let choice = mappings
             .iter()
             .find_map(|(id, choice)| (*id == selected_id).then(|| choice.clone()))
@@ -2686,17 +3011,43 @@ impl GameDriver {
                     self.seed
                 )
             })?;
-        self.finish_human_main_choice(player, source, choice)?;
+        self.finish_human_main_choice_in_episode(player, source, choice, Some(episode))?;
         Ok(())
     }
 
+    #[cfg(test)]
     fn finish_human_main_choice(
         &mut self,
         player: PlayerId,
         source: &mut dyn DecisionSource,
+        choice: MainChoice,
+    ) -> Result<bool, String> {
+        self.finish_human_main_choice_in_episode(player, source, choice, None)
+    }
+
+    fn finish_human_main_choice_in_episode(
+        &mut self,
+        player: PlayerId,
+        source: &mut dyn DecisionSource,
         mut choice: MainChoice,
+        mut episode: Option<DecisionEpisodePath>,
     ) -> Result<bool, String> {
         while let Some((context, mappings)) = self.hierarchical_main_context(player, &choice)? {
+            if episode.is_none() {
+                episode = Some(DecisionEpisodePath::root(
+                    self.seed,
+                    source.decision_count(),
+                    &context,
+                ));
+            }
+            let episode_path = episode
+                .as_ref()
+                .ok_or_else(|| "human decision episode was not initialized".to_owned())?;
+            let child_episode = if episode_path.selected_action_ids.is_empty() {
+                episode_path.root_metadata()
+            } else {
+                episode_path.child_metadata(&context)
+            };
             let parent_object = match &choice {
                 MainChoice::BeginActivateProgramWithCosts { source, .. }
                 | MainChoice::ActivateProgramWithCosts { source, .. } => *source,
@@ -2771,7 +3122,16 @@ impl GameDriver {
                     ));
                 }
             };
-            let selected_id = self.prompt_context_choice(source, prompt, &context, &labels)?;
+            let selected_id = self.prompt_context_choice_in_episode(
+                source,
+                prompt,
+                &context,
+                &labels,
+                child_episode.clone(),
+            )?;
+            if let Some(episode) = episode.as_mut() {
+                episode.record_selection(&context, selected_id, child_episode.path_depth);
+            }
             choice = mappings
                 .iter()
                 .find_map(|(id, choice)| (*id == selected_id).then(|| choice.clone()))
@@ -2781,6 +3141,12 @@ impl GameDriver {
                         self.seed
                     )
                 })?;
+        }
+        if let Some(episode) = episode.as_ref() {
+            source.complete_episode(
+                &episode.metadata.decision_episode_id,
+                &episode.final_action_id(),
+            )?;
         }
         self.apply_main_choice(player, choice)
     }
@@ -2802,6 +3168,12 @@ impl GameDriver {
             context: &context,
             options: &labels,
             allow_concession: false,
+            episode: DecisionEpisodeMetadata::root(
+                self.seed,
+                source.decision_count(),
+                &context,
+                true,
+            ),
         })?;
         let option = context.options().get(selected).ok_or_else(|| {
             format!(
@@ -2829,6 +3201,8 @@ impl GameDriver {
     ) -> Result<(), String> {
         let decision_started = Instant::now();
         let (context, mappings) = self.priority_decision_context(player)?;
+        let mut episode =
+            DecisionEpisodePath::root(self.seed, self.ai_decisions.len() as u64, &context);
         let (selected_id, decision, policy_name, candidates) = if context.options().len() == 1 {
             (context.options()[0].id(), None, "forced-v1", Vec::new())
         } else {
@@ -2868,7 +3242,9 @@ impl GameDriver {
             } else {
                 "random_legal_selection"
             },
+            episode: Some(episode.root_metadata()),
         });
+        episode.record_selection(&context, selected_id, 0);
         let choice = mappings
             .iter()
             .find_map(|(id, choice)| (*id == selected_id).then(|| choice.clone()))
@@ -2878,7 +3254,7 @@ impl GameDriver {
                     self.seed
                 )
             })?;
-        self.finish_ai_main_choice(player, policy, choice)?;
+        self.finish_ai_main_choice_in_episode(player, policy, choice, Some(episode))?;
         Ok(())
     }
 
@@ -4641,6 +5017,8 @@ impl GameDriver {
             let resource_started =
                 matches!(policy, AiController::Search(_)).then(ResourceSnapshot::capture);
             let (context, mappings) = self.main_decision_context(player)?;
+            let mut episode =
+                DecisionEpisodePath::root(self.seed, self.ai_decisions.len() as u64, &context);
             let (selected_id, decision, policy_name, candidates, search_report) = match policy {
                 AiController::Search(controller) => {
                     let decision_index = self.ai_decisions.len() as u64;
@@ -4704,6 +5082,7 @@ impl GameDriver {
                     report,
                     matches!(policy, AiController::Search(controller) if controller.adaptive),
                     elapsed_us(decision_started),
+                    Some(episode.root_metadata()),
                 );
             } else {
                 self.record_ai_decision(AiDecisionTelemetry {
@@ -4720,8 +5099,10 @@ impl GameDriver {
                     } else {
                         "random_legal_selection"
                     },
+                    episode: Some(episode.root_metadata()),
                 });
             }
+            episode.record_selection(&context, selected_id, 0);
             let choice = mappings
                 .iter()
                 .find_map(|(id, choice)| (*id == selected_id).then(|| choice.clone()))
@@ -4731,19 +5112,45 @@ impl GameDriver {
                         self.seed
                     )
                 })?;
-            if self.finish_ai_main_choice(player, policy, choice)? {
+            if self.finish_ai_main_choice_in_episode(player, policy, choice, Some(episode))? {
                 return Ok(());
             }
         }
     }
 
+    #[cfg(test)]
     fn finish_ai_main_choice(
         &mut self,
         player: PlayerId,
         policy: AiController,
+        choice: MainChoice,
+    ) -> Result<bool, String> {
+        self.finish_ai_main_choice_in_episode(player, policy, choice, None)
+    }
+
+    fn finish_ai_main_choice_in_episode(
+        &mut self,
+        player: PlayerId,
+        policy: AiController,
         mut choice: MainChoice,
+        mut episode: Option<DecisionEpisodePath>,
     ) -> Result<bool, String> {
         while let Some((context, mappings)) = self.hierarchical_main_context(player, &choice)? {
+            if episode.is_none() {
+                episode = Some(DecisionEpisodePath::root(
+                    self.seed,
+                    self.ai_decisions.len() as u64,
+                    &context,
+                ));
+            }
+            let episode_path = episode
+                .as_ref()
+                .ok_or_else(|| "AI decision episode was not initialized".to_owned())?;
+            let child_episode = if episode_path.selected_action_ids.is_empty() {
+                episode_path.root_metadata()
+            } else {
+                episode_path.child_metadata(&context)
+            };
             let decision_started = Instant::now();
             let kind = match context.kind() {
                 DecisionKind::NumericValue => "numeric_value",
@@ -4822,7 +5229,11 @@ impl GameDriver {
                 } else {
                     "random_legal_selection"
                 },
+                episode: Some(child_episode.clone()),
             });
+            if let Some(episode) = episode.as_mut() {
+                episode.record_selection(&context, selected_id, child_episode.path_depth);
+            }
             choice = mappings
                 .iter()
                 .find_map(|(id, choice)| (*id == selected_id).then(|| choice.clone()))
@@ -4832,6 +5243,9 @@ impl GameDriver {
                         self.seed
                     )
                 })?;
+        }
+        if let Some(episode) = episode.as_ref() {
+            self.complete_ai_episode(episode)?;
         }
         self.apply_main_choice(player, choice)
     }
@@ -5731,10 +6145,17 @@ impl GameDriver {
             wall_latency_us,
             score_override,
             stop_reason,
+            episode,
         } = telemetry;
         let legal_actions = context.options().len();
+        let index = self.ai_decisions.len() as u64;
+        let mut episode = episode
+            .unwrap_or_else(|| DecisionEpisodeMetadata::root(self.seed, index, context, true));
+        if episode.is_terminal_subchoice {
+            episode.final_concrete_action_id = action_id.to_string();
+        }
         self.ai_decisions.push(AiDecisionRecord {
-            index: self.ai_decisions.len() as u64,
+            index,
             kind: kind.to_owned(),
             policy: policy.to_owned(),
             context_id: context.id().to_string(),
@@ -5742,6 +6163,7 @@ impl GameDriver {
             path_discriminator: context.path_discriminator(),
             player_view_hash: format!("{:016x}", context.player_view_hash().get()),
             action_id: action_id.to_string(),
+            episode,
             canonical_legal_actions: canonical_legal_actions(context),
             evaluation: decision.map_or(0, |value| value.evaluation().total()),
             prior: decision.map_or(0, PolicyDecision::prior),
@@ -5778,6 +6200,7 @@ impl GameDriver {
         });
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn record_search_decision(
         &mut self,
         kind: &'static str,
@@ -5786,6 +6209,7 @@ impl GameDriver {
         report: &SearchReport,
         adaptive_search: bool,
         wall_latency_us: u64,
+        episode: Option<DecisionEpisodeMetadata>,
     ) {
         let explanation = LastDecisionReport::from_search(report);
         let selected = report
@@ -5827,8 +6251,14 @@ impl GameDriver {
             },
             |checkpoint| checkpoint.bounded_solver_state().to_owned(),
         );
+        let index = self.ai_decisions.len() as u64;
+        let mut episode = episode
+            .unwrap_or_else(|| DecisionEpisodeMetadata::root(self.seed, index, context, true));
+        if episode.is_terminal_subchoice {
+            episode.final_concrete_action_id = report.selected_action().to_string();
+        }
         self.ai_decisions.push(AiDecisionRecord {
-            index: self.ai_decisions.len() as u64,
+            index,
             kind: kind.to_owned(),
             policy: policy.to_owned(),
             context_id: context.id().to_string(),
@@ -5836,6 +6266,7 @@ impl GameDriver {
             path_discriminator: context.path_discriminator(),
             player_view_hash: format!("{:016x}", context.player_view_hash().get()),
             action_id: report.selected_action().to_string(),
+            episode,
             canonical_legal_actions: canonical_legal_actions(context),
             evaluation: selected.map_or(0, |action| action.mean_value()),
             prior: 0,
@@ -5893,6 +6324,34 @@ impl GameDriver {
             wall_latency_us,
             stop_reason: search_stop_reason(report.stop_reason()).to_owned(),
         });
+    }
+
+    fn complete_ai_episode(&mut self, episode: &DecisionEpisodePath) -> Result<(), String> {
+        let final_action_id = episode.final_action_id();
+        let mut matched = self
+            .ai_decisions
+            .iter_mut()
+            .filter(|decision| {
+                decision.episode.decision_episode_id == episode.metadata.decision_episode_id
+            })
+            .collect::<Vec<_>>();
+        if matched.is_empty() {
+            return Err(format!(
+                "seed {} cannot complete unknown AI decision episode {}",
+                self.seed, episode.metadata.decision_episode_id
+            ));
+        }
+        for decision in &mut matched {
+            decision.episode.is_terminal_subchoice = false;
+            decision
+                .episode
+                .final_concrete_action_id
+                .clone_from(&final_action_id);
+        }
+        if let Some(last) = matched.last_mut() {
+            last.episode.is_terminal_subchoice = true;
+        }
+        Ok(())
     }
 
     fn object_name(&self, object: ObjectId) -> String {
@@ -6417,9 +6876,26 @@ impl GameDriver {
         }
         let mut choices = Vec::with_capacity(requirements.len());
         let mut actions = Vec::new();
+        let mut episode = None;
         for cursor in 0..requirements.len() {
             let context =
                 self.pending_spell_choice_context(&pending, &requirements, cursor, &choices)?;
+            if episode.is_none() {
+                episode = self.begin_controlled_episode(
+                    pending.controller,
+                    human,
+                    decisions,
+                    ai_policies,
+                    &context,
+                )?;
+            }
+            let episode_metadata = episode.as_ref().map(|episode| {
+                if episode.selected_action_ids.is_empty() {
+                    episode.root_metadata()
+                } else {
+                    episode.child_metadata(&context)
+                }
+            });
             let selected_id = self.select_resolution_choice(
                 &context,
                 pending.controller,
@@ -6427,7 +6903,15 @@ impl GameDriver {
                 decisions,
                 ai_policies,
                 "spell_resolution_object_choice",
+                episode_metadata.clone(),
             )?;
+            if let Some(episode) = episode.as_mut() {
+                episode.record_selection(
+                    &context,
+                    selected_id,
+                    episode_metadata.map_or(0, |metadata| metadata.path_depth),
+                );
+            }
             let selected = context.select(selected_id).map_err(|error| {
                 format!("seed {} spell resolution choice failed: {error}", self.seed)
             })?;
@@ -6445,6 +6929,13 @@ impl GameDriver {
                 actions = selected.actions().to_vec();
             }
         }
+        self.complete_controlled_episode(
+            pending.controller,
+            human,
+            decisions,
+            ai_policies,
+            episode.as_ref(),
+        )?;
         let action_count = actions.len() as u64;
         for action in actions {
             self.dispatch(action)?;
@@ -6604,6 +7095,7 @@ impl GameDriver {
             .join(" | "))
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn select_resolution_choice(
         &mut self,
         context: &DecisionContext,
@@ -6612,6 +7104,7 @@ impl GameDriver {
         decisions: &mut Option<&mut dyn DecisionSource>,
         ai_policies: Option<&SeatPolicies>,
         telemetry_kind: &'static str,
+        episode: Option<DecisionEpisodeMetadata>,
     ) -> Result<CanonicalActionId, String> {
         if human == Some(chooser) {
             let labels = context
@@ -6622,12 +7115,17 @@ impl GameDriver {
             let source = decisions.as_deref_mut().ok_or_else(|| {
                 "human game is missing a decision source for a resolution choice".to_owned()
             })?;
-            return self.prompt_context_choice(
-                source,
-                "Choose cards while resolving",
-                context,
-                &labels,
-            );
+            return if let Some(episode) = episode {
+                self.prompt_context_choice_in_episode(
+                    source,
+                    "Choose cards while resolving",
+                    context,
+                    &labels,
+                    episode,
+                )
+            } else {
+                self.prompt_context_choice(source, "Choose cards while resolving", context, &labels)
+            };
         }
         if let Some(policies) = ai_policies {
             let decision_started = Instant::now();
@@ -6666,6 +7164,7 @@ impl GameDriver {
                 } else {
                     "random_legal_selection"
                 },
+                episode,
             });
             return Ok(selected_id);
         }
@@ -6715,9 +7214,26 @@ impl GameDriver {
         }
         let mut choices = Vec::with_capacity(requirements.len());
         let mut actions = Vec::new();
+        let mut episode = None;
         for cursor in 0..requirements.len() {
             let context =
                 self.pending_activated_choice_context(&pending, &requirements, cursor, &choices)?;
+            if episode.is_none() {
+                episode = self.begin_controlled_episode(
+                    pending.controller,
+                    human,
+                    decisions,
+                    ai_policies,
+                    &context,
+                )?;
+            }
+            let episode_metadata = episode.as_ref().map(|episode| {
+                if episode.selected_action_ids.is_empty() {
+                    episode.root_metadata()
+                } else {
+                    episode.child_metadata(&context)
+                }
+            });
             let selected_id = self.select_resolution_choice(
                 &context,
                 pending.controller,
@@ -6725,7 +7241,15 @@ impl GameDriver {
                 decisions,
                 ai_policies,
                 "resolution_object_choice",
+                episode_metadata.clone(),
             )?;
+            if let Some(episode) = episode.as_mut() {
+                episode.record_selection(
+                    &context,
+                    selected_id,
+                    episode_metadata.map_or(0, |metadata| metadata.path_depth),
+                );
+            }
             let selected = context
                 .select(selected_id)
                 .map_err(|error| format!("seed {} resolution choice failed: {error}", self.seed))?;
@@ -6743,6 +7267,13 @@ impl GameDriver {
                 actions = selected.actions().to_vec();
             }
         }
+        self.complete_controlled_episode(
+            pending.controller,
+            human,
+            decisions,
+            ai_policies,
+            episode.as_ref(),
+        )?;
         let action_count = actions.len() as u64;
         for action in actions {
             self.dispatch(action)?;
@@ -6907,7 +7438,8 @@ impl GameDriver {
         human: Option<PlayerId>,
         decisions: &mut Option<&mut dyn DecisionSource>,
         ai_policies: Option<&SeatPolicies>,
-    ) -> Result<(bool, Vec<Action>), String> {
+        episode: Option<DecisionEpisodeMetadata>,
+    ) -> Result<(bool, Vec<Action>, CanonicalActionId), String> {
         self.select_trigger_boolean_choice(
             context,
             controller,
@@ -6920,6 +7452,7 @@ impl GameDriver {
             "trigger_optional",
             1,
             true,
+            episode,
         )
     }
 
@@ -6937,7 +7470,8 @@ impl GameDriver {
         telemetry_kind: &'static str,
         accept_prior: i64,
         autonomous_accept: bool,
-    ) -> Result<(bool, Vec<Action>), String> {
+        episode: Option<DecisionEpisodeMetadata>,
+    ) -> Result<(bool, Vec<Action>, CanonicalActionId), String> {
         let selected_id = if context.options().len() == 1 && ai_policies.is_none() {
             context.options()[0].id()
         } else if human == Some(chooser) {
@@ -6959,7 +7493,11 @@ impl GameDriver {
             let source = decisions.as_deref_mut().ok_or_else(|| {
                 format!("human game is missing a decision source for {telemetry_kind}")
             })?;
-            self.prompt_context_choice(source, prompt, context, &labels)?
+            if let Some(episode) = episode.clone() {
+                self.prompt_context_choice_in_episode(source, prompt, context, &labels, episode)?
+            } else {
+                self.prompt_context_choice(source, prompt, context, &labels)?
+            }
         } else if let Some(policies) = ai_policies {
             let decision_started = Instant::now();
             let policy = self.policy_for(chooser, policies)?;
@@ -7000,6 +7538,7 @@ impl GameDriver {
                 } else {
                     "random_legal_selection"
                 },
+                episode,
             });
             selected_id
         } else {
@@ -7029,7 +7568,7 @@ impl GameDriver {
                 self.seed
             ));
         };
-        Ok((*accept, selected.actions().to_vec()))
+        Ok((*accept, selected.actions().to_vec(), selected_id))
     }
 
     fn pending_triggered_unless_intent_context(
@@ -7172,8 +7711,12 @@ impl GameDriver {
         human: Option<PlayerId>,
         decisions: &mut Option<&mut dyn DecisionSource>,
         ai_policies: Option<&SeatPolicies>,
-    ) -> Result<Vec<Action>, String> {
-        let selected_id = if context.options().len() == 1 && ai_policies.is_none() {
+        episode: Option<DecisionEpisodeMetadata>,
+    ) -> Result<(Vec<Action>, CanonicalActionId), String> {
+        let selected_id = if context.options().len() == 1
+            && ai_policies.is_none()
+            && human != Some(payer)
+        {
             context.options()[0].id()
         } else if human == Some(payer) {
             let labels = context
@@ -7192,7 +7735,17 @@ impl GameDriver {
             let source = decisions.as_deref_mut().ok_or_else(|| {
                 "human game is missing a decision source for trigger payment".to_owned()
             })?;
-            self.prompt_context_choice(source, "Choose a trigger payment", context, &labels)?
+            if let Some(episode) = episode.clone() {
+                self.prompt_context_choice_in_episode(
+                    source,
+                    "Choose a trigger payment",
+                    context,
+                    &labels,
+                    episode,
+                )?
+            } else {
+                self.prompt_context_choice(source, "Choose a trigger payment", context, &labels)?
+            }
         } else if let Some(policies) = ai_policies {
             let decision_started = Instant::now();
             let policy = self.policy_for(payer, policies)?;
@@ -7229,6 +7782,7 @@ impl GameDriver {
                 } else {
                     "random_legal_selection"
                 },
+                episode,
             });
             selected_id
         } else {
@@ -7257,7 +7811,7 @@ impl GameDriver {
                 self.seed
             ));
         }
-        Ok(selected.actions().to_vec())
+        Ok((selected.actions().to_vec(), selected_id))
     }
 
     fn pending_triggered_choice_context(
@@ -7358,7 +7912,10 @@ impl GameDriver {
         let mut unless_paid = false;
         if has_unless {
             let (context, payer, plans) = self.pending_triggered_unless_intent_context(&pending)?;
-            let (pay, selected_actions) = self.select_trigger_boolean_choice(
+            let mut episode =
+                self.begin_controlled_episode(payer, human, decisions, ai_policies, &context)?;
+            let episode_metadata = episode.as_ref().map(DecisionEpisodePath::root_metadata);
+            let (pay, selected_actions, selected_id) = self.select_trigger_boolean_choice(
                 &context,
                 payer,
                 human,
@@ -7370,22 +7927,50 @@ impl GameDriver {
                 "trigger_unless_payment_intent",
                 0,
                 false,
+                episode_metadata.clone(),
             )?;
+            if let Some(episode) = episode.as_mut() {
+                episode.record_selection(
+                    &context,
+                    selected_id,
+                    episode_metadata.map_or(0, |metadata| metadata.path_depth),
+                );
+            }
             actions = selected_actions;
             if pay {
                 let payment_context =
                     self.pending_triggered_unless_payment_context(&pending, payer, &plans)?;
-                actions = self.select_trigger_unless_payment(
+                let payment_episode = episode
+                    .as_ref()
+                    .map(|episode| episode.child_metadata(&payment_context));
+                let (selected_actions, selected_id) = self.select_trigger_unless_payment(
                     &payment_context,
                     payer,
                     human,
                     decisions,
                     ai_policies,
+                    payment_episode.clone(),
                 )?;
+                actions = selected_actions;
+                if let Some(episode) = episode.as_mut() {
+                    episode.record_selection(
+                        &payment_context,
+                        selected_id,
+                        payment_episode.map_or(0, |metadata| metadata.path_depth),
+                    );
+                }
                 unless_paid = true;
             }
+            self.complete_controlled_episode(
+                payer,
+                human,
+                decisions,
+                ai_policies,
+                episode.as_ref(),
+            )?;
         }
         if !unless_paid {
+            let mut episode = None;
             for cursor in 0..optional_count {
                 let context = self.pending_triggered_optional_context(
                     &pending,
@@ -7393,13 +7978,37 @@ impl GameDriver {
                     &optional_choices,
                     !requirements.is_empty(),
                 )?;
-                let (accept, selected_actions) = self.select_trigger_optional_choice(
+                if episode.is_none() {
+                    episode = self.begin_controlled_episode(
+                        pending.controller,
+                        human,
+                        decisions,
+                        ai_policies,
+                        &context,
+                    )?;
+                }
+                let episode_metadata = episode.as_ref().map(|episode| {
+                    if episode.selected_action_ids.is_empty() {
+                        episode.root_metadata()
+                    } else {
+                        episode.child_metadata(&context)
+                    }
+                });
+                let (accept, selected_actions, selected_id) = self.select_trigger_optional_choice(
                     &context,
                     pending.controller,
                     human,
                     decisions,
                     ai_policies,
+                    episode_metadata.clone(),
                 )?;
+                if let Some(episode) = episode.as_mut() {
+                    episode.record_selection(
+                        &context,
+                        selected_id,
+                        episode_metadata.map_or(0, |metadata| metadata.path_depth),
+                    );
+                }
                 optional_choices.push(accept);
                 if cursor + 1 == optional_count && requirements.is_empty() {
                     actions = selected_actions;
@@ -7414,6 +8023,22 @@ impl GameDriver {
                     &choices,
                     &optional_choices,
                 )?;
+                if episode.is_none() {
+                    episode = self.begin_controlled_episode(
+                        pending.controller,
+                        human,
+                        decisions,
+                        ai_policies,
+                        &context,
+                    )?;
+                }
+                let episode_metadata = episode.as_ref().map(|episode| {
+                    if episode.selected_action_ids.is_empty() {
+                        episode.root_metadata()
+                    } else {
+                        episode.child_metadata(&context)
+                    }
+                });
                 let selected_id = self.select_resolution_choice(
                     &context,
                     pending.controller,
@@ -7421,7 +8046,15 @@ impl GameDriver {
                     decisions,
                     ai_policies,
                     "trigger_resolution_object_choice",
+                    episode_metadata.clone(),
                 )?;
+                if let Some(episode) = episode.as_mut() {
+                    episode.record_selection(
+                        &context,
+                        selected_id,
+                        episode_metadata.map_or(0, |metadata| metadata.path_depth),
+                    );
+                }
                 let selected = context.select(selected_id).map_err(|error| {
                     format!(
                         "seed {} trigger resolution choice failed: {error}",
@@ -7442,6 +8075,13 @@ impl GameDriver {
                     actions = selected.actions().to_vec();
                 }
             }
+            self.complete_controlled_episode(
+                pending.controller,
+                human,
+                decisions,
+                ai_policies,
+                episode.as_ref(),
+            )?;
         }
         let action_count = actions.len() as u64;
         for action in actions {
@@ -7819,7 +8459,8 @@ impl GameDriver {
         prior: &[AnnouncedTarget],
         prompt: &'static str,
         telemetry_kind: &'static str,
-    ) -> Result<Vec<AnnouncedTarget>, String> {
+        episode: Option<DecisionEpisodeMetadata>,
+    ) -> Result<(Vec<AnnouncedTarget>, CanonicalActionId), String> {
         let selected_id = if human == Some(controller) {
             let labels = context
                 .options()
@@ -7868,7 +8509,11 @@ impl GameDriver {
             let source = decisions.as_deref_mut().ok_or_else(|| {
                 "human game is missing a decision source for trigger targets".to_owned()
             })?;
-            self.prompt_context_choice(source, prompt, context, &labels)?
+            if let Some(episode) = episode.clone() {
+                self.prompt_context_choice_in_episode(source, prompt, context, &labels, episode)?
+            } else {
+                self.prompt_context_choice(source, prompt, context, &labels)?
+            }
         } else if let Some(policies) = ai_policies {
             let decision_started = Instant::now();
             let policy = self.policy_for(controller, policies)?;
@@ -7900,6 +8545,7 @@ impl GameDriver {
                 } else {
                     "random_legal_selection"
                 },
+                episode,
             });
             selected_id
         } else {
@@ -7922,7 +8568,7 @@ impl GameDriver {
                 self.seed
             ));
         };
-        Ok(targets.clone())
+        Ok((targets.clone(), selected_id))
     }
 
     fn trigger_order_context(
@@ -7969,6 +8615,7 @@ impl GameDriver {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn select_trigger_order_choice(
         &mut self,
         context: &DecisionContext,
@@ -7977,7 +8624,8 @@ impl GameDriver {
         decisions: &mut Option<&mut dyn DecisionSource>,
         ai_policies: Option<&SeatPolicies>,
         position: usize,
-    ) -> Result<TriggerId, String> {
+        episode: Option<DecisionEpisodeMetadata>,
+    ) -> Result<(TriggerId, CanonicalActionId), String> {
         let selected_id = if human == Some(controller) {
             let labels = context
                 .options()
@@ -7997,7 +8645,17 @@ impl GameDriver {
             let source = decisions.as_deref_mut().ok_or_else(|| {
                 "human game is missing a decision source for trigger ordering".to_owned()
             })?;
-            self.prompt_context_choice(source, "Order simultaneous triggers", context, &labels)?
+            if let Some(episode) = episode.clone() {
+                self.prompt_context_choice_in_episode(
+                    source,
+                    "Order simultaneous triggers",
+                    context,
+                    &labels,
+                    episode,
+                )?
+            } else {
+                self.prompt_context_choice(source, "Order simultaneous triggers", context, &labels)?
+            }
         } else if let Some(policies) = ai_policies {
             let decision_started = Instant::now();
             let policy = self.policy_for(controller, policies)?;
@@ -8022,6 +8680,7 @@ impl GameDriver {
                 } else {
                     "random_legal_selection"
                 },
+                episode,
             });
             selected_id
         } else {
@@ -8042,10 +8701,11 @@ impl GameDriver {
                 self.seed
             ));
         };
-        triggers
+        let trigger = triggers
             .last()
             .copied()
-            .ok_or_else(|| format!("seed {} trigger-order selection is empty", self.seed))
+            .ok_or_else(|| format!("seed {} trigger-order selection is empty", self.seed))?;
+        Ok((trigger, selected_id))
     }
 
     fn put_pending_triggers_on_stack(
@@ -8116,17 +8776,42 @@ impl GameDriver {
                 continue;
             }
             let mut controller_prefix = Vec::with_capacity(remaining.len());
+            let mut episode = None;
             while remaining.iter().copied().collect::<BTreeSet<_>>().len() > 1 {
                 let context =
                     self.trigger_order_context(controller, &remaining, &controller_prefix, &order)?;
-                let selected = self.select_trigger_order_choice(
+                if episode.is_none() {
+                    episode = self.begin_controlled_episode(
+                        controller,
+                        human,
+                        decisions,
+                        ai_policies,
+                        &context,
+                    )?;
+                }
+                let episode_metadata = episode.as_ref().map(|episode| {
+                    if episode.selected_action_ids.is_empty() {
+                        episode.root_metadata()
+                    } else {
+                        episode.child_metadata(&context)
+                    }
+                });
+                let (selected, selected_id) = self.select_trigger_order_choice(
                     &context,
                     controller,
                     human,
                     decisions,
                     ai_policies,
                     order.len() + 1,
+                    episode_metadata.clone(),
                 )?;
+                if let Some(episode) = episode.as_mut() {
+                    episode.record_selection(
+                        &context,
+                        selected_id,
+                        episode_metadata.map_or(0, |metadata| metadata.path_depth),
+                    );
+                }
                 let index = remaining
                     .iter()
                     .position(|trigger| *trigger == selected)
@@ -8141,6 +8826,13 @@ impl GameDriver {
                 controller_prefix.push(selected);
                 order.push(selected);
             }
+            self.complete_controlled_episode(
+                controller,
+                human,
+                decisions,
+                ai_policies,
+                episode.as_ref(),
+            )?;
             order.extend(remaining);
         }
         if !has_target_prompts {
@@ -8208,6 +8900,7 @@ impl GameDriver {
                 continue;
             }
             let mut targets = Vec::new();
+            let mut target_episode = None;
             for (group_index, requirement) in requirements.iter().copied().enumerate() {
                 let group = u8::try_from(group_index)
                     .map_err(|_| format!("seed {} trigger target group overflow", self.seed))?;
@@ -8236,7 +8929,23 @@ impl GameDriver {
                         requirement,
                         &prospective_stack_entries,
                     )?;
-                    let next = self.select_trigger_target_groups(
+                    if target_episode.is_none() {
+                        target_episode = self.begin_controlled_episode(
+                            controller,
+                            human,
+                            decisions,
+                            ai_policies,
+                            &context,
+                        )?;
+                    }
+                    let episode_metadata = target_episode.as_ref().map(|episode| {
+                        if episode.selected_action_ids.is_empty() {
+                            episode.root_metadata()
+                        } else {
+                            episode.child_metadata(&context)
+                        }
+                    });
+                    let (next, selected_id) = self.select_trigger_target_groups(
                         &context,
                         controller,
                         human,
@@ -8245,7 +8954,15 @@ impl GameDriver {
                         &targets,
                         "Choose triggered ability targets",
                         "trigger_target",
+                        episode_metadata.clone(),
                     )?;
+                    if let Some(episode) = target_episode.as_mut() {
+                        episode.record_selection(
+                            &context,
+                            selected_id,
+                            episode_metadata.map_or(0, |metadata| metadata.path_depth),
+                        );
+                    }
                     if next == targets {
                         break;
                     }
@@ -8290,7 +9007,23 @@ impl GameDriver {
                                 1,
                                 maximum,
                             )?;
-                            targets = self.select_trigger_target_groups(
+                            if target_episode.is_none() {
+                                target_episode = self.begin_controlled_episode(
+                                    controller,
+                                    human,
+                                    decisions,
+                                    ai_policies,
+                                    &context,
+                                )?;
+                            }
+                            let episode_metadata = target_episode.as_ref().map(|episode| {
+                                if episode.selected_action_ids.is_empty() {
+                                    episode.root_metadata()
+                                } else {
+                                    episode.child_metadata(&context)
+                                }
+                            });
+                            let (next_targets, selected_id) = self.select_trigger_target_groups(
                                 &context,
                                 controller,
                                 human,
@@ -8299,7 +9032,16 @@ impl GameDriver {
                                 &targets,
                                 "Allocate the triggered ability's target amount",
                                 "trigger_target_allocation",
+                                episode_metadata.clone(),
                             )?;
+                            targets = next_targets;
+                            if let Some(episode) = target_episode.as_mut() {
+                                episode.record_selection(
+                                    &context,
+                                    selected_id,
+                                    episode_metadata.map_or(0, |metadata| metadata.path_depth),
+                                );
+                            }
                             targets[target_index].allocation().ok_or_else(|| {
                                 format!(
                                     "seed {} trigger {} allocation choice omitted its amount",
@@ -8328,6 +9070,13 @@ impl GameDriver {
                     }
                 }
             }
+            self.complete_controlled_episode(
+                controller,
+                human,
+                decisions,
+                ai_policies,
+                target_episode.as_ref(),
+            )?;
             let (target_requirements, target_choices) =
                 expand_announced_targets(&requirements, &targets).map_err(|error| {
                     format!(
@@ -8932,11 +9681,26 @@ impl GameDriver {
     ) -> Result<(), String> {
         let objects = Arc::new(self.attack_assignment_objects(active)?);
         let mut attacks = Vec::new();
+        let mut episode = None;
         for (cursor, attacker) in objects.iter().copied().enumerate() {
             let decision_started = Instant::now();
             let resource_started =
                 matches!(policy, AiController::Search(_)).then(ResourceSnapshot::capture);
             let context = self.attack_assignment_context(active, &objects, cursor, &attacks)?;
+            if episode.is_none() {
+                episode = Some(DecisionEpisodePath::root(
+                    self.seed,
+                    self.ai_decisions.len() as u64,
+                    &context,
+                ));
+            }
+            let episode_metadata = episode.as_ref().map(|episode| {
+                if episode.selected_action_ids.is_empty() {
+                    episode.root_metadata()
+                } else {
+                    episode.child_metadata(&context)
+                }
+            });
             let (selected_id, decision, policy_name, candidates, search_report) = match policy {
                 AiController::Search(controller) => {
                     let decision_index = self.ai_decisions.len() as u64;
@@ -9001,6 +9765,7 @@ impl GameDriver {
                     report,
                     matches!(policy, AiController::Search(controller) if controller.adaptive),
                     elapsed_us(decision_started),
+                    episode_metadata.clone(),
                 );
             } else {
                 self.record_ai_decision(AiDecisionTelemetry {
@@ -9017,7 +9782,15 @@ impl GameDriver {
                     } else {
                         "random_legal_selection"
                     },
+                    episode: episode_metadata.clone(),
                 });
+            }
+            if let Some(episode) = episode.as_mut() {
+                episode.record_selection(
+                    &context,
+                    selected_id,
+                    episode_metadata.map_or(0, |metadata| metadata.path_depth),
+                );
             }
             let DecisionDescriptor::AssignAttacker {
                 attacker: selected_attacker,
@@ -9039,6 +9812,9 @@ impl GameDriver {
                 attacks.push(AttackDeclaration::new(attacker, *defender));
             }
         }
+        if let Some(episode) = episode.as_ref() {
+            self.complete_ai_episode(episode)?;
+        }
         self.dispatch(Action::DeclareAttackers {
             player: active,
             attacks: attacks.clone(),
@@ -9058,15 +9834,44 @@ impl GameDriver {
         }
         let objects = self.attack_assignment_objects(active)?;
         let mut attacks = Vec::new();
+        let mut episode = None;
         for (cursor, attacker) in objects.iter().copied().enumerate() {
             let context = self.attack_assignment_context(active, &objects, cursor, &attacks)?;
+            if episode.is_none() {
+                episode = Some(DecisionEpisodePath::root(
+                    self.seed,
+                    source.decision_count(),
+                    &context,
+                ));
+            }
+            let episode_metadata = episode.as_ref().map(|episode| {
+                if episode.selected_action_ids.is_empty() {
+                    episode.root_metadata()
+                } else {
+                    episode.child_metadata(&context)
+                }
+            });
             let labels = context
                 .options()
                 .iter()
                 .map(|option| self.attack_choice_label(option.descriptor()))
                 .collect::<Result<Vec<_>, _>>()?;
-            let selected_id =
-                self.prompt_context_choice(source, "Assign attacker", &context, &labels)?;
+            let selected_id = self.prompt_context_choice_in_episode(
+                source,
+                "Assign attacker",
+                &context,
+                &labels,
+                episode_metadata
+                    .clone()
+                    .ok_or_else(|| "attack episode was not initialized".to_owned())?,
+            )?;
+            if let Some(episode) = episode.as_mut() {
+                episode.record_selection(
+                    &context,
+                    selected_id,
+                    episode_metadata.map_or(0, |metadata| metadata.path_depth),
+                );
+            }
             let selected = context.select(selected_id).map_err(|error| {
                 format!(
                     "seed {} human selected illegal attacker assignment: {error}",
@@ -9092,6 +9897,12 @@ impl GameDriver {
             if let Some(defender) = defender {
                 attacks.push(AttackDeclaration::new(attacker, *defender));
             }
+        }
+        if let Some(episode) = episode.as_ref() {
+            source.complete_episode(
+                &episode.metadata.decision_episode_id,
+                &episode.final_action_id(),
+            )?;
         }
         self.dispatch(Action::DeclareAttackers {
             player: active,
@@ -9307,12 +10118,27 @@ impl GameDriver {
     ) -> Result<(), String> {
         let objects = Arc::new(self.block_assignment_objects(defending_player)?);
         let mut blocks = Vec::new();
+        let mut episode = None;
         for (cursor, blocker) in objects.iter().copied().enumerate() {
             let decision_started = Instant::now();
             let resource_started =
                 matches!(policy, AiController::Search(_)).then(ResourceSnapshot::capture);
             let context =
                 self.block_assignment_context(defending_player, &objects, cursor, &blocks)?;
+            if episode.is_none() {
+                episode = Some(DecisionEpisodePath::root(
+                    self.seed,
+                    self.ai_decisions.len() as u64,
+                    &context,
+                ));
+            }
+            let episode_metadata = episode.as_ref().map(|episode| {
+                if episode.selected_action_ids.is_empty() {
+                    episode.root_metadata()
+                } else {
+                    episode.child_metadata(&context)
+                }
+            });
             let (selected_id, decision, policy_name, candidates, search_report) = match policy {
                 AiController::Search(controller) => {
                     let decision_index = self.ai_decisions.len() as u64;
@@ -9377,6 +10203,7 @@ impl GameDriver {
                     report,
                     matches!(policy, AiController::Search(controller) if controller.adaptive),
                     elapsed_us(decision_started),
+                    episode_metadata.clone(),
                 );
             } else {
                 self.record_ai_decision(AiDecisionTelemetry {
@@ -9393,7 +10220,15 @@ impl GameDriver {
                     } else {
                         "random_legal_selection"
                     },
+                    episode: episode_metadata.clone(),
                 });
+            }
+            if let Some(episode) = episode.as_mut() {
+                episode.record_selection(
+                    &context,
+                    selected_id,
+                    episode_metadata.map_or(0, |metadata| metadata.path_depth),
+                );
             }
             let DecisionDescriptor::AssignBlocker {
                 blocker: selected_blocker,
@@ -9415,6 +10250,9 @@ impl GameDriver {
                 blocks.push(BlockDeclaration::new(blocker, *attacker));
             }
         }
+        if let Some(episode) = episode.as_ref() {
+            self.complete_ai_episode(episode)?;
+        }
         self.dispatch(Action::DeclareBlockers {
             defending_player,
             blocks,
@@ -9432,16 +10270,45 @@ impl GameDriver {
         }
         let objects = self.block_assignment_objects(defending_player)?;
         let mut blocks = Vec::new();
+        let mut episode = None;
         for (cursor, blocker) in objects.iter().copied().enumerate() {
             let context =
                 self.block_assignment_context(defending_player, &objects, cursor, &blocks)?;
+            if episode.is_none() {
+                episode = Some(DecisionEpisodePath::root(
+                    self.seed,
+                    source.decision_count(),
+                    &context,
+                ));
+            }
+            let episode_metadata = episode.as_ref().map(|episode| {
+                if episode.selected_action_ids.is_empty() {
+                    episode.root_metadata()
+                } else {
+                    episode.child_metadata(&context)
+                }
+            });
             let labels = context
                 .options()
                 .iter()
                 .map(|option| self.block_choice_label(option.descriptor()))
                 .collect::<Result<Vec<_>, _>>()?;
-            let selected_id =
-                self.prompt_context_choice(source, "Assign blocker", &context, &labels)?;
+            let selected_id = self.prompt_context_choice_in_episode(
+                source,
+                "Assign blocker",
+                &context,
+                &labels,
+                episode_metadata
+                    .clone()
+                    .ok_or_else(|| "block episode was not initialized".to_owned())?,
+            )?;
+            if let Some(episode) = episode.as_mut() {
+                episode.record_selection(
+                    &context,
+                    selected_id,
+                    episode_metadata.map_or(0, |metadata| metadata.path_depth),
+                );
+            }
             let selected = context.select(selected_id).map_err(|error| {
                 format!(
                     "seed {} human selected illegal blocker assignment: {error}",
@@ -9467,6 +10334,12 @@ impl GameDriver {
             if let Some(attacker) = attacker {
                 blocks.push(BlockDeclaration::new(blocker, *attacker));
             }
+        }
+        if let Some(episode) = episode.as_ref() {
+            source.complete_episode(
+                &episode.metadata.decision_episode_id,
+                &episode.final_action_id(),
+            )?;
         }
         self.dispatch(Action::DeclareBlockers {
             defending_player,
@@ -9796,7 +10669,8 @@ impl GameDriver {
         human: Option<PlayerId>,
         decisions: &mut Option<&mut dyn DecisionSource>,
         ai_policies: Option<&SeatPolicies>,
-    ) -> Result<CombatDamageTarget, String> {
+        episode: Option<DecisionEpisodeMetadata>,
+    ) -> Result<(CombatDamageTarget, CanonicalActionId), String> {
         let selected_id = if human == Some(controller) {
             let labels = context
                 .options()
@@ -9826,7 +10700,17 @@ impl GameDriver {
             let source = decisions.as_deref_mut().ok_or_else(|| {
                 "human game is missing a decision source for combat-damage ordering".to_owned()
             })?;
-            self.prompt_context_choice(source, "Order combat-damage targets", context, &labels)?
+            if let Some(episode) = episode.clone() {
+                self.prompt_context_choice_in_episode(
+                    source,
+                    "Order combat-damage targets",
+                    context,
+                    &labels,
+                    episode,
+                )?
+            } else {
+                self.prompt_context_choice(source, "Order combat-damage targets", context, &labels)?
+            }
         } else if let Some(policies) = ai_policies {
             let decision_started = Instant::now();
             let policy = self.policy_for(controller, policies)?;
@@ -9851,6 +10735,7 @@ impl GameDriver {
                 } else {
                     "random_legal_selection"
                 },
+                episode,
             });
             selected_id
         } else {
@@ -9871,11 +10756,12 @@ impl GameDriver {
                 self.seed
             ));
         };
-        targets
+        let target = targets
             .last()
             .copied()
             .and_then(combat_damage_choice_target)
-            .ok_or_else(|| format!("seed {} combat-damage order selection is empty", self.seed))
+            .ok_or_else(|| format!("seed {} combat-damage order selection is empty", self.seed))?;
+        Ok((target, selected_id))
     }
 
     fn select_combat_damage_amount(
@@ -9885,7 +10771,8 @@ impl GameDriver {
         human: Option<PlayerId>,
         decisions: &mut Option<&mut dyn DecisionSource>,
         ai_policies: Option<&SeatPolicies>,
-    ) -> Result<u32, String> {
+        episode: Option<DecisionEpisodeMetadata>,
+    ) -> Result<(u32, CanonicalActionId), String> {
         let selected_id = if human == Some(controller) {
             let labels = context
                 .options()
@@ -9918,7 +10805,17 @@ impl GameDriver {
             let source = decisions.as_deref_mut().ok_or_else(|| {
                 "human game is missing a decision source for combat-damage assignment".to_owned()
             })?;
-            self.prompt_context_choice(source, "Assign combat damage", context, &labels)?
+            if let Some(episode) = episode.clone() {
+                self.prompt_context_choice_in_episode(
+                    source,
+                    "Assign combat damage",
+                    context,
+                    &labels,
+                    episode,
+                )?
+            } else {
+                self.prompt_context_choice(source, "Assign combat damage", context, &labels)?
+            }
         } else if let Some(policies) = ai_policies {
             let decision_started = Instant::now();
             let policy = self.policy_for(controller, policies)?;
@@ -9951,6 +10848,7 @@ impl GameDriver {
                 } else {
                     "random_legal_selection"
                 },
+                episode,
             });
             selected_id
         } else {
@@ -9971,7 +10869,7 @@ impl GameDriver {
                 self.seed
             ));
         };
-        Ok(*amount)
+        Ok((*amount, selected_id))
     }
 
     fn select_combat_damage_amount_range(
@@ -9981,7 +10879,8 @@ impl GameDriver {
         human: Option<PlayerId>,
         decisions: &mut Option<&mut dyn DecisionSource>,
         ai_policies: Option<&SeatPolicies>,
-    ) -> Result<(u32, u32), String> {
+        episode: Option<DecisionEpisodeMetadata>,
+    ) -> Result<((u32, u32), CanonicalActionId), String> {
         let selected_id = if human == Some(controller) {
             let labels = context
                 .options()
@@ -10015,7 +10914,17 @@ impl GameDriver {
             let source = decisions.as_deref_mut().ok_or_else(|| {
                 "human game is missing a decision source for combat-damage assignment".to_owned()
             })?;
-            self.prompt_context_choice(source, "Narrow combat damage", context, &labels)?
+            if let Some(episode) = episode.clone() {
+                self.prompt_context_choice_in_episode(
+                    source,
+                    "Narrow combat damage",
+                    context,
+                    &labels,
+                    episode,
+                )?
+            } else {
+                self.prompt_context_choice(source, "Narrow combat damage", context, &labels)?
+            }
         } else if let Some(policies) = ai_policies {
             let decision_started = Instant::now();
             let policy = self.policy_for(controller, policies)?;
@@ -10048,6 +10957,7 @@ impl GameDriver {
                 } else {
                     "random_range_selection"
                 },
+                episode,
             });
             selected_id
         } else {
@@ -10071,7 +10981,7 @@ impl GameDriver {
                 self.seed
             ));
         };
-        Ok((*minimum, *maximum))
+        Ok(((*minimum, *maximum), selected_id))
     }
 
     fn assign_combat_damage(
@@ -10116,6 +11026,7 @@ impl GameDriver {
             })?;
             let controlled =
                 (human == Some(controller) && !legacy_human_replay) || ai_policies.is_some();
+            let mut episode = None;
             let mut remaining = canonical
                 .targets()
                 .iter()
@@ -10127,13 +11038,37 @@ impl GameDriver {
                 while remaining.len() > 1 {
                     let context =
                         self.combat_damage_order_context(controller, source, &remaining, &ordered)?;
-                    let selected = self.select_combat_damage_order_choice(
+                    if episode.is_none() {
+                        episode = self.begin_controlled_episode(
+                            controller,
+                            human,
+                            decisions,
+                            ai_policies,
+                            &context,
+                        )?;
+                    }
+                    let episode_metadata = episode.as_ref().map(|episode| {
+                        if episode.selected_action_ids.is_empty() {
+                            episode.root_metadata()
+                        } else {
+                            episode.child_metadata(&context)
+                        }
+                    });
+                    let (selected, selected_id) = self.select_combat_damage_order_choice(
                         &context,
                         controller,
                         human,
                         decisions,
                         ai_policies,
+                        episode_metadata.clone(),
                     )?;
+                    if let Some(episode) = episode.as_mut() {
+                        episode.record_selection(
+                            &context,
+                            selected_id,
+                            episode_metadata.map_or(0, |metadata| metadata.path_depth),
+                        );
+                    }
                     let index = remaining
                         .iter()
                         .position(|target| *target == selected)
@@ -10198,13 +11133,39 @@ impl GameDriver {
                                 cursor,
                                 bounds,
                             )?;
-                            bounds = self.select_combat_damage_amount_range(
-                                &context,
-                                controller,
-                                human,
-                                decisions,
-                                ai_policies,
-                            )?;
+                            if episode.is_none() {
+                                episode = self.begin_controlled_episode(
+                                    controller,
+                                    human,
+                                    decisions,
+                                    ai_policies,
+                                    &context,
+                                )?;
+                            }
+                            let episode_metadata = episode.as_ref().map(|episode| {
+                                if episode.selected_action_ids.is_empty() {
+                                    episode.root_metadata()
+                                } else {
+                                    episode.child_metadata(&context)
+                                }
+                            });
+                            let (next_bounds, selected_id) = self
+                                .select_combat_damage_amount_range(
+                                    &context,
+                                    controller,
+                                    human,
+                                    decisions,
+                                    ai_policies,
+                                    episode_metadata.clone(),
+                                )?;
+                            bounds = next_bounds;
+                            if let Some(episode) = episode.as_mut() {
+                                episode.record_selection(
+                                    &context,
+                                    selected_id,
+                                    episode_metadata.map_or(0, |metadata| metadata.path_depth),
+                                );
+                            }
                         }
                         let context = self.combat_damage_amount_context(
                             controller,
@@ -10214,13 +11175,38 @@ impl GameDriver {
                             cursor,
                             bounds,
                         )?;
-                        self.select_combat_damage_amount(
+                        if episode.is_none() {
+                            episode = self.begin_controlled_episode(
+                                controller,
+                                human,
+                                decisions,
+                                ai_policies,
+                                &context,
+                            )?;
+                        }
+                        let episode_metadata = episode.as_ref().map(|episode| {
+                            if episode.selected_action_ids.is_empty() {
+                                episode.root_metadata()
+                            } else {
+                                episode.child_metadata(&context)
+                            }
+                        });
+                        let (amount, selected_id) = self.select_combat_damage_amount(
                             &context,
                             controller,
                             human,
                             decisions,
                             ai_policies,
-                        )?
+                            episode_metadata.clone(),
+                        )?;
+                        if let Some(episode) = episode.as_mut() {
+                            episode.record_selection(
+                                &context,
+                                selected_id,
+                                episode_metadata.map_or(0, |metadata| metadata.path_depth),
+                            );
+                        }
+                        amount
                     }
                 };
                 remaining_damage = remaining_damage.checked_sub(amount).ok_or_else(|| {
@@ -10233,6 +11219,13 @@ impl GameDriver {
                     source_assignments.push(CombatDamageAssignment::new(target, amount));
                 }
             }
+            self.complete_controlled_episode(
+                controller,
+                human,
+                decisions,
+                ai_policies,
+                episode.as_ref(),
+            )?;
             assignments.push(CombatDamageAssignmentRequest::new(
                 source,
                 source_assignments,
@@ -10457,6 +11450,7 @@ impl GameDriver {
                 } else {
                     "random_legal_selection"
                 },
+                episode: None,
             });
             let actions = selected.actions().to_vec();
             for action in actions {
@@ -13327,11 +14321,12 @@ mod tests {
         concession_decision_context, concession_decision_context_from_view,
         legacy_human_summary_matches, multiplayer_backup_sign, player_view_fingerprint,
         replay_captured_actions, replay_human_file, run_prompted_game, snapshot_prompt,
-        ActivatedRuntime, AiController, CombatSearchDomain, CombatSearchProgress, DecisionPrompt,
-        DecisionSelection, DecisionSource, GameDriver, GameMetrics, GameSummary, HeuristicPolicy,
-        IdentityExercise, MainChoice, MainSearchDomain, MainSearchWindow,
-        PendingActivatedResolution, RandomLegalPolicy, RegisteredAbility, ReplayDecisionSource,
-        TerminalDecisionSource, TraceMode, TraceRecord, CONCESSION_PROMPT, PLAYER_COUNT,
+        ActivatedRuntime, AiController, AiDecisionRecord, CombatSearchDomain, CombatSearchProgress,
+        DecisionEpisodeMetadata, DecisionPrompt, DecisionSelection, DecisionSource, GameDriver,
+        GameMetrics, GameSummary, HeuristicPolicy, IdentityExercise, MainChoice, MainSearchDomain,
+        MainSearchWindow, PendingActivatedResolution, RandomLegalPolicy, RegisteredAbility,
+        ReplayDecisionSource, TerminalDecisionSource, TraceMode, TraceRecord, CONCESSION_PROMPT,
+        PLAYER_COUNT,
     };
     use forge_ai::{
         AiWeights, GuardrailProfile, GuardrailTable, SearchConfig, SearchDomain, SearchEngine,
@@ -13432,12 +14427,71 @@ card "Mulldrifter" {
 }
 "#;
     use std::{
-        collections::{BTreeSet, HashMap, HashSet},
+        collections::{BTreeMap, BTreeSet, HashMap, HashSet},
         env,
         io::Cursor,
         path::Path,
         sync::Arc,
     };
+
+    fn assert_ai_episode_integrity(records: &[AiDecisionRecord]) {
+        assert!(
+            !records.is_empty(),
+            "episode fixture must record a decision"
+        );
+        let mut episodes = BTreeMap::<&str, Vec<&AiDecisionRecord>>::new();
+        for record in records {
+            assert!(!record.episode.decision_episode_id.is_empty());
+            assert!(!record.episode.root_context_id.is_empty());
+            assert!(!record.episode.final_concrete_action_id.is_empty());
+            assert_eq!(record.episode.is_forced, record.legal_actions == 1);
+            episodes
+                .entry(record.episode.decision_episode_id.as_str())
+                .or_default()
+                .push(record);
+        }
+
+        for episode in episodes.values() {
+            assert_eq!(
+                episode
+                    .iter()
+                    .filter(|record| record.episode.path_depth == 0)
+                    .count(),
+                1
+            );
+            assert_eq!(
+                episode
+                    .iter()
+                    .filter(|record| record.episode.is_terminal_subchoice)
+                    .count(),
+                1
+            );
+            assert!(episode
+                .last()
+                .is_some_and(|record| record.episode.is_terminal_subchoice));
+            assert_eq!(episode[0].episode.root_context_id, episode[0].context_id);
+            assert_eq!(
+                episode[0].episode.is_strategic_root,
+                episode[0].legal_actions > 1
+            );
+            let final_id = &episode[0].episode.final_concrete_action_id;
+            assert!(episode
+                .iter()
+                .all(|record| &record.episode.final_concrete_action_id == final_id));
+            for (depth, record) in episode.iter().enumerate() {
+                assert_eq!(record.episode.path_depth as usize, depth);
+                if depth == 0 {
+                    assert!(record.episode.parent_context_id.is_none());
+                } else {
+                    assert_eq!(
+                        record.episode.parent_context_id.as_deref(),
+                        Some(episode[depth - 1].context_id.as_str())
+                    );
+                    assert!(!record.episode.is_strategic_root);
+                }
+            }
+        }
+    }
 
     #[test]
     fn action_replay_rejects_a_tampered_transition() {
@@ -13534,6 +14588,7 @@ card "Mulldrifter" {
             context: &context,
             options: &options,
             allow_concession: false,
+            episode: DecisionEpisodeMetadata::root(7, 0, &context, true),
         };
         let record = snapshot_prompt(0, &prompt, 1);
         assert_eq!(record.context_id, context.id().to_string());
@@ -13554,6 +14609,7 @@ card "Mulldrifter" {
             context: &context,
             options: &changed_options,
             allow_concession: false,
+            episode: DecisionEpisodeMetadata::root(7, 0, &context, true),
         };
         let record = snapshot_prompt(0, &prompt, 1);
         let mut replay = ReplayDecisionSource::new(vec![record]);
@@ -13583,6 +14639,7 @@ card "Mulldrifter" {
             context: &context,
             options: &labels,
             allow_concession: false,
+            episode: DecisionEpisodeMetadata::root(7, 0, &context, true),
         };
         let mut legacy = snapshot_prompt(0, &prompt, 0);
         legacy.decision_context_schema = 0;
@@ -13640,7 +14697,7 @@ card "Mulldrifter" {
 
     #[test]
     fn attack_subcontexts_expose_split_defenders_without_a_cartesian_product() {
-        let (driver, active, defenders, pieces) = combat_decision_driver();
+        let (mut driver, active, defenders, pieces) = combat_decision_driver();
         let objects = driver
             .attack_assignment_objects(active)
             .unwrap_or_else(|error| panic!("attack assignments should exist: {error}"));
@@ -13687,6 +14744,12 @@ card "Mulldrifter" {
             player: active,
             attacks: split,
         }));
+
+        driver
+            .declare_ai_attackers(active, AiController::Random(RandomLegalPolicy::new(8_040)))
+            .unwrap_or_else(|error| panic!("AI attack declaration should succeed: {error}"));
+        assert_eq!(driver.ai_decisions.len(), objects.len());
+        assert_ai_episode_integrity(&driver.ai_decisions);
     }
 
     #[test]
@@ -13815,6 +14878,15 @@ card "Mulldrifter" {
                 attacker: Some(pieces[0]),
             }
         );
+
+        driver
+            .declare_ai_blocks(
+                defenders[0],
+                AiController::Random(RandomLegalPolicy::new(8_041)),
+            )
+            .unwrap_or_else(|error| panic!("AI block declaration should succeed: {error}"));
+        assert_eq!(driver.ai_decisions.len(), blockers.len());
+        assert_ai_episode_integrity(&driver.ai_decisions);
     }
 
     #[test]
@@ -13995,6 +15067,7 @@ card "Mulldrifter" {
             .ai_decisions
             .iter()
             .any(|record| record.kind == "combat_damage_amount"));
+        assert_ai_episode_integrity(&driver.ai_decisions);
     }
 
     #[test]
@@ -14658,6 +15731,22 @@ card "Mulldrifter" {
         );
         let decisions = terminal.into_decisions();
         assert_eq!(decisions.len(), 3);
+        assert!(decisions
+            .iter()
+            .all(|decision| decision.episode.decision_episode_id
+                == decisions[0].episode.decision_episode_id));
+        assert_eq!(
+            decisions
+                .iter()
+                .filter(|decision| decision.episode.is_terminal_subchoice)
+                .count(),
+            1
+        );
+        assert!(decisions.iter().all(|decision| {
+            !decision.episode.final_concrete_action_id.is_empty()
+                && decision.episode.final_concrete_action_id
+                    == decisions[0].episode.final_concrete_action_id
+        }));
         assert_eq!(decisions[0].prompt, "Choose an additional cost");
         assert_eq!(decisions[1].prompt, "Choose an additional cost");
         assert_eq!(decisions[2].prompt, "Choose a mana payment");
@@ -14873,6 +15962,35 @@ card "Mulldrifter" {
         );
         let decisions = terminal.into_decisions();
         assert_eq!(decisions.len(), 2);
+        assert_eq!(
+            decisions
+                .iter()
+                .map(|decision| decision.episode.decision_episode_id.as_str())
+                .collect::<BTreeSet<_>>()
+                .len(),
+            1
+        );
+        assert_eq!(
+            decisions
+                .iter()
+                .filter(|decision| decision.episode.is_strategic_root)
+                .count(),
+            1
+        );
+        assert!(!decisions[0].episode.is_terminal_subchoice);
+        assert!(decisions[1].episode.is_terminal_subchoice);
+        assert!(decisions[1].episode.is_forced);
+        assert_eq!(decisions[0].episode.path_depth, 0);
+        assert_eq!(decisions[1].episode.path_depth, 1);
+        assert_eq!(
+            decisions[1].episode.parent_context_id.as_deref(),
+            Some(decisions[0].context_id.as_str())
+        );
+        assert!(decisions.iter().all(|decision| {
+            !decision.episode.final_concrete_action_id.is_empty()
+                && decision.episode.final_concrete_action_id
+                    == decisions[0].episode.final_concrete_action_id
+        }));
         assert_eq!(decisions[0].prompt, "Choose X");
         assert_eq!(decisions[1].prompt, "Choose a mana payment");
         assert_eq!(
@@ -15469,7 +16587,7 @@ card "Mulldrifter" {
     fn simultaneous_trigger_order_uses_shared_human_and_ai_contexts() {
         let (mut driver, controller, opponent, _source) = modal_spell_driver();
         let mut triggers = Vec::new();
-        for _ in 0..2 {
+        for _ in 0..3 {
             let trigger = match driver
                 .dispatch(Action::RegisterTriggeredAbility {
                     definition: TriggerDefinition::new(
@@ -15496,7 +16614,7 @@ card "Mulldrifter" {
             .trigger_order_context(controller, &triggers, &[], &[])
             .unwrap_or_else(|error| panic!("trigger order context should exist: {error}"));
         assert_eq!(context.kind(), DecisionKind::TriggerOrder);
-        assert_eq!(context.options().len(), 2);
+        assert_eq!(context.options().len(), 3);
         assert!(context.options().iter().all(|option| {
             option.actions().is_empty()
                 && matches!(
@@ -15506,15 +16624,15 @@ card "Mulldrifter" {
         }));
 
         let mut human_driver = driver.clone();
-        let mut source = PickSecondChoice;
+        let mut source = PickFirstChoice;
         let mut decisions = Some(&mut source as &mut dyn DecisionSource);
         let human_outcome = human_driver
             .put_pending_triggers_on_stack(Some(controller), &mut decisions, None)
             .unwrap_or_else(|error| panic!("human trigger order should succeed: {error}"));
-        assert!(matches!(human_outcome, Outcome::StackEntriesAdded(entries) if entries.len() == 2));
+        assert!(matches!(human_outcome, Outcome::StackEntriesAdded(entries) if entries.len() == 3));
         assert!(matches!(
             human_driver.actions.last(),
-            Some(Action::PutPendingTriggeredAbilitiesOnStackInOrder { order }) if order.len() == 2
+            Some(Action::PutPendingTriggeredAbilitiesOnStackInOrder { order }) if order.len() == 3
         ));
 
         let policies = [AiController::Random(RandomLegalPolicy::new(17)); PLAYER_COUNT];
@@ -15523,13 +16641,14 @@ card "Mulldrifter" {
         let ai_outcome = ai_driver
             .put_pending_triggers_on_stack(None, &mut no_decisions, Some(&policies))
             .unwrap_or_else(|error| panic!("AI trigger order should succeed: {error}"));
-        assert!(matches!(ai_outcome, Outcome::StackEntriesAdded(entries) if entries.len() == 2));
-        assert_eq!(ai_driver.ai_decisions.len(), 1);
+        assert!(matches!(ai_outcome, Outcome::StackEntriesAdded(entries) if entries.len() == 3));
+        assert_eq!(ai_driver.ai_decisions.len(), 2);
         assert_eq!(ai_driver.ai_decisions[0].kind, "trigger_order");
         assert!(ai_driver.ai_decisions[0]
             .canonical_legal_actions
             .iter()
             .any(|action| action.action_id == ai_driver.ai_decisions[0].action_id));
+        assert_ai_episode_integrity(&ai_driver.ai_decisions);
     }
 
     #[test]
@@ -15626,7 +16745,7 @@ card "Mulldrifter" {
 
         let mut ai_driver = driver.clone();
         let mut human_driver = driver;
-        let mut source = MaximizeTriggerTargets;
+        let mut source = PickFirstChoice;
         let mut decisions = Some(&mut source as &mut dyn DecisionSource);
         let outcome = human_driver
             .put_pending_triggers_on_stack(Some(controller), &mut decisions, None)
@@ -15793,6 +16912,7 @@ card "Mulldrifter" {
                 if targets == &first_prefix
         )));
 
+        let mut ai_driver = driver.clone();
         let mut source = MaximizeTriggerTargets;
         let mut decisions = Some(&mut source as &mut dyn DecisionSource);
         let outcome = driver
@@ -15825,6 +16945,22 @@ card "Mulldrifter" {
             .into_iter()
             .collect::<HashSet<_>>()
         );
+
+        let policies = [AiController::Random(RandomLegalPolicy::new(1_351)); PLAYER_COUNT];
+        let mut no_decisions = None;
+        let ai_outcome = ai_driver
+            .put_pending_triggers_on_stack(None, &mut no_decisions, Some(&policies))
+            .unwrap_or_else(|error| panic!("AI divided trigger should stack: {error}"));
+        assert!(matches!(ai_outcome, Outcome::StackEntriesAdded(entries) if entries.len() == 1));
+        assert!(ai_driver
+            .ai_decisions
+            .iter()
+            .any(|record| record.kind == "trigger_target"));
+        assert!(ai_driver
+            .ai_decisions
+            .iter()
+            .any(|record| record.kind == "trigger_target_allocation"));
+        assert_ai_episode_integrity(&ai_driver.ai_decisions);
     }
 
     #[test]
@@ -16339,11 +17475,64 @@ card "Mulldrifter" {
         assert_eq!(intent.0.kind(), DecisionKind::Optional);
         assert_eq!(intent.0.options().len(), 2);
 
-        let mut pay = PayUnlessChoice;
-        let mut pay_decisions = Some(&mut pay as &mut dyn DecisionSource);
-        pay_driver
-            .complete_pending_triggered_resolution(Some(opponent), &mut pay_decisions, None)
-            .unwrap_or_else(|error| panic!("human payment should resolve: {error}"));
+        let (intent_choice, payment_choice) = {
+            let pending = pay_driver
+                .pending_triggered_resolution
+                .as_ref()
+                .unwrap_or_else(|| panic!("unless-paid resolution should remain pending"));
+            let (intent_context, payer, plans) = pay_driver
+                .pending_triggered_unless_intent_context(pending)
+                .unwrap_or_else(|error| panic!("unless intent should rebuild: {error}"));
+            let intent_choice = intent_context
+                .options()
+                .iter()
+                .position(|option| {
+                    matches!(
+                        option.descriptor(),
+                        DecisionDescriptor::ChooseOptional { accept: true, .. }
+                    )
+                })
+                .unwrap_or_else(|| panic!("pay intent should be canonical"))
+                + 1;
+            let payment_context = pay_driver
+                .pending_triggered_unless_payment_context(pending, payer, &plans)
+                .unwrap_or_else(|error| panic!("unless payment should build: {error}"));
+            (
+                intent_choice,
+                usize::from(!payment_context.options().is_empty()),
+            )
+        };
+        let scripted_input = format!("{intent_choice}\n{payment_choice}\n");
+        let mut input = Cursor::new(scripted_input.as_bytes());
+        let mut output = Vec::new();
+        let mut terminal = TerminalDecisionSource::new(&mut input, &mut output);
+        {
+            let mut pay_decisions = Some(&mut terminal as &mut dyn DecisionSource);
+            pay_driver
+                .complete_pending_triggered_resolution(Some(opponent), &mut pay_decisions, None)
+                .unwrap_or_else(|error| panic!("human payment should resolve: {error}"));
+        }
+        let pay_records = terminal.into_decisions();
+        assert_eq!(pay_records.len(), 2);
+        assert!(pay_records.iter().all(|record| {
+            record.episode.decision_episode_id == pay_records[0].episode.decision_episode_id
+                && record.episode.final_concrete_action_id
+                    == pay_records[0].episode.final_concrete_action_id
+                && !record.episode.final_concrete_action_id.is_empty()
+        }));
+        assert_eq!(
+            pay_records
+                .iter()
+                .filter(|record| record.episode.is_terminal_subchoice)
+                .count(),
+            1
+        );
+        assert_eq!(pay_records[0].episode.path_depth, 0);
+        assert_eq!(pay_records[1].episode.path_depth, 1);
+        assert_eq!(
+            pay_records[1].episode.parent_context_id.as_deref(),
+            Some(pay_records[0].context_id.as_str())
+        );
         assert_eq!(pay_driver.state.mana_pool(opponent), Ok(ManaPool::empty()));
         assert!(pay_driver.actions.iter().any(|action| matches!(
             action,
@@ -16386,6 +17575,7 @@ card "Mulldrifter" {
             .actions
             .iter()
             .any(|action| matches!(action, Action::CreateToken { controller: player, .. } if *player == controller)));
+        assert_ai_episode_integrity(&cannot_pay_driver.ai_decisions);
     }
 
     #[test]
@@ -17036,6 +18226,22 @@ card "Mulldrifter" {
             option.descriptor(),
             DecisionDescriptor::ChooseResolutionObjects { choices } if choices.len() == 2
         )));
+
+        driver.pending_activated_resolution = Some(pending);
+        let policies = [AiController::Random(RandomLegalPolicy::new(1_299)); PLAYER_COUNT];
+        let mut no_decisions = None;
+        driver
+            .complete_pending_activated_resolution(None, &mut no_decisions, Some(&policies))
+            .unwrap_or_else(|error| panic!("AI resolution choices should complete: {error}"));
+        assert_eq!(
+            driver
+                .ai_decisions
+                .iter()
+                .filter(|record| record.kind == "resolution_object_choice")
+                .count(),
+            2
+        );
+        assert_ai_episode_integrity(&driver.ai_decisions);
     }
 
     #[test]
@@ -17307,24 +18513,6 @@ card "Mulldrifter" {
                 })
                 .map(DecisionSelection::Option)
                 .ok_or_else(|| "expected a declined optional choice".to_owned())
-        }
-    }
-
-    struct PayUnlessChoice;
-
-    impl DecisionSource for PayUnlessChoice {
-        fn choose(&mut self, prompt: &DecisionPrompt<'_>) -> Result<DecisionSelection, String> {
-            prompt
-                .context
-                .options()
-                .iter()
-                .position(|option| match option.descriptor() {
-                    DecisionDescriptor::ChooseOptional { accept, .. } => *accept,
-                    DecisionDescriptor::ChoosePayment { .. } => true,
-                    _ => false,
-                })
-                .map(DecisionSelection::Option)
-                .ok_or_else(|| "expected an unless-payment choice".to_owned())
         }
     }
 

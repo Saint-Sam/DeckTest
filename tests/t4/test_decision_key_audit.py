@@ -16,13 +16,29 @@ MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
 
 
-def decision(key: str, *, path: int | None = None, action: str = "a") -> dict:
+def decision(
+    key: str,
+    *,
+    path: int | None = None,
+    action: str = "a",
+    episode: str | None = None,
+) -> dict:
+    context_id = f"context-{key}-{path}"
     return {
         "kind": "declare_attackers",
-        "context_id": f"context-{key}-{path}",
+        "context_id": context_id,
         "decision_state_key": key,
         "path_discriminator": path,
         "player_view_hash": "view",
+        "legal_actions": 1,
+        "decision_episode_id": episode or f"episode-{key}-{path}-{action}",
+        "root_context_id": context_id,
+        "parent_context_id": None,
+        "path_depth": 0,
+        "is_forced": True,
+        "is_strategic_root": False,
+        "is_terminal_subchoice": True,
+        "final_concrete_action_id": action,
         "canonical_legal_actions": [
             {
                 "action_id": action,
@@ -54,8 +70,8 @@ class DecisionKeyAuditTests(unittest.TestCase):
             path = self.write_replay(
                 root,
                 [
-                    decision("same"),
-                    decision("same"),
+                    decision("same", episode="same-1"),
+                    decision("same", episode="same-2"),
                     decision("path-1", path=1),
                     decision("path-2", path=2),
                 ],
@@ -68,6 +84,35 @@ class DecisionKeyAuditTests(unittest.TestCase):
             )
             self.assertEqual(report["totals"]["path_bound_decisions"], 2)
             self.assertEqual(report["totals"]["unique_state_keys"], 3)
+            self.assertEqual(report["totals"]["decision_episodes"], 4)
+
+    def test_accepts_one_linked_strategic_episode(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            first = decision("root", action="root-action", episode="linked")
+            first.update(
+                {
+                    "legal_actions": 2,
+                    "is_forced": False,
+                    "is_strategic_root": True,
+                    "is_terminal_subchoice": False,
+                    "final_concrete_action_id": "complete-action",
+                }
+            )
+            second = decision("child", action="child-action", episode="linked")
+            second.update(
+                {
+                    "root_context_id": first["context_id"],
+                    "parent_context_id": first["context_id"],
+                    "path_depth": 1,
+                    "final_concrete_action_id": "complete-action",
+                }
+            )
+            path = self.write_replay(root, [first, second])
+            report = MODULE.build_report([path], "commit", "tree")
+            self.assertEqual(report["status"], "passed")
+            self.assertEqual(report["totals"]["decision_episodes"], 1)
+            self.assertEqual(report["totals"]["strategic_decision_episodes"], 1)
 
     def test_rejects_one_key_for_different_semantic_states(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

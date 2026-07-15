@@ -46,8 +46,17 @@ check_contracts() {
     .[0].status == "passed" and
     .[0].recorded_key_signature_consistency == "passed" and
     .[0].near_state_dedup_audit == "not_run_runtime_isomorphism" and
+    .[0].totals.decision_episodes > 0 and
+    .[0].totals.strategic_decision_episodes > 0 and
+    .[0].totals.forced_prompt_records > 0 and
     .[1].recorded_key_signature_consistency == "passed" and
     .[1].near_state_dedup_audit == "not_run_runtime_isomorphism" and
+    all(.[1].runs[];
+      .decision_episode_accounting.episode_linkage_complete == true and
+      .decision_episode_accounting.raw_prompt_records == .decisions and
+      .decision_episode_accounting.decision_episodes > 0 and
+      .decision_episode_accounting.strategic_decision_episodes > 0
+    ) and
     .[0].product_commit == .[1].product_commit and
     .[0].product_tree == .[1].product_tree
   ' metrics/ai/decision_state_audit.json metrics/ai/decision_benchmark.json >/dev/null

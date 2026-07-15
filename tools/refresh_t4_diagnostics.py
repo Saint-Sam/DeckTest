@@ -60,6 +60,41 @@ def complete_record_count(decisions: list[dict[str, Any]], field: str) -> int:
     return sum(field in decision and decision[field] is not None for decision in decisions)
 
 
+def episode_summary(decisions: list[dict[str, Any]]) -> dict[str, Any]:
+    episodes: dict[str, list[dict[str, Any]]] = {}
+    for decision in decisions:
+        episode_id = decision.get("decision_episode_id")
+        if isinstance(episode_id, str) and episode_id:
+            episodes.setdefault(episode_id, []).append(decision)
+    complete = len(episodes) > 0 and all(
+        len(records) >= 1
+        and sum(int(record.get("path_depth", -1) == 0) for record in records) == 1
+        and sum(bool(record.get("is_terminal_subchoice")) for record in records) == 1
+        and len(
+            {
+                record.get("final_concrete_action_id")
+                for record in records
+                if record.get("final_concrete_action_id")
+            }
+        )
+        == 1
+        for records in episodes.values()
+    ) and sum(len(records) for records in episodes.values()) == len(decisions)
+    return {
+        "raw_prompt_records": len(decisions),
+        "decision_episodes": len(episodes),
+        "strategic_decision_episodes": sum(
+            any(bool(record.get("is_strategic_root")) for record in records)
+            for records in episodes.values()
+        ),
+        "multi_prompt_episodes": sum(len(records) > 1 for records in episodes.values()),
+        "forced_prompt_records": sum(
+            bool(decision.get("is_forced")) for decision in decisions
+        ),
+        "episode_linkage_complete": complete,
+    }
+
+
 def replay_run(
     replay: dict[str, Any], path: Path, existing: dict[str, Any]
 ) -> dict[str, Any]:
@@ -89,6 +124,7 @@ def replay_run(
             ),
             "exact_policy_replay": True,
             "exact_typed_action_replay": True,
+            "decision_episode_accounting": episode_summary(decisions),
         }
     )
     if replay["policy_kind"] == "determinized-uct-v1":
@@ -192,6 +228,9 @@ def refresh_benchmark(
         "decisions": totals["decisions"],
         "unique_state_keys": totals["unique_state_keys"],
         "path_bound_decisions": totals["path_bound_decisions"],
+        "decision_episodes": totals["decision_episodes"],
+        "strategic_decision_episodes": totals["strategic_decision_episodes"],
+        "forced_prompt_records": totals["forced_prompt_records"],
         "failures": totals["failures"],
     }
     benchmark["reasons"][2] = (

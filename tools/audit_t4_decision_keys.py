@@ -10,6 +10,18 @@ from pathlib import Path
 from typing import Any, Iterable
 
 
+EPISODE_FIELDS = (
+    "decision_episode_id",
+    "root_context_id",
+    "parent_context_id",
+    "path_depth",
+    "is_forced",
+    "is_strategic_root",
+    "is_terminal_subchoice",
+    "final_concrete_action_id",
+)
+
+
 def canonical_digest(value: Any) -> str:
     payload = json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
@@ -54,6 +66,123 @@ def load_replay(path: Path) -> tuple[dict[str, Any], str]:
     return value, hashlib.sha256(payload).hexdigest()
 
 
+def episode_linkage_failures(
+    decisions: list[dict[str, Any]], source_name: str
+) -> tuple[list[dict[str, Any]], int, int, int]:
+    failures: list[dict[str, Any]] = []
+    episodes: dict[str, list[tuple[int, dict[str, Any]]]] = {}
+    forced_records = 0
+    for index, decision in enumerate(decisions):
+        missing = [field for field in EPISODE_FIELDS if field not in decision]
+        if missing:
+            failures.append(
+                {
+                    "code": "MISSING_EPISODE_FIELD",
+                    "source": source_name,
+                    "index": index,
+                    "fields": missing,
+                }
+            )
+            continue
+        episode_id = decision["decision_episode_id"]
+        if not isinstance(episode_id, str) or not episode_id:
+            failures.append(
+                {
+                    "code": "INVALID_EPISODE_ID",
+                    "source": source_name,
+                    "index": index,
+                }
+            )
+            continue
+        episodes.setdefault(episode_id, []).append((index, decision))
+        forced_records += int(bool(decision["is_forced"]))
+        if bool(decision["is_forced"]) != (int(decision.get("legal_actions", 0)) == 1):
+            failures.append(
+                {
+                    "code": "FORCED_EPISODE_FLAG_MISMATCH",
+                    "source": source_name,
+                    "index": index,
+                    "decision_episode_id": episode_id,
+                }
+            )
+
+    strategic_episodes = 0
+    for episode_id, records in episodes.items():
+        roots = [(index, record) for index, record in records if record["path_depth"] == 0]
+        terminals = [
+            (index, record)
+            for index, record in records
+            if record["is_terminal_subchoice"]
+        ]
+        final_ids = {record["final_concrete_action_id"] for _, record in records}
+        if len(roots) != 1:
+            failures.append(
+                {
+                    "code": "EPISODE_ROOT_CARDINALITY",
+                    "source": source_name,
+                    "decision_episode_id": episode_id,
+                    "roots": len(roots),
+                }
+            )
+            continue
+        root_index, root = roots[0]
+        strategic_episodes += int(bool(root["is_strategic_root"]))
+        if root["parent_context_id"] is not None or root["root_context_id"] != root["context_id"]:
+            failures.append(
+                {
+                    "code": "INVALID_EPISODE_ROOT_LINK",
+                    "source": source_name,
+                    "index": root_index,
+                    "decision_episode_id": episode_id,
+                }
+            )
+        if bool(root["is_strategic_root"]) != (int(root.get("legal_actions", 0)) > 1):
+            failures.append(
+                {
+                    "code": "STRATEGIC_ROOT_FLAG_MISMATCH",
+                    "source": source_name,
+                    "index": root_index,
+                    "decision_episode_id": episode_id,
+                }
+            )
+        if len(terminals) != 1 or terminals[0][0] != records[-1][0]:
+            failures.append(
+                {
+                    "code": "EPISODE_TERMINAL_CARDINALITY",
+                    "source": source_name,
+                    "decision_episode_id": episode_id,
+                    "terminals": len(terminals),
+                }
+            )
+        if len(final_ids) != 1 or not next(iter(final_ids), ""):
+            failures.append(
+                {
+                    "code": "EPISODE_FINAL_ACTION_MISMATCH",
+                    "source": source_name,
+                    "decision_episode_id": episode_id,
+                }
+            )
+        prior_contexts: dict[str, int] = {}
+        for index, record in records:
+            depth = int(record["path_depth"])
+            parent = record["parent_context_id"]
+            if depth > 0 and (
+                not isinstance(parent, str)
+                or parent not in prior_contexts
+                or prior_contexts[parent] != depth - 1
+            ):
+                failures.append(
+                    {
+                        "code": "INVALID_EPISODE_PARENT_LINK",
+                        "source": source_name,
+                        "index": index,
+                        "decision_episode_id": episode_id,
+                    }
+                )
+            prior_contexts[record["context_id"]] = depth
+    return failures, len(episodes), strategic_episodes, forced_records
+
+
 def build_report(
     replay_paths: Iterable[Path], product_commit: str, product_tree: str
 ) -> dict[str, Any]:
@@ -65,11 +194,24 @@ def build_report(
     sources: list[dict[str, Any]] = []
     total_decisions = 0
     path_bound_decisions = 0
+    total_episodes = 0
+    strategic_episodes = 0
+    forced_prompt_records = 0
 
     for path in replay_paths:
         replay, source_sha256 = load_replay(path)
         source_name = str(path)
         decisions = replay["decisions"]
+        (
+            replay_episode_failures,
+            replay_episodes,
+            replay_strategic_episodes,
+            replay_forced_records,
+        ) = episode_linkage_failures(decisions, source_name)
+        failures.extend(replay_episode_failures)
+        total_episodes += replay_episodes
+        strategic_episodes += replay_strategic_episodes
+        forced_prompt_records += replay_forced_records
         sources.append(
             {
                 "path": source_name,
@@ -166,6 +308,9 @@ def build_report(
             "unique_state_keys": len(key_to_signature),
             "unique_semantic_signatures": len(signature_to_key),
             "path_bound_decisions": path_bound_decisions,
+            "decision_episodes": total_episodes,
+            "strategic_decision_episodes": strategic_episodes,
+            "forced_prompt_records": forced_prompt_records,
             "keys_shared_across_paired_policy_replays": shared_keys,
             "failures": len(failures),
         },

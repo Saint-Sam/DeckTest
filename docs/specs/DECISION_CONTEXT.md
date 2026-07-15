@@ -139,6 +139,15 @@ game inputs, search checkpoint history, and expected final state. Exact replay
 regenerates decisions and typed actions from the same seeds and rejects any
 divergence.
 
+Replay records also carry the additive strategic-episode fields ratified in
+ADR 0035. Ordinary prompts form singleton episodes. Main and priority action
+chains, trigger announcement and ordering, resolution-time choices, trigger
+unless payments, combat declarations, and combat-damage assignment each link
+their hierarchical prompts under one root and one final canonical action-path
+ID. Forced subchoices remain replayed but do not count as independent strategic
+decisions. Exact current-product episode evidence and Track B consumer
+validation remain required before teacher-corpus promotion.
+
 New T1.R10 human replay decisions additively persist the canonical context ID,
 `DecisionStateKey`, `PlayerViewHash`, complete typed legal descriptors, and
 selected action ID. The display labels, selected index, and legacy `Debug`
