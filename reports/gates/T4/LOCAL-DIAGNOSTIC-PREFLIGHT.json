@@ -2,44 +2,48 @@
   "schema_version": 1,
   "tier": "T4",
   "status": "local_diagnostic_preflight_passed_promotion_blocked",
-  "verified_at": "2026-07-14",
+  "verified_at": "2026-07-15",
   "verification_mode": "local_only_no_github_actions",
-  "product_commit": "fae0c77baa24176bec9e9585a2a66c1d775316d1",
-  "product_tree": "85e27929dcd3956d6a804261a184a8d1b41b9534",
-  "preflight_evidence_commit": "ee92b6d9af64a53fff65d2cdaecac50dba299b17",
-  "preflight_evidence_tree": "0083b0d40fdb9a08b96c3e443fce0d5c134109c5",
+  "product_commit": "aa4389800db327f7878e1bfe78db18d3d2bce011",
+  "product_tree": "5d0baa8b2022ea2045a20b08076b71c85971996f",
+  "preflight_evidence_commit": "951156b3117eaf0c766be7f981d601ec606efc43",
+  "preflight_evidence_tree": "337b039c2c37a94315a391b12cde978b3d8a9505",
   "gate_command": "scripts/gates/gate_T4.sh --preflight",
   "gate_log": "reports/gates/T4/commands/00-preflight.log",
-  "gate_log_sha256": "ee45ba7c284ca8dc95230274ef1d0c458a3bce27d398bbc3e0a071c1050ab276",
+  "gate_log_sha256": "727421882661b2d245eb3eb86d0f27fec165cfa6004c558e285e978962927553",
   "checks": {
     "format": "passed",
     "strict_clippy": "passed",
     "tests": {
-      "passed": 262,
+      "passed": 265,
       "failed": 0,
       "ignored": 1,
       "ignored_reason": "requires local generated T3 translated-card output"
     },
     "heuristic_exact_policy_and_typed_action_replay": {
       "status": "passed",
-      "replay_sha256": "317f09370823de9347e9cfff56b6f804bec17c068234b3ebd9fbdbb6d338636d",
+      "replay_sha256": "51320e97574978f0354e1cb43538d965de39e75e774960a518b4cd6309eb1f36",
       "decisions": 15763,
       "typed_actions": 18029,
       "final_hash": "1347092284232215653"
     },
     "random_legal_exact_policy_and_typed_action_replay": {
       "status": "passed",
-      "replay_sha256": "14199ab0e43488669f418881b0999ffc68681bbda99dd7d2826bf0abdc01106c",
+      "replay_sha256": "6c74096e8ddc2dc1bee3d38045920776a5019e57f48734ad5346a7808e3eaee8",
       "decisions": 6505,
       "typed_actions": 8299,
       "final_hash": "7006841597002591361"
     },
     "search_exact_policy_and_typed_action_replay": {
       "status": "passed",
-      "replay_sha256": "1e0ac3706852c8e4f8828eac9d631a3e2155a3266582aa274eee7a30e141d861",
-      "decisions": 16031,
-      "typed_actions": 18321,
-      "final_hash": "16375386236967138290"
+      "replay_sha256": "2c8bf72a44efefe14e91fd714bf333af0e127f52473b24351a03c2e5dbcebfc6",
+      "decisions": 16010,
+      "searched_decisions": 563,
+      "typed_actions": 18282,
+      "simulations": 8672,
+      "nodes": 2683,
+      "maximum_depth": 7,
+      "final_hash": "8631010851649779696"
     },
     "wasm32_unknown_unknown_compile": "passed",
     "aarch64_linux_android_compile": "passed",
@@ -60,21 +64,21 @@
       "strength_claim": false,
       "total_decision_budget_contract": "shared_deadline_and_current_surface_budget_response_passed",
       "observed_p95_wall_latency_us": [
-        1543,
-        4841
+        2276,
+        5600
       ],
       "result": "metrics/ai/search_budget_knee_results.json",
-      "result_sha256": "b062ad60a567de9ddac09c30dc9dd162082c10f0c98305c2eb955baed462d33a"
+      "result_sha256": "2b08ce04b6765da7f3dc2ccdbf74ccc2eba1d28196f48bfd7a270e7b31e4a918"
     },
     "decision_state_key_audit": {
       "status": "passed",
       "artifact": "metrics/ai/decision_state_audit.json",
-      "artifact_sha256": "b85161646cbf9964457a7249cbb64b3223046d3dac951d096ce3c85821fc0ef3",
-      "decisions": 38299,
-      "unique_semantic_signatures": 38242,
-      "unique_state_keys": 38242,
-      "path_bound_decisions": 190,
-      "paired_policy_shared_keys": 56,
+      "artifact_sha256": "244c10a0b4e6c5cff9e0f17cd8603d94c354f5cd3a9311f51862dec4ad606736",
+      "decisions": 38278,
+      "unique_semantic_signatures": 38229,
+      "unique_state_keys": 38229,
+      "path_bound_decisions": 183,
+      "paired_policy_shared_keys": 48,
       "failures": 0
     },
     "resource_telemetry": {

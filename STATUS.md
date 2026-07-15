@@ -95,7 +95,8 @@ onto identities.
    priority, resolves the production stack, places forced triggers, and applies
    an explicit paranoid-coalition multiplayer backup. Unopposed combat search
    crosses forced priority and production damage while choice-bearing responses
-   remain fail closed. All three exact policy/action replays pass. The exact
+   remain fail closed. The 265-test local preflight, WASM/Android compiles,
+   clone guard, and all three exact policy/action replays pass. The exact
    state-key audit covers 38,278 decisions with zero failures.
 2. Hierarchical per-attacker/per-blocker contexts and single-construction
    determinization are exact-replay-bound. Combat-damage order and amount now
