@@ -1385,6 +1385,7 @@ struct PendingActivatedResolution {
     controller: PlayerId,
     runtime: ActivatedRuntime,
     targets: Vec<TargetChoice>,
+    target_legalities: Vec<bool>,
     decisions: StackDecisionBindings,
 }
 
@@ -1394,6 +1395,7 @@ struct PendingSpellResolution {
     object: ObjectId,
     program: Arc<CardProgram>,
     targets: Vec<TargetChoice>,
+    target_legalities: Vec<bool>,
     decisions: StackDecisionBindings,
 }
 
@@ -1404,6 +1406,7 @@ struct PendingTriggeredResolution {
     triggering_player: Option<PlayerId>,
     runtime: TriggerRuntime,
     targets: Vec<TargetChoice>,
+    target_legalities: Vec<bool>,
     decisions: StackDecisionBindings,
 }
 
@@ -6120,6 +6123,7 @@ impl GameDriver {
             ExecutionBindings::new(pending.controller, self.live_opponents(pending.controller))
                 .with_source(pending.object)
                 .with_targets(pending.targets.clone())
+                .with_target_legalities(pending.target_legalities.clone())
                 .with_object_choices(object_choices)
                 .with_optional_effect_choices(pending.decisions.optional_choices().collect());
         if let Some(mode) = pending.decisions.mode() {
@@ -6284,6 +6288,7 @@ impl GameDriver {
             ExecutionBindings::new(pending.controller, self.live_opponents(pending.controller))
                 .with_source(pending.runtime.source)
                 .with_targets(pending.targets.clone())
+                .with_target_legalities(pending.target_legalities.clone())
                 .with_object_choices(object_choices)
                 .with_optional_effect_choices(pending.decisions.optional_choices().collect());
         bind_activated_effect_actions(&self.state, effect, &bindings)
@@ -6596,6 +6601,7 @@ impl GameDriver {
             ExecutionBindings::new(pending.controller, self.live_opponents(pending.controller))
                 .with_source(pending.runtime.source)
                 .with_targets(pending.targets.clone())
+                .with_target_legalities(pending.target_legalities.clone())
                 .with_object_choices(object_choices)
                 .with_optional_effect_choices(optional_choices.to_vec());
         if let Some(player) = pending.triggering_player {
@@ -7931,6 +7937,7 @@ impl GameDriver {
             .iter()
             .map(|target| target.choice())
             .collect::<Vec<_>>();
+        let target_legalities = record.legal_targets().to_vec();
         let decisions = record.decisions();
         let triggering_player = self.triggering_players_by_stack_entry.remove(&entry);
         if let Some(object) = object {
@@ -7962,6 +7969,7 @@ impl GameDriver {
                 trigger,
                 triggering_player,
                 targets,
+                target_legalities,
                 decisions,
             );
         }
@@ -7998,6 +8006,7 @@ impl GameDriver {
                 controller,
                 runtime,
                 targets,
+                target_legalities,
                 decisions,
             };
             if requires_object_choices {
@@ -8049,6 +8058,7 @@ impl GameDriver {
                 object,
                 program,
                 targets,
+                target_legalities,
                 decisions,
             };
             if !self.pending_spell_requirements(&pending)?.is_empty() {
@@ -8086,6 +8096,7 @@ impl GameDriver {
         trigger: TriggerId,
         triggering_player: Option<PlayerId>,
         targets: Vec<TargetChoice>,
+        target_legalities: Vec<bool>,
         decisions: StackDecisionBindings,
     ) -> Result<(), String> {
         let runtime = self
@@ -8107,6 +8118,7 @@ impl GameDriver {
             triggering_player,
             runtime,
             targets,
+            target_legalities,
             decisions,
         };
         let requires_deferred_choices =
@@ -13518,6 +13530,98 @@ card "Mulldrifter" {
     }
 
     #[test]
+    fn partially_illegal_targets_skip_only_their_bound_effects() {
+        let source = r#"card "Partial Target Legality" {
+  id: "forge:test:runner-partial-target-legality"
+  layout: normal
+  status: unverified_playable
+  face "Partial Target Legality" {
+    cost: "{R}{W}"
+    types: "Instant"
+    oracle: "Deal 2 damage to target creature. Target opponent loses 1 life."
+    keywords: []
+    ability spell {
+      effect: sequence(deal_damage(target(permanents(type_is("creature"))), 2), lose_life(1, target(opponent())))
+    }
+  }
+}"#;
+        let definition = forge_cardc::parse_card_named("partial_target_legality.frs", source)
+            .unwrap_or_else(|error| panic!("partial-target fixture should parse: {error}"));
+        let program = Arc::new(
+            compile_card_program(&definition)
+                .unwrap_or_else(|error| panic!("partial-target fixture should compile: {error}")),
+        );
+        assert_eq!(program.target_requirements().len(), 2);
+
+        let (mut driver, caster, opponent, spell) = modal_spell_driver();
+        Arc::make_mut(&mut driver.programs).insert(spell, Arc::clone(&program));
+        driver
+            .dispatch(Action::SetBaseObjectCharacteristics {
+                object: spell,
+                base: program.base_object(),
+            })
+            .unwrap_or_else(|error| panic!("partial-target spell base should apply: {error}"));
+        let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+        let creature = driver
+            .state
+            .zone_objects(battlefield)
+            .and_then(|objects| objects.first())
+            .copied()
+            .unwrap_or_else(|| panic!("fixture opponent creature should exist"));
+        let (context, mappings) = driver
+            .main_decision_context(caster)
+            .unwrap_or_else(|error| panic!("partial-target context should exist: {error}"));
+        let selected = context
+            .options()
+            .iter()
+            .find(|option| {
+                matches!(
+                    option.descriptor(),
+                    DecisionDescriptor::CastSpell {
+                        object,
+                        targets,
+                        ..
+                    } if *object == spell
+                        && targets == &vec![
+                            TargetChoice::Object(creature),
+                            TargetChoice::Player(opponent),
+                        ]
+                )
+            })
+            .unwrap_or_else(|| panic!("two-target cast should be canonical"));
+        let choice = mappings
+            .iter()
+            .find_map(|(id, choice)| (*id == selected.id()).then(|| choice.clone()))
+            .unwrap_or_else(|| panic!("two-target cast should have a typed adapter"));
+        assert_eq!(driver.apply_main_choice(caster, choice), Ok(true));
+
+        driver
+            .dispatch(Action::MoveObject {
+                object: creature,
+                to: ZoneId::new(Some(opponent), ZoneKind::Graveyard),
+            })
+            .unwrap_or_else(|error| panic!("target removal should succeed: {error}"));
+        resolve_top_for_two_players(&mut driver);
+
+        let record = driver
+            .state
+            .resolution_log()
+            .last()
+            .unwrap_or_else(|| panic!("spell should have a resolution record"));
+        assert_eq!(record.outcome(), ResolutionOutcome::Resolved);
+        assert_eq!(record.legal_targets(), &[false, true]);
+        assert_eq!(driver.state.players()[opponent.index()].life(), 19);
+        assert!(driver.actions.iter().all(|action| !matches!(
+            action,
+            Action::DealDamage {
+                target: CombatDamageTarget::Object(object),
+                amount: 2,
+                ..
+            } if *object == creature
+        )));
+    }
+
+    #[test]
     fn commander_alternate_cost_uses_the_shared_canonical_cast_hierarchy() {
         let (mut driver, caster, _opponent, spell, _) =
             alternate_spell_driver("flawless_maneuver.frs", FLAWLESS_MANEUVER);
@@ -16117,6 +16221,7 @@ card "Mulldrifter" {
                 source: source_object,
             },
             targets: Vec::new(),
+            target_legalities: Vec::new(),
             decisions: StackDecisionBindings::default(),
         };
         let first = driver
@@ -16252,6 +16357,7 @@ card "Mulldrifter" {
                 controller,
                 trigger,
                 None,
+                Vec::new(),
                 Vec::new(),
                 StackDecisionBindings::default(),
             )

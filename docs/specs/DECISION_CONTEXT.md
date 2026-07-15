@@ -93,6 +93,10 @@ The T4.3-T4.5 diagnostics path currently adapts:
 - an explicit kernel-validated no-stack disposition when a required trigger
   target slot has no legal choice, consuming that pending instance without a
   human or AI prompt while preserving every valid sibling trigger;
+- kernel-recorded per-slot target legality at resolution, carried into spell,
+  activated, and triggered interpreter bindings so effects depending on an
+  illegal target are skipped while legal-target and untargeted instructions
+  continue;
 - kernel-validated combat-damage ordering and sequential amounts for human and
   AI controllers, using bounded next-blocker contexts and binary range
   narrowing above 64 direct amounts rather than complete distributions;
@@ -117,8 +121,8 @@ payments and spell/activated/triggered object searches also share the boundary.
 Same-batch stack-entry targets now use deterministic prospective IDs and atomic
 staged kernel validation, so later triggers can target prior entries without
 opening a priority window or accepting a forward reference. The remaining
-prompt families stay partial until their multi-zone, distribution, modal, and
-partial-illegality forms use the same rules path.
+prompt families stay partial until their multi-zone, distribution, and modal
+forms use the same rules path.
 The live concession adapter is complete, but its sealed benchmark fixture is
 still pending with the other Track B evidence. Remaining gaps cannot be
 silently skipped for CP-AI-BENCH,

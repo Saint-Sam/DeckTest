@@ -63,8 +63,10 @@ validated atomically by the kernel, snapshots targets for the priority window,
 and is recovered from the resolution record by the interpreter. A required
 trigger with an empty current target domain uses an explicit kernel-validated
 no-stack disposition, produces no prompt, and does not block valid sibling
-triggers. Same-batch inter-trigger stack targeting, target distribution, and
-partial-illegality filtering remain fail closed.
+triggers. Same-batch inter-trigger stack targeting is canonical. At resolution,
+the interpreter consumes the kernel's per-slot legality mask, skips only effects
+that depend on illegal targets, and continues independent legal-target and
+untargeted instructions. Target distribution remains fail closed.
 
 Triggered optional effects are deferred until resolution and use one scoped
 `Optional` context per compiled group. Compiled opponent-draw unless branches

@@ -6758,6 +6758,7 @@ pub struct ExecutionBindings {
     unless_payment: Option<bool>,
     opponents: Vec<PlayerId>,
     targets: Vec<TargetChoice>,
+    target_legalities: Option<Vec<bool>>,
     object_choices: Vec<Vec<ObjectId>>,
     optional_effect_choices: Vec<bool>,
     scry_bottoms: BTreeMap<(usize, PlayerId), Vec<ObjectId>>,
@@ -6776,6 +6777,7 @@ impl ExecutionBindings {
             unless_payment: None,
             opponents,
             targets: Vec::new(),
+            target_legalities: None,
             object_choices: Vec::new(),
             optional_effect_choices: Vec::new(),
             scry_bottoms: BTreeMap::new(),
@@ -6821,6 +6823,17 @@ impl ExecutionBindings {
     #[must_use]
     pub fn with_targets(mut self, targets: Vec<TargetChoice>) -> Self {
         self.targets = targets;
+        self
+    }
+
+    /// Supplies the kernel-recorded legality of each target at resolution.
+    ///
+    /// This must be copied from the matching [`forge_core::ResolutionRecord`].
+    /// Announcement-time binding leaves the mask absent and validates every
+    /// target normally.
+    #[must_use]
+    pub fn with_target_legalities(mut self, legalities: Vec<bool>) -> Self {
+        self.target_legalities = Some(legalities);
         self
     }
 
@@ -7211,20 +7224,7 @@ fn bind_effect_actions(
     bindings: &ExecutionBindings,
 ) -> Result<Vec<BoundAction>, ExecutionDiagnostic> {
     validate_player_bindings(bindings)?;
-    state
-        .validate_target_choices(
-            bindings.controller,
-            bindings.source,
-            target_requirements,
-            &bindings.targets,
-        )
-        .map_err(|error| {
-            ExecutionDiagnostic::new(
-                ExecutionDiagnosticCode::InvalidChoice,
-                None,
-                format!("kernel rejected target binding: {error:?}"),
-            )
-        })?;
+    validate_effect_target_bindings(state, target_requirements, bindings)?;
     validate_object_choices(state, object_choice_requirements, bindings)?;
     if optional_effect_groups.len() != bindings.optional_effect_choices.len() {
         return Err(ExecutionDiagnostic::new(
@@ -7244,6 +7244,9 @@ fn bind_effect_actions(
             .zip(&bindings.optional_effect_choices)
             .any(|(group, execute)| !*execute && (group.start..group.end).contains(&effect_index))
         {
+            continue;
+        }
+        if effect_references_illegal_target(effect, bindings, effect_index)? {
             continue;
         }
         match effect {
@@ -7802,6 +7805,201 @@ fn bind_effect_actions(
     Ok(actions)
 }
 
+fn validate_effect_target_bindings(
+    state: &GameState,
+    target_requirements: &[TargetRequirement],
+    bindings: &ExecutionBindings,
+) -> Result<(), ExecutionDiagnostic> {
+    if target_requirements.len() != bindings.targets.len() {
+        return Err(ExecutionDiagnostic::new(
+            ExecutionDiagnosticCode::InvalidChoice,
+            None,
+            format!(
+                "program requires {} target binding(s), found {}",
+                target_requirements.len(),
+                bindings.targets.len()
+            ),
+        ));
+    }
+    let Some(legalities) = bindings.target_legalities.as_deref() else {
+        return state
+            .validate_target_choices(
+                bindings.controller,
+                bindings.source,
+                target_requirements,
+                &bindings.targets,
+            )
+            .map_err(|error| {
+                ExecutionDiagnostic::new(
+                    ExecutionDiagnosticCode::InvalidChoice,
+                    None,
+                    format!("kernel rejected target binding: {error:?}"),
+                )
+            });
+    };
+    if legalities.len() != bindings.targets.len() {
+        return Err(ExecutionDiagnostic::new(
+            ExecutionDiagnosticCode::InvalidChoice,
+            None,
+            format!(
+                "resolution target mask has {} entries for {} target binding(s)",
+                legalities.len(),
+                bindings.targets.len()
+            ),
+        ));
+    }
+    if !legalities.is_empty() && legalities.iter().all(|legal| !*legal) {
+        return Err(ExecutionDiagnostic::new(
+            ExecutionDiagnosticCode::InvalidChoice,
+            None,
+            "an all-illegal targeted stack object must be countered before effect binding",
+        ));
+    }
+    for (index, ((requirement, choice), legal)) in target_requirements
+        .iter()
+        .zip(&bindings.targets)
+        .zip(legalities)
+        .enumerate()
+    {
+        if *legal && !state.can_target(bindings.controller, bindings.source, *requirement, *choice)
+        {
+            return Err(ExecutionDiagnostic::new(
+                ExecutionDiagnosticCode::InvalidChoice,
+                None,
+                format!("kernel-recorded legal target slot {index} is no longer legal"),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn effect_references_illegal_target(
+    effect: &EffectProgram,
+    bindings: &ExecutionBindings,
+    effect_index: usize,
+) -> Result<bool, ExecutionDiagnostic> {
+    let target = |slot| target_slot_is_illegal(bindings, slot, effect_index);
+    let player =
+        |binding| player_binding_references_illegal_target(binding, bindings, effect_index);
+    let amount = |program| amount_references_illegal_target(program, bindings, effect_index);
+    let objects = |program| object_set_references_illegal_target(program, bindings, effect_index);
+
+    match effect {
+        EffectProgram::GainLife {
+            players,
+            amount: value,
+        }
+        | EffectProgram::LoseLife {
+            players,
+            amount: value,
+        }
+        | EffectProgram::DealDamageToPlayers {
+            players,
+            amount: value,
+        } => Ok(player(*players)? || amount(*value)?),
+        EffectProgram::DealDamageToTarget {
+            target: slot,
+            amount: value,
+        } => Ok(target(*slot)? || amount(*value)?),
+        EffectProgram::DrawCards { players, count } | EffectProgram::Scry { players, count } => {
+            Ok(player(*players)? || amount(*count)?)
+        }
+        EffectProgram::DiscardHands { players } | EffectProgram::ShuffleLibrary { players } => {
+            player(*players)
+        }
+        EffectProgram::DestroyPermanent { target: slot }
+        | EffectProgram::DestroyPermanentWithoutRegeneration { target: slot }
+        | EffectProgram::ExileObject { target: slot }
+        | EffectProgram::CounterStackEntry { target: slot }
+        | EffectProgram::AttachSourceToTarget { target: slot } => target(*slot),
+        EffectProgram::MoveTargetObject { target: slot, .. } => {
+            if bindings.alternate_cost == Some(AlternateCostKind::Overload) {
+                Ok(false)
+            } else {
+                target(*slot)
+            }
+        }
+        EffectProgram::CreateTokens { count, players, .. } => {
+            Ok(amount(*count)? || player(*players)?)
+        }
+        EffectProgram::ModifyPowerToughness {
+            objects: set,
+            power,
+            toughness,
+            ..
+        } => Ok(objects(*set)? || amount(*power)? || amount(*toughness)?),
+        EffectProgram::GrantKeywords { objects: set, .. }
+        | EffectProgram::GrantTargetingRestriction { objects: set, .. }
+        | EffectProgram::GrantIndestructible { objects: set, .. } => objects(*set),
+        EffectProgram::SacrificeSource
+        | EffectProgram::SearchLibrary { .. }
+        | EffectProgram::MoveChosenObjects { .. }
+        | EffectProgram::TapChosenObjects { .. }
+        | EffectProgram::DiscardChosenObjects { .. }
+        | EffectProgram::AddCountersToSource { .. }
+        | EffectProgram::RevealChosenObjects { .. } => Ok(false),
+    }
+}
+
+fn target_slot_is_illegal(
+    bindings: &ExecutionBindings,
+    target: usize,
+    effect_index: usize,
+) -> Result<bool, ExecutionDiagnostic> {
+    let Some(legalities) = bindings.target_legalities.as_deref() else {
+        return Ok(false);
+    };
+    legalities.get(target).map(|legal| !*legal).ok_or_else(|| {
+        ExecutionDiagnostic::new(
+            ExecutionDiagnosticCode::MissingBinding,
+            Some(effect_index),
+            format!("target slot {target} has no resolution-legality entry"),
+        )
+    })
+}
+
+fn player_binding_references_illegal_target(
+    binding: PlayerBinding,
+    bindings: &ExecutionBindings,
+    effect_index: usize,
+) -> Result<bool, ExecutionDiagnostic> {
+    match binding {
+        PlayerBinding::Target(target)
+        | PlayerBinding::ControllerOfTargetObject(target)
+        | PlayerBinding::ControllerOfTargetStack(target) => {
+            target_slot_is_illegal(bindings, target, effect_index)
+        }
+        PlayerBinding::Controller
+        | PlayerBinding::Opponents
+        | PlayerBinding::AllPlayers
+        | PlayerBinding::TriggeringPlayer => Ok(false),
+    }
+}
+
+fn amount_references_illegal_target(
+    amount: AmountProgram,
+    bindings: &ExecutionBindings,
+    effect_index: usize,
+) -> Result<bool, ExecutionDiagnostic> {
+    match amount {
+        AmountProgram::PowerOfTargetObject(target) => {
+            target_slot_is_illegal(bindings, target, effect_index)
+        }
+        AmountProgram::Literal(_) | AmountProgram::CountPermanents(_) => Ok(false),
+    }
+}
+
+fn object_set_references_illegal_target(
+    objects: ObjectSetProgram,
+    bindings: &ExecutionBindings,
+    effect_index: usize,
+) -> Result<bool, ExecutionDiagnostic> {
+    match objects {
+        ObjectSetProgram::Target(target) => target_slot_is_illegal(bindings, target, effect_index),
+        ObjectSetProgram::Battlefield(_) => Ok(false),
+    }
+}
+
 fn validate_object_choices(
     state: &GameState,
     requirements: &[ObjectChoiceRequirement],
@@ -8194,10 +8392,10 @@ pub fn execute_program(
 #[cfg(test)]
 mod tests {
     use super::{
-        bind_triggered_ability_actions, compile_card_program, execute_program,
-        AlternateCostCondition, AlternateCostKind, Capability, CompileDiagnosticCode,
-        EffectProgram, ExecutionBindings, ExecutionDiagnosticCode, PlayerBinding, ProgramKind,
-        StaticAbilityProgram, TriggeredEventProgram,
+        bind_program_actions, bind_triggered_ability_actions, compile_card_program,
+        execute_program, AlternateCostCondition, AlternateCostKind, Capability,
+        CompileDiagnosticCode, EffectProgram, ExecutionBindings, ExecutionDiagnosticCode,
+        PlayerBinding, ProgramKind, StaticAbilityProgram, TriggeredEventProgram,
     };
     use forge_core::{
         apply, Action, ActivationCondition, BaseCreatureCharacteristics, BaseObjectCharacteristics,
@@ -8236,6 +8434,22 @@ card "Terminate" {
     keywords: []
     ability spell {
       effect: destroy(target(permanents(type_is("creature"))), "cannot_regenerate")
+    }
+  }
+}
+"#;
+    const PARTIAL_TARGET_LEGALITY: &str = r#"
+card "Partial Target Legality" {
+  id: "forge:test:partial-target-legality"
+  layout: normal
+  status: unverified_playable
+  face "Partial Target Legality" {
+    cost: "{R}{W}"
+    types: "Instant"
+    oracle: "Deal 2 damage to target creature. Target opponent loses 1 life."
+    keywords: []
+    ability spell {
+      effect: sequence(deal_damage(target(permanents(type_is("creature"))), 2), lose_life(1, target(opponent())))
     }
   }
 }
@@ -8706,6 +8920,82 @@ card "Purphoros, God of the Forge" {
             state.deterministic_hash(),
             state.deterministic_hash_streaming()
         );
+    }
+
+    #[test]
+    fn resolution_legality_mask_skips_only_effects_bound_to_illegal_targets() {
+        let program = compile_card_program(&parse(
+            "partial_target_legality.frs",
+            PARTIAL_TARGET_LEGALITY,
+        ))
+        .unwrap_or_else(|error| panic!("unexpected compile error: {error}"));
+        assert_eq!(program.target_requirements().len(), 2);
+        let mut state = GameState::new();
+        let controller = add_player(&mut state);
+        let opponent = add_player(&mut state);
+        let target = create_object(
+            &mut state,
+            CardId::new(3_100),
+            opponent,
+            ZoneId::new(None, ZoneKind::Battlefield),
+        );
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::SetBaseObjectCharacteristics {
+                    object: target,
+                    base: BaseObjectCharacteristics::new(
+                        ObjectTypes::none().with_creature(),
+                        ObjectColors::none(),
+                    ),
+                },
+            ),
+            Outcome::Applied
+        );
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::MoveObject {
+                    object: target,
+                    to: ZoneId::new(Some(opponent), ZoneKind::Graveyard),
+                },
+            ),
+            Outcome::Applied
+        );
+
+        let base = ExecutionBindings::new(controller, vec![opponent]).with_targets(vec![
+            TargetChoice::Object(target),
+            TargetChoice::Player(opponent),
+        ]);
+        let actions = bind_program_actions(
+            &state,
+            &program,
+            &base.clone().with_target_legalities(vec![false, true]),
+        )
+        .unwrap_or_else(|error| panic!("partial target binding should succeed: {error}"));
+        assert_eq!(actions.len(), 1);
+        assert!(matches!(
+            actions[0].action(),
+            Action::LoseLife { player, amount: 1 } if *player == opponent
+        ));
+
+        let Err(missing_mask) = bind_program_actions(
+            &state,
+            &program,
+            &base.clone().with_target_legalities(vec![false]),
+        ) else {
+            panic!("a truncated resolution mask must fail closed");
+        };
+        assert_eq!(missing_mask.code(), ExecutionDiagnosticCode::InvalidChoice);
+
+        let Err(all_illegal) = bind_program_actions(
+            &state,
+            &program,
+            &base.with_target_legalities(vec![false, false]),
+        ) else {
+            panic!("an all-illegal stack object must not execute effects");
+        };
+        assert_eq!(all_illegal.code(), ExecutionDiagnosticCode::InvalidChoice);
     }
 
     #[test]
