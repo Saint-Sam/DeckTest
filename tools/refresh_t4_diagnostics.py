@@ -190,6 +190,15 @@ def refresh_benchmark(
         "path_bound_decisions": totals["path_bound_decisions"],
         "failures": totals["failures"],
     }
+    benchmark["reasons"][2] = (
+        "ordinary and same-batch inter-trigger targets, kernel-recorded partial-target "
+        "legality at resolution, resolution-time trigger optionals, event-player unless "
+        "payments, compiled discard/sacrifice additional spell costs, compiler-declared "
+        "Commander, flashback, evoke, and overload costs, and explicit no-legal-target "
+        "dispositions use canonical contexts, but target distribution, arbitrary and "
+        "unsupported costs, non-player combat defenders, and remaining prompt families "
+        "are incomplete"
+    )
     write(BENCHMARK, benchmark)
 
 
@@ -325,11 +334,12 @@ def refresh_latency(
     latency["note"] = (
         "Exact product-bound heuristic, random, and search replays pass with canonical "
         "spell costs, compiler-declared alternate costs, literal-life and matching-permanent "
-        "activation costs, ordinary trigger targets, resolution choices, and explicit "
-        f"no-legal-target dispositions, plus a zero-failure {total:,}-decision state-key "
+        "activation costs, ordinary and same-batch inter-trigger targets, kernel-recorded "
+        "partial-target legality, resolution choices, and explicit no-legal-target "
+        f"dispositions, plus a zero-failure {total:,}-decision state-key "
         f"isomorphism audit. The refreshed 1-4 ms ladder measures approximately "
-        f"{observed[0] / 1000:.1f}-{observed[1] / 1000:.1f} ms p95. Same-batch "
-        "inter-trigger targeting and other prompt families remain incomplete. Safe "
+        f"{observed[0] / 1000:.1f}-{observed[1] / 1000:.1f} ms p95. Target "
+        "distribution and other prompt families remain incomplete. Safe "
         "Linux/Android CPU and memory adapters are implemented, but this Darwin replay "
         "correctly retains null resource fields; supported-platform, competence-label, "
         "archetype, and reference-device evidence remain mandatory."
