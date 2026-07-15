@@ -280,8 +280,21 @@ def materialize_product(commit: str) -> None:
     if SOURCE_ROOT.exists():
         shutil.rmtree(SOURCE_ROOT)
     SOURCE_ROOT.mkdir(parents=True)
+    # Archive committed blobs exactly; mutation tests do not need LFS payloads.
     archive = subprocess.check_output(
-        ["git", "archive", "--format=tar", commit], cwd=ROOT
+        [
+            "git",
+            "-c",
+            "filter.lfs.process=",
+            "-c",
+            "filter.lfs.smudge=cat",
+            "-c",
+            "filter.lfs.required=false",
+            "archive",
+            "--format=tar",
+            commit,
+        ],
+        cwd=ROOT,
     )
     with tarfile.open(fileobj=io.BytesIO(archive), mode="r:") as bundle:
         destination = SOURCE_ROOT.resolve()
