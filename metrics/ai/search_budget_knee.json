@@ -94,8 +94,8 @@
   "promotion_authority": "DeckTest paired arena, decision benchmark, human trace review, latency, and measured cost evidence",
   "implementation_evidence": {
     "date": "2026-07-15",
-    "product_commit": "fae0c77baa24176bec9e9585a2a66c1d775316d1",
-    "product_tree": "85e27929dcd3956d6a804261a184a8d1b41b9534",
+    "product_commit": "aa4389800db327f7878e1bfe78db18d3d2bce011",
+    "product_tree": "5d0baa8b2022ea2045a20b08076b71c85971996f",
     "policy": "determinized-uct-v1",
     "decision_families": [
       "main_phase",
@@ -105,22 +105,22 @@
     ],
     "full_game_smoke": {
       "budget_kind": "fixed_iterations_per_determinization",
-      "iterations": 2,
+      "iterations": 16,
       "determinizations": 1,
       "workers": 1,
       "turns": 243,
       "max_turns": 500,
-      "canonical_decisions": 16031,
-      "typed_actions": 18321,
-      "searched_decisions": 789,
-      "singleton_bypasses": 246,
-      "simulations": 1086,
-      "nodes": 1629,
-      "maximum_depth": 1,
+      "canonical_decisions": 16010,
+      "typed_actions": 18282,
+      "searched_decisions": 563,
+      "singleton_bypasses": 21,
+      "simulations": 8672,
+      "nodes": 2683,
+      "maximum_depth": 7,
       "winner_seat_zero_based": 0,
-      "final_hash": "16375386236967138290",
+      "final_hash": "8631010851649779696",
       "replay": "reports/gates/T4.3/search-baseline.frsreplay",
-      "replay_sha256": "1e0ac3706852c8e4f8828eac9d631a3e2155a3266582aa274eee7a30e141d861",
+      "replay_sha256": "2c8bf72a44efefe14e91fd714bf333af0e127f52473b24351a03c2e5dbcebfc6",
       "exact_policy_replay_passed": true,
       "exact_typed_action_replay_passed": true,
       "canonical_legal_action_records_complete": true,
@@ -131,7 +131,7 @@
     "release_search_knee_smoke": {
       "command": "target/release/forge-arena --search-knee --tier standard --budgets 1,2,4 --games 2 --jobs 2 --max-turns 500 --output metrics/ai/search_budget_knee_results.json",
       "result": "metrics/ai/search_budget_knee_results.json",
-      "result_sha256": "b062ad60a567de9ddac09c30dc9dd162082c10f0c98305c2eb955baed462d33a",
+      "result_sha256": "2b08ce04b6765da7f3dc2ccdbf74ccc2eba1d28196f48bfd7a270e7b31e4a918",
       "profile": "release",
       "games_per_comparison": 2,
       "max_turns": 500,
@@ -145,8 +145,8 @@
             -40.54687942657693,
             40.54687942657693
           ],
-          "lower_p95_wall_us": 1543,
-          "upper_p95_wall_us": 2643,
+          "lower_p95_wall_us": 2276,
+          "upper_p95_wall_us": 3288,
           "acceptance_fields_complete": false,
           "plateau_accepted": false
         },
@@ -159,16 +159,16 @@
             -40.54687942657693,
             40.54687942657693
           ],
-          "lower_p95_wall_us": 2702,
-          "upper_p95_wall_us": 4841,
+          "lower_p95_wall_us": 3379,
+          "upper_p95_wall_us": 5600,
           "acceptance_fields_complete": false,
           "plateau_accepted": false
         }
       ],
       "adaptive_p95_wall_us": {
-        "1": 1592,
-        "2": 2720,
-        "4": 4799
+        "1": 2277,
+        "2": 3526,
+        "4": 5767
       },
       "fixed_adaptive_ablations_completed": 3,
       "fixed_checkpoint_history_unit_test": "passed",
@@ -178,7 +178,7 @@
     "total_decision_budget_semantics": {
       "status": "shared_deadline_and_current_surface_budget_response_satisfied",
       "required": "one shared wall-clock deadline across all determinizations and workers for one decision",
-      "observed": "hierarchical combat contexts, inline single-worker search, and single-construction determinization keep the refreshed nominal 1-4 ms ladder at approximately 1.5-4.8 ms p95",
+      "observed": "hierarchical combat contexts, inline single-worker search, and single-construction determinization keep the refreshed nominal 1-4 ms ladder at approximately 2.3-5.6 ms p95",
       "next_action": "add process CPU and memory telemetry, complete Track B and acceptable-action labels, then run the full paired calibration ladder before selecting a Standard budget"
     },
     "resource_telemetry": {

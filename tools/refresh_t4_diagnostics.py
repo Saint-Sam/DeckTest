@@ -95,6 +95,21 @@ def replay_run(
         searched = policy_decisions(replay, "determinized-uct-v1")
         run.update(
             {
+                "budget": {
+                    "iterations_per_determinization": replay["search_iterations"],
+                    "determinizations": replay["search_determinizations"],
+                    "workers": replay["search_workers"],
+                },
+                "command": (
+                    "target/release/forge-cli play --ai --search "
+                    f"--search-iterations {replay['search_iterations']} "
+                    f"--determinizations {replay['search_determinizations']} "
+                    f"--search-workers {replay['search_workers']} "
+                    f"--seed {replay['seed']} "
+                    f"--policy-seed {replay['policy_seed']} "
+                    f"--max-turns {replay['max_turns']} "
+                    f"--replay-out {path.relative_to(ROOT)}"
+                ),
                 "searched_decisions": len(searched),
                 "simulations": sum(item["simulations"] for item in searched),
                 "nodes": sum(item["nodes"] for item in searched),

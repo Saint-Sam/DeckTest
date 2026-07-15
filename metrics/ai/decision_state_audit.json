@@ -2,8 +2,8 @@
   "artifact_classification": "diagnostic_not_promotion_eligible",
   "failures": [],
   "near_state_dedup_audit": "passed_exact_baseline_isomorphism",
-  "product_commit": "fae0c77baa24176bec9e9585a2a66c1d775316d1",
-  "product_tree": "85e27929dcd3956d6a804261a184a8d1b41b9534",
+  "product_commit": "aa4389800db327f7878e1bfe78db18d3d2bce011",
+  "product_tree": "5d0baa8b2022ea2045a20b08076b71c85971996f",
   "promotion_limits": [
     "paired baseline overlap is expected and is not a development/validation/sealed leakage audit",
     "campaign split manifests and sealed labels remain required before promotion"
@@ -20,30 +20,30 @@
       "path": "reports/gates/T4.3/ai-baseline.frsreplay",
       "policy": "heuristic-v1",
       "seed": "17306488943054686737",
-      "sha256": "317f09370823de9347e9cfff56b6f804bec17c068234b3ebd9fbdbb6d338636d"
+      "sha256": "51320e97574978f0354e1cb43538d965de39e75e774960a518b4cd6309eb1f36"
     },
     {
       "decisions": 6505,
       "path": "reports/gates/T4.3/random-legal-baseline.frsreplay",
       "policy": "random-legal-v1",
       "seed": "17306488943054686737",
-      "sha256": "14199ab0e43488669f418881b0999ffc68681bbda99dd7d2826bf0abdc01106c"
+      "sha256": "6c74096e8ddc2dc1bee3d38045920776a5019e57f48734ad5346a7808e3eaee8"
     },
     {
-      "decisions": 16031,
+      "decisions": 16010,
       "path": "reports/gates/T4.3/search-baseline.frsreplay",
       "policy": "determinized-uct-v1",
       "seed": "17306488943054686737",
-      "sha256": "1e0ac3706852c8e4f8828eac9d631a3e2155a3266582aa274eee7a30e141d861"
+      "sha256": "2c8bf72a44efefe14e91fd714bf333af0e127f52473b24351a03c2e5dbcebfc6"
     }
   ],
   "status": "passed",
   "totals": {
-    "decisions": 38299,
+    "decisions": 38278,
     "failures": 0,
-    "keys_shared_across_paired_policy_replays": 56,
-    "path_bound_decisions": 190,
-    "unique_semantic_signatures": 38242,
-    "unique_state_keys": 38242
+    "keys_shared_across_paired_policy_replays": 48,
+    "path_bound_decisions": 183,
+    "unique_semantic_signatures": 38229,
+    "unique_state_keys": 38229
   }
 }
