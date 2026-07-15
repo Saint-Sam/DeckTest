@@ -18,6 +18,9 @@ Use a recursive clone so the pinned legacy Forge reference is available:
 ```bash
 git clone --recurse-submodules https://github.com/Saint-Sam/DeckTest.git DeckTest
 cd DeckTest
+git lfs install
+git lfs pull
+git lfs fsck
 bash scripts/bootstrap_toolchain.sh --check
 bash scripts/local_verify.sh task
 ```
@@ -26,8 +29,14 @@ If you downloaded the repository before initializing submodules, run:
 
 ```bash
 git submodule update --init --recursive
+git lfs pull
+git lfs fsck
 bash scripts/bootstrap_toolchain.sh --check
 ```
+
+Git LFS is required for exact `.frsreplay` gate evidence. An unhydrated clone
+fails replay gates with the remediation command instead of treating a small
+pointer file as a replay.
 
 The repository includes the project Rust pin in `rust-toolchain.toml`, the
 explicit check/install helper in `scripts/bootstrap_toolchain.sh`, the official rules text

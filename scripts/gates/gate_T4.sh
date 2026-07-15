@@ -14,6 +14,10 @@ require_json() {
 }
 
 check_contracts() {
+  scripts/verify_lfs_hydration.sh \
+    reports/gates/T4.3/ai-baseline.frsreplay \
+    reports/gates/T4.3/random-legal-baseline.frsreplay \
+    reports/gates/T4.3/search-baseline.frsreplay
   require_json assets/ai/decision_surface.json
   require_json assets/ai/benchmark_splits.json
   require_json metrics/ai/decision_benchmark.json
@@ -34,12 +38,16 @@ check_contracts() {
   ' assets/ai/decision_surface.json >/dev/null
   jq -e '
     (.promotion_eligible | type == "boolean") and
+    (.recorded_key_signature_consistency | type == "string") and
     (.near_state_dedup_audit | type == "string") and
     (.replay_family_leakage_audit | type == "string")
   ' metrics/ai/decision_benchmark.json >/dev/null
   jq -s -e '
     .[0].status == "passed" and
-    .[0].near_state_dedup_audit == "passed_exact_baseline_isomorphism" and
+    .[0].recorded_key_signature_consistency == "passed" and
+    .[0].near_state_dedup_audit == "not_run_runtime_isomorphism" and
+    .[1].recorded_key_signature_consistency == "passed" and
+    .[1].near_state_dedup_audit == "not_run_runtime_isomorphism" and
     .[0].product_commit == .[1].product_commit and
     .[0].product_tree == .[1].product_tree
   ' metrics/ai/decision_state_audit.json metrics/ai/decision_benchmark.json >/dev/null

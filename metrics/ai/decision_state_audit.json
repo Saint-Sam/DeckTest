@@ -1,13 +1,15 @@
 {
   "artifact_classification": "diagnostic_not_promotion_eligible",
   "failures": [],
-  "near_state_dedup_audit": "passed_exact_baseline_isomorphism",
+  "near_state_dedup_audit": "not_run_runtime_isomorphism",
   "product_commit": "72ea3eeef2d2c6dd8c92fb8289a0fb65ee613439",
   "product_tree": "379793e9bd2e55b29448fd46396371402ed3fdbd",
   "promotion_limits": [
+    "this artifact checks recorded key/signature consistency; it does not construct independently allocated equivalent runtime states",
     "paired baseline overlap is expected and is not a development/validation/sealed leakage audit",
     "campaign split manifests and sealed labels remain required before promotion"
   ],
+  "recorded_key_signature_consistency": "passed",
   "replay_family_leakage_audit": "not_applicable_paired_diagnostic_baselines",
   "schema_version": 1,
   "signature_contract": {

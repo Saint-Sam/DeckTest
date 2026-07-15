@@ -169,11 +169,16 @@ def build_report(
             "keys_shared_across_paired_policy_replays": shared_keys,
             "failures": len(failures),
         },
-        "near_state_dedup_audit": (
-            "passed_exact_baseline_isomorphism" if not failures else "failed"
+        "recorded_key_signature_consistency": (
+            "passed" if not failures else "failed"
         ),
+        "near_state_dedup_audit": "not_run_runtime_isomorphism",
         "replay_family_leakage_audit": "not_applicable_paired_diagnostic_baselines",
         "promotion_limits": [
+            (
+                "this artifact checks recorded key/signature consistency; it does not "
+                "construct independently allocated equivalent runtime states"
+            ),
             (
                 "paired baseline overlap is expected and is not a "
                 "development/validation/sealed leakage audit"

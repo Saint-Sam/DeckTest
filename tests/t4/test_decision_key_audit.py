@@ -48,7 +48,7 @@ class DecisionKeyAuditTests(unittest.TestCase):
         )
         return path
 
-    def test_accepts_repeated_isomorphic_states_and_distinct_paths(self) -> None:
+    def test_accepts_repeated_recorded_signatures_and_distinct_paths(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             path = self.write_replay(
@@ -62,6 +62,10 @@ class DecisionKeyAuditTests(unittest.TestCase):
             )
             report = MODULE.build_report([path], "commit", "tree")
             self.assertEqual(report["status"], "passed")
+            self.assertEqual(report["recorded_key_signature_consistency"], "passed")
+            self.assertEqual(
+                report["near_state_dedup_audit"], "not_run_runtime_isomorphism"
+            )
             self.assertEqual(report["totals"]["path_bound_decisions"], 2)
             self.assertEqual(report["totals"]["unique_state_keys"], 3)
 

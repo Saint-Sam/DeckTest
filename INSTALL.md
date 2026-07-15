@@ -8,6 +8,9 @@ toolchain used by this repository.
 ```bash
 git clone --recurse-submodules https://github.com/Saint-Sam/DeckTest.git DeckTest
 cd DeckTest
+git lfs install
+git lfs pull
+git lfs fsck
 bash scripts/bootstrap_toolchain.sh --check
 bash scripts/local_verify.sh task
 ```
@@ -16,7 +19,9 @@ bash scripts/local_verify.sh task
 
 GitHub source ZIP files do not include git submodule contents. The ZIP includes
 the pinned legacy-reference manifest, and the baseline build and local task
-verification do not require the legacy source tree.
+verification do not require the legacy source tree. GitHub ZIP files also do
+not provide a Git LFS checkout, so exact replay gates are unavailable from a
+ZIP. Use the recommended clone path for T4 replay or promotion verification.
 
 ```bash
 cd DeckTest-main

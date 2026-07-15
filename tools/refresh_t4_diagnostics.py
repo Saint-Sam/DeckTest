@@ -181,6 +181,10 @@ def refresh_benchmark(
         replay_run(replay, path, existing[replay["policy_kind"]])
         for replay, path in zip(replays, REPLAYS)
     ]
+    benchmark["recorded_key_signature_consistency"] = audit[
+        "recorded_key_signature_consistency"
+    ]
+    benchmark["near_state_dedup_audit"] = audit["near_state_dedup_audit"]
     totals = audit["totals"]
     benchmark["decision_state_audit"] = {
         "path": str(AUDIT.relative_to(ROOT)),
@@ -195,9 +199,9 @@ def refresh_benchmark(
         "legality at resolution, resolution-time trigger optionals, event-player unless "
         "payments, compiled discard/sacrifice additional spell costs, compiler-declared "
         "Commander, flashback, evoke, and overload costs, and explicit no-legal-target "
-        "dispositions use canonical contexts, but target distribution, arbitrary and "
-        "unsupported costs, non-player combat defenders, and remaining prompt families "
-        "are incomplete"
+        "dispositions and statically bounded target ranges/divisions use canonical "
+        "contexts, but dynamic target relationships, arbitrary and unsupported costs, "
+        "non-player combat defenders, and remaining prompt families are incomplete"
     )
     write(BENCHMARK, benchmark)
 
@@ -336,10 +340,12 @@ def refresh_latency(
         "spell costs, compiler-declared alternate costs, literal-life and matching-permanent "
         "activation costs, ordinary and same-batch inter-trigger targets, kernel-recorded "
         "partial-target legality, resolution choices, and explicit no-legal-target "
-        f"dispositions, plus a zero-failure {total:,}-decision state-key "
-        f"isomorphism audit. The refreshed 1-4 ms ladder measures approximately "
-        f"{observed[0] / 1000:.1f}-{observed[1] / 1000:.1f} ms p95. Target "
-        "distribution and other prompt families remain incomplete. Safe "
+        "dispositions and statically bounded target ranges/divisions, plus a "
+        f"zero-failure {total:,}-decision recorded key/signature consistency audit. "
+        "Independent runtime-isomorphism fixtures remain pending. The refreshed 1-4 ms "
+        f"ladder measures approximately {observed[0] / 1000:.1f}-{observed[1] / 1000:.1f} "
+        "ms p95. Dynamic target relationships and other prompt families remain "
+        "incomplete. Safe "
         "Linux/Android CPU and memory adapters are implemented, but this Darwin replay "
         "correctly retains null resource fields; supported-platform, competence-label, "
         "archetype, and reference-device evidence remain mandatory."
