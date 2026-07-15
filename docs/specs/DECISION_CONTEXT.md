@@ -64,11 +64,12 @@ The T4.3-T4.5 diagnostics path currently adapts:
 - typed program-bound non-mana activations with exact payments, targets, and
   optional answers announced through the kernel stack, followed by interpreter
   effect binding only after successful resolution;
-- bounded resolution-time object products for program-bound activated and
-  triggered abilities,
+- scoped slot-by-slot resolution-time object choices for program-bound
+  activated and triggered abilities,
   including legal fail-to-find branches, authoritative characteristic
   filtering, human search labels, AI successor evaluation, canonical telemetry,
-  and exact decision/action replay;
+  typed visible-path identity, and exact decision/action replay; multiple
+  requirements no longer form an eager Cartesian product;
 - every live human and AI priority window, with legal normal-cost instants and
   a forced-pass fast path that does not invoke search or one-ply evaluation;
 - complete player-defender attack assignments, including split attacks, built

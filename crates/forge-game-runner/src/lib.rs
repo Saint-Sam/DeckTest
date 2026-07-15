@@ -4236,71 +4236,46 @@ impl GameDriver {
         Ok(())
     }
 
-    fn object_choice_bindings(
+    fn object_choice_selections(
         &self,
         controller: PlayerId,
-        requirements: &[ObjectChoiceRequirement],
-    ) -> Result<Vec<Vec<Vec<ObjectId>>>, String> {
-        let mut complete = vec![Vec::new()];
-        for (choice_index, requirement) in requirements.iter().copied().enumerate() {
-            if requirement.player() != PlayerBinding::Controller {
-                return Err(format!(
-                    "seed {} object choice {choice_index} has an unsupported player binding",
-                    self.seed
-                ));
-            }
-            let zone = ZoneId::new(Some(controller), requirement.zone());
-            let mut candidates = Vec::new();
-            for object in self.state.zone_objects(zone).unwrap_or_default() {
-                if object_satisfies_choice_requirement(
-                    &self.state,
-                    requirement,
-                    controller,
-                    *object,
-                )
+        choice_index: usize,
+        requirement: ObjectChoiceRequirement,
+    ) -> Result<Vec<Vec<ObjectId>>, String> {
+        if requirement.player() != PlayerBinding::Controller {
+            return Err(format!(
+                "seed {} object choice {choice_index} has an unsupported player binding",
+                self.seed
+            ));
+        }
+        let zone = ZoneId::new(Some(controller), requirement.zone());
+        let mut candidates = Vec::new();
+        for object in self.state.zone_objects(zone).unwrap_or_default() {
+            if object_satisfies_choice_requirement(&self.state, requirement, controller, *object)
                 .map_err(|error| {
                     format!(
                         "seed {} object choice {choice_index} predicate failed: {error}",
                         self.seed
                     )
-                })? {
-                    candidates.push(*object);
-                }
+                })?
+            {
+                candidates.push(*object);
             }
-            candidates.sort_by_key(|object| object.index());
-            let selections = bounded_object_combinations(
-                &candidates,
-                requirement.minimum() as usize,
-                requirement.maximum() as usize,
-                MAX_CANONICAL_SPELL_OPTIONS,
-            )?;
-            if selections.is_empty() {
-                return Err(format!(
-                    "seed {} object choice {choice_index} has no legal binding",
-                    self.seed
-                ));
-            }
-            let next_count = complete
-                .len()
-                .checked_mul(selections.len())
-                .ok_or_else(|| format!("seed {} object choice count overflow", self.seed))?;
-            if next_count > MAX_CANONICAL_SPELL_OPTIONS {
-                return Err(format!(
-                    "seed {} resolution choice exceeds the {}-option canonical cap",
-                    self.seed, MAX_CANONICAL_SPELL_OPTIONS
-                ));
-            }
-            let mut next = Vec::with_capacity(next_count);
-            for prefix in complete {
-                for selection in &selections {
-                    let mut binding = prefix.clone();
-                    binding.push(selection.clone());
-                    next.push(binding);
-                }
-            }
-            complete = next;
         }
-        Ok(complete)
+        candidates.sort_by_key(|object| object.index());
+        let selections = bounded_object_combinations(
+            &candidates,
+            requirement.minimum() as usize,
+            requirement.maximum() as usize,
+            MAX_CANONICAL_SPELL_OPTIONS,
+        )?;
+        if selections.is_empty() {
+            return Err(format!(
+                "seed {} object choice {choice_index} has no legal binding",
+                self.seed
+            ));
+        }
+        Ok(selections)
     }
 
     fn pending_activated_actions(
@@ -4342,6 +4317,7 @@ impl GameDriver {
             })
     }
 
+    #[cfg(test)]
     fn pending_activated_context(
         &self,
         pending: &PendingActivatedResolution,
@@ -4359,26 +4335,56 @@ impl GameDriver {
                     pending.runtime.program.name()
                 )
             })?;
-        let choices =
-            self.object_choice_bindings(pending.controller, effect.object_choice_requirements())?;
-        let mut options = Vec::with_capacity(choices.len());
-        for choice in choices {
-            let actions = self.pending_activated_actions(pending, choice.clone())?;
+        self.pending_activated_choice_context(pending, effect.object_choice_requirements(), 0, &[])
+    }
+
+    fn pending_activated_choice_context(
+        &self,
+        pending: &PendingActivatedResolution,
+        requirements: &[ObjectChoiceRequirement],
+        cursor: usize,
+        prior: &[Vec<ObjectId>],
+    ) -> Result<DecisionContext, String> {
+        let requirement = requirements.get(cursor).copied().ok_or_else(|| {
+            format!(
+                "seed {} activated resolution has no object choice at slot {cursor}",
+                self.seed
+            )
+        })?;
+        if prior.len() != cursor {
+            return Err(format!(
+                "seed {} activated resolution path has {} choices at slot {cursor}",
+                self.seed,
+                prior.len()
+            ));
+        }
+        let selections = self.object_choice_selections(pending.controller, cursor, requirement)?;
+        let final_slot = cursor + 1 == requirements.len();
+        let mut options = Vec::with_capacity(selections.len());
+        for selection in selections {
+            let mut choices = prior.to_vec();
+            choices.push(selection);
+            let actions = if final_slot {
+                self.pending_activated_actions(pending, choices.clone())?
+            } else {
+                Vec::new()
+            };
             options.push(DecisionOption::new(
-                DecisionDescriptor::ChooseResolutionObjects { choices: choice },
+                DecisionDescriptor::ChooseResolutionObjects { choices },
                 actions,
             ));
         }
-        let kind = if effect
-            .object_choice_requirements()
-            .iter()
-            .any(|requirement| requirement.zone() == ZoneKind::Library)
-        {
+        let kind = if requirement.zone() == ZoneKind::Library {
             DecisionKind::Search
         } else {
             DecisionKind::HiddenChoice
         };
-        self.decision_context(kind, pending.controller, options)
+        self.scoped_decision_context(
+            kind,
+            pending.controller,
+            options,
+            resolution_choice_path_discriminator(pending.controller, cursor, prior),
+        )
     }
 
     fn resolution_choice_label(&self, descriptor: &DecisionDescriptor) -> Result<String, String> {
@@ -4501,20 +4507,57 @@ impl GameDriver {
             .pending_activated_resolution
             .take()
             .ok_or_else(|| format!("seed {} has no pending activated resolution", self.seed))?;
-        let context = self.pending_activated_context(&pending)?;
-        let selected_id = self.select_resolution_choice(
-            &context,
-            pending.controller,
-            human,
-            decisions,
-            ai_policies,
-            "resolution_object_choice",
-        )?;
-        let actions = context
-            .select(selected_id)
-            .map_err(|error| format!("seed {} resolution choice failed: {error}", self.seed))?
-            .actions()
+        let requirements = pending
+            .runtime
+            .program
+            .activated_effects()
+            .get(pending.runtime.ability_index)
+            .ok_or_else(|| {
+                format!(
+                    "seed {} missing activated runtime {} on {}",
+                    self.seed,
+                    pending.runtime.ability_index,
+                    pending.runtime.program.name()
+                )
+            })?
+            .object_choice_requirements()
             .to_vec();
+        if requirements.is_empty() {
+            return Err(format!(
+                "seed {} pending activated resolution has no object choices",
+                self.seed
+            ));
+        }
+        let mut choices = Vec::with_capacity(requirements.len());
+        let mut actions = Vec::new();
+        for cursor in 0..requirements.len() {
+            let context =
+                self.pending_activated_choice_context(&pending, &requirements, cursor, &choices)?;
+            let selected_id = self.select_resolution_choice(
+                &context,
+                pending.controller,
+                human,
+                decisions,
+                ai_policies,
+                "resolution_object_choice",
+            )?;
+            let selected = context
+                .select(selected_id)
+                .map_err(|error| format!("seed {} resolution choice failed: {error}", self.seed))?;
+            let DecisionDescriptor::ChooseResolutionObjects {
+                choices: selected_choices,
+            } = selected.descriptor()
+            else {
+                return Err(format!(
+                    "seed {} resolution choice returned a non-object descriptor",
+                    self.seed
+                ));
+            };
+            choices.clone_from(selected_choices);
+            if cursor + 1 == requirements.len() {
+                actions = selected.actions().to_vec();
+            }
+        }
         let action_count = actions.len() as u64;
         for action in actions {
             self.dispatch(action)?;
@@ -4565,6 +4608,7 @@ impl GameDriver {
             .map_err(|error| format!("seed {} trigger binding failed: {error}", self.seed))
     }
 
+    #[cfg(test)]
     fn pending_triggered_context(
         &self,
         pending: &PendingTriggeredResolution,
@@ -4582,26 +4626,56 @@ impl GameDriver {
                     pending.runtime.program.name()
                 )
             })?;
-        let choices =
-            self.object_choice_bindings(pending.controller, ability.object_choice_requirements())?;
-        let mut options = Vec::with_capacity(choices.len());
-        for choice in choices {
-            let actions = self.pending_triggered_actions(pending, choice.clone())?;
+        self.pending_triggered_choice_context(pending, ability.object_choice_requirements(), 0, &[])
+    }
+
+    fn pending_triggered_choice_context(
+        &self,
+        pending: &PendingTriggeredResolution,
+        requirements: &[ObjectChoiceRequirement],
+        cursor: usize,
+        prior: &[Vec<ObjectId>],
+    ) -> Result<DecisionContext, String> {
+        let requirement = requirements.get(cursor).copied().ok_or_else(|| {
+            format!(
+                "seed {} triggered resolution has no object choice at slot {cursor}",
+                self.seed
+            )
+        })?;
+        if prior.len() != cursor {
+            return Err(format!(
+                "seed {} triggered resolution path has {} choices at slot {cursor}",
+                self.seed,
+                prior.len()
+            ));
+        }
+        let selections = self.object_choice_selections(pending.controller, cursor, requirement)?;
+        let final_slot = cursor + 1 == requirements.len();
+        let mut options = Vec::with_capacity(selections.len());
+        for selection in selections {
+            let mut choices = prior.to_vec();
+            choices.push(selection);
+            let actions = if final_slot {
+                self.pending_triggered_actions(pending, choices.clone())?
+            } else {
+                Vec::new()
+            };
             options.push(DecisionOption::new(
-                DecisionDescriptor::ChooseResolutionObjects { choices: choice },
+                DecisionDescriptor::ChooseResolutionObjects { choices },
                 actions,
             ));
         }
-        let kind = if ability
-            .object_choice_requirements()
-            .iter()
-            .any(|requirement| requirement.zone() == ZoneKind::Library)
-        {
+        let kind = if requirement.zone() == ZoneKind::Library {
             DecisionKind::Search
         } else {
             DecisionKind::HiddenChoice
         };
-        self.decision_context(kind, pending.controller, options)
+        self.scoped_decision_context(
+            kind,
+            pending.controller,
+            options,
+            resolution_choice_path_discriminator(pending.controller, cursor, prior),
+        )
     }
 
     fn complete_pending_triggered_resolution(
@@ -4614,25 +4688,60 @@ impl GameDriver {
             .pending_triggered_resolution
             .take()
             .ok_or_else(|| format!("seed {} has no pending triggered resolution", self.seed))?;
-        let context = self.pending_triggered_context(&pending)?;
-        let selected_id = self.select_resolution_choice(
-            &context,
-            pending.controller,
-            human,
-            decisions,
-            ai_policies,
-            "trigger_resolution_object_choice",
-        )?;
-        let actions = context
-            .select(selected_id)
-            .map_err(|error| {
+        let requirements = pending
+            .runtime
+            .program
+            .triggered_abilities()
+            .get(pending.runtime.ability_index)
+            .ok_or_else(|| {
+                format!(
+                    "seed {} missing triggered runtime {} on {}",
+                    self.seed,
+                    pending.runtime.ability_index,
+                    pending.runtime.program.name()
+                )
+            })?
+            .object_choice_requirements()
+            .to_vec();
+        if requirements.is_empty() {
+            return Err(format!(
+                "seed {} pending triggered resolution has no object choices",
+                self.seed
+            ));
+        }
+        let mut choices = Vec::with_capacity(requirements.len());
+        let mut actions = Vec::new();
+        for cursor in 0..requirements.len() {
+            let context =
+                self.pending_triggered_choice_context(&pending, &requirements, cursor, &choices)?;
+            let selected_id = self.select_resolution_choice(
+                &context,
+                pending.controller,
+                human,
+                decisions,
+                ai_policies,
+                "trigger_resolution_object_choice",
+            )?;
+            let selected = context.select(selected_id).map_err(|error| {
                 format!(
                     "seed {} trigger resolution choice failed: {error}",
                     self.seed
                 )
-            })?
-            .actions()
-            .to_vec();
+            })?;
+            let DecisionDescriptor::ChooseResolutionObjects {
+                choices: selected_choices,
+            } = selected.descriptor()
+            else {
+                return Err(format!(
+                    "seed {} trigger resolution returned a non-object descriptor",
+                    self.seed
+                ));
+            };
+            choices.clone_from(selected_choices);
+            if cursor + 1 == requirements.len() {
+                actions = selected.actions().to_vec();
+            }
+        }
         let action_count = actions.len() as u64;
         for action in actions {
             self.dispatch(action)?;
@@ -6927,6 +7036,22 @@ fn block_path_discriminator(
     state
 }
 
+fn resolution_choice_path_discriminator(
+    controller: PlayerId,
+    cursor: usize,
+    choices: &[Vec<ObjectId>],
+) -> u64 {
+    let mut state = combat_path_mix(0x7265_736f_6c76_0001, controller.index() as u64);
+    state = combat_path_mix(state, cursor as u64);
+    for choice in choices {
+        state = combat_path_mix(state, choice.len() as u64);
+        for object in choice {
+            state = combat_path_mix(state, object.index() as u64);
+        }
+    }
+    state
+}
+
 fn canonical_legal_actions(context: &DecisionContext) -> Vec<AiLegalAction> {
     context
         .options()
@@ -8261,9 +8386,9 @@ mod tests {
     use super::{
         campaign_seed, legacy_human_summary_matches, player_view_fingerprint,
         replay_captured_actions, replay_human_file, run_prompted_game, snapshot_prompt,
-        AiController, DecisionPrompt, DecisionSource, GameDriver, GameMetrics, GameSummary,
-        HeuristicPolicy, IdentityExercise, MainChoice, ReplayDecisionSource, TraceMode,
-        TraceRecord, PLAYER_COUNT,
+        ActivatedRuntime, AiController, DecisionPrompt, DecisionSource, GameDriver, GameMetrics,
+        GameSummary, HeuristicPolicy, IdentityExercise, MainChoice, PendingActivatedResolution,
+        ReplayDecisionSource, TraceMode, TraceRecord, PLAYER_COUNT,
     };
     use forge_ai::{AiWeights, GuardrailTable};
     use forge_cards::runtime::compile_card_program;
@@ -8272,7 +8397,7 @@ mod tests {
         BasicLandTypes, BlockDeclaration, CardId, CombatDamageTarget, CreatureKeywords,
         DecisionContext, DecisionDescriptor, DecisionKind, DecisionOption, GameState, ManaPool,
         ObjectColors, ObjectId, ObjectSupertypes, ObjectTypes, Outcome, PlayerId, PlayerView,
-        ResolutionOutcome, Step, TargetChoice, ZoneId, ZoneKind,
+        ResolutionOutcome, StackDecisionBindings, Step, TargetChoice, ZoneId, ZoneKind,
     };
     use std::{
         collections::{BTreeSet, HashMap, HashSet},
@@ -9198,6 +9323,121 @@ mod tests {
         assert!(driver.actions.iter().any(|action| matches!(
             action,
             Action::ShuffleLibrary { player } if *player == caster
+        )));
+    }
+
+    #[test]
+    fn resolution_choice_slots_do_not_materialize_a_cartesian_product() {
+        let source = r#"card "Two Searches" {
+  id: "88e24adb-2fb2-49db-8e55-f5bbeb18e2f7"
+  layout: normal
+  status: unverified_playable
+  face "Two Searches" {
+    cost: "{1}"
+    types: "Artifact"
+    oracle: "{1}: Search your library twice."
+    keywords: []
+    ability activated {
+      costs: [mana_cost("{1}")]
+      effect: sequence(search_library(cards(and(type_is("land"), zone_is("library"))), you(), 1), search_library(cards(and(type_is("creature"), zone_is("library"))), you(), 1))
+    }
+  }
+}"#;
+        let definition = forge_cardc::parse_card_named("two_searches.frs", source)
+            .unwrap_or_else(|error| panic!("two-search fixture should parse: {error}"));
+        let program = Arc::new(
+            compile_card_program(&definition)
+                .unwrap_or_else(|error| panic!("two-search fixture should compile: {error}")),
+        );
+        let requirements = program.activated_effects()[0]
+            .object_choice_requirements()
+            .to_vec();
+        assert_eq!(requirements.len(), 2);
+
+        let (mut driver, controller, _opponent, source_object) = modal_spell_driver();
+        Arc::make_mut(&mut driver.programs).insert(source_object, Arc::clone(&program));
+        let library = ZoneId::new(Some(controller), ZoneKind::Library);
+        for index in 0..8 {
+            let object = match driver
+                .dispatch(Action::CreateObject {
+                    card: CardId::new(1_100 + index),
+                    owner: controller,
+                    controller,
+                    zone: library,
+                })
+                .unwrap_or_else(|error| panic!("search candidate setup should succeed: {error}"))
+            {
+                Outcome::ObjectCreated(object) => object,
+                other => panic!("unexpected search candidate outcome: {other:?}"),
+            };
+            driver
+                .dispatch(Action::SetBaseObjectCharacteristics {
+                    object,
+                    base: BaseObjectCharacteristics::new(
+                        ObjectTypes::none().with_land(),
+                        ObjectColors::none(),
+                    ),
+                })
+                .unwrap_or_else(|error| panic!("search candidate types should apply: {error}"));
+        }
+        for index in 0..8 {
+            let object = match driver
+                .dispatch(Action::CreateObject {
+                    card: CardId::new(1_200 + index),
+                    owner: controller,
+                    controller,
+                    zone: library,
+                })
+                .unwrap_or_else(|error| panic!("creature candidate setup should succeed: {error}"))
+            {
+                Outcome::ObjectCreated(object) => object,
+                other => panic!("unexpected creature candidate outcome: {other:?}"),
+            };
+            driver
+                .dispatch(Action::SetBaseObjectCharacteristics {
+                    object,
+                    base: BaseObjectCharacteristics::new(
+                        ObjectTypes::none().with_creature(),
+                        ObjectColors::none(),
+                    ),
+                })
+                .unwrap_or_else(|error| panic!("creature candidate types should apply: {error}"));
+        }
+        let pending = PendingActivatedResolution {
+            controller,
+            runtime: ActivatedRuntime {
+                program,
+                ability_index: 0,
+                source: source_object,
+            },
+            targets: Vec::new(),
+            decisions: StackDecisionBindings::default(),
+        };
+        let first = driver
+            .pending_activated_choice_context(&pending, &requirements, 0, &[])
+            .unwrap_or_else(|error| panic!("first search slot should exist: {error}"));
+        assert_eq!(first.kind(), DecisionKind::Search);
+        assert_eq!(first.options().len(), 9);
+        let first_choice = first
+            .options()
+            .iter()
+            .find_map(|option| match option.descriptor() {
+                DecisionDescriptor::ChooseResolutionObjects { choices }
+                    if choices.first().is_some_and(|choice| !choice.is_empty()) =>
+                {
+                    Some(choices.clone())
+                }
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("first search should expose a non-empty choice"));
+        let second = driver
+            .pending_activated_choice_context(&pending, &requirements, 1, &first_choice)
+            .unwrap_or_else(|error| panic!("second search slot should exist: {error}"));
+        assert_eq!(second.options().len(), 9);
+        assert_ne!(first.state_key(), second.state_key());
+        assert!(second.options().iter().all(|option| matches!(
+            option.descriptor(),
+            DecisionDescriptor::ChooseResolutionObjects { choices } if choices.len() == 2
         )));
     }
 
