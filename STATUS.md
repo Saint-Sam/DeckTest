@@ -73,16 +73,17 @@ onto identities.
 
 ## Next Gates
 
-1. Product `2c8a3f9` has an extracted production runner, one pre-context shared
+1. Product `f8645e8` has an extracted production runner, one pre-context shared
    search deadline, inline single-worker execution, action-edge statistics, and
-   collision-checked transposition buckets. The 236-test local preflight,
+   collision-checked transposition buckets. Printed `{X}` now uses typed
+   begin-cast, numeric-range, payment, and final-cast contexts. The 240-test local preflight,
    WASM/Android compiles, clone guard, and all three exact policy/action replays
    pass. The exact state-key audit covers 38,299 decisions with zero failures.
 2. Hierarchical per-attacker/per-blocker contexts and single-construction
    determinization are exact-replay-bound. Combat-damage order and amount now
    use the same bounded typed path. The 18,321-action search game and final hash
    are preserved, while the refreshed 1-4 ms ladder measures approximately
-   1.5-4.9 ms p95 instead of the former 240-266 ms floor. No search knee is
+   1.5-4.7 ms p95 instead of the former 240-266 ms floor. No search knee is
    claimed yet.
 3. Complete the remaining canonical Choice/Prompt adapters and T4.5 action abstraction.
    Live combat-damage order and amount adapters are complete with bounded
