@@ -73,7 +73,7 @@ onto identities.
 
 ## Next Gates
 
-1. Product `72ea3ee` has an extracted production runner, one pre-context shared
+1. Product `19ef330` has an extracted production runner, one pre-context shared
    search deadline, inline single-worker execution, action-edge statistics, and
    collision-checked transposition buckets. Printed `{X}` now uses typed
    begin-cast, numeric-range, payment, and final-cast contexts. Typed target
@@ -99,20 +99,29 @@ onto identities.
    priority, resolves the production stack, places forced triggers, and applies
    an explicit paranoid-coalition multiplayer backup. Unopposed combat search
    crosses forced priority and production damage while choice-bearing responses
-   remain fail closed. The 268-test current-product local preflight,
+   remain fail closed. Allocation-independent normalized bindings now cover
+   hidden objects exposed by legal library-search choices without exposing them
+   through ordinary player views. The 276-test current-product local preflight,
    WASM/Android compiles, clone guard, all three exact policy/action replays,
-   and the 38,278-decision state-key audit pass with zero failures.
+   80.4249% line-coverage gate, 15/15 critical mutation campaign, runtime-
+   isomorphism fixtures, and the 38,278-decision state-key audit pass with zero
+   failures.
 2. Hierarchical per-attacker/per-blocker contexts and single-construction
    determinization are exact-replay-bound. Combat-damage order and amount now
    use the same bounded typed path. The 18,282-action, 16-iteration search game
    is exact-replay verified at final hash `8631010851649779696`; its 563 searched
    decisions perform 8,672 simulations, reach depth 7, and preserve the full
    canonical replay. The refreshed 1-4 ms ladder reaches meaningful depth 3-4
-   and measures approximately 2.1-5.5 ms p95 instead of the former 240-266
+   and measures approximately 2.5-6.7 ms p95 instead of the former 240-266
    ms floor. No search knee is
    claimed yet.
-3. T4.5 search mechanics are locally complete. Complete the remaining canonical
-   Choice/Prompt adapters and benchmark fixtures.
+3. T4.5 search mechanics are locally complete. The retained 21-mainboard-
+   identity pod is now being frozen as a nonrepresentative engineering
+   regression fixture while a separate realistic four-deck Commander lane is
+   built. Complete four exact color-legal 100-card candidate decks, versioned
+   PilotIntents, fail-closed per-card admission, and at least 100 deterministic
+   realistic-pod games before using that lane for strength or cost claims.
+   Complete the remaining canonical Choice/Prompt adapters and benchmark fixtures.
    Live combat-damage order and amount adapters are complete with bounded
    hierarchical contexts and strict kernel validation.
    The safe Linux/Android CPU/RSS adapter is implemented; run its supported-server

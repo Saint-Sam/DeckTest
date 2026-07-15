@@ -1,42 +1,42 @@
 {
   "schema_version": 1,
   "tier": "T4",
-  "status": "local_diagnostic_preflight_passed_promotion_blocked",
+  "status": "local_diagnostic_preflight_passed_exact_current_product_promotion_blocked",
   "verified_at": "2026-07-15",
   "verification_mode": "local_only_no_github_actions",
-  "product_commit": "72ea3eeef2d2c6dd8c92fb8289a0fb65ee613439",
-  "product_tree": "379793e9bd2e55b29448fd46396371402ed3fdbd",
-  "preflight_evidence_commit": "f0d9531f706f5edad52b95a18d9e18f206722f25",
-  "preflight_evidence_tree": "b0dda6f590cf15d9b09e48c54f46b290dfdfdc52",
+  "product_commit": "19ef3302c40db3e916d2a60925546d4ebc28608d",
+  "product_tree": "e79efa91e0146f23f7219367e117db34ce13867a",
+  "preflight_evidence_commit": "03b9e84ff0358c899830340e93cc93213121ab90",
+  "preflight_evidence_tree": "6499309c062543265f7a4d935bf48ff10932871d",
   "gate_command": "scripts/gates/gate_T4.sh --preflight",
   "gate_log": "reports/gates/T4/commands/00-preflight.log",
-  "gate_log_sha256": "199429012f776c2f45d5d7eddd91dc2df82afda020e29bb7bf56d0dada86fff0",
+  "gate_log_sha256": "4bc77b8349c5bbfded5d617e2c7caa7f2023ca77fc82aac630fd4cd6d41939d5",
   "checks": {
     "format": "passed",
     "strict_clippy": "passed",
     "tests": {
-      "passed": 268,
+      "passed": 276,
       "failed": 0,
       "ignored": 1,
       "ignored_reason": "requires local generated T3 translated-card output"
     },
     "heuristic_exact_policy_and_typed_action_replay": {
       "status": "passed",
-      "replay_sha256": "2ec92d3b1d9c918759cbc4a87834f8822a2f2d86aff44bfc2b435fc47dcc0686",
+      "replay_sha256": "52eca94f74a1a9a8ea4f21e92732b13016473eaf2769ba0528b4c803b7bb88dc",
       "decisions": 15763,
       "typed_actions": 18029,
       "final_hash": "1347092284232215653"
     },
     "random_legal_exact_policy_and_typed_action_replay": {
       "status": "passed",
-      "replay_sha256": "55f6ae0d07ec1f8737b5d50ece835c7dce1e7cccd0c348d212eec4936f2b1c87",
+      "replay_sha256": "04d5bce32d4d5adae424822800a518debc495e8aa87fdbbb756bc2566686537e",
       "decisions": 6505,
       "typed_actions": 8299,
-      "final_hash": "7006841597002591361"
+      "final_hash": "9589709704845103598"
     },
     "search_exact_policy_and_typed_action_replay": {
       "status": "passed",
-      "replay_sha256": "e96e969ff47a9c020538756faf62b9175c906c846c170f63831c29b572d41aa6",
+      "replay_sha256": "cf65dbfa1edeb2afd850708910c7d675e31fd7f53610205bc98792b48a873281",
       "decisions": 16010,
       "searched_decisions": 563,
       "typed_actions": 18282,
@@ -44,6 +44,39 @@
       "nodes": 2683,
       "maximum_depth": 7,
       "final_hash": "8631010851649779696"
+    },
+    "coverage": {
+      "status": "passed",
+      "artifact": "metrics/coverage.json",
+      "artifact_sha256": "aac70db995c14952fba37102fe825a297858de7c5cd2c413e73d1a97ed05b8b5",
+      "line_percent": 80.42487304698074,
+      "floor_percent": 80,
+      "changed_executable_lines": 26289,
+      "changed_covered_lines": 19950
+    },
+    "mutation": {
+      "status": "passed",
+      "artifact": "metrics/ai/t4_mutation.json",
+      "artifact_sha256": "e01308fc6eaad8ebb2fda5bba66c6bb2086136072405d36c292e784c31325012",
+      "mutants_killed": 15,
+      "mutants_total": 15,
+      "mutation_score_percent": 100.0
+    },
+    "runtime_isomorphism": {
+      "status": "passed",
+      "artifact": "metrics/ai/runtime_isomorphism.json",
+      "artifact_sha256": "3f76d3b85a3900aef7b0cf0e4d9ecdb5e1c0c665abd69dddd7abcba8f9abcb50",
+      "checks_passed": 10,
+      "checks_failed": 0
+    },
+    "game_length_diagnostics": {
+      "status": "diagnostic_complete",
+      "artifact": "metrics/ai/game_length_diagnostics.json",
+      "artifact_sha256": "b4dfc1351c2e223c0ea43a6f727c68ef0d71f25680d0dc3d9eba09630c877dae",
+      "games": 3,
+      "turn_cap_games": 0,
+      "turn_p50": 243,
+      "turn_p95": 243
     },
     "wasm32_unknown_unknown_compile": "passed",
     "aarch64_linux_android_compile": "passed",
@@ -64,16 +97,16 @@
       "strength_claim": false,
       "total_decision_budget_contract": "shared_deadline_and_current_surface_budget_response_passed",
       "observed_p95_wall_latency_us": [
-        2100,
-        5484
+        2535,
+        6651
       ],
       "result": "metrics/ai/search_budget_knee_results.json",
-      "result_sha256": "4ce76ab98923d49ddc0af465ff3ea2b310f645d9dc98e07fdc65db10eec38d63"
+      "result_sha256": "afc4918f096d53efcb16c2aedc36270563690243ac42b6c8e898ff0dc68305c4"
     },
     "decision_state_key_audit": {
       "status": "passed",
       "artifact": "metrics/ai/decision_state_audit.json",
-      "artifact_sha256": "eb938d21a5a022799ab7fd890d3e9fb9c9fa0d8597d7fa643a952c9f66950a9d",
+      "artifact_sha256": "db3a88a9006f550c33d9a1508f84f19374a622e9dfa3796daa50d675e8417fe5",
       "decisions": 38278,
       "unique_semantic_signatures": 38229,
       "unique_state_keys": 38229,
@@ -107,6 +140,9 @@
     "T4.10"
   ],
   "promotion_blockers": [
+    "complete four exact color-legal realistic Commander candidate decks and their versioned PilotIntents",
+    "pass fail-closed per-card admission and the proposed CP-AI-REALISTIC-POD review",
+    "complete at least 100 deterministic realistic-pod games with retained exact replays and zero invariant or hidden-information-canary failures",
     "complete the remaining canonical human, AI, and benchmark Choice/Prompt adapters, including arbitrary alternate and unsupported spell/activation-cost families, modal abilities, target distribution, and remaining prompt families",
     "three materially different archetype tracks",
     "development, validation, and sealed Track A campaigns",
