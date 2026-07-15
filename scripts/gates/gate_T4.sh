@@ -23,6 +23,7 @@ check_contracts() {
   require_json metrics/ai/decision_benchmark.json
   require_json metrics/ai/decision_state_audit.json
   require_json metrics/ai/game_length_diagnostics.json
+  require_json metrics/ai/runtime_isomorphism.json
   require_json metrics/ai/latency_cost.json
   require_json metrics/ai/arena_results.json
   require_json metrics/ai/search_budget_knee.json
@@ -40,23 +41,28 @@ check_contracts() {
   jq -e '
     (.promotion_eligible | type == "boolean") and
     (.recorded_key_signature_consistency | type == "string") and
+    (.normalized_key_signature_consistency | type == "string") and
     (.near_state_dedup_audit | type == "string") and
     (.replay_family_leakage_audit | type == "string")
   ' metrics/ai/decision_benchmark.json >/dev/null
   jq -s -e '
     .[0].status == "passed" and
     .[0].recorded_key_signature_consistency == "passed" and
-    .[0].near_state_dedup_audit == "not_run_runtime_isomorphism" and
+    .[0].normalized_key_signature_consistency == "passed" and
+    .[0].near_state_dedup_audit == "passed_runtime_isomorphism" and
     .[0].totals.decision_episodes > 0 and
     .[0].totals.strategic_decision_episodes > 0 and
     .[0].totals.forced_prompt_records > 0 and
     .[1].recorded_key_signature_consistency == "passed" and
-    .[1].near_state_dedup_audit == "not_run_runtime_isomorphism" and
+    .[1].normalized_key_signature_consistency == "passed" and
+    .[1].near_state_dedup_audit == "passed_runtime_isomorphism" and
     all(.[1].runs[];
       .decision_episode_accounting.episode_linkage_complete == true and
       .decision_episode_accounting.raw_prompt_records == .decisions and
       .decision_episode_accounting.decision_episodes > 0 and
       .decision_episode_accounting.strategic_decision_episodes > 0 and
+      .normalized_benchmark_key_records == .decisions and
+      .complete_benchmark_normalization_records == .decisions and
       .progress_diagnostics.termination_reason == "winner" and
       .progress_diagnostics.turn_cap_reached == false and
       (.progress_diagnostics.rounds | length) > 0
@@ -71,10 +77,17 @@ check_contracts() {
     --check \
     --product-commit "$product_commit" \
     --product-tree "$product_tree" \
+    --runtime-isomorphism metrics/ai/runtime_isomorphism.json \
     --output metrics/ai/decision_state_audit.json \
     reports/gates/T4.3/ai-baseline.frsreplay \
     reports/gates/T4.3/random-legal-baseline.frsreplay \
     reports/gates/T4.3/search-baseline.frsreplay
+  jq -e --arg commit "$product_commit" --arg tree "$product_tree" '
+    .status == "passed" and
+    .product_commit == $commit and
+    .product_tree == $tree and
+    all(.checks[]; . == true)
+  ' metrics/ai/runtime_isomorphism.json >/dev/null
   jq -e --arg commit "$product_commit" --arg tree "$product_tree" '
     .status == "diagnostic_complete" and
     .promotion_eligible == false and

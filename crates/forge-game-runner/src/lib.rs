@@ -20,15 +20,16 @@ use forge_cards::runtime::{
 };
 use forge_core::{
     apply, Action, ActivatedAbilityDefinition, ActivatedAbilityEffect, ActivatedAbilityId,
-    ActivationCost, AnnouncedTarget, AttackDeclaration, BlockDeclaration, CanonicalActionId,
-    CardId, CastSpellRequest, CombatDamageAssignment, CombatDamageAssignmentRequest,
-    CombatDamageStepKind, CombatDamageTarget, DecisionContext, DecisionDescriptor, DecisionKind,
-    DecisionOption, GameEvent, GameOutcome, GameState, HiddenCardDefinition, HiddenSlotDefinition,
-    ManaKind, ObjectColors, ObjectId, ObjectView, Outcome, PaymentPlan, PendingTriggeredAbility,
-    PlayerId, PlayerView, PriorityOutcome, ResolutionOutcome, SpellAdditionalCostPayment,
-    SpellAlternateCost, SpellTiming, StackDecisionBindings, StackEntryId, StackObjectKind,
-    StateError, Step, TargetChoice, TargetKind, TargetPredicate, TargetRequirement, TriggerId,
-    TriggerStackBinding, TriggerStackDisposition, ZoneId, ZoneKind,
+    ActivationCost, AnnouncedTarget, AttackDeclaration, BenchmarkRuntimeSemantics,
+    BlockDeclaration, CanonicalActionId, CardId, CastSpellRequest, CombatDamageAssignment,
+    CombatDamageAssignmentRequest, CombatDamageStepKind, CombatDamageTarget, DecisionContext,
+    DecisionDescriptor, DecisionKind, DecisionOption, GameEvent, GameOutcome, GameState,
+    HiddenCardDefinition, HiddenSlotDefinition, ManaKind, ObjectColors, ObjectId, ObjectView,
+    Outcome, PaymentPlan, PendingTriggeredAbility, PlayerId, PlayerView, PriorityOutcome,
+    ResolutionOutcome, SpellAdditionalCostPayment, SpellAlternateCost, SpellTiming,
+    StackDecisionBindings, StackEntryId, StackObjectKind, StateError, Step, TargetChoice,
+    TargetKind, TargetPredicate, TargetRequirement, TriggerId, TriggerStackBinding,
+    TriggerStackDisposition, ZoneId, ZoneKind,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -810,6 +811,14 @@ struct HumanDecisionRecord {
     #[serde(default)]
     decision_state_key: String,
     #[serde(default)]
+    normalized_benchmark_key: String,
+    #[serde(default)]
+    normalized_player_view_hash: String,
+    #[serde(default)]
+    normalized_legal_action_ids: Vec<String>,
+    #[serde(default)]
+    benchmark_normalization_complete: bool,
+    #[serde(default)]
     path_discriminator: Option<u64>,
     #[serde(default)]
     player_view_hash: String,
@@ -861,6 +870,14 @@ struct AiDecisionRecord {
     context_id: String,
     #[serde(default)]
     decision_state_key: String,
+    #[serde(default)]
+    normalized_benchmark_key: String,
+    #[serde(default)]
+    normalized_player_view_hash: String,
+    #[serde(default)]
+    normalized_legal_action_ids: Vec<String>,
+    #[serde(default)]
+    benchmark_normalization_complete: bool,
     #[serde(default)]
     path_discriminator: Option<u64>,
     #[serde(default)]
@@ -1365,6 +1382,18 @@ fn snapshot_prompt(
         decision_context_schema: prompt.context.schema_version(),
         context_id: prompt.context.id().to_string(),
         decision_state_key: prompt.context.state_key().to_string(),
+        normalized_benchmark_key: prompt.context.normalized_benchmark_key().to_string(),
+        normalized_player_view_hash: format!(
+            "{:016x}",
+            prompt.context.normalized_player_view_hash().get()
+        ),
+        normalized_legal_action_ids: prompt
+            .context
+            .normalized_action_ids()
+            .iter()
+            .map(ToString::to_string)
+            .collect(),
+        benchmark_normalization_complete: prompt.context.benchmark_normalization_complete(),
         path_discriminator: prompt.context.path_discriminator(),
         player_view_hash: format!("{:016x}", prompt.context.player_view_hash().get()),
         canonical_legal_actions: prompt
@@ -1409,6 +1438,12 @@ fn validate_decision_prompt(prompt: &DecisionPrompt<'_>) -> Result<(), String> {
 fn human_decision_matches(expected: &HumanDecisionRecord, actual: &HumanDecisionRecord) -> bool {
     if !expected.context_id.is_empty() {
         let mut normalized_actual = actual.clone();
+        if expected.normalized_benchmark_key.is_empty() {
+            normalized_actual.normalized_benchmark_key.clear();
+            normalized_actual.normalized_player_view_hash.clear();
+            normalized_actual.normalized_legal_action_ids.clear();
+            normalized_actual.benchmark_normalization_complete = false;
+        }
         if expected.episode.decision_episode_id.is_empty() {
             normalized_actual.episode = DecisionEpisodeMetadata::default();
         } else {
@@ -1843,6 +1878,7 @@ struct TriggerRuntime {
     program: Arc<CardProgram>,
     ability_index: usize,
     source: ObjectId,
+    benchmark_semantic_identity: String,
 }
 
 #[derive(Clone)]
@@ -1858,6 +1894,7 @@ struct RegisteredAbility {
     controller: PlayerId,
     id: ActivatedAbilityId,
     runtime: Option<ActivatedRuntime>,
+    benchmark_semantic_identity: String,
 }
 
 #[derive(Clone)]
@@ -6366,8 +6403,16 @@ impl GameDriver {
             .state
             .player_view(actor)
             .map_err(|error| format!("seed {} player view failed: {error:?}", self.seed))?;
-        DecisionContext::new(kind, actor, &view, options, Vec::new())
-            .map_err(|error| format!("seed {} decision context failed: {error}", self.seed))
+        let runtime = self.benchmark_runtime_semantics();
+        DecisionContext::new_with_benchmark_semantics(
+            kind,
+            actor,
+            &view,
+            options,
+            Vec::new(),
+            &runtime,
+        )
+        .map_err(|error| format!("seed {} decision context failed: {error}", self.seed))
     }
 
     fn scoped_decision_context(
@@ -6381,8 +6426,39 @@ impl GameDriver {
             .state
             .player_view(actor)
             .map_err(|error| format!("seed {} player view failed: {error:?}", self.seed))?;
-        DecisionContext::new_scoped(kind, actor, &view, options, Vec::new(), path_discriminator)
-            .map_err(|error| format!("seed {} scoped decision context failed: {error}", self.seed))
+        let runtime = self.benchmark_runtime_semantics();
+        DecisionContext::new_scoped_with_benchmark_semantics(
+            kind,
+            actor,
+            &view,
+            options,
+            Vec::new(),
+            path_discriminator,
+            &runtime,
+        )
+        .map_err(|error| format!("seed {} scoped decision context failed: {error}", self.seed))
+    }
+
+    fn benchmark_runtime_semantics(&self) -> BenchmarkRuntimeSemantics {
+        let mut runtime = BenchmarkRuntimeSemantics::default();
+        for ability in &self.activated_abilities {
+            runtime.bind_ability(
+                ability.id,
+                ability.source,
+                ability.benchmark_semantic_identity.as_bytes(),
+            );
+        }
+        for (trigger, trigger_runtime) in &self.trigger_programs {
+            runtime.bind_trigger(
+                *trigger,
+                trigger_runtime.source,
+                trigger_runtime.benchmark_semantic_identity.as_bytes(),
+            );
+        }
+        for (position, entry) in self.state.stack_entries().iter().enumerate() {
+            runtime.bind_stack_entry(entry.clone(), position as u32);
+        }
+        runtime
     }
 
     fn policy_candidates(
@@ -6481,6 +6557,17 @@ impl GameDriver {
             policy: policy.to_owned(),
             context_id: context.id().to_string(),
             decision_state_key: context.state_key().to_string(),
+            normalized_benchmark_key: context.normalized_benchmark_key().to_string(),
+            normalized_player_view_hash: format!(
+                "{:016x}",
+                context.normalized_player_view_hash().get()
+            ),
+            normalized_legal_action_ids: context
+                .normalized_action_ids()
+                .iter()
+                .map(ToString::to_string)
+                .collect(),
+            benchmark_normalization_complete: context.benchmark_normalization_complete(),
             path_discriminator: context.path_discriminator(),
             player_view_hash: format!("{:016x}", context.player_view_hash().get()),
             action_id: action_id.to_string(),
@@ -6584,6 +6671,17 @@ impl GameDriver {
             policy: policy.to_owned(),
             context_id: context.id().to_string(),
             decision_state_key: context.state_key().to_string(),
+            normalized_benchmark_key: context.normalized_benchmark_key().to_string(),
+            normalized_player_view_hash: format!(
+                "{:016x}",
+                context.normalized_player_view_hash().get()
+            ),
+            normalized_legal_action_ids: context
+                .normalized_action_ids()
+                .iter()
+                .map(ToString::to_string)
+                .collect(),
+            benchmark_normalization_complete: context.benchmark_normalization_complete(),
             path_discriminator: context.path_discriminator(),
             player_view_hash: format!("{:016x}", context.player_view_hash().get()),
             action_id: report.selected_action().to_string(),
@@ -6917,6 +7015,10 @@ impl GameDriver {
                     program: Arc::clone(program),
                     ability_index,
                     source,
+                    benchmark_semantic_identity: format!(
+                        "{}/trigger/{ability_index}",
+                        program.oracle_id()
+                    ),
                 },
             );
             if conditional.is_some() {
@@ -6950,7 +7052,7 @@ impl GameDriver {
                     self.metrics.interpreter_actions.saturating_add(1);
             }
         }
-        for ability in program.activated_abilities() {
+        for (ability_index, ability) in program.activated_abilities().iter().enumerate() {
             if ability.condition().is_some() {
                 continue;
             }
@@ -6968,6 +7070,10 @@ impl GameDriver {
                 controller,
                 id: ability_id,
                 runtime: None,
+                benchmark_semantic_identity: format!(
+                    "{}/mana/{ability_index}",
+                    program.oracle_id()
+                ),
             });
         }
         for (ability_index, ability) in program.activated_effects().iter().enumerate() {
@@ -7009,6 +7115,10 @@ impl GameDriver {
                     ability_index,
                     source,
                 }),
+                benchmark_semantic_identity: format!(
+                    "{}/activated/{ability_index}",
+                    program.oracle_id()
+                ),
             });
         }
         Ok(())
@@ -13527,6 +13637,17 @@ fn ai_decisions_match(left: &[AiDecisionRecord], right: &[AiDecisionRecord]) -> 
         && left.iter().zip(right).all(|(left, right)| {
             let mut left = left.clone();
             let mut right = right.clone();
+            if left.normalized_benchmark_key.is_empty() || right.normalized_benchmark_key.is_empty()
+            {
+                left.normalized_benchmark_key.clear();
+                right.normalized_benchmark_key.clear();
+                left.normalized_player_view_hash.clear();
+                right.normalized_player_view_hash.clear();
+                left.normalized_legal_action_ids.clear();
+                right.normalized_legal_action_ids.clear();
+                left.benchmark_normalization_complete = false;
+                right.benchmark_normalization_complete = false;
+            }
             left.wall_latency_us = 0;
             right.wall_latency_us = 0;
             left.think_ms = 0;
@@ -14976,6 +15097,12 @@ card "Mulldrifter" {
         let record = snapshot_prompt(0, &prompt, 1);
         assert_eq!(record.context_id, context.id().to_string());
         assert_eq!(record.decision_state_key, context.state_key().to_string());
+        assert_eq!(
+            record.normalized_benchmark_key,
+            context.normalized_benchmark_key().to_string()
+        );
+        assert_eq!(record.normalized_legal_action_ids.len(), 2);
+        assert!(record.benchmark_normalization_complete);
         assert_eq!(record.canonical_legal_actions.len(), 2);
         assert_eq!(
             record.selected_action_id,
@@ -16645,6 +16772,7 @@ card "Mulldrifter" {
             controller: opponent,
             id: ability,
             runtime: None,
+            benchmark_semantic_identity: "test/gain-life/0".to_owned(),
         });
 
         let weights =

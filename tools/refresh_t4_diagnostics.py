@@ -123,6 +123,13 @@ def replay_run(
             "decision_state_key_records": complete_record_count(
                 decisions, "decision_state_key"
             ),
+            "normalized_benchmark_key_records": complete_record_count(
+                decisions, "normalized_benchmark_key"
+            ),
+            "complete_benchmark_normalization_records": sum(
+                decision.get("benchmark_normalization_complete") is True
+                for decision in decisions
+            ),
             "exact_policy_replay": True,
             "exact_typed_action_replay": True,
             "decision_episode_accounting": episode_summary(decisions),
@@ -221,6 +228,9 @@ def refresh_benchmark(
     benchmark["recorded_key_signature_consistency"] = audit[
         "recorded_key_signature_consistency"
     ]
+    benchmark["normalized_key_signature_consistency"] = audit[
+        "normalized_key_signature_consistency"
+    ]
     benchmark["near_state_dedup_audit"] = audit["near_state_dedup_audit"]
     totals = audit["totals"]
     benchmark["decision_state_audit"] = {
@@ -228,11 +238,15 @@ def refresh_benchmark(
         "sha256": sha256(AUDIT),
         "decisions": totals["decisions"],
         "unique_state_keys": totals["unique_state_keys"],
+        "unique_normalized_benchmark_keys": totals[
+            "unique_normalized_benchmark_keys"
+        ],
         "path_bound_decisions": totals["path_bound_decisions"],
         "decision_episodes": totals["decision_episodes"],
         "strategic_decision_episodes": totals["strategic_decision_episodes"],
         "forced_prompt_records": totals["forced_prompt_records"],
         "failures": totals["failures"],
+        "runtime_isomorphism_fixture": audit["runtime_isomorphism_fixture"],
     }
     benchmark["reasons"][2] = (
         "ordinary and same-batch inter-trigger targets, kernel-recorded partial-target "

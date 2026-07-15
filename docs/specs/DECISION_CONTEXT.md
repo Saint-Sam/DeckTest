@@ -36,12 +36,16 @@ contribute canonical typed bytes. `DecisionContextId` is derived from the
 schema version, `PlayerViewHash`, visible context metadata, and sorted
 canonical action IDs. Selecting an ID not present in the context fails closed.
 Duplicate IDs and grouping references outside the legal set also fail closed.
-`DecisionStateKey` contains `PlayerViewHash` plus those sorted action IDs and is
-the machine key for Track B near-state deduplication. Hierarchical subcontexts
-also carry a typed-path discriminator derived only from actor-visible prior
-choices. That discriminator participates in both the context ID and state key,
-so identical-looking later prompts reached through different declarations are
-not collapsed.
+`DecisionStateKey` contains `PlayerViewHash` plus those sorted action IDs and
+remains the exact replay near-state identity. `NormalizedBenchmarkKey` is the
+separate Track B deduplication and leakage-split identity. It canonicalizes
+actor-visible object allocation and unordered-zone membership, and production
+adapters bind runtime ability, trigger, and stack handles to stable semantics.
+Missing bindings fail closed and mark normalization incomplete. Hierarchical
+subcontexts also carry a typed-path discriminator derived only from
+actor-visible prior choices. That discriminator participates in the exact and
+normalized keys, so identical-looking later prompts reached through different
+declarations are not collapsed.
 
 Adding a `DecisionDescriptor` variant requires updating its exhaustive
 canonical encoder; otherwise compilation fails. The contract test constructs
@@ -134,10 +138,13 @@ CP-HUMAN-TRACE, teacher-corpus eligibility, or product-strength claims.
 ## Replay And Data Boundary
 
 T4 AI replays persist canonical context/action IDs, `PlayerViewHash`, complete
-typed legal-action descriptors, policy identity, score components, immutable
-game inputs, search checkpoint history, and expected final state. Exact replay
-regenerates decisions and typed actions from the same seeds and rejects any
-divergence.
+typed legal-action descriptors, `NormalizedBenchmarkKey`, the normalized view
+hash and legal-action multiset, normalization completeness, policy identity,
+score components, immutable game inputs, search checkpoint history, and
+expected final state. Exact replay regenerates decisions and typed actions from
+the same seeds and rejects any divergence. Benchmark deduplication and leakage
+checks use the normalized key; exact replay selection continues to use only the
+exact canonical IDs.
 
 Replay records also carry the additive strategic-episode fields ratified in
 ADR 0035. Ordinary prompts form singleton episodes. Main and priority action

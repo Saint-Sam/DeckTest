@@ -28,6 +28,10 @@ def decision(
         "kind": "declare_attackers",
         "context_id": context_id,
         "decision_state_key": key,
+        "normalized_benchmark_key": f"normalized-{key}",
+        "normalized_player_view_hash": "normalized-view",
+        "normalized_legal_action_ids": [f"normalized-{action}"],
+        "benchmark_normalization_complete": True,
         "path_discriminator": path,
         "player_view_hash": "view",
         "legal_actions": 1,
@@ -79,8 +83,10 @@ class DecisionKeyAuditTests(unittest.TestCase):
             report = MODULE.build_report([path], "commit", "tree")
             self.assertEqual(report["status"], "passed")
             self.assertEqual(report["recorded_key_signature_consistency"], "passed")
+            self.assertEqual(report["normalized_key_signature_consistency"], "passed")
             self.assertEqual(
-                report["near_state_dedup_audit"], "not_run_runtime_isomorphism"
+                report["near_state_dedup_audit"],
+                "requires_runtime_isomorphism_fixture_artifact",
             )
             self.assertEqual(report["totals"]["path_bound_decisions"], 2)
             self.assertEqual(report["totals"]["unique_state_keys"], 3)
@@ -113,6 +119,39 @@ class DecisionKeyAuditTests(unittest.TestCase):
             self.assertEqual(report["status"], "passed")
             self.assertEqual(report["totals"]["decision_episodes"], 1)
             self.assertEqual(report["totals"]["strategic_decision_episodes"], 1)
+
+    def test_accepts_exact_product_runtime_isomorphism_fixture(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            replay = self.write_replay(root, [decision("state")])
+            fixture = root / "runtime-isomorphism.json"
+            fixture.write_text(
+                json.dumps(
+                    {
+                        "status": "passed",
+                        "product_commit": "commit",
+                        "product_tree": "tree",
+                        "checks": {
+                            "exact_replay_ids_unchanged": True,
+                            "object_allocation_order_isomorphic": True,
+                            "equivalent_mana_source_creation_order_isomorphic": True,
+                            "ability_registration_order_isomorphic": True,
+                            "equivalent_zone_membership_runtime_handles_isomorphic": True,
+                            "exact_runtime_handles_remain_distinct": True,
+                            "hierarchical_paths_remain_distinct": True,
+                            "unequal_semantics_remain_distinct": True,
+                            "visible_stack_semantics_remain_distinct": True,
+                            "normalization_complete": True,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            report = MODULE.build_report([replay], "commit", "tree", fixture)
+            self.assertEqual(report["status"], "passed")
+            self.assertEqual(
+                report["near_state_dedup_audit"], "passed_runtime_isomorphism"
+            )
 
     def test_rejects_one_key_for_different_semantic_states(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

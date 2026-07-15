@@ -58,6 +58,21 @@ def context_signature(decision: dict[str, Any]) -> str:
     )
 
 
+def normalized_decision_signature(decision: dict[str, Any]) -> str:
+    return canonical_digest(
+        {
+            "kind": decision.get("kind"),
+            "normalized_player_view_hash": decision.get(
+                "normalized_player_view_hash"
+            ),
+            "path_discriminator": decision.get("path_discriminator"),
+            "normalized_legal_action_ids": sorted(
+                decision.get("normalized_legal_action_ids", [])
+            ),
+        }
+    )
+
+
 def load_replay(path: Path) -> tuple[dict[str, Any], str]:
     payload = path.read_bytes()
     value = json.loads(payload)
@@ -184,12 +199,17 @@ def episode_linkage_failures(
 
 
 def build_report(
-    replay_paths: Iterable[Path], product_commit: str, product_tree: str
+    replay_paths: Iterable[Path],
+    product_commit: str,
+    product_tree: str,
+    runtime_isomorphism_path: Path | None = None,
 ) -> dict[str, Any]:
     key_to_signature: dict[str, str] = {}
     signature_to_key: dict[str, str] = {}
     context_to_signature: dict[str, str] = {}
-    key_sources: dict[str, set[str]] = {}
+    normalized_key_to_signature: dict[str, str] = {}
+    normalized_signature_to_key: dict[str, str] = {}
+    normalized_key_sources: dict[str, set[str]] = {}
     failures: list[dict[str, Any]] = []
     sources: list[dict[str, Any]] = []
     total_decisions = 0
@@ -227,6 +247,9 @@ def build_report(
             context_id = decision.get("context_id")
             view_hash = decision.get("player_view_hash")
             actions = decision.get("canonical_legal_actions")
+            normalized_key = decision.get("normalized_benchmark_key")
+            normalized_view_hash = decision.get("normalized_player_view_hash")
+            normalized_actions = decision.get("normalized_legal_action_ids")
             missing = [
                 name
                 for name, value in (
@@ -234,6 +257,9 @@ def build_report(
                     ("context_id", context_id),
                     ("player_view_hash", view_hash),
                     ("canonical_legal_actions", actions),
+                    ("normalized_benchmark_key", normalized_key),
+                    ("normalized_player_view_hash", normalized_view_hash),
+                    ("normalized_legal_action_ids", normalized_actions),
                 )
                 if value in (None, "", [])
             ]
@@ -244,6 +270,15 @@ def build_report(
                         "source": source_name,
                         "index": index,
                         "fields": missing,
+                    }
+                )
+                continue
+            if not decision.get("benchmark_normalization_complete", False):
+                failures.append(
+                    {
+                        "code": "INCOMPLETE_BENCHMARK_NORMALIZATION",
+                        "source": source_name,
+                        "index": index,
                     }
                 )
                 continue
@@ -286,9 +321,92 @@ def build_report(
                         "context_id": context_id,
                     }
                 )
-            key_sources.setdefault(key, set()).add(source_name)
+            normalized_signature = normalized_decision_signature(decision)
+            prior_normalized_signature = normalized_key_to_signature.setdefault(
+                normalized_key, normalized_signature
+            )
+            if prior_normalized_signature != normalized_signature:
+                failures.append(
+                    {
+                        "code": "NORMALIZED_KEY_COLLISION",
+                        "source": source_name,
+                        "index": index,
+                        "normalized_benchmark_key": normalized_key,
+                        "expected_signature": prior_normalized_signature,
+                        "actual_signature": normalized_signature,
+                    }
+                )
+            prior_normalized_key = normalized_signature_to_key.setdefault(
+                normalized_signature, normalized_key
+            )
+            if prior_normalized_key != normalized_key:
+                failures.append(
+                    {
+                        "code": "NORMALIZED_SIGNATURE_ALIAS",
+                        "source": source_name,
+                        "index": index,
+                        "signature": normalized_signature,
+                        "expected_key": prior_normalized_key,
+                        "actual_key": normalized_key,
+                    }
+                )
+            normalized_key_sources.setdefault(normalized_key, set()).add(source_name)
 
-    shared_keys = sum(1 for sources_for_key in key_sources.values() if len(sources_for_key) > 1)
+    shared_keys = sum(
+        1
+        for sources_for_key in normalized_key_sources.values()
+        if len(sources_for_key) > 1
+    )
+    near_state_dedup_audit = "requires_runtime_isomorphism_fixture_artifact"
+    runtime_isomorphism: dict[str, Any] | None = None
+    if runtime_isomorphism_path is not None:
+        try:
+            loaded = json.loads(runtime_isomorphism_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            failures.append(
+                {
+                    "code": "INVALID_RUNTIME_ISOMORPHISM_ARTIFACT",
+                    "path": str(runtime_isomorphism_path),
+                    "error": str(error),
+                }
+            )
+        else:
+            required_checks = (
+                "exact_replay_ids_unchanged",
+                "object_allocation_order_isomorphic",
+                "equivalent_mana_source_creation_order_isomorphic",
+                "ability_registration_order_isomorphic",
+                "equivalent_zone_membership_runtime_handles_isomorphic",
+                "exact_runtime_handles_remain_distinct",
+                "hierarchical_paths_remain_distinct",
+                "unequal_semantics_remain_distinct",
+                "visible_stack_semantics_remain_distinct",
+                "normalization_complete",
+            )
+            checks = loaded.get("checks", {})
+            runtime_isomorphism = {
+                "path": str(runtime_isomorphism_path),
+                "sha256": hashlib.sha256(
+                    runtime_isomorphism_path.read_bytes()
+                ).hexdigest(),
+                "status": loaded.get("status"),
+                "checks": {name: checks.get(name) for name in required_checks},
+            }
+            valid = (
+                loaded.get("status") == "passed"
+                and loaded.get("product_commit") == product_commit
+                and loaded.get("product_tree") == product_tree
+                and all(checks.get(name) is True for name in required_checks)
+            )
+            if valid:
+                near_state_dedup_audit = "passed_runtime_isomorphism"
+            else:
+                failures.append(
+                    {
+                        "code": "RUNTIME_ISOMORPHISM_CHECK_FAILED",
+                        "path": str(runtime_isomorphism_path),
+                    }
+                )
     return {
         "schema_version": 1,
         "status": "passed" if not failures else "failed",
@@ -301,12 +419,18 @@ def build_report(
                 "sorted canonical legal descriptors"
             ),
             "context": "state signature + DecisionContextId",
+            "normalized_benchmark": (
+                "decision kind + normalized PlayerViewHash + hierarchical path "
+                "discriminator + sorted normalized legal-action multiset"
+            ),
         },
         "sources": sources,
         "totals": {
             "decisions": total_decisions,
             "unique_state_keys": len(key_to_signature),
             "unique_semantic_signatures": len(signature_to_key),
+            "unique_normalized_benchmark_keys": len(normalized_key_to_signature),
+            "unique_normalized_signatures": len(normalized_signature_to_key),
             "path_bound_decisions": path_bound_decisions,
             "decision_episodes": total_episodes,
             "strategic_decision_episodes": strategic_episodes,
@@ -317,7 +441,11 @@ def build_report(
         "recorded_key_signature_consistency": (
             "passed" if not failures else "failed"
         ),
-        "near_state_dedup_audit": "not_run_runtime_isomorphism",
+        "normalized_key_signature_consistency": (
+            "passed" if not failures else "failed"
+        ),
+        "near_state_dedup_audit": near_state_dedup_audit,
+        "runtime_isomorphism_fixture": runtime_isomorphism,
         "replay_family_leakage_audit": "not_applicable_paired_diagnostic_baselines",
         "promotion_limits": [
             (
@@ -340,13 +468,19 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--product-commit", required=True)
     parser.add_argument("--product-tree", required=True)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--runtime-isomorphism", type=Path)
     parser.add_argument("--check", action="store_true")
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    report = build_report(args.replays, args.product_commit, args.product_tree)
+    report = build_report(
+        args.replays,
+        args.product_commit,
+        args.product_tree,
+        args.runtime_isomorphism,
+    )
     rendered = json.dumps(report, indent=2, sort_keys=True) + "\n"
     if args.check:
         if not args.output.exists() or args.output.read_text(encoding="utf-8") != rendered:

@@ -12,9 +12,9 @@ use std::sync::Arc;
 mod decision;
 
 pub use decision::{
-    CanonicalActionId, DecisionContext, DecisionContextError, DecisionContextId,
-    DecisionDescriptor, DecisionGroup, DecisionKind, DecisionOption, DecisionStateKey,
-    DECISION_CONTEXT_SCHEMA_VERSION,
+    BenchmarkRuntimeSemantics, CanonicalActionId, DecisionContext, DecisionContextError,
+    DecisionContextId, DecisionDescriptor, DecisionGroup, DecisionKind, DecisionOption,
+    DecisionStateKey, NormalizedActionId, NormalizedBenchmarkKey, DECISION_CONTEXT_SCHEMA_VERSION,
 };
 
 /// Returns true when the bootstrap crate is linked correctly.

@@ -20,5 +20,11 @@ path = "src/main.rs"
 test = false
 bench = false
 
+[[bin]]
+name = "forge-t4-runtime-isomorphism"
+path = "src/bin/t4_runtime_isomorphism.rs"
+test = false
+bench = false
+
 [lints]
 workspace = true
