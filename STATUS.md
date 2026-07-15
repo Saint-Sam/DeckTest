@@ -116,11 +116,16 @@ onto identities.
    ms floor. No search knee is
    claimed yet.
 3. T4.5 search mechanics are locally complete. The retained 21-mainboard-
-   identity pod is now being frozen as a nonrepresentative engineering
-   regression fixture while a separate realistic four-deck Commander lane is
-   built. Complete four exact color-legal 100-card candidate decks, versioned
-   PilotIntents, fail-closed per-card admission, and at least 100 deterministic
-   realistic-pod games before using that lane for strength or cost claims.
+   identity pod is frozen and validated as a nonrepresentative engineering
+   regression fixture. The realistic lane now contains four exact color-legal
+   100-card Commander candidate decks spanning 282 unique identities, corrected
+   three-color Zaxara coverage, versioned PilotIntents, and strict candidate,
+   admission, and regression validation. Its 35 focused tests and diagnostic
+   `T4-CARDS` gate pass, but all 282 candidates remain fail-closed with zero
+   admissions until exact current-product evidence adapters pass. Fix the
+   highest-fan-out shared blockers, admit the pod, and run at least 100
+   deterministic realistic-pod games before using that lane for strength or
+   cost claims.
    Complete the remaining canonical Choice/Prompt adapters and benchmark fixtures.
    Live combat-damage order and amount adapters are complete with bounded
    hierarchical contexts and strict kernel validation.

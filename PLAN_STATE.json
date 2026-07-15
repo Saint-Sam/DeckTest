@@ -11,8 +11,8 @@
   },
   "tier": 4,
   "execution_flow": {
-    "current": "complete the remaining canonical decision adapters, then run supported-server resource and CP-AI-BENCH campaigns",
-    "next": "run CP-AI-BENCH development, validation, sealed calibration, and search-knee campaigns",
+    "current": "produce exact current-product admission evidence for the 282-identity realistic Commander candidate pod, then fix only high-fan-out blockers required by that pod",
+    "next": "admit the realistic pod fail-closed, run at least 100 deterministic games, then run CP-AI-BENCH development, validation, sealed calibration, and search-knee campaigns",
     "targeted_fallback": "When T4 discovers a concrete coverage blocker, fix the smallest shared T3 primitive, add semantic regression tests, and resume T4. Do not reopen broad mapper expansion."
   },
   "t4_diagnostic_product": {
@@ -23,6 +23,22 @@
     "preflight_evidence_tree": "6499309c062543265f7a4d935bf48ff10932871d",
     "evidence": "reports/gates/T4/LOCAL-DIAGNOSTIC-PREFLIGHT.json",
     "promotion_gate": "scripts/gates/gate_T4.sh"
+  },
+  "t4_realistic_card_pool": {
+    "status": "exact_legal_candidate_pod_blocked_pending_fail_closed_admission",
+    "evidence_commit": "6fb391b83c480174d6c6f43e2c942e179a5195e7",
+    "evidence_tree": "e3d86fadaf3f30115bd28098f4a3ac3fe29646fa",
+    "runtime_product_commit": "19ef3302c40db3e916d2a60925546d4ebc28608d",
+    "runtime_product_tree": "e79efa91e0146f23f7219367e117db34ce13867a",
+    "candidate_manifest": "assets/ai/pods/realistic-pod-v1-candidates.json",
+    "pilot_intents": "assets/ai/pilot_intents/realistic-pod-v1-candidates.json",
+    "admission_report": "reports/gates/T4-CARDS/ADMISSION.json",
+    "identity_count": 282,
+    "deck_count": 4,
+    "local_gate": "scripts/gates/gate_T4_cards.sh",
+    "focused_tests_passed": 35,
+    "promotion_eligible": false,
+    "cp_ai_realistic_pod_passed": false
   },
   "tasks": {
     "T0.1": {
@@ -395,7 +411,7 @@
       "status": "blocked_on_telemetry_labels_and_promotion_evidence",
       "branch": "task/T4.6-difficulty-calibration",
       "attempts": 0,
-      "verification": "Versioned provisional tier definitions and paired seat-swapped ladder/calibration/search-knee infrastructure are implemented. The current diagnostic surface responds to 1-4 ms budgets, but no tier or Standard knee is promoted because the realistic four-deck pool, fail-closed card admission, 100-game realistic-pod campaign, CPU/memory telemetry, development, validation, sealed, three-archetype, acceptable-action, and Owner play evidence remain incomplete."
+      "verification": "Versioned provisional tier definitions and paired seat-swapped ladder/calibration/search-knee infrastructure are implemented. An exact color-legal four-deck candidate pod now covers 282 unique identities, with versioned PilotIntents, strict candidate and regression validation, fail-closed admission tooling, 35 focused tests, and a passing diagnostic T4-CARDS gate. Admission remains intentionally blocked at 0 cards until exact current-product evidence adapters pass. No tier or Standard knee is promoted because admission, the 100-game realistic-pod campaign, CPU/memory telemetry, development, validation, sealed, three-archetype, acceptable-action, and Owner play evidence remain incomplete."
     },
     "T4.7": {
       "status": "verified_local_diagnostics",
