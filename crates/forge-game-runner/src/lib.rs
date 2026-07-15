@@ -15,7 +15,7 @@ use forge_ai::{
 use forge_cards::runtime::{
     bind_activated_effect_actions, bind_program_actions, bind_triggered_ability_actions,
     compile_card_program, object_satisfies_choice_requirement, CardProgram, ExecutionBindings,
-    ObjectChoiceRequirement, PlayerBinding, ProgramKind, TriggeredAbilityProgram,
+    ObjectChoiceRequirement, PlayerBinding, ProgramKind, SpellModeProgram, TriggeredAbilityProgram,
 };
 use forge_core::{
     apply, Action, ActivatedAbilityDefinition, ActivatedAbilityEffect, ActivatedAbilityId,
@@ -1386,6 +1386,15 @@ struct PendingActivatedResolution {
 }
 
 #[derive(Clone)]
+struct PendingSpellResolution {
+    controller: PlayerId,
+    object: ObjectId,
+    program: Arc<CardProgram>,
+    targets: Vec<TargetChoice>,
+    decisions: StackDecisionBindings,
+}
+
+#[derive(Clone)]
 struct PendingTriggeredResolution {
     controller: PlayerId,
     runtime: TriggerRuntime,
@@ -1538,6 +1547,7 @@ struct GameDriver {
     commanders: Vec<ObjectId>,
     trigger_programs: HashMap<TriggerId, TriggerRuntime>,
     activated_abilities: Vec<RegisteredAbility>,
+    pending_spell_resolution: Option<PendingSpellResolution>,
     pending_activated_resolution: Option<PendingActivatedResolution>,
     pending_triggered_resolution: Option<PendingTriggeredResolution>,
     triggers_registered_for: HashSet<ObjectId>,
@@ -1639,6 +1649,7 @@ impl GameDriver {
             commanders: Vec::with_capacity(PLAYER_COUNT),
             trigger_programs: HashMap::new(),
             activated_abilities: Vec::new(),
+            pending_spell_resolution: None,
             pending_activated_resolution: None,
             pending_triggered_resolution: None,
             triggers_registered_for: HashSet::new(),
@@ -2029,6 +2040,7 @@ impl GameDriver {
             commanders: self.commanders.clone(),
             trigger_programs: self.trigger_programs.clone(),
             activated_abilities: self.activated_abilities.clone(),
+            pending_spell_resolution: self.pending_spell_resolution.clone(),
             pending_activated_resolution: self.pending_activated_resolution.clone(),
             pending_triggered_resolution: self.pending_triggered_resolution.clone(),
             triggers_registered_for: self.triggers_registered_for.clone(),
@@ -2147,6 +2159,14 @@ impl GameDriver {
                     .is_some_and(|source| !source.is_legacy_replay()));
 
         while self.state.game_outcome() == GameOutcome::InProgress {
+            if self.pending_spell_resolution.is_some() {
+                self.complete_pending_spell_resolution(
+                    human,
+                    &mut decisions,
+                    ai_policies.as_ref(),
+                )?;
+                continue;
+            }
             if self.pending_activated_resolution.is_some() {
                 self.complete_pending_activated_resolution(
                     human,
@@ -3070,7 +3090,6 @@ impl GameDriver {
                 program.name(),
                 None,
                 program.target_requirements(),
-                program.object_choice_requirements().len(),
                 program.optional_choice_count(),
                 &mut bindings,
             )?;
@@ -3084,7 +3103,6 @@ impl GameDriver {
                     program.name(),
                     Some(mode_index),
                     mode.target_requirements(),
-                    mode.object_choice_requirements().len(),
                     mode.optional_choice_count(),
                     &mut bindings,
                 )?;
@@ -3101,16 +3119,9 @@ impl GameDriver {
         card_name: &str,
         mode: Option<u32>,
         requirements: &[TargetRequirement],
-        object_choice_count: usize,
         optional_count: usize,
         output: &mut Vec<SpellChoiceBinding>,
     ) -> Result<(), String> {
-        if object_choice_count != 0 {
-            return Err(format!(
-                "seed {} spell {card_name} requires {object_choice_count} resolution-time object choice(s)",
-                self.seed
-            ));
-        }
         let targets = self.target_bindings(player, object, requirements)?;
         let optionals = self.optional_bindings(card_name, optional_count)?;
         let branch_count = targets
@@ -4967,6 +4978,182 @@ impl GameDriver {
         Ok(selections)
     }
 
+    fn pending_spell_requirements<'a>(
+        &self,
+        pending: &'a PendingSpellResolution,
+    ) -> Result<&'a [ObjectChoiceRequirement], String> {
+        match pending.decisions.mode() {
+            Some(mode) => pending
+                .program
+                .spell_modes()
+                .get(mode as usize)
+                .map(SpellModeProgram::object_choice_requirements)
+                .ok_or_else(|| {
+                    format!(
+                        "seed {} resolved spell {} with invalid mode {mode}",
+                        self.seed,
+                        pending.program.name()
+                    )
+                }),
+            None if pending.program.spell_modes().is_empty() => {
+                Ok(pending.program.object_choice_requirements())
+            }
+            None => Err(format!(
+                "seed {} resolved modal spell {} without a mode binding",
+                self.seed,
+                pending.program.name()
+            )),
+        }
+    }
+
+    fn pending_spell_actions(
+        &self,
+        pending: &PendingSpellResolution,
+        object_choices: Vec<Vec<ObjectId>>,
+    ) -> Result<Vec<Action>, String> {
+        let mut bindings =
+            ExecutionBindings::new(pending.controller, self.live_opponents(pending.controller))
+                .with_source(pending.object)
+                .with_targets(pending.targets.clone())
+                .with_object_choices(object_choices)
+                .with_optional_effect_choices(pending.decisions.optional_choices().collect());
+        if let Some(mode) = pending.decisions.mode() {
+            bindings = bindings.with_spell_mode(mode as usize);
+        }
+        bind_program_actions(&self.state, &pending.program, &bindings)
+            .map(|actions| {
+                actions
+                    .into_iter()
+                    .map(|action| action.action().clone())
+                    .collect()
+            })
+            .map_err(|error| {
+                format!(
+                    "seed {} spell interpreter binding failed: {error}",
+                    self.seed
+                )
+            })
+    }
+
+    #[cfg(test)]
+    fn pending_spell_context(
+        &self,
+        pending: &PendingSpellResolution,
+    ) -> Result<DecisionContext, String> {
+        let requirements = self.pending_spell_requirements(pending)?;
+        self.pending_spell_choice_context(pending, requirements, 0, &[])
+    }
+
+    fn pending_spell_choice_context(
+        &self,
+        pending: &PendingSpellResolution,
+        requirements: &[ObjectChoiceRequirement],
+        cursor: usize,
+        prior: &[Vec<ObjectId>],
+    ) -> Result<DecisionContext, String> {
+        let requirement = requirements.get(cursor).copied().ok_or_else(|| {
+            format!(
+                "seed {} spell resolution has no object choice at slot {cursor}",
+                self.seed
+            )
+        })?;
+        if prior.len() != cursor {
+            return Err(format!(
+                "seed {} spell resolution path has {} choices at slot {cursor}",
+                self.seed,
+                prior.len()
+            ));
+        }
+        let selections = self.object_choice_selections(pending.controller, cursor, requirement)?;
+        let final_slot = cursor + 1 == requirements.len();
+        let mut options = Vec::with_capacity(selections.len());
+        for selection in selections {
+            let mut choices = prior.to_vec();
+            choices.push(selection);
+            let actions = if final_slot {
+                self.pending_spell_actions(pending, choices.clone())?
+            } else {
+                Vec::new()
+            };
+            options.push(DecisionOption::new(
+                DecisionDescriptor::ChooseResolutionObjects { choices },
+                actions,
+            ));
+        }
+        let kind = if requirement.zone() == ZoneKind::Library {
+            DecisionKind::Search
+        } else {
+            DecisionKind::HiddenChoice
+        };
+        self.scoped_decision_context(
+            kind,
+            pending.controller,
+            options,
+            resolution_choice_path_discriminator(pending.controller, cursor, prior),
+        )
+    }
+
+    fn complete_pending_spell_resolution(
+        &mut self,
+        human: Option<PlayerId>,
+        decisions: &mut Option<&mut dyn DecisionSource>,
+        ai_policies: Option<&SeatPolicies>,
+    ) -> Result<(), String> {
+        let pending = self
+            .pending_spell_resolution
+            .take()
+            .ok_or_else(|| format!("seed {} has no pending spell resolution", self.seed))?;
+        let requirements = self.pending_spell_requirements(&pending)?.to_vec();
+        if requirements.is_empty() {
+            return Err(format!(
+                "seed {} pending spell resolution has no object choices",
+                self.seed
+            ));
+        }
+        let mut choices = Vec::with_capacity(requirements.len());
+        let mut actions = Vec::new();
+        for cursor in 0..requirements.len() {
+            let context =
+                self.pending_spell_choice_context(&pending, &requirements, cursor, &choices)?;
+            let selected_id = self.select_resolution_choice(
+                &context,
+                pending.controller,
+                human,
+                decisions,
+                ai_policies,
+                "spell_resolution_object_choice",
+            )?;
+            let selected = context.select(selected_id).map_err(|error| {
+                format!("seed {} spell resolution choice failed: {error}", self.seed)
+            })?;
+            let DecisionDescriptor::ChooseResolutionObjects {
+                choices: selected_choices,
+            } = selected.descriptor()
+            else {
+                return Err(format!(
+                    "seed {} spell resolution returned a non-object descriptor",
+                    self.seed
+                ));
+            };
+            choices.clone_from(selected_choices);
+            if cursor + 1 == requirements.len() {
+                actions = selected.actions().to_vec();
+            }
+        }
+        let action_count = actions.len() as u64;
+        for action in actions {
+            self.dispatch(action)?;
+        }
+        self.metrics.interpreter_actions = self
+            .metrics
+            .interpreter_actions
+            .saturating_add(action_count);
+        if let Some(exercise) = self.identity_exercise_mut(pending.object) {
+            exercise.effect_actions = exercise.effect_actions.saturating_add(action_count);
+        }
+        Ok(())
+    }
+
     fn pending_activated_actions(
         &self,
         pending: &PendingActivatedResolution,
@@ -5720,7 +5907,8 @@ impl GameDriver {
                 decisions,
             };
             if requires_object_choices {
-                if self.pending_activated_resolution.is_some()
+                if self.pending_spell_resolution.is_some()
+                    || self.pending_activated_resolution.is_some()
                     || self.pending_triggered_resolution.is_some()
                 {
                     return Err(format!(
@@ -5762,20 +5950,30 @@ impl GameDriver {
             self.register_permanent_runtime(controller, object)?;
         }
         if !program.effects().is_empty() || !program.spell_modes().is_empty() {
-            let mut bindings = ExecutionBindings::new(controller, self.live_opponents(controller))
-                .with_source(object)
-                .with_targets(targets)
-                .with_optional_effect_choices(decisions.optional_choices().collect());
-            if let Some(mode) = decisions.mode() {
-                bindings = bindings.with_spell_mode(mode as usize);
+            let pending = PendingSpellResolution {
+                controller,
+                object,
+                program,
+                targets,
+                decisions,
+            };
+            if !self.pending_spell_requirements(&pending)?.is_empty() {
+                if self.pending_spell_resolution.is_some()
+                    || self.pending_activated_resolution.is_some()
+                    || self.pending_triggered_resolution.is_some()
+                {
+                    return Err(format!(
+                        "seed {} attempted to overlap deferred resolution choices",
+                        self.seed
+                    ));
+                }
+                self.pending_spell_resolution = Some(pending);
+                return Ok(());
             }
-            let actions =
-                bind_program_actions(&self.state, &program, &bindings).map_err(|error| {
-                    format!("seed {} interpreter binding failed: {error}", self.seed)
-                })?;
+            let actions = self.pending_spell_actions(&pending, Vec::new())?;
             let action_count = actions.len() as u64;
             for action in actions {
-                self.dispatch(action.action().clone())?;
+                self.dispatch(action)?;
             }
             self.metrics.interpreter_actions = self
                 .metrics
@@ -5806,7 +6004,8 @@ impl GameDriver {
             runtime,
         };
         if requires_object_choices {
-            if self.pending_activated_resolution.is_some()
+            if self.pending_spell_resolution.is_some()
+                || self.pending_activated_resolution.is_some()
                 || self.pending_triggered_resolution.is_some()
             {
                 return Err(format!(
@@ -11338,6 +11537,175 @@ mod tests {
     }
 
     #[test]
+    fn spell_search_is_deferred_to_a_shared_resolution_context() {
+        let source = r#"card "Spell Search Fixture" {
+  id: "c992b25e-224d-4856-a785-56b8e4017590"
+  layout: normal
+  status: unverified_playable
+  face "Spell Search Fixture" {
+    cost: "{R}{W}"
+    types: "Sorcery"
+    oracle: "Search your library for a basic land card, put it into your hand, then shuffle."
+    keywords: []
+    ability spell {
+      effect: sequence(search_library(cards(and(and(type_is("land"), supertype_is("basic")), zone_is("library"))), you(), 1), move_zone(chosen(cards(and(and(type_is("land"), supertype_is("basic")), zone_is("library")))), "hand", 1), shuffle(you()))
+    }
+  }
+}"#;
+        let definition = forge_cardc::parse_card_named("spell_search_fixture.frs", source)
+            .unwrap_or_else(|error| panic!("spell-search fixture should parse: {error}"));
+        let program = Arc::new(
+            compile_card_program(&definition)
+                .unwrap_or_else(|error| panic!("spell-search fixture should compile: {error}")),
+        );
+        assert_eq!(program.object_choice_requirements().len(), 1);
+
+        let (mut driver, caster, _opponent, spell) = modal_spell_driver();
+        Arc::make_mut(&mut driver.programs).insert(spell, Arc::clone(&program));
+        driver
+            .dispatch(Action::SetBaseObjectCharacteristics {
+                object: spell,
+                base: program.base_object(),
+            })
+            .unwrap_or_else(|error| panic!("spell characteristics should apply: {error}"));
+
+        let library = ZoneId::new(Some(caster), ZoneKind::Library);
+        let nonbasic = match driver
+            .dispatch(Action::CreateObject {
+                card: CardId::new(1_300),
+                owner: caster,
+                controller: caster,
+                zone: library,
+            })
+            .unwrap_or_else(|error| panic!("nonbasic setup should succeed: {error}"))
+        {
+            Outcome::ObjectCreated(object) => object,
+            other => panic!("unexpected nonbasic setup outcome: {other:?}"),
+        };
+        let basic = match driver
+            .dispatch(Action::CreateObject {
+                card: CardId::new(1_301),
+                owner: caster,
+                controller: caster,
+                zone: library,
+            })
+            .unwrap_or_else(|error| panic!("basic setup should succeed: {error}"))
+        {
+            Outcome::ObjectCreated(object) => object,
+            other => panic!("unexpected basic setup outcome: {other:?}"),
+        };
+        for (object, supertypes) in [
+            (nonbasic, ObjectSupertypes::none()),
+            (basic, ObjectSupertypes::none().with_basic()),
+        ] {
+            driver
+                .dispatch(Action::SetBaseObjectCharacteristics {
+                    object,
+                    base: BaseObjectCharacteristics::new(
+                        ObjectTypes::none().with_land(),
+                        ObjectColors::none(),
+                    )
+                    .with_supertypes(supertypes),
+                })
+                .unwrap_or_else(|error| panic!("land characteristics should apply: {error}"));
+        }
+
+        let (context, mappings) = driver
+            .main_decision_context(caster)
+            .unwrap_or_else(|error| panic!("spell-search main context should exist: {error}"));
+        let selected = context
+            .options()
+            .iter()
+            .find(|option| {
+                matches!(
+                    option.descriptor(),
+                    DecisionDescriptor::CastSpell {
+                        object,
+                        targets,
+                        modes,
+                        optional,
+                        ..
+                    } if *object == spell
+                        && targets.is_empty()
+                        && modes.is_empty()
+                        && optional.is_empty()
+                )
+            })
+            .unwrap_or_else(|| panic!("spell search should have a canonical cast option"));
+        let choice = mappings
+            .iter()
+            .find_map(|(id, choice)| (*id == selected.id()).then(|| choice.clone()))
+            .unwrap_or_else(|| panic!("spell search should have a typed cast adapter"));
+        assert_eq!(driver.apply_main_choice(caster, choice), Ok(true));
+        driver
+            .pass_priority()
+            .unwrap_or_else(|error| panic!("caster pass should succeed: {error}"));
+        driver
+            .pass_priority()
+            .unwrap_or_else(|error| panic!("opponent pass should resolve spell: {error}"));
+        assert!(driver.pending_spell_resolution.is_some());
+        assert_eq!(
+            driver.state.object_zone(spell),
+            Some(ZoneId::new(Some(caster), ZoneKind::Graveyard))
+        );
+
+        let pending = driver
+            .pending_spell_resolution
+            .as_ref()
+            .unwrap_or_else(|| panic!("spell should await its search choice"));
+        let search = driver
+            .pending_spell_context(pending)
+            .unwrap_or_else(|error| panic!("spell search context should exist: {error}"));
+        assert_eq!(search.kind(), DecisionKind::Search);
+        assert_eq!(search.options().len(), 2);
+        assert!(search.options().iter().any(|option| matches!(
+            option.descriptor(),
+            DecisionDescriptor::ChooseResolutionObjects { choices }
+                if choices == &vec![vec![basic]]
+        )));
+        assert!(search
+            .options()
+            .iter()
+            .all(|option| match option.descriptor() {
+                DecisionDescriptor::ChooseResolutionObjects { choices } => {
+                    !choices.iter().flatten().any(|object| *object == nonbasic)
+                }
+                _ => false,
+            }));
+
+        let mut ai_driver = driver.clone();
+        let policies = [AiController::Random(RandomLegalPolicy::new(31)); PLAYER_COUNT];
+        let mut no_decisions = None;
+        ai_driver
+            .complete_pending_spell_resolution(None, &mut no_decisions, Some(&policies))
+            .unwrap_or_else(|error| panic!("AI spell search should complete: {error}"));
+        assert!(ai_driver.pending_spell_resolution.is_none());
+        assert_eq!(
+            ai_driver
+                .ai_decisions
+                .last()
+                .map(|record| record.kind.as_str()),
+            Some("spell_resolution_object_choice")
+        );
+
+        let mut source = PickNonEmptyResolutionChoice;
+        let mut decisions = Some(&mut source as &mut dyn DecisionSource);
+        driver
+            .complete_pending_spell_resolution(Some(caster), &mut decisions, None)
+            .unwrap_or_else(|error| panic!("human spell search should complete: {error}"));
+        assert!(driver.pending_spell_resolution.is_none());
+        assert_eq!(
+            driver.state.object_zone(basic),
+            Some(ZoneId::new(Some(caster), ZoneKind::Hand))
+        );
+        assert_eq!(driver.state.object_zone(nonbasic), Some(library));
+        assert!(driver.actions.iter().any(|action| matches!(
+            action,
+            Action::ShuffleLibrary { player } if *player == caster
+        )));
+    }
+
+    #[test]
     fn evolving_wilds_search_is_chosen_at_resolution_and_filters_nonbasic_lands() {
         let source = r#"card "Evolving Wilds" {
   id: "a75445d3-1303-4bb5-89ad-26ea93fecd48"
@@ -11905,6 +12273,7 @@ mod tests {
             commanders: vec![commander],
             trigger_programs: HashMap::new(),
             activated_abilities: Vec::new(),
+            pending_spell_resolution: None,
             pending_activated_resolution: None,
             pending_triggered_resolution: None,
             triggers_registered_for: HashSet::new(),
@@ -12018,6 +12387,7 @@ mod tests {
             commanders: vec![spell, creature],
             trigger_programs: HashMap::new(),
             activated_abilities: Vec::new(),
+            pending_spell_resolution: None,
             pending_activated_resolution: None,
             pending_triggered_resolution: None,
             triggers_registered_for: HashSet::new(),
@@ -12090,6 +12460,7 @@ mod tests {
             commanders: vec![first_attacker, second_attacker],
             trigger_programs: HashMap::new(),
             activated_abilities: Vec::new(),
+            pending_spell_resolution: None,
             pending_activated_resolution: None,
             pending_triggered_resolution: None,
             triggers_registered_for: HashSet::new(),

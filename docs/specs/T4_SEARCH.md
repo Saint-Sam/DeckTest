@@ -50,11 +50,11 @@ The current four-player product adapter searches:
 - bounded per-blocker choices for each attacked defender, including fail-closed
   menace-completion viability before a branch is offered.
 
-Activated and triggered resolution-time object choices use the same bounded
-subcontext rule outside the main search tree: one complete canonical context
-per compiled requirement, with prior selections retained in typed path state
-and interpreter actions bound only after the final slot. This removes the
-cross-requirement Cartesian product while preserving every legal concrete
+Spell, activated, and triggered resolution-time object choices use the same
+bounded subcontext rule outside the main search tree: one complete canonical
+context per compiled requirement, with prior selections retained in typed path
+state and interpreter actions bound only after the final slot. This removes
+the cross-requirement Cartesian product while preserving every legal concrete
 selection for human, AI, telemetry, and replay consumers.
 
 Combat-damage ordering and amounts also use bounded contexts outside the main

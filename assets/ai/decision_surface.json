@@ -97,14 +97,14 @@
       "human": "partial",
       "ai": "partial",
       "benchmark": "partial",
-      "note": "Interpreter object choices now use one scoped canonical context per compiled slot for activated and triggered resolution, retain prior typed selections, and bind actions only after the final slot. Authorized human labels, AI selection, telemetry, and replay share the same path. Non-library breadth, trigger targets, deferred choices, and teacher-corpus fixtures remain incomplete."
+      "note": "Interpreter object choices now use one scoped canonical context per compiled slot for spell, activated, and triggered resolution, retain prior typed selections, and bind actions only after the final slot. Authorized human labels, AI selection, telemetry, and replay share the same path. Non-library breadth, trigger targets, deferred choices, and teacher-corpus fixtures remain incomplete."
     },
     {
       "kind": "search",
       "human": "partial",
       "ai": "partial",
       "benchmark": "partial",
-      "note": "Typed program-bound activated and triggered abilities defer object selection until successful resolution and expose one bounded scoped context per search requirement, including fail-to-find and authoritative predicate filtering. Prior selections remain typed and final actions replay canonically without a cross-slot Cartesian product. Spell-resolution, trigger-target, multi-zone, and sealed benchmark coverage remain open."
+      "note": "Typed spells plus program-bound activated and triggered abilities defer object selection until successful resolution and expose one bounded scoped context per search requirement, including fail-to-find and authoritative predicate filtering. Prior selections remain typed and final actions replay canonically without a cross-slot Cartesian product. Trigger-target, multi-zone, and sealed benchmark coverage remain open."
     },
     {
       "kind": "combat_damage",

@@ -68,8 +68,8 @@ The T4.3-T4.5 diagnostics path currently adapts:
 - typed program-bound non-mana activations with exact payments, targets, and
   optional answers announced through the kernel stack, followed by interpreter
   effect binding only after successful resolution;
-- scoped slot-by-slot resolution-time object choices for program-bound
-  activated and triggered abilities,
+- scoped slot-by-slot resolution-time object choices for spells and
+  program-bound activated and triggered abilities,
   including legal fail-to-find branches, authoritative characteristic
   filtering, human search labels, AI successor evaluation, canonical telemetry,
   typed visible-path identity, and exact decision/action replay; multiple
@@ -104,11 +104,11 @@ The T4.3-T4.5 diagnostics path currently adapts:
 The current path remains `limited` and diagnostics-only because it does not yet
 canonicalize the full Commander prompt surface: unsupported activation cost
 families, target distribution, non-cost numeric values, additional and alternative costs,
-trigger-order benchmark labels, spell resolution-time choices, triggered
+trigger-order benchmark labels, triggered
 targets and deferred optionals, and non-player combat defenders. Normal spells
 and the current typed activated slice cover targets, optional effects,
-payments, and activated/triggered object searches, but those prompt families
-remain partial until their remaining trigger-target, spell-resolution, and
+payments, and spell/activated/triggered object searches, but those prompt families
+remain partial until their remaining trigger-target and
 multi-zone forms use the same boundary.
 The live concession adapter is complete, but its sealed benchmark fixture is
 still pending with the other Track B evidence. Remaining gaps cannot be

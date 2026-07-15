@@ -1,11 +1,12 @@
 # ADR 0019: Hierarchical Resolution Object Choices
 
-Status: accepted for local T4 diagnostics on 2026-07-14.
+Status: accepted for local T4 diagnostics on 2026-07-14; amended on 2026-07-15
+to include spell resolution.
 
 ## Context
 
-Activated and triggered interpreter effects may ask for several ordered object
-choices while resolving. The production runner previously enumerated each
+Spell, activated, and triggered interpreter effects may ask for several
+ordered object choices while resolving. The production runner previously enumerated each
 slot and multiplied the results into one complete Cartesian product before it
 could present any decision. The fail-closed option cap was honest, but a legal
 effect with several broad searches could exceed it even when each individual
@@ -25,6 +26,8 @@ compiled choice slot:
   the context and benchmark state keys;
 - interpreter actions are bound only on the final slot, after every required
   selection is complete;
+- spell choices are deferred until successful resolution just like activated
+  and triggered choices, so countered spells never expose or consume them;
 - human, AI, autonomous, telemetry, and replay paths consume the same contexts;
 - authoritative interpreter predicates and legal fail-to-find branches remain
   unchanged.
