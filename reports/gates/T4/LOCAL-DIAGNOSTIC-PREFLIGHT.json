@@ -4,39 +4,39 @@
   "status": "local_diagnostic_preflight_passed_promotion_blocked",
   "verified_at": "2026-07-14",
   "verification_mode": "local_only_no_github_actions",
-  "product_commit": "0961e94dd16a7bea689e9e079e38da5878cc5ac0",
-  "product_tree": "a43fe89ee755d13ba4fd9c056182c06e0983edef",
-  "preflight_evidence_commit": "0805fdd05e12374559c465fe835d723a0c7c335e",
-  "preflight_evidence_tree": "f929e2659623bcae7250d77897f85c4767e98498",
+  "product_commit": "07e2f52ad8422be10aef9e2d9ec0657ac53a5207",
+  "product_tree": "2af66380f9840fecd5c99f256c794be53f381443",
+  "preflight_evidence_commit": "d05757265a3da5103c8496f834b397f535bf38b9",
+  "preflight_evidence_tree": "4e4ffd19533b6f0b44b78e20918eaa2b086882b1",
   "gate_command": "scripts/gates/gate_T4.sh --preflight",
   "gate_log": "reports/gates/T4/commands/00-preflight.log",
-  "gate_log_sha256": "e9d6abd590fe0999b4ab2cb467e83383d00644000070c4997eefc5aebe4daa93",
+  "gate_log_sha256": "eb76cf81ac92043d7b338b16da8f69f5b9c495edc8b48c903b0e4ec7e1eccb94",
   "checks": {
     "format": "passed",
     "strict_clippy": "passed",
     "tests": {
-      "passed": 249,
+      "passed": 252,
       "failed": 0,
       "ignored": 1,
       "ignored_reason": "requires local generated T3 translated-card output"
     },
     "heuristic_exact_policy_and_typed_action_replay": {
       "status": "passed",
-      "replay_sha256": "56f7aeff6f9d375d39e7b08efa3117d2a3b1daa2f98af04994d35cc9766775db",
+      "replay_sha256": "b0e56210d642d3001c918f36f3edd2736197dadbcbc3dd2d0e1655ddfa6f3105",
       "decisions": 15763,
       "typed_actions": 18029,
       "final_hash": "5970657412682018395"
     },
     "random_legal_exact_policy_and_typed_action_replay": {
       "status": "passed",
-      "replay_sha256": "b1f4f142c4eccb4cce5183c7dc90dcfc825838cb21ab1bc4a7572e6ebb29aeb8",
+      "replay_sha256": "8d02e7b16f51cdd494db616f850b565457760d924b4dc23cf3c562d8d91a513b",
       "decisions": 6505,
       "typed_actions": 8299,
       "final_hash": "16389952752106501979"
     },
     "search_exact_policy_and_typed_action_replay": {
       "status": "passed",
-      "replay_sha256": "fdd89ea894a30bf3084305128840673bde130f9eed01f74d20e133298872e7e2",
+      "replay_sha256": "eac1e28498618ce3e79393645ad1474b106fd025ece11f414ea46aadf76077a9",
       "decisions": 16031,
       "typed_actions": 18321,
       "final_hash": "3933493530367397528"
@@ -60,16 +60,16 @@
       "strength_claim": false,
       "total_decision_budget_contract": "shared_deadline_and_current_surface_budget_response_passed",
       "observed_p95_wall_latency_us": [
-        1549,
-        4890
+        1513,
+        4699
       ],
       "result": "metrics/ai/search_budget_knee_results.json",
-      "result_sha256": "8f1bbfe0bfbed44a600aff6fa7dd38c865f57889d55c30ca3f1321c58da3d081"
+      "result_sha256": "69a7e313c4b69409b78021a7a88ec23d36e01918726ccd0a6319c30727d02db8"
     },
     "decision_state_key_audit": {
       "status": "passed",
       "artifact": "metrics/ai/decision_state_audit.json",
-      "artifact_sha256": "4d6af621d0452c0ca772098df620edd6b90bcc0cef1af7b084719d26d760f64f",
+      "artifact_sha256": "4a3cb51243f2bdbd6b7305256495c2c91b3428a90bc7f96cd1702e83a58d8c6a",
       "decisions": 38299,
       "unique_semantic_signatures": 38242,
       "unique_state_keys": 38242,
@@ -96,7 +96,7 @@
     "T4.10"
   ],
   "promotion_blockers": [
-    "complete the remaining canonical human, AI, and benchmark Choice/Prompt adapters, including same-batch inter-trigger targeting, alternate/additional costs, modal abilities, target distribution, and partial-legality filtering",
+    "complete the remaining canonical human, AI, and benchmark Choice/Prompt adapters, including same-batch inter-trigger targeting, alternate and unsupported additional-cost families, modal abilities, target distribution, and partial-legality filtering",
     "three materially different archetype tracks",
     "development, validation, and sealed Track A campaigns",
     "sealed Track B acceptable-action, catastrophic-blunder, and bounded win/defense labels",
