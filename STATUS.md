@@ -73,7 +73,7 @@ onto identities.
 
 ## Next Gates
 
-1. Product `aa43898` has an extracted production runner, one pre-context shared
+1. Product `a0c21b9` has an extracted production runner, one pre-context shared
    search deadline, inline single-worker execution, action-edge statistics, and
    collision-checked transposition buckets. Printed `{X}` now uses typed
    begin-cast, numeric-range, payment, and final-cast contexts. Typed target
@@ -90,21 +90,24 @@ onto identities.
    Ordinary triggered targets, resolution-time trigger optionals, and exact
    event-player `unless_paid` choices now use the same canonical human, AI,
    telemetry, and replay path; required targetless triggers use an explicit
-   kernel-validated no-stack disposition. Same-batch inter-trigger targeting
-   remains fail closed. Bounded main-phase search now crosses real opponent
+   kernel-validated no-stack disposition. Later simultaneous triggers can now
+   target prior entries in the same atomically validated APNAP batch through
+   the shared human, AI, telemetry, and replay path. Bounded main-phase search
+   now crosses real opponent
    priority, resolves the production stack, places forced triggers, and applies
    an explicit paranoid-coalition multiplayer backup. Unopposed combat search
    crosses forced priority and production damage while choice-bearing responses
-   remain fail closed. The 265-test local preflight, WASM/Android compiles,
-   clone guard, and all three exact policy/action replays pass. The exact
-   state-key audit covers 38,278 decisions with zero failures.
+   remain fail closed. All three exact policy/action replays and the 38,278
+   decision state-key audit pass with zero failures. The current-product local
+   preflight is pending; its predecessor passed 265 tests plus WASM/Android
+   compiles and the clone guard.
 2. Hierarchical per-attacker/per-blocker contexts and single-construction
    determinization are exact-replay-bound. Combat-damage order and amount now
    use the same bounded typed path. The 18,282-action, 16-iteration search game
    is exact-replay verified at final hash `8631010851649779696`; its 563 searched
    decisions perform 8,672 simulations, reach depth 7, and preserve the full
    canonical replay. The refreshed 1-4 ms ladder reaches meaningful depth 3-4
-   and measures approximately 2.3-5.6 ms p95 instead of the former 240-266
+   and measures approximately 2.2-5.3 ms p95 instead of the former 240-266
    ms floor. No search knee is
    claimed yet.
 3. T4.5 search mechanics are locally complete. Complete the remaining canonical

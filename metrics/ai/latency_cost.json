@@ -3,8 +3,8 @@
   "status": "diagnostic_exact_replays_bound_budget_responsive_resource_probe_unmeasured_local",
   "generated_at": "2026-07-15",
   "artifact_classification": "diagnostic_not_promotion_eligible",
-  "product_commit": "aa4389800db327f7878e1bfe78db18d3d2bce011",
-  "product_tree": "5d0baa8b2022ea2045a20b08076b71c85971996f",
+  "product_commit": "a0c21b98fd98225ba3d9f11d99453ebd38418721",
+  "product_tree": "64a2d16b2709115cd64f35864a6dcba8f6034ace",
   "required_budgets_ms": [
     0,
     10,
@@ -43,17 +43,17 @@
     {
       "policy": "heuristic-v1",
       "path": "reports/gates/T4.3/ai-baseline.frsreplay",
-      "sha256": "51320e97574978f0354e1cb43538d965de39e75e774960a518b4cd6309eb1f36"
+      "sha256": "3fde30fe4ae332a50bef03b3931614f6b59eed630e72ec0bb9eaf44d9f0c6e73"
     },
     {
       "policy": "random-legal-v1",
       "path": "reports/gates/T4.3/random-legal-baseline.frsreplay",
-      "sha256": "6c74096e8ddc2dc1bee3d38045920776a5019e57f48734ad5346a7808e3eaee8"
+      "sha256": "ff51c6aaab05a63760e81c2e5c6e81b66aa5effcfb1a5b74172f4e76e41c57b9"
     },
     {
       "policy": "determinized-uct-v1",
       "path": "reports/gates/T4.3/search-baseline.frsreplay",
-      "sha256": "2c8bf72a44efefe14e91fd714bf333af0e127f52473b24351a03c2e5dbcebfc6"
+      "sha256": "137f36e7903749f747c5b27762396abe7b72045578a7b54437aceb3512d7c7e4"
     }
   ],
   "diagnostic_runs": [
@@ -61,11 +61,11 @@
       "policy": "heuristic-v1",
       "scope": "policy_owned_decisions",
       "decisions": 13706,
-      "mean_wall_latency_us": 2102.3963,
-      "p50_wall_latency_us": 1060,
-      "p95_wall_latency_us": 7087,
-      "p99_wall_latency_us": 9111,
-      "max_wall_latency_us": 12855,
+      "mean_wall_latency_us": 1798.2638,
+      "p50_wall_latency_us": 869,
+      "p95_wall_latency_us": 5966,
+      "p99_wall_latency_us": 8094,
+      "max_wall_latency_us": 16109,
       "mean_legal_actions": 12.8434,
       "max_legal_actions": 63,
       "singleton_early_stops": 2105
@@ -74,11 +74,11 @@
       "policy": "random-legal-v1",
       "scope": "policy_owned_decisions",
       "decisions": 2123,
-      "mean_wall_latency_us": 127.8182,
-      "p50_wall_latency_us": 118,
-      "p95_wall_latency_us": 249,
-      "p99_wall_latency_us": 330,
-      "max_wall_latency_us": 817,
+      "mean_wall_latency_us": 131.6585,
+      "p50_wall_latency_us": 123,
+      "p95_wall_latency_us": 255,
+      "p99_wall_latency_us": 417,
+      "max_wall_latency_us": 751,
       "mean_legal_actions": 9.0655,
       "max_legal_actions": 2017,
       "singleton_early_stops": 4422
@@ -87,11 +87,11 @@
       "policy": "determinized-uct-v1",
       "scope": "searched_decisions",
       "decisions": 563,
-      "mean_wall_latency_us": 5002.5737,
-      "p50_wall_latency_us": 3468,
-      "p95_wall_latency_us": 12850,
-      "p99_wall_latency_us": 25069,
-      "max_wall_latency_us": 60563,
+      "mean_wall_latency_us": 5114.7869,
+      "p50_wall_latency_us": 3725,
+      "p95_wall_latency_us": 13424,
+      "p99_wall_latency_us": 21276,
+      "max_wall_latency_us": 60211,
       "mean_legal_actions": 2.6501,
       "max_legal_actions": 5,
       "singleton_early_stops": 21,
@@ -108,7 +108,7 @@
   ],
   "release_search_knee_smoke": {
     "result_path": "metrics/ai/search_budget_knee_results.json",
-    "result_sha256": "2b08ce04b6765da7f3dc2ccdbf74ccc2eba1d28196f48bfd7a270e7b31e4a918",
+    "result_sha256": "d9b19a68551917601f15528b111b3e44be01acf6c7e0f54a9a8690b24dfca1ad",
     "command": "target/release/forge-arena --search-knee --tier standard --budgets 1,2,4 --games 2 --jobs 2 --max-turns 500 --output metrics/ai/search_budget_knee_results.json",
     "profile": "release",
     "hardware_and_threads_frozen_within_each_pair": true,
@@ -117,31 +117,31 @@
       {
         "lower_budget_ms": 1,
         "upper_budget_ms": 2,
-        "lower_p95_wall_latency_us": 2276,
-        "upper_p95_wall_latency_us": 3288
+        "lower_p95_wall_latency_us": 2167,
+        "upper_p95_wall_latency_us": 3531
       },
       {
         "lower_budget_ms": 2,
         "upper_budget_ms": 4,
-        "lower_p95_wall_latency_us": 3379,
-        "upper_p95_wall_latency_us": 5600
+        "lower_p95_wall_latency_us": 3310,
+        "upper_p95_wall_latency_us": 5281
       }
     ],
     "adaptive_ablations": [
       {
         "budget_ms": 1,
-        "fixed_p95_wall_latency_us": 2034,
-        "adaptive_p95_wall_latency_us": 2277
+        "fixed_p95_wall_latency_us": 2476,
+        "adaptive_p95_wall_latency_us": 2295
       },
       {
         "budget_ms": 2,
-        "fixed_p95_wall_latency_us": 3868,
-        "adaptive_p95_wall_latency_us": 3526
+        "fixed_p95_wall_latency_us": 3659,
+        "adaptive_p95_wall_latency_us": 3745
       },
       {
         "budget_ms": 4,
-        "fixed_p95_wall_latency_us": 5656,
-        "adaptive_p95_wall_latency_us": 5767
+        "fixed_p95_wall_latency_us": 5812,
+        "adaptive_p95_wall_latency_us": 5799
       }
     ],
     "product_latency_claim": false
@@ -158,8 +158,8 @@
       4
     ],
     "observed_p95_wall_latency_range_us": [
-      2276,
-      5600
+      2167,
+      5281
     ],
     "promotion_effect": "removes the eager-combat latency defect; product promotion remains blocked by CPU, memory, competence-label, archetype, and reference-device evidence"
   },
@@ -175,7 +175,7 @@
     "physical Android reference-device latency",
     "physical WASM reference-device latency"
   ],
-  "note": "Exact product-bound heuristic, random, and search replays pass with canonical spell costs, compiler-declared alternate costs, literal-life and matching-permanent activation costs, ordinary trigger targets, resolution choices, and explicit no-legal-target dispositions, plus a zero-failure 38,278-decision state-key isomorphism audit. The refreshed 1-4 ms ladder measures approximately 2.3-5.6 ms p95. Same-batch inter-trigger targeting and other prompt families remain incomplete. Safe Linux/Android CPU and memory adapters are implemented, but this Darwin replay correctly retains null resource fields; supported-platform, competence-label, archetype, and reference-device evidence remain mandatory.",
+  "note": "Exact product-bound heuristic, random, and search replays pass with canonical spell costs, compiler-declared alternate costs, literal-life and matching-permanent activation costs, ordinary and same-batch inter-trigger targets, resolution choices, and explicit no-legal-target dispositions, plus a zero-failure 38,278-decision state-key isomorphism audit. The refreshed 1-4 ms ladder measures approximately 2.2-5.3 ms p95. Other prompt families remain incomplete. Safe Linux/Android CPU and memory adapters are implemented, but this Darwin replay correctly retains null resource fields; supported-platform, competence-label, archetype, and reference-device evidence remain mandatory.",
   "resource_telemetry_adapter": {
     "status": "implemented_measurement_pending",
     "supported_platforms": [
