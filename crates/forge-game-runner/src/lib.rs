@@ -1600,9 +1600,30 @@ struct GameDriver {
 struct MainSearchState {
     driver: GameDriver,
     finished: bool,
+    actor: PlayerId,
+    window: MainSearchWindow,
+    decision_count: u32,
     context: Arc<DecisionContext>,
     mappings: Arc<Vec<(CanonicalActionId, MainChoice)>>,
     priors: Arc<HashMap<CanonicalActionId, i64>>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum MainSearchWindow {
+    Main,
+    Priority,
+}
+
+fn multiplayer_backup_sign(
+    root_actor: PlayerId,
+    node_actor: PlayerId,
+    paranoid_coalition: bool,
+) -> i8 {
+    if paranoid_coalition && node_actor != root_actor {
+        -1
+    } else {
+        1
+    }
 }
 
 struct MainSearchDomain<'a> {
@@ -10067,14 +10088,32 @@ impl GameDriver {
 }
 
 impl MainSearchDomain<'_> {
+    const MAX_DECISIONS: u32 = 12;
+
     fn state(&self, driver: GameDriver) -> Result<MainSearchState, String> {
-        let (context, mappings) = driver.main_decision_context(self.actor)?;
-        self.state_with_context(driver, context, mappings)
+        self.state_for_window(driver, self.actor, MainSearchWindow::Main, 0)
+    }
+
+    fn state_for_window(
+        &self,
+        driver: GameDriver,
+        actor: PlayerId,
+        window: MainSearchWindow,
+        decision_count: u32,
+    ) -> Result<MainSearchState, String> {
+        let (context, mappings) = match window {
+            MainSearchWindow::Main => driver.main_decision_context(actor)?,
+            MainSearchWindow::Priority => driver.priority_decision_context(actor)?,
+        };
+        self.state_with_context(driver, actor, window, decision_count, context, mappings)
     }
 
     fn state_with_context(
         &self,
         driver: GameDriver,
+        actor: PlayerId,
+        window: MainSearchWindow,
+        decision_count: u32,
         context: DecisionContext,
         mappings: Vec<(CanonicalActionId, MainChoice)>,
     ) -> Result<MainSearchState, String> {
@@ -10106,10 +10145,111 @@ impl MainSearchDomain<'_> {
         Ok(MainSearchState {
             driver,
             finished: false,
+            actor,
+            window,
+            decision_count,
             context: Arc::new(context),
             mappings: Arc::new(mappings),
             priors: Arc::new(priors),
         })
+    }
+
+    fn finish_state(&self, mut state: MainSearchState, decision_count: u32) -> MainSearchState {
+        state.finished = true;
+        state.decision_count = decision_count;
+        state
+    }
+
+    fn trigger_placement_is_forced(&self, driver: &GameDriver) -> Result<bool, String> {
+        let pending = driver.state.pending_triggers();
+        for controller in driver.state.players().iter().map(|player| player.id()) {
+            let distinct = pending
+                .iter()
+                .filter(|trigger| trigger.controller() == controller)
+                .map(|trigger| trigger.trigger())
+                .collect::<BTreeSet<_>>();
+            if distinct.len() > 1 {
+                return Ok(false);
+            }
+        }
+        for pending in pending {
+            let Some(runtime) = driver.trigger_programs.get(&pending.trigger()) else {
+                return Ok(false);
+            };
+            let ability = runtime
+                .program
+                .triggered_abilities()
+                .get(runtime.ability_index)
+                .ok_or_else(|| {
+                    format!(
+                        "seed {} missing triggered runtime {} on {}",
+                        driver.seed,
+                        runtime.ability_index,
+                        runtime.program.name()
+                    )
+                })?;
+            if !ability.target_requirements().is_empty() {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+
+    fn advance_after_transition(
+        &self,
+        mut state: MainSearchState,
+        decision_count: u32,
+    ) -> Result<MainSearchState, String> {
+        loop {
+            if decision_count >= Self::MAX_DECISIONS
+                || state.driver.state.game_outcome() != GameOutcome::InProgress
+            {
+                return Ok(self.finish_state(state, decision_count));
+            }
+            if state.driver.pending_spell_resolution.is_some()
+                || state.driver.pending_activated_resolution.is_some()
+                || state.driver.pending_triggered_resolution.is_some()
+            {
+                return Ok(self.finish_state(state, decision_count));
+            }
+            if !state.driver.state.pending_triggers().is_empty() {
+                if !self.trigger_placement_is_forced(&state.driver)? {
+                    return Ok(self.finish_state(state, decision_count));
+                }
+                let mut decisions = None;
+                state
+                    .driver
+                    .put_pending_triggers_on_stack(None, &mut decisions, None)?;
+                continue;
+            }
+            let Some(priority_actor) = state.driver.state.priority_player() else {
+                return Ok(self.finish_state(state, decision_count));
+            };
+            if !matches!(
+                state.driver.state.current_step(),
+                Some(Step::PrecombatMain | Step::PostcombatMain)
+            ) {
+                return Ok(self.finish_state(state, decision_count));
+            }
+            let (context, mappings) = state.driver.priority_decision_context(priority_actor)?;
+            let forced_pass = context.options().len() == 1
+                && matches!(
+                    context.options()[0].descriptor(),
+                    DecisionDescriptor::PassPriority
+                );
+            if forced_pass {
+                state.driver.pass_priority()?;
+                continue;
+            }
+            return self.state_with_context(
+                state.driver,
+                priority_actor,
+                MainSearchWindow::Priority,
+                decision_count,
+                context,
+                mappings,
+            );
+        }
     }
 
     fn value(&self, state: &MainSearchState) -> i64 {
@@ -10153,16 +10293,30 @@ impl SearchDomain for MainSearchDomain<'_> {
             .find_map(|(id, choice)| (*id == action).then(|| choice.clone()))
             .ok_or_else(|| format!("search action {action} has no typed main-phase adapter"))?;
         let mut next = state.clone();
-        if let Some((context, mappings)) =
-            next.driver.hierarchical_main_context(self.actor, &choice)?
+        let decision_count = state.decision_count.saturating_add(1);
+        if let Some((context, mappings)) = next
+            .driver
+            .hierarchical_main_context(state.actor, &choice)?
         {
-            return self.state_with_context(next.driver, context, mappings);
+            return self.state_with_context(
+                next.driver,
+                state.actor,
+                state.window,
+                decision_count,
+                context,
+                mappings,
+            );
         }
-        next.finished = next.driver.apply_main_choice(self.actor, choice)?;
-        if next.finished {
-            Ok(next)
+        let transitioned = next.driver.apply_main_choice(state.actor, choice)?;
+        if decision_count >= Self::MAX_DECISIONS
+            || next.driver.state.game_outcome() != GameOutcome::InProgress
+        {
+            return Ok(self.finish_state(next, decision_count));
+        }
+        if transitioned {
+            self.advance_after_transition(next, decision_count)
         } else {
-            self.state(next.driver)
+            self.state_for_window(next.driver, state.actor, state.window, decision_count)
         }
     }
 
@@ -10186,7 +10340,7 @@ impl SearchDomain for MainSearchDomain<'_> {
         }
         let candidates = state
             .driver
-            .policy_candidates(&state.context, self.actor, |option| {
+            .policy_candidates(&state.context, state.actor, |option| {
                 state.priors.get(&option.id()).copied().unwrap_or(0)
             })?;
         let decision = HeuristicPolicy::rollout(self.weights, self.rollout_seed ^ seed)
@@ -10205,6 +10359,10 @@ impl SearchDomain for MainSearchDomain<'_> {
         state.priors.get(&action).copied().unwrap_or(0)
     }
 
+    fn selection_sign(&self, state: &Self::State) -> i8 {
+        multiplayer_backup_sign(self.actor, state.actor, true)
+    }
+
     fn action_group(&self, state: &Self::State, action: CanonicalActionId) -> u64 {
         state.context.select(action).map_or_else(
             |_| {
@@ -10219,6 +10377,12 @@ impl SearchDomain for MainSearchDomain<'_> {
         let context = state.context.id().get();
         let discriminator = (context as u64)
             ^ ((context >> 64) as u64)
+            ^ u64::from(state.decision_count).rotate_left(17)
+            ^ (state.actor.index() as u64).rotate_left(31)
+            ^ match state.window {
+                MainSearchWindow::Main => 0x8ebc_6af0_9c88_c6e3,
+                MainSearchWindow::Priority => 0x5899_65cc_7537_4cc3,
+            }
             ^ if state.finished {
                 0xa076_1d64_78bd_642f
             } else {
@@ -10232,6 +10396,9 @@ impl SearchDomain for MainSearchDomain<'_> {
 
     fn transposition_equivalent(&self, left: &Self::State, right: &Self::State) -> bool {
         left.finished == right.finished
+            && left.actor == right.actor
+            && left.window == right.window
+            && left.decision_count == right.decision_count
             && left.context.id() == right.context.id()
             && left
                 .driver
@@ -10408,6 +10575,72 @@ impl CombatSearchProgress {
 }
 
 impl CombatSearchDomain<'_> {
+    fn priority_is_forced_pass(driver: &GameDriver) -> Result<bool, String> {
+        let actor = driver
+            .state
+            .priority_player()
+            .ok_or_else(|| format!("seed {} combat search has no priority actor", driver.seed))?;
+        let (context, _) = driver.priority_decision_context(actor)?;
+        Ok(context.options().len() == 1
+            && matches!(
+                context.options()[0].descriptor(),
+                DecisionDescriptor::PassPriority
+            ))
+    }
+
+    fn pass_forced_priority_through_step(
+        driver: &mut GameDriver,
+        step: Step,
+    ) -> Result<bool, String> {
+        while driver.state.current_step() == Some(step) {
+            if !Self::priority_is_forced_pass(driver)? {
+                return Ok(false);
+            }
+            driver.pass_priority()?;
+            if !driver.state.pending_triggers().is_empty()
+                || driver.pending_spell_resolution.is_some()
+                || driver.pending_activated_resolution.is_some()
+                || driver.pending_triggered_resolution.is_some()
+            {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+
+    fn advance_unopposed_attack_to_damage(
+        &self,
+        state: &mut CombatSearchState,
+    ) -> Result<(), String> {
+        let CombatSearchProgress::Attackers { active, .. } = state.progress else {
+            return Ok(());
+        };
+        if !Self::pass_forced_priority_through_step(&mut state.driver, Step::DeclareAttackers)?
+            || state.driver.state.current_step() != Some(Step::DeclareBlockers)
+        {
+            return Ok(());
+        }
+        for defender in state.driver.current_defending_players(active) {
+            if !state.driver.block_assignment_objects(defender)?.is_empty() {
+                return Ok(());
+            }
+            state.driver.dispatch(Action::DeclareBlockers {
+                defending_player: defender,
+                blocks: Vec::new(),
+            })?;
+        }
+        if !Self::pass_forced_priority_through_step(&mut state.driver, Step::DeclareBlockers)?
+            || state.driver.state.current_step() != Some(Step::CombatDamage)
+        {
+            return Ok(());
+        }
+        let mut decisions = None;
+        state
+            .driver
+            .assign_combat_damage(None, &mut decisions, None)?;
+        Ok(())
+    }
+
     fn value(&self, state: &CombatSearchState) -> i64 {
         state
             .driver
@@ -10471,6 +10704,7 @@ impl SearchDomain for CombatSearchDomain<'_> {
         if complete {
             let progress = next.progress.clone();
             progress.commit(&mut next.driver)?;
+            self.advance_unopposed_attack_to_damage(&mut next)?;
             next.finished = true;
             next.context = None;
         } else {
@@ -12398,23 +12632,27 @@ fn build_report(
 mod tests {
     use super::{
         campaign_seed, concession_decision_context, concession_decision_context_from_view,
-        legacy_human_summary_matches, player_view_fingerprint, replay_captured_actions,
-        replay_human_file, run_prompted_game, snapshot_prompt, ActivatedRuntime, AiController,
-        DecisionPrompt, DecisionSelection, DecisionSource, GameDriver, GameMetrics, GameSummary,
-        HeuristicPolicy, IdentityExercise, MainChoice, MainSearchDomain,
-        PendingActivatedResolution, RandomLegalPolicy, ReplayDecisionSource,
+        legacy_human_summary_matches, multiplayer_backup_sign, player_view_fingerprint,
+        replay_captured_actions, replay_human_file, run_prompted_game, snapshot_prompt,
+        ActivatedRuntime, AiController, CombatSearchDomain, CombatSearchProgress, DecisionPrompt,
+        DecisionSelection, DecisionSource, GameDriver, GameMetrics, GameSummary, HeuristicPolicy,
+        IdentityExercise, MainChoice, MainSearchDomain, MainSearchWindow,
+        PendingActivatedResolution, RandomLegalPolicy, RegisteredAbility, ReplayDecisionSource,
         TerminalDecisionSource, TraceMode, TraceRecord, CONCESSION_PROMPT, PLAYER_COUNT,
     };
-    use forge_ai::{AiWeights, GuardrailProfile, GuardrailTable, SearchDomain};
+    use forge_ai::{
+        AiWeights, GuardrailProfile, GuardrailTable, SearchConfig, SearchDomain, SearchEngine,
+    };
     use forge_cards::runtime::{compile_card_program, AlternateCostKind};
     use forge_core::{
-        apply, Action, AttackDeclaration, BaseCreatureCharacteristics, BaseObjectCharacteristics,
-        BasicLandTypes, BlockDeclaration, CardId, CombatDamageTarget, CreatureKeywords,
-        DecisionContext, DecisionDescriptor, DecisionKind, DecisionOption, GameState, ManaPool,
-        ObjectColors, ObjectId, ObjectSupertypes, ObjectTypes, Outcome, PaymentPlan, PlayerId,
-        PlayerView, ResolutionOutcome, SpellAlternateCost, StackDecisionBindings, Step,
-        TargetChoice, TriggerCondition, TriggerDefinition, TriggerPlayerFilter,
-        TriggerStackDisposition, ZoneId, ZoneKind,
+        apply, AbilityPlayer, Action, ActivatedAbilityDefinition, ActivatedAbilityEffect,
+        ActivationCost, ActivationTiming, AttackDeclaration, BaseCreatureCharacteristics,
+        BaseObjectCharacteristics, BasicLandTypes, BlockDeclaration, CardId, CombatDamageTarget,
+        CreatureKeywords, DecisionContext, DecisionDescriptor, DecisionKind, DecisionOption,
+        GameState, ManaCost, ManaPool, ObjectColors, ObjectId, ObjectSupertypes, ObjectTypes,
+        Outcome, PaymentPlan, PlayerId, PlayerView, ResolutionOutcome, SpellAlternateCost,
+        StackDecisionBindings, Step, TargetChoice, TriggerCondition, TriggerDefinition,
+        TriggerPlayerFilter, TriggerStackDisposition, ZoneId, ZoneKind,
     };
 
     const FLAWLESS_MANEUVER: &str = r#"
@@ -12755,6 +12993,77 @@ card "Mulldrifter" {
             player: active,
             attacks: split,
         }));
+    }
+
+    #[test]
+    fn combat_search_advances_unopposed_attacks_through_damage() {
+        let (mut driver, active, defenders, pieces) = combat_decision_driver();
+        let fourth_commander = match driver.dispatch(Action::CreateObject {
+            card: CardId::new(8_051),
+            owner: defenders[2],
+            controller: defenders[2],
+            zone: ZoneId::new(None, ZoneKind::Command),
+        }) {
+            Ok(Outcome::ObjectCreated(object)) => object,
+            other => panic!("unexpected fourth commander outcome: {other:?}"),
+        };
+        driver.commanders = vec![pieces[0], pieces[2], pieces[3], fourth_commander];
+        let objects = Arc::new(
+            driver
+                .attack_assignment_objects(active)
+                .unwrap_or_else(|error| panic!("attack objects should exist: {error}")),
+        );
+        let weights =
+            AiWeights::bundled().unwrap_or_else(|error| panic!("weights should load: {error}"));
+        let domain = CombatSearchDomain {
+            root: &driver,
+            actor: active,
+            weights,
+            progress: CombatSearchProgress::Attackers {
+                active,
+                objects,
+                cursor: 0,
+                declarations: Vec::new(),
+            },
+            guardrail_profile: GuardrailProfile::Standard,
+        };
+        let mut state = domain
+            .determinize(8_050)
+            .unwrap_or_else(|error| panic!("combat search should determinize: {error}"));
+        for attacker in [pieces[0], pieces[1]] {
+            let context = state
+                .context
+                .as_ref()
+                .unwrap_or_else(|| panic!("incomplete attack path should have a context"));
+            let attack = context
+                .options()
+                .iter()
+                .find(|option| {
+                    matches!(
+                        option.descriptor(),
+                        DecisionDescriptor::AssignAttacker {
+                            attacker: selected,
+                            defender: Some(defender),
+                        } if *selected == attacker && *defender == defenders[2]
+                    )
+                })
+                .unwrap_or_else(|| panic!("attacker should reach the unblocked defender"));
+            state = domain
+                .apply_action(&state, attack.id())
+                .unwrap_or_else(|error| panic!("attack path should advance: {error}"));
+        }
+        assert!(state.finished);
+        assert_eq!(state.driver.state.current_step(), Some(Step::CombatDamage));
+        assert_eq!(
+            state.driver.state.players()[defenders[2].index()].life(),
+            16
+        );
+        assert_eq!(state.driver.metrics.combat_damage_events, 2);
+        assert!(state
+            .driver
+            .actions
+            .iter()
+            .any(|action| matches!(action, Action::AssignCombatDamage { .. })));
     }
 
     #[test]
@@ -13922,15 +14231,12 @@ card "Mulldrifter" {
                 .apply_action(&payment_state, payment.id())
                 .unwrap_or_else(|error| panic!("search should apply final cast: {error}"));
             assert!(cast_state.finished);
+            assert!(cast_state.driver.state.stack_top().is_none());
             assert_eq!(
-                cast_state
-                    .driver
-                    .state
-                    .stack_top()
-                    .and_then(|entry| entry.payment())
-                    .map(PaymentPlan::x_value),
-                Some(1)
+                cast_state.driver.state.object_zone(spell),
+                Some(ZoneId::new(Some(caster), ZoneKind::Graveyard))
             );
+            assert_eq!(cast_state.driver.state.players()[caster.index()].life(), 21);
         }
         let policy = AiController::Heuristic(HeuristicPolicy::rollout(weights, 29));
         assert_eq!(
@@ -14000,6 +14306,197 @@ card "Mulldrifter" {
                 && label.contains("targets seat 2")
                 && label.contains("mode 1")
         }));
+    }
+
+    #[test]
+    fn main_search_crosses_opponent_priority_and_resolves_the_response_stack() {
+        let (mut driver, caster, opponent, spell) = modal_spell_driver();
+        let response_source = match driver.dispatch(Action::CreateObject {
+            card: CardId::new(9_050),
+            owner: opponent,
+            controller: opponent,
+            zone: ZoneId::new(None, ZoneKind::Battlefield),
+        }) {
+            Ok(Outcome::ObjectCreated(object)) => object,
+            other => panic!("unexpected response source outcome: {other:?}"),
+        };
+        driver
+            .dispatch(Action::SetBaseObjectCharacteristics {
+                object: response_source,
+                base: BaseObjectCharacteristics::new(
+                    ObjectTypes::none().with_artifact(),
+                    ObjectColors::none(),
+                ),
+            })
+            .unwrap_or_else(|error| panic!("response source should be an artifact: {error}"));
+        let definition = ActivatedAbilityDefinition::new(
+            opponent,
+            Some(response_source),
+            ActivationTiming::Instant,
+            ActivationCost::new(ManaCost::new(0, 0, 0, 0, 0, 0)).with_sacrifice_source(),
+            ActivatedAbilityEffect::GainLife {
+                player: AbilityPlayer::Controller,
+                amount: 2,
+            },
+        );
+        let ability = match driver.dispatch(Action::RegisterActivatedAbility {
+            definition: Box::new(definition),
+        }) {
+            Ok(Outcome::ActivatedAbilityRegistered(ability)) => ability,
+            other => panic!("unexpected response registration outcome: {other:?}"),
+        };
+        driver.activated_abilities.push(RegisteredAbility {
+            source: response_source,
+            controller: opponent,
+            id: ability,
+            runtime: None,
+        });
+
+        let weights =
+            AiWeights::bundled().unwrap_or_else(|error| panic!("weights should load: {error}"));
+        let domain = MainSearchDomain {
+            root: &driver,
+            actor: caster,
+            weights,
+            rollout_seed: 9_051,
+            guardrail_profile: GuardrailProfile::Standard,
+        };
+        let root = domain
+            .state(driver.clone())
+            .unwrap_or_else(|error| panic!("search root should build: {error}"));
+        let cast = root
+            .context
+            .options()
+            .iter()
+            .find(|option| {
+                matches!(
+                    option.descriptor(),
+                    DecisionDescriptor::CastSpell { object, modes, .. }
+                        if *object == spell && modes == &vec![1]
+                )
+            })
+            .unwrap_or_else(|| panic!("root should expose the targetless Charm mode"));
+        let response = domain
+            .apply_action(&root, cast.id())
+            .unwrap_or_else(|error| panic!("cast should reach opponent priority: {error}"));
+        assert!(!response.finished);
+        assert_eq!(response.actor, opponent);
+        assert_eq!(response.window, MainSearchWindow::Priority);
+        assert_eq!(domain.selection_sign(&response), -1);
+        assert_eq!(multiplayer_backup_sign(caster, opponent, false), 1);
+        assert!(response.driver.state.stack_top().is_some());
+        let activate = response
+            .context
+            .options()
+            .iter()
+            .find(|option| {
+                matches!(
+                    option.descriptor(),
+                    DecisionDescriptor::ActivateAbility { source, .. }
+                        if *source == response_source
+                )
+            })
+            .unwrap_or_else(|| panic!("opponent response should be a canonical action"));
+        let resolved = domain
+            .apply_action(&response, activate.id())
+            .unwrap_or_else(|error| panic!("response line should resolve: {error}"));
+        assert!(resolved.finished);
+        assert!(resolved.driver.state.stack_top().is_none());
+        assert_eq!(
+            resolved.driver.state.object_zone(response_source),
+            Some(ZoneId::new(Some(opponent), ZoneKind::Graveyard))
+        );
+        assert_eq!(resolved.driver.state.players()[opponent.index()].life(), 22);
+
+        let report = SearchEngine::search(
+            &domain,
+            &root.context,
+            &SearchConfig::fixed_iterations(9_052, 1, 64)
+                .with_workers(1)
+                .with_rollout_depth(8),
+        )
+        .unwrap_or_else(|error| panic!("bounded response search should run: {error}"));
+        assert!(report.maximum_depth() >= 2);
+    }
+
+    #[test]
+    fn main_search_places_and_resolves_a_forced_trigger_before_evaluation() {
+        let source = r#"card "Search Trigger Fixture" {
+  id: "forge:test:search-trigger-fixture"
+  layout: normal
+  status: unverified_playable
+  face "Search Trigger Fixture" {
+    cost: "{0}"
+    types: "Creature - Human Wizard"
+    oracle: "When this enters, you gain 3 life."
+    power: "1"
+    toughness: "1"
+    keywords: []
+    ability triggered {
+      event: event_enters(source())
+      effect: gain_life(3, you())
+    }
+  }
+}"#;
+        let definition = forge_cardc::parse_card_named("search_trigger_fixture.frs", source)
+            .unwrap_or_else(|error| panic!("trigger fixture should parse: {error}"));
+        let program = Arc::new(
+            compile_card_program(&definition)
+                .unwrap_or_else(|error| panic!("trigger fixture should compile: {error}")),
+        );
+        let (mut driver, caster, _opponent, spell) = modal_spell_driver();
+        Arc::make_mut(&mut driver.programs).insert(spell, Arc::clone(&program));
+        driver
+            .dispatch(Action::SetBaseObjectCharacteristics {
+                object: spell,
+                base: program.base_object(),
+            })
+            .unwrap_or_else(|error| panic!("trigger fixture base should apply: {error}"));
+        driver
+            .dispatch(Action::SetBaseCreatureCharacteristics {
+                object: spell,
+                base: program
+                    .base_creature()
+                    .unwrap_or_else(|| panic!("trigger fixture should be a creature")),
+            })
+            .unwrap_or_else(|error| panic!("trigger fixture creature base should apply: {error}"));
+
+        let weights =
+            AiWeights::bundled().unwrap_or_else(|error| panic!("weights should load: {error}"));
+        let domain = MainSearchDomain {
+            root: &driver,
+            actor: caster,
+            weights,
+            rollout_seed: 9_060,
+            guardrail_profile: GuardrailProfile::Standard,
+        };
+        let root = domain
+            .state(driver.clone())
+            .unwrap_or_else(|error| panic!("trigger search root should build: {error}"));
+        let cast = root
+            .context
+            .options()
+            .iter()
+            .find(|option| {
+                matches!(
+                    option.descriptor(),
+                    DecisionDescriptor::CastSpell { object, .. } if *object == spell
+                )
+            })
+            .unwrap_or_else(|| panic!("trigger fixture should be castable"));
+        let resolved = domain
+            .apply_action(&root, cast.id())
+            .unwrap_or_else(|error| panic!("forced trigger line should resolve: {error}"));
+        assert!(resolved.finished);
+        assert!(resolved.driver.state.pending_triggers().is_empty());
+        assert!(resolved.driver.state.stack_top().is_none());
+        assert_eq!(resolved.driver.state.players()[caster.index()].life(), 23);
+        assert_eq!(resolved.driver.metrics.triggers_resolved, 1);
+        assert!(resolved
+            .driver
+            .actions
+            .iter()
+            .any(|action| matches!(action, Action::PutPendingTriggeredAbilitiesOnStack)));
     }
 
     #[test]
