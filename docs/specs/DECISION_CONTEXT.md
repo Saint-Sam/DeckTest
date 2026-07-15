@@ -83,6 +83,9 @@ The T4.3-T4.5 diagnostics path currently adapts:
 - kernel-validated simultaneous-trigger ordering in APNAP controller groups,
   represented as one bounded next-trigger subcontext at a time for live human
   and AI controllers rather than complete-order permutations;
+- kernel-validated combat-damage ordering and sequential amounts for human and
+  AI controllers, using bounded next-blocker contexts and binary range
+  narrowing above 64 direct amounts rather than complete distributions;
 - one shared sorted context for the live human and AI main-phase, attacker,
   blocker, and commander-zone adapters; presentation labels are derived from
   those typed options rather than independently enumerated menus;
@@ -93,13 +96,13 @@ The T4.3-T4.5 diagnostics path currently adapts:
 
 The current path remains `limited` and diagnostics-only because it does not yet
 canonicalize the full Commander prompt surface: unsupported activation cost
-families, target distribution, X, additional and alternative costs, trigger
-  trigger-order benchmark labels, spell resolution-time choices, triggered targets and deferred optionals,
-non-player combat defenders,
-and strategic damage ordering. Normal spells and the current typed activated
-slice cover targets, optional effects, payments, and activated/triggered object
-searches, but those prompt families remain partial until their remaining
-trigger-target, spell-resolution, and multi-zone forms use the same boundary.
+families, target distribution, X, additional and alternative costs,
+trigger-order benchmark labels, spell resolution-time choices, triggered
+targets and deferred optionals, and non-player combat defenders. Normal spells
+and the current typed activated slice cover targets, optional effects,
+payments, and activated/triggered object searches, but those prompt families
+remain partial until their remaining trigger-target, spell-resolution, and
+multi-zone forms use the same boundary.
 A typed immediate concession action and event exist, but the always-available
 human/AI/benchmark prompt adapter remains open. These gaps cannot be silently
 skipped for CP-AI-BENCH,

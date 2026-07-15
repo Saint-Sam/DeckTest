@@ -309,6 +309,24 @@ pub enum DecisionDescriptor {
         /// Selected objects in compiled choice-slot order.
         choices: Vec<Vec<ObjectId>>,
     },
+    /// Extend the ordered combat-damage target prefix for one source.
+    OrderCombatDamage {
+        /// Damage source.
+        source: ObjectId,
+        /// Ordered targets selected so far.
+        targets: Vec<TargetChoice>,
+    },
+    /// Narrow a large legal combat-damage amount range hierarchically.
+    ChooseCombatDamageRange {
+        /// Damage source.
+        source: ObjectId,
+        /// Damage target.
+        target: TargetChoice,
+        /// Inclusive lower bound selected by this option.
+        minimum: u32,
+        /// Inclusive upper bound selected by this option.
+        maximum: u32,
+    },
     /// Choose one combat-damage amount for a typed target.
     AssignCombatDamage {
         /// Damage source.
@@ -473,6 +491,26 @@ impl DecisionDescriptor {
                 for choice in choices {
                     bytes.objects(choice);
                 }
+            }
+            Self::OrderCombatDamage { source, targets } => {
+                bytes.u8(24);
+                bytes.object(*source);
+                bytes.u32(targets.len() as u32);
+                for target in targets {
+                    bytes.target(*target);
+                }
+            }
+            Self::ChooseCombatDamageRange {
+                source,
+                target,
+                minimum,
+                maximum,
+            } => {
+                bytes.u8(25);
+                bytes.object(*source);
+                bytes.target(*target);
+                bytes.u32(*minimum);
+                bytes.u32(*maximum);
             }
             Self::AssignCombatDamage {
                 source,
@@ -1173,6 +1211,16 @@ mod tests {
             DecisionDescriptor::ChooseResolutionObjects {
                 choices: vec![vec![object]],
             },
+            DecisionDescriptor::OrderCombatDamage {
+                source: object,
+                targets: vec![crate::TargetChoice::Object(object)],
+            },
+            DecisionDescriptor::ChooseCombatDamageRange {
+                source: object,
+                target: crate::TargetChoice::Player(player),
+                minimum: 0,
+                maximum: 10,
+            },
             DecisionDescriptor::AssignCombatDamage {
                 source: object,
                 target: crate::TargetChoice::Player(player),
@@ -1184,6 +1232,6 @@ mod tests {
             .into_iter()
             .map(|descriptor| DecisionOption::new(descriptor, Vec::new()).id())
             .collect::<std::collections::BTreeSet<_>>();
-        assert_eq!(ids.len(), 24);
+        assert_eq!(ids.len(), 26);
     }
 }

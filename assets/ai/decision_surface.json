@@ -41,7 +41,7 @@
       "human": "partial",
       "ai": "partial",
       "benchmark": "partial",
-      "note": "Human and AI consume the same scoped per-blocker contexts for every attacked player in deterministic APNAP order; typed partial declarations include fail-closed menace completion and the kernel receives one complete declaration. Strategic damage ordering and sealed benchmark fixtures remain open."
+      "note": "Human and AI consume the same scoped per-blocker contexts for every attacked player in deterministic APNAP order; typed partial declarations include fail-closed menace completion and the kernel receives one complete declaration. Non-player defenders and sealed benchmark fixtures remain open."
     },
     {
       "kind": "commander_zone",
@@ -108,10 +108,10 @@
     },
     {
       "kind": "combat_damage",
-      "human": "descriptor_only",
-      "ai": "descriptor_only",
-      "benchmark": "descriptor_only",
-      "note": "Automatic legal damage is exercised, but strategic order and assignment prompts remain open."
+      "human": "complete",
+      "ai": "complete",
+      "benchmark": "partial",
+      "note": "Live human and AI controllers share bounded next-blocker and sequential amount contexts, including lethal-to-advance, trample, typed path identity, replay telemetry, and logarithmic narrowing for large numeric ranges. The kernel validates the final ordered assignment before mutation; sealed benchmark fixtures and acceptable-action labels remain open."
     },
     {
       "kind": "concession",

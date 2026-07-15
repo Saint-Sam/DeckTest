@@ -5409,6 +5409,41 @@ impl CombatDamageAssignmentRequest {
     }
 }
 
+/// Legal target order and amount constraints for one combat-damage source.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CombatDamageChoiceProfile {
+    source: ObjectId,
+    targets: Vec<CombatDamageTarget>,
+    required_total: u32,
+    minimum_to_advance: Vec<u32>,
+}
+
+impl CombatDamageChoiceProfile {
+    /// Returns the damage source.
+    #[must_use]
+    pub const fn source(&self) -> ObjectId {
+        self.source
+    }
+
+    /// Returns legal targets in the current damage-assignment order.
+    #[must_use]
+    pub fn targets(&self) -> &[CombatDamageTarget] {
+        &self.targets
+    }
+
+    /// Returns the source's complete damage amount for this step.
+    #[must_use]
+    pub const fn required_total(&self) -> u32 {
+        self.required_total
+    }
+
+    /// Returns the minimum damage this target needs before a later target may receive damage.
+    #[must_use]
+    pub fn minimum_to_advance(&self) -> &[u32] {
+        &self.minimum_to_advance
+    }
+}
+
 /// One combat damage event recorded after damage is dealt.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct CombatDamageRecord {
@@ -13494,7 +13529,9 @@ impl GameState {
         }
     }
 
-    fn eligible_combat_damage_sources(&self) -> Result<Vec<ObjectId>, StateError> {
+    /// Returns every creature that must assign damage in the current combat-damage step.
+    pub fn eligible_combat_damage_sources(&self) -> Result<Vec<ObjectId>, StateError> {
+        self.require_combat_step(Step::CombatDamage)?;
         let step = self
             .combat
             .damage_step
@@ -13522,6 +13559,81 @@ impl GameState {
         Ok(sources)
     }
 
+    /// Returns the canonical legal target order and amount constraints for one damage source.
+    pub fn combat_damage_choice_profile(
+        &self,
+        source: ObjectId,
+    ) -> Result<CombatDamageChoiceProfile, StateError> {
+        if !self.eligible_combat_damage_sources()?.contains(&source) {
+            return Err(StateError::IllegalCombatDamageAssignment(source));
+        }
+        let profile = self.combat_damage_profile(source)?;
+        self.combat_damage_choice_profile_for_targets(
+            source,
+            profile.legal_targets,
+            profile.required_total,
+        )
+    }
+
+    /// Validates and returns constraints for an explicitly selected damage-target order.
+    pub fn combat_damage_choice_profile_for_order(
+        &self,
+        source: ObjectId,
+        targets: &[CombatDamageTarget],
+    ) -> Result<CombatDamageChoiceProfile, StateError> {
+        let canonical = self.combat_damage_choice_profile(source)?;
+        let mut unmatched = canonical.targets.clone();
+        for target in targets {
+            let Some(index) = unmatched.iter().position(|candidate| candidate == target) else {
+                return Err(StateError::IllegalCombatDamageAssignment(source));
+            };
+            unmatched.remove(index);
+        }
+        if !unmatched.is_empty()
+            || targets
+                .iter()
+                .take(targets.len().saturating_sub(1))
+                .any(|target| matches!(target, CombatDamageTarget::Player(_)))
+        {
+            return Err(StateError::IllegalCombatDamageAssignment(source));
+        }
+        self.combat_damage_choice_profile_for_targets(
+            source,
+            targets.to_vec(),
+            canonical.required_total,
+        )
+    }
+
+    fn combat_damage_choice_profile_for_targets(
+        &self,
+        source: ObjectId,
+        targets: Vec<CombatDamageTarget>,
+        required_total: u32,
+    ) -> Result<CombatDamageChoiceProfile, StateError> {
+        let source_keywords = self.creature_keywords(source)?;
+        let minimum_to_advance = targets
+            .iter()
+            .enumerate()
+            .map(|(index, target)| {
+                if index + 1 == targets.len() {
+                    return Ok(0);
+                }
+                match target {
+                    CombatDamageTarget::Object(object) => {
+                        self.lethal_damage_required(*object, source_keywords)
+                    }
+                    CombatDamageTarget::Player(_) => Ok(0),
+                }
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(CombatDamageChoiceProfile {
+            source,
+            targets,
+            required_total,
+            minimum_to_advance,
+        })
+    }
+
     fn validate_combat_damage_request(
         &self,
         request: &CombatDamageAssignmentRequest,
@@ -13539,11 +13651,47 @@ impl GameState {
         if total != profile.required_total {
             return Err(StateError::IllegalCombatDamageAssignment(request.source()));
         }
-        self.validate_blocker_assignment_order(request)?;
+        let target_order = self.combat_damage_target_order(request, &profile)?;
+        self.validate_blocker_assignment_order(request, &target_order)?;
         if !profile.trample_blockers.is_empty() {
             self.validate_trample_assignment(request, &profile)?;
         }
         Ok(())
+    }
+
+    fn combat_damage_target_order(
+        &self,
+        request: &CombatDamageAssignmentRequest,
+        profile: &CombatDamageProfile,
+    ) -> Result<Vec<CombatDamageTarget>, StateError> {
+        let mut order = Vec::with_capacity(profile.legal_targets.len());
+        for assignment in request.assignments() {
+            if !order.contains(&assignment.target()) {
+                order.push(assignment.target());
+            }
+        }
+        if let Some(player_index) = order
+            .iter()
+            .position(|target| matches!(target, CombatDamageTarget::Player(_)))
+        {
+            if player_index + 1 != order.len() {
+                return Err(StateError::IllegalCombatDamageAssignment(request.source()));
+            }
+            let player = order.remove(player_index);
+            for target in &profile.legal_targets {
+                if !matches!(target, CombatDamageTarget::Player(_)) && !order.contains(target) {
+                    order.push(*target);
+                }
+            }
+            order.push(player);
+        } else {
+            for target in &profile.legal_targets {
+                if !order.contains(target) {
+                    order.push(*target);
+                }
+            }
+        }
+        Ok(order)
     }
 
     fn validate_trample_assignment(
@@ -13578,6 +13726,7 @@ impl GameState {
     fn validate_blocker_assignment_order(
         &self,
         request: &CombatDamageAssignmentRequest,
+        target_order: &[CombatDamageTarget],
     ) -> Result<(), StateError> {
         let Some(attacker) = self
             .combat
@@ -13590,11 +13739,17 @@ impl GameState {
         if !attacker.blocked {
             return Ok(());
         }
-        let current_blockers: Vec<ObjectId> = attacker
-            .blockers
+        let current_blockers: Vec<ObjectId> = target_order
             .iter()
-            .copied()
-            .filter(|blocker| self.is_active_blocking_creature(*blocker))
+            .filter_map(|target| match target {
+                CombatDamageTarget::Object(blocker)
+                    if attacker.blockers.contains(blocker)
+                        && self.is_active_blocking_creature(*blocker) =>
+                {
+                    Some(*blocker)
+                }
+                _ => None,
+            })
             .collect();
         if current_blockers.len() < 2 {
             return Ok(());
@@ -22856,10 +23011,21 @@ mod tests {
             Err(StateError::IllegalCombatDamageAssignment(trampler))
         );
         assert_eq!(state.canonical_bytes(), before);
+        assert_eq!(
+            state.assign_combat_damage(&[CombatDamageAssignmentRequest::new(
+                trampler,
+                vec![
+                    CombatDamageAssignment::new(CombatDamageTarget::Player(defender), 2),
+                    CombatDamageAssignment::new(CombatDamageTarget::Object(blocker), 3),
+                ],
+            )]),
+            Err(StateError::IllegalCombatDamageAssignment(trampler))
+        );
+        assert_eq!(state.canonical_bytes(), before);
     }
 
     #[test]
-    fn double_block_damage_must_follow_blocker_order() {
+    fn double_block_damage_uses_the_explicit_request_order() {
         let mut state = GameState::new();
         let active = state.add_player();
         let defender = state.add_player();
@@ -22888,19 +23054,45 @@ mod tests {
         state
             .advance_step()
             .unwrap_or_else(|error| panic!("unexpected damage advance error: {error:?}"));
-        let before = state.canonical_bytes();
-
+        let canonical = state
+            .combat_damage_choice_profile(attacker)
+            .unwrap_or_else(|error| panic!("unexpected canonical profile error: {error:?}"));
         assert_eq!(
-            state.assign_combat_damage(&[CombatDamageAssignmentRequest::new(
+            canonical.targets(),
+            &[
+                CombatDamageTarget::Object(first_blocker),
+                CombatDamageTarget::Object(second_blocker),
+            ]
+        );
+        let reversed = state
+            .combat_damage_choice_profile_for_order(
+                attacker,
+                &[
+                    CombatDamageTarget::Object(second_blocker),
+                    CombatDamageTarget::Object(first_blocker),
+                ],
+            )
+            .unwrap_or_else(|error| panic!("unexpected reversed profile error: {error:?}"));
+        assert_eq!(reversed.minimum_to_advance(), &[2, 0]);
+
+        let mut reversed_state = state.clone();
+        reversed_state
+            .assign_combat_damage(&[CombatDamageAssignmentRequest::new(
                 attacker,
                 vec![CombatDamageAssignment::new(
                     CombatDamageTarget::Object(second_blocker),
                     4,
                 )],
-            )]),
-            Err(StateError::IllegalCombatDamageAssignment(attacker))
+            )])
+            .unwrap_or_else(|error| panic!("unexpected reversed damage error: {error:?}"));
+        assert_eq!(
+            reversed_state.object_zone(first_blocker),
+            Some(ZoneId::new(None, ZoneKind::Battlefield))
         );
-        assert_eq!(state.canonical_bytes(), before);
+        assert_eq!(
+            reversed_state.object_zone(second_blocker),
+            Some(ZoneId::new(Some(defender), ZoneKind::Graveyard))
+        );
 
         state
             .assign_combat_damage(&[CombatDamageAssignmentRequest::new(

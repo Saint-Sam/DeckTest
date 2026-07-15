@@ -83,7 +83,9 @@ onto identities.
    final hash are preserved, while the refreshed 1-4 ms ladder now measures
    approximately 1.5-4.8 ms p95 instead of the former 240-266 ms floor. No
    search knee is claimed yet.
-3. Complete canonical Choice/Prompt adapters and remaining T4.5 action abstraction.
+3. Complete the remaining canonical Choice/Prompt adapters and T4.5 action abstraction.
+   Live combat-damage order and amount adapters are now implemented with bounded
+   hierarchical contexts and strict kernel validation.
    The safe Linux/Android CPU/RSS adapter is implemented; run its supported-server
    measurement campaign, then
    run the three-track development, validation, and sealed CP-AI-BENCH campaigns.

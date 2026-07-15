@@ -54,6 +54,7 @@ const AI_REPLAY_MAGIC: &str = "forge-ai-baseline-replay-v1";
 const PILOT_INTENTS_PATH: &str = "assets/ai/pilot_intents.json";
 const RETAINED_REPLAYS: usize = 10;
 const MAX_CANONICAL_SPELL_OPTIONS: usize = 65_536;
+const MAX_DIRECT_COMBAT_DAMAGE_AMOUNTS: u32 = 64;
 
 /// Runs the complete local T3.9 pod campaign from process arguments.
 pub fn run() -> Result<(), String> {
@@ -2152,7 +2153,7 @@ impl GameDriver {
                         })?;
                     if damage_done.insert((turn, damage_step)) {
                         self.check_hidden_information()?;
-                        self.assign_combat_damage()?;
+                        self.assign_combat_damage(human, &mut decisions, ai_policies.as_ref())?;
                         if let Some(human) = human {
                             let source = decisions.as_deref_mut().ok_or_else(|| {
                                 "human game is missing a decision source".to_owned()
@@ -6196,81 +6197,587 @@ impl GameDriver {
         Ok(())
     }
 
-    fn assign_combat_damage(&mut self) -> Result<(), String> {
-        let combat = self.state.combat_state().clone();
-        let step = combat
-            .damage_step()
-            .ok_or_else(|| format!("seed {} missing combat damage step", self.seed))?;
-        let mut assignments = Vec::new();
-        for attack in combat.attackers() {
-            if self.state.object_zone(attack.object())
-                != Some(ZoneId::new(None, ZoneKind::Battlefield))
-            {
-                continue;
-            }
-            let characteristics = self
-                .state
-                .creature_characteristics(attack.object())
-                .map_err(|error| {
-                    format!(
-                        "seed {} combat characteristics failed: {error:?}",
-                        self.seed
-                    )
-                })?;
-            if !damage_step_eligible(step, characteristics.keywords()) {
-                continue;
-            }
-            let amount = u32::try_from(characteristics.power().max(0))
-                .map_err(|error| format!("seed {} invalid combat power: {error}", self.seed))?;
-            if amount == 0 {
-                continue;
-            }
-            let active_blocker = attack.blockers().iter().copied().find(|blocker| {
-                self.state.object_zone(*blocker) == Some(ZoneId::new(None, ZoneKind::Battlefield))
-            });
-            let target = if let Some(blocker) = active_blocker {
-                CombatDamageTarget::Object(blocker)
-            } else if !attack.blocked() || characteristics.keywords().trample() {
-                CombatDamageTarget::Player(attack.defending_player())
-            } else {
-                continue;
-            };
-            assignments.push(CombatDamageAssignmentRequest::new(
-                attack.object(),
-                vec![CombatDamageAssignment::new(target, amount)],
+    fn combat_damage_order_context(
+        &self,
+        controller: PlayerId,
+        source: ObjectId,
+        remaining: &[CombatDamageTarget],
+        prefix: &[CombatDamageTarget],
+    ) -> Result<DecisionContext, String> {
+        let options = remaining
+            .iter()
+            .copied()
+            .map(|target| {
+                let mut targets = prefix
+                    .iter()
+                    .copied()
+                    .map(combat_damage_target_choice)
+                    .collect::<Vec<_>>();
+                targets.push(combat_damage_target_choice(target));
+                DecisionOption::new(
+                    DecisionDescriptor::OrderCombatDamage { source, targets },
+                    Vec::new(),
+                )
+            })
+            .collect();
+        self.scoped_decision_context(
+            DecisionKind::CombatDamage,
+            controller,
+            options,
+            combat_damage_order_path_discriminator(controller, source, remaining, prefix),
+        )
+    }
+
+    fn combat_damage_amount_context(
+        &self,
+        controller: PlayerId,
+        source: ObjectId,
+        targets: &[CombatDamageTarget],
+        assignments: &[CombatDamageAssignment],
+        cursor: usize,
+        bounds: (u32, u32),
+    ) -> Result<DecisionContext, String> {
+        let target = targets.get(cursor).copied().ok_or_else(|| {
+            format!(
+                "seed {} combat-damage amount cursor {cursor} is out of bounds",
+                self.seed
+            )
+        })?;
+        let options = (bounds.0..=bounds.1)
+            .map(|amount| {
+                DecisionOption::new(
+                    DecisionDescriptor::AssignCombatDamage {
+                        source,
+                        target: combat_damage_target_choice(target),
+                        amount,
+                    },
+                    Vec::new(),
+                )
+            })
+            .collect();
+        self.scoped_decision_context(
+            DecisionKind::CombatDamage,
+            controller,
+            options,
+            combat_damage_amount_path_discriminator(
+                controller,
+                source,
+                targets,
+                assignments,
+                cursor,
+                bounds,
+            ),
+        )
+    }
+
+    fn combat_damage_amount_range_context(
+        &self,
+        controller: PlayerId,
+        source: ObjectId,
+        targets: &[CombatDamageTarget],
+        assignments: &[CombatDamageAssignment],
+        cursor: usize,
+        bounds: (u32, u32),
+    ) -> Result<DecisionContext, String> {
+        if bounds.0 >= bounds.1 {
+            return Err(format!(
+                "seed {} combat-damage range is not divisible: {bounds:?}",
+                self.seed
             ));
         }
-        for block in combat.blockers() {
-            if self.state.object_zone(block.object())
-                != Some(ZoneId::new(None, ZoneKind::Battlefield))
-                || self.state.object_zone(block.attacker())
-                    != Some(ZoneId::new(None, ZoneKind::Battlefield))
-            {
-                continue;
+        let target = targets.get(cursor).copied().ok_or_else(|| {
+            format!(
+                "seed {} combat-damage range cursor {cursor} is out of bounds",
+                self.seed
+            )
+        })?;
+        let midpoint = bounds.0 + (bounds.1 - bounds.0) / 2;
+        let options = [(bounds.0, midpoint), (midpoint + 1, bounds.1)]
+            .into_iter()
+            .map(|(minimum, maximum)| {
+                DecisionOption::new(
+                    DecisionDescriptor::ChooseCombatDamageRange {
+                        source,
+                        target: combat_damage_target_choice(target),
+                        minimum,
+                        maximum,
+                    },
+                    Vec::new(),
+                )
+            })
+            .collect();
+        self.scoped_decision_context(
+            DecisionKind::CombatDamage,
+            controller,
+            options,
+            combat_damage_amount_path_discriminator(
+                controller,
+                source,
+                targets,
+                assignments,
+                cursor,
+                bounds,
+            ),
+        )
+    }
+
+    fn combat_damage_target_label(&self, target: CombatDamageTarget) -> String {
+        match target {
+            CombatDamageTarget::Object(object) => self.object_name(object),
+            CombatDamageTarget::Player(player) => {
+                format!("player {}", player.index().saturating_add(1))
             }
-            let characteristics = self
+        }
+    }
+
+    fn select_combat_damage_order_choice(
+        &mut self,
+        context: &DecisionContext,
+        controller: PlayerId,
+        human: Option<PlayerId>,
+        decisions: &mut Option<&mut dyn DecisionSource>,
+        ai_policies: Option<&SeatPolicies>,
+    ) -> Result<CombatDamageTarget, String> {
+        let selected_id = if human == Some(controller) {
+            let labels = context
+                .options()
+                .iter()
+                .map(|option| match option.descriptor() {
+                    DecisionDescriptor::OrderCombatDamage { source, targets } => targets
+                        .last()
+                        .copied()
+                        .and_then(combat_damage_choice_target)
+                        .map(|target| {
+                            format!(
+                                "Assign damage from {} to {} in position {}",
+                                self.object_name(*source),
+                                self.combat_damage_target_label(target),
+                                targets.len()
+                            )
+                        })
+                        .ok_or_else(|| {
+                            format!("seed {} combat-damage order option is empty", self.seed)
+                        }),
+                    descriptor => Err(format!(
+                        "seed {} cannot label combat-damage order descriptor {descriptor:?}",
+                        self.seed
+                    )),
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let source = decisions.as_deref_mut().ok_or_else(|| {
+                "human game is missing a decision source for combat-damage ordering".to_owned()
+            })?;
+            self.prompt_context_choice(source, "Order combat-damage targets", context, &labels)?
+        } else if let Some(policies) = ai_policies {
+            let decision_started = Instant::now();
+            let policy = self.policy_for(controller, policies)?;
+            let candidates = if matches!(policy, AiController::Random(_)) {
+                Vec::new()
+            } else {
+                self.policy_candidates(context, controller, |_| 0)?
+            };
+            let (selected_id, decision, policy_name) =
+                self.select_ai_action(policy, context, &candidates, "combat_damage_order")?;
+            self.record_ai_decision(AiDecisionTelemetry {
+                kind: "combat_damage_order",
+                policy: policy_name,
+                context,
+                action_id: selected_id,
+                decision,
+                evaluated_candidates: candidates.len(),
+                wall_latency_us: elapsed_us(decision_started),
+                score_override: None,
+                stop_reason: if decision.is_some() {
+                    "one_ply_complete"
+                } else {
+                    "random_legal_selection"
+                },
+            });
+            selected_id
+        } else {
+            return Err(format!(
+                "seed {} combat-damage order prompt has no controller",
+                self.seed
+            ));
+        };
+        let selected = context.select(selected_id).map_err(|error| {
+            format!(
+                "seed {} selected an illegal combat-damage order action: {error}",
+                self.seed
+            )
+        })?;
+        let DecisionDescriptor::OrderCombatDamage { targets, .. } = selected.descriptor() else {
+            return Err(format!(
+                "seed {} combat-damage order returned a non-order descriptor",
+                self.seed
+            ));
+        };
+        targets
+            .last()
+            .copied()
+            .and_then(combat_damage_choice_target)
+            .ok_or_else(|| format!("seed {} combat-damage order selection is empty", self.seed))
+    }
+
+    fn select_combat_damage_amount(
+        &mut self,
+        context: &DecisionContext,
+        controller: PlayerId,
+        human: Option<PlayerId>,
+        decisions: &mut Option<&mut dyn DecisionSource>,
+        ai_policies: Option<&SeatPolicies>,
+    ) -> Result<u32, String> {
+        let selected_id = if human == Some(controller) {
+            let labels = context
+                .options()
+                .iter()
+                .map(|option| match option.descriptor() {
+                    DecisionDescriptor::AssignCombatDamage {
+                        source,
+                        target,
+                        amount,
+                    } => combat_damage_choice_target(*target)
+                        .map(|target| {
+                            format!(
+                                "Assign {amount} damage from {} to {}",
+                                self.object_name(*source),
+                                self.combat_damage_target_label(target)
+                            )
+                        })
+                        .ok_or_else(|| {
+                            format!(
+                                "seed {} combat-damage target cannot be a stack entry",
+                                self.seed
+                            )
+                        }),
+                    descriptor => Err(format!(
+                        "seed {} cannot label combat-damage amount descriptor {descriptor:?}",
+                        self.seed
+                    )),
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let source = decisions.as_deref_mut().ok_or_else(|| {
+                "human game is missing a decision source for combat-damage assignment".to_owned()
+            })?;
+            self.prompt_context_choice(source, "Assign combat damage", context, &labels)?
+        } else if let Some(policies) = ai_policies {
+            let decision_started = Instant::now();
+            let policy = self.policy_for(controller, policies)?;
+            let candidates = if matches!(policy, AiController::Random(_)) {
+                Vec::new()
+            } else {
+                self.policy_candidates(context, controller, |option| {
+                    if let DecisionDescriptor::AssignCombatDamage { amount, .. } =
+                        option.descriptor()
+                    {
+                        -i64::from(*amount)
+                    } else {
+                        0
+                    }
+                })?
+            };
+            let (selected_id, decision, policy_name) =
+                self.select_ai_action(policy, context, &candidates, "combat_damage_amount")?;
+            self.record_ai_decision(AiDecisionTelemetry {
+                kind: "combat_damage_amount",
+                policy: policy_name,
+                context,
+                action_id: selected_id,
+                decision,
+                evaluated_candidates: candidates.len(),
+                wall_latency_us: elapsed_us(decision_started),
+                score_override: None,
+                stop_reason: if decision.is_some() {
+                    "one_ply_complete"
+                } else {
+                    "random_legal_selection"
+                },
+            });
+            selected_id
+        } else {
+            return Err(format!(
+                "seed {} combat-damage amount prompt has no controller",
+                self.seed
+            ));
+        };
+        let selected = context.select(selected_id).map_err(|error| {
+            format!(
+                "seed {} selected an illegal combat-damage amount action: {error}",
+                self.seed
+            )
+        })?;
+        let DecisionDescriptor::AssignCombatDamage { amount, .. } = selected.descriptor() else {
+            return Err(format!(
+                "seed {} combat-damage amount returned a non-assignment descriptor",
+                self.seed
+            ));
+        };
+        Ok(*amount)
+    }
+
+    fn select_combat_damage_amount_range(
+        &mut self,
+        context: &DecisionContext,
+        controller: PlayerId,
+        human: Option<PlayerId>,
+        decisions: &mut Option<&mut dyn DecisionSource>,
+        ai_policies: Option<&SeatPolicies>,
+    ) -> Result<(u32, u32), String> {
+        let selected_id = if human == Some(controller) {
+            let labels = context
+                .options()
+                .iter()
+                .map(|option| match option.descriptor() {
+                    DecisionDescriptor::ChooseCombatDamageRange {
+                        source,
+                        target,
+                        minimum,
+                        maximum,
+                    } => combat_damage_choice_target(*target)
+                        .map(|target| {
+                            format!(
+                                "Assign {minimum}-{maximum} damage from {} to {}",
+                                self.object_name(*source),
+                                self.combat_damage_target_label(target)
+                            )
+                        })
+                        .ok_or_else(|| {
+                            format!(
+                                "seed {} combat-damage target cannot be a stack entry",
+                                self.seed
+                            )
+                        }),
+                    descriptor => Err(format!(
+                        "seed {} cannot label combat-damage range descriptor {descriptor:?}",
+                        self.seed
+                    )),
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let source = decisions.as_deref_mut().ok_or_else(|| {
+                "human game is missing a decision source for combat-damage assignment".to_owned()
+            })?;
+            self.prompt_context_choice(source, "Narrow combat damage", context, &labels)?
+        } else if let Some(policies) = ai_policies {
+            let decision_started = Instant::now();
+            let policy = self.policy_for(controller, policies)?;
+            let candidates = if matches!(policy, AiController::Random(_)) {
+                Vec::new()
+            } else {
+                self.policy_candidates(context, controller, |option| {
+                    if let DecisionDescriptor::ChooseCombatDamageRange { minimum, .. } =
+                        option.descriptor()
+                    {
+                        -i64::from(*minimum)
+                    } else {
+                        0
+                    }
+                })?
+            };
+            let (selected_id, decision, policy_name) =
+                self.select_ai_action(policy, context, &candidates, "combat_damage_amount")?;
+            self.record_ai_decision(AiDecisionTelemetry {
+                kind: "combat_damage_amount",
+                policy: policy_name,
+                context,
+                action_id: selected_id,
+                decision,
+                evaluated_candidates: candidates.len(),
+                wall_latency_us: elapsed_us(decision_started),
+                score_override: None,
+                stop_reason: if decision.is_some() {
+                    "range_narrowed"
+                } else {
+                    "random_range_selection"
+                },
+            });
+            selected_id
+        } else {
+            return Err(format!(
+                "seed {} combat-damage range prompt has no controller",
+                self.seed
+            ));
+        };
+        let selected = context.select(selected_id).map_err(|error| {
+            format!(
+                "seed {} selected an illegal combat-damage range action: {error}",
+                self.seed
+            )
+        })?;
+        let DecisionDescriptor::ChooseCombatDamageRange {
+            minimum, maximum, ..
+        } = selected.descriptor()
+        else {
+            return Err(format!(
+                "seed {} combat-damage range returned a non-range descriptor",
+                self.seed
+            ));
+        };
+        Ok((*minimum, *maximum))
+    }
+
+    fn assign_combat_damage(
+        &mut self,
+        human: Option<PlayerId>,
+        decisions: &mut Option<&mut dyn DecisionSource>,
+        ai_policies: Option<&SeatPolicies>,
+    ) -> Result<(), String> {
+        let sources = self
+            .state
+            .eligible_combat_damage_sources()
+            .map_err(|error| {
+                format!(
+                    "seed {} combat-damage source discovery failed: {error:?}",
+                    self.seed
+                )
+            })?;
+        let mut assignments = Vec::new();
+        let legacy_human_replay = decisions
+            .as_ref()
+            .is_some_and(|source| source.is_legacy_replay());
+        for source in sources {
+            let canonical = self
                 .state
-                .creature_characteristics(block.object())
+                .combat_damage_choice_profile(source)
                 .map_err(|error| {
                     format!(
-                        "seed {} blocker characteristics failed: {error:?}",
+                        "seed {} combat-damage profile failed for {}: {error:?}",
+                        self.seed,
+                        source.index()
+                    )
+                })?;
+            if canonical.required_total() == 0 {
+                continue;
+            }
+            let controller = self.state.object_controller(source).map_err(|error| {
+                format!(
+                    "seed {} combat-damage controller failed for {}: {error:?}",
+                    self.seed,
+                    source.index()
+                )
+            })?;
+            let controlled =
+                (human == Some(controller) && !legacy_human_replay) || ai_policies.is_some();
+            let mut remaining = canonical
+                .targets()
+                .iter()
+                .copied()
+                .filter(|target| matches!(target, CombatDamageTarget::Object(_)))
+                .collect::<Vec<_>>();
+            let mut ordered = Vec::with_capacity(canonical.targets().len());
+            if controlled {
+                while remaining.len() > 1 {
+                    let context =
+                        self.combat_damage_order_context(controller, source, &remaining, &ordered)?;
+                    let selected = self.select_combat_damage_order_choice(
+                        &context,
+                        controller,
+                        human,
+                        decisions,
+                        ai_policies,
+                    )?;
+                    let index = remaining
+                        .iter()
+                        .position(|target| *target == selected)
+                        .ok_or_else(|| {
+                            format!(
+                                "seed {} selected combat-damage target outside the remaining order",
+                                self.seed
+                            )
+                        })?;
+                    ordered.push(remaining.remove(index));
+                }
+            }
+            ordered.extend(remaining);
+            ordered.extend(
+                canonical
+                    .targets()
+                    .iter()
+                    .copied()
+                    .filter(|target| matches!(target, CombatDamageTarget::Player(_))),
+            );
+            if ordered.is_empty() {
+                return Err(format!(
+                    "seed {} damage source {} has positive power but no legal target",
+                    self.seed,
+                    source.index()
+                ));
+            }
+            let profile = self
+                .state
+                .combat_damage_choice_profile_for_order(source, &ordered)
+                .map_err(|error| {
+                    format!(
+                        "seed {} selected combat-damage order failed validation: {error:?}",
                         self.seed
                     )
                 })?;
-            if !damage_step_eligible(step, characteristics.keywords()) {
-                continue;
+            let mut remaining_damage = profile.required_total();
+            let mut source_assignments = Vec::with_capacity(ordered.len());
+            for (cursor, target) in ordered.iter().copied().enumerate() {
+                let amount = if cursor + 1 == ordered.len() {
+                    remaining_damage
+                } else if !controlled {
+                    if cursor == 0 {
+                        remaining_damage
+                    } else {
+                        0
+                    }
+                } else {
+                    let minimum = profile.minimum_to_advance()[cursor].min(remaining_damage);
+                    if minimum == remaining_damage {
+                        remaining_damage
+                    } else {
+                        let mut bounds = (minimum, remaining_damage);
+                        while u64::from(bounds.1) - u64::from(bounds.0) + 1
+                            > u64::from(MAX_DIRECT_COMBAT_DAMAGE_AMOUNTS)
+                        {
+                            let context = self.combat_damage_amount_range_context(
+                                controller,
+                                source,
+                                &ordered,
+                                &source_assignments,
+                                cursor,
+                                bounds,
+                            )?;
+                            bounds = self.select_combat_damage_amount_range(
+                                &context,
+                                controller,
+                                human,
+                                decisions,
+                                ai_policies,
+                            )?;
+                        }
+                        let context = self.combat_damage_amount_context(
+                            controller,
+                            source,
+                            &ordered,
+                            &source_assignments,
+                            cursor,
+                            bounds,
+                        )?;
+                        self.select_combat_damage_amount(
+                            &context,
+                            controller,
+                            human,
+                            decisions,
+                            ai_policies,
+                        )?
+                    }
+                };
+                remaining_damage = remaining_damage.checked_sub(amount).ok_or_else(|| {
+                    format!(
+                        "seed {} selected {amount} damage with only {remaining_damage} remaining",
+                        self.seed
+                    )
+                })?;
+                if controlled || amount > 0 {
+                    source_assignments.push(CombatDamageAssignment::new(target, amount));
+                }
             }
-            let amount = u32::try_from(characteristics.power().max(0))
-                .map_err(|error| format!("seed {} invalid blocker power: {error}", self.seed))?;
-            if amount > 0 {
-                assignments.push(CombatDamageAssignmentRequest::new(
-                    block.object(),
-                    vec![CombatDamageAssignment::new(
-                        CombatDamageTarget::Object(block.attacker()),
-                        amount,
-                    )],
-                ));
-            }
+            assignments.push(CombatDamageAssignmentRequest::new(
+                source,
+                source_assignments,
+            ));
         }
         let outcome = self.dispatch(Action::AssignCombatDamage { assignments })?;
         let Outcome::CombatDamageAssigned(records) = outcome else {
@@ -7085,17 +7592,6 @@ impl SearchDomain for CombatSearchDomain<'_> {
     }
 }
 
-fn damage_step_eligible(
-    step: CombatDamageStepKind,
-    keywords: forge_core::CreatureKeywords,
-) -> bool {
-    match step {
-        CombatDamageStepKind::Normal => true,
-        CombatDamageStepKind::FirstStrike => keywords.first_strike() || keywords.double_strike(),
-        CombatDamageStepKind::Regular => !keywords.first_strike() || keywords.double_strike(),
-    }
-}
-
 fn ensure_trigger_targets_are_autonomous(
     ability: &TriggeredAbilityProgram,
     card_name: &str,
@@ -7281,6 +7777,74 @@ fn trigger_order_path_discriminator(
     state
 }
 
+const fn combat_damage_target_choice(target: CombatDamageTarget) -> TargetChoice {
+    match target {
+        CombatDamageTarget::Object(object) => TargetChoice::Object(object),
+        CombatDamageTarget::Player(player) => TargetChoice::Player(player),
+    }
+}
+
+const fn combat_damage_choice_target(target: TargetChoice) -> Option<CombatDamageTarget> {
+    match target {
+        TargetChoice::Object(object) => Some(CombatDamageTarget::Object(object)),
+        TargetChoice::Player(player) => Some(CombatDamageTarget::Player(player)),
+        TargetChoice::StackEntry(_) => None,
+    }
+}
+
+fn mix_combat_damage_target(state: u64, target: CombatDamageTarget) -> u64 {
+    match target {
+        CombatDamageTarget::Object(object) => {
+            combat_path_mix(combat_path_mix(state, 0), object.index() as u64)
+        }
+        CombatDamageTarget::Player(player) => {
+            combat_path_mix(combat_path_mix(state, 1), player.index() as u64)
+        }
+    }
+}
+
+fn combat_damage_order_path_discriminator(
+    controller: PlayerId,
+    source: ObjectId,
+    remaining: &[CombatDamageTarget],
+    prefix: &[CombatDamageTarget],
+) -> u64 {
+    let mut state = combat_path_mix(0x6461_6d61_6765_0001, controller.index() as u64);
+    state = combat_path_mix(state, source.index() as u64);
+    state = combat_path_mix(state, prefix.len() as u64);
+    for target in prefix {
+        state = mix_combat_damage_target(state, *target);
+    }
+    state = combat_path_mix(state, remaining.len() as u64);
+    for target in remaining {
+        state = mix_combat_damage_target(state, *target);
+    }
+    state
+}
+
+fn combat_damage_amount_path_discriminator(
+    controller: PlayerId,
+    source: ObjectId,
+    targets: &[CombatDamageTarget],
+    assignments: &[CombatDamageAssignment],
+    cursor: usize,
+    bounds: (u32, u32),
+) -> u64 {
+    let mut state = combat_path_mix(0x6461_6d61_6765_0002, controller.index() as u64);
+    state = combat_path_mix(state, source.index() as u64);
+    state = combat_path_mix(state, cursor as u64);
+    state = combat_path_mix(state, u64::from(bounds.0));
+    state = combat_path_mix(state, u64::from(bounds.1));
+    for target in targets {
+        state = mix_combat_damage_target(state, *target);
+    }
+    for assignment in assignments {
+        state = mix_combat_damage_target(state, assignment.target());
+        state = combat_path_mix(state, u64::from(assignment.amount()));
+    }
+    state
+}
+
 fn canonical_legal_actions(context: &DecisionContext) -> Vec<AiLegalAction> {
     context
         .options()
@@ -7410,6 +7974,23 @@ fn decision_descriptor_value(descriptor: &DecisionDescriptor) -> Value {
             "choice_object_ids": choices.iter().map(|choice| {
                 choice.iter().map(|object| object.index()).collect::<Vec<_>>()
             }).collect::<Vec<_>>()
+        }),
+        DecisionDescriptor::OrderCombatDamage { source, targets } => json!({
+            "kind": "order_combat_damage",
+            "source_object_id": source.index(),
+            "targets": targets.iter().copied().map(target_value).collect::<Vec<_>>()
+        }),
+        DecisionDescriptor::ChooseCombatDamageRange {
+            source,
+            target,
+            minimum,
+            maximum,
+        } => json!({
+            "kind": "choose_combat_damage_range",
+            "source_object_id": source.index(),
+            "target": target_value(*target),
+            "minimum": minimum,
+            "maximum": maximum
         }),
         DecisionDescriptor::AssignCombatDamage {
             source,
@@ -8986,6 +9567,142 @@ mod tests {
     }
 
     #[test]
+    fn combat_damage_order_and_amount_use_hierarchical_shared_contexts() {
+        let (mut driver, active, defenders, pieces) = combat_decision_driver();
+        assert_eq!(
+            apply(
+                &mut driver.state,
+                Action::SetBaseCreatureCharacteristics {
+                    object: pieces[0],
+                    base: BaseCreatureCharacteristics::new(4, 4),
+                },
+            ),
+            Outcome::Applied
+        );
+        let second_blocker = create_test_creature(&mut driver.state, defenders[0], 804, 3, 3);
+        let attacks = vec![AttackDeclaration::new(pieces[0], defenders[0])];
+        driver
+            .dispatch(Action::DeclareAttackers {
+                player: active,
+                attacks: attacks.clone(),
+            })
+            .unwrap_or_else(|error| panic!("attack should apply: {error}"));
+        driver.current_attacks = attacks;
+        assert!(matches!(
+            driver.dispatch(Action::AdvanceStep),
+            Ok(Outcome::StepAdvanced(Step::DeclareBlockers))
+        ));
+        driver
+            .dispatch(Action::DeclareBlockers {
+                defending_player: defenders[0],
+                blocks: vec![
+                    BlockDeclaration::new(pieces[2], pieces[0]),
+                    BlockDeclaration::new(second_blocker, pieces[0]),
+                ],
+            })
+            .unwrap_or_else(|error| panic!("double block should apply: {error}"));
+        assert!(matches!(
+            driver.dispatch(Action::AdvanceStep),
+            Ok(Outcome::StepAdvanced(Step::CombatDamage))
+        ));
+
+        let targets = vec![
+            CombatDamageTarget::Object(pieces[2]),
+            CombatDamageTarget::Object(second_blocker),
+        ];
+        let order = driver
+            .combat_damage_order_context(active, pieces[0], &targets, &[])
+            .unwrap_or_else(|error| panic!("order context should exist: {error}"));
+        assert_eq!(order.kind(), DecisionKind::CombatDamage);
+        assert_eq!(order.options().len(), 2);
+        assert!(order.options().iter().all(|option| {
+            option.actions().is_empty()
+                && matches!(
+                    option.descriptor(),
+                    DecisionDescriptor::OrderCombatDamage { source, targets }
+                        if *source == pieces[0] && targets.len() == 1
+                )
+        }));
+        let reversed = vec![targets[1], targets[0]];
+        let profile = driver
+            .state
+            .combat_damage_choice_profile_for_order(pieces[0], &reversed)
+            .unwrap_or_else(|error| panic!("reversed profile should exist: {error:?}"));
+        assert_eq!(profile.minimum_to_advance(), &[3, 0]);
+        let amount = driver
+            .combat_damage_amount_context(active, pieces[0], &reversed, &[], 0, (3, 4))
+            .unwrap_or_else(|error| panic!("amount context should exist: {error}"));
+        assert_eq!(amount.options().len(), 2);
+        assert!(amount.options().iter().all(|option| matches!(
+            option.descriptor(),
+            DecisionDescriptor::AssignCombatDamage { source, target, amount: 3 | 4 }
+                if *source == pieces[0]
+                    && *target == TargetChoice::Object(second_blocker)
+        )));
+        let large = driver
+            .combat_damage_amount_range_context(active, pieces[0], &reversed, &[], 0, (0, u32::MAX))
+            .unwrap_or_else(|error| panic!("large range context should exist: {error}"));
+        assert_eq!(large.options().len(), 2);
+        let mut ranges = large
+            .options()
+            .iter()
+            .map(|option| match option.descriptor() {
+                DecisionDescriptor::ChooseCombatDamageRange {
+                    minimum, maximum, ..
+                } => (*minimum, *maximum),
+                descriptor => panic!("unexpected large-range descriptor: {descriptor:?}"),
+            })
+            .collect::<Vec<_>>();
+        ranges.sort_unstable();
+        assert_eq!(
+            ranges,
+            vec![(0, u32::MAX / 2), (u32::MAX / 2 + 1, u32::MAX)]
+        );
+
+        let mut human_driver = driver.clone();
+        let mut source = PickSecondChoice;
+        let mut decisions = Some(&mut source as &mut dyn DecisionSource);
+        human_driver
+            .assign_combat_damage(Some(active), &mut decisions, None)
+            .unwrap_or_else(|error| panic!("human damage assignment should succeed: {error}"));
+        assert!(matches!(
+            human_driver.actions.last(),
+            Some(Action::AssignCombatDamage { assignments })
+                if assignments.iter().any(|request| {
+                    request.source() == pieces[0] && request.assignments().len() == 2
+                })
+        ));
+
+        let mut legacy_driver = driver.clone();
+        let mut legacy_source = LegacyNoPrompt;
+        let mut legacy_decisions = Some(&mut legacy_source as &mut dyn DecisionSource);
+        legacy_driver
+            .assign_combat_damage(Some(active), &mut legacy_decisions, None)
+            .unwrap_or_else(|error| panic!("legacy automatic damage should succeed: {error}"));
+        assert!(matches!(
+            legacy_driver.actions.last(),
+            Some(Action::AssignCombatDamage { assignments })
+                if assignments.iter().any(|request| {
+                    request.source() == pieces[0] && request.assignments().len() == 1
+                })
+        ));
+
+        let policies = [AiController::Random(RandomLegalPolicy::new(17)); PLAYER_COUNT];
+        let mut no_decisions = None;
+        driver
+            .assign_combat_damage(None, &mut no_decisions, Some(&policies))
+            .unwrap_or_else(|error| panic!("AI damage assignment should succeed: {error}"));
+        assert!(driver
+            .ai_decisions
+            .iter()
+            .any(|record| record.kind == "combat_damage_order"));
+        assert!(driver
+            .ai_decisions
+            .iter()
+            .any(|record| record.kind == "combat_damage_amount"));
+    }
+
+    #[test]
     fn commander_zone_adapter_exposes_both_legal_choices_and_ai_records_membership() {
         let (mut driver, owner, commander, graveyard) = commander_decision_driver();
         let context = driver
@@ -9957,6 +10674,18 @@ mod tests {
             (prompt.options.len() == 2)
                 .then_some(1)
                 .ok_or_else(|| "expected exactly two commander-zone options".to_owned())
+        }
+    }
+
+    struct LegacyNoPrompt;
+
+    impl DecisionSource for LegacyNoPrompt {
+        fn choose(&mut self, _prompt: &DecisionPrompt<'_>) -> Result<usize, String> {
+            Err("legacy combat damage must remain automatic".to_owned())
+        }
+
+        fn is_legacy_replay(&self) -> bool {
+            true
         }
     }
 

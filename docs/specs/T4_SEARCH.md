@@ -57,6 +57,12 @@ and interpreter actions bound only after the final slot. This removes the
 cross-requirement Cartesian product while preserving every legal concrete
 selection for human, AI, telemetry, and replay consumers.
 
+Combat-damage ordering and amounts also use bounded contexts outside the main
+tree. Controllers choose one next blocker and then one amount at a time; large
+numeric ranges are narrowed through binary subranges before a direct context
+is built. The rollout policy consumes the same contexts as a human controller,
+and the kernel validates the final complete ordered assignment.
+
 The typed kernel still receives one complete declaration. Hierarchical path
 bindings participate in decision-state keys and transposition equivalence, so
 the smaller action surface does not merge different partial declarations.
