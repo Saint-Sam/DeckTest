@@ -11,16 +11,16 @@
   },
   "tier": 4,
   "execution_flow": {
-    "current": "complete the remaining canonical decision adapters and T4.5 action abstraction, then run supported-server resource and CP-AI-BENCH campaigns",
+    "current": "complete the remaining canonical decision adapters, then run supported-server resource and CP-AI-BENCH campaigns",
     "next": "run CP-AI-BENCH development, validation, sealed calibration, and search-knee campaigns",
     "targeted_fallback": "When T4 discovers a concrete coverage blocker, fix the smallest shared T3 primitive, add semantic regression tests, and resume T4. Do not reopen broad mapper expansion."
   },
   "t4_diagnostic_product": {
     "status": "local_preflight_passed_resource_and_state_key_audited_promotion_blocked",
-    "commit": "3339ffb37194c3f85d9f82f88ad87757219dd3b8",
-    "tree": "af2176f5e81e2263f314f402a1a241fa7e76290b",
-    "preflight_evidence_commit": "e2cdc39d08b1f62e0b47fd11acf099daf37cedae",
-    "preflight_evidence_tree": "ab441dfe659a2bdf53779af420b8491c071c386f",
+    "commit": "f8fbb4fe1de4a14c9f37ee6eb1832319465dfcbc",
+    "tree": "47a186d0e08dcdd0716d256c22efc66ebe3f8a67",
+    "preflight_evidence_commit": "c86dc49f5e9a29a4a6a7ccd2a4952a1390964221",
+    "preflight_evidence_tree": "6077018e8ace33ec26bbcf6b381de7e38851ff8c",
     "evidence": "reports/gates/T4/LOCAL-DIAGNOSTIC-PREFLIGHT.json",
     "promotion_gate": "scripts/gates/gate_T4.sh"
   },
@@ -377,19 +377,19 @@
       "status": "verified_local_diagnostics",
       "branch": "task/T4.3-heuristic-policy",
       "attempts": 0,
-      "verification": "Seeded random-legal, deterministic/noisy one-ply heuristic, mulligan, threat/target helpers, and exact release-profile policy/action replay pass at product 3339ffb. Regenerated heuristic and random replays cover 15,763 and 6,505 canonical decisions and persist complete legal descriptors, PlayerView hashes, DecisionStateKeys, and path discriminators. The exact three-policy audit covers 38,299 decisions with 38,242 semantic signatures, matching 38,242 state keys, 190 explicitly path-bound decisions, and zero collisions or missing canonical fields. Hierarchical attacker, blocker, combat-damage order/amount, variable-number, payment, and spell/activated/triggered resolution object choices preserve complete typed declarations without materializing Cartesian products; unsupported choices remain fail closed."
+      "verification": "Seeded random-legal, deterministic/noisy one-ply heuristic, mulligan, threat/target helpers, and exact release-profile policy/action replay pass at product f8fbb4f. Regenerated heuristic and random replays cover 15,763 and 6,505 canonical decisions and persist complete legal descriptors, PlayerView hashes, DecisionStateKeys, and path discriminators. The exact three-policy audit covers 38,299 decisions with 38,242 semantic signatures, matching 38,242 state keys, 190 explicitly path-bound decisions, and zero collisions or missing canonical fields. Hierarchical attacker, blocker, combat-damage order/amount, variable-number, payment, spell/activated/triggered resolution object choices, and ordinary triggered-target announcements preserve complete typed declarations without materializing Cartesian products; required no-legal-target trigger suppression and other unsupported choices remain fail closed."
     },
     "T4.4": {
       "status": "verified_local_diagnostics",
       "branch": "task/T4.4-determinized-mcts-v1",
       "attempts": 0,
-      "verification": "Root-parallel determinized UCT passes the regenerated exact full-game replay at product 3339ffb: 16,031 canonical decisions, 789 search-policy decisions, 1,086 simulations, and 1,629 nodes, with 18,321 typed actions and final hash 3933493530367397528. Action-edge statistics, collision-checked wide-key buckets, hierarchical combat and variable-mana path identity, typed target-family widening, and exact state-key auditing pass focused regressions."
+      "verification": "Root-parallel determinized UCT passes the regenerated exact full-game replay at product f8fbb4f: 16,031 canonical decisions, 789 search-policy decisions, 1,086 simulations, and 1,629 nodes, with 18,321 typed actions and final hash 3933493530367397528. Action-edge statistics, collision-checked wide-key buckets, hierarchical combat and variable-mana path identity, typed target-family widening, and exact state-key auditing pass focused regressions."
     },
     "T4.5": {
       "status": "verified_local_diagnostics",
       "branch": "task/T4.5-search-upgrades",
       "attempts": 0,
-      "verification": "Product 3339ffb replaces exponential combat products with scoped per-object subcontexts, preserves split attacks and menace completion, validates combat-damage order and amount through bounded hierarchical contexts, and resolves printed {X} through typed begin-cast, numeric-range, payment, and final-cast contexts. Typed partial declarations survive deeper search states and each sampled GameState is constructed once. Target variants of the same typed cast or program-bound activation are interleaved as widening families while every concrete ID, transition, edge statistic, and replay action remains distinct. Exact heuristic, random, and search replays pass; the refreshed fixed/adaptive 1-4 ms ladder measures approximately 1.5-4.6 ms p95 instead of the former 240-266 ms floor. Transpositions, progressive widening, action abstraction, and total decision time budgets are implemented; future hierarchical expansion is evidence-driven rather than an open T4.5 deliverable."
+      "verification": "Product f8fbb4f replaces exponential combat products with scoped per-object subcontexts, preserves split attacks and menace completion, validates combat-damage order and amount through bounded hierarchical contexts, resolves printed {X} through typed begin-cast, numeric-range, payment, and final-cast contexts, and routes ordinary triggered targets through the canonical decision surface. Typed partial declarations survive deeper search states and each sampled GameState is constructed once. Target variants of the same typed cast or program-bound activation are interleaved as widening families while every concrete ID, transition, edge statistic, and replay action remains distinct. Exact heuristic, random, and search replays pass; the refreshed fixed/adaptive 1-4 ms ladder measures approximately 1.5-4.7 ms p95 instead of the former 240-266 ms floor. Transpositions, progressive widening, action abstraction, and total decision time budgets are implemented; future hierarchical expansion is evidence-driven rather than an open T4.5 deliverable."
     },
     "T4.6": {
       "status": "blocked_on_telemetry_labels_and_promotion_evidence",
