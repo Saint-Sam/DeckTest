@@ -4,39 +4,39 @@
   "status": "local_diagnostic_preflight_passed_promotion_blocked",
   "verified_at": "2026-07-15",
   "verification_mode": "local_only_no_github_actions",
-  "product_commit": "aa4389800db327f7878e1bfe78db18d3d2bce011",
-  "product_tree": "5d0baa8b2022ea2045a20b08076b71c85971996f",
-  "preflight_evidence_commit": "951156b3117eaf0c766be7f981d601ec606efc43",
-  "preflight_evidence_tree": "337b039c2c37a94315a391b12cde978b3d8a9505",
+  "product_commit": "a0c21b98fd98225ba3d9f11d99453ebd38418721",
+  "product_tree": "64a2d16b2709115cd64f35864a6dcba8f6034ace",
+  "preflight_evidence_commit": "db2b8421a1cc2b18b87f62cff3d4932b69a030b2",
+  "preflight_evidence_tree": "eeff747fb007811dd8353a9cf3002b024853267a",
   "gate_command": "scripts/gates/gate_T4.sh --preflight",
   "gate_log": "reports/gates/T4/commands/00-preflight.log",
-  "gate_log_sha256": "727421882661b2d245eb3eb86d0f27fec165cfa6004c558e285e978962927553",
+  "gate_log_sha256": "0ff1ee6b5ac82a0abfc7a333c0e06b691b7b67614326ad96a387c66f0e641787",
   "checks": {
     "format": "passed",
     "strict_clippy": "passed",
     "tests": {
-      "passed": 265,
+      "passed": 267,
       "failed": 0,
       "ignored": 1,
       "ignored_reason": "requires local generated T3 translated-card output"
     },
     "heuristic_exact_policy_and_typed_action_replay": {
       "status": "passed",
-      "replay_sha256": "51320e97574978f0354e1cb43538d965de39e75e774960a518b4cd6309eb1f36",
+      "replay_sha256": "3fde30fe4ae332a50bef03b3931614f6b59eed630e72ec0bb9eaf44d9f0c6e73",
       "decisions": 15763,
       "typed_actions": 18029,
       "final_hash": "1347092284232215653"
     },
     "random_legal_exact_policy_and_typed_action_replay": {
       "status": "passed",
-      "replay_sha256": "6c74096e8ddc2dc1bee3d38045920776a5019e57f48734ad5346a7808e3eaee8",
+      "replay_sha256": "ff51c6aaab05a63760e81c2e5c6e81b66aa5effcfb1a5b74172f4e76e41c57b9",
       "decisions": 6505,
       "typed_actions": 8299,
       "final_hash": "7006841597002591361"
     },
     "search_exact_policy_and_typed_action_replay": {
       "status": "passed",
-      "replay_sha256": "2c8bf72a44efefe14e91fd714bf333af0e127f52473b24351a03c2e5dbcebfc6",
+      "replay_sha256": "137f36e7903749f747c5b27762396abe7b72045578a7b54437aceb3512d7c7e4",
       "decisions": 16010,
       "searched_decisions": 563,
       "typed_actions": 18282,
@@ -64,16 +64,16 @@
       "strength_claim": false,
       "total_decision_budget_contract": "shared_deadline_and_current_surface_budget_response_passed",
       "observed_p95_wall_latency_us": [
-        2276,
-        5600
+        2167,
+        5281
       ],
       "result": "metrics/ai/search_budget_knee_results.json",
-      "result_sha256": "2b08ce04b6765da7f3dc2ccdbf74ccc2eba1d28196f48bfd7a270e7b31e4a918"
+      "result_sha256": "d9b19a68551917601f15528b111b3e44be01acf6c7e0f54a9a8690b24dfca1ad"
     },
     "decision_state_key_audit": {
       "status": "passed",
       "artifact": "metrics/ai/decision_state_audit.json",
-      "artifact_sha256": "244c10a0b4e6c5cff9e0f17cd8603d94c354f5cd3a9311f51862dec4ad606736",
+      "artifact_sha256": "12df20da4fb64cafa1fff4c9a3b7a0828a4eece30a124ae86753c6242d29181a",
       "decisions": 38278,
       "unique_semantic_signatures": 38229,
       "unique_state_keys": 38229,
@@ -100,7 +100,7 @@
     "T4.10"
   ],
   "promotion_blockers": [
-    "complete the remaining canonical human, AI, and benchmark Choice/Prompt adapters, including same-batch inter-trigger targeting, arbitrary alternate and unsupported spell/activation-cost families, modal abilities, target distribution, and partial-legality filtering",
+    "complete the remaining canonical human, AI, and benchmark Choice/Prompt adapters, including arbitrary alternate and unsupported spell/activation-cost families, modal abilities, target distribution, and partial-legality filtering",
     "three materially different archetype tracks",
     "development, validation, and sealed Track A campaigns",
     "sealed Track B acceptable-action, catastrophic-blunder, and bounded win/defense labels",

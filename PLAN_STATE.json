@@ -16,12 +16,12 @@
     "targeted_fallback": "When T4 discovers a concrete coverage blocker, fix the smallest shared T3 primitive, add semantic regression tests, and resume T4. Do not reopen broad mapper expansion."
   },
   "t4_diagnostic_product": {
-    "status": "exact_diagnostics_regenerated_preflight_pending_promotion_blocked",
+    "status": "local_preflight_passed_resource_and_state_key_audited_promotion_blocked",
     "commit": "a0c21b98fd98225ba3d9f11d99453ebd38418721",
     "tree": "64a2d16b2709115cd64f35864a6dcba8f6034ace",
-    "preflight_evidence_commit": null,
-    "preflight_evidence_tree": null,
-    "evidence": null,
+    "preflight_evidence_commit": "db2b8421a1cc2b18b87f62cff3d4932b69a030b2",
+    "preflight_evidence_tree": "eeff747fb007811dd8353a9cf3002b024853267a",
+    "evidence": "reports/gates/T4/LOCAL-DIAGNOSTIC-PREFLIGHT.json",
     "promotion_gate": "scripts/gates/gate_T4.sh"
   },
   "tasks": {
