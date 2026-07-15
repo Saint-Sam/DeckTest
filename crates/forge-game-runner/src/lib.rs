@@ -15,7 +15,7 @@ use forge_ai::{
 use forge_cards::runtime::{
     bind_activated_effect_actions, bind_program_actions, bind_triggered_ability_actions,
     compile_card_program, object_satisfies_choice_requirement, CardProgram, ExecutionBindings,
-    ObjectChoiceRequirement, PlayerBinding, ProgramKind, SpellModeProgram, TriggeredAbilityProgram,
+    ObjectChoiceRequirement, PlayerBinding, ProgramKind, SpellModeProgram,
 };
 use forge_core::{
     apply, Action, ActivatedAbilityDefinition, ActivatedAbilityEffect, ActivatedAbilityId,
@@ -25,7 +25,8 @@ use forge_core::{
     GameOutcome, GameState, HiddenCardDefinition, HiddenSlotDefinition, ManaKind, ObjectColors,
     ObjectId, ObjectView, Outcome, PaymentPlan, PlayerId, PlayerView, PriorityOutcome,
     ResolutionOutcome, SpellTiming, StackDecisionBindings, StackEntryId, StackObjectKind,
-    StateError, Step, TargetChoice, TargetKind, TargetRequirement, TriggerId, ZoneId, ZoneKind,
+    StateError, Step, TargetChoice, TargetKind, TargetRequirement, TriggerId, TriggerStackBinding,
+    ZoneId, ZoneKind,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -1398,6 +1399,8 @@ struct PendingSpellResolution {
 struct PendingTriggeredResolution {
     controller: PlayerId,
     runtime: TriggerRuntime,
+    targets: Vec<TargetChoice>,
+    decisions: StackDecisionBindings,
 }
 
 #[derive(Clone)]
@@ -5469,8 +5472,23 @@ impl GameDriver {
         let mut bindings =
             ExecutionBindings::new(pending.controller, self.live_opponents(pending.controller))
                 .with_source(pending.runtime.source)
+                .with_targets(pending.targets.clone())
                 .with_object_choices(object_choices)
-                .with_optional_effect_choices(vec![true; ability.optional_choice_count()]);
+                .with_optional_effect_choices(if pending.decisions.optional_choice_count() == 0 {
+                    vec![true; ability.optional_choice_count()]
+                } else if pending.decisions.optional_choice_count()
+                    == ability.optional_choice_count()
+                {
+                    pending.decisions.optional_choices().collect()
+                } else {
+                    return Err(format!(
+                        "seed {} trigger on {} has {} announced optional choices for {} slots",
+                        self.seed,
+                        pending.runtime.program.name(),
+                        pending.decisions.optional_choice_count(),
+                        ability.optional_choice_count()
+                    ));
+                });
         if ability.unless_paid().is_some() {
             bindings = bindings.with_unless_payment(false);
         }
@@ -5652,6 +5670,131 @@ impl GameDriver {
             .collect())
     }
 
+    fn trigger_target_context(
+        &self,
+        controller: PlayerId,
+        source: ObjectId,
+        trigger: TriggerId,
+        position: (usize, usize),
+        prior: &[TargetChoice],
+        requirement: TargetRequirement,
+    ) -> Result<DecisionContext, String> {
+        let (stack_position, cursor) = position;
+        if prior.len() != cursor {
+            return Err(format!(
+                "seed {} trigger target path has {} choices at slot {cursor}",
+                self.seed,
+                prior.len()
+            ));
+        }
+        let choices = self.legal_targets_for(controller, source, requirement);
+        if choices.is_empty() {
+            return Err(format!(
+                "seed {} trigger {} has no legal target at slot {cursor}; no-target trigger suppression remains fail closed",
+                self.seed,
+                trigger.index()
+            ));
+        }
+        let options = choices
+            .into_iter()
+            .map(|target| {
+                DecisionOption::new(DecisionDescriptor::ChooseTarget { target }, Vec::new())
+            })
+            .collect();
+        self.scoped_decision_context(
+            DecisionKind::Target,
+            controller,
+            options,
+            trigger_target_path_discriminator(controller, trigger, stack_position, cursor, prior),
+        )
+    }
+
+    fn select_trigger_target_choice(
+        &mut self,
+        context: &DecisionContext,
+        controller: PlayerId,
+        human: Option<PlayerId>,
+        decisions: &mut Option<&mut dyn DecisionSource>,
+        ai_policies: Option<&SeatPolicies>,
+    ) -> Result<TargetChoice, String> {
+        let selected_id = if human == Some(controller) {
+            let labels = context
+                .options()
+                .iter()
+                .map(|option| match option.descriptor() {
+                    DecisionDescriptor::ChooseTarget { target } => {
+                        Ok(format!("Target {}", self.target_choice_label(*target)))
+                    }
+                    descriptor => Err(format!(
+                        "seed {} cannot label trigger-target descriptor {descriptor:?}",
+                        self.seed
+                    )),
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let source = decisions.as_deref_mut().ok_or_else(|| {
+                "human game is missing a decision source for trigger targets".to_owned()
+            })?;
+            self.prompt_context_choice(
+                source,
+                "Choose a triggered ability target",
+                context,
+                &labels,
+            )?
+        } else if let Some(policies) = ai_policies {
+            let decision_started = Instant::now();
+            let policy = self.policy_for(controller, policies)?;
+            let (selected_id, decision, policy_name, candidates) = if context.options().len() == 1 {
+                (context.options()[0].id(), None, "forced-v1", Vec::new())
+            } else {
+                let candidates = if matches!(policy, AiController::Random(_)) {
+                    Vec::new()
+                } else {
+                    self.policy_candidates(context, controller, |_| 0)?
+                };
+                let (selected_id, decision, policy_name) =
+                    self.select_ai_action(policy, context, &candidates, "trigger_target")?;
+                (selected_id, decision, policy_name, candidates)
+            };
+            self.record_ai_decision(AiDecisionTelemetry {
+                kind: "trigger_target",
+                policy: policy_name,
+                context,
+                action_id: selected_id,
+                decision,
+                evaluated_candidates: candidates.len(),
+                wall_latency_us: elapsed_us(decision_started),
+                score_override: None,
+                stop_reason: if context.options().len() == 1 {
+                    "single_legal_action"
+                } else if decision.is_some() {
+                    "one_ply_complete"
+                } else {
+                    "random_legal_selection"
+                },
+            });
+            selected_id
+        } else {
+            context
+                .options()
+                .first()
+                .map(DecisionOption::id)
+                .ok_or_else(|| format!("seed {} trigger target has no options", self.seed))?
+        };
+        let selected = context.select(selected_id).map_err(|error| {
+            format!(
+                "seed {} selected an illegal trigger-target action: {error}",
+                self.seed
+            )
+        })?;
+        let DecisionDescriptor::ChooseTarget { target } = selected.descriptor() else {
+            return Err(format!(
+                "seed {} trigger-target context returned a non-target descriptor",
+                self.seed
+            ));
+        };
+        Ok(*target)
+    }
+
     fn trigger_order_context(
         &self,
         controller: PlayerId,
@@ -5795,7 +5938,25 @@ impl GameDriver {
                 .collect::<BTreeSet<_>>();
             ids.len() > 1 && (human == Some(controller) || ai_policies.is_some())
         });
-        if !has_controlled_choice {
+        let has_target_prompts = pending.iter().try_fold(false, |found, pending| {
+            let Some(runtime) = self.trigger_programs.get(&pending.trigger()) else {
+                return Ok::<_, String>(found);
+            };
+            let ability = runtime
+                .program
+                .triggered_abilities()
+                .get(runtime.ability_index)
+                .ok_or_else(|| {
+                    format!(
+                        "seed {} missing triggered runtime {} on {}",
+                        self.seed,
+                        runtime.ability_index,
+                        runtime.program.name()
+                    )
+                })?;
+            Ok(found || !ability.target_requirements().is_empty())
+        })?;
+        if !has_controlled_choice && !has_target_prompts {
             return self.dispatch(Action::PutPendingTriggeredAbilitiesOnStack);
         }
 
@@ -5838,7 +5999,75 @@ impl GameDriver {
             }
             order.extend(remaining);
         }
-        self.dispatch(Action::PutPendingTriggeredAbilitiesOnStackInOrder { order })
+        if !has_target_prompts {
+            return self.dispatch(Action::PutPendingTriggeredAbilitiesOnStackInOrder { order });
+        }
+
+        let mut bindings = Vec::with_capacity(order.len());
+        for (stack_position, trigger) in order.iter().copied().enumerate() {
+            let controller = pending
+                .iter()
+                .find(|pending| pending.trigger() == trigger)
+                .map(|pending| pending.controller())
+                .ok_or_else(|| {
+                    format!(
+                        "seed {} ordered trigger {} is not pending",
+                        self.seed,
+                        trigger.index()
+                    )
+                })?;
+            let Some(runtime) = self.trigger_programs.get(&trigger) else {
+                bindings.push(TriggerStackBinding::new(trigger));
+                continue;
+            };
+            let ability = runtime
+                .program
+                .triggered_abilities()
+                .get(runtime.ability_index)
+                .ok_or_else(|| {
+                    format!(
+                        "seed {} missing triggered runtime {} on {}",
+                        self.seed,
+                        runtime.ability_index,
+                        runtime.program.name()
+                    )
+                })?;
+            let source = runtime.source;
+            let requirements = ability.target_requirements().to_vec();
+            let optional = vec![true; ability.optional_choice_count()];
+            let announced = StackDecisionBindings::new(None, &optional).map_err(|error| {
+                format!(
+                    "seed {} trigger choices on {} failed: {error:?}",
+                    self.seed,
+                    runtime.program.name()
+                )
+            })?;
+            let mut targets = Vec::with_capacity(requirements.len());
+            for (cursor, requirement) in requirements.iter().copied().enumerate() {
+                let context = self.trigger_target_context(
+                    controller,
+                    source,
+                    trigger,
+                    (stack_position, cursor),
+                    &targets,
+                    requirement,
+                )?;
+                let target = self.select_trigger_target_choice(
+                    &context,
+                    controller,
+                    human,
+                    decisions,
+                    ai_policies,
+                )?;
+                targets.push(target);
+            }
+            bindings.push(
+                TriggerStackBinding::new(trigger)
+                    .with_targets(requirements, targets)
+                    .with_decisions(announced),
+            );
+        }
+        self.dispatch(Action::PutPendingTriggeredAbilitiesOnStackWithChoices { bindings })
     }
 
     fn pass_priority(&mut self) -> Result<(), String> {
@@ -5876,7 +6105,7 @@ impl GameDriver {
             return Ok(());
         }
         if let Some(trigger) = trigger {
-            return self.execute_trigger(controller, trigger);
+            return self.execute_trigger(controller, trigger, targets, decisions);
         }
         if let Some(ability) = activated_ability {
             let Some(runtime) = self
@@ -5986,7 +6215,13 @@ impl GameDriver {
         Ok(())
     }
 
-    fn execute_trigger(&mut self, controller: PlayerId, trigger: TriggerId) -> Result<(), String> {
+    fn execute_trigger(
+        &mut self,
+        controller: PlayerId,
+        trigger: TriggerId,
+        targets: Vec<TargetChoice>,
+        decisions: StackDecisionBindings,
+    ) -> Result<(), String> {
         let runtime = self
             .trigger_programs
             .get(&trigger)
@@ -5997,11 +6232,12 @@ impl GameDriver {
             .triggered_abilities()
             .get(runtime.ability_index)
             .ok_or_else(|| format!("seed {} missing trigger ability", self.seed))?;
-        ensure_trigger_targets_are_autonomous(ability, runtime.program.name())?;
         let requires_object_choices = !ability.object_choice_requirements().is_empty();
         let pending = PendingTriggeredResolution {
             controller,
             runtime,
+            targets,
+            decisions,
         };
         if requires_object_choices {
             if self.pending_spell_resolution.is_some()
@@ -8510,18 +8746,6 @@ impl SearchDomain for CombatSearchDomain<'_> {
     }
 }
 
-fn ensure_trigger_targets_are_autonomous(
-    ability: &TriggeredAbilityProgram,
-    card_name: &str,
-) -> Result<(), String> {
-    if !ability.target_requirements().is_empty() {
-        return Err(format!(
-            "trigger on {card_name} requires target prompts not supplied by this canonical controller"
-        ));
-    }
-    Ok(())
-}
-
 fn run_campaign(
     pod: Arc<PodTemplate>,
     games: usize,
@@ -8727,6 +8951,33 @@ fn trigger_order_path_discriminator(
     state = combat_path_mix(state, remaining.len() as u64);
     for trigger in remaining {
         state = combat_path_mix(state, trigger.index() as u64);
+    }
+    state
+}
+
+fn trigger_target_path_discriminator(
+    controller: PlayerId,
+    trigger: TriggerId,
+    stack_position: usize,
+    cursor: usize,
+    prior: &[TargetChoice],
+) -> u64 {
+    let mut state = combat_path_mix(0x7472_6774_6172_0001, controller.index() as u64);
+    state = combat_path_mix(state, trigger.index() as u64);
+    state = combat_path_mix(state, stack_position as u64);
+    state = combat_path_mix(state, cursor as u64);
+    for target in prior {
+        state = match target {
+            TargetChoice::Player(player) => {
+                combat_path_mix(combat_path_mix(state, 0), player.index() as u64)
+            }
+            TargetChoice::Object(object) => {
+                combat_path_mix(combat_path_mix(state, 1), object.index() as u64)
+            }
+            TargetChoice::StackEntry(entry) => {
+                combat_path_mix(combat_path_mix(state, 2), entry.index() as u64)
+            }
+        };
     }
     state
 }
@@ -11537,6 +11788,144 @@ mod tests {
     }
 
     #[test]
+    fn triggered_targets_use_shared_human_and_ai_contexts_and_resolve_from_stack() {
+        let source = r#"card "Queza Trigger Fixture" {
+  id: "forge:test:queza-trigger-fixture"
+  layout: normal
+  status: unverified_playable
+  face "Queza Trigger Fixture" {
+    cost: "{1}{W}{U}{B}"
+    types: "Legendary Creature - Octopus Advisor"
+    oracle: "Whenever an opponent draws a card, target opponent loses 1 life."
+    power: "3"
+    toughness: "4"
+    keywords: []
+    ability triggered {
+      event: event_draw(opponent())
+      effect: lose_life(1, target(opponent()))
+    }
+  }
+}"#;
+        let definition = forge_cardc::parse_card_named("queza_trigger_fixture.frs", source)
+            .unwrap_or_else(|error| panic!("trigger-target fixture should parse: {error}"));
+        let program = Arc::new(
+            compile_card_program(&definition)
+                .unwrap_or_else(|error| panic!("trigger-target fixture should compile: {error}")),
+        );
+        assert_eq!(program.triggered_abilities().len(), 1);
+        assert_eq!(
+            program.triggered_abilities()[0].target_requirements().len(),
+            1
+        );
+
+        let (mut driver, controller, opponent, source_object) = modal_spell_driver();
+        Arc::make_mut(&mut driver.programs).insert(source_object, Arc::clone(&program));
+        driver
+            .dispatch(Action::SetBaseObjectCharacteristics {
+                object: source_object,
+                base: program.base_object(),
+            })
+            .unwrap_or_else(|error| panic!("trigger source characteristics should apply: {error}"));
+        driver
+            .dispatch(Action::MoveObject {
+                object: source_object,
+                to: ZoneId::new(None, ZoneKind::Battlefield),
+            })
+            .unwrap_or_else(|error| panic!("trigger source should enter play: {error}"));
+        driver
+            .register_triggers(controller, source_object, &program)
+            .unwrap_or_else(|error| panic!("trigger runtime should register: {error}"));
+        driver
+            .dispatch(Action::CreateObject {
+                card: CardId::new(1_302),
+                owner: opponent,
+                controller: opponent,
+                zone: ZoneId::new(Some(opponent), ZoneKind::Library),
+            })
+            .unwrap_or_else(|error| panic!("opponent draw card should be created: {error}"));
+        driver
+            .dispatch(Action::DrawCards {
+                player: opponent,
+                count: 1,
+            })
+            .unwrap_or_else(|error| panic!("draw event should queue the trigger: {error}"));
+        let trigger = driver
+            .state
+            .pending_triggers()
+            .first()
+            .map(|pending| pending.trigger())
+            .unwrap_or_else(|| panic!("draw should queue the targeted trigger"));
+        let requirement = program.triggered_abilities()[0].target_requirements()[0];
+        let context = driver
+            .trigger_target_context(controller, source_object, trigger, (0, 0), &[], requirement)
+            .unwrap_or_else(|error| panic!("trigger target context should exist: {error}"));
+        assert_eq!(context.kind(), DecisionKind::Target);
+        assert_eq!(context.options().len(), 1);
+        assert!(matches!(
+            context.options()[0].descriptor(),
+            DecisionDescriptor::ChooseTarget {
+                target: TargetChoice::Player(player)
+            } if *player == opponent
+        ));
+
+        let mut ai_driver = driver.clone();
+        let mut human_driver = driver;
+        let mut source = PickFirstChoice;
+        let mut decisions = Some(&mut source as &mut dyn DecisionSource);
+        let outcome = human_driver
+            .put_pending_triggers_on_stack(Some(controller), &mut decisions, None)
+            .unwrap_or_else(|error| panic!("human trigger target should stack: {error}"));
+        assert!(matches!(outcome, Outcome::StackEntriesAdded(entries) if entries.len() == 1));
+        assert!(matches!(
+            human_driver.actions.last(),
+            Some(Action::PutPendingTriggeredAbilitiesOnStackWithChoices { bindings })
+                if bindings.len() == 1
+        ));
+        assert_eq!(
+            human_driver
+                .state
+                .stack_top()
+                .unwrap_or_else(|| panic!("targeted trigger should be on the stack"))
+                .targets()
+                .iter()
+                .map(|target| target.choice())
+                .collect::<Vec<_>>(),
+            vec![TargetChoice::Player(opponent)]
+        );
+        human_driver
+            .pass_priority()
+            .unwrap_or_else(|error| panic!("controller pass should succeed: {error}"));
+        human_driver
+            .pass_priority()
+            .unwrap_or_else(|error| panic!("opponent pass should resolve trigger: {error}"));
+        assert_eq!(human_driver.state.players()[opponent.index()].life(), 19);
+
+        let policies = [AiController::Random(RandomLegalPolicy::new(19)); PLAYER_COUNT];
+        let mut no_decisions = None;
+        let outcome = ai_driver
+            .put_pending_triggers_on_stack(None, &mut no_decisions, Some(&policies))
+            .unwrap_or_else(|error| panic!("AI trigger target should stack: {error}"));
+        assert!(matches!(outcome, Outcome::StackEntriesAdded(entries) if entries.len() == 1));
+        assert_eq!(ai_driver.ai_decisions.len(), 1);
+        assert_eq!(ai_driver.ai_decisions[0].kind, "trigger_target");
+        assert_eq!(
+            ai_driver.ai_decisions[0].context_id,
+            context.id().to_string()
+        );
+        assert_eq!(
+            ai_driver
+                .state
+                .stack_top()
+                .unwrap_or_else(|| panic!("AI targeted trigger should be on the stack"))
+                .targets()
+                .iter()
+                .map(|target| target.choice())
+                .collect::<Vec<_>>(),
+            vec![TargetChoice::Player(opponent)]
+        );
+    }
+
+    #[test]
     fn spell_search_is_deferred_to_a_shared_resolution_context() {
         let source = r#"card "Spell Search Fixture" {
   id: "c992b25e-224d-4856-a785-56b8e4017590"
@@ -12085,7 +12474,12 @@ mod tests {
             .next()
             .unwrap_or_else(|| panic!("Sword trigger should register"));
         driver
-            .execute_trigger(controller, trigger)
+            .execute_trigger(
+                controller,
+                trigger,
+                Vec::new(),
+                StackDecisionBindings::default(),
+            )
             .unwrap_or_else(|error| panic!("Sword trigger should await a search: {error}"));
         let pending = driver
             .pending_triggered_resolution
@@ -12203,6 +12597,16 @@ mod tests {
             (prompt.options.len() == 2)
                 .then_some(DecisionSelection::Option(1))
                 .ok_or_else(|| "expected exactly two commander-zone options".to_owned())
+        }
+    }
+
+    struct PickFirstChoice;
+
+    impl DecisionSource for PickFirstChoice {
+        fn choose(&mut self, prompt: &DecisionPrompt<'_>) -> Result<DecisionSelection, String> {
+            (!prompt.options.is_empty())
+                .then_some(DecisionSelection::Option(0))
+                .ok_or_else(|| "expected at least one canonical option".to_owned())
         }
     }
 

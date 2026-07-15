@@ -20,14 +20,14 @@
       "human": "partial",
       "ai": "partial",
       "benchmark": "partial",
-      "note": "Every live human and AI priority window uses one shared canonical context with a forced-pass fast path, exact normal-cost instant choices, hierarchical printed-X casting, and typed program-bound non-mana activations. Activation targets, optional answers, announced X, and payments survive the stack; alternate costs, unsupported extra activation costs, and triggered-ability prompts remain open."
+      "note": "Every live human and AI priority window uses one shared canonical context with a forced-pass fast path, exact normal-cost instant choices, hierarchical printed-X casting, and typed program-bound non-mana activations. Activation targets, optional answers, announced X, payments, and ordinary trigger targets survive the stack; alternate costs, unsupported extra activation costs, no-legal-target trigger suppression, and deferred trigger optionals remain open."
     },
     {
       "kind": "main_phase",
       "human": "partial",
       "ai": "partial",
       "benchmark": "partial",
-      "note": "Human and AI consume the same canonical land, mana activation, typed program-bound non-mana activation, normal-cost cast, and finish options. Printed X spells defer the numeric announcement and payment into bounded shared subcontexts; descriptors bind exact targets, modes, optional answers, announced X, and every legal payment. Search progressively interleaves typed target families without merging their concrete actions or edge statistics. Additional and alternate costs and spell or trigger resolution-time object choices remain open."
+      "note": "Human and AI consume the same canonical land, mana activation, typed program-bound non-mana activation, normal-cost cast, and finish options. Printed X spells defer the numeric announcement and payment into bounded shared subcontexts; descriptors bind exact targets, modes, optional answers, announced X, and every legal payment. Search progressively interleaves typed target families without merging their concrete actions or edge statistics. Additional and alternate costs and deferred trigger optionals remain open."
     },
     {
       "kind": "declare_attackers",
@@ -55,7 +55,7 @@
       "human": "partial",
       "ai": "partial",
       "benchmark": "partial",
-      "note": "Normal spells and typed program-bound activated abilities enumerate exact legal target products and preserve selected targets through stack resolution. Target variants of the same typed spell or ability family share only a progressive-widening key; canonical IDs, legality, transitions, edge statistics, and replay remain concrete. Triggered targets, target distribution, and partial-illegality resolution remain open."
+      "note": "Normal spells and typed program-bound activated abilities enumerate exact legal target products and preserve selected targets through stack resolution. Triggered abilities now use one scoped canonical context per target slot before entering the stack, with atomic kernel validation, exact snapshots, telemetry, replay, and resolution bindings. Target variants share only a progressive-widening key; canonical IDs and transitions remain concrete. No-legal-target trigger suppression, target distribution, partial-illegality effect filtering, and sealed benchmark labels remain open."
     },
     {
       "kind": "mode",
@@ -97,14 +97,14 @@
       "human": "partial",
       "ai": "partial",
       "benchmark": "partial",
-      "note": "Interpreter object choices now use one scoped canonical context per compiled slot for spell, activated, and triggered resolution, retain prior typed selections, and bind actions only after the final slot. Authorized human labels, AI selection, telemetry, and replay share the same path. Non-library breadth, trigger targets, deferred choices, and teacher-corpus fixtures remain incomplete."
+      "note": "Interpreter object choices now use one scoped canonical context per compiled slot for spell, activated, and triggered resolution, retain prior typed selections, and bind actions only after the final slot. Authorized human labels, AI selection, telemetry, and replay share the same path. Non-library breadth, deferred choices, and teacher-corpus fixtures remain incomplete."
     },
     {
       "kind": "search",
       "human": "partial",
       "ai": "partial",
       "benchmark": "partial",
-      "note": "Typed spells plus program-bound activated and triggered abilities defer object selection until successful resolution and expose one bounded scoped context per search requirement, including fail-to-find and authoritative predicate filtering. Prior selections remain typed and final actions replay canonically without a cross-slot Cartesian product. Trigger-target, multi-zone, and sealed benchmark coverage remain open."
+      "note": "Typed spells plus program-bound activated and triggered abilities defer object selection until successful resolution and expose one bounded scoped context per search requirement, including fail-to-find and authoritative predicate filtering. Prior selections remain typed and final actions replay canonically without a cross-slot Cartesian product. Multi-zone and sealed benchmark coverage remain open."
     },
     {
       "kind": "combat_damage",

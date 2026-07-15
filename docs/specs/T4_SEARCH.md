@@ -57,6 +57,13 @@ state and interpreter actions bound only after the final slot. This removes
 the cross-requirement Cartesian product while preserving every legal concrete
 selection for human, AI, telemetry, and replay consumers.
 
+Targeted triggered abilities use bounded target-slot contexts before the
+pending trigger is put on the stack. The final typed trigger binding is
+validated atomically by the kernel, snapshots targets for the priority window,
+and is recovered from the resolution record by the interpreter. A required
+trigger with no legal target still fails closed pending an explicit kernel
+no-stack disposition; search support does not imply that case is complete.
+
 Combat-damage ordering and amounts also use bounded contexts outside the main
 tree. Controllers choose one next blocker and then one amount at a time; large
 numeric ranges are narrowed through binary subranges before a direct context

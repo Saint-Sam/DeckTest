@@ -3395,6 +3395,75 @@ impl StackDecisionBindings {
     }
 }
 
+/// Choices announced while one pending triggered ability is put on the stack.
+///
+/// The binding is ordered with its pending trigger from bottom to top. Target
+/// requirements remain explicit so the kernel can validate and snapshot every
+/// choice before consuming the pending-trigger queue.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TriggerStackBinding {
+    trigger: TriggerId,
+    target_requirements: Vec<TargetRequirement>,
+    target_choices: Vec<TargetChoice>,
+    decisions: StackDecisionBindings,
+}
+
+impl TriggerStackBinding {
+    /// Creates a binding for a trigger with no announced choices.
+    #[must_use]
+    pub fn new(trigger: TriggerId) -> Self {
+        Self {
+            trigger,
+            target_requirements: Vec::new(),
+            target_choices: Vec::new(),
+            decisions: StackDecisionBindings::default(),
+        }
+    }
+
+    /// Supplies the trigger's closed target requirements and selected targets.
+    #[must_use]
+    pub fn with_targets(
+        mut self,
+        requirements: Vec<TargetRequirement>,
+        choices: Vec<TargetChoice>,
+    ) -> Self {
+        self.target_requirements = requirements;
+        self.target_choices = choices;
+        self
+    }
+
+    /// Supplies the trigger's announced non-target choices.
+    #[must_use]
+    pub const fn with_decisions(mut self, decisions: StackDecisionBindings) -> Self {
+        self.decisions = decisions;
+        self
+    }
+
+    /// Returns the registered trigger ID.
+    #[must_use]
+    pub const fn trigger(&self) -> TriggerId {
+        self.trigger
+    }
+
+    /// Returns target requirements in announcement order.
+    #[must_use]
+    pub fn target_requirements(&self) -> &[TargetRequirement] {
+        &self.target_requirements
+    }
+
+    /// Returns target choices in announcement order.
+    #[must_use]
+    pub fn target_choices(&self) -> &[TargetChoice] {
+        &self.target_choices
+    }
+
+    /// Returns the remaining announced stack choices.
+    #[must_use]
+    pub const fn decisions(&self) -> StackDecisionBindings {
+        self.decisions
+    }
+}
+
 /// Request object for casting one spell.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CastSpellRequest {
@@ -7379,6 +7448,11 @@ pub enum Action {
         /// Trigger IDs from bottom to top, grouped by controller in APNAP order.
         order: Vec<TriggerId>,
     },
+    /// Put pending triggers on the stack with explicit APNAP order and choices.
+    PutPendingTriggeredAbilitiesOnStackWithChoices {
+        /// One binding per pending trigger, ordered from bottom to top.
+        bindings: Vec<TriggerStackBinding>,
+    },
 }
 
 /// Ordered set of currently legal actions.
@@ -7877,6 +7951,12 @@ fn apply_fallback(state: &mut GameState, action: Action) -> Outcome {
         }
         Action::PutPendingTriggeredAbilitiesOnStackInOrder { order } => {
             match state.put_pending_triggered_abilities_on_stack_in_order(&order) {
+                Ok(entries) => Outcome::StackEntriesAdded(entries),
+                Err(error) => Outcome::Failed(error),
+            }
+        }
+        Action::PutPendingTriggeredAbilitiesOnStackWithChoices { bindings } => {
+            match state.put_pending_triggered_abilities_on_stack_with_choices(&bindings) {
                 Ok(entries) => Outcome::StackEntriesAdded(entries),
                 Err(error) => Outcome::Failed(error),
             }
@@ -11601,23 +11681,37 @@ impl GameState {
     fn put_pending_triggered_abilities_on_stack(
         &mut self,
     ) -> Result<Vec<StackEntryId>, StateError> {
-        self.put_pending_triggered_abilities_on_stack_with_order(None)
+        self.put_pending_triggered_abilities_on_stack_with_order(None, None)
     }
 
     fn put_pending_triggered_abilities_on_stack_in_order(
         &mut self,
         order: &[TriggerId],
     ) -> Result<Vec<StackEntryId>, StateError> {
-        self.put_pending_triggered_abilities_on_stack_with_order(Some(order))
+        self.put_pending_triggered_abilities_on_stack_with_order(Some(order), None)
+    }
+
+    fn put_pending_triggered_abilities_on_stack_with_choices(
+        &mut self,
+        bindings: &[TriggerStackBinding],
+    ) -> Result<Vec<StackEntryId>, StateError> {
+        let order = bindings
+            .iter()
+            .map(TriggerStackBinding::trigger)
+            .collect::<Vec<_>>();
+        self.put_pending_triggered_abilities_on_stack_with_order(Some(&order), Some(bindings))
     }
 
     fn put_pending_triggered_abilities_on_stack_with_order(
         &mut self,
         requested_order: Option<&[TriggerId]>,
+        requested_bindings: Option<&[TriggerStackBinding]>,
     ) -> Result<Vec<StackEntryId>, StateError> {
         let active = self.active_player.ok_or(StateError::TurnNotStarted)?;
         if self.pending_triggers.is_empty() {
-            if requested_order.is_some_and(|order| !order.is_empty()) {
+            if requested_order.is_some_and(|order| !order.is_empty())
+                || requested_bindings.is_some_and(|bindings| !bindings.is_empty())
+            {
                 return Err(StateError::InvalidPendingTriggerOrder);
             }
             return Ok(Vec::new());
@@ -11674,10 +11768,37 @@ impl GameState {
             }
             ordered
         };
+
+        if requested_bindings.is_some_and(|bindings| bindings.len() != ordered.len()) {
+            return Err(StateError::InvalidPendingTriggerOrder);
+        }
+        let mut prepared = Vec::with_capacity(ordered.len());
+        for (index, trigger) in ordered.iter().copied().enumerate() {
+            let (targets, decisions) = if let Some(bindings) = requested_bindings {
+                let binding = bindings
+                    .get(index)
+                    .ok_or(StateError::InvalidPendingTriggerOrder)?;
+                if binding.trigger() != trigger.trigger() {
+                    return Err(StateError::InvalidPendingTriggerOrder);
+                }
+                (
+                    self.capture_target_snapshots(
+                        trigger.controller(),
+                        trigger.source(),
+                        binding.target_requirements(),
+                        binding.target_choices(),
+                    )?,
+                    binding.decisions(),
+                )
+            } else {
+                (Vec::new(), StackDecisionBindings::default())
+            };
+            prepared.push((trigger, targets, decisions));
+        }
         self.pending_triggers.clear();
 
-        let mut ids = Vec::with_capacity(ordered.len());
-        for trigger in ordered {
+        let mut ids = Vec::with_capacity(prepared.len());
+        for (trigger, targets, decisions) in prepared {
             let controller = trigger.controller();
             let id = self.push_stack_entry(StackEntryRequest {
                 controller,
@@ -11685,13 +11806,13 @@ impl GameState {
                 trigger: Some(trigger.trigger()),
                 activated_ability: None,
                 kind: StackObjectKind::TriggeredAbility,
-                targets: Vec::new(),
+                targets,
                 payment: None,
                 copy_info: None,
                 kicked: false,
                 flashback: false,
                 split_second: false,
-                decisions: StackDecisionBindings::default(),
+                decisions,
             });
             self.emit_event_without_triggers(GameEvent::TriggeredAbilityPutOnStack {
                 trigger: trigger.trigger(),
@@ -18686,9 +18807,9 @@ mod tests {
         StateBasedActionKind, StateBasedActionReport, StateError, Step, TargetChoice,
         TargetControllerPredicate, TargetKind, TargetRequirement, TargetRestriction,
         TargetRestrictionSubject, TriggerCondition, TriggerDefinition, TriggerInterveningIf,
-        TriggerObjectFilter, TriggerPlayerFilter, TriggerZoneFilter, ZoneConservation, ZoneId,
-        ZoneKind, EVENT_RING_CAPACITY, MAX_STACK_OPTIONAL_CHOICES, NORMAL_TURN_STEPS,
-        OPENING_HAND_SIZE, PAYMENT_PLAN_LIMIT,
+        TriggerObjectFilter, TriggerPlayerFilter, TriggerStackBinding, TriggerZoneFilter,
+        ZoneConservation, ZoneId, ZoneKind, EVENT_RING_CAPACITY, MAX_STACK_OPTIONAL_CHOICES,
+        NORMAL_TURN_STEPS, OPENING_HAND_SIZE, PAYMENT_PLAN_LIMIT,
     };
 
     #[test]
@@ -19122,6 +19243,97 @@ mod tests {
         assert_eq!(
             state.stack_top().and_then(|entry| entry.trigger()),
             Some(triggers[0])
+        );
+    }
+
+    #[test]
+    fn targeted_pending_trigger_choices_are_validated_and_snapshotted_atomically() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let controller = state.add_player();
+        let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+        let hand = ZoneId::new(Some(controller), ZoneKind::Hand);
+        let source = state
+            .create_object(CardId::new(2_210), controller, controller, battlefield)
+            .unwrap_or_else(|error| panic!("unexpected source create error: {error:?}"));
+        let legal_target = state
+            .create_object(CardId::new(2_211), active, active, battlefield)
+            .unwrap_or_else(|error| panic!("unexpected target create error: {error:?}"));
+        let illegal_target = state
+            .create_object(CardId::new(2_212), controller, controller, hand)
+            .unwrap_or_else(|error| panic!("unexpected hand create error: {error:?}"));
+        state
+            .start_turn(active)
+            .unwrap_or_else(|error| panic!("unexpected start error: {error:?}"));
+        let trigger = match apply(
+            &mut state,
+            Action::RegisterTriggeredAbility {
+                definition: TriggerDefinition::new(
+                    controller,
+                    TriggerCondition::LifeLost {
+                        player: TriggerPlayerFilter::Any,
+                    },
+                )
+                .with_source(source),
+            },
+        ) {
+            Outcome::TriggerRegistered(trigger) => trigger,
+            other => panic!("unexpected trigger registration: {other:?}"),
+        };
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::LoseLife {
+                    player: active,
+                    amount: 1,
+                },
+            ),
+            Outcome::Applied
+        );
+
+        let requirement = TargetRequirement::new(TargetKind::Permanent);
+        let mut invalid = state.clone();
+        assert!(matches!(
+            apply(
+                &mut invalid,
+                Action::PutPendingTriggeredAbilitiesOnStackWithChoices {
+                    bindings: vec![TriggerStackBinding::new(trigger).with_targets(
+                        vec![requirement],
+                        vec![TargetChoice::Object(illegal_target)],
+                    )],
+                },
+            ),
+            Outcome::Failed(StateError::IllegalTarget { .. })
+        ));
+        assert_eq!(invalid.pending_triggers().len(), 1);
+        assert!(invalid.stack_entries().is_empty());
+
+        let decisions = StackDecisionBindings::new(Some(2), &[true, false])
+            .unwrap_or_else(|error| panic!("unexpected decision binding error: {error:?}"));
+        let entries = match apply(
+            &mut state,
+            Action::PutPendingTriggeredAbilitiesOnStackWithChoices {
+                bindings: vec![TriggerStackBinding::new(trigger)
+                    .with_targets(vec![requirement], vec![TargetChoice::Object(legal_target)])
+                    .with_decisions(decisions)],
+            },
+        ) {
+            Outcome::StackEntriesAdded(entries) => entries,
+            other => panic!("unexpected targeted trigger outcome: {other:?}"),
+        };
+        assert_eq!(entries.len(), 1);
+        assert!(state.pending_triggers().is_empty());
+        let top = state
+            .stack_top()
+            .unwrap_or_else(|| panic!("targeted trigger should be on the stack"));
+        assert_eq!(top.trigger(), Some(trigger));
+        assert_eq!(top.decisions(), decisions);
+        assert_eq!(
+            top.targets()
+                .iter()
+                .map(|target| target.choice())
+                .collect::<Vec<_>>(),
+            vec![TargetChoice::Object(legal_target)]
         );
     }
 

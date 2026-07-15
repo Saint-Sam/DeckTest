@@ -87,6 +87,9 @@ The T4.3-T4.5 diagnostics path currently adapts:
 - kernel-validated simultaneous-trigger ordering in APNAP controller groups,
   represented as one bounded next-trigger subcontext at a time for live human
   and AI controllers rather than complete-order permutations;
+- kernel-validated triggered-ability targets announced while each pending
+  trigger is put on the stack, represented as one scoped target-slot context at
+  a time with exact target snapshots retained through priority and resolution;
 - kernel-validated combat-damage ordering and sequential amounts for human and
   AI controllers, using bounded next-blocker contexts and binary range
   narrowing above 64 direct amounts rather than complete distributions;
@@ -104,12 +107,12 @@ The T4.3-T4.5 diagnostics path currently adapts:
 The current path remains `limited` and diagnostics-only because it does not yet
 canonicalize the full Commander prompt surface: unsupported activation cost
 families, target distribution, non-cost numeric values, additional and alternative costs,
-trigger-order benchmark labels, triggered
-targets and deferred optionals, and non-player combat defenders. Normal spells
-and the current typed activated slice cover targets, optional effects,
-payments, and spell/activated/triggered object searches, but those prompt families
-remain partial until their remaining trigger-target and
-multi-zone forms use the same boundary.
+trigger-order benchmark labels, no-legal-target trigger suppression and
+deferred optionals, and non-player combat defenders. Normal spells, the current
+typed activated slice, and ordinary targeted triggers cover target announcement;
+payments and spell/activated/triggered object searches also share the boundary.
+Those prompt families remain partial until their remaining multi-zone,
+distribution, and partial-illegality forms use the same rules path.
 The live concession adapter is complete, but its sealed benchmark fixture is
 still pending with the other Track B evidence. Remaining gaps cannot be
 silently skipped for CP-AI-BENCH,
