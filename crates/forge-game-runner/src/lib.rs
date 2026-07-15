@@ -27,7 +27,7 @@ use forge_core::{
     ObjectColors, ObjectId, ObjectView, Outcome, PaymentPlan, PendingTriggeredAbility, PlayerId,
     PlayerView, PriorityOutcome, ResolutionOutcome, SpellAdditionalCostPayment, SpellAlternateCost,
     SpellTiming, StackDecisionBindings, StackEntryId, StackObjectKind, StateError, Step,
-    TargetChoice, TargetKind, TargetRequirement, TriggerId, TriggerStackBinding,
+    TargetChoice, TargetKind, TargetPredicate, TargetRequirement, TriggerId, TriggerStackBinding,
     TriggerStackDisposition, ZoneId, ZoneKind,
 };
 use serde::{Deserialize, Serialize};
@@ -7427,6 +7427,43 @@ impl GameDriver {
         Ok(outcome)
     }
 
+    fn prospective_trigger_stack_entry_id(&self, offset: usize) -> Result<StackEntryId, String> {
+        let offset = u32::try_from(offset)
+            .map_err(|_| format!("seed {} trigger stack offset overflow", self.seed))?;
+        self.state
+            .next_stack_entry_id()
+            .checked_offset(offset)
+            .ok_or_else(|| format!("seed {} trigger stack ID overflow", self.seed))
+    }
+
+    fn trigger_target_choices(
+        &self,
+        controller: PlayerId,
+        source: ObjectId,
+        requirement: TargetRequirement,
+        prospective_stack_entries: &[StackEntryId],
+    ) -> Vec<TargetChoice> {
+        let mut choices = self.legal_targets_for(controller, source, requirement);
+        if requirement.kind() == TargetKind::StackEntry
+            && requirement.predicate() == TargetPredicate::Any
+        {
+            choices.extend(
+                prospective_stack_entries
+                    .iter()
+                    .copied()
+                    .map(TargetChoice::StackEntry),
+            );
+        }
+        choices.sort_by_key(|choice| match choice {
+            TargetChoice::Player(target) => (0_u8, target.index()),
+            TargetChoice::Object(target) => (1_u8, target.index()),
+            TargetChoice::StackEntry(target) => (2_u8, target.index()),
+        });
+        choices.dedup();
+        choices
+    }
+
+    #[allow(clippy::too_many_arguments)]
     fn trigger_target_context(
         &self,
         controller: PlayerId,
@@ -7435,6 +7472,7 @@ impl GameDriver {
         position: (usize, usize),
         prior: &[TargetChoice],
         requirement: TargetRequirement,
+        prospective_stack_entries: &[StackEntryId],
     ) -> Result<DecisionContext, String> {
         let (stack_position, cursor) = position;
         if prior.len() != cursor {
@@ -7444,7 +7482,8 @@ impl GameDriver {
                 prior.len()
             ));
         }
-        let choices = self.legal_targets_for(controller, source, requirement);
+        let choices =
+            self.trigger_target_choices(controller, source, requirement, prospective_stack_entries);
         if choices.is_empty() {
             return Err(format!(
                 "seed {} trigger {} lost every legal target after its no-target disposition check at slot {cursor}",
@@ -7780,6 +7819,7 @@ impl GameDriver {
         }
 
         let mut bindings = Vec::with_capacity(order.len());
+        let mut prospective_stack_entries = Vec::with_capacity(order.len());
         for (stack_position, trigger) in order.iter().copied().enumerate() {
             let controller = pending
                 .iter()
@@ -7794,6 +7834,9 @@ impl GameDriver {
                 })?;
             let Some(runtime) = self.trigger_programs.get(&trigger) else {
                 bindings.push(TriggerStackBinding::new(trigger));
+                prospective_stack_entries.push(
+                    self.prospective_trigger_stack_entry_id(prospective_stack_entries.len())?,
+                );
                 continue;
             };
             let ability = runtime
@@ -7811,9 +7854,13 @@ impl GameDriver {
             let source = runtime.source;
             let requirements = ability.target_requirements().to_vec();
             if requirements.iter().copied().any(|requirement| {
-                !self
-                    .state
-                    .has_legal_target(controller, Some(source), requirement)
+                self.trigger_target_choices(
+                    controller,
+                    source,
+                    requirement,
+                    &prospective_stack_entries,
+                )
+                .is_empty()
             }) {
                 bindings.push(TriggerStackBinding::no_legal_targets(trigger, requirements));
                 continue;
@@ -7827,6 +7874,7 @@ impl GameDriver {
                     (stack_position, cursor),
                     &targets,
                     requirement,
+                    &prospective_stack_entries,
                 )?;
                 let target = self.select_trigger_target_choice(
                     &context,
@@ -7842,6 +7890,8 @@ impl GameDriver {
                     .with_targets(requirements, targets)
                     .with_decisions(StackDecisionBindings::default()),
             );
+            prospective_stack_entries
+                .push(self.prospective_trigger_stack_entry_id(prospective_stack_entries.len())?);
         }
         let ordered = self.ordered_pending_trigger_instances(&pending, &order)?;
         let contexts = self.prepare_trigger_stack_contexts(&ordered, Some(&bindings))?;
@@ -12651,8 +12701,8 @@ mod tests {
         CreatureKeywords, DecisionContext, DecisionDescriptor, DecisionKind, DecisionOption,
         GameState, ManaCost, ManaPool, ObjectColors, ObjectId, ObjectSupertypes, ObjectTypes,
         Outcome, PaymentPlan, PlayerId, PlayerView, ResolutionOutcome, SpellAlternateCost,
-        StackDecisionBindings, Step, TargetChoice, TriggerCondition, TriggerDefinition,
-        TriggerPlayerFilter, TriggerStackDisposition, ZoneId, ZoneKind,
+        StackDecisionBindings, Step, TargetChoice, TargetKind, TargetRequirement, TriggerCondition,
+        TriggerDefinition, TriggerPlayerFilter, TriggerStackDisposition, ZoneId, ZoneKind,
     };
 
     const FLAWLESS_MANEUVER: &str = r#"
@@ -14815,7 +14865,15 @@ card "Mulldrifter" {
             .unwrap_or_else(|| panic!("draw should queue the targeted trigger"));
         let requirement = program.triggered_abilities()[0].target_requirements()[0];
         let context = driver
-            .trigger_target_context(controller, source_object, trigger, (0, 0), &[], requirement)
+            .trigger_target_context(
+                controller,
+                source_object,
+                trigger,
+                (0, 0),
+                &[],
+                requirement,
+                &[],
+            )
             .unwrap_or_else(|error| panic!("trigger target context should exist: {error}"));
         assert_eq!(context.kind(), DecisionKind::Target);
         assert_eq!(context.options().len(), 1);
@@ -14881,6 +14939,170 @@ card "Mulldrifter" {
                 .collect::<Vec<_>>(),
             vec![TargetChoice::Player(opponent)]
         );
+    }
+
+    #[test]
+    fn same_batch_trigger_targeting_uses_the_staged_stack_for_human_and_ai() {
+        let source = r#"card "Trigger Batch Fixture" {
+  id: "forge:test:trigger-batch-fixture"
+  layout: normal
+  status: unverified_playable
+  face "Trigger Batch Fixture" {
+    cost: "{2}{U}"
+    types: "Creature - Human Wizard"
+    oracle: "Whenever an opponent draws a card, you gain 1 life. Whenever an opponent draws a card, counter target spell or ability."
+    power: "2"
+    toughness: "3"
+    keywords: []
+    ability triggered {
+      event: event_draw(opponent())
+      effect: gain_life(1, you())
+    }
+    ability triggered {
+      event: event_draw(opponent())
+      effect: counter_spell(target(spells()))
+    }
+  }
+}"#;
+        let definition = forge_cardc::parse_card_named("trigger_batch_fixture.frs", source)
+            .unwrap_or_else(|error| panic!("trigger-batch fixture should parse: {error}"));
+        let program = Arc::new(
+            compile_card_program(&definition)
+                .unwrap_or_else(|error| panic!("trigger-batch fixture should compile: {error}")),
+        );
+        assert_eq!(program.triggered_abilities().len(), 2);
+        assert!(program.triggered_abilities()[0]
+            .target_requirements()
+            .is_empty());
+        assert_eq!(
+            program.triggered_abilities()[1].target_requirements(),
+            &[TargetRequirement::new(TargetKind::StackEntry)]
+        );
+
+        let (mut driver, controller, opponent, source_object) = modal_spell_driver();
+        Arc::make_mut(&mut driver.programs).insert(source_object, Arc::clone(&program));
+        driver
+            .dispatch(Action::SetBaseObjectCharacteristics {
+                object: source_object,
+                base: program.base_object(),
+            })
+            .unwrap_or_else(|error| panic!("trigger source characteristics should apply: {error}"));
+        driver
+            .dispatch(Action::MoveObject {
+                object: source_object,
+                to: ZoneId::new(None, ZoneKind::Battlefield),
+            })
+            .unwrap_or_else(|error| panic!("trigger source should enter play: {error}"));
+        driver
+            .register_triggers(controller, source_object, &program, None)
+            .unwrap_or_else(|error| panic!("trigger runtimes should register: {error}"));
+        driver
+            .dispatch(Action::CreateObject {
+                card: CardId::new(1_304),
+                owner: opponent,
+                controller: opponent,
+                zone: ZoneId::new(Some(opponent), ZoneKind::Library),
+            })
+            .unwrap_or_else(|error| panic!("opponent draw card should be created: {error}"));
+        driver
+            .dispatch(Action::DrawCards {
+                player: opponent,
+                count: 1,
+            })
+            .unwrap_or_else(|error| panic!("draw event should queue both triggers: {error}"));
+        assert_eq!(driver.state.pending_triggers().len(), 2);
+        let lower_entry = driver.state.next_stack_entry_id();
+        let upper_trigger = driver.state.pending_triggers()[1].trigger();
+        let target_context = driver
+            .trigger_target_context(
+                controller,
+                source_object,
+                upper_trigger,
+                (1, 0),
+                &[],
+                TargetRequirement::new(TargetKind::StackEntry),
+                &[lower_entry],
+            )
+            .unwrap_or_else(|error| panic!("same-batch target context should exist: {error}"));
+        assert_eq!(target_context.options().len(), 1);
+        assert!(matches!(
+            target_context.options()[0].descriptor(),
+            DecisionDescriptor::ChooseTarget {
+                target: TargetChoice::StackEntry(entry)
+            } if *entry == lower_entry
+        ));
+
+        let mut human_driver = driver.clone();
+        let mut human_source = PickFirstChoice;
+        let mut human_decisions = Some(&mut human_source as &mut dyn DecisionSource);
+        let outcome = human_driver
+            .put_pending_triggers_on_stack(Some(controller), &mut human_decisions, None)
+            .unwrap_or_else(|error| panic!("human trigger batch should stack: {error}"));
+        let Outcome::StackEntriesAdded(human_entries) = outcome else {
+            panic!("human trigger batch returned {outcome:?}");
+        };
+        assert_eq!(human_entries.len(), 2);
+        assert_eq!(human_entries[0], lower_entry);
+        assert_eq!(
+            human_driver
+                .state
+                .stack_top()
+                .unwrap_or_else(|| panic!("counter trigger should be on top"))
+                .targets()
+                .iter()
+                .map(|target| target.choice())
+                .collect::<Vec<_>>(),
+            vec![TargetChoice::StackEntry(lower_entry)]
+        );
+        assert!(matches!(
+            human_driver.actions.last(),
+            Some(Action::PutPendingTriggeredAbilitiesOnStackWithChoices { bindings })
+                if bindings.len() == 2
+        ));
+        resolve_top_for_two_players(&mut human_driver);
+        assert!(human_driver.state.stack_entries().is_empty());
+        assert!(human_driver
+            .state
+            .resolution_log()
+            .iter()
+            .any(|record| record.stack_entry() == lower_entry
+                && record.outcome() == ResolutionOutcome::CounteredBySpell));
+
+        let weights = AiWeights::bundled()
+            .unwrap_or_else(|error| panic!("bundled weights should parse: {error}"));
+        let policies =
+            [AiController::Heuristic(HeuristicPolicy::rollout(weights, 31)); PLAYER_COUNT];
+        let mut ai_driver = driver;
+        let mut no_decisions = None;
+        let outcome = ai_driver
+            .put_pending_triggers_on_stack(None, &mut no_decisions, Some(&policies))
+            .unwrap_or_else(|error| panic!("AI trigger batch should stack: {error}"));
+        assert!(matches!(outcome, Outcome::StackEntriesAdded(entries) if entries.len() == 2));
+        assert_eq!(
+            ai_driver
+                .state
+                .stack_top()
+                .unwrap_or_else(|| panic!("AI counter trigger should be on top"))
+                .targets()
+                .iter()
+                .map(|target| target.choice())
+                .collect::<Vec<_>>(),
+            vec![TargetChoice::StackEntry(lower_entry)]
+        );
+        assert!(ai_driver
+            .ai_decisions
+            .iter()
+            .any(|decision| decision.kind == "trigger_order"));
+        let target_decision = ai_driver
+            .ai_decisions
+            .iter()
+            .find(|decision| decision.kind == "trigger_target")
+            .unwrap_or_else(|| panic!("AI should record the same-batch target decision"));
+        assert_eq!(target_decision.context_id, target_context.id().to_string());
+        assert!(target_decision
+            .canonical_legal_actions
+            .iter()
+            .any(|action| action.action_id == target_decision.action_id));
     }
 
     #[test]

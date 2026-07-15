@@ -1162,6 +1162,18 @@ impl StackEntryId {
     pub const fn get(self) -> u32 {
         self.0
     }
+
+    /// Returns the deterministic ID at one checked offset from this entry.
+    ///
+    /// This supports canonical planning for an atomic stack batch without
+    /// exposing an unchecked raw-ID constructor.
+    #[must_use]
+    pub const fn checked_offset(self, offset: u32) -> Option<Self> {
+        match self.0.checked_add(offset) {
+            Some(value) => Some(Self(value)),
+            None => None,
+        }
+    }
 }
 
 /// Provenance for a copied stack entry.
@@ -9565,6 +9577,16 @@ impl GameState {
         &self.stack_entries
     }
 
+    /// Returns the ID the next successfully created stack entry will receive.
+    ///
+    /// The value is predictive only until another stack entry is created. It is
+    /// used to describe choices inside one atomic pending-trigger batch; the
+    /// eventual action still validates every target against the staged stack.
+    #[must_use]
+    pub const fn next_stack_entry_id(&self) -> StackEntryId {
+        StackEntryId(self.next_stack_entry)
+    }
+
     /// Returns the current top stack entry.
     #[must_use]
     pub fn stack_top(&self) -> Option<StackEntry> {
@@ -12232,6 +12254,82 @@ impl GameState {
 
         if requested_bindings.is_some_and(|bindings| bindings.len() != ordered.len()) {
             return Err(StateError::InvalidPendingTriggerOrder);
+        }
+        if let Some(bindings) = requested_bindings.filter(|bindings| {
+            bindings.iter().any(|binding| {
+                binding
+                    .target_requirements()
+                    .iter()
+                    .any(|requirement| requirement.kind() == TargetKind::StackEntry)
+            })
+        }) {
+            let mut staged = self.clone();
+            staged.pending_triggers.clear();
+            let mut ids = Vec::with_capacity(ordered.len());
+            for (index, trigger) in ordered.iter().copied().enumerate() {
+                let binding = bindings
+                    .get(index)
+                    .ok_or(StateError::InvalidPendingTriggerOrder)?;
+                if binding.trigger() != trigger.trigger() {
+                    return Err(StateError::InvalidPendingTriggerOrder);
+                }
+                let (targets, decisions) = match binding.disposition() {
+                    TriggerStackDisposition::PutOnStack => (
+                        staged.capture_target_snapshots(
+                            trigger.controller(),
+                            trigger.source(),
+                            binding.target_requirements(),
+                            binding.target_choices(),
+                        )?,
+                        binding.decisions(),
+                    ),
+                    TriggerStackDisposition::RemoveForNoLegalTargets => {
+                        let requirements = binding.target_requirements();
+                        if requirements.is_empty()
+                            || !binding.target_choices().is_empty()
+                            || binding.decisions() != StackDecisionBindings::default()
+                            || requirements.iter().copied().all(|requirement| {
+                                staged.has_legal_target(
+                                    trigger.controller(),
+                                    trigger.source(),
+                                    requirement,
+                                )
+                            })
+                        {
+                            return Err(StateError::InvalidPendingTriggerDisposition(
+                                trigger.trigger(),
+                            ));
+                        }
+                        continue;
+                    }
+                };
+                let controller = trigger.controller();
+                let id = staged.push_stack_entry(StackEntryRequest {
+                    controller,
+                    object: None,
+                    trigger: Some(trigger.trigger()),
+                    activated_ability: None,
+                    kind: StackObjectKind::TriggeredAbility,
+                    targets,
+                    payment: None,
+                    copy_info: None,
+                    kicked: false,
+                    flashback: false,
+                    split_second: false,
+                    decisions,
+                });
+                staged.emit_event_without_triggers(GameEvent::TriggeredAbilityPutOnStack {
+                    trigger: trigger.trigger(),
+                    entry: id,
+                    controller,
+                });
+                ids.push(id);
+            }
+            let priority = staged.deferred_priority_player.or(staged.active_player);
+            staged.deferred_priority_player = None;
+            staged.grant_priority_to(priority)?;
+            *self = staged;
+            return Ok(ids);
         }
         let mut prepared = Vec::with_capacity(ordered.len());
         for (index, trigger) in ordered.iter().copied().enumerate() {
@@ -19907,6 +20005,105 @@ mod tests {
                 .map(|target| target.choice())
                 .collect::<Vec<_>>(),
             vec![TargetChoice::Object(legal_target)]
+        );
+    }
+
+    #[test]
+    fn same_batch_trigger_targets_stage_prior_entries_and_reject_forward_references() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let controller = state.add_player();
+        let source = state
+            .create_object(
+                CardId::new(2_215),
+                controller,
+                controller,
+                ZoneId::new(None, ZoneKind::Battlefield),
+            )
+            .unwrap_or_else(|error| panic!("unexpected source create error: {error:?}"));
+        state
+            .start_turn(active)
+            .unwrap_or_else(|error| panic!("unexpected start error: {error:?}"));
+        let mut register = || match apply(
+            &mut state,
+            Action::RegisterTriggeredAbility {
+                definition: TriggerDefinition::new(
+                    controller,
+                    TriggerCondition::LifeLost {
+                        player: TriggerPlayerFilter::Any,
+                    },
+                )
+                .with_source(source),
+            },
+        ) {
+            Outcome::TriggerRegistered(trigger) => trigger,
+            other => panic!("unexpected trigger registration: {other:?}"),
+        };
+        let lower_trigger = register();
+        let upper_trigger = register();
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::LoseLife {
+                    player: active,
+                    amount: 1,
+                },
+            ),
+            Outcome::Applied
+        );
+
+        let lower_entry = state.next_stack_entry_id();
+        let upper_entry = lower_entry
+            .checked_offset(1)
+            .unwrap_or_else(|| panic!("stack entry ID should have room"));
+        let requirement = TargetRequirement::new(TargetKind::StackEntry);
+        let mut invalid = state.clone();
+        assert!(matches!(
+            apply(
+                &mut invalid,
+                Action::PutPendingTriggeredAbilitiesOnStackWithChoices {
+                    bindings: vec![
+                        TriggerStackBinding::new(lower_trigger).with_targets(
+                            vec![requirement],
+                            vec![TargetChoice::StackEntry(upper_entry)]
+                        ),
+                        TriggerStackBinding::new(upper_trigger),
+                    ],
+                },
+            ),
+            Outcome::Failed(StateError::IllegalTarget { .. })
+        ));
+        assert_eq!(invalid.pending_triggers().len(), 2);
+        assert!(invalid.stack_entries().is_empty());
+        assert_eq!(invalid.next_stack_entry_id(), lower_entry);
+
+        let entries = match apply(
+            &mut state,
+            Action::PutPendingTriggeredAbilitiesOnStackWithChoices {
+                bindings: vec![
+                    TriggerStackBinding::new(lower_trigger),
+                    TriggerStackBinding::new(upper_trigger).with_targets(
+                        vec![requirement],
+                        vec![TargetChoice::StackEntry(lower_entry)],
+                    ),
+                ],
+            },
+        ) {
+            Outcome::StackEntriesAdded(entries) => entries,
+            other => panic!("unexpected same-batch trigger outcome: {other:?}"),
+        };
+        assert_eq!(entries, vec![lower_entry, upper_entry]);
+        assert!(state.pending_triggers().is_empty());
+        let top = state
+            .stack_top()
+            .unwrap_or_else(|| panic!("upper trigger should be on the stack"));
+        assert_eq!(top.trigger(), Some(upper_trigger));
+        assert_eq!(
+            top.targets()
+                .iter()
+                .map(|target| target.choice())
+                .collect::<Vec<_>>(),
+            vec![TargetChoice::StackEntry(lower_entry)]
         );
     }
 
