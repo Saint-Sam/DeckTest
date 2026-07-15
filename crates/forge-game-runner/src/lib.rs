@@ -24,8 +24,8 @@ use forge_core::{
     CombatDamageTarget, DecisionContext, DecisionDescriptor, DecisionKind, DecisionOption,
     GameOutcome, GameState, HiddenCardDefinition, HiddenSlotDefinition, ManaKind, ObjectColors,
     ObjectId, ObjectView, Outcome, PaymentPlan, PlayerId, PlayerView, PriorityOutcome,
-    ResolutionOutcome, SpellTiming, StackDecisionBindings, StackEntryId, StackObjectKind, Step,
-    TargetChoice, TargetKind, TargetRequirement, TriggerId, ZoneId, ZoneKind,
+    ResolutionOutcome, SpellTiming, StackDecisionBindings, StackEntryId, StackObjectKind,
+    StateError, Step, TargetChoice, TargetKind, TargetRequirement, TriggerId, ZoneId, ZoneKind,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -54,6 +54,7 @@ const AI_REPLAY_MAGIC: &str = "forge-ai-baseline-replay-v1";
 const PILOT_INTENTS_PATH: &str = "assets/ai/pilot_intents.json";
 const RETAINED_REPLAYS: usize = 10;
 const MAX_CANONICAL_SPELL_OPTIONS: usize = 65_536;
+const MAX_DIRECT_NUMERIC_VALUES: u32 = 64;
 const MAX_DIRECT_COMBAT_DAMAGE_AMOUNTS: u32 = 64;
 const CONCESSION_PROMPT: &str = "Concede the game";
 
@@ -1406,6 +1407,27 @@ enum MainChoice {
         targets: Vec<TargetChoice>,
         optional: Vec<bool>,
     },
+    BeginCast {
+        object: ObjectId,
+        targets: Vec<TargetChoice>,
+        mode: Option<u32>,
+        optional: Vec<bool>,
+    },
+    NarrowCastX {
+        object: ObjectId,
+        targets: Vec<TargetChoice>,
+        mode: Option<u32>,
+        optional: Vec<bool>,
+        minimum: u32,
+        maximum: u32,
+    },
+    ChooseCastX {
+        object: ObjectId,
+        targets: Vec<TargetChoice>,
+        mode: Option<u32>,
+        optional: Vec<bool>,
+        x_value: u32,
+    },
     Cast {
         object: ObjectId,
         payment: PaymentPlan,
@@ -1415,6 +1437,8 @@ enum MainChoice {
     },
     Finish,
 }
+
+type MainDecisionAdapter = (DecisionContext, Vec<(CanonicalActionId, MainChoice)>);
 
 #[derive(Clone)]
 struct SpellChoiceBinding {
@@ -2516,7 +2540,7 @@ impl GameDriver {
                         self.seed
                     )
                 })?;
-            if self.apply_main_choice(player, choice)? {
+            if self.finish_human_main_choice(player, source, choice)? {
                 return Ok(());
             }
         }
@@ -2572,8 +2596,58 @@ impl GameDriver {
                     self.seed
                 )
             })?;
-        self.apply_main_choice(player, choice)?;
+        self.finish_human_main_choice(player, source, choice)?;
         Ok(())
+    }
+
+    fn finish_human_main_choice(
+        &mut self,
+        player: PlayerId,
+        source: &mut dyn DecisionSource,
+        mut choice: MainChoice,
+    ) -> Result<bool, String> {
+        while let Some((context, mappings)) = self.hierarchical_cast_context(player, &choice)? {
+            let labels = context
+                .options()
+                .iter()
+                .map(|option| match option.descriptor() {
+                    DecisionDescriptor::ChooseNumber { value } => Ok(format!("Choose X = {value}")),
+                    DecisionDescriptor::ChooseNumberRange { minimum, maximum } => {
+                        Ok(format!("Narrow X to {minimum}-{maximum}"))
+                    }
+                    DecisionDescriptor::ChoosePayment { payment } => Ok(format!(
+                        "Pay for X={} (payment waste {})",
+                        payment.x_value(),
+                        payment.waste_score()
+                    )),
+                    descriptor => Err(format!(
+                        "seed {} cannot label hierarchical cast descriptor {descriptor:?}",
+                        self.seed
+                    )),
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let prompt = match context.kind() {
+                DecisionKind::NumericValue => "Choose X",
+                DecisionKind::Payment => "Choose a mana payment",
+                other => {
+                    return Err(format!(
+                        "seed {} unexpected hierarchical cast context {other:?}",
+                        self.seed
+                    ));
+                }
+            };
+            let selected_id = self.prompt_context_choice(source, prompt, &context, &labels)?;
+            choice = mappings
+                .iter()
+                .find_map(|(id, choice)| (*id == selected_id).then(|| choice.clone()))
+                .ok_or_else(|| {
+                    format!(
+                        "seed {} hierarchical cast action {selected_id} has no typed adapter",
+                        self.seed
+                    )
+                })?;
+        }
+        self.apply_main_choice(player, choice)
     }
 
     fn take_human_concession(
@@ -2669,7 +2743,7 @@ impl GameDriver {
                     self.seed
                 )
             })?;
-        self.apply_main_choice(player, choice)?;
+        self.finish_ai_main_choice(player, policy, choice)?;
         Ok(())
     }
 
@@ -2755,6 +2829,50 @@ impl GameDriver {
                 optional,
             } => {
                 let mut details = vec![format!("payment waste {}", payment.waste_score())];
+                if !targets.is_empty() {
+                    details.push(format!(
+                        "targets {}",
+                        targets
+                            .iter()
+                            .copied()
+                            .map(|target| self.target_choice_label(target))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ));
+                }
+                if !modes.is_empty() {
+                    details.push(format!(
+                        "mode {}",
+                        modes
+                            .iter()
+                            .map(|mode| mode.saturating_add(1).to_string())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ));
+                }
+                if !optional.is_empty() {
+                    details.push(format!(
+                        "optional {}",
+                        optional
+                            .iter()
+                            .map(|accept| if *accept { "yes" } else { "no" })
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ));
+                }
+                Ok(format!(
+                    "Cast: {} ({})",
+                    self.object_name(*object),
+                    details.join("; ")
+                ))
+            }
+            DecisionDescriptor::BeginCastSpell {
+                object,
+                targets,
+                modes,
+                optional,
+            } => {
+                let mut details = vec!["choose X and payment".to_owned()];
                 if !targets.is_empty() {
                     details.push(format!(
                         "targets {}",
@@ -2908,6 +3026,12 @@ impl GameDriver {
                 }
                 Ok(true)
             }
+            MainChoice::BeginCast { .. }
+            | MainChoice::NarrowCastX { .. }
+            | MainChoice::ChooseCastX { .. } => Err(format!(
+                "seed {} attempted to dispatch an incomplete hierarchical cast",
+                self.seed
+            )),
             MainChoice::Cast {
                 object,
                 payment,
@@ -3134,6 +3258,84 @@ impl GameDriver {
             .collect())
     }
 
+    fn cast_payment_plans(
+        &self,
+        player: PlayerId,
+        object: ObjectId,
+        x_value: u32,
+    ) -> Result<Vec<PaymentPlan>, String> {
+        let program = self
+            .programs
+            .get(&object)
+            .ok_or_else(|| format!("seed {} missing cast program", self.seed))?;
+        let printed_cost = program.mana_cost();
+        let announced_cost = printed_cost.with_x(printed_cost.x_count(), x_value);
+        let effective_cost = match self
+            .state
+            .effective_spell_cost(player, object, announced_cost)
+        {
+            Ok(cost) => cost,
+            Err(StateError::ManaValueOverflow | StateError::CommanderTaxOverflow(_)) => {
+                return Ok(Vec::new());
+            }
+            Err(error) => {
+                return Err(format!("seed {} spell cost failed: {error:?}", self.seed));
+            }
+        };
+        let payments = match self.state.payment_plans_for_player(player, effective_cost) {
+            Ok(payments) => payments,
+            Err(StateError::ManaValueOverflow) => return Ok(Vec::new()),
+            Err(error) => {
+                return Err(format!(
+                    "seed {} payment enumeration failed: {error:?}",
+                    self.seed
+                ));
+            }
+        };
+        Ok(payments
+            .plans()
+            .iter()
+            .copied()
+            .map(|payment| payment.with_x_value(x_value))
+            .collect())
+    }
+
+    fn maximum_affordable_x(
+        &self,
+        player: PlayerId,
+        object: ObjectId,
+    ) -> Result<Option<u32>, String> {
+        let program = self
+            .programs
+            .get(&object)
+            .ok_or_else(|| format!("seed {} missing X spell program", self.seed))?;
+        let x_count = program.mana_cost().x_count();
+        if x_count == 0 {
+            return Err(format!(
+                "seed {} requested X range for a fixed cost",
+                self.seed
+            ));
+        }
+        if self.cast_payment_plans(player, object, 0)?.is_empty() {
+            return Ok(None);
+        }
+
+        let mut minimum = 0_u32;
+        let mut maximum = u32::MAX / x_count;
+        while minimum < maximum {
+            let midpoint = minimum + (maximum - minimum).div_ceil(2);
+            if self
+                .cast_payment_plans(player, object, midpoint)?
+                .is_empty()
+            {
+                maximum = midpoint - 1;
+            } else {
+                minimum = midpoint;
+            }
+        }
+        Ok(Some(minimum))
+    }
+
     fn legal_cast_choices(&self, player: PlayerId) -> Result<Vec<MainChoice>, String> {
         let seat = self
             .players
@@ -3162,19 +3364,43 @@ impl GameDriver {
             if !self.normal_spell_timing_available(player, program.kind()) {
                 continue;
             }
-            let cost = self
-                .state
-                .effective_spell_cost(player, object, program.mana_cost())
-                .map_err(|error| format!("seed {} spell cost failed: {error:?}", self.seed))?;
-            let payments = self
-                .state
-                .payment_plans_for_player(player, cost)
-                .map_err(|error| {
-                    format!("seed {} payment enumeration failed: {error:?}", self.seed)
-                })?;
             let spell_bindings = self.spell_choice_bindings(player, object, program)?;
-            let option_count = payments
-                .plans()
+            if program.mana_cost().x_count() != 0 {
+                let payments = self.cast_payment_plans(player, object, 0)?;
+                if payments.is_empty() {
+                    continue;
+                }
+                for binding in spell_bindings {
+                    let is_legal = payments.iter().copied().any(|payment| {
+                        self.spell_request(
+                            program,
+                            payment,
+                            &binding.targets,
+                            binding.mode,
+                            &binding.optional,
+                        )
+                        .is_ok_and(|request| {
+                            self.action_is_legal(&Action::CastSpell {
+                                player,
+                                object,
+                                request,
+                            })
+                        })
+                    });
+                    if is_legal {
+                        choices.push(MainChoice::BeginCast {
+                            object,
+                            targets: binding.targets,
+                            mode: binding.mode,
+                            optional: binding.optional,
+                        });
+                    }
+                }
+                continue;
+            }
+
+            let payment_options = self.cast_payment_plans(player, object, 0)?;
+            let option_count = payment_options
                 .len()
                 .checked_mul(spell_bindings.len())
                 .ok_or_else(|| format!("seed {} spell option count overflow", self.seed))?;
@@ -3187,7 +3413,7 @@ impl GameDriver {
                 ));
             }
             for binding in spell_bindings {
-                for payment in payments.plans().iter().copied() {
+                for payment in payment_options.iter().copied() {
                     let request = self.spell_request(
                         program,
                         payment,
@@ -3362,7 +3588,10 @@ impl GameDriver {
         };
         let decisions = StackDecisionBindings::new(mode, optional)
             .map_err(|error| format!("seed {} stack choices failed: {error:?}", self.seed))?;
-        let mut request = CastSpellRequest::new(kind, timing, program.mana_cost(), payment)
+        let announced_cost = program
+            .mana_cost()
+            .with_x(program.mana_cost().x_count(), payment.x_value());
+        let mut request = CastSpellRequest::new(kind, timing, announced_cost, payment)
             .with_targets(requirements.to_vec(), targets.to_vec())
             .with_decisions(decisions);
         if program.split_second() {
@@ -3423,10 +3652,11 @@ impl GameDriver {
         }
 
         for choice in self.legal_cast_choices(player)? {
-            let MainChoice::Cast { object, .. } = &choice else {
-                unreachable!("legal cast enumeration returned a non-cast choice");
+            let object = match &choice {
+                MainChoice::Cast { object, .. } | MainChoice::BeginCast { object, .. } => *object,
+                _ => unreachable!("legal cast enumeration returned a non-cast choice"),
             };
-            labels.push(format!("Cast: {}", self.object_name(*object)));
+            labels.push(format!("Cast: {}", self.object_name(object)));
             choices.push(choice);
         }
 
@@ -3686,10 +3916,85 @@ impl GameDriver {
                         self.seed
                     )
                 })?;
-            if self.apply_main_choice(player, choice)? {
+            if self.finish_ai_main_choice(player, policy, choice)? {
                 return Ok(());
             }
         }
+    }
+
+    fn finish_ai_main_choice(
+        &mut self,
+        player: PlayerId,
+        policy: AiController,
+        mut choice: MainChoice,
+    ) -> Result<bool, String> {
+        while let Some((context, mappings)) = self.hierarchical_cast_context(player, &choice)? {
+            let decision_started = Instant::now();
+            let kind = match context.kind() {
+                DecisionKind::NumericValue => "numeric_value",
+                DecisionKind::Payment => "payment",
+                other => {
+                    return Err(format!(
+                        "seed {} unexpected AI cast context {other:?}",
+                        self.seed
+                    ));
+                }
+            };
+            let (selected_id, decision, policy_name, candidates) = if context.options().len() == 1 {
+                (context.options()[0].id(), None, "forced-v1", Vec::new())
+            } else {
+                let candidates = if matches!(policy, AiController::Random(_)) {
+                    Vec::new()
+                } else {
+                    self.policy_candidates(&context, player, |option| match option.descriptor() {
+                        DecisionDescriptor::ChooseNumber { value } => i64::from(*value),
+                        DecisionDescriptor::ChooseNumberRange { maximum, .. } => {
+                            i64::from(*maximum)
+                        }
+                        DecisionDescriptor::ChoosePayment { payment } => {
+                            -i64::from(payment.waste_score())
+                        }
+                        _ => 0,
+                    })?
+                };
+                let (selected_id, decision, policy_name) =
+                    self.select_ai_action(policy, &context, &candidates, kind)?;
+                (selected_id, decision, policy_name, candidates)
+            };
+            context.select(selected_id).map_err(|error| {
+                format!(
+                    "seed {} AI selected illegal hierarchical cast action: {error}",
+                    self.seed
+                )
+            })?;
+            self.record_ai_decision(AiDecisionTelemetry {
+                kind,
+                policy: policy_name,
+                context: &context,
+                action_id: selected_id,
+                decision,
+                evaluated_candidates: candidates.len(),
+                wall_latency_us: elapsed_us(decision_started),
+                score_override: None,
+                stop_reason: if context.options().len() == 1 {
+                    "single_legal_action"
+                } else if decision.is_some() {
+                    "one_ply_complete"
+                } else {
+                    "random_legal_selection"
+                },
+            });
+            choice = mappings
+                .iter()
+                .find_map(|(id, choice)| (*id == selected_id).then(|| choice.clone()))
+                .ok_or_else(|| {
+                    format!(
+                        "seed {} AI hierarchical cast action {selected_id} has no typed adapter",
+                        self.seed
+                    )
+                })?;
+        }
+        self.apply_main_choice(player, choice)
     }
 
     fn main_decision_context(
@@ -3796,6 +4101,24 @@ impl GameDriver {
                     }],
                 ))
             }
+            MainChoice::BeginCast {
+                object,
+                targets,
+                mode,
+                optional,
+            } => Ok(DecisionOption::new(
+                DecisionDescriptor::BeginCastSpell {
+                    object,
+                    targets,
+                    modes: mode.into_iter().collect(),
+                    optional,
+                },
+                Vec::new(),
+            )),
+            MainChoice::NarrowCastX { .. } | MainChoice::ChooseCastX { .. } => Err(format!(
+                "seed {} hierarchical cast stage cannot enter a root context",
+                self.seed
+            )),
             MainChoice::Cast {
                 object,
                 payment,
@@ -3830,6 +4153,190 @@ impl GameDriver {
                 "seed {} grouped ActivateAll presentation choice is not canonical",
                 self.seed
             )),
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn variable_cast_numeric_context(
+        &self,
+        player: PlayerId,
+        object: ObjectId,
+        targets: &[TargetChoice],
+        mode: Option<u32>,
+        optional: &[bool],
+        bounds: (u32, u32),
+    ) -> Result<(DecisionContext, Vec<(CanonicalActionId, MainChoice)>), String> {
+        if bounds.0 > bounds.1 {
+            return Err(format!("seed {} invalid X bounds {bounds:?}", self.seed));
+        }
+        let direct = bounds.1 - bounds.0 < MAX_DIRECT_NUMERIC_VALUES;
+        let ranges = if direct {
+            Vec::new()
+        } else {
+            let midpoint = bounds.0 + (bounds.1 - bounds.0) / 2;
+            vec![(bounds.0, midpoint), (midpoint + 1, bounds.1)]
+        };
+        let mut mappings = Vec::new();
+        let mut options = Vec::new();
+        if direct {
+            for x_value in bounds.0..=bounds.1 {
+                let option = DecisionOption::new(
+                    DecisionDescriptor::ChooseNumber { value: x_value },
+                    Vec::new(),
+                );
+                mappings.push((
+                    option.id(),
+                    MainChoice::ChooseCastX {
+                        object,
+                        targets: targets.to_vec(),
+                        mode,
+                        optional: optional.to_vec(),
+                        x_value,
+                    },
+                ));
+                options.push(option);
+            }
+        } else {
+            for (minimum, maximum) in ranges {
+                let option = DecisionOption::new(
+                    DecisionDescriptor::ChooseNumberRange { minimum, maximum },
+                    Vec::new(),
+                );
+                mappings.push((
+                    option.id(),
+                    MainChoice::NarrowCastX {
+                        object,
+                        targets: targets.to_vec(),
+                        mode,
+                        optional: optional.to_vec(),
+                        minimum,
+                        maximum,
+                    },
+                ));
+                options.push(option);
+            }
+        }
+        let context = self.scoped_decision_context(
+            DecisionKind::NumericValue,
+            player,
+            options,
+            variable_cast_path_discriminator(
+                player, object, targets, mode, optional, 0, bounds.0, bounds.1,
+            ),
+        )?;
+        Ok((context, mappings))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn variable_cast_payment_context(
+        &self,
+        player: PlayerId,
+        object: ObjectId,
+        targets: &[TargetChoice],
+        mode: Option<u32>,
+        optional: &[bool],
+        x_value: u32,
+    ) -> Result<(DecisionContext, Vec<(CanonicalActionId, MainChoice)>), String> {
+        let program = self
+            .programs
+            .get(&object)
+            .ok_or_else(|| format!("seed {} missing X spell program", self.seed))?;
+        let mut mappings = Vec::new();
+        let mut options = Vec::new();
+        for payment in self.cast_payment_plans(player, object, x_value)? {
+            let request = self.spell_request(program, payment, targets, mode, optional)?;
+            let action = Action::CastSpell {
+                player,
+                object,
+                request,
+            };
+            if !self.action_is_legal(&action) {
+                continue;
+            }
+            let option =
+                DecisionOption::new(DecisionDescriptor::ChoosePayment { payment }, vec![action]);
+            mappings.push((
+                option.id(),
+                MainChoice::Cast {
+                    object,
+                    payment,
+                    targets: targets.to_vec(),
+                    mode,
+                    optional: optional.to_vec(),
+                },
+            ));
+            options.push(option);
+        }
+        if options.is_empty() {
+            return Err(format!(
+                "seed {} selected unaffordable X={x_value} for {}",
+                self.seed,
+                program.name()
+            ));
+        }
+        let context = self.scoped_decision_context(
+            DecisionKind::Payment,
+            player,
+            options,
+            variable_cast_path_discriminator(
+                player, object, targets, mode, optional, 1, x_value, x_value,
+            ),
+        )?;
+        Ok((context, mappings))
+    }
+
+    fn hierarchical_cast_context(
+        &self,
+        player: PlayerId,
+        choice: &MainChoice,
+    ) -> Result<Option<MainDecisionAdapter>, String> {
+        match choice {
+            MainChoice::BeginCast {
+                object,
+                targets,
+                mode,
+                optional,
+            } => {
+                let maximum = self.maximum_affordable_x(player, *object)?.ok_or_else(|| {
+                    format!("seed {} selected an unaffordable X spell", self.seed)
+                })?;
+                self.variable_cast_numeric_context(
+                    player,
+                    *object,
+                    targets,
+                    *mode,
+                    optional,
+                    (0, maximum),
+                )
+                .map(Some)
+            }
+            MainChoice::NarrowCastX {
+                object,
+                targets,
+                mode,
+                optional,
+                minimum,
+                maximum,
+            } => self
+                .variable_cast_numeric_context(
+                    player,
+                    *object,
+                    targets,
+                    *mode,
+                    optional,
+                    (*minimum, *maximum),
+                )
+                .map(Some),
+            MainChoice::ChooseCastX {
+                object,
+                targets,
+                mode,
+                optional,
+                x_value,
+            } => self
+                .variable_cast_payment_context(player, *object, targets, *mode, optional, *x_value)
+                .map(Some),
+            _ => Ok(None),
         }
     }
 
@@ -7326,13 +7833,33 @@ impl GameDriver {
 impl MainSearchDomain<'_> {
     fn state(&self, driver: GameDriver) -> Result<MainSearchState, String> {
         let (context, mappings) = driver.main_decision_context(self.actor)?;
+        self.state_with_context(driver, context, mappings)
+    }
+
+    fn state_with_context(
+        &self,
+        driver: GameDriver,
+        context: DecisionContext,
+        mappings: Vec<(CanonicalActionId, MainChoice)>,
+    ) -> Result<MainSearchState, String> {
         let priors = context
             .options()
             .iter()
             .map(|option| {
                 (
                     option.id(),
-                    driver.main_action_prior(&context, option.descriptor(), self.guardrail_profile),
+                    match option.descriptor() {
+                        DecisionDescriptor::ChooseNumber { value } => i64::from(*value),
+                        DecisionDescriptor::ChooseNumberRange { maximum, .. } => {
+                            i64::from(*maximum)
+                        }
+                        DecisionDescriptor::ChoosePayment { payment } => {
+                            -i64::from(payment.waste_score())
+                        }
+                        descriptor => {
+                            driver.main_action_prior(&context, descriptor, self.guardrail_profile)
+                        }
+                    },
                 )
             })
             .collect();
@@ -7386,6 +7913,11 @@ impl SearchDomain for MainSearchDomain<'_> {
             .find_map(|(id, choice)| (*id == action).then(|| choice.clone()))
             .ok_or_else(|| format!("search action {action} has no typed main-phase adapter"))?;
         let mut next = state.clone();
+        if let Some((context, mappings)) =
+            next.driver.hierarchical_cast_context(self.actor, &choice)?
+        {
+            return self.state_with_context(next.driver, context, mappings);
+        }
         next.finished = next.driver.apply_main_choice(self.actor, choice)?;
         if next.finished {
             Ok(next)
@@ -7937,6 +8469,42 @@ fn resolution_choice_path_discriminator(
     state
 }
 
+#[allow(clippy::too_many_arguments)]
+fn variable_cast_path_discriminator(
+    player: PlayerId,
+    object: ObjectId,
+    targets: &[TargetChoice],
+    mode: Option<u32>,
+    optional: &[bool],
+    stage: u64,
+    minimum: u32,
+    maximum: u32,
+) -> u64 {
+    let mut state = combat_path_mix(0x7661_7263_6173_0001, player.index() as u64);
+    state = combat_path_mix(state, object.index() as u64);
+    state = combat_path_mix(state, stage);
+    state = combat_path_mix(state, u64::from(minimum));
+    state = combat_path_mix(state, u64::from(maximum));
+    state = combat_path_mix(state, mode.map_or(u64::MAX, u64::from));
+    for target in targets {
+        state = match target {
+            TargetChoice::Player(player) => {
+                combat_path_mix(combat_path_mix(state, 0), player.index() as u64)
+            }
+            TargetChoice::Object(object) => {
+                combat_path_mix(combat_path_mix(state, 1), object.index() as u64)
+            }
+            TargetChoice::StackEntry(entry) => {
+                combat_path_mix(combat_path_mix(state, 2), entry.index() as u64)
+            }
+        };
+    }
+    for accept in optional {
+        state = combat_path_mix(state, u64::from(*accept));
+    }
+    state
+}
+
 fn trigger_order_path_discriminator(
     controller: PlayerId,
     remaining: &[TriggerId],
@@ -8083,6 +8651,18 @@ fn decision_descriptor_value(descriptor: &DecisionDescriptor) -> Value {
             "modes": modes,
             "optional": optional
         }),
+        DecisionDescriptor::BeginCastSpell {
+            object,
+            targets,
+            modes,
+            optional,
+        } => json!({
+            "kind": "begin_cast_spell",
+            "object_id": object.index(),
+            "targets": targets.iter().copied().map(target_value).collect::<Vec<_>>(),
+            "modes": modes,
+            "optional": optional
+        }),
         DecisionDescriptor::DeclareAttackers { attacks } => json!({
             "kind": "declare_attackers",
             "attacks": attacks.iter().map(|attack| json!({
@@ -8125,6 +8705,11 @@ fn decision_descriptor_value(descriptor: &DecisionDescriptor) -> Value {
         DecisionDescriptor::ChooseNumber { value } => {
             json!({"kind": "choose_number", "value": value})
         }
+        DecisionDescriptor::ChooseNumberRange { minimum, maximum } => json!({
+            "kind": "choose_number_range",
+            "minimum": minimum,
+            "maximum": maximum
+        }),
         DecisionDescriptor::ChoosePayment { payment } => {
             json!({"kind": "choose_payment", "payment": payment_value(*payment)})
         }
@@ -9375,18 +9960,18 @@ mod tests {
         legacy_human_summary_matches, player_view_fingerprint, replay_captured_actions,
         replay_human_file, run_prompted_game, snapshot_prompt, ActivatedRuntime, AiController,
         DecisionPrompt, DecisionSelection, DecisionSource, GameDriver, GameMetrics, GameSummary,
-        HeuristicPolicy, IdentityExercise, MainChoice, PendingActivatedResolution,
-        RandomLegalPolicy, ReplayDecisionSource, TerminalDecisionSource, TraceMode, TraceRecord,
-        CONCESSION_PROMPT, PLAYER_COUNT,
+        HeuristicPolicy, IdentityExercise, MainChoice, MainSearchDomain,
+        PendingActivatedResolution, RandomLegalPolicy, ReplayDecisionSource,
+        TerminalDecisionSource, TraceMode, TraceRecord, CONCESSION_PROMPT, PLAYER_COUNT,
     };
-    use forge_ai::{AiWeights, GuardrailTable};
+    use forge_ai::{AiWeights, GuardrailProfile, GuardrailTable, SearchDomain};
     use forge_cards::runtime::compile_card_program;
     use forge_core::{
         apply, Action, AttackDeclaration, BaseCreatureCharacteristics, BaseObjectCharacteristics,
         BasicLandTypes, BlockDeclaration, CardId, CombatDamageTarget, CreatureKeywords,
         DecisionContext, DecisionDescriptor, DecisionKind, DecisionOption, GameState, ManaPool,
-        ObjectColors, ObjectId, ObjectSupertypes, ObjectTypes, Outcome, PlayerId, PlayerView,
-        ResolutionOutcome, StackDecisionBindings, Step, TargetChoice, TriggerCondition,
+        ObjectColors, ObjectId, ObjectSupertypes, ObjectTypes, Outcome, PaymentPlan, PlayerId,
+        PlayerView, ResolutionOutcome, StackDecisionBindings, Step, TargetChoice, TriggerCondition,
         TriggerDefinition, TriggerPlayerFilter, ZoneId, ZoneKind,
     };
     use std::{
@@ -10140,6 +10725,313 @@ mod tests {
             action,
             Action::GainLife { player, amount } if *player == caster && *amount == 3
         )));
+    }
+
+    #[test]
+    fn x_spell_choices_bind_the_announced_value_to_payment_and_stack() {
+        let source = r#"card "X Choice" {
+  id: "forge:test:x-choice"
+  layout: normal
+  status: unverified_playable
+  face "X Choice" {
+    cost: "{X}{R}"
+    types: "Instant"
+    oracle: "You gain 1 life."
+    keywords: []
+    ability spell {
+      effect: gain_life(1, you())
+    }
+  }
+}"#;
+        let definition = forge_cardc::parse_card_named("x_choice.frs", source)
+            .unwrap_or_else(|error| panic!("X fixture should parse: {error}"));
+        let program = Arc::new(
+            forge_cards::runtime::compile_card_program(&definition)
+                .unwrap_or_else(|error| panic!("X fixture should compile: {error}")),
+        );
+        let (mut driver, caster, _opponent, spell) = modal_spell_driver();
+        Arc::make_mut(&mut driver.programs).insert(spell, program);
+
+        let (context, mappings) = driver
+            .main_decision_context(caster)
+            .unwrap_or_else(|error| panic!("X main context should exist: {error}"));
+        let begin = context
+            .options()
+            .iter()
+            .find(|option| {
+                matches!(
+                    option.descriptor(),
+                    DecisionDescriptor::BeginCastSpell {
+                        object,
+                        targets,
+                        modes,
+                        optional,
+                    } if *object == spell
+                        && targets.is_empty()
+                        && modes.is_empty()
+                        && optional.is_empty()
+                )
+            })
+            .unwrap_or_else(|| panic!("X spell should expose one deferred cast option"));
+        assert!(begin.actions().is_empty());
+        let begin_choice = mappings
+            .iter()
+            .find_map(|(id, choice)| (*id == begin.id()).then(|| choice.clone()))
+            .unwrap_or_else(|| panic!("deferred X cast should have a typed adapter"));
+        let replay_base = driver.clone();
+        let replay_begin = begin_choice.clone();
+
+        let (numeric, numeric_mappings) = driver
+            .hierarchical_cast_context(caster, &begin_choice)
+            .unwrap_or_else(|error| panic!("X numeric context should build: {error}"))
+            .unwrap_or_else(|| panic!("X cast should require a numeric context"));
+        assert_eq!(numeric.kind(), DecisionKind::NumericValue);
+        assert!(numeric.path_discriminator().is_some());
+        let x_values = numeric
+            .options()
+            .iter()
+            .filter_map(|option| match option.descriptor() {
+                DecisionDescriptor::ChooseNumber { value } => Some(*value),
+                _ => None,
+            })
+            .collect::<BTreeSet<_>>();
+        assert_eq!(x_values, BTreeSet::from([0, 1]));
+        let x_one = numeric
+            .options()
+            .iter()
+            .find(|option| {
+                matches!(
+                    option.descriptor(),
+                    DecisionDescriptor::ChooseNumber { value: 1 }
+                )
+            })
+            .unwrap_or_else(|| panic!("X=1 should be canonical"));
+        let x_one_terminal_choice = numeric
+            .options()
+            .iter()
+            .position(|option| option.id() == x_one.id())
+            .unwrap_or_else(|| panic!("X=1 should have a prompt position"))
+            + 1;
+        let payment_stage = numeric_mappings
+            .iter()
+            .find_map(|(id, choice)| (*id == x_one.id()).then(|| choice.clone()))
+            .unwrap_or_else(|| panic!("X=1 should have a typed adapter"));
+        let (payments, payment_mappings) = driver
+            .hierarchical_cast_context(caster, &payment_stage)
+            .unwrap_or_else(|error| panic!("X payment context should build: {error}"))
+            .unwrap_or_else(|| panic!("selected X should require a payment context"));
+        assert_eq!(payments.kind(), DecisionKind::Payment);
+        assert!(payments.options().iter().all(|option| matches!(
+            option.descriptor(),
+            DecisionDescriptor::ChoosePayment { payment } if payment.x_value() == 1
+        )));
+        let selected = payments
+            .options()
+            .first()
+            .unwrap_or_else(|| panic!("X=1 should have a legal payment"));
+        let choice = payment_mappings
+            .iter()
+            .find_map(|(id, choice)| (*id == selected.id()).then(|| choice.clone()))
+            .unwrap_or_else(|| panic!("X payment should have a final typed adapter"));
+
+        assert_eq!(driver.apply_main_choice(caster, choice), Ok(true));
+        let stack = driver
+            .state
+            .stack_top()
+            .unwrap_or_else(|| panic!("X spell should be on the stack"));
+        assert_eq!(stack.payment().map(PaymentPlan::x_value), Some(1));
+        assert_eq!(
+            driver.state.mana_pool(caster),
+            Ok(forge_core::ManaPool::empty())
+        );
+
+        let mut human_driver = replay_base.clone();
+        let scripted_input = format!("{x_one_terminal_choice}\n1\n");
+        let mut input = Cursor::new(scripted_input.as_bytes());
+        let mut output = Vec::new();
+        let mut terminal = TerminalDecisionSource::new(&mut input, &mut output);
+        assert_eq!(
+            human_driver.finish_human_main_choice(caster, &mut terminal, replay_begin.clone()),
+            Ok(true)
+        );
+        let decisions = terminal.into_decisions();
+        assert_eq!(decisions.len(), 2);
+        assert_eq!(decisions[0].prompt, "Choose X");
+        assert_eq!(decisions[1].prompt, "Choose a mana payment");
+        assert_eq!(
+            decisions[0].canonical_legal_actions[decisions[0].selected].descriptor,
+            serde_json::json!({"kind": "choose_number", "value": 1})
+        );
+        assert_eq!(
+            decisions[1].canonical_legal_actions[decisions[1].selected].descriptor["kind"],
+            "choose_payment"
+        );
+
+        let mut replay_driver = replay_base;
+        let mut replay = ReplayDecisionSource::new(decisions);
+        assert_eq!(
+            replay_driver.finish_human_main_choice(caster, &mut replay, replay_begin),
+            Ok(true)
+        );
+        assert!(replay.finish().is_ok());
+        assert_eq!(replay_driver.actions, human_driver.actions);
+        assert_eq!(
+            replay_driver.state.deterministic_hash(),
+            human_driver.state.deterministic_hash()
+        );
+    }
+
+    #[test]
+    fn large_x_ranges_split_logarithmically_and_ai_records_both_stages() {
+        let source = r#"card "X Choice" {
+  id: "forge:test:x-choice-ai"
+  layout: normal
+  status: unverified_playable
+  face "X Choice" {
+    cost: "{X}{R}"
+    types: "Instant"
+    oracle: "You gain 1 life."
+    keywords: []
+    ability spell {
+      effect: gain_life(1, you())
+    }
+  }
+}"#;
+        let definition = forge_cardc::parse_card_named("x_choice_ai.frs", source)
+            .unwrap_or_else(|error| panic!("X fixture should parse: {error}"));
+        let program = Arc::new(
+            forge_cards::runtime::compile_card_program(&definition)
+                .unwrap_or_else(|error| panic!("X fixture should compile: {error}")),
+        );
+        let (mut driver, caster, _opponent, spell) = modal_spell_driver();
+        Arc::make_mut(&mut driver.programs).insert(spell, program);
+
+        let (large, _) = driver
+            .variable_cast_numeric_context(caster, spell, &[], None, &[], (0, u32::MAX))
+            .unwrap_or_else(|error| panic!("large X range should build: {error}"));
+        assert_eq!(large.options().len(), 2);
+        assert!(large.options().iter().all(|option| matches!(
+            option.descriptor(),
+            DecisionDescriptor::ChooseNumberRange { .. }
+        )));
+        let first_hidden = hidden_card_view(41, false);
+        let second_hidden = hidden_card_view(99, false);
+        let path = large
+            .path_discriminator()
+            .unwrap_or_else(|| panic!("large X context should be scoped"));
+        let first_hidden_context = DecisionContext::new_scoped(
+            DecisionKind::NumericValue,
+            first_hidden.observer(),
+            &first_hidden,
+            large.options().to_vec(),
+            Vec::new(),
+            path,
+        )
+        .unwrap_or_else(|error| panic!("first hidden X context should build: {error}"));
+        let second_hidden_context = DecisionContext::new_scoped(
+            DecisionKind::NumericValue,
+            second_hidden.observer(),
+            &second_hidden,
+            large.options().to_vec(),
+            Vec::new(),
+            path,
+        )
+        .unwrap_or_else(|error| panic!("second hidden X context should build: {error}"));
+        assert_eq!(first_hidden_context.id(), second_hidden_context.id());
+        assert_eq!(
+            first_hidden_context.state_key(),
+            second_hidden_context.state_key()
+        );
+
+        let (root, mappings) = driver
+            .main_decision_context(caster)
+            .unwrap_or_else(|error| panic!("AI X root should build: {error}"));
+        let begin = root
+            .options()
+            .iter()
+            .find(|option| {
+                matches!(
+                    option.descriptor(),
+                    DecisionDescriptor::BeginCastSpell { object, .. } if *object == spell
+                )
+            })
+            .unwrap_or_else(|| panic!("AI X root should contain the spell"));
+        let choice = mappings
+            .iter()
+            .find_map(|(id, choice)| (*id == begin.id()).then(|| choice.clone()))
+            .unwrap_or_else(|| panic!("AI X root should have a typed adapter"));
+        let weights =
+            AiWeights::bundled().unwrap_or_else(|error| panic!("weights should load: {error}"));
+        {
+            let domain = MainSearchDomain {
+                root: &driver,
+                actor: caster,
+                weights,
+                rollout_seed: 31,
+                guardrail_profile: GuardrailProfile::Standard,
+            };
+            let search_root = domain
+                .state(driver.clone())
+                .unwrap_or_else(|error| panic!("search root should build: {error}"));
+            let numeric_state = domain
+                .apply_action(&search_root, begin.id())
+                .unwrap_or_else(|error| panic!("search should enter X context: {error}"));
+            assert_eq!(numeric_state.context.kind(), DecisionKind::NumericValue);
+            let x_one = numeric_state
+                .context
+                .options()
+                .iter()
+                .find(|option| {
+                    matches!(
+                        option.descriptor(),
+                        DecisionDescriptor::ChooseNumber { value: 1 }
+                    )
+                })
+                .unwrap_or_else(|| panic!("search X context should contain one"));
+            let payment_state = domain
+                .apply_action(&numeric_state, x_one.id())
+                .unwrap_or_else(|error| panic!("search should enter payment context: {error}"));
+            assert_eq!(payment_state.context.kind(), DecisionKind::Payment);
+            let payment = payment_state
+                .context
+                .options()
+                .first()
+                .unwrap_or_else(|| panic!("search payment context should not be empty"));
+            let cast_state = domain
+                .apply_action(&payment_state, payment.id())
+                .unwrap_or_else(|error| panic!("search should apply final cast: {error}"));
+            assert!(cast_state.finished);
+            assert_eq!(
+                cast_state
+                    .driver
+                    .state
+                    .stack_top()
+                    .and_then(|entry| entry.payment())
+                    .map(PaymentPlan::x_value),
+                Some(1)
+            );
+        }
+        let policy = AiController::Heuristic(HeuristicPolicy::rollout(weights, 29));
+        assert_eq!(
+            driver.finish_ai_main_choice(caster, policy, choice),
+            Ok(true)
+        );
+        assert!(driver
+            .ai_decisions
+            .iter()
+            .any(|record| record.kind == "numeric_value"));
+        assert!(driver
+            .ai_decisions
+            .iter()
+            .any(|record| record.kind == "payment"));
+        assert_eq!(
+            driver
+                .state
+                .stack_top()
+                .and_then(|entry| entry.payment())
+                .map(PaymentPlan::x_value),
+            Some(1)
+        );
     }
 
     #[test]

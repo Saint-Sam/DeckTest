@@ -58,6 +58,10 @@ The T4.3-T4.5 diagnostics path currently adapts:
   AI seats;
 - main-phase land plays, normal-cost permanent/instant/sorcery casts, mana
   activations, every enumerated mana payment, and priority pass;
+- printed X spell costs through one deferred cast-family option followed by a
+  scoped numeric context and a scoped payment context; values above 64 choices
+  narrow through binary subranges, while the final option remains the same
+  fully bound typed `CastSpell` action used by replay and the kernel;
 - exact normal-spell target products, modal branches, and optional-effect
   answers, preserved in the canonical descriptor and stack hash and rebound
   through real resolution; human labels expose every bound choice;
@@ -99,7 +103,7 @@ The T4.3-T4.5 diagnostics path currently adapts:
 
 The current path remains `limited` and diagnostics-only because it does not yet
 canonicalize the full Commander prompt surface: unsupported activation cost
-families, target distribution, X, additional and alternative costs,
+families, target distribution, non-cost numeric values, additional and alternative costs,
 trigger-order benchmark labels, spell resolution-time choices, triggered
 targets and deferred optionals, and non-player combat defenders. Normal spells
 and the current typed activated slice cover targets, optional effects,

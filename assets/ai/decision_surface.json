@@ -20,14 +20,14 @@
       "human": "partial",
       "ai": "partial",
       "benchmark": "partial",
-      "note": "Every live human and AI priority window uses one shared canonical context with a forced-pass fast path, exact normal-cost instant choices, and typed program-bound non-mana activations. Activation targets, optional answers, and payments survive the stack; alternate costs, unsupported extra activation costs, and triggered-ability prompts remain open."
+      "note": "Every live human and AI priority window uses one shared canonical context with a forced-pass fast path, exact normal-cost instant choices, hierarchical printed-X casting, and typed program-bound non-mana activations. Activation targets, optional answers, announced X, and payments survive the stack; alternate costs, unsupported extra activation costs, and triggered-ability prompts remain open."
     },
     {
       "kind": "main_phase",
       "human": "partial",
       "ai": "partial",
       "benchmark": "partial",
-      "note": "Human and AI consume the same canonical land, mana activation, typed program-bound non-mana activation, normal-cost cast, and finish options. Descriptors bind exact targets, modes, optional answers, and every legal payment. Variable/additional/alternate costs and spell or trigger resolution-time object choices remain open."
+      "note": "Human and AI consume the same canonical land, mana activation, typed program-bound non-mana activation, normal-cost cast, and finish options. Printed X spells defer the numeric announcement and payment into bounded shared subcontexts; descriptors bind exact targets, modes, optional answers, announced X, and every legal payment. Additional and alternate costs and spell or trigger resolution-time object choices remain open."
     },
     {
       "kind": "declare_attackers",
@@ -66,17 +66,17 @@
     },
     {
       "kind": "numeric_value",
-      "human": "descriptor_only",
-      "ai": "descriptor_only",
-      "benchmark": "descriptor_only",
-      "note": "Typed IDs exist; no complete production prompt adapter is claimed."
+      "human": "partial",
+      "ai": "partial",
+      "benchmark": "partial",
+      "note": "Printed X spell costs use shared human, heuristic, random, and search contexts with exact replay, typed path identity, hidden-information canaries, and binary narrowing above 64 values. Non-cost numeric choices, variable activated abilities, target distribution, and sealed benchmark labels remain open."
     },
     {
       "kind": "payment",
       "human": "partial",
       "ai": "partial",
       "benchmark": "descriptor_only",
-      "note": "Current main-phase options bind explicit mana plans; general strategic payment prompts remain open."
+      "note": "Fixed costs bind explicit mana plans in the root option. Printed X costs use a separate shared Payment context after X is announced, preserve X metadata through cost modification and stack entry, and expose the same final typed CastSpell action to human, heuristic, random, and search consumers. Additional, alternate, and non-mana payment prompts remain open."
     },
     {
       "kind": "optional",

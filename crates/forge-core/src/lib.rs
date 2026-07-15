@@ -382,6 +382,16 @@ pub struct PaymentPlan {
 }
 
 impl PaymentPlan {
+    /// Returns this payment with the announced X value attached as metadata.
+    ///
+    /// Cost reducers can consume part of X's generic contribution, so the
+    /// effective payable cost cannot always retain the announcement itself.
+    #[must_use]
+    pub const fn with_x_value(mut self, x_value: u32) -> Self {
+        self.x_value = x_value;
+        self
+    }
+
     /// Returns all mana consumed by this plan.
     #[must_use]
     pub const fn paid(self) -> ManaPool {
@@ -9646,7 +9656,8 @@ impl GameState {
             .get_mut(player.index())
             .ok_or(StateError::UnknownPlayer(player))?;
         let canonical = validate_payment_plan(player_state.mana_pool, cost, plan.paid())
-            .map_err(Self::map_payment_error)?;
+            .map_err(Self::map_payment_error)?
+            .with_x_value(plan.x_value());
         if canonical != plan {
             return Err(StateError::InvalidPaymentPlan);
         }
@@ -11376,13 +11387,17 @@ impl GameState {
             request.target_requirements(),
             request.target_choices(),
         )?;
+        if request.cost().x_value() != request.payment().x_value() {
+            return Err(StateError::InvalidPaymentPlan);
+        }
         let effective_cost = self.effective_spell_request_cost(player, object, &request)?;
         let canonical_payment = validate_payment_plan(
             self.mana_pool(player)?,
             effective_cost,
             request.payment().paid(),
         )
-        .map_err(Self::map_payment_error)?;
+        .map_err(Self::map_payment_error)?
+        .with_x_value(request.cost().x_value());
         if canonical_payment != request.payment() {
             return Err(StateError::InvalidPaymentPlan);
         }
@@ -24256,6 +24271,29 @@ mod tests {
         );
         assert_eq!(state.players()[active.index()].life(), 20);
         assert!(state.stack_entries().is_empty());
+    }
+
+    #[test]
+    fn effective_payment_retains_the_announced_x_metadata() {
+        let mut state = GameState::new();
+        let player = state.add_player();
+        state
+            .add_mana_to_pool(player, ManaPool::new(0, 0, 0, 0, 0, 1))
+            .unwrap_or_else(|error| panic!("unexpected mana add error: {error:?}"));
+        let effective_cost = ManaCost::new(0, 0, 0, 0, 0, 1);
+        let payment = validate_payment_plan(
+            state
+                .mana_pool(player)
+                .unwrap_or_else(|error| panic!("unexpected mana pool error: {error:?}")),
+            effective_cost,
+            ManaPool::new(0, 0, 0, 0, 0, 1),
+        )
+        .unwrap_or_else(|error| panic!("unexpected payment error: {error:?}"))
+        .with_x_value(3);
+
+        assert_eq!(state.pay_mana(player, effective_cost, payment), Ok(()));
+        assert_eq!(state.mana_pool(player), Ok(ManaPool::empty()));
+        assert_eq!(payment.x_value(), 3);
     }
 
     #[test]

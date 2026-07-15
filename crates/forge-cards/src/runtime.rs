@@ -4298,6 +4298,7 @@ fn compile_printed_mana_value(symbols: &[ManaSymbol]) -> Result<u32, CompileDiag
         let contribution = match symbol {
             ManaSymbol::Color(_) => 1,
             ManaSymbol::Generic(amount) => u32::from(*amount),
+            ManaSymbol::Variable(_) => 0,
             unsupported => {
                 return Err(CompileDiagnostic::new(
                     CompileDiagnosticCode::ManaSymbol,
@@ -4320,6 +4321,7 @@ fn compile_printed_mana_value(symbols: &[ManaSymbol]) -> Result<u32, CompileDiag
 fn compile_mana_cost(symbols: &[ManaSymbol]) -> Result<(ManaCost, ManaPool), CompileDiagnostic> {
     let mut colored = [0_u32; 5];
     let mut generic = 0_u32;
+    let mut x_count = 0_u32;
     for (index, symbol) in symbols.iter().enumerate() {
         match symbol {
             ManaSymbol::Color(color) => {
@@ -4347,6 +4349,15 @@ fn compile_mana_cost(symbols: &[ManaSymbol]) -> Result<(ManaCost, ManaPool), Com
                     )
                 })?;
             }
+            ManaSymbol::Variable('X') => {
+                x_count = x_count.checked_add(1).ok_or_else(|| {
+                    CompileDiagnostic::new(
+                        CompileDiagnosticCode::ProgramBounds,
+                        format!("card.faces[0].cost[{index}]"),
+                        "variable X count overflowed",
+                    )
+                })?;
+            }
             unsupported => {
                 return Err(CompileDiagnostic::new(
                     CompileDiagnosticCode::ManaSymbol,
@@ -4359,7 +4370,8 @@ fn compile_mana_cost(symbols: &[ManaSymbol]) -> Result<(ManaCost, ManaPool), Com
     Ok((
         ManaCost::new(
             colored[0], colored[1], colored[2], colored[3], colored[4], generic,
-        ),
+        )
+        .with_x(x_count, 0),
         ManaPool::new(
             colored[0], colored[1], colored[2], colored[3], colored[4], generic,
         ),
@@ -10044,6 +10056,41 @@ card "Purphoros, God of the Forge" {
                 amount: 2,
             } if *bound_source == source && *player == opponent
         ));
+    }
+
+    #[test]
+    fn x_mana_symbols_compile_as_dynamic_costs_and_zero_printed_value() {
+        let source = r#"card "Double X Test" {
+  id: "forge:test:double-x"
+  layout: normal
+  status: unverified_playable
+  face "Double X Test" {
+    cost: "{X}{X}{R}"
+    types: "Sorcery"
+    oracle: "You gain 1 life."
+    keywords: []
+    ability spell {
+      effect: gain_life(1, you())
+    }
+  }
+}"#;
+        let program = compile_card_program(&parse("double_x_test.frs", source))
+            .unwrap_or_else(|error| panic!("X-cost fixture should compile: {error}"));
+        assert_eq!(
+            program.mana_cost(),
+            ManaCost::new(0, 0, 0, 1, 0, 0).with_x(2, 0)
+        );
+        assert_eq!(program.base_object().mana_value(), 1);
+        assert_eq!(program.exact_payment(), ManaPool::new(0, 0, 0, 1, 0, 0));
+
+        let unsupported = source
+            .replace("{X}{X}{R}", "{Y}{R}")
+            .replace("double-x", "variable-y");
+        let error = match compile_card_program(&parse("variable_y_test.frs", &unsupported)) {
+            Ok(_) => panic!("independent Y values must remain fail-closed"),
+            Err(error) => error,
+        };
+        assert_eq!(error.code(), CompileDiagnosticCode::ManaSymbol);
     }
 
     fn parse(path: &str, source: &str) -> forge_carddef::CardDefinition {

@@ -224,6 +224,17 @@ pub enum DecisionDescriptor {
         /// Optional-effect answers in prompt order.
         optional: Vec<bool>,
     },
+    /// Begin casting a spell whose numeric and payment choices remain deferred.
+    BeginCastSpell {
+        /// Spell object.
+        object: ObjectId,
+        /// Targets already bound by the enclosing action-family choice.
+        targets: Vec<TargetChoice>,
+        /// Mode indexes already bound by the enclosing action-family choice.
+        modes: Vec<u32>,
+        /// Optional-effect answers already bound by the enclosing action-family choice.
+        optional: Vec<bool>,
+    },
     /// Declare a complete attacker set.
     DeclareAttackers {
         /// Attack declarations for this option.
@@ -274,6 +285,13 @@ pub enum DecisionDescriptor {
     ChooseNumber {
         /// Selected value.
         value: u32,
+    },
+    /// Narrow a large legal numeric range hierarchically.
+    ChooseNumberRange {
+        /// Inclusive lower bound selected by this option.
+        minimum: u32,
+        /// Inclusive upper bound selected by this option.
+        maximum: u32,
     },
     /// Choose one mana payment.
     ChoosePayment {
@@ -407,6 +425,27 @@ impl DecisionDescriptor {
                     bytes.u8(u8::from(*accept));
                 }
             }
+            Self::BeginCastSpell {
+                object,
+                targets,
+                modes,
+                optional,
+            } => {
+                bytes.u8(26);
+                bytes.object(*object);
+                bytes.u32(targets.len() as u32);
+                for target in targets {
+                    bytes.target(*target);
+                }
+                bytes.u32(modes.len() as u32);
+                for mode in modes {
+                    bytes.u32(*mode);
+                }
+                bytes.u32(optional.len() as u32);
+                for accept in optional {
+                    bytes.u8(u8::from(*accept));
+                }
+            }
             Self::DeclareAttackers { attacks } => {
                 bytes.u8(6);
                 bytes.u32(attacks.len() as u32);
@@ -459,6 +498,11 @@ impl DecisionDescriptor {
             Self::ChooseNumber { value } => {
                 bytes.u8(12);
                 bytes.u32(*value);
+            }
+            Self::ChooseNumberRange { minimum, maximum } => {
+                bytes.u8(27);
+                bytes.u32(*minimum);
+                bytes.u32(*maximum);
             }
             Self::ChoosePayment { payment } => {
                 bytes.u8(13);
@@ -1171,6 +1215,12 @@ mod tests {
                 modes: vec![0],
                 optional: vec![true],
             },
+            DecisionDescriptor::BeginCastSpell {
+                object,
+                targets: vec![crate::TargetChoice::Player(opponent)],
+                modes: vec![0],
+                optional: vec![true],
+            },
             DecisionDescriptor::DeclareAttackers {
                 attacks: vec![AttackDeclaration::new(object, opponent)],
             },
@@ -1195,6 +1245,10 @@ mod tests {
             },
             DecisionDescriptor::ChooseMode { mode: 1 },
             DecisionDescriptor::ChooseNumber { value: 2 },
+            DecisionDescriptor::ChooseNumberRange {
+                minimum: 3,
+                maximum: 8,
+            },
             DecisionDescriptor::ChoosePayment { payment },
             DecisionDescriptor::ChooseOptional {
                 prompt: 0,
@@ -1232,6 +1286,6 @@ mod tests {
             .into_iter()
             .map(|descriptor| DecisionOption::new(descriptor, Vec::new()).id())
             .collect::<std::collections::BTreeSet<_>>();
-        assert_eq!(ids.len(), 26);
+        assert_eq!(ids.len(), 28);
     }
 }
