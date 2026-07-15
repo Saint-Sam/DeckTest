@@ -73,23 +73,24 @@ onto identities.
 
 ## Next Gates
 
-1. Product `313158a` has an extracted production runner, one pre-context shared
+1. Product `0961e94` has an extracted production runner, one pre-context shared
    search deadline, inline single-worker execution, action-edge statistics, and
    collision-checked transposition buckets. Printed `{X}` now uses typed
    begin-cast, numeric-range, payment, and final-cast contexts. Typed target
    families interleave widening without merging concrete actions. Spell,
    activated, and triggered resolution searches share bounded typed contexts.
-   Ordinary triggered targets now use the same canonical human, AI, telemetry,
-   and replay path; required targetless triggers use an explicit kernel-validated
-   no-stack disposition. Same-batch inter-trigger targeting remains fail closed.
-   The 247-test local preflight,
+   Ordinary triggered targets, resolution-time trigger optionals, and exact
+   event-player `unless_paid` choices now use the same canonical human, AI,
+   telemetry, and replay path; required targetless triggers use an explicit
+   kernel-validated no-stack disposition. Same-batch inter-trigger targeting
+   remains fail closed. The 249-test local preflight,
    WASM/Android compiles, clone guard, and all three exact policy/action replays
    pass. The exact state-key audit covers 38,299 decisions with zero failures.
 2. Hierarchical per-attacker/per-blocker contexts and single-construction
    determinization are exact-replay-bound. Combat-damage order and amount now
    use the same bounded typed path. The 18,321-action search game and final hash
    are preserved, while the refreshed 1-4 ms ladder measures approximately
-   1.5-4.8 ms p95 instead of the former 240-266 ms floor. No search knee is
+   1.5-4.9 ms p95 instead of the former 240-266 ms floor. No search knee is
    claimed yet.
 3. T4.5 search mechanics are locally complete. Complete the remaining canonical
    Choice/Prompt adapters and benchmark fixtures.
