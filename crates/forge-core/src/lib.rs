@@ -3493,6 +3493,33 @@ impl TriggerStackBinding {
     }
 }
 
+/// One fully selected non-mana additional cost paid while casting a spell.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum SpellAdditionalCostPayment {
+    /// Discard the listed cards from the caster's hand.
+    DiscardCards {
+        /// Exact cards selected for the discard cost, in canonical order.
+        objects: Vec<ObjectId>,
+    },
+    /// Sacrifice the listed matching permanents controlled by the caster.
+    SacrificePermanents {
+        /// Exact permanents selected for the sacrifice cost, in canonical order.
+        objects: Vec<ObjectId>,
+        /// Closed predicate every selected permanent must satisfy.
+        predicate: Box<ObjectTargetPredicate>,
+    },
+}
+
+impl SpellAdditionalCostPayment {
+    /// Returns the exact objects selected for this cost.
+    #[must_use]
+    pub fn objects(&self) -> &[ObjectId] {
+        match self {
+            Self::DiscardCards { objects } | Self::SacrificePermanents { objects, .. } => objects,
+        }
+    }
+}
+
 /// Request object for casting one spell.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CastSpellRequest {
@@ -3506,6 +3533,7 @@ pub struct CastSpellRequest {
     split_second: bool,
     target_requirements: Vec<TargetRequirement>,
     target_choices: Vec<TargetChoice>,
+    additional_costs: Vec<SpellAdditionalCostPayment>,
     decisions: StackDecisionBindings,
 }
 
@@ -3529,6 +3557,7 @@ impl CastSpellRequest {
             split_second: false,
             target_requirements: Vec::new(),
             target_choices: Vec::new(),
+            additional_costs: Vec::new(),
             decisions: StackDecisionBindings::default(),
         }
     }
@@ -3542,6 +3571,16 @@ impl CastSpellRequest {
     ) -> Self {
         self.target_requirements = target_requirements;
         self.target_choices = target_choices;
+        self
+    }
+
+    /// Supplies every selected non-mana additional cost in printed order.
+    #[must_use]
+    pub fn with_additional_costs(
+        mut self,
+        additional_costs: Vec<SpellAdditionalCostPayment>,
+    ) -> Self {
+        self.additional_costs = additional_costs;
         self
     }
 
@@ -3644,6 +3683,12 @@ impl CastSpellRequest {
     #[must_use]
     pub fn target_choices(&self) -> &[TargetChoice] {
         &self.target_choices
+    }
+
+    /// Returns selected non-mana additional costs in printed order.
+    #[must_use]
+    pub fn additional_costs(&self) -> &[SpellAdditionalCostPayment] {
+        &self.additional_costs
     }
 
     /// Returns modal and optional answers announced for this spell.
@@ -6915,6 +6960,12 @@ pub enum StateError {
     InsufficientMana,
     /// A proposed explicit payment does not satisfy the cost.
     InvalidPaymentPlan,
+    /// One declared additional-cost group selected no objects.
+    EmptySpellAdditionalCost,
+    /// The same object was selected for more than one part of a spell's additional costs.
+    DuplicateSpellAdditionalCostObject(ObjectId),
+    /// An object cannot pay the declared spell additional cost in the current state.
+    InvalidSpellAdditionalCostObject(ObjectId),
     /// The object cannot be cast from its current zone by that player.
     ObjectNotCastable(ObjectId),
     /// The object cannot be played as a land from its current zone by that player.
@@ -11448,6 +11499,52 @@ impl GameState {
         }
     }
 
+    fn validate_spell_additional_costs(
+        &self,
+        player: PlayerId,
+        spell: ObjectId,
+        costs: &[SpellAdditionalCostPayment],
+    ) -> Result<Vec<(ObjectId, ZoneId)>, StateError> {
+        let mut selected = Vec::new();
+        let mut moves = Vec::new();
+        for cost in costs {
+            if cost.objects().is_empty() {
+                return Err(StateError::EmptySpellAdditionalCost);
+            }
+            for object in cost.objects() {
+                let record = self
+                    .objects
+                    .get(*object)
+                    .ok_or(StateError::UnknownObject(*object))?;
+                if *object == spell {
+                    return Err(StateError::InvalidSpellAdditionalCostObject(*object));
+                }
+                if selected.contains(object) {
+                    return Err(StateError::DuplicateSpellAdditionalCostObject(*object));
+                }
+                let valid = match cost {
+                    SpellAdditionalCostPayment::DiscardCards { .. } => {
+                        self.object_zone(*object) == Some(ZoneId::new(Some(player), ZoneKind::Hand))
+                    }
+                    SpellAdditionalCostPayment::SacrificePermanents { predicate, .. } => {
+                        self.object_zone(*object) == Some(ZoneId::new(None, ZoneKind::Battlefield))
+                            && record.controller() == player
+                            && self.object_matches_target_predicate(player, **predicate, *object)
+                    }
+                };
+                if !valid {
+                    return Err(StateError::InvalidSpellAdditionalCostObject(*object));
+                }
+                selected.push(*object);
+                moves.push((
+                    *object,
+                    ZoneId::new(Some(record.owner()), ZoneKind::Graveyard),
+                ));
+            }
+        }
+        Ok(moves)
+    }
+
     /// Casts a spell through the T1.5 CR 601 pipeline.
     ///
     /// This validates priority, timing, targets, and the explicit mana payment
@@ -11512,7 +11609,12 @@ impl GameState {
         if canonical_payment != request.payment() {
             return Err(StateError::InvalidPaymentPlan);
         }
+        let additional_cost_moves =
+            self.validate_spell_additional_costs(player, object, request.additional_costs())?;
 
+        for (cost_object, destination) in additional_cost_moves {
+            self.move_object(cost_object, destination)?;
+        }
         self.pay_mana(player, effective_cost, request.payment())?;
         self.move_object(object, ZoneId::new(None, ZoneKind::Stack))?;
         if casting_commander_from_command {
@@ -18891,13 +18993,14 @@ mod tests {
         PriorityOutcome, ReplacementCondition, ReplacementDamageTargetFilter,
         ReplacementDefinition, ReplacementDuration, ReplacementEffectId, ReplacementOperation,
         ReplacementSourceFilter, ResolutionOutcome, RestrictionDefinition, RestrictionEffect,
-        SpellTiming, StackDecisionBindings, StackEntryId, StackEntryRequest, StackObjectKind,
-        StateBasedActionKind, StateBasedActionReport, StateError, Step, TargetChoice,
-        TargetControllerPredicate, TargetKind, TargetRequirement, TargetRestriction,
-        TargetRestrictionSubject, TriggerCondition, TriggerDefinition, TriggerInterveningIf,
-        TriggerObjectFilter, TriggerPlayerFilter, TriggerStackBinding, TriggerStackDisposition,
-        TriggerZoneFilter, ZoneConservation, ZoneId, ZoneKind, EVENT_RING_CAPACITY,
-        MAX_STACK_OPTIONAL_CHOICES, NORMAL_TURN_STEPS, OPENING_HAND_SIZE, PAYMENT_PLAN_LIMIT,
+        SpellAdditionalCostPayment, SpellTiming, StackDecisionBindings, StackEntryId,
+        StackEntryRequest, StackObjectKind, StateBasedActionKind, StateBasedActionReport,
+        StateError, Step, TargetChoice, TargetControllerPredicate, TargetKind, TargetRequirement,
+        TargetRestriction, TargetRestrictionSubject, TriggerCondition, TriggerDefinition,
+        TriggerInterveningIf, TriggerObjectFilter, TriggerPlayerFilter, TriggerStackBinding,
+        TriggerStackDisposition, TriggerZoneFilter, ZoneConservation, ZoneId, ZoneKind,
+        EVENT_RING_CAPACITY, MAX_STACK_OPTIONAL_CHOICES, NORMAL_TURN_STEPS, OPENING_HAND_SIZE,
+        PAYMENT_PLAN_LIMIT,
     };
 
     #[test]
@@ -22036,6 +22139,96 @@ mod tests {
         );
         assert_eq!(stack_entry.targets()[0].original_zone(), Some(battlefield));
         assert_eq!(stack_entry.payment(), Some(payment));
+    }
+
+    #[test]
+    fn spell_additional_costs_are_validated_then_paid_atomically() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let hand = ZoneId::new(Some(active), ZoneKind::Hand);
+        let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+        let graveyard = ZoneId::new(Some(active), ZoneKind::Graveyard);
+        let spell = state
+            .create_object(CardId::new(9_220), active, active, hand)
+            .unwrap_or_else(|error| panic!("unexpected spell create error: {error:?}"));
+        let discarded = state
+            .create_object(CardId::new(9_221), active, active, hand)
+            .unwrap_or_else(|error| panic!("unexpected discard create error: {error:?}"));
+        let sacrificed = state
+            .create_object(CardId::new(9_222), active, active, battlefield)
+            .unwrap_or_else(|error| panic!("unexpected sacrifice create error: {error:?}"));
+        state
+            .set_base_object_characteristics(
+                sacrificed,
+                BaseObjectCharacteristics::new(
+                    ObjectTypes::none().with_creature(),
+                    ObjectColors::none(),
+                ),
+            )
+            .unwrap_or_else(|error| panic!("unexpected characteristics error: {error:?}"));
+        start_upkeep(&mut state, active);
+        let zero = ManaCost::new(0, 0, 0, 0, 0, 0);
+        let creature_you = ObjectTargetPredicate::any()
+            .with_controller(TargetControllerPredicate::You)
+            .with_required_types(ObjectTypes::none().with_creature());
+        let request = CastSpellRequest::new(
+            StackObjectKind::InstantSpell,
+            SpellTiming::Instant,
+            zero,
+            zero_payment(zero),
+        )
+        .with_additional_costs(vec![
+            SpellAdditionalCostPayment::DiscardCards {
+                objects: vec![discarded],
+            },
+            SpellAdditionalCostPayment::SacrificePermanents {
+                objects: vec![sacrificed],
+                predicate: Box::new(creature_you),
+            },
+        ]);
+
+        let entry = state
+            .cast_spell(active, spell, request)
+            .unwrap_or_else(|error| panic!("unexpected additional-cost cast error: {error:?}"));
+
+        assert_eq!(state.object_zone(discarded), Some(graveyard));
+        assert_eq!(state.object_zone(sacrificed), Some(graveyard));
+        assert_eq!(
+            state.object_zone(spell),
+            Some(ZoneId::new(None, ZoneKind::Stack))
+        );
+        assert_eq!(state.stack_top().map(|stack| stack.id()), Some(entry));
+    }
+
+    #[test]
+    fn invalid_spell_additional_cost_leaves_state_unchanged() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let hand = ZoneId::new(Some(active), ZoneKind::Hand);
+        let spell = state
+            .create_object(CardId::new(9_223), active, active, hand)
+            .unwrap_or_else(|error| panic!("unexpected spell create error: {error:?}"));
+        let discarded = state
+            .create_object(CardId::new(9_224), active, active, hand)
+            .unwrap_or_else(|error| panic!("unexpected discard create error: {error:?}"));
+        start_upkeep(&mut state, active);
+        let before = state.canonical_bytes();
+        let zero = ManaCost::new(0, 0, 0, 0, 0, 0);
+        let request = CastSpellRequest::new(
+            StackObjectKind::InstantSpell,
+            SpellTiming::Instant,
+            zero,
+            zero_payment(zero),
+        )
+        .with_additional_costs(vec![SpellAdditionalCostPayment::DiscardCards {
+            objects: vec![discarded, discarded],
+        }]);
+
+        assert_eq!(
+            state.cast_spell(active, spell, request),
+            Err(StateError::DuplicateSpellAdditionalCostObject(discarded))
+        );
+        assert_eq!(state.canonical_bytes(), before);
     }
 
     #[test]

@@ -298,6 +298,13 @@ pub enum DecisionDescriptor {
         /// Selected payment plan.
         payment: PaymentPlan,
     },
+    /// Choose the exact objects paying one non-mana additional cost.
+    ChooseAdditionalCost {
+        /// Zero-based additional-cost slot in printed order.
+        cost: u32,
+        /// Exact objects selected for this cost, in canonical order.
+        objects: Vec<ObjectId>,
+    },
     /// Accept or decline one optional choice.
     ChooseOptional {
         /// Stable prompt index.
@@ -507,6 +514,11 @@ impl DecisionDescriptor {
             Self::ChoosePayment { payment } => {
                 bytes.u8(13);
                 bytes.payment(*payment);
+            }
+            Self::ChooseAdditionalCost { cost, objects } => {
+                bytes.u8(28);
+                bytes.u32(*cost);
+                bytes.objects(objects);
             }
             Self::ChooseOptional { prompt, accept } => {
                 bytes.u8(14);
@@ -1395,6 +1407,10 @@ mod tests {
                 maximum: 8,
             },
             DecisionDescriptor::ChoosePayment { payment },
+            DecisionDescriptor::ChooseAdditionalCost {
+                cost: 0,
+                objects: vec![object],
+            },
             DecisionDescriptor::ChooseOptional {
                 prompt: 0,
                 accept: true,
@@ -1431,6 +1447,6 @@ mod tests {
             .into_iter()
             .map(|descriptor| DecisionOption::new(descriptor, Vec::new()).id())
             .collect::<std::collections::BTreeSet<_>>();
-        assert_eq!(ids.len(), 28);
+        assert_eq!(ids.len(), 29);
     }
 }

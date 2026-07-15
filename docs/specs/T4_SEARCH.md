@@ -74,6 +74,15 @@ separate exact `Payment` context. An unaffordable cost is a singleton decline;
 it receives no search budget. Other event-bound payer families remain fail
 closed rather than inheriting the trigger controller.
 
+Spells with the currently compiled discard-card or sacrifice-permanent
+additional costs use one scoped `Payment` context per printed cost group before
+the X and mana-payment stages. Each partial selection must have at least one
+complete continuation, and prior selections remain in typed path state, so the
+adapter never constructs a cross-cost Cartesian product. The kernel validates
+the entire announcement before mutation and then pays additional costs in
+order. Alternate and other uncompiled non-mana cost families remain fail
+closed.
+
 Combat-damage ordering and amounts also use bounded contexts outside the main
 tree. Controllers choose one next blocker and then one amount at a time; large
 numeric ranges are narrowed through binary subranges before a direct context
