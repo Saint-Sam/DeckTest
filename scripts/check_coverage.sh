@@ -31,8 +31,13 @@ if ! cargo llvm-cov --version >/dev/null 2>&1; then
   exit 1
 fi
 
+export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-24}"
+export CARGO_NET_OFFLINE="true"
+
 mkdir -p metrics
 raw_coverage="target/coverage/coverage.raw.json"
+raw_lcov="target/coverage/coverage.raw.lcov"
+changed_base="${T4_CHANGED_BASE:-c211fc27d5b4cfc1c281d095bb5b403b47d95f46}"
 mkdir -p "$(dirname "$raw_coverage")"
 cargo llvm-cov clean --workspace
 cargo llvm-cov --workspace --no-report
@@ -67,5 +72,14 @@ cargo llvm-cov run -p forge-testkit --bin forge-t3-6-runtime-probe --no-report -
 cargo llvm-cov run -p forge-game-runner --bin forge-t3-9-four-player-pod --no-report -- \
   --games 4 --jobs 4 --output target/coverage/t3_9_four_player_pod.json \
   --replay-dir target/coverage/t3_9_replays
+product_commit="$(git rev-parse HEAD)"
+product_tree="$(git rev-parse 'HEAD^{tree}')"
+cargo llvm-cov run -p forge-game-runner --bin forge-t4-runtime-isomorphism --no-report -- \
+  target/coverage/t4_runtime_isomorphism.json "$product_commit" "$product_tree"
 cargo llvm-cov report --fail-under-lines "$floor" --json --output-path "$raw_coverage"
-python3 tools/coverage_summary.py --raw "$raw_coverage" --floor "$floor"
+cargo llvm-cov report --lcov --output-path "$raw_lcov"
+python3 tools/coverage_summary.py \
+  --raw "$raw_coverage" \
+  --lcov "$raw_lcov" \
+  --changed-base "$changed_base" \
+  --floor "$floor"

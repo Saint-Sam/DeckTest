@@ -17140,6 +17140,19 @@ card "Mulldrifter" {
                     DecisionDescriptor::OrderTriggers { triggers } if triggers.len() == 1
                 )
         }));
+        let pending = driver.state.pending_triggers().to_vec();
+        let mut reversed = triggers.clone();
+        reversed.reverse();
+        let reordered = driver
+            .ordered_pending_trigger_instances(&pending, &reversed)
+            .unwrap_or_else(|error| panic!("explicit trigger order should bind: {error}"));
+        assert_eq!(
+            reordered
+                .iter()
+                .map(|pending| pending.trigger())
+                .collect::<Vec<_>>(),
+            reversed
+        );
 
         let mut human_driver = driver.clone();
         let mut source = PickFirstChoice;

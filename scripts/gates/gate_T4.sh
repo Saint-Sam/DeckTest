@@ -24,6 +24,8 @@ check_contracts() {
   require_json metrics/ai/decision_state_audit.json
   require_json metrics/ai/game_length_diagnostics.json
   require_json metrics/ai/runtime_isomorphism.json
+  require_json metrics/ai/t4_mutation.json
+  require_json metrics/coverage.json
   require_json metrics/ai/latency_cost.json
   require_json metrics/ai/arena_results.json
   require_json metrics/ai/search_budget_knee.json
@@ -32,6 +34,9 @@ check_contracts() {
   require_json schemas/learning/v1/game_manifest.schema.json
   require_json schemas/learning/v1/decision_record.schema.json
   require_json schemas/learning/v1/post_game_review.schema.json
+
+  python3 tools/coverage_summary.py --check
+  python3 tools/run_t4_mutation_gate.py --check
 
   jq -e '
     (.gate_status == "blocked_incomplete_adapters" or .gate_status == "complete") and
@@ -73,6 +78,23 @@ check_contracts() {
   local product_commit product_tree
   product_commit="$(jq -r '.product_commit' metrics/ai/decision_benchmark.json)"
   product_tree="$(jq -r '.product_tree' metrics/ai/decision_benchmark.json)"
+  jq -e --arg commit "$product_commit" --arg tree "$product_tree" '
+    .schema_version == 3 and
+    .passed == true and
+    .reviewed_commit == $commit and
+    .reviewed_tree == $tree and
+    .lines.percent >= .floor_percent and
+    .changed_lines.base_commit == "c211fc27d5b4cfc1c281d095bb5b403b47d95f46" and
+    .changed_lines.executable_lines > 0
+  ' metrics/coverage.json >/dev/null
+  jq -e --arg commit "$product_commit" --arg tree "$product_tree" '
+    .reviewed_commit == $commit and
+    .reviewed_tree == $tree and
+    .mutants_total == 15 and
+    .mutants_killed == 15 and
+    .surviving_mutants == [] and
+    .mutation_score_percent == 100
+  ' metrics/ai/t4_mutation.json >/dev/null
   python3 tools/audit_t4_decision_keys.py \
     --check \
     --product-commit "$product_commit" \
@@ -131,6 +153,7 @@ run_local_preflight() {
 case "${1:-}" in
   --self-test)
     command -v jq >/dev/null
+    python3 tools/run_t4_mutation_gate.py --self-test
     check_contracts
     echo "PASS gate_T4.sh self-test"
     exit 0

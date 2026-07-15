@@ -170,6 +170,24 @@ resident-memory deltas through safe `/proc` adapters. Unsupported platforms
 retain explicit unavailable fields; CPU is never inferred from wall time.
 Worker price and utilization remain campaign inputs.
 
+## Exact Coverage and Mutation Evidence
+
+Pre-T4 workspace coverage does not establish the T4 search product. The local
+gate binds `metrics/coverage.json`, the exact replay packet, and
+`metrics/ai/t4_mutation.json` to one product commit and tree. Workspace line
+coverage retains the ratified 80% floor. A separate changed-line measurement
+uses `c211fc27d5b4cfc1c281d095bb5b403b47d95f46`, the last pre-T4 commit, as its
+fixed baseline and reports every executable Rust line added by T4 without
+silently changing the promotion floor.
+
+The focused mutation campaign must kill all declared failures in shared
+deadlines, caller-side budget accounting, edge statistics, transpositions,
+hidden information, hierarchical paths, target legality, trigger staging and
+ordering, cost announcements, and search across opponent priority and stack
+resolution. Mutants run sequentially from an archived exact product with the
+repository's single shared Cargo target. A compiler failure does not count as a
+kill; the named focused test must execute and fail.
+
 ## Promotion Limits
 
 The tiny fixed-iteration full-game smoke proves execution and exact replay, not

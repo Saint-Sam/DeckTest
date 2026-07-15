@@ -1890,6 +1890,21 @@ mod tests {
         assert_eq!(first.simulations(), 256);
         assert_eq!(first.determinizations(), 4);
         assert_eq!(first.transposition_hits(), 0);
+        let left = first
+            .actions()
+            .iter()
+            .find(|action| action.action() == ids[0])
+            .copied()
+            .unwrap_or_else(|| panic!("left action report should exist"));
+        let right = first
+            .actions()
+            .iter()
+            .find(|action| action.action() == ids[1])
+            .copied()
+            .unwrap_or_else(|| panic!("right action report should exist"));
+        assert!(left.total_value() > 0);
+        assert!(right.total_value() < 0);
+        assert!(left.mean_value() > right.mean_value());
         let public_report = LastDecisionReport::from_search(&first);
         assert_eq!(public_report.selected_action(), ids[0]);
         assert_eq!(public_report.considered().len(), 2);
