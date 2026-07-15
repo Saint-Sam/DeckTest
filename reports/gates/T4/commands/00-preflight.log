@@ -1,87 +1,88 @@
-python3: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-YO4KoPya' (errno=Operation not permitted)
-python3: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-bH20vhQm' (errno=Operation not permitted)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.39s
+    Checking forge-testkit v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-testkit)
+    Checking forge-arena v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-arena)
+    Checking forge-cli v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1m 10s
 warning: output of `xcrun` while finding MacOSX.sdk
   |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-vU7y09Lq' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-bqDKJTRz' (errno=Operation not permitted)
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-uPXdWa3H' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-HjC3nDao' (errno=Operation not permitted)
 
 warning: `forge-ai` (lib test) generated 1 warning
 warning: output of `xcrun` while finding MacOSX.sdk
   |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-yiUDkKh0' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-srnru8Qr' (errno=Operation not permitted)
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-iwaFhJtB' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-rL8GmWDr' (errno=Operation not permitted)
 
 warning: `forge-game-runner` (lib test) generated 1 warning
 warning: output of `xcrun` while finding MacOSX.sdk
   |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-jl48dkw8' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-mE2htXiw' (errno=Operation not permitted)
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-HqcQaEZD' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-hMxwi9Ws' (errno=Operation not permitted)
 
 warning: output of `xcrun` while finding MacOSX.sdk
   |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-de6jjwCQ' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-l6tfTvAq' (errno=Operation not permitted)
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-Ib7iZrnk' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-kE1tfGPV' (errno=Operation not permitted)
 
 warning: output of `xcrun` while finding MacOSX.sdk
   |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-D4K2TTM5' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-Nb9YuJG2' (errno=Operation not permitted)
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-b6ekRD0A' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-VvO3S94z' (errno=Operation not permitted)
 
-warning: `forge-cli` (lib test) generated 1 warning
-warning: `forge-arena` (lib test) generated 1 warning
 warning: `forge-testkit` (lib test) generated 1 warning
+warning: `forge-arena` (lib test) generated 1 warning
+warning: `forge-cli` (lib test) generated 1 warning
 warning: output of `xcrun` while finding MacOSX.sdk
   |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-14Y9rYMz' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-0dhMQzzi' (errno=Operation not permitted)
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-Hm91nPSk' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-sXFO77s4' (errno=Operation not permitted)
 
 warning: output of `xcrun` while finding MacOSX.sdk
   |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-V8kdVraC' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-1KQvy8YK' (errno=Operation not permitted)
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-260Iy3vV' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-KZQXEsNN' (errno=Operation not permitted)
 
 warning: output of `xcrun` while finding MacOSX.sdk
   |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-w22E0mJK' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-zUA7vmRg' (errno=Operation not permitted)
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-Bj2tB25N' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-elxMD19z' (errno=Operation not permitted)
 
 warning: output of `xcrun` while finding MacOSX.sdk
   |
-  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-T4ZXURqi' (errno=Operation not permitted)
-          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-qrFiE1aD' (errno=Operation not permitted)
+  = note: xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-npkY3uOS' (errno=Operation not permitted)
+          xcrun: error: couldn't create cache file '/var/folders/zz/zyxvpxvq6csfxvn_n5p1l26ddhcrjl/T/xcrun_db-kmGWRHQx' (errno=Operation not permitted)
 
-warning: `forge-cli` (bin "forge-cli" test) generated 1 warning
-warning: `forge-arena` (bin "forge-arena" test) generated 1 warning
 warning: `forge-core` (lib test) generated 1 warning
+warning: `forge-cli` (bin "forge-cli" test) generated 1 warning
 warning: `forge-testkit` (bin "forge-testkit" test) generated 1 warning
-    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.25s
+warning: `forge-arena` (bin "forge-arena" test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.23s
      Running unittests src/lib.rs (target/debug/deps/forge_ai-86ecff62ffb147b4)
 
 running 26 tests
 test tests::bootstrap_crate_is_ready ... ok
 test search::tests::linux_resource_counter_parsers_are_exact_and_fail_closed ... ok
 test guardrail::tests::parser_rejects_positive_values ... ok
-test search::tests::singleton_actions_bypass_determinization_and_search ... ok
-test tests::ai_entrypoint_accepts_player_view ... ok
 test evaluation::tests::weights_fail_closed_on_unknown_fields ... ok
-test search::tests::colliding_keys_do_not_merge_non_equivalent_states ... ok
-test random::tests::random_legal_selection_is_seeded_and_a_legal_member ... ok
-test search::tests::progressive_widening_opens_prior_order_by_sqrt_visits ... ok
-test search::tests::state_keys_share_convergent_children_and_report_hits ... ok
-test search::tests::adaptive_stopping_records_auditable_fixed_visit_checkpoints ... ok
-test search::tests::adaptive_stopping_rejects_invalid_threshold_documents ... ok
-test search::tests::caller_side_context_time_counts_against_the_total_budget ... ok
 test guardrail::tests::bundled_prior_penalties_are_soft_and_tiered ... ok
 test tier::tests::bundled_tiers_are_explicitly_unpromoted ... ok
-test determinization::tests::hidden_identity_poison_does_not_change_sample ... ok
 test tier::tests::parser_rejects_unknown_fields_and_zero_search_budget ... ok
+test tests::ai_entrypoint_accepts_player_view ... ok
+test search::tests::singleton_actions_bypass_determinization_and_search ... ok
 test policy::tests::novice_noise_is_seeded_and_replayable ... ok
-test mulligan::tests::baseline_keeps_balanced_hands_and_mulligans_zero_land_hands ... ok
-test target::tests::harmful_targeting_prefers_the_larger_visible_opposing_threat ... ok
+test policy::tests::rollout_policy_chooses_the_better_one_ply_view ... ok
+test determinization::tests::hidden_identity_poison_does_not_change_sample ... ok
+test search::tests::adaptive_stopping_rejects_invalid_threshold_documents ... ok
+test search::tests::progressive_widening_opens_prior_order_by_sqrt_visits ... ok
+test search::tests::colliding_keys_do_not_merge_non_equivalent_states ... ok
+test random::tests::random_legal_selection_is_seeded_and_a_legal_member ... ok
+test search::tests::caller_side_context_time_counts_against_the_total_budget ... ok
+test search::tests::state_keys_share_convergent_children_and_report_hits ... ok
+test search::tests::adaptive_stopping_records_auditable_fixed_visit_checkpoints ... ok
 test determinization::tests::determinization_subtracts_known_cards_and_fills_hidden_slots ... ok
 test evaluation::tests::bundled_weights_parse_and_value_effective_board_material ... ok
-test policy::tests::rollout_policy_chooses_the_better_one_ply_view ... ok
+test mulligan::tests::baseline_keeps_balanced_hands_and_mulligans_zero_land_hands ... ok
+test target::tests::harmful_targeting_prefers_the_larger_visible_opposing_threat ... ok
 test search::tests::root_parallel_visit_sum_selects_the_winning_action_replayably ... ok
 test search::tests::expired_wall_budget_uses_prior_ordered_fallback_without_a_simulation ... ok
 test search::tests::total_wall_budget_does_not_start_sequential_determinizations_after_expiry ... ok
@@ -113,8 +114,8 @@ test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 
 running 6 tests
 test tests::bootstrap_crate_is_ready ... ok
-test tests::cli_rejects_unknown_command ... ok
 test tests::replay_parser_rejects_bad_magic ... ok
+test tests::cli_rejects_unknown_command ... ok
 test tests::scripted_starter_game_finishes ... ok
 test tests::replay_text_round_trips ... ok
 test tests::cli_demo_writes_replay_and_roundtrips ... ok
@@ -129,81 +130,82 @@ test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 
      Running unittests src/lib.rs (target/debug/deps/forge_core-d72812272a403451)
 
-running 129 tests
+running 130 tests
 test tests::bootstrap_crate_is_ready ... ok
-test tests::action_surface_creates_setup_state_without_public_mutators ... ok
 test decision::tests::stable_ids_use_typed_fields_not_display_text ... ok
-test tests::commander_zone_choice_is_owner_only_and_fail_closed ... ok
-test tests::combat_with_attackers_visits_blockers_and_damage ... ok
-test tests::cleanup_priority_exception_repeats_cleanup_step ... ok
-test tests::auto_tap_keeps_equivalent_sources_distinct ... ok
-test tests::cleanup_state_based_action_grants_priority_and_repeats_cleanup ... ok
-test tests::auto_tap_prefers_exact_sources_with_minimal_waste ... ok
-test tests::all_targets_illegal_before_resolution_counter_spell_by_rules ... ok
-test tests::adding_stack_object_holds_priority_and_resets_passes ... ok
-test tests::affected_player_orders_damage_replacements ... ok
-test decision::tests::concession_context_maps_to_the_typed_kernel_action ... ok
-test tests::combat_without_attackers_skips_blockers_and_damage ... ok
-test decision::tests::context_rejects_ids_outside_its_legal_set ... ok
+test tests::action_surface_creates_setup_state_without_public_mutators ... ok
 test tests::concession_is_typed_immediate_and_canonical ... ok
-test tests::counter_stack_entry_moves_spell_and_records_distinct_outcome ... ok
-test decision::tests::scoped_contexts_bind_identical_options_to_their_visible_choice_path ... ok
-test tests::cast_or_copy_trigger_observes_stack_copies_without_open_matching ... ok
-test tests::cleanup_discards_to_max_hand_size_before_next_turn ... ok
-test tests::activated_cost_modifier_changes_required_payment ... ok
-test tests::base_characteristics_are_derived_before_rules_use ... ok
+test tests::commander_zone_choice_is_owner_only_and_fail_closed ... ok
 test tests::basic_land_type_line_is_derived_and_participates_in_state_hashes ... ok
+test tests::combat_without_attackers_skips_blockers_and_damage ... ok
+test tests::auto_tap_prefers_exact_sources_with_minimal_waste ... ok
+test tests::base_characteristics_are_derived_before_rules_use ... ok
+test tests::adding_stack_object_holds_priority_and_resets_passes ... ok
+test tests::cast_or_copy_trigger_observes_stack_copies_without_open_matching ... ok
+test tests::affected_player_orders_damage_replacements ... ok
+test decision::tests::context_rejects_ids_outside_its_legal_set ... ok
+test decision::tests::scoped_contexts_bind_identical_options_to_their_visible_choice_path ... ok
+test decision::tests::concession_context_maps_to_the_typed_kernel_action ... ok
+test tests::counter_stack_entry_moves_spell_and_records_distinct_outcome ... ok
+test tests::cleanup_priority_exception_repeats_cleanup_step ... ok
+test tests::all_targets_illegal_before_resolution_counter_spell_by_rules ... ok
+test tests::auto_tap_keeps_equivalent_sources_distinct ... ok
+test tests::combat_with_attackers_visits_blockers_and_damage ... ok
+test tests::cleanup_discards_to_max_hand_size_before_next_turn ... ok
 test tests::blocked_attacker_remains_blocked_after_blocker_leaves ... ok
+test tests::activated_cost_modifier_changes_required_payment ... ok
+test tests::cleanup_state_based_action_grants_priority_and_repeats_cleanup ... ok
+test tests::combat_damage_marks_persist_until_cleanup ... ok
 test decision::tests::descriptor_contract_covers_every_prompt_family ... ok
 test tests::declare_no_attackers_skips_blockers_and_damage ... ok
-test tests::declare_attackers_taps_nonvigilance_and_preserves_vigilance ... ok
 test tests::deathtouch_damage_does_not_persist_past_one_sba_check ... ok
 test tests::deterministic_hash_is_canonical_and_sensitive_to_ordered_state ... ok
 test tests::determinized_clone_rebinds_only_complete_hidden_slots ... ok
 test tests::determinized_clone_rejects_partial_duplicate_and_known_assignments ... ok
-test tests::combat_damage_marks_persist_until_cleanup ... ok
+test tests::declare_attackers_taps_nonvigilance_and_preserves_vigilance ... ok
 test tests::draw_cards_action_moves_library_cards_to_hand ... ok
 test tests::draw_step_draws_before_active_player_gets_priority ... ok
+test tests::effective_payment_retains_the_announced_x_metadata ... ok
 test tests::empty_library_draw_step_loses_before_priority ... ok
 test tests::end_of_turn_durations_survive_end_step_and_expire_during_cleanup ... ok
 test tests::event_log_records_setup_and_zone_mutations ... ok
 test tests::double_strike_creates_two_damage_steps ... ok
 test tests::explicit_payment_plan_is_validated_and_applied ... ok
-test tests::failed_actions_do_not_emit_events ... ok
 test tests::explicit_pending_trigger_order_is_validated_and_preserved ... ok
-test tests::generic_cost_uses_colorless_before_colored_mana ... ok
+test tests::failed_actions_do_not_emit_events ... ok
 test tests::full_pass_round_resolves_only_one_object ... ok
+test tests::generic_cost_uses_colorless_before_colored_mana ... ok
 test tests::insufficient_colored_mana_has_no_payment_plans ... ok
-test tests::illegal_target_during_announcement_leaves_state_unchanged ... ok
-test tests::event_ring_is_bounded_and_reports_stale_cursors ... ok
 test tests::double_block_damage_uses_the_explicit_request_order ... ok
+test tests::illegal_target_during_announcement_leaves_state_unchanged ... ok
 test tests::intervening_action_breaks_pass_succession ... ok
-test tests::illegal_attack_declarations_leave_state_unchanged ... ok
-test tests::invalid_explicit_payment_is_rejected ... ok
+test tests::event_ring_is_bounded_and_reports_stale_cursors ... ok
 test tests::intervening_if_blocks_and_delayed_trigger_retires ... ok
+test tests::invalid_explicit_payment_is_rejected ... ok
+test tests::illegal_attack_declarations_leave_state_unchanged ... ok
 test tests::first_strike_lethal_damage_removes_blocker_before_regular_damage ... ok
 test tests::invalid_zone_owner_is_rejected ... ok
 test tests::invalid_payment_during_cast_leaves_state_unchanged ... ok
-test tests::layers::control_layer_updates_effective_controller ... ok
 test tests::land_with_enters_tapped_characteristic_enters_tapped_atomically ... ok
+test tests::layers::control_layer_updates_effective_controller ... ok
 test tests::layers::continuous_effect_state_participates_in_hashes ... ok
 test tests::layers::copy_layer_uses_base_copiable_values ... ok
 test tests::layers::devotion_condition_tracks_printed_symbols_and_toggles_type_removal ... ok
 test tests::layers::power_toughness_sublayers_apply_in_cr_order ... ok
 test tests::layers::same_layer_dependency_overrides_timestamp_order ... ok
 test tests::flying_reach_and_menace_block_legality_is_enforced ... ok
-test tests::layers::source_bound_predicate_effect_tracks_entrants_and_source_zone ... ok
 test tests::legal_actions_return_actions_that_apply_accepts ... ok
+test tests::layers::source_bound_predicate_effect_tracks_entrants_and_source_zone ... ok
 test tests::layers::source_bound_attachment_effects_follow_reattachment_and_expire ... ok
 test tests::life_total_sba_causes_loss_and_win_before_priority ... ok
 test tests::lifelink_combat_damage_gains_life_as_damage_is_dealt ... ok
 test tests::mana_activated_ability_resolves_without_priority_or_stack ... ok
-test tests::loyalty_activated_ability_is_once_per_turn ... ok
 test tests::lifelink_is_applied_before_loss_state_based_actions ... ok
+test tests::loyalty_activated_ability_is_once_per_turn ... ok
 test tests::lethal_combat_damage_moves_creatures_to_owner_graveyards_before_priority ... ok
-test tests::london_mulligan_redraws_and_bottoms_mulligan_count ... ok
 test tests::mana_pool_changes_state_hash_and_matches_streaming_hash ... ok
 test tests::mana_pool_empties_when_step_ends ... ok
+test tests::london_mulligan_redraws_and_bottoms_mulligan_count ... ok
 test tests::mana_activation_condition_fails_closed_until_permanent_count_is_met ... ok
 test tests::new_turn_resets_event_ring_and_invalidates_old_turn_cursor ... ok
 test tests::normal_turn_steps_match_cr5_skeleton ... ok
@@ -213,16 +215,16 @@ test tests::opening_hand_player_view_hides_opponent_hand_and_libraries ... ok
 test tests::opponent_card_draw_trigger_queues_once_per_successful_draw ... ok
 test tests::passes_in_succession_on_empty_stack_advance_step ... ok
 test tests::payment_enumeration_caps_at_sixty_four_distinct_plans ... ok
-test tests::opening_hands_draw_in_seeded_turn_order ... ok
 test tests::player_or_permanent_player_target_remains_legal_on_resolution ... ok
-test tests::multiplayer_blocker_declarations_accumulate_before_combat_advances ... ok
+test tests::opening_hands_draw_in_seeded_turn_order ... ok
 test tests::player_view_hash_ignores_hidden_identity_and_tracks_visible_identity ... ok
+test tests::multiplayer_blocker_declarations_accumulate_before_combat_advances ... ok
 test tests::player_view_hides_opponent_hand_and_library_objects ... ok
 test tests::player_view_rejects_unknown_observer ... ok
 test tests::play_land_enforces_timing_type_and_once_per_turn_limit ... ok
 test tests::players_receive_owned_zones ... ok
-test tests::poison_sba_causes_loss ... ok
 test tests::player_view_retains_known_hidden_identity_until_library_shuffle ... ok
+test tests::poison_sba_causes_loss ... ok
 test tests::prevent_all_combat_damage_blocks_lifelink_deathtouch_and_damage_marking ... ok
 test tests::priority_starts_with_active_then_passes_in_turn_order ... ok
 test tests::put_object_on_top_of_library_reorders_without_changing_membership ... ok
@@ -230,8 +232,8 @@ test tests::program_bound_activation_preserves_targets_and_decisions_on_stack ..
 test tests::regeneration_shield_replaces_normal_but_not_prohibited_destruction ... ok
 test tests::resolved_object_controller_does_not_receive_priority ... ok
 test tests::reveal_objects_emits_public_events_without_moving_cards ... ok
-test tests::self_replacement_applies_before_affected_choice_order ... ok
 test tests::replacement_state_participates_in_canonical_hashes ... ok
+test tests::self_replacement_applies_before_affected_choice_order ... ok
 test tests::setup_start_turn_respects_keeps_and_chosen_starter ... ok
 test tests::simultaneous_lethal_life_loss_is_a_draw ... ok
 test tests::simultaneous_stack_objects_use_apnap_low_to_high ... ok
@@ -240,55 +242,58 @@ test tests::source_bound_player_rule_tracks_controller_and_expires_off_battlefie
 test tests::source_bound_spell_cost_modifier_matches_subtype_and_expires_off_battlefield ... ok
 test tests::shuffle_library_action_is_seeded_and_deterministic ... ok
 test tests::stack_decision_bindings_are_bounded_and_ordered ... ok
+test tests::split_second_blocks_spells_and_non_mana_abilities_but_allows_mana_abilities ... ok
 test tests::stack_entry_target_is_captured_and_revalidated ... ok
 test tests::state_based_action_table_tracks_cr_704_rows ... ok
-test tests::split_second_blocks_spells_and_non_mana_abilities_but_allows_mana_abilities ... ok
 test tests::starting_player_skips_first_turn_draw_step_after_turn_order_setup ... ok
 test tests::stack_decisions_affect_hash_and_survive_copy_resolution ... ok
 test tests::successful_instant_cast_pays_cost_and_records_target_snapshot ... ok
 test tests::three_instant_response_chain_resolves_lifo ... ok
-test tests::triggered_abilities_use_apnap_stack_order ... ok
 test tests::trigger_state_participates_in_canonical_hashes ... ok
+test tests::triggered_abilities_use_apnap_stack_order ... ok
 test tests::target_choices_affect_canonical_hash ... ok
-test tests::temporary_hexproof_and_indestructible_apply_to_objects_and_expire ... ok
 test tests::triggered_object_move_queues_and_stacks_before_priority ... ok
+test tests::temporary_hexproof_and_indestructible_apply_to_objects_and_expire ... ok
 test tests::untap_has_no_priority_and_upkeep_assigns_active_priority ... ok
 test tests::turn_order_decision_is_deterministic_from_seed ... ok
 test tests::x_cost_is_added_to_generic_requirement ... ok
-test tests::x_cost_overflow_is_reported ... ok
 test tests::trample_with_deathtouch_allows_one_damage_to_each_blocker ... ok
+test tests::x_cost_overflow_is_reported ... ok
 test tests::zero_toughness_creature_goes_to_owner_graveyard ... ok
 test tests::trample_without_lethal_blocker_damage_is_rejected ... ok
 
-test result: ok. 129 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 130 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
 
      Running unittests src/lib.rs (target/debug/deps/forge_game_runner-60e382f4a6e37ef3)
 
-running 22 tests
+running 25 tests
 test tests::scripted_human_game_completes_and_replays_exactly ... ignored, requires the local T3 translated-card output
 test tests::identity_exercise_aggregation_preserves_every_counter ... ok
 test tests::legacy_summary_allows_only_monotonic_instrumentation_growth ... ok
 test tests::action_replay_rejects_a_tampered_transition ... ok
 test tests::prompt_fingerprint_cannot_see_opponent_hidden_card_identity ... ok
 test tests::legacy_human_decision_record_remains_replayable ... ok
-test tests::driver_preserves_blocks_from_every_attacked_defender ... ok
-test tests::campaign_seed_schedule_is_deterministic_and_disperse ... ok
 test tests::decision_replay_binds_view_options_and_selection ... ok
-test tests::attack_subcontexts_expose_split_defenders_without_a_cartesian_product ... ok
 test tests::human_commander_zone_choice_can_legally_leave_the_card ... ok
-test tests::block_subcontexts_preserve_menace_completion_legality ... ok
 test tests::commander_zone_adapter_exposes_both_legal_choices_and_ai_records_membership ... ok
-test tests::simultaneous_trigger_order_uses_shared_human_and_ai_contexts ... ok
+test tests::driver_preserves_blocks_from_every_attacked_defender ... ok
+test tests::attack_subcontexts_expose_split_defenders_without_a_cartesian_product ... ok
+test tests::sword_of_the_animist_trigger_search_uses_the_canonical_resolution_choice ... ok
+test tests::priority_adapter_exposes_exact_instant_choices_without_duplicate_labels ... ok
 test tests::resolution_choice_slots_do_not_materialize_a_cartesian_product ... ok
 test tests::optional_spell_choices_survive_canonical_cast_and_resolution ... ok
-test tests::priority_adapter_exposes_exact_instant_choices_without_duplicate_labels ... ok
 test tests::evolving_wilds_search_is_chosen_at_resolution_and_filters_nonbasic_lands ... ok
+test tests::block_subcontexts_preserve_menace_completion_legality ... ok
 test tests::modal_targeted_spell_choices_survive_canonical_cast_and_resolution ... ok
-test tests::sword_of_the_animist_trigger_search_uses_the_canonical_resolution_choice ... ok
+test tests::simultaneous_trigger_order_uses_shared_human_and_ai_contexts ... ok
+test tests::campaign_seed_schedule_is_deterministic_and_disperse ... ok
 test tests::program_activated_choices_survive_priority_stack_and_resolution ... ok
+test tests::large_x_ranges_split_logarithmically_and_ai_records_both_stages ... ok
+test tests::explicit_concession_uses_one_human_ai_and_replay_context ... ok
 test tests::combat_damage_order_and_amount_use_hierarchical_shared_contexts ... ok
+test tests::x_spell_choices_bind_the_announced_value_to_payment_and_stack ... ok
 
-test result: ok. 21 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 24 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.02s
 
      Running unittests src/lib.rs (target/debug/deps/forge_testkit-ab32a2092329401f)
 
@@ -299,32 +304,32 @@ test tests::ron_parser_rejects_new_surface_mistakes ... ok
 test runtime_smoke::tests::unsupported_effect_operation_is_reason_coded_and_not_a_pass ... ok
 test tests::ron_scenario_asserts_poison_loss_winner ... ok
 test tests::constructed_scenario_runs_opening_hand_setup ... ok
-test runtime_smoke::tests::heroic_intervention_executes_object_level_protection ... ok
-test tests::ron_scenario_asserts_turn_priority_and_cleanup_exception ... ok
-test runtime_smoke::tests::basic_land_is_played_and_its_intrinsic_mana_ability_executes ... ok
-test runtime_smoke::tests::targeted_player_life_effect_uses_synthesized_legal_target ... ok
 test tests::ron_scenario_covers_creature_damage_sba ... ok
+test tests::ron_scenario_asserts_turn_priority_and_cleanup_exception ... ok
+test runtime_smoke::tests::heroic_intervention_executes_object_level_protection ... ok
 test runtime_smoke::tests::draw_spell_executes_through_production_action ... ok
-test runtime_smoke::tests::ability_free_permanent_casts_and_resolves_to_battlefield ... ok
-test tests::ron_scenario_covers_mana_and_object_movement ... ok
 test tests::run_scenario_ron_records_failed_expectation ... ok
-test tests::ron_scenario_runs_and_reports_junit ... ok
-test runtime_smoke::tests::krosan_grip_executes_with_split_second_on_the_stack ... ok
-test runtime_smoke::tests::supported_life_spell_executes_and_reaches_owner_graveyard ... ok
-test runtime_smoke::tests::cyclonic_rift_executes_the_overload_each_object_replacement ... ok
-test tests::ron_scenario_covers_combat_actions ... ok
-test runtime_smoke::tests::mulldrifter_evoke_draws_then_finishes_in_its_owners_graveyard ... ok
+test runtime_smoke::tests::basic_land_is_played_and_its_intrinsic_mana_ability_executes ... ok
+test tests::ron_scenario_covers_mana_and_object_movement ... ok
+test runtime_smoke::tests::ability_free_permanent_casts_and_resolves_to_battlefield ... ok
 test runtime_smoke::tests::scry_shuffle_and_draw_sequence_executes ... ok
-test runtime_smoke::tests::activated_damage_from_a_lifelink_source_gains_matching_life ... ok
+test runtime_smoke::tests::targeted_player_life_effect_uses_synthesized_legal_target ... ok
+test runtime_smoke::tests::krosan_grip_executes_with_split_second_on_the_stack ... ok
+test tests::ron_scenario_runs_and_reports_junit ... ok
+test runtime_smoke::tests::supported_life_spell_executes_and_reaches_owner_graveyard ... ok
+test tests::ron_scenario_covers_combat_actions ... ok
+test runtime_smoke::tests::cyclonic_rift_executes_the_overload_each_object_replacement ... ok
 test runtime_smoke::tests::cast_or_copy_trigger_executes_and_accounts_for_both_events ... ok
-test runtime_smoke::tests::smothering_tithe_executes_decline_and_exact_payment_branches ... ok
-test runtime_smoke::tests::bala_ged_recovery_executes_both_modal_dfc_faces ... ok
-test runtime_smoke::tests::reconnaissance_mission_cycles_and_triggers_on_combat_damage ... ok
 test runtime_smoke::tests::activated_effects_pay_costs_use_the_stack_and_resolve ... ok
-test runtime_smoke::tests::purphoros_toggles_devotion_executes_enter_damage_and_activated_pump ... ok
+test runtime_smoke::tests::activated_damage_from_a_lifelink_source_gains_matching_life ... ok
+test runtime_smoke::tests::mulldrifter_evoke_draws_then_finishes_in_its_owners_graveyard ... ok
+test runtime_smoke::tests::bala_ged_recovery_executes_both_modal_dfc_faces ... ok
+test runtime_smoke::tests::smothering_tithe_executes_decline_and_exact_payment_branches ... ok
+test runtime_smoke::tests::reconnaissance_mission_cycles_and_triggers_on_combat_damage ... ok
 test runtime_smoke::tests::creature_mana_source_waits_out_summoning_sickness_and_executes ... ok
-test runtime_smoke::tests::opponent_draw_trigger_is_isolated_from_upkeep_turn_advancement ... ok
+test runtime_smoke::tests::purphoros_toggles_devotion_executes_enter_damage_and_activated_pump ... ok
 test runtime_smoke::tests::equipment_attaches_and_executes_live_layers_and_attack_trigger ... ok
+test runtime_smoke::tests::opponent_draw_trigger_is_isolated_from_upkeep_turn_advancement ... ok
 test runtime_smoke::tests::enter_cast_upkeep_and_attack_triggers_execute_once_each ... ok
 
 test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
@@ -332,16 +337,16 @@ test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fin
      Running unittests src/main.rs (target/debug/deps/forge_testkit-6dd6a83431a92004)
 
 running 12 tests
-test tests::help_command_succeeds ... ok
 test tests::lint_oracle_directory_succeeds ... ok
+test tests::help_command_succeeds ... ok
+test tests::unknown_command_is_an_error ... ok
 test tests::absent_scenario_path_is_empty ... ok
 test tests::runtime_smoke_requires_one_path ... ok
-test tests::unknown_command_is_an_error ... ok
+test tests::oracle_changed_succeeds_with_junit ... ok
+test tests::oracle_filter_succeeds ... ok
+test tests::malformed_oracle_option_is_an_error ... ok
 test tests::oracle_all_succeeds_without_junit ... ok
 test tests::oracle_path_succeeds ... ok
-test tests::oracle_filter_succeeds ... ok
-test tests::oracle_changed_succeeds_with_junit ... ok
-test tests::malformed_oracle_option_is_an_error ... ok
 test tests::runtime_smoke_unsupported_fixture_does_not_pass ... ok
 test tests::runtime_smoke_supported_fixture_succeeds ... ok
 
@@ -401,6 +406,10 @@ decisions: 16031
 actions: 18321
 final_hash: 3933493530367397528
 winner_seat: 1
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.30s
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.05s
+    Checking forge-core v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-core)
+    Checking forge-ai v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-ai)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.70s
+    Checking forge-core v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-core)
+    Checking forge-ai v0.0.0 (/Users/juanlopez2016/Desktop/Forge 2.0/crates/forge-ai)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.70s
 PASS gate_T4.sh --preflight (diagnostics only; no promotion claim)
