@@ -3196,7 +3196,9 @@ fn action_for_step(step: &ScenarioStep, context: &RunContext) -> Result<Action, 
         }
         ScenarioStep::RegisterActivatedAbility { spec } => {
             let definition = activated_ability_definition(spec, context)?;
-            Ok(Action::RegisterActivatedAbility { definition })
+            Ok(Action::RegisterActivatedAbility {
+                definition: Box::new(definition),
+            })
         }
         ScenarioStep::RegisterCostModifier { spec } => {
             let definition = cost_modifier_definition(spec, context)?;

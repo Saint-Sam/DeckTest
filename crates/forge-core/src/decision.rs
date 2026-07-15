@@ -211,6 +211,17 @@ pub enum DecisionDescriptor {
         /// Optional-effect answers in prompt order.
         optional: Vec<bool>,
     },
+    /// Begin a program-bound activation with registered extra costs deferred.
+    BeginActivateProgramAbilityWithCosts {
+        /// Source object used by presentation and auditing.
+        source: ObjectId,
+        /// Registered ability ID.
+        ability: ActivatedAbilityId,
+        /// Bound targets in requirement order.
+        targets: Vec<TargetChoice>,
+        /// Optional-effect answers in prompt order.
+        optional: Vec<bool>,
+    },
     /// Cast a spell with all currently bound choices.
     CastSpell {
         /// Spell object.
@@ -318,6 +329,11 @@ pub enum DecisionDescriptor {
         /// Exact objects selected for this cost, in canonical order.
         objects: Vec<ObjectId>,
     },
+    /// Choose the exact permanents sacrificed to activate an ability.
+    ChooseActivationCostObjects {
+        /// Permanents selected in canonical object order.
+        objects: Vec<ObjectId>,
+    },
     /// Accept or decline one optional choice.
     ChooseOptional {
         /// Stable prompt index.
@@ -413,6 +429,24 @@ impl DecisionDescriptor {
                 bytes.object(*source);
                 bytes.u32(ability.get());
                 bytes.payment(*payment);
+                bytes.u32(targets.len() as u32);
+                for target in targets {
+                    bytes.target(*target);
+                }
+                bytes.u32(optional.len() as u32);
+                for accept in optional {
+                    bytes.u8(u8::from(*accept));
+                }
+            }
+            Self::BeginActivateProgramAbilityWithCosts {
+                source,
+                ability,
+                targets,
+                optional,
+            } => {
+                bytes.u8(30);
+                bytes.object(*source);
+                bytes.u32(ability.get());
                 bytes.u32(targets.len() as u32);
                 for target in targets {
                     bytes.target(*target);
@@ -556,6 +590,10 @@ impl DecisionDescriptor {
                 bytes.u32(*cost);
                 bytes.objects(objects);
             }
+            Self::ChooseActivationCostObjects { objects } => {
+                bytes.u8(31);
+                bytes.objects(objects);
+            }
             Self::ChooseOptional { prompt, accept } => {
                 bytes.u8(14);
                 bytes.u32(*prompt);
@@ -633,6 +671,22 @@ impl DecisionDescriptor {
                 bytes.object(*source);
                 bytes.u32(ability.get());
                 bytes.payment(*payment);
+                bytes.target_kinds(targets);
+                bytes.u32(optional.len() as u32);
+                for accept in optional {
+                    bytes.u8(u8::from(*accept));
+                }
+                true
+            }
+            Self::BeginActivateProgramAbilityWithCosts {
+                source,
+                ability,
+                targets,
+                optional,
+            } => {
+                bytes.u8(30);
+                bytes.object(*source);
+                bytes.u32(ability.get());
                 bytes.target_kinds(targets);
                 bytes.u32(optional.len() as u32);
                 for accept in optional {
@@ -1422,6 +1476,12 @@ mod tests {
                 targets: vec![crate::TargetChoice::Player(opponent)],
                 optional: vec![true],
             },
+            DecisionDescriptor::BeginActivateProgramAbilityWithCosts {
+                source: object,
+                ability: crate::ActivatedAbilityId(2),
+                targets: vec![crate::TargetChoice::Player(opponent)],
+                optional: vec![false],
+            },
             DecisionDescriptor::CastSpell {
                 object,
                 payment,
@@ -1441,6 +1501,9 @@ mod tests {
                 targets: Vec::new(),
                 modes: Vec::new(),
                 optional: vec![false],
+            },
+            DecisionDescriptor::ChooseActivationCostObjects {
+                objects: vec![object],
             },
             DecisionDescriptor::DeclareAttackers {
                 attacks: vec![AttackDeclaration::new(object, opponent)],
@@ -1511,6 +1574,6 @@ mod tests {
             .into_iter()
             .map(|descriptor| DecisionOption::new(descriptor, Vec::new()).id())
             .collect::<std::collections::BTreeSet<_>>();
-        assert_eq!(ids.len(), 30);
+        assert_eq!(ids.len(), 32);
     }
 }

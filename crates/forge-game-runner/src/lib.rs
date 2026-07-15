@@ -1423,6 +1423,21 @@ enum MainChoice {
         targets: Vec<TargetChoice>,
         optional: Vec<bool>,
     },
+    BeginActivateProgramWithCosts {
+        source: ObjectId,
+        ability: ActivatedAbilityId,
+        targets: Vec<TargetChoice>,
+        optional: Vec<bool>,
+        sacrifice_objects: Option<Vec<ObjectId>>,
+    },
+    ActivateProgramWithCosts {
+        source: ObjectId,
+        ability: ActivatedAbilityId,
+        payment: PaymentPlan,
+        targets: Vec<TargetChoice>,
+        optional: Vec<bool>,
+        sacrifice_objects: Vec<ObjectId>,
+    },
     BeginCast {
         object: ObjectId,
         alternate: Option<AlternateCostKind>,
@@ -2654,15 +2669,17 @@ impl GameDriver {
         source: &mut dyn DecisionSource,
         mut choice: MainChoice,
     ) -> Result<bool, String> {
-        while let Some((context, mappings)) = self.hierarchical_cast_context(player, &choice)? {
-            let cast_object = match &choice {
+        while let Some((context, mappings)) = self.hierarchical_main_context(player, &choice)? {
+            let parent_object = match &choice {
+                MainChoice::BeginActivateProgramWithCosts { source, .. }
+                | MainChoice::ActivateProgramWithCosts { source, .. } => *source,
                 MainChoice::BeginCast { object, .. }
                 | MainChoice::NarrowCastX { object, .. }
                 | MainChoice::ChooseCastX { object, .. }
                 | MainChoice::Cast { object, .. } => *object,
                 _ => {
                     return Err(format!(
-                        "seed {} hierarchical context has a non-cast parent",
+                        "seed {} hierarchical context has an unsupported parent",
                         self.seed
                     ));
                 }
@@ -2681,10 +2698,18 @@ impl GameDriver {
                         payment.waste_score()
                     )),
                     DecisionDescriptor::ChooseAdditionalCost { cost, objects } => {
-                        self.additional_cost_choice_label(cast_object, *cost, objects)
+                        self.additional_cost_choice_label(parent_object, *cost, objects)
                     }
+                    DecisionDescriptor::ChooseActivationCostObjects { objects } => Ok(format!(
+                        "Sacrifice {}",
+                        objects
+                            .iter()
+                            .map(|object| self.object_name(*object))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )),
                     descriptor => Err(format!(
-                        "seed {} cannot label hierarchical cast descriptor {descriptor:?}",
+                        "seed {} cannot label hierarchical descriptor {descriptor:?}",
                         self.seed
                     )),
                 })
@@ -2701,10 +2726,20 @@ impl GameDriver {
                 {
                     "Choose an additional cost"
                 }
+                DecisionKind::Payment
+                    if context.options().iter().all(|option| {
+                        matches!(
+                            option.descriptor(),
+                            DecisionDescriptor::ChooseActivationCostObjects { .. }
+                        )
+                    }) =>
+                {
+                    "Choose permanents to sacrifice"
+                }
                 DecisionKind::Payment => "Choose a mana payment",
                 other => {
                     return Err(format!(
-                        "seed {} unexpected hierarchical cast context {other:?}",
+                        "seed {} unexpected hierarchical context {other:?}",
                         self.seed
                     ));
                 }
@@ -2715,7 +2750,7 @@ impl GameDriver {
                 .find_map(|(id, choice)| (*id == selected_id).then(|| choice.clone()))
                 .ok_or_else(|| {
                     format!(
-                        "seed {} hierarchical cast action {selected_id} has no typed adapter",
+                        "seed {} hierarchical action {selected_id} has no typed adapter",
                         self.seed
                     )
                 })?;
@@ -2892,6 +2927,44 @@ impl GameDriver {
                     "Activate ability: {} ({})",
                     self.object_name(*source),
                     details.join("; ")
+                ))
+            }
+            DecisionDescriptor::BeginActivateProgramAbilityWithCosts {
+                source,
+                targets,
+                optional,
+                ..
+            } => {
+                let mut details = Vec::new();
+                if !targets.is_empty() {
+                    details.push(format!(
+                        "targets {}",
+                        targets
+                            .iter()
+                            .copied()
+                            .map(|target| self.target_choice_label(target))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ));
+                }
+                if !optional.is_empty() {
+                    details.push(format!(
+                        "optional {}",
+                        optional
+                            .iter()
+                            .map(|accept| if *accept { "yes" } else { "no" })
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ));
+                }
+                let suffix = if details.is_empty() {
+                    String::new()
+                } else {
+                    format!(" ({})", details.join("; "))
+                };
+                Ok(format!(
+                    "Activate ability: {}{suffix}",
+                    self.object_name(*source)
                 ))
             }
             DecisionDescriptor::CastSpell {
@@ -3136,6 +3209,52 @@ impl GameDriver {
                 }
                 Ok(true)
             }
+            MainChoice::ActivateProgramWithCosts {
+                source,
+                ability,
+                payment,
+                targets,
+                optional,
+                sacrifice_objects,
+            } => {
+                let runtime = self.activated_runtime(ability)?.clone();
+                let effect = runtime
+                    .program
+                    .activated_effects()
+                    .get(runtime.ability_index)
+                    .ok_or_else(|| {
+                        format!(
+                            "seed {} missing activated runtime {} on {}",
+                            self.seed,
+                            runtime.ability_index,
+                            runtime.program.name()
+                        )
+                    })?;
+                let decisions = StackDecisionBindings::new(None, &optional).map_err(|error| {
+                    format!("seed {} activation choices failed: {error:?}", self.seed)
+                })?;
+                let outcome = self.dispatch(Action::ActivateProgramAbilityWithCosts {
+                    player,
+                    ability,
+                    payment,
+                    target_requirements: effect.target_requirements().to_vec(),
+                    target_choices: targets,
+                    decisions,
+                    additional_cost_objects: sacrifice_objects,
+                })?;
+                if !matches!(outcome, Outcome::StackEntryAdded(_)) {
+                    return Err(format!(
+                        "seed {} program activation on {} returned {outcome:?}",
+                        self.seed,
+                        self.object_name(source)
+                    ));
+                }
+                Ok(true)
+            }
+            MainChoice::BeginActivateProgramWithCosts { .. } => Err(format!(
+                "seed {} attempted to dispatch an incomplete hierarchical activation",
+                self.seed
+            )),
             MainChoice::BeginCast { .. }
             | MainChoice::NarrowCastX { .. }
             | MainChoice::ChooseCastX { .. } => Err(format!(
@@ -3420,8 +3539,10 @@ impl GameDriver {
     }
 
     fn additional_cost_choice_prior(&self, descriptor: &DecisionDescriptor) -> i64 {
-        let DecisionDescriptor::ChooseAdditionalCost { objects, .. } = descriptor else {
-            return 0;
+        let objects = match descriptor {
+            DecisionDescriptor::ChooseAdditionalCost { objects, .. }
+            | DecisionDescriptor::ChooseActivationCostObjects { objects } => objects,
+            _ => return 0,
         };
         -objects
             .iter()
@@ -3433,6 +3554,110 @@ impl GameDriver {
                 })
             })
             .sum::<i64>()
+    }
+
+    fn activation_sacrifice_selections(
+        &self,
+        player: PlayerId,
+        source: ObjectId,
+        ability: ActivatedAbilityId,
+        cost: ActivationCost,
+    ) -> Result<Vec<Vec<ObjectId>>, String> {
+        let Some((predicate, count)) = self
+            .state
+            .activation_sacrifice_cost(ability)
+            .map_err(|error| format!("seed {} activation cost failed: {error:?}", self.seed))?
+        else {
+            return Ok(vec![Vec::new()]);
+        };
+        let mut candidates = self
+            .state
+            .zone_objects(ZoneId::new(None, ZoneKind::Battlefield))
+            .unwrap_or_default()
+            .iter()
+            .copied()
+            .filter(|object| !cost.sacrifice_source() || *object != source)
+            .filter(|object| self.state.object_controller(*object) == Ok(player))
+            .filter(|object| {
+                self.state
+                    .object_matches_target_predicate(player, predicate, *object)
+            })
+            .collect::<Vec<_>>();
+        candidates.sort_by_key(|object| object.index());
+        let count = usize::try_from(count)
+            .map_err(|_| format!("seed {} activation sacrifice count overflow", self.seed))?;
+        bounded_object_combinations(&candidates, count, count, MAX_CANONICAL_SPELL_OPTIONS)
+    }
+
+    fn program_activation_action_with_costs(
+        &self,
+        player: PlayerId,
+        ability: ActivatedAbilityId,
+        payment: PaymentPlan,
+        targets: &[TargetChoice],
+        optional: &[bool],
+        sacrifice_objects: &[ObjectId],
+    ) -> Result<Action, String> {
+        let runtime = self.activated_runtime(ability)?;
+        let effect = runtime
+            .program
+            .activated_effects()
+            .get(runtime.ability_index)
+            .ok_or_else(|| {
+                format!(
+                    "seed {} missing activated runtime {} on {}",
+                    self.seed,
+                    runtime.ability_index,
+                    runtime.program.name()
+                )
+            })?;
+        let decisions = StackDecisionBindings::new(None, optional)
+            .map_err(|error| format!("seed {} activation choices failed: {error:?}", self.seed))?;
+        Ok(Action::ActivateProgramAbilityWithCosts {
+            player,
+            ability,
+            payment,
+            target_requirements: effect.target_requirements().to_vec(),
+            target_choices: targets.to_vec(),
+            decisions,
+            additional_cost_objects: sacrifice_objects.to_vec(),
+        })
+    }
+
+    fn activation_cost_has_completion(
+        &self,
+        player: PlayerId,
+        source: ObjectId,
+        ability: ActivatedAbilityId,
+        targets: &[TargetChoice],
+        optional: &[bool],
+    ) -> Result<bool, String> {
+        let cost = self
+            .state
+            .effective_activation_cost(ability)
+            .map_err(|error| format!("seed {} activation cost failed: {error:?}", self.seed))?;
+        let payments = self
+            .state
+            .payment_plans_for_player(player, cost.mana())
+            .map_err(|error| format!("seed {} payment enumeration failed: {error:?}", self.seed))?;
+        for sacrifice_objects in
+            self.activation_sacrifice_selections(player, source, ability, cost)?
+        {
+            for payment in payments.plans().iter().copied() {
+                let action = self.program_activation_action_with_costs(
+                    player,
+                    ability,
+                    payment,
+                    targets,
+                    optional,
+                    &sacrifice_objects,
+                )?;
+                if self.action_is_legal(&action) {
+                    return Ok(true);
+                }
+            }
+        }
+        Ok(false)
     }
 
     fn target_bindings(
@@ -3875,10 +4100,24 @@ impl GameDriver {
                 self.target_bindings(player, runtime.source, ability.target_requirements())?;
             let optionals =
                 self.optional_bindings(runtime.program.name(), ability.optional_choice_count())?;
+            let has_extra_costs = cost.life() != 0
+                || self
+                    .state
+                    .activation_sacrifice_cost(registered.id)
+                    .map_err(|error| {
+                        format!("seed {} activation cost failed: {error:?}", self.seed)
+                    })?
+                    .is_some();
             let branch_count = targets
                 .len()
                 .checked_mul(optionals.len())
-                .and_then(|count| count.checked_mul(payments.plans().len()))
+                .and_then(|count| {
+                    count.checked_mul(if has_extra_costs {
+                        1
+                    } else {
+                        payments.plans().len()
+                    })
+                })
                 .ok_or_else(|| format!("seed {} activation option count overflow", self.seed))?;
             if branch_count > MAX_CANONICAL_SPELL_OPTIONS {
                 return Err(format!(
@@ -3890,6 +4129,24 @@ impl GameDriver {
             }
             for target_binding in targets {
                 for optional in &optionals {
+                    if has_extra_costs {
+                        if self.activation_cost_has_completion(
+                            player,
+                            registered.source,
+                            registered.id,
+                            &target_binding,
+                            optional,
+                        )? {
+                            choices.push(MainChoice::BeginActivateProgramWithCosts {
+                                source: registered.source,
+                                ability: registered.id,
+                                targets: target_binding.clone(),
+                                optional: optional.clone(),
+                                sacrifice_objects: None,
+                            });
+                        }
+                        continue;
+                    }
                     let decisions =
                         StackDecisionBindings::new(None, optional).map_err(|error| {
                             format!("seed {} activation choices failed: {error:?}", self.seed)
@@ -4090,7 +4347,8 @@ impl GameDriver {
         for choice in activations {
             let source = match &choice {
                 MainChoice::Activate { source, .. }
-                | MainChoice::ActivateProgram { source, .. } => *source,
+                | MainChoice::ActivateProgram { source, .. }
+                | MainChoice::BeginActivateProgramWithCosts { source, .. } => *source,
                 _ => unreachable!("activation enumeration returned a non-activation choice"),
             };
             labels.push(format!("Activate ability: {}", self.object_name(source)));
@@ -4377,7 +4635,7 @@ impl GameDriver {
         policy: AiController,
         mut choice: MainChoice,
     ) -> Result<bool, String> {
-        while let Some((context, mappings)) = self.hierarchical_cast_context(player, &choice)? {
+        while let Some((context, mappings)) = self.hierarchical_main_context(player, &choice)? {
             let decision_started = Instant::now();
             let kind = match context.kind() {
                 DecisionKind::NumericValue => "numeric_value",
@@ -4391,10 +4649,20 @@ impl GameDriver {
                 {
                     "additional_cost"
                 }
+                DecisionKind::Payment
+                    if context.options().iter().all(|option| {
+                        matches!(
+                            option.descriptor(),
+                            DecisionDescriptor::ChooseActivationCostObjects { .. }
+                        )
+                    }) =>
+                {
+                    "activation_cost"
+                }
                 DecisionKind::Payment => "payment",
                 other => {
                     return Err(format!(
-                        "seed {} unexpected AI cast context {other:?}",
+                        "seed {} unexpected AI hierarchical context {other:?}",
                         self.seed
                     ));
                 }
@@ -4413,7 +4681,8 @@ impl GameDriver {
                         DecisionDescriptor::ChoosePayment { payment } => {
                             -i64::from(payment.waste_score())
                         }
-                        DecisionDescriptor::ChooseAdditionalCost { .. } => {
+                        DecisionDescriptor::ChooseAdditionalCost { .. }
+                        | DecisionDescriptor::ChooseActivationCostObjects { .. } => {
                             self.additional_cost_choice_prior(option.descriptor())
                         }
                         _ => 0,
@@ -4425,7 +4694,7 @@ impl GameDriver {
             };
             context.select(selected_id).map_err(|error| {
                 format!(
-                    "seed {} AI selected illegal hierarchical cast action: {error}",
+                    "seed {} AI selected illegal hierarchical action: {error}",
                     self.seed
                 )
             })?;
@@ -4451,7 +4720,7 @@ impl GameDriver {
                 .find_map(|(id, choice)| (*id == selected_id).then(|| choice.clone()))
                 .ok_or_else(|| {
                     format!(
-                        "seed {} AI hierarchical cast action {selected_id} has no typed adapter",
+                        "seed {} AI hierarchical action {selected_id} has no typed adapter",
                         self.seed
                     )
                 })?;
@@ -4563,6 +4832,26 @@ impl GameDriver {
                     }],
                 ))
             }
+            MainChoice::BeginActivateProgramWithCosts {
+                source,
+                ability,
+                targets,
+                optional,
+                sacrifice_objects: None,
+            } => Ok(DecisionOption::new(
+                DecisionDescriptor::BeginActivateProgramAbilityWithCosts {
+                    source,
+                    ability,
+                    targets,
+                    optional,
+                },
+                Vec::new(),
+            )),
+            MainChoice::BeginActivateProgramWithCosts { .. }
+            | MainChoice::ActivateProgramWithCosts { .. } => Err(format!(
+                "seed {} hierarchical activation stage cannot enter a root context",
+                self.seed
+            )),
             MainChoice::BeginCast {
                 object,
                 alternate,
@@ -4643,6 +4932,161 @@ impl GameDriver {
                 self.seed
             )),
         }
+    }
+
+    fn activation_sacrifice_context(
+        &self,
+        player: PlayerId,
+        source: ObjectId,
+        ability: ActivatedAbilityId,
+        targets: &[TargetChoice],
+        optional: &[bool],
+    ) -> Result<MainDecisionAdapter, String> {
+        let cost = self
+            .state
+            .effective_activation_cost(ability)
+            .map_err(|error| format!("seed {} activation cost failed: {error:?}", self.seed))?;
+        if self
+            .state
+            .activation_sacrifice_cost(ability)
+            .map_err(|error| format!("seed {} activation cost failed: {error:?}", self.seed))?
+            .is_none()
+        {
+            return Err(format!(
+                "seed {} activation {} has no selected-object cost",
+                self.seed,
+                ability.get()
+            ));
+        }
+        let payments = self
+            .state
+            .payment_plans_for_player(player, cost.mana())
+            .map_err(|error| format!("seed {} payment enumeration failed: {error:?}", self.seed))?;
+        let mut mappings = Vec::new();
+        let mut options = Vec::new();
+        for sacrifice_objects in
+            self.activation_sacrifice_selections(player, source, ability, cost)?
+        {
+            let mut legal_completion = false;
+            for payment in payments.plans().iter().copied() {
+                let action = self.program_activation_action_with_costs(
+                    player,
+                    ability,
+                    payment,
+                    targets,
+                    optional,
+                    &sacrifice_objects,
+                )?;
+                if self.action_is_legal(&action) {
+                    legal_completion = true;
+                    break;
+                }
+            }
+            if !legal_completion {
+                continue;
+            }
+            let option = DecisionOption::new(
+                DecisionDescriptor::ChooseActivationCostObjects {
+                    objects: sacrifice_objects.clone(),
+                },
+                Vec::new(),
+            );
+            mappings.push((
+                option.id(),
+                MainChoice::BeginActivateProgramWithCosts {
+                    source,
+                    ability,
+                    targets: targets.to_vec(),
+                    optional: optional.to_vec(),
+                    sacrifice_objects: Some(sacrifice_objects),
+                },
+            ));
+            options.push(option);
+        }
+        if options.is_empty() {
+            return Err(format!(
+                "seed {} activation {} has no legal sacrifice payment",
+                self.seed,
+                ability.get()
+            ));
+        }
+        let context = self.scoped_decision_context(
+            DecisionKind::Payment,
+            player,
+            options,
+            activation_cost_path_discriminator(player, source, ability, targets, optional, None, 0),
+        )?;
+        Ok((context, mappings))
+    }
+
+    fn activation_payment_context(
+        &self,
+        player: PlayerId,
+        source: ObjectId,
+        ability: ActivatedAbilityId,
+        targets: &[TargetChoice],
+        optional: &[bool],
+        sacrifice_objects: &[ObjectId],
+    ) -> Result<MainDecisionAdapter, String> {
+        let cost = self
+            .state
+            .effective_activation_cost(ability)
+            .map_err(|error| format!("seed {} activation cost failed: {error:?}", self.seed))?;
+        let payments = self
+            .state
+            .payment_plans_for_player(player, cost.mana())
+            .map_err(|error| format!("seed {} payment enumeration failed: {error:?}", self.seed))?;
+        let mut mappings = Vec::new();
+        let mut options = Vec::new();
+        for payment in payments.plans().iter().copied() {
+            let action = self.program_activation_action_with_costs(
+                player,
+                ability,
+                payment,
+                targets,
+                optional,
+                sacrifice_objects,
+            )?;
+            if !self.action_is_legal(&action) {
+                continue;
+            }
+            let option =
+                DecisionOption::new(DecisionDescriptor::ChoosePayment { payment }, vec![action]);
+            mappings.push((
+                option.id(),
+                MainChoice::ActivateProgramWithCosts {
+                    source,
+                    ability,
+                    payment,
+                    targets: targets.to_vec(),
+                    optional: optional.to_vec(),
+                    sacrifice_objects: sacrifice_objects.to_vec(),
+                },
+            ));
+            options.push(option);
+        }
+        if options.is_empty() {
+            return Err(format!(
+                "seed {} activation {} has no legal mana payment",
+                self.seed,
+                ability.get()
+            ));
+        }
+        let context = self.scoped_decision_context(
+            DecisionKind::Payment,
+            player,
+            options,
+            activation_cost_path_discriminator(
+                player,
+                source,
+                ability,
+                targets,
+                optional,
+                Some(sacrifice_objects),
+                1,
+            ),
+        )?;
+        Ok((context, mappings))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -4810,12 +5254,51 @@ impl GameDriver {
         Ok((context, mappings))
     }
 
-    fn hierarchical_cast_context(
+    fn hierarchical_main_context(
         &self,
         player: PlayerId,
         choice: &MainChoice,
     ) -> Result<Option<MainDecisionAdapter>, String> {
         match choice {
+            MainChoice::BeginActivateProgramWithCosts {
+                source,
+                ability,
+                targets,
+                optional,
+                sacrifice_objects,
+            } => {
+                let sacrifice_cost =
+                    self.state
+                        .activation_sacrifice_cost(*ability)
+                        .map_err(|error| {
+                            format!("seed {} activation cost failed: {error:?}", self.seed)
+                        })?;
+                match (sacrifice_cost, sacrifice_objects) {
+                    (Some(_), None) => self
+                        .activation_sacrifice_context(player, *source, *ability, targets, optional)
+                        .map(Some),
+                    (Some(_), Some(objects)) => self
+                        .activation_payment_context(
+                            player, *source, *ability, targets, optional, objects,
+                        )
+                        .map(Some),
+                    (None, None) => self
+                        .activation_payment_context(
+                            player,
+                            *source,
+                            *ability,
+                            targets,
+                            optional,
+                            &[],
+                        )
+                        .map(Some),
+                    (None, Some(_)) => Err(format!(
+                        "seed {} activation {} supplied an unexpected sacrifice selection",
+                        self.seed,
+                        ability.get()
+                    )),
+                }
+            }
             MainChoice::BeginCast {
                 object,
                 alternate,
@@ -5478,7 +5961,7 @@ impl GameDriver {
                 continue;
             }
             let outcome = self.dispatch(Action::RegisterActivatedAbility {
-                definition: ability.bind(controller, source),
+                definition: Box::new(ability.bind(controller, source)),
             })?;
             let Outcome::ActivatedAbilityRegistered(ability_id) = outcome else {
                 return Err(format!(
@@ -5494,14 +5977,6 @@ impl GameDriver {
             });
         }
         for (ability_index, ability) in program.activated_effects().iter().enumerate() {
-            if ability.pay_life() != 0 || ability.sacrifice_cost().is_some() {
-                return Err(format!(
-                    "seed {} activated ability {} on {} requires an unsupported extra-cost adapter",
-                    self.seed,
-                    ability_index,
-                    program.name()
-                ));
-            }
             let mut cost = ActivationCost::new(ability.mana_cost());
             if ability.tap_source() {
                 cost = cost.with_tap_source();
@@ -5509,14 +5984,21 @@ impl GameDriver {
             if ability.sacrifice_source() {
                 cost = cost.with_sacrifice_source();
             }
+            if ability.pay_life() != 0 {
+                cost = cost.with_life(ability.pay_life());
+            }
+            let mut definition = ActivatedAbilityDefinition::new(
+                controller,
+                Some(source),
+                ability.timing(),
+                cost,
+                ActivatedAbilityEffect::ProgramBound,
+            );
+            if let Some((predicate, count)) = ability.sacrifice_cost() {
+                definition = definition.with_sacrifice_permanents(predicate, count);
+            }
             let outcome = self.dispatch(Action::RegisterActivatedAbility {
-                definition: ActivatedAbilityDefinition::new(
-                    controller,
-                    Some(source),
-                    ability.timing(),
-                    cost,
-                    ActivatedAbilityEffect::ProgramBound,
-                ),
+                definition: Box::new(definition),
             })?;
             let Outcome::ActivatedAbilityRegistered(ability_id) = outcome else {
                 return Err(format!(
@@ -9610,7 +10092,8 @@ impl MainSearchDomain<'_> {
                         DecisionDescriptor::ChoosePayment { payment } => {
                             -i64::from(payment.waste_score())
                         }
-                        DecisionDescriptor::ChooseAdditionalCost { .. } => {
+                        DecisionDescriptor::ChooseAdditionalCost { .. }
+                        | DecisionDescriptor::ChooseActivationCostObjects { .. } => {
                             driver.additional_cost_choice_prior(option.descriptor())
                         }
                         descriptor => {
@@ -9671,7 +10154,7 @@ impl SearchDomain for MainSearchDomain<'_> {
             .ok_or_else(|| format!("search action {action} has no typed main-phase adapter"))?;
         let mut next = state.clone();
         if let Some((context, mappings)) =
-            next.driver.hierarchical_cast_context(self.actor, &choice)?
+            next.driver.hierarchical_main_context(self.actor, &choice)?
         {
             return self.state_with_context(next.driver, context, mappings);
         }
@@ -10273,6 +10756,47 @@ const fn runtime_alternate_path_code(alternate: Option<AlternateCostKind>) -> u6
     }
 }
 
+fn activation_cost_path_discriminator(
+    player: PlayerId,
+    source: ObjectId,
+    ability: ActivatedAbilityId,
+    targets: &[TargetChoice],
+    optional: &[bool],
+    sacrifice_objects: Option<&[ObjectId]>,
+    stage: u64,
+) -> u64 {
+    let mut state = combat_path_mix(0x6163_7463_6f73_0001, player.index() as u64);
+    state = combat_path_mix(state, source.index() as u64);
+    state = combat_path_mix(state, u64::from(ability.get()));
+    state = combat_path_mix(state, stage);
+    for target in targets {
+        state = match target {
+            TargetChoice::Player(player) => {
+                combat_path_mix(combat_path_mix(state, 0), player.index() as u64)
+            }
+            TargetChoice::Object(object) => {
+                combat_path_mix(combat_path_mix(state, 1), object.index() as u64)
+            }
+            TargetChoice::StackEntry(entry) => {
+                combat_path_mix(combat_path_mix(state, 2), entry.index() as u64)
+            }
+        };
+    }
+    for accept in optional {
+        state = combat_path_mix(state, u64::from(*accept));
+    }
+    match sacrifice_objects {
+        None => state = combat_path_mix(state, u64::MAX),
+        Some(objects) => {
+            state = combat_path_mix(state, objects.len() as u64);
+            for object in objects {
+                state = combat_path_mix(state, object.index() as u64);
+            }
+        }
+    }
+    state
+}
+
 #[allow(clippy::too_many_arguments)]
 fn variable_cast_path_discriminator(
     player: PlayerId,
@@ -10519,6 +11043,18 @@ fn decision_descriptor_value(descriptor: &DecisionDescriptor) -> Value {
             "targets": targets.iter().copied().map(target_value).collect::<Vec<_>>(),
             "optional": optional
         }),
+        DecisionDescriptor::BeginActivateProgramAbilityWithCosts {
+            source,
+            ability,
+            targets,
+            optional,
+        } => json!({
+            "kind": "begin_activate_program_ability_with_costs",
+            "source_object_id": source.index(),
+            "ability_id": ability.get(),
+            "targets": targets.iter().copied().map(target_value).collect::<Vec<_>>(),
+            "optional": optional
+        }),
         DecisionDescriptor::CastSpell {
             object,
             payment,
@@ -10612,6 +11148,10 @@ fn decision_descriptor_value(descriptor: &DecisionDescriptor) -> Value {
         DecisionDescriptor::ChooseAdditionalCost { cost, objects } => json!({
             "kind": "choose_additional_cost",
             "cost": cost,
+            "object_ids": objects.iter().map(|object| object.index()).collect::<Vec<_>>()
+        }),
+        DecisionDescriptor::ChooseActivationCostObjects { objects } => json!({
+            "kind": "choose_activation_cost_objects",
             "object_ids": objects.iter().map(|object| object.index()).collect::<Vec<_>>()
         }),
         DecisionDescriptor::ChooseOptional { prompt, accept } => json!({
@@ -12949,7 +13489,7 @@ card "Mulldrifter" {
         let replay_base = driver.clone();
 
         let (discard_context, discard_mappings) = driver
-            .hierarchical_cast_context(caster, &begin_choice)
+            .hierarchical_main_context(caster, &begin_choice)
             .unwrap_or_else(|error| panic!("discard context should build: {error}"))
             .unwrap_or_else(|| panic!("discard context should be deferred"));
         assert_eq!(discard_context.kind(), DecisionKind::Payment);
@@ -12969,7 +13509,7 @@ card "Mulldrifter" {
             .find_map(|(id, choice)| (*id == discard_option.id()).then(|| choice.clone()))
             .unwrap_or_else(|| panic!("discard selection needs an adapter"));
         let (sacrifice_context, sacrifice_mappings) = driver
-            .hierarchical_cast_context(caster, &sacrifice_stage)
+            .hierarchical_main_context(caster, &sacrifice_stage)
             .unwrap_or_else(|error| panic!("sacrifice context should build: {error}"))
             .unwrap_or_else(|| panic!("sacrifice context should be deferred"));
         let sacrifice_option = sacrifice_context
@@ -12988,7 +13528,7 @@ card "Mulldrifter" {
             .find_map(|(id, choice)| (*id == sacrifice_option.id()).then(|| choice.clone()))
             .unwrap_or_else(|| panic!("sacrifice selection needs an adapter"));
         let (payment_context, payment_mappings) = driver
-            .hierarchical_cast_context(caster, &payment_stage)
+            .hierarchical_main_context(caster, &payment_stage)
             .unwrap_or_else(|error| panic!("mana-payment context should build: {error}"))
             .unwrap_or_else(|| panic!("mana payment should be deferred"));
         assert!(payment_context.options().iter().all(|option| matches!(
@@ -13163,7 +13703,7 @@ card "Mulldrifter" {
         let replay_begin = begin_choice.clone();
 
         let (numeric, numeric_mappings) = driver
-            .hierarchical_cast_context(caster, &begin_choice)
+            .hierarchical_main_context(caster, &begin_choice)
             .unwrap_or_else(|error| panic!("X numeric context should build: {error}"))
             .unwrap_or_else(|| panic!("X cast should require a numeric context"));
         assert_eq!(numeric.kind(), DecisionKind::NumericValue);
@@ -13198,7 +13738,7 @@ card "Mulldrifter" {
             .find_map(|(id, choice)| (*id == x_one.id()).then(|| choice.clone()))
             .unwrap_or_else(|| panic!("X=1 should have a typed adapter"));
         let (payments, payment_mappings) = driver
-            .hierarchical_cast_context(caster, &payment_stage)
+            .hierarchical_main_context(caster, &payment_stage)
             .unwrap_or_else(|error| panic!("X payment context should build: {error}"))
             .unwrap_or_else(|| panic!("selected X should require a payment context"));
         assert_eq!(payments.kind(), DecisionKind::Payment);
@@ -14426,6 +14966,7 @@ card "Mulldrifter" {
     }
   }
 }"#;
+
         let definition = forge_cardc::parse_card_named("evolving_wilds.frs", source)
             .unwrap_or_else(|error| panic!("Evolving Wilds should parse: {error}"));
         let program = Arc::new(
@@ -14571,6 +15112,205 @@ card "Mulldrifter" {
             action,
             Action::ShuffleLibrary { player } if *player == caster
         )));
+    }
+
+    #[test]
+    fn polluted_delta_uses_canonical_life_cost_activation_hierarchy() {
+        let source = r#"card "Polluted Delta" {
+  id: "ef86989d-ce80-4e55-aece-7d11710eeffa"
+  layout: normal
+  status: unverified_playable
+  face "Polluted Delta" {
+    cost: ""
+    types: "Land"
+    oracle: "{T}, Pay 1 life, Sacrifice Polluted Delta: Search your library for an Island or Swamp card, put it onto the battlefield, then shuffle."
+    keywords: []
+    ability activated {
+      costs: [tap_self(), pay_life(1), sacrifice_self()]
+      effect: sequence(search_library(cards(and(or(subtype_is("island"), subtype_is("swamp")), zone_is("library"))), you(), 1), move_zone(chosen(cards(and(or(subtype_is("island"), subtype_is("swamp")), zone_is("library")))), "battlefield", 1), shuffle(you()))
+    }
+  }
+}"#;
+        let definition = forge_cardc::parse_card_named("polluted_delta.frs", source)
+            .unwrap_or_else(|error| panic!("Polluted Delta should parse: {error}"));
+        let program = Arc::new(
+            compile_card_program(&definition)
+                .unwrap_or_else(|error| panic!("Polluted Delta should compile: {error}")),
+        );
+        let (mut driver, caster, _opponent, delta) = modal_spell_driver();
+        Arc::make_mut(&mut driver.programs).insert(delta, Arc::clone(&program));
+        driver
+            .dispatch(Action::SetBaseObjectCharacteristics {
+                object: delta,
+                base: program.base_object(),
+            })
+            .unwrap_or_else(|error| panic!("Delta characteristics should apply: {error}"));
+        driver
+            .dispatch(Action::MoveObject {
+                object: delta,
+                to: ZoneId::new(None, ZoneKind::Battlefield),
+            })
+            .unwrap_or_else(|error| panic!("Delta should enter the battlefield: {error}"));
+        driver
+            .register_permanent_runtime(caster, delta)
+            .unwrap_or_else(|error| panic!("Delta runtime should register: {error}"));
+
+        let (context, mappings) = driver
+            .priority_decision_context(caster)
+            .unwrap_or_else(|error| panic!("Delta priority context should exist: {error}"));
+        let root = context
+            .options()
+            .iter()
+            .find(|option| {
+                matches!(
+                    option.descriptor(),
+                    DecisionDescriptor::BeginActivateProgramAbilityWithCosts {
+                        source,
+                        targets,
+                        optional,
+                        ..
+                    } if *source == delta && targets.is_empty() && optional.is_empty()
+                )
+            })
+            .unwrap_or_else(|| panic!("Delta extra-cost activation root should be canonical"));
+        let begin = mappings
+            .iter()
+            .find_map(|(id, choice)| (*id == root.id()).then(|| choice.clone()))
+            .unwrap_or_else(|| panic!("Delta root should have a typed adapter"));
+        let (payment_context, payment_mappings) = driver
+            .hierarchical_main_context(caster, &begin)
+            .unwrap_or_else(|error| panic!("Delta payment context should build: {error}"))
+            .unwrap_or_else(|| panic!("Delta should defer its exact payment"));
+        assert!(payment_context.options().iter().all(|option| matches!(
+            option.descriptor(),
+            DecisionDescriptor::ChoosePayment { .. }
+        )));
+        let finish = payment_mappings
+            .first()
+            .map(|(_, choice)| choice.clone())
+            .unwrap_or_else(|| panic!("Delta should have a zero-mana payment"));
+
+        assert_eq!(driver.state.players()[caster.index()].life(), 20);
+        assert_eq!(driver.apply_main_choice(caster, finish), Ok(true));
+        assert_eq!(driver.state.players()[caster.index()].life(), 19);
+        assert_eq!(
+            driver.state.object_zone(delta),
+            Some(ZoneId::new(Some(caster), ZoneKind::Graveyard))
+        );
+        assert!(driver.state.stack_top().is_some());
+    }
+
+    #[test]
+    fn zuran_orb_uses_canonical_selected_sacrifice_hierarchy() {
+        let source = r#"card "Zuran Orb" {
+  id: "08cb8a30-9cb4-4517-bee5-8848aa60d1a2"
+  layout: normal
+  status: unverified_playable
+  face "Zuran Orb" {
+    cost: "{0}"
+    types: "Artifact"
+    oracle: "Sacrifice a land: You gain 2 life."
+    keywords: []
+    ability activated {
+      costs: [sacrifice(permanents(and(type_is("land"), controlled_by(you()))), 1)]
+      effect: gain_life(2, you())
+    }
+  }
+}"#;
+        let definition = forge_cardc::parse_card_named("zuran_orb.frs", source)
+            .unwrap_or_else(|error| panic!("Zuran Orb should parse: {error}"));
+        let program = Arc::new(
+            compile_card_program(&definition)
+                .unwrap_or_else(|error| panic!("Zuran Orb should compile: {error}")),
+        );
+        let (mut driver, caster, _opponent, orb) = modal_spell_driver();
+        Arc::make_mut(&mut driver.programs).insert(orb, Arc::clone(&program));
+        driver
+            .dispatch(Action::SetBaseObjectCharacteristics {
+                object: orb,
+                base: program.base_object(),
+            })
+            .unwrap_or_else(|error| panic!("Orb characteristics should apply: {error}"));
+        driver
+            .dispatch(Action::MoveObject {
+                object: orb,
+                to: ZoneId::new(None, ZoneKind::Battlefield),
+            })
+            .unwrap_or_else(|error| panic!("Orb should enter the battlefield: {error}"));
+        let land = match driver
+            .dispatch(Action::CreateObject {
+                card: CardId::new(907),
+                owner: caster,
+                controller: caster,
+                zone: ZoneId::new(None, ZoneKind::Battlefield),
+            })
+            .unwrap_or_else(|error| panic!("land setup should succeed: {error}"))
+        {
+            Outcome::ObjectCreated(object) => object,
+            other => panic!("unexpected land setup outcome: {other:?}"),
+        };
+        driver
+            .dispatch(Action::SetBaseObjectCharacteristics {
+                object: land,
+                base: BaseObjectCharacteristics::new(
+                    ObjectTypes::none().with_land(),
+                    ObjectColors::none(),
+                ),
+            })
+            .unwrap_or_else(|error| panic!("land characteristics should apply: {error}"));
+        driver
+            .register_permanent_runtime(caster, orb)
+            .unwrap_or_else(|error| panic!("Orb runtime should register: {error}"));
+
+        let (context, mappings) = driver
+            .priority_decision_context(caster)
+            .unwrap_or_else(|error| panic!("Orb priority context should exist: {error}"));
+        let root = context
+            .options()
+            .iter()
+            .find(|option| {
+                matches!(
+                    option.descriptor(),
+                    DecisionDescriptor::BeginActivateProgramAbilityWithCosts { source, .. }
+                        if *source == orb
+                )
+            })
+            .unwrap_or_else(|| panic!("Orb extra-cost activation root should be canonical"));
+        let begin = mappings
+            .iter()
+            .find_map(|(id, choice)| (*id == root.id()).then(|| choice.clone()))
+            .unwrap_or_else(|| panic!("Orb root should have a typed adapter"));
+        let (sacrifice_context, sacrifice_mappings) = driver
+            .hierarchical_main_context(caster, &begin)
+            .unwrap_or_else(|error| panic!("Orb sacrifice context should build: {error}"))
+            .unwrap_or_else(|| panic!("Orb should defer its sacrifice"));
+        assert_eq!(sacrifice_context.options().len(), 1);
+        assert!(matches!(
+            sacrifice_context.options()[0].descriptor(),
+            DecisionDescriptor::ChooseActivationCostObjects { objects }
+                if objects == &vec![land]
+        ));
+        let sacrifice_stage = sacrifice_mappings[0].1.clone();
+        let (payment_context, payment_mappings) = driver
+            .hierarchical_main_context(caster, &sacrifice_stage)
+            .unwrap_or_else(|error| panic!("Orb payment context should build: {error}"))
+            .unwrap_or_else(|| panic!("Orb should defer its exact payment"));
+        assert!(matches!(
+            payment_context.options()[0].descriptor(),
+            DecisionDescriptor::ChoosePayment { .. }
+        ));
+        let finish = payment_mappings[0].1.clone();
+
+        assert_eq!(driver.apply_main_choice(caster, finish), Ok(true));
+        assert_eq!(
+            driver.state.object_zone(orb),
+            Some(ZoneId::new(None, ZoneKind::Battlefield))
+        );
+        assert_eq!(
+            driver.state.object_zone(land),
+            Some(ZoneId::new(Some(caster), ZoneKind::Graveyard))
+        );
+        assert!(driver.state.stack_top().is_some());
     }
 
     #[test]
@@ -15236,7 +15976,7 @@ card "Mulldrifter" {
             .find_map(|(id, choice)| (*id == root.id()).then(|| choice.clone()))
             .unwrap_or_else(|| panic!("alternate root should have a typed adapter"));
         let (payment_context, payment_mappings) = driver
-            .hierarchical_cast_context(caster, &begin)
+            .hierarchical_main_context(caster, &begin)
             .unwrap_or_else(|error| panic!("alternate payment context should build: {error}"))
             .unwrap_or_else(|| panic!("alternate cast should defer payment"));
         assert!(payment_context.options().iter().all(|option| matches!(

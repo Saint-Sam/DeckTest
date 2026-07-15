@@ -158,7 +158,12 @@ fn rejects_below_activation_condition(program: ActivatedAbilityProgram, salt: u3
     let Some(definition) = program.bind_selected(controller, source, output) else {
         return Some(false);
     };
-    let ability = match apply(&mut state, Action::RegisterActivatedAbility { definition }) {
+    let ability = match apply(
+        &mut state,
+        Action::RegisterActivatedAbility {
+            definition: Box::new(definition),
+        },
+    ) {
         Outcome::ActivatedAbilityRegistered(ability) => ability,
         _ => return Some(false),
     };
@@ -236,7 +241,12 @@ fn replay_mana_ability(program: ActivatedAbilityProgram, salt: u32) -> serde_jso
         let Some(definition) = program.bind_selected(controller, source, output) else {
             continue;
         };
-        let ability = match apply(&mut state, Action::RegisterActivatedAbility { definition }) {
+        let ability = match apply(
+            &mut state,
+            Action::RegisterActivatedAbility {
+                definition: Box::new(definition),
+            },
+        ) {
             Outcome::ActivatedAbilityRegistered(ability) => ability,
             _ => continue,
         };
@@ -1663,7 +1673,7 @@ fn split_second_probe(program: &CardProgram) -> Option<serde_json::Value> {
     let non_mana_ability = match apply(
         &mut state,
         Action::RegisterActivatedAbility {
-            definition: ActivatedAbilityDefinition::new(
+            definition: Box::new(ActivatedAbilityDefinition::new(
                 opponent,
                 Some(non_mana_source),
                 ActivationTiming::Instant,
@@ -1672,7 +1682,7 @@ fn split_second_probe(program: &CardProgram) -> Option<serde_json::Value> {
                     player: AbilityPlayer::Controller,
                     amount: 1,
                 },
-            ),
+            )),
         },
     ) {
         Outcome::ActivatedAbilityRegistered(ability) => ability,
@@ -1681,17 +1691,19 @@ fn split_second_probe(program: &CardProgram) -> Option<serde_json::Value> {
     let mana_ability = match apply(
         &mut state,
         Action::RegisterActivatedAbility {
-            definition: ActivatedAbilityDefinition::new(
-                opponent,
-                Some(mana_source),
-                ActivationTiming::Instant,
-                ActivationCost::new(zero_cost).with_tap_source(),
-                ActivatedAbilityEffect::AddMana {
-                    player: AbilityPlayer::Controller,
-                    mana: ManaPool::of(ManaKind::Green, 1),
-                },
-            )
-            .as_mana_ability(),
+            definition: Box::new(
+                ActivatedAbilityDefinition::new(
+                    opponent,
+                    Some(mana_source),
+                    ActivationTiming::Instant,
+                    ActivationCost::new(zero_cost).with_tap_source(),
+                    ActivatedAbilityEffect::AddMana {
+                        player: AbilityPlayer::Controller,
+                        mana: ManaPool::of(ManaKind::Green, 1),
+                    },
+                )
+                .as_mana_ability(),
+            ),
         },
     ) {
         Outcome::ActivatedAbilityRegistered(ability) => ability,
@@ -5317,7 +5329,7 @@ fn bala_ged_modal_dfc_probe(program: &CardProgram) -> Option<serde_json::Value> 
     let registered_mana = match apply(
         &mut back_state,
         Action::RegisterActivatedAbility {
-            definition: mana_definition,
+            definition: Box::new(mana_definition),
         },
     ) {
         Outcome::ActivatedAbilityRegistered(ability) => Some(ability),

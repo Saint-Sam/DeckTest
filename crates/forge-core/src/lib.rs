@@ -4093,41 +4093,67 @@ impl ActivatedAbilityEffect {
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct ActivationCost {
     mana: ManaCost,
-    tap_source: bool,
-    sacrifice_source: bool,
-    loyalty_delta: Option<i32>,
+    life: u32,
+    loyalty_delta: i32,
+    flags_and_sacrifice_count: u32,
 }
 
 impl ActivationCost {
+    const NO_LOYALTY_DELTA: i32 = i32::MIN;
+    const TAP_SOURCE_MASK: u32 = 1 << 31;
+    const SACRIFICE_SOURCE_MASK: u32 = 1 << 30;
+    const SACRIFICE_COUNT_MASK: u32 = (1 << 30) - 1;
+
     /// Creates an activation cost with mana and no non-mana costs.
     #[must_use]
     pub const fn new(mana: ManaCost) -> Self {
         Self {
             mana,
-            tap_source: false,
-            sacrifice_source: false,
-            loyalty_delta: None,
+            life: 0,
+            loyalty_delta: Self::NO_LOYALTY_DELTA,
+            flags_and_sacrifice_count: 0,
         }
     }
 
     /// Adds a tap-symbol source cost.
     #[must_use]
     pub const fn with_tap_source(mut self) -> Self {
-        self.tap_source = true;
+        self.flags_and_sacrifice_count |= Self::TAP_SOURCE_MASK;
         self
     }
 
     /// Adds a source-sacrifice cost.
     #[must_use]
     pub const fn with_sacrifice_source(mut self) -> Self {
-        self.sacrifice_source = true;
+        self.flags_and_sacrifice_count |= Self::SACRIFICE_SOURCE_MASK;
         self
     }
 
     /// Adds a loyalty cost or loyalty-increase cost.
     #[must_use]
     pub const fn with_loyalty_delta(mut self, delta: i32) -> Self {
-        self.loyalty_delta = Some(delta);
+        assert!(
+            delta != Self::NO_LOYALTY_DELTA,
+            "loyalty delta is outside the closed action range"
+        );
+        self.loyalty_delta = delta;
+        self
+    }
+
+    /// Adds an exact life payment.
+    #[must_use]
+    pub const fn with_life(mut self, amount: u32) -> Self {
+        self.life = amount;
+        self
+    }
+
+    const fn with_sacrifice_permanent_count(mut self, count: u32) -> Self {
+        assert!(
+            count != 0 && count <= Self::SACRIFICE_COUNT_MASK,
+            "sacrifice count is outside the closed action range"
+        );
+        self.flags_and_sacrifice_count =
+            (self.flags_and_sacrifice_count & !Self::SACRIFICE_COUNT_MASK) | count;
         self
     }
 
@@ -4140,19 +4166,38 @@ impl ActivationCost {
     /// Returns whether the source must be tapped.
     #[must_use]
     pub const fn tap_source(self) -> bool {
-        self.tap_source
+        self.flags_and_sacrifice_count & Self::TAP_SOURCE_MASK != 0
     }
 
     /// Returns whether the source must be sacrificed.
     #[must_use]
     pub const fn sacrifice_source(self) -> bool {
-        self.sacrifice_source
+        self.flags_and_sacrifice_count & Self::SACRIFICE_SOURCE_MASK != 0
     }
 
     /// Returns the loyalty change paid as a cost, if any.
     #[must_use]
     pub const fn loyalty_delta(self) -> Option<i32> {
-        self.loyalty_delta
+        if self.loyalty_delta == Self::NO_LOYALTY_DELTA {
+            None
+        } else {
+            Some(self.loyalty_delta)
+        }
+    }
+
+    /// Returns the exact life payment.
+    #[must_use]
+    pub const fn life(self) -> u32 {
+        self.life
+    }
+
+    const fn sacrifice_permanent_count(self) -> Option<u32> {
+        let count = self.flags_and_sacrifice_count & Self::SACRIFICE_COUNT_MASK;
+        if count == 0 {
+            None
+        } else {
+            Some(count)
+        }
     }
 }
 
@@ -4166,6 +4211,7 @@ pub struct ActivatedAbilityDefinition {
     effect: ActivatedAbilityEffect,
     mana_ability: bool,
     condition: Option<ActivationCondition>,
+    sacrifice_permanent_predicate: Option<ObjectTargetPredicate>,
 }
 
 impl ActivatedAbilityDefinition {
@@ -4186,6 +4232,7 @@ impl ActivatedAbilityDefinition {
             effect,
             mana_ability: false,
             condition: None,
+            sacrifice_permanent_predicate: None,
         }
     }
 
@@ -4200,6 +4247,18 @@ impl ActivatedAbilityDefinition {
     #[must_use]
     pub const fn with_condition(mut self, condition: ActivationCondition) -> Self {
         self.condition = Some(condition);
+        self
+    }
+
+    /// Returns this ability with one exact matching-permanent sacrifice cost.
+    #[must_use]
+    pub const fn with_sacrifice_permanents(
+        mut self,
+        predicate: ObjectTargetPredicate,
+        count: u32,
+    ) -> Self {
+        self.cost = self.cost.with_sacrifice_permanent_count(count);
+        self.sacrifice_permanent_predicate = Some(predicate);
         self
     }
 
@@ -4225,6 +4284,18 @@ impl ActivatedAbilityDefinition {
     #[must_use]
     pub const fn cost(self) -> ActivationCost {
         self.cost
+    }
+
+    /// Returns the closed permanent predicate and exact sacrifice count, if any.
+    #[must_use]
+    pub const fn sacrifice_permanents(self) -> Option<(ObjectTargetPredicate, u32)> {
+        match (
+            self.sacrifice_permanent_predicate,
+            self.cost.sacrifice_permanent_count(),
+        ) {
+            (Some(predicate), Some(count)) => Some((predicate, count)),
+            _ => None,
+        }
     }
 
     /// Returns the effect to resolve.
@@ -4596,6 +4667,7 @@ enum AbilityActivationAdapter<'a> {
         target_requirements: &'a [TargetRequirement],
         target_choices: &'a [TargetChoice],
         decisions: StackDecisionBindings,
+        additional_cost_objects: &'a [ObjectId],
     },
 }
 
@@ -6937,6 +7009,26 @@ pub enum StateError {
     LoyaltyAbilityAlreadyActivatedThisTurn(ObjectId),
     /// The source object does not have enough loyalty for the requested cost.
     InsufficientLoyalty(ObjectId),
+    /// The activating player cannot pay the registered life cost.
+    InsufficientLifeForActivation {
+        /// Player attempting the activation.
+        player: PlayerId,
+        /// Current life total.
+        available: i32,
+        /// Required life payment.
+        required: u32,
+    },
+    /// An activation selected the wrong number of permanent cost objects.
+    ActivationCostObjectCountMismatch {
+        /// Exact number required by the registered cost.
+        required: u32,
+        /// Number supplied by the activation action.
+        selected: u32,
+    },
+    /// The same permanent was selected more than once for activation costs.
+    DuplicateActivationCostObject(ObjectId),
+    /// A permanent cannot pay the registered activation cost in the current state.
+    InvalidActivationCostObject(ObjectId),
     /// A stack resolution was requested while the stack was empty.
     EmptyStack,
     /// The requested stack entry ID does not exist.
@@ -7309,7 +7401,7 @@ pub enum Action {
     /// Register one declarative activated ability definition.
     RegisterActivatedAbility {
         /// Data-only activated ability definition.
-        definition: ActivatedAbilityDefinition,
+        definition: Box<ActivatedAbilityDefinition>,
     },
     /// Register one activated ability cost modifier.
     RegisterCostModifier {
@@ -7344,6 +7436,23 @@ pub enum Action {
         target_choices: Vec<TargetChoice>,
         /// Optional-effect decisions announced for the ability.
         decisions: StackDecisionBindings,
+    },
+    /// Activate a registered program-bound ability with selected non-mana cost objects.
+    ActivateProgramAbilityWithCosts {
+        /// Activating player.
+        player: PlayerId,
+        /// Registered ability to activate.
+        ability: ActivatedAbilityId,
+        /// Mana payment selected for the effective activation cost.
+        payment: PaymentPlan,
+        /// Closed target requirements in program order.
+        target_requirements: Vec<TargetRequirement>,
+        /// Announced target choices in requirement order.
+        target_choices: Vec<TargetChoice>,
+        /// Optional-effect decisions announced for the ability.
+        decisions: StackDecisionBindings,
+        /// Permanents selected for the registered sacrifice cost.
+        additional_cost_objects: Vec<ObjectId>,
     },
     /// Set base printed card types and colors for one object.
     SetBaseObjectCharacteristics {
@@ -7926,7 +8035,7 @@ fn apply_fallback(state: &mut GameState, action: Action) -> Outcome {
             Err(error) => Outcome::Failed(error),
         },
         Action::RegisterActivatedAbility { definition } => {
-            match state.register_activated_ability(definition) {
+            match state.register_activated_ability(*definition) {
                 Ok(ability) => Outcome::ActivatedAbilityRegistered(ability),
                 Err(error) => Outcome::Failed(error),
             }
@@ -7967,6 +8076,30 @@ fn apply_fallback(state: &mut GameState, action: Action) -> Outcome {
                 target_requirements: &target_requirements,
                 target_choices: &target_choices,
                 decisions,
+                additional_cost_objects: &[],
+            },
+        ) {
+            Ok(Some(entry)) => Outcome::StackEntryAdded(entry),
+            Ok(None) => Outcome::Applied,
+            Err(error) => Outcome::Failed(error),
+        },
+        Action::ActivateProgramAbilityWithCosts {
+            player,
+            ability,
+            payment,
+            target_requirements,
+            target_choices,
+            decisions,
+            additional_cost_objects,
+        } => match state.activate_ability_with_choices(
+            player,
+            ability,
+            payment,
+            AbilityActivationAdapter::Program {
+                target_requirements: &target_requirements,
+                target_choices: &target_choices,
+                decisions,
+                additional_cost_objects: &additional_cost_objects,
             },
         ) {
             Ok(Some(entry)) => Outcome::StackEntryAdded(entry),
@@ -10547,7 +10680,23 @@ impl GameState {
         if let Some(delta) = definition.cost().loyalty_delta() {
             cost = cost.with_loyalty_delta(delta);
         }
+        if definition.cost().life() != 0 {
+            cost = cost.with_life(definition.cost().life());
+        }
+        if let Some(count) = definition.cost().sacrifice_permanent_count() {
+            cost = cost.with_sacrifice_permanent_count(count);
+        }
         Ok(cost)
+    }
+
+    /// Returns the closed matching-permanent sacrifice cost for one ability.
+    pub fn activation_sacrifice_cost(
+        &self,
+        ability: ActivatedAbilityId,
+    ) -> Result<Option<(ObjectTargetPredicate, u32)>, StateError> {
+        Ok(self
+            .activated_ability_definition(ability)?
+            .sacrifice_permanents())
     }
 
     fn activated_ability_definition(
@@ -10684,16 +10833,23 @@ impl GameState {
         if matches!(definition.effect(), ActivatedAbilityEffect::ProgramBound) != program_bound {
             return Err(StateError::ActivatedAbilityAdapterMismatch(ability));
         }
-        let (target_requirements, target_choices, decisions) = match adapter {
-            AbilityActivationAdapter::BuiltIn => {
-                (&[][..], &[][..], StackDecisionBindings::default())
-            }
-            AbilityActivationAdapter::Program {
-                target_requirements,
-                target_choices,
-                decisions,
-            } => (target_requirements, target_choices, decisions),
-        };
+        let (target_requirements, target_choices, decisions, additional_cost_objects) =
+            match adapter {
+                AbilityActivationAdapter::BuiltIn => {
+                    (&[][..], &[][..], StackDecisionBindings::default(), &[][..])
+                }
+                AbilityActivationAdapter::Program {
+                    target_requirements,
+                    target_choices,
+                    decisions,
+                    additional_cost_objects,
+                } => (
+                    target_requirements,
+                    target_choices,
+                    decisions,
+                    additional_cost_objects,
+                ),
+            };
         let controller = self.activated_ability_controller(definition)?;
         if controller != player {
             return Err(StateError::PriorityPlayerMismatch {
@@ -10734,10 +10890,20 @@ impl GameState {
         if canonical_payment != payment {
             return Err(StateError::InvalidPaymentPlan);
         }
-        self.validate_non_mana_activation_costs(player, definition, effective_cost)?;
+        self.validate_non_mana_activation_costs(
+            player,
+            definition,
+            effective_cost,
+            additional_cost_objects,
+        )?;
 
         self.pay_mana(player, effective_cost.mana(), payment)?;
-        self.pay_non_mana_activation_costs(definition, effective_cost)?;
+        self.pay_non_mana_activation_costs(
+            player,
+            definition,
+            effective_cost,
+            additional_cost_objects,
+        )?;
         self.emit_event(GameEvent::ActivatedAbilityActivated {
             ability,
             player,
@@ -10773,7 +10939,20 @@ impl GameState {
         player: PlayerId,
         definition: ActivatedAbilityDefinition,
         cost: ActivationCost,
+        additional_cost_objects: &[ObjectId],
     ) -> Result<(), StateError> {
+        let available_life = self
+            .players
+            .get(player.index())
+            .ok_or(StateError::UnknownPlayer(player))?
+            .life();
+        if cost.life() != 0 && i64::from(available_life) < i64::from(cost.life()) {
+            return Err(StateError::InsufficientLifeForActivation {
+                player,
+                available: available_life,
+                required: cost.life(),
+            });
+        }
         if let Some(source) = definition.source() {
             if self.object_zone(source) != Some(ZoneId::new(None, ZoneKind::Battlefield)) {
                 return Err(StateError::ObjectNotActivatable(source));
@@ -10814,14 +10993,55 @@ impl GameState {
         } else if cost.tap_source() || cost.sacrifice_source() || cost.loyalty_delta().is_some() {
             return Err(StateError::ObjectNotActivatable(ObjectId(0)));
         }
+        match definition.sacrifice_permanents() {
+            Some((predicate, required)) => {
+                let selected = u32::try_from(additional_cost_objects.len()).unwrap_or(u32::MAX);
+                if selected != required {
+                    return Err(StateError::ActivationCostObjectCountMismatch {
+                        required,
+                        selected,
+                    });
+                }
+                for (index, object) in additional_cost_objects.iter().copied().enumerate() {
+                    if additional_cost_objects[..index].contains(&object) {
+                        return Err(StateError::DuplicateActivationCostObject(object));
+                    }
+                    if definition.source() == Some(object) && cost.sacrifice_source() {
+                        return Err(StateError::DuplicateActivationCostObject(object));
+                    }
+                    let record = self
+                        .objects
+                        .get(object)
+                        .ok_or(StateError::UnknownObject(object))?;
+                    if self.object_zone(object) != Some(ZoneId::new(None, ZoneKind::Battlefield))
+                        || record.controller() != player
+                        || !self.object_matches_target_predicate(player, predicate, object)
+                    {
+                        return Err(StateError::InvalidActivationCostObject(object));
+                    }
+                }
+            }
+            None if !additional_cost_objects.is_empty() => {
+                return Err(StateError::ActivationCostObjectCountMismatch {
+                    required: 0,
+                    selected: u32::try_from(additional_cost_objects.len()).unwrap_or(u32::MAX),
+                });
+            }
+            None => {}
+        }
         Ok(())
     }
 
     fn pay_non_mana_activation_costs(
         &mut self,
+        player: PlayerId,
         definition: ActivatedAbilityDefinition,
         cost: ActivationCost,
+        additional_cost_objects: &[ObjectId],
     ) -> Result<(), StateError> {
+        if cost.life() != 0 {
+            self.lose_life(player, cost.life())?;
+        }
         if let Some(source) = definition.source() {
             if cost.tap_source() {
                 self.set_object_tapped(source, true)?;
@@ -10851,6 +11071,14 @@ impl GameState {
                     .owner();
                 self.move_object(source, ZoneId::new(Some(owner), ZoneKind::Graveyard))?;
             }
+        }
+        for object in additional_cost_objects {
+            let owner = self
+                .objects
+                .get(*object)
+                .ok_or(StateError::UnknownObject(*object))?
+                .owner();
+            self.move_object(*object, ZoneId::new(Some(owner), ZoneKind::Graveyard))?;
         }
         Ok(())
     }
@@ -16859,9 +17087,17 @@ impl Fnva64 {
 
     fn write_activation_cost(&mut self, cost: ActivationCost) {
         self.write_mana_cost(cost.mana);
-        self.write_bool(cost.tap_source);
-        self.write_bool(cost.sacrifice_source);
-        self.write_optional_i32(cost.loyalty_delta);
+        self.write_bool(cost.tap_source());
+        self.write_bool(cost.sacrifice_source());
+        self.write_optional_i32(cost.loyalty_delta());
+        self.write_u32(cost.life);
+        match cost.sacrifice_permanent_count() {
+            None => self.write_u8(0),
+            Some(count) => {
+                self.write_u8(1);
+                self.write_u32(count);
+            }
+        }
     }
 
     fn write_activation_condition(&mut self, condition: Option<ActivationCondition>) {
@@ -16892,6 +17128,13 @@ impl Fnva64 {
         self.write_optional_object(definition.source);
         self.write_activation_timing(definition.timing);
         self.write_activation_cost(definition.cost);
+        match definition.sacrifice_permanent_predicate {
+            None => self.write_u8(0),
+            Some(predicate) => {
+                self.write_u8(1);
+                self.write_object_target_predicate(predicate);
+            }
+        }
         self.write_activated_ability_effect(definition.effect);
         self.write_bool(definition.mana_ability);
         self.write_activation_condition(definition.condition);
@@ -18244,9 +18487,17 @@ impl CanonicalBytes {
 
     fn write_activation_cost(&mut self, cost: ActivationCost) {
         self.write_mana_cost(cost.mana);
-        self.write_bool(cost.tap_source);
-        self.write_bool(cost.sacrifice_source);
-        self.write_optional_i32(cost.loyalty_delta);
+        self.write_bool(cost.tap_source());
+        self.write_bool(cost.sacrifice_source());
+        self.write_optional_i32(cost.loyalty_delta());
+        self.write_u32(cost.life);
+        match cost.sacrifice_permanent_count() {
+            None => self.write_u8(0),
+            Some(count) => {
+                self.write_u8(1);
+                self.write_u32(count);
+            }
+        }
     }
 
     fn write_activation_condition(&mut self, condition: Option<ActivationCondition>) {
@@ -18268,6 +18519,13 @@ impl CanonicalBytes {
         self.write_optional_object(definition.source);
         self.write_activation_timing(definition.timing);
         self.write_activation_cost(definition.cost);
+        match definition.sacrifice_permanent_predicate {
+            None => self.write_u8(0),
+            Some(predicate) => {
+                self.write_u8(1);
+                self.write_object_target_predicate(predicate);
+            }
+        }
         self.write_activated_ability_effect(definition.effect);
         self.write_bool(definition.mana_ability);
         self.write_activation_condition(definition.condition);
@@ -24900,6 +25158,115 @@ mod tests {
         assert_eq!(record.activated_ability(), Some(ability));
         assert_eq!(record.decisions(), decisions);
         assert_eq!(record.outcome(), ResolutionOutcome::Resolved);
+    }
+
+    #[test]
+    fn program_activation_pays_life_and_selected_sacrifice_costs() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let opponent = state.add_player();
+        let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+        let source = state
+            .create_object(CardId::new(25_060), active, active, battlefield)
+            .unwrap_or_else(|error| panic!("unexpected source create error: {error:?}"));
+        let sacrifice = state
+            .create_object(CardId::new(25_061), active, active, battlefield)
+            .unwrap_or_else(|error| panic!("unexpected sacrifice create error: {error:?}"));
+        let ability = state
+            .register_activated_ability(
+                ActivatedAbilityDefinition::new(
+                    active,
+                    Some(source),
+                    ActivationTiming::Instant,
+                    ActivationCost::new(ManaCost::new(0, 0, 0, 0, 0, 0))
+                        .with_tap_source()
+                        .with_life(2),
+                    ActivatedAbilityEffect::ProgramBound,
+                )
+                .with_sacrifice_permanents(ObjectTargetPredicate::any(), 1),
+            )
+            .unwrap_or_else(|error| panic!("unexpected ability registration error: {error:?}"));
+        start_upkeep(&mut state, active);
+
+        let outcome = apply(
+            &mut state,
+            Action::ActivateProgramAbilityWithCosts {
+                player: active,
+                ability,
+                payment: zero_payment(ManaCost::new(0, 0, 0, 0, 0, 0)),
+                target_requirements: Vec::new(),
+                target_choices: Vec::new(),
+                decisions: StackDecisionBindings::default(),
+                additional_cost_objects: vec![sacrifice],
+            },
+        );
+
+        assert!(matches!(outcome, Outcome::StackEntryAdded(_)));
+        assert_eq!(state.players()[active.index()].life(), 18);
+        assert!(state
+            .object(source)
+            .unwrap_or_else(|| panic!("source missing"))
+            .tapped());
+        assert_eq!(state.object_zone(source), Some(battlefield));
+        assert_eq!(
+            state.object_zone(sacrifice),
+            Some(ZoneId::new(Some(active), ZoneKind::Graveyard))
+        );
+        assert_eq!(state.priority_player(), Some(active));
+        assert_eq!(state.players()[opponent.index()].life(), 20);
+    }
+
+    #[test]
+    fn invalid_activation_sacrifice_is_atomic() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let opponent = state.add_player();
+        let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+        let source = state
+            .create_object(CardId::new(25_070), active, active, battlefield)
+            .unwrap_or_else(|error| panic!("unexpected source create error: {error:?}"));
+        let opponent_object = state
+            .create_object(CardId::new(25_071), opponent, opponent, battlefield)
+            .unwrap_or_else(|error| panic!("unexpected cost object error: {error:?}"));
+        let ability = state
+            .register_activated_ability(
+                ActivatedAbilityDefinition::new(
+                    active,
+                    Some(source),
+                    ActivationTiming::Instant,
+                    ActivationCost::new(ManaCost::new(0, 0, 0, 0, 0, 0))
+                        .with_tap_source()
+                        .with_life(2),
+                    ActivatedAbilityEffect::ProgramBound,
+                )
+                .with_sacrifice_permanents(ObjectTargetPredicate::any(), 1),
+            )
+            .unwrap_or_else(|error| panic!("unexpected ability registration error: {error:?}"));
+        start_upkeep(&mut state, active);
+
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::ActivateProgramAbilityWithCosts {
+                    player: active,
+                    ability,
+                    payment: zero_payment(ManaCost::new(0, 0, 0, 0, 0, 0)),
+                    target_requirements: Vec::new(),
+                    target_choices: Vec::new(),
+                    decisions: StackDecisionBindings::default(),
+                    additional_cost_objects: vec![opponent_object],
+                },
+            ),
+            Outcome::Failed(StateError::InvalidActivationCostObject(opponent_object))
+        );
+        assert_eq!(state.players()[active.index()].life(), 20);
+        assert!(!state
+            .object(source)
+            .unwrap_or_else(|| panic!("source missing"))
+            .tapped());
+        assert_eq!(state.object_zone(source), Some(battlefield));
+        assert_eq!(state.object_zone(opponent_object), Some(battlefield));
+        assert!(state.stack_entries().is_empty());
     }
 
     #[test]

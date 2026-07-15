@@ -92,6 +92,15 @@ trigger only for the matching cast and retires that one-shot subscription when
 the spell is countered. Arbitrary alternate costs and other uncompiled
 non-mana cost families remain fail closed.
 
+Program-bound activated abilities with compiler-declared literal life payments
+or one exact matching-permanent sacrifice use an append-only activation root.
+Matching permanents are selected in a bounded scoped `Payment` context before
+the existing exact mana-plan context. Every partial selection must have a
+complete legal continuation. The kernel revalidates life, count, uniqueness,
+zone, controller, predicate, and source reuse before any cost mutates state.
+Ordinary activation IDs remain unchanged; unsupported activation-cost families
+remain fail closed.
+
 Combat-damage ordering and amounts also use bounded contexts outside the main
 tree. Controllers choose one next blocker and then one amount at a time; large
 numeric ranges are narrowed through binary subranges before a direct context

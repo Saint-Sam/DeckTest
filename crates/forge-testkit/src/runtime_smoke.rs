@@ -1534,7 +1534,7 @@ fn execute_smoke(
         let outcome = execution.dispatch(
             &format!("ability[{index}].register"),
             Action::RegisterActivatedAbility {
-                definition: ability.bind(caster, spell),
+                definition: Box::new(ability.bind(caster, spell)),
             },
         )?;
         let Outcome::ActivatedAbilityRegistered(id) = outcome else {
@@ -3507,7 +3507,9 @@ fn dispatch_bound_actions(
                         })?;
                     let registered = execution.dispatch(
                         &format!("{phase}[{}].token_ability[{choice}]", bound.effect_index()),
-                        Action::RegisterActivatedAbility { definition },
+                        Action::RegisterActivatedAbility {
+                            definition: Box::new(definition),
+                        },
                     )?;
                     if !matches!(registered, Outcome::ActivatedAbilityRegistered(_)) {
                         return Err(unexpected_outcome(
