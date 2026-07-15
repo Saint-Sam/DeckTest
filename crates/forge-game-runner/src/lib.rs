@@ -1526,6 +1526,8 @@ impl TraceMode {
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 struct GameMetrics {
     actions: u64,
+    #[serde(default)]
+    meaningful_actions: u64,
     casts: u64,
     commander_casts: u64,
     taxed_commander_recasts: u64,
@@ -1533,6 +1535,12 @@ struct GameMetrics {
     lands_played: u64,
     mana_abilities: u64,
     priority_passes: u64,
+    #[serde(default)]
+    pass_only_priority_cycles: u64,
+    #[serde(default)]
+    table_damage_to_players: u64,
+    #[serde(default)]
+    life_total_movement: u64,
     triggers_registered: u64,
     triggers_resolved: u64,
     interpreter_actions: u64,
@@ -1547,6 +1555,7 @@ struct GameMetrics {
 impl GameMetrics {
     fn add_assign(&mut self, other: &Self) {
         self.actions += other.actions;
+        self.meaningful_actions += other.meaningful_actions;
         self.casts += other.casts;
         self.commander_casts += other.commander_casts;
         self.taxed_commander_recasts += other.taxed_commander_recasts;
@@ -1554,6 +1563,9 @@ impl GameMetrics {
         self.lands_played += other.lands_played;
         self.mana_abilities += other.mana_abilities;
         self.priority_passes += other.priority_passes;
+        self.pass_only_priority_cycles += other.pass_only_priority_cycles;
+        self.table_damage_to_players += other.table_damage_to_players;
+        self.life_total_movement += other.life_total_movement;
         self.triggers_registered += other.triggers_registered;
         self.triggers_resolved += other.triggers_resolved;
         self.interpreter_actions += other.interpreter_actions;
@@ -1571,6 +1583,235 @@ impl GameMetrics {
     }
 }
 
+/// One eliminated seat and the turn on which it left the game.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct EliminationDiagnostic {
+    /// Zero-based seat index.
+    pub seat: usize,
+    /// Game turn on which the elimination occurred.
+    pub turn: u32,
+}
+
+/// Activity recorded across one four-seat table round.
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(default)]
+pub struct RoundProgressDiagnostic {
+    /// One-based table round number.
+    pub round: u32,
+    /// First game turn included in this round.
+    pub first_turn: u32,
+    /// Last game turn included in this round.
+    pub last_turn: u32,
+    /// Damage actually dealt to players during the round.
+    pub table_damage_to_players: u64,
+    /// Cumulative absolute life-total movement during the round.
+    pub life_total_movement: u64,
+    /// Spells cast during the round.
+    pub casts: u64,
+    /// Successful typed actions excluding passes, step advancement, and rules checks.
+    pub meaningful_actions: u64,
+    /// Empty-stack all-pass priority cycles during the round.
+    pub pass_only_priority_cycles: u64,
+    /// Active-player turns containing at least one meaningful action.
+    pub active_players_with_progress: u32,
+    /// Players eliminated during the round.
+    pub eliminations: u64,
+    /// True only when the round changed no tracked progress signal.
+    pub no_progress: bool,
+}
+
+/// Diagnostic-only long-game telemetry; it never changes game termination.
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(default)]
+pub struct GameProgressDiagnostics {
+    /// Distinguishes ordinary wins from future diagnostic termination modes.
+    pub termination_reason: String,
+    /// True only when a diagnostic run ended at its configured turn cap.
+    pub turn_cap_reached: bool,
+    /// Number of full-state observations taken at runner boundaries.
+    pub state_observations: u64,
+    /// Observations whose full-state hash had appeared before.
+    pub repeated_full_state_hashes: u64,
+    /// Repeated full-state observations in parts per million.
+    pub repeated_full_state_hash_rate_ppm: u32,
+    /// AI prompt records whose `DecisionStateKey` had appeared before.
+    pub repeated_decision_state_keys: u64,
+    /// Repeated AI decision-state keys in parts per million.
+    pub repeated_decision_state_key_rate_ppm: u32,
+    /// Count of rounds with no tracked progress.
+    pub no_progress_rounds: u32,
+    /// Longest consecutive run of no-progress rounds.
+    pub maximum_consecutive_no_progress_rounds: u32,
+    /// Turn-stamped eliminations in seat order of occurrence.
+    pub eliminations: Vec<EliminationDiagnostic>,
+    /// Per-round progress records.
+    pub rounds: Vec<RoundProgressDiagnostic>,
+}
+
+#[derive(Clone, Debug)]
+struct RoundProgressStart {
+    round: u32,
+    first_turn: u32,
+    last_turn: u32,
+    metrics: GameMetrics,
+    active_players_with_progress: BTreeSet<usize>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct GameProgressTracker {
+    state_observations: u64,
+    repeated_full_state_hashes: u64,
+    seen_full_state_hashes: HashSet<u64>,
+    current_round: Option<RoundProgressStart>,
+    rounds: Vec<RoundProgressDiagnostic>,
+    eliminations: Vec<EliminationDiagnostic>,
+    consecutive_no_progress_rounds: u32,
+    maximum_consecutive_no_progress_rounds: u32,
+}
+
+impl GameProgressTracker {
+    fn observe_state(&mut self, hash: u64) {
+        self.state_observations = self.state_observations.saturating_add(1);
+        if !self.seen_full_state_hashes.insert(hash) {
+            self.repeated_full_state_hashes = self.repeated_full_state_hashes.saturating_add(1);
+        }
+    }
+
+    fn observe_turn(&mut self, turn: u32, metrics: &GameMetrics) {
+        let round = turn.saturating_sub(1) / PLAYER_COUNT as u32 + 1;
+        if self
+            .current_round
+            .as_ref()
+            .is_some_and(|current| current.round != round)
+        {
+            self.finish_current_round(turn.saturating_sub(1), metrics);
+        }
+        let current = self
+            .current_round
+            .get_or_insert_with(|| RoundProgressStart {
+                round,
+                first_turn: turn,
+                last_turn: turn,
+                metrics: metrics.clone(),
+                active_players_with_progress: BTreeSet::new(),
+            });
+        current.last_turn = turn;
+    }
+
+    fn record_meaningful_action(&mut self, active_seat: Option<usize>) {
+        let Some(active_seat) = active_seat else {
+            return;
+        };
+        if let Some(current) = self.current_round.as_mut() {
+            current.active_players_with_progress.insert(active_seat);
+        }
+    }
+
+    fn record_elimination(&mut self, seat: usize, turn: u32) {
+        self.eliminations.push(EliminationDiagnostic { seat, turn });
+    }
+
+    fn finish_current_round(&mut self, last_turn: u32, metrics: &GameMetrics) {
+        let Some(current) = self.current_round.take() else {
+            return;
+        };
+        let table_damage_to_players = metrics
+            .table_damage_to_players
+            .saturating_sub(current.metrics.table_damage_to_players);
+        let life_total_movement = metrics
+            .life_total_movement
+            .saturating_sub(current.metrics.life_total_movement);
+        let casts = metrics.casts.saturating_sub(current.metrics.casts);
+        let meaningful_actions = metrics
+            .meaningful_actions
+            .saturating_sub(current.metrics.meaningful_actions);
+        let pass_only_priority_cycles = metrics
+            .pass_only_priority_cycles
+            .saturating_sub(current.metrics.pass_only_priority_cycles);
+        let eliminations = metrics
+            .eliminations
+            .saturating_sub(current.metrics.eliminations);
+        let no_progress = table_damage_to_players == 0
+            && life_total_movement == 0
+            && casts == 0
+            && meaningful_actions == 0
+            && eliminations == 0;
+        if no_progress {
+            self.consecutive_no_progress_rounds =
+                self.consecutive_no_progress_rounds.saturating_add(1);
+            self.maximum_consecutive_no_progress_rounds = self
+                .maximum_consecutive_no_progress_rounds
+                .max(self.consecutive_no_progress_rounds);
+        } else {
+            self.consecutive_no_progress_rounds = 0;
+        }
+        self.rounds.push(RoundProgressDiagnostic {
+            round: current.round,
+            first_turn: current.first_turn,
+            last_turn: last_turn.max(current.last_turn),
+            table_damage_to_players,
+            life_total_movement,
+            casts,
+            meaningful_actions,
+            pass_only_priority_cycles,
+            active_players_with_progress: current.active_players_with_progress.len() as u32,
+            eliminations,
+            no_progress,
+        });
+    }
+
+    fn finish(
+        mut self,
+        final_turn: u32,
+        metrics: &GameMetrics,
+        decisions: &[AiDecisionRecord],
+    ) -> GameProgressDiagnostics {
+        self.finish_current_round(final_turn, metrics);
+        let mut seen_keys = HashSet::new();
+        let mut decision_keys = 0_u64;
+        let mut repeated_decision_state_keys = 0_u64;
+        for decision in decisions {
+            if decision.decision_state_key.is_empty() {
+                continue;
+            }
+            decision_keys = decision_keys.saturating_add(1);
+            if !seen_keys.insert(decision.decision_state_key.as_str()) {
+                repeated_decision_state_keys = repeated_decision_state_keys.saturating_add(1);
+            }
+        }
+        GameProgressDiagnostics {
+            termination_reason: "winner".to_owned(),
+            turn_cap_reached: false,
+            state_observations: self.state_observations,
+            repeated_full_state_hashes: self.repeated_full_state_hashes,
+            repeated_full_state_hash_rate_ppm: ratio_ppm(
+                self.repeated_full_state_hashes,
+                self.state_observations,
+            ),
+            repeated_decision_state_keys,
+            repeated_decision_state_key_rate_ppm: ratio_ppm(
+                repeated_decision_state_keys,
+                decision_keys,
+            ),
+            no_progress_rounds: self.rounds.iter().filter(|round| round.no_progress).count() as u32,
+            maximum_consecutive_no_progress_rounds: self.maximum_consecutive_no_progress_rounds,
+            eliminations: self.eliminations,
+            rounds: self.rounds,
+        }
+    }
+}
+
+fn ratio_ppm(numerator: u64, denominator: u64) -> u32 {
+    if denominator == 0 {
+        return 0;
+    }
+    numerator
+        .saturating_mul(1_000_000)
+        .checked_div(denominator)
+        .unwrap_or(0)
+        .min(u64::from(u32::MAX)) as u32
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 struct GameSummary {
     seed: u64,
@@ -1579,6 +1820,8 @@ struct GameSummary {
     final_hash: u64,
     final_life: [i32; PLAYER_COUNT],
     metrics: GameMetrics,
+    #[serde(default)]
+    progress: GameProgressDiagnostics,
 }
 
 struct GameRun {
@@ -1831,6 +2074,7 @@ struct GameDriver {
     current_attacks: Vec<AttackDeclaration>,
     coverage_target: Option<String>,
     metrics: GameMetrics,
+    progress: GameProgressTracker,
     trace: TraceMode,
     actions: Vec<Action>,
     ai_decisions: Vec<AiDecisionRecord>,
@@ -1956,6 +2200,7 @@ impl GameDriver {
             current_attacks: Vec::new(),
             coverage_target,
             metrics: GameMetrics::default(),
+            progress: GameProgressTracker::default(),
             trace,
             actions: Vec::new(),
             ai_decisions: Vec::new(),
@@ -2350,6 +2595,7 @@ impl GameDriver {
             current_attacks: self.current_attacks.clone(),
             coverage_target: None,
             metrics: GameMetrics::default(),
+            progress: GameProgressTracker::default(),
             trace: TraceMode::Off,
             actions: Vec::new(),
             ai_decisions: Vec::new(),
@@ -2460,6 +2706,10 @@ impl GameDriver {
                     .is_some_and(|source| !source.is_legacy_replay()));
 
         while self.state.game_outcome() == GameOutcome::InProgress {
+            self.progress
+                .observe_state(self.state.deterministic_hash().get());
+            self.progress
+                .observe_turn(self.state.turn_number(), &self.metrics);
             if self.pending_spell_resolution.is_some() {
                 self.complete_pending_spell_resolution(
                     human,
@@ -2642,6 +2892,11 @@ impl GameDriver {
             .position(|player| *player == winner)
             .ok_or_else(|| format!("seed {} winner is outside the pod", self.seed))?;
         let final_life = std::array::from_fn(|index| self.state.players()[index].life());
+        let progress = std::mem::take(&mut self.progress).finish(
+            self.state.turn_number(),
+            &self.metrics,
+            &self.ai_decisions,
+        );
         let summary = GameSummary {
             seed: self.seed,
             winner,
@@ -2649,6 +2904,7 @@ impl GameDriver {
             final_hash: self.state.deterministic_hash().get(),
             final_life,
             metrics: self.metrics,
+            progress,
         };
         let trace = self.trace.finish()?;
         Ok(GameRun {
@@ -2677,16 +2933,37 @@ impl GameDriver {
             Action::CounterStackEntry { entry } => Some(*entry),
             _ => None,
         };
-        let trace_header = self
-            .trace
-            .enabled()
-            .then(|| (format!("{action:?}"), self.state.deterministic_hash().get()));
+        let tracking_progress = self.progress.current_round.is_some();
+        let meaningful_action = tracking_progress
+            && !matches!(
+                &action,
+                Action::PassPriority { .. }
+                    | Action::AdvanceStep
+                    | Action::CheckStateBasedActions
+                    | Action::StartTurn { .. }
+                    | Action::RequestCleanupPriority
+            );
+        let noncombat_damage = tracking_progress && matches!(&action, Action::DealDamage { .. });
+        let active_seat = self
+            .state
+            .active_player()
+            .and_then(|active| self.players.iter().position(|player| *player == active));
+        let life_before = self
+            .state
+            .players()
+            .iter()
+            .map(|player| player.life())
+            .collect::<Vec<_>>();
         let lost_before = self
             .state
             .players()
             .iter()
-            .filter(|player| player.lost())
-            .count();
+            .map(|player| player.lost())
+            .collect::<Vec<_>>();
+        let trace_header = self
+            .trace
+            .enabled()
+            .then(|| (format!("{action:?}"), self.state.deterministic_hash().get()));
         self.actions.push(action.clone());
         let outcome = apply(&mut self.state, action);
         if let Some((action, before_hash)) = trace_header {
@@ -2708,16 +2985,60 @@ impl GameDriver {
                 self.seed
             ));
         }
-        let lost_after = self
+        if meaningful_action {
+            self.metrics.meaningful_actions = self.metrics.meaningful_actions.saturating_add(1);
+            self.progress.record_meaningful_action(active_seat);
+        }
+        if matches!(outcome, Outcome::Priority(PriorityOutcome::StepComplete)) && tracking_progress
+        {
+            self.metrics.pass_only_priority_cycles =
+                self.metrics.pass_only_priority_cycles.saturating_add(1);
+        }
+        let life_after = self
             .state
             .players()
             .iter()
-            .filter(|player| player.lost())
-            .count();
-        self.metrics.eliminations = self
-            .metrics
-            .eliminations
-            .saturating_add(lost_after.saturating_sub(lost_before) as u64);
+            .map(|player| player.life())
+            .collect::<Vec<_>>();
+        if tracking_progress {
+            let life_movement = life_before
+                .iter()
+                .zip(&life_after)
+                .map(|(before, after)| u64::from(before.abs_diff(*after)))
+                .sum::<u64>();
+            self.metrics.life_total_movement = self
+                .metrics
+                .life_total_movement
+                .saturating_add(life_movement);
+            let table_damage = match &outcome {
+                Outcome::CombatDamageAssigned(records) => records
+                    .iter()
+                    .filter(|record| matches!(record.target(), CombatDamageTarget::Player(_)))
+                    .map(|record| u64::from(record.amount()))
+                    .sum(),
+                _ if noncombat_damage => life_before
+                    .iter()
+                    .zip(&life_after)
+                    .map(|(before, after)| u64::from(before.saturating_sub(*after).max(0) as u32))
+                    .sum(),
+                _ => 0,
+            };
+            self.metrics.table_damage_to_players = self
+                .metrics
+                .table_damage_to_players
+                .saturating_add(table_damage);
+        }
+        let mut eliminations = 0_u64;
+        for (seat, (was_lost, player)) in lost_before.iter().zip(self.state.players()).enumerate() {
+            if !*was_lost && player.lost() {
+                eliminations = eliminations.saturating_add(1);
+                if tracking_progress {
+                    self.progress
+                        .record_elimination(seat, self.state.turn_number());
+                }
+            }
+        }
+        self.metrics.eliminations = self.metrics.eliminations.saturating_add(eliminations);
         if let Some(entry) = countered_entry {
             self.handle_resolution(entry)?;
         }
@@ -13526,6 +13847,8 @@ pub struct AiArenaSummary {
     pub peak_memory_delta_bytes: Option<i64>,
     /// Counts of explicit policy stop reasons.
     pub stop_reasons: BTreeMap<String, u64>,
+    /// Diagnostic-only long-game and per-round progress telemetry.
+    pub progress: GameProgressDiagnostics,
 }
 
 /// Cached compiled pod used by high-throughput local arena campaigns.
@@ -13764,6 +14087,7 @@ fn run_ai_arena_with_pod(
             .filter_map(|decision| decision.memory_delta_bytes)
             .max(),
         stop_reasons,
+        progress: run.summary.progress,
     })
 }
 
@@ -14060,7 +14384,32 @@ fn legacy_human_summary_matches(expected: &GameSummary, actual: &GameSummary) ->
     }
     let mut normalized = actual.clone();
     normalized.metrics.hidden_information_checks = expected.metrics.hidden_information_checks;
+    normalize_additive_progress(expected, &mut normalized);
     &normalized == expected
+}
+
+fn additive_progress_summary_matches(expected: &GameSummary, actual: &GameSummary) -> bool {
+    let mut normalized = actual.clone();
+    normalize_additive_progress(expected, &mut normalized);
+    &normalized == expected
+}
+
+fn normalize_additive_progress(expected: &GameSummary, actual: &mut GameSummary) {
+    if expected.metrics.meaningful_actions == 0 {
+        actual.metrics.meaningful_actions = 0;
+    }
+    if expected.metrics.pass_only_priority_cycles == 0 {
+        actual.metrics.pass_only_priority_cycles = 0;
+    }
+    if expected.metrics.table_damage_to_players == 0 {
+        actual.metrics.table_damage_to_players = 0;
+    }
+    if expected.metrics.life_total_movement == 0 {
+        actual.metrics.life_total_movement = 0;
+    }
+    if expected.progress == GameProgressDiagnostics::default() {
+        actual.progress = GameProgressDiagnostics::default();
+    }
 }
 
 /// Replays a recorded T3.9 pod action stream and verifies every state transition.
@@ -14089,7 +14438,7 @@ pub fn replay_pod_file(path: impl AsRef<Path>) -> Result<String, String> {
         None,
     )?
     .run(replay.max_turns)?;
-    if run.summary != replay.expected {
+    if !additive_progress_summary_matches(&replay.expected, &run.summary) {
         return Err(format!(
             "replay summary diverged: {:?} != {:?}",
             replay.expected, run.summary
@@ -14323,10 +14672,10 @@ mod tests {
         replay_captured_actions, replay_human_file, run_prompted_game, snapshot_prompt,
         ActivatedRuntime, AiController, AiDecisionRecord, CombatSearchDomain, CombatSearchProgress,
         DecisionEpisodeMetadata, DecisionPrompt, DecisionSelection, DecisionSource, GameDriver,
-        GameMetrics, GameSummary, HeuristicPolicy, IdentityExercise, MainChoice, MainSearchDomain,
-        MainSearchWindow, PendingActivatedResolution, RandomLegalPolicy, RegisteredAbility,
-        ReplayDecisionSource, TerminalDecisionSource, TraceMode, TraceRecord, CONCESSION_PROMPT,
-        PLAYER_COUNT,
+        GameMetrics, GameProgressDiagnostics, GameProgressTracker, GameSummary, HeuristicPolicy,
+        IdentityExercise, MainChoice, MainSearchDomain, MainSearchWindow,
+        PendingActivatedResolution, RandomLegalPolicy, RegisteredAbility, ReplayDecisionSource,
+        TerminalDecisionSource, TraceMode, TraceRecord, CONCESSION_PROMPT, PLAYER_COUNT,
     };
     use forge_ai::{
         AiWeights, GuardrailProfile, GuardrailTable, SearchConfig, SearchDomain, SearchEngine,
@@ -14556,6 +14905,40 @@ card "Mulldrifter" {
     }
 
     #[test]
+    fn long_game_progress_tracks_round_activity_and_repetition_without_termination() {
+        let mut tracker = GameProgressTracker::default();
+        let mut metrics = GameMetrics::default();
+        tracker.observe_state(41);
+        tracker.observe_state(41);
+        tracker.observe_turn(1, &metrics);
+        tracker.record_meaningful_action(Some(0));
+        tracker.record_elimination(3, 4);
+        metrics.meaningful_actions = 2;
+        metrics.casts = 1;
+        metrics.table_damage_to_players = 7;
+        metrics.life_total_movement = 9;
+        metrics.pass_only_priority_cycles = 3;
+        metrics.eliminations = 1;
+        tracker.observe_turn(5, &metrics);
+
+        let diagnostics = tracker.finish(5, &metrics, &[]);
+        assert_eq!(diagnostics.termination_reason, "winner");
+        assert!(!diagnostics.turn_cap_reached);
+        assert_eq!(diagnostics.state_observations, 2);
+        assert_eq!(diagnostics.repeated_full_state_hashes, 1);
+        assert_eq!(diagnostics.repeated_full_state_hash_rate_ppm, 500_000);
+        assert_eq!(diagnostics.no_progress_rounds, 1);
+        assert_eq!(diagnostics.maximum_consecutive_no_progress_rounds, 1);
+        assert_eq!(diagnostics.eliminations.len(), 1);
+        assert_eq!(diagnostics.rounds.len(), 2);
+        assert_eq!(diagnostics.rounds[0].last_turn, 4);
+        assert_eq!(diagnostics.rounds[0].table_damage_to_players, 7);
+        assert_eq!(diagnostics.rounds[0].active_players_with_progress, 1);
+        assert!(!diagnostics.rounds[0].no_progress);
+        assert!(diagnostics.rounds[1].no_progress);
+    }
+
+    #[test]
     fn decision_replay_binds_view_options_and_selection() {
         let view = hidden_card_view(7, false);
         let context = DecisionContext::new(
@@ -14666,9 +15049,16 @@ card "Mulldrifter" {
                 hidden_information_checks: 100,
                 ..GameMetrics::default()
             },
+            progress: GameProgressDiagnostics::default(),
         };
         let mut instrumented = expected.clone();
         instrumented.metrics.hidden_information_checks = 104;
+        instrumented.metrics.meaningful_actions = 9;
+        instrumented.metrics.pass_only_priority_cycles = 3;
+        instrumented.metrics.table_damage_to_players = 7;
+        instrumented.metrics.life_total_movement = 11;
+        instrumented.progress.termination_reason = "winner".to_owned();
+        instrumented.progress.state_observations = 12;
         assert!(legacy_human_summary_matches(&expected, &instrumented));
 
         instrumented.final_hash = 100;
@@ -18608,6 +18998,7 @@ card "Mulldrifter" {
             current_attacks: Vec::new(),
             coverage_target: None,
             metrics: GameMetrics::default(),
+            progress: GameProgressTracker::default(),
             trace: TraceMode::Off,
             actions: Vec::new(),
             ai_decisions: Vec::new(),
@@ -18751,6 +19142,7 @@ card "Mulldrifter" {
             current_attacks: Vec::new(),
             coverage_target: None,
             metrics: GameMetrics::default(),
+            progress: GameProgressTracker::default(),
             trace: TraceMode::Off,
             actions: Vec::new(),
             ai_decisions: Vec::new(),
@@ -18921,6 +19313,7 @@ card "Mulldrifter" {
             current_attacks: Vec::new(),
             coverage_target: None,
             metrics: GameMetrics::default(),
+            progress: GameProgressTracker::default(),
             trace: TraceMode::Off,
             actions: Vec::new(),
             ai_decisions: Vec::new(),
@@ -19064,6 +19457,7 @@ card "Mulldrifter" {
             current_attacks: Vec::new(),
             coverage_target: None,
             metrics: GameMetrics::default(),
+            progress: GameProgressTracker::default(),
             trace: TraceMode::Off,
             actions: Vec::new(),
             ai_decisions: Vec::new(),

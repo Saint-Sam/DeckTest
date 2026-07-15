@@ -22,6 +22,7 @@ check_contracts() {
   require_json assets/ai/benchmark_splits.json
   require_json metrics/ai/decision_benchmark.json
   require_json metrics/ai/decision_state_audit.json
+  require_json metrics/ai/game_length_diagnostics.json
   require_json metrics/ai/latency_cost.json
   require_json metrics/ai/arena_results.json
   require_json metrics/ai/search_budget_knee.json
@@ -55,7 +56,10 @@ check_contracts() {
       .decision_episode_accounting.episode_linkage_complete == true and
       .decision_episode_accounting.raw_prompt_records == .decisions and
       .decision_episode_accounting.decision_episodes > 0 and
-      .decision_episode_accounting.strategic_decision_episodes > 0
+      .decision_episode_accounting.strategic_decision_episodes > 0 and
+      .progress_diagnostics.termination_reason == "winner" and
+      .progress_diagnostics.turn_cap_reached == false and
+      (.progress_diagnostics.rounds | length) > 0
     ) and
     .[0].product_commit == .[1].product_commit and
     .[0].product_tree == .[1].product_tree
@@ -68,6 +72,22 @@ check_contracts() {
     --product-commit "$product_commit" \
     --product-tree "$product_tree" \
     --output metrics/ai/decision_state_audit.json \
+    reports/gates/T4.3/ai-baseline.frsreplay \
+    reports/gates/T4.3/random-legal-baseline.frsreplay \
+    reports/gates/T4.3/search-baseline.frsreplay
+  jq -e --arg commit "$product_commit" --arg tree "$product_tree" '
+    .status == "diagnostic_complete" and
+    .promotion_eligible == false and
+    .product_commit == $commit and
+    .product_tree == $tree and
+    .aggregate.games == 3 and
+    .aggregate.turn_cap_games == 0
+  ' metrics/ai/game_length_diagnostics.json >/dev/null
+  python3 tools/summarize_t4_long_games.py \
+    --check \
+    --product-commit "$product_commit" \
+    --product-tree "$product_tree" \
+    --output metrics/ai/game_length_diagnostics.json \
     reports/gates/T4.3/ai-baseline.frsreplay \
     reports/gates/T4.3/random-legal-baseline.frsreplay \
     reports/gates/T4.3/search-baseline.frsreplay

@@ -113,6 +113,7 @@ def replay_run(
             "max_turns": replay["max_turns"],
             "winner_seat_zero_based": expected["winner"],
             "final_hash": str(expected["final_hash"]),
+            "progress_diagnostics": expected.get("progress", {}),
             "canonical_legal_action_records": complete_record_count(
                 decisions, "canonical_legal_actions"
             ),

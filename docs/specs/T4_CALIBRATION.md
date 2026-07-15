@@ -15,6 +15,13 @@ opposite seat parities, then swap controller ownership while deck and physical
 seat assignments remain fixed. The report records every winner, final state
 hash, action/search counters, and Wilson interval.
 
+Every game also carries the ADR 0036 progress packet. Rung totals report
+p50/p95/p99 and maximum turns, turn-cap rate, repeated full-state and decision
+key rates, no-progress rounds, player damage, life movement, casts, meaningful
+actions, pass-only priority cycles, active-player progress, and elimination
+timing. These values diagnose long games; they do not terminate games or count
+as strength evidence by themselves.
+
 `--calibrate` is the provisional competence-band tool. It searches measured
 budgets for the smallest candidate reaching 65-75% against the prior tier. It
 does not rewrite `assets/ai/ai_tiers.ron` because the current one-pod campaign

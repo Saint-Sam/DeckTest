@@ -1,5 +1,5 @@
 use forge_ai::{AiPolicyFamily, AiTierSet, DifficultyTier, GuardrailProfile};
-use forge_game_runner::{AiArena, AiArenaSummary, AiPolicyConfig};
+use forge_game_runner::{AiArena, AiArenaSummary, AiPolicyConfig, GameProgressDiagnostics};
 use serde::Serialize;
 use std::{
     collections::BTreeMap,
@@ -236,6 +236,7 @@ struct GameEvidence {
     search_wall_latency_us: u64,
     search_wall_latency_p95_us: u64,
     wall_runtime_us: u64,
+    progress: GameProgressDiagnostics,
     #[serde(skip)]
     search_wall_latencies_us: Vec<u64>,
     #[serde(skip)]
@@ -274,6 +275,28 @@ struct RungReport {
 
 #[derive(Clone, Debug, Default, Serialize)]
 struct CampaignTotals {
+    turn_p50: u64,
+    turn_p95: u64,
+    turn_p99: u64,
+    maximum_turns: u64,
+    turn_cap_games: u64,
+    turn_cap_rate_ppm: u32,
+    repeated_full_state_hashes: u64,
+    state_observations: u64,
+    repeated_full_state_hash_rate_ppm: u32,
+    repeated_decision_state_keys: u64,
+    decision_state_key_observations: u64,
+    repeated_decision_state_key_rate_ppm: u32,
+    no_progress_rounds: u64,
+    maximum_consecutive_no_progress_rounds: u32,
+    table_damage_to_players: u64,
+    life_total_movement: u64,
+    casts: u64,
+    meaningful_actions: u64,
+    pass_only_priority_cycles: u64,
+    active_player_progress_turns: u64,
+    elimination_turn_p50: u64,
+    elimination_turn_p95: u64,
     typed_actions: u64,
     decisions: u64,
     searched_decisions: u64,
@@ -292,6 +315,10 @@ struct CampaignTotals {
     adaptive_searched_decisions_by_budget_ms: BTreeMap<u32, u64>,
     wall_runtime_us: u64,
     #[serde(skip)]
+    turn_samples: Vec<u64>,
+    #[serde(skip)]
+    elimination_turn_samples: Vec<u64>,
+    #[serde(skip)]
     search_wall_latencies_us: Vec<u64>,
     #[serde(skip)]
     search_wall_latencies_by_budget_ms: BTreeMap<u32, Vec<u64>>,
@@ -301,6 +328,52 @@ struct CampaignTotals {
 
 impl CampaignTotals {
     fn add(&mut self, game: &GameEvidence) {
+        self.turn_samples.push(u64::from(game.turns));
+        self.turn_cap_games = self
+            .turn_cap_games
+            .saturating_add(u64::from(game.progress.turn_cap_reached));
+        self.repeated_full_state_hashes = self
+            .repeated_full_state_hashes
+            .saturating_add(game.progress.repeated_full_state_hashes);
+        self.state_observations = self
+            .state_observations
+            .saturating_add(game.progress.state_observations);
+        self.repeated_decision_state_keys = self
+            .repeated_decision_state_keys
+            .saturating_add(game.progress.repeated_decision_state_keys);
+        self.decision_state_key_observations = self
+            .decision_state_key_observations
+            .saturating_add(game.decisions as u64);
+        self.no_progress_rounds = self
+            .no_progress_rounds
+            .saturating_add(u64::from(game.progress.no_progress_rounds));
+        self.maximum_consecutive_no_progress_rounds = self
+            .maximum_consecutive_no_progress_rounds
+            .max(game.progress.maximum_consecutive_no_progress_rounds);
+        for round in &game.progress.rounds {
+            self.table_damage_to_players = self
+                .table_damage_to_players
+                .saturating_add(round.table_damage_to_players);
+            self.life_total_movement = self
+                .life_total_movement
+                .saturating_add(round.life_total_movement);
+            self.casts = self.casts.saturating_add(round.casts);
+            self.meaningful_actions = self
+                .meaningful_actions
+                .saturating_add(round.meaningful_actions);
+            self.pass_only_priority_cycles = self
+                .pass_only_priority_cycles
+                .saturating_add(round.pass_only_priority_cycles);
+            self.active_player_progress_turns = self
+                .active_player_progress_turns
+                .saturating_add(u64::from(round.active_players_with_progress));
+        }
+        self.elimination_turn_samples.extend(
+            game.progress
+                .eliminations
+                .iter()
+                .map(|elimination| u64::from(elimination.turn)),
+        );
         self.typed_actions = self.typed_actions.saturating_add(game.typed_actions as u64);
         self.decisions = self.decisions.saturating_add(game.decisions as u64);
         self.searched_decisions = self
@@ -335,6 +408,24 @@ impl CampaignTotals {
     }
 
     fn finalize(&mut self) {
+        self.turn_samples.sort_unstable();
+        self.turn_p50 = percentile(&self.turn_samples, 50);
+        self.turn_p95 = percentile(&self.turn_samples, 95);
+        self.turn_p99 = percentile(&self.turn_samples, 99);
+        self.maximum_turns = self.turn_samples.last().copied().unwrap_or(0);
+        self.turn_cap_rate_ppm = ratio_ppm(
+            self.turn_cap_games,
+            u64::try_from(self.turn_samples.len()).unwrap_or(u64::MAX),
+        );
+        self.repeated_full_state_hash_rate_ppm =
+            ratio_ppm(self.repeated_full_state_hashes, self.state_observations);
+        self.repeated_decision_state_key_rate_ppm = ratio_ppm(
+            self.repeated_decision_state_keys,
+            self.decision_state_key_observations,
+        );
+        self.elimination_turn_samples.sort_unstable();
+        self.elimination_turn_p50 = percentile(&self.elimination_turn_samples, 50);
+        self.elimination_turn_p95 = percentile(&self.elimination_turn_samples, 95);
         self.search_wall_latency_mean_us = if self.search_wall_latencies_us.is_empty() {
             0
         } else {
@@ -358,6 +449,17 @@ impl CampaignTotals {
                 .insert(*budget, u64::try_from(samples.len()).unwrap_or(u64::MAX));
         }
     }
+}
+
+fn ratio_ppm(numerator: u64, denominator: u64) -> u32 {
+    if denominator == 0 {
+        return 0;
+    }
+    numerator
+        .saturating_mul(1_000_000)
+        .checked_div(denominator)
+        .unwrap_or(0)
+        .min(u64::from(u32::MAX)) as u32
 }
 
 #[derive(Debug, Serialize)]
@@ -1027,6 +1129,7 @@ fn game_evidence(
         search_wall_latency_us: summary.search_wall_latency_us,
         search_wall_latency_p95_us: percentile(&summary.search_wall_latencies_us, 95),
         wall_runtime_us,
+        progress: summary.progress,
         search_wall_latencies_us: summary.search_wall_latencies_us,
         search_wall_latencies_by_budget_ms: summary.search_wall_latencies_by_budget_ms,
         adaptive_search_wall_latencies_by_budget_ms: summary
@@ -1132,7 +1235,7 @@ fn write_report(path: &Path, report: &impl Serialize) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{elo_from_score, percentile, score_from_elo, wilson_interval};
+    use super::{elo_from_score, percentile, ratio_ppm, score_from_elo, wilson_interval};
     use forge_core::DecisionKind;
     use serde::Deserialize;
     use serde_json::Value;
@@ -1165,6 +1268,8 @@ mod tests {
         assert!((score_from_elo(elo_from_score(0.7)) - 0.7).abs() < 0.000_001);
         assert_eq!(percentile(&[40, 10, 20, 30], 50), 30);
         assert_eq!(percentile(&[40, 10, 20, 30], 95), 40);
+        assert_eq!(ratio_ppm(1, 4), 250_000);
+        assert_eq!(ratio_ppm(1, 0), 0);
     }
 
     #[test]
