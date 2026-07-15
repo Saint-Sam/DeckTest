@@ -38,8 +38,8 @@
       "catastrophic_blunder_rate_meaningfully_decreased": null,
       "missed_win_or_required_defense_rate_meaningfully_decreased": null,
       "ordinary_state_acceptable_action_agreement": null,
-      "lower_p95_wall_latency_us": 1509,
-      "upper_p95_wall_latency_us": 2545,
+      "lower_p95_wall_latency_us": 1511,
+      "upper_p95_wall_latency_us": 2592,
       "p95_wall_latency_increased": true,
       "measured_cpu_cost_increased_materially": null,
       "all_acceptance_criteria_complete": false,
@@ -68,29 +68,29 @@
         "split_pairs": 1,
         "candidate_losses_both": 0,
         "totals": {
-          "typed_actions": 36307,
-          "decisions": 31731,
-          "searched_decisions": 1589,
-          "singleton_bypasses": 407,
-          "simulations": 1049383,
-          "nodes": 3819,
+          "typed_actions": 36222,
+          "decisions": 31652,
+          "searched_decisions": 1579,
+          "singleton_bypasses": 380,
+          "simulations": 1059123,
+          "nodes": 3737,
           "transposition_hits": 0,
-          "search_wall_latency_us": 2083152,
-          "search_wall_latency_mean_us": 1310,
-          "search_wall_latency_p50_us": 1248,
-          "search_wall_latency_p95_us": 2380,
-          "search_wall_latency_p99_us": 2701,
+          "search_wall_latency_us": 2124570,
+          "search_wall_latency_mean_us": 1345,
+          "search_wall_latency_p50_us": 1273,
+          "search_wall_latency_p95_us": 2457,
+          "search_wall_latency_p99_us": 2737,
           "search_wall_latency_p95_by_budget_ms": {
-            "1": 1509,
-            "2": 2545
+            "1": 1511,
+            "2": 2592
           },
           "searched_decisions_by_budget_ms": {
-            "1": 807,
-            "2": 782
+            "1": 798,
+            "2": 781
           },
           "adaptive_search_wall_latency_p95_by_budget_ms": {},
           "adaptive_searched_decisions_by_budget_ms": {},
-          "wall_runtime_us": 56911312
+          "wall_runtime_us": 63244730
         },
         "evidence": [
           {
@@ -100,18 +100,18 @@
             "winner_seat": 0,
             "candidate_won": true,
             "turns": 243,
-            "final_hash": 4328235212245189664,
-            "typed_actions": 18172,
-            "decisions": 15878,
-            "searched_decisions": 802,
-            "singleton_bypasses": 212,
-            "simulations": 551488,
-            "nodes": 1887,
+            "final_hash": 13398742181150567925,
+            "typed_actions": 18102,
+            "decisions": 15817,
+            "searched_decisions": 786,
+            "singleton_bypasses": 201,
+            "simulations": 541372,
+            "nodes": 1850,
             "transposition_hits": 0,
             "maximum_depth": 3,
-            "search_wall_latency_us": 1069821,
-            "search_wall_latency_p95_us": 2380,
-            "wall_runtime_us": 28586205
+            "search_wall_latency_us": 1067339,
+            "search_wall_latency_p95_us": 2435,
+            "wall_runtime_us": 31599158
           },
           {
             "pair_index": 0,
@@ -120,18 +120,18 @@
             "winner_seat": 0,
             "candidate_won": false,
             "turns": 243,
-            "final_hash": 5158672533640876968,
-            "typed_actions": 18135,
-            "decisions": 15853,
-            "searched_decisions": 787,
-            "singleton_bypasses": 195,
-            "simulations": 497895,
-            "nodes": 1932,
+            "final_hash": 5062716466044470922,
+            "typed_actions": 18120,
+            "decisions": 15835,
+            "searched_decisions": 793,
+            "singleton_bypasses": 179,
+            "simulations": 517751,
+            "nodes": 1887,
             "transposition_hits": 0,
             "maximum_depth": 3,
-            "search_wall_latency_us": 1013331,
-            "search_wall_latency_p95_us": 2371,
-            "wall_runtime_us": 28325107
+            "search_wall_latency_us": 1057231,
+            "search_wall_latency_p95_us": 2476,
+            "wall_runtime_us": 31645572
           }
         ]
       }
@@ -150,8 +150,8 @@
       "catastrophic_blunder_rate_meaningfully_decreased": null,
       "missed_win_or_required_defense_rate_meaningfully_decreased": null,
       "ordinary_state_acceptable_action_agreement": null,
-      "lower_p95_wall_latency_us": 2701,
-      "upper_p95_wall_latency_us": 4712,
+      "lower_p95_wall_latency_us": 2639,
+      "upper_p95_wall_latency_us": 4705,
       "p95_wall_latency_increased": true,
       "measured_cpu_cost_increased_materially": null,
       "all_acceptance_criteria_complete": false,
@@ -180,29 +180,29 @@
         "split_pairs": 1,
         "candidate_losses_both": 0,
         "totals": {
-          "typed_actions": 36370,
-          "decisions": 31806,
-          "searched_decisions": 1506,
-          "singleton_bypasses": 293,
-          "simulations": 3682492,
-          "nodes": 5082,
+          "typed_actions": 36277,
+          "decisions": 31710,
+          "searched_decisions": 1505,
+          "singleton_bypasses": 273,
+          "simulations": 3937096,
+          "nodes": 5141,
           "transposition_hits": 0,
-          "search_wall_latency_us": 3959628,
-          "search_wall_latency_mean_us": 2629,
-          "search_wall_latency_p50_us": 2295,
-          "search_wall_latency_p95_us": 4497,
-          "search_wall_latency_p99_us": 5239,
+          "search_wall_latency_us": 3946044,
+          "search_wall_latency_mean_us": 2621,
+          "search_wall_latency_p50_us": 2257,
+          "search_wall_latency_p95_us": 4399,
+          "search_wall_latency_p99_us": 5054,
           "search_wall_latency_p95_by_budget_ms": {
-            "2": 2701,
-            "4": 4712
+            "2": 2639,
+            "4": 4705
           },
           "searched_decisions_by_budget_ms": {
-            "2": 787,
-            "4": 719
+            "2": 784,
+            "4": 721
           },
           "adaptive_search_wall_latency_p95_by_budget_ms": {},
           "adaptive_searched_decisions_by_budget_ms": {},
-          "wall_runtime_us": 71076131
+          "wall_runtime_us": 62520705
         },
         "evidence": [
           {
@@ -212,18 +212,18 @@
             "winner_seat": 0,
             "candidate_won": true,
             "turns": 243,
-            "final_hash": 11499644489421454160,
-            "typed_actions": 18177,
-            "decisions": 15894,
-            "searched_decisions": 755,
-            "singleton_bypasses": 155,
-            "simulations": 1963847,
-            "nodes": 2506,
+            "final_hash": 16719951862161561521,
+            "typed_actions": 18064,
+            "decisions": 15779,
+            "searched_decisions": 765,
+            "singleton_bypasses": 161,
+            "simulations": 2123857,
+            "nodes": 2451,
             "transposition_hits": 0,
             "maximum_depth": 3,
-            "search_wall_latency_us": 2014367,
-            "search_wall_latency_p95_us": 4461,
-            "wall_runtime_us": 36284392
+            "search_wall_latency_us": 2024490,
+            "search_wall_latency_p95_us": 4486,
+            "wall_runtime_us": 33760691
           },
           {
             "pair_index": 0,
@@ -232,18 +232,18 @@
             "winner_seat": 0,
             "candidate_won": false,
             "turns": 243,
-            "final_hash": 6519373933046777939,
-            "typed_actions": 18193,
-            "decisions": 15912,
-            "searched_decisions": 751,
-            "singleton_bypasses": 138,
-            "simulations": 1718645,
-            "nodes": 2576,
+            "final_hash": 9639932449362140896,
+            "typed_actions": 18213,
+            "decisions": 15931,
+            "searched_decisions": 740,
+            "singleton_bypasses": 112,
+            "simulations": 1813239,
+            "nodes": 2690,
             "transposition_hits": 0,
             "maximum_depth": 3,
-            "search_wall_latency_us": 1945261,
-            "search_wall_latency_p95_us": 4528,
-            "wall_runtime_us": 34791739
+            "search_wall_latency_us": 1921554,
+            "search_wall_latency_p95_us": 4336,
+            "wall_runtime_us": 28760014
           }
         ]
       }
@@ -258,9 +258,9 @@
         -40.54687942657693,
         40.54687942657693
       ],
-      "fixed_p95_wall_latency_us": 1581,
-      "adaptive_p95_wall_latency_us": 1648,
-      "p95_wall_latency_reduction_fraction": -0.04237824161922834,
+      "fixed_p95_wall_latency_us": 1608,
+      "adaptive_p95_wall_latency_us": 1576,
+      "p95_wall_latency_reduction_fraction": 0.01990049751243781,
       "measured_cpu_cost_reduction_fraction": null,
       "no_practical_strength_decline_proven": false,
       "tracks_a_b_c_complete": false,
@@ -289,31 +289,31 @@
         "split_pairs": 1,
         "candidate_losses_both": 0,
         "totals": {
-          "typed_actions": 36259,
-          "decisions": 31686,
-          "searched_decisions": 1602,
-          "singleton_bypasses": 477,
-          "simulations": 209367,
-          "nodes": 2649,
+          "typed_actions": 36242,
+          "decisions": 31665,
+          "searched_decisions": 1611,
+          "singleton_bypasses": 474,
+          "simulations": 170255,
+          "nodes": 2614,
           "transposition_hits": 0,
-          "search_wall_latency_us": 1503647,
-          "search_wall_latency_mean_us": 938,
-          "search_wall_latency_p50_us": 1096,
-          "search_wall_latency_p95_us": 1602,
-          "search_wall_latency_p99_us": 1950,
+          "search_wall_latency_us": 1528998,
+          "search_wall_latency_mean_us": 949,
+          "search_wall_latency_p50_us": 1117,
+          "search_wall_latency_p95_us": 1596,
+          "search_wall_latency_p99_us": 1903,
           "search_wall_latency_p95_by_budget_ms": {
-            "1": 1581
+            "1": 1608
           },
           "searched_decisions_by_budget_ms": {
-            "1": 800
+            "1": 808
           },
           "adaptive_search_wall_latency_p95_by_budget_ms": {
-            "1": 1648
+            "1": 1576
           },
           "adaptive_searched_decisions_by_budget_ms": {
-            "1": 802
+            "1": 803
           },
-          "wall_runtime_us": 69976622
+          "wall_runtime_us": 65597089
         },
         "evidence": [
           {
@@ -323,18 +323,18 @@
             "winner_seat": 0,
             "candidate_won": true,
             "turns": 243,
-            "final_hash": 2159929837515805070,
-            "typed_actions": 18147,
-            "decisions": 15858,
-            "searched_decisions": 805,
-            "singleton_bypasses": 229,
-            "simulations": 104569,
-            "nodes": 1381,
+            "final_hash": 9764231376152915022,
+            "typed_actions": 18084,
+            "decisions": 15795,
+            "searched_decisions": 806,
+            "singleton_bypasses": 240,
+            "simulations": 85370,
+            "nodes": 1296,
             "transposition_hits": 0,
             "maximum_depth": 3,
-            "search_wall_latency_us": 756397,
-            "search_wall_latency_p95_us": 1539,
-            "wall_runtime_us": 32964751
+            "search_wall_latency_us": 766692,
+            "search_wall_latency_p95_us": 1634,
+            "wall_runtime_us": 34763286
           },
           {
             "pair_index": 0,
@@ -343,18 +343,18 @@
             "winner_seat": 0,
             "candidate_won": false,
             "turns": 243,
-            "final_hash": 5839433793198856009,
-            "typed_actions": 18112,
-            "decisions": 15828,
-            "searched_decisions": 797,
-            "singleton_bypasses": 248,
-            "simulations": 104798,
-            "nodes": 1268,
+            "final_hash": 8733424507255416660,
+            "typed_actions": 18158,
+            "decisions": 15870,
+            "searched_decisions": 805,
+            "singleton_bypasses": 234,
+            "simulations": 84885,
+            "nodes": 1318,
             "transposition_hits": 0,
-            "maximum_depth": 3,
-            "search_wall_latency_us": 747250,
-            "search_wall_latency_p95_us": 1657,
-            "wall_runtime_us": 37011871
+            "maximum_depth": 2,
+            "search_wall_latency_us": 762306,
+            "search_wall_latency_p95_us": 1574,
+            "wall_runtime_us": 30833803
           }
         ]
       }
@@ -367,9 +367,9 @@
         -40.54687942657693,
         40.54687942657693
       ],
-      "fixed_p95_wall_latency_us": 2674,
-      "adaptive_p95_wall_latency_us": 2571,
-      "p95_wall_latency_reduction_fraction": 0.038519072550486165,
+      "fixed_p95_wall_latency_us": 2621,
+      "adaptive_p95_wall_latency_us": 2694,
+      "p95_wall_latency_reduction_fraction": -0.027851964898893553,
       "measured_cpu_cost_reduction_fraction": null,
       "no_practical_strength_decline_proven": false,
       "tracks_a_b_c_complete": false,
@@ -398,31 +398,31 @@
         "split_pairs": 1,
         "candidate_losses_both": 0,
         "totals": {
-          "typed_actions": 36316,
-          "decisions": 31746,
+          "typed_actions": 36299,
+          "decisions": 31727,
           "searched_decisions": 1566,
-          "singleton_bypasses": 339,
-          "simulations": 1669273,
-          "nodes": 4337,
+          "singleton_bypasses": 393,
+          "simulations": 1364048,
+          "nodes": 4111,
           "transposition_hits": 0,
-          "search_wall_latency_us": 2777640,
-          "search_wall_latency_mean_us": 1773,
-          "search_wall_latency_p50_us": 2070,
-          "search_wall_latency_p95_us": 2631,
-          "search_wall_latency_p99_us": 2946,
+          "search_wall_latency_us": 2695182,
+          "search_wall_latency_mean_us": 1721,
+          "search_wall_latency_p50_us": 2078,
+          "search_wall_latency_p95_us": 2656,
+          "search_wall_latency_p99_us": 3058,
           "search_wall_latency_p95_by_budget_ms": {
-            "2": 2674
+            "2": 2621
           },
           "searched_decisions_by_budget_ms": {
-            "2": 791
+            "2": 788
           },
           "adaptive_search_wall_latency_p95_by_budget_ms": {
-            "2": 2571
+            "2": 2694
           },
           "adaptive_searched_decisions_by_budget_ms": {
-            "2": 775
+            "2": 778
           },
-          "wall_runtime_us": 64246109
+          "wall_runtime_us": 71847740
         },
         "evidence": [
           {
@@ -432,18 +432,18 @@
             "winner_seat": 0,
             "candidate_won": true,
             "turns": 243,
-            "final_hash": 157285513197881693,
-            "typed_actions": 18197,
-            "decisions": 15911,
-            "searched_decisions": 792,
-            "singleton_bypasses": 177,
-            "simulations": 882424,
-            "nodes": 2176,
+            "final_hash": 10010322146311689784,
+            "typed_actions": 18154,
+            "decisions": 15867,
+            "searched_decisions": 784,
+            "singleton_bypasses": 212,
+            "simulations": 620470,
+            "nodes": 1979,
             "transposition_hits": 0,
             "maximum_depth": 3,
-            "search_wall_latency_us": 1384643,
-            "search_wall_latency_p95_us": 2594,
-            "wall_runtime_us": 30494162
+            "search_wall_latency_us": 1323022,
+            "search_wall_latency_p95_us": 2640,
+            "wall_runtime_us": 36800755
           },
           {
             "pair_index": 0,
@@ -452,18 +452,18 @@
             "winner_seat": 0,
             "candidate_won": false,
             "turns": 243,
-            "final_hash": 9464719648029246195,
-            "typed_actions": 18119,
-            "decisions": 15835,
-            "searched_decisions": 774,
-            "singleton_bypasses": 162,
-            "simulations": 786849,
-            "nodes": 2161,
+            "final_hash": 10822348525325371075,
+            "typed_actions": 18145,
+            "decisions": 15860,
+            "searched_decisions": 782,
+            "singleton_bypasses": 181,
+            "simulations": 743578,
+            "nodes": 2132,
             "transposition_hits": 0,
             "maximum_depth": 3,
-            "search_wall_latency_us": 1392997,
-            "search_wall_latency_p95_us": 2702,
-            "wall_runtime_us": 33751947
+            "search_wall_latency_us": 1372160,
+            "search_wall_latency_p95_us": 2676,
+            "wall_runtime_us": 35046985
           }
         ]
       }
@@ -476,9 +476,9 @@
         -40.54687942657693,
         40.54687942657693
       ],
-      "fixed_p95_wall_latency_us": 4658,
-      "adaptive_p95_wall_latency_us": 4672,
-      "p95_wall_latency_reduction_fraction": -0.0030055817947617003,
+      "fixed_p95_wall_latency_us": 4782,
+      "adaptive_p95_wall_latency_us": 4980,
+      "p95_wall_latency_reduction_fraction": -0.04140526976160602,
       "measured_cpu_cost_reduction_fraction": null,
       "no_practical_strength_decline_proven": false,
       "tracks_a_b_c_complete": false,
@@ -507,31 +507,31 @@
         "split_pairs": 1,
         "candidate_losses_both": 0,
         "totals": {
-          "typed_actions": 36312,
-          "decisions": 31764,
-          "searched_decisions": 1392,
-          "singleton_bypasses": 200,
-          "simulations": 5974704,
-          "nodes": 6092,
+          "typed_actions": 36310,
+          "decisions": 31752,
+          "searched_decisions": 1456,
+          "singleton_bypasses": 225,
+          "simulations": 5971227,
+          "nodes": 5828,
           "transposition_hits": 0,
-          "search_wall_latency_us": 5018714,
-          "search_wall_latency_mean_us": 3605,
-          "search_wall_latency_p50_us": 4080,
-          "search_wall_latency_p95_us": 4658,
-          "search_wall_latency_p99_us": 5272,
+          "search_wall_latency_us": 5253294,
+          "search_wall_latency_mean_us": 3608,
+          "search_wall_latency_p50_us": 4101,
+          "search_wall_latency_p95_us": 4872,
+          "search_wall_latency_p99_us": 5556,
           "search_wall_latency_p95_by_budget_ms": {
-            "4": 4658
+            "4": 4782
           },
           "searched_decisions_by_budget_ms": {
-            "4": 696
+            "4": 723
           },
           "adaptive_search_wall_latency_p95_by_budget_ms": {
-            "4": 4672
+            "4": 4980
           },
           "adaptive_searched_decisions_by_budget_ms": {
-            "4": 696
+            "4": 733
           },
-          "wall_runtime_us": 65623832
+          "wall_runtime_us": 77862901
         },
         "evidence": [
           {
@@ -541,18 +541,18 @@
             "winner_seat": 0,
             "candidate_won": true,
             "turns": 243,
-            "final_hash": 10250497680898889111,
+            "final_hash": 12765251038274357607,
             "typed_actions": 18156,
             "decisions": 15882,
-            "searched_decisions": 700,
+            "searched_decisions": 712,
             "singleton_bypasses": 100,
-            "simulations": 2981072,
-            "nodes": 3069,
+            "simulations": 2802092,
+            "nodes": 2969,
             "transposition_hits": 0,
             "maximum_depth": 3,
-            "search_wall_latency_us": 2530745,
-            "search_wall_latency_p95_us": 4736,
-            "wall_runtime_us": 33107370
+            "search_wall_latency_us": 2610911,
+            "search_wall_latency_p95_us": 4939,
+            "wall_runtime_us": 36461090
           },
           {
             "pair_index": 0,
@@ -561,18 +561,18 @@
             "winner_seat": 0,
             "candidate_won": false,
             "turns": 243,
-            "final_hash": 11705353523539913487,
-            "typed_actions": 18156,
-            "decisions": 15882,
-            "searched_decisions": 692,
-            "singleton_bypasses": 100,
-            "simulations": 2993632,
-            "nodes": 3023,
+            "final_hash": 5212549037800669878,
+            "typed_actions": 18154,
+            "decisions": 15870,
+            "searched_decisions": 744,
+            "singleton_bypasses": 125,
+            "simulations": 3169135,
+            "nodes": 2859,
             "transposition_hits": 0,
             "maximum_depth": 3,
-            "search_wall_latency_us": 2487969,
-            "search_wall_latency_p95_us": 4634,
-            "wall_runtime_us": 32516462
+            "search_wall_latency_us": 2642383,
+            "search_wall_latency_p95_us": 4802,
+            "wall_runtime_us": 41401811
           }
         ]
       }
