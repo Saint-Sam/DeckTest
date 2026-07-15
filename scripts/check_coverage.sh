@@ -58,6 +58,16 @@ cargo llvm-cov run -p forge-cards --bin forge-cards --no-report -- \
   validate "$coverage_card_dir/carddb.bin"
 cargo llvm-cov run -p forge-porttools --bin forge-porttools --no-report -- \
   quarantine --list --catalog assets/card_catalog.json
+cargo llvm-cov run -p forge-porttools --bin forge-porttools --no-report -- \
+  translate --all --jobs "$CARGO_BUILD_JOBS" \
+  --root vendor/legacy-forge/forge-gui/res/cardsfolder \
+  --catalog assets/card_catalog.json \
+  --output target/coverage/translated-cards \
+  --metrics target/coverage/translation.json \
+  --quarantine target/coverage/translation_quarantine.json \
+  --priority assets/coverage_priority.txt \
+  --priority-metrics target/coverage/priority_coverage.json \
+  --write-output false
 cargo llvm-cov run -p forge-arena --bin forge-arena --no-report -- \
   --nightmare-suite --games 10 --max-turns 2
 cargo llvm-cov run -p forge-arena --bin forge-arena --no-report -- \
