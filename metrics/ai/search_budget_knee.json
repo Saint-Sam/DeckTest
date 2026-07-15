@@ -93,9 +93,9 @@
   "supporting_reference": "Learning to Stop: Dynamic Simulation Monte-Carlo Tree Search, arXiv:2012.07910",
   "promotion_authority": "DeckTest paired arena, decision benchmark, human trace review, latency, and measured cost evidence",
   "implementation_evidence": {
-    "date": "2026-07-14",
-    "product_commit": "a2e223c7e60aa8d6dd4d3afb624933bd9bf3ede9",
-    "product_tree": "240552015135b1c59fe82f529baccf7e4a157407",
+    "date": "2026-07-15",
+    "product_commit": "fae0c77baa24176bec9e9585a2a66c1d775316d1",
+    "product_tree": "85e27929dcd3956d6a804261a184a8d1b41b9534",
     "policy": "determinized-uct-v1",
     "decision_families": [
       "main_phase",
@@ -118,9 +118,9 @@
       "nodes": 1629,
       "maximum_depth": 1,
       "winner_seat_zero_based": 0,
-      "final_hash": "14097481066362770282",
+      "final_hash": "16375386236967138290",
       "replay": "reports/gates/T4.3/search-baseline.frsreplay",
-      "replay_sha256": "8e17f06d892e5f39109a0e375f0ee7278e4c58638c48d4b231546b002bee2d4b",
+      "replay_sha256": "1e0ac3706852c8e4f8828eac9d631a3e2155a3266582aa274eee7a30e141d861",
       "exact_policy_replay_passed": true,
       "exact_typed_action_replay_passed": true,
       "canonical_legal_action_records_complete": true,
@@ -131,7 +131,7 @@
     "release_search_knee_smoke": {
       "command": "target/release/forge-arena --search-knee --tier standard --budgets 1,2,4 --games 2 --jobs 2 --max-turns 500 --output metrics/ai/search_budget_knee_results.json",
       "result": "metrics/ai/search_budget_knee_results.json",
-      "result_sha256": "652aafd09c249e5e194728db0c05da02ea0614268b60f8cdf2fe7284408ac092",
+      "result_sha256": "b062ad60a567de9ddac09c30dc9dd162082c10f0c98305c2eb955baed462d33a",
       "profile": "release",
       "games_per_comparison": 2,
       "max_turns": 500,
@@ -145,8 +145,8 @@
             -40.54687942657693,
             40.54687942657693
           ],
-          "lower_p95_wall_us": 1443,
-          "upper_p95_wall_us": 2585,
+          "lower_p95_wall_us": 1543,
+          "upper_p95_wall_us": 2643,
           "acceptance_fields_complete": false,
           "plateau_accepted": false
         },
@@ -159,16 +159,16 @@
             -40.54687942657693,
             40.54687942657693
           ],
-          "lower_p95_wall_us": 2646,
-          "upper_p95_wall_us": 4658,
+          "lower_p95_wall_us": 2702,
+          "upper_p95_wall_us": 4841,
           "acceptance_fields_complete": false,
           "plateau_accepted": false
         }
       ],
       "adaptive_p95_wall_us": {
-        "1": 1591,
-        "2": 2676,
-        "4": 5018
+        "1": 1592,
+        "2": 2720,
+        "4": 4799
       },
       "fixed_adaptive_ablations_completed": 3,
       "fixed_checkpoint_history_unit_test": "passed",
@@ -178,7 +178,7 @@
     "total_decision_budget_semantics": {
       "status": "shared_deadline_and_current_surface_budget_response_satisfied",
       "required": "one shared wall-clock deadline across all determinizations and workers for one decision",
-      "observed": "hierarchical combat contexts, inline single-worker search, and single-construction determinization keep the refreshed nominal 1-4 ms ladder at approximately 1.4-4.7 ms p95",
+      "observed": "hierarchical combat contexts, inline single-worker search, and single-construction determinization keep the refreshed nominal 1-4 ms ladder at approximately 1.5-4.8 ms p95",
       "next_action": "add process CPU and memory telemetry, complete Track B and acceptable-action labels, then run the full paired calibration ladder before selecting a Standard budget"
     },
     "resource_telemetry": {
