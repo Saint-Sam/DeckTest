@@ -22,11 +22,11 @@ use forge_core::{
     ActivationCost, AttackDeclaration, BlockDeclaration, CanonicalActionId, CardId,
     CastSpellRequest, CombatDamageAssignment, CombatDamageAssignmentRequest, CombatDamageStepKind,
     CombatDamageTarget, DecisionContext, DecisionDescriptor, DecisionKind, DecisionOption,
-    GameOutcome, GameState, HiddenCardDefinition, HiddenSlotDefinition, ManaKind, ObjectColors,
-    ObjectId, ObjectView, Outcome, PaymentPlan, PlayerId, PlayerView, PriorityOutcome,
-    ResolutionOutcome, SpellTiming, StackDecisionBindings, StackEntryId, StackObjectKind,
-    StateError, Step, TargetChoice, TargetKind, TargetRequirement, TriggerId, TriggerStackBinding,
-    ZoneId, ZoneKind,
+    GameEvent, GameOutcome, GameState, HiddenCardDefinition, HiddenSlotDefinition, ManaKind,
+    ObjectColors, ObjectId, ObjectView, Outcome, PaymentPlan, PendingTriggeredAbility, PlayerId,
+    PlayerView, PriorityOutcome, ResolutionOutcome, SpellTiming, StackDecisionBindings,
+    StackEntryId, StackObjectKind, StateError, Step, TargetChoice, TargetKind, TargetRequirement,
+    TriggerId, TriggerStackBinding, TriggerStackDisposition, ZoneId, ZoneKind,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -1398,6 +1398,8 @@ struct PendingSpellResolution {
 #[derive(Clone)]
 struct PendingTriggeredResolution {
     controller: PlayerId,
+    trigger: TriggerId,
+    triggering_player: Option<PlayerId>,
     runtime: TriggerRuntime,
     targets: Vec<TargetChoice>,
     decisions: StackDecisionBindings,
@@ -1549,6 +1551,7 @@ struct GameDriver {
     guardrails: Arc<GuardrailTable>,
     commanders: Vec<ObjectId>,
     trigger_programs: HashMap<TriggerId, TriggerRuntime>,
+    triggering_players_by_stack_entry: HashMap<StackEntryId, PlayerId>,
     activated_abilities: Vec<RegisteredAbility>,
     pending_spell_resolution: Option<PendingSpellResolution>,
     pending_activated_resolution: Option<PendingActivatedResolution>,
@@ -1651,6 +1654,7 @@ impl GameDriver {
             ),
             commanders: Vec::with_capacity(PLAYER_COUNT),
             trigger_programs: HashMap::new(),
+            triggering_players_by_stack_entry: HashMap::new(),
             activated_abilities: Vec::new(),
             pending_spell_resolution: None,
             pending_activated_resolution: None,
@@ -2042,6 +2046,7 @@ impl GameDriver {
             guardrails: Arc::clone(&self.guardrails),
             commanders: self.commanders.clone(),
             trigger_programs: self.trigger_programs.clone(),
+            triggering_players_by_stack_entry: self.triggering_players_by_stack_entry.clone(),
             activated_abilities: self.activated_abilities.clone(),
             pending_spell_resolution: self.pending_spell_resolution.clone(),
             pending_activated_resolution: self.pending_activated_resolution.clone(),
@@ -5455,6 +5460,7 @@ impl GameDriver {
         &self,
         pending: &PendingTriggeredResolution,
         object_choices: Vec<Vec<ObjectId>>,
+        optional_choices: &[bool],
     ) -> Result<Vec<Action>, String> {
         let ability = pending
             .runtime
@@ -5469,26 +5475,32 @@ impl GameDriver {
                     pending.runtime.program.name()
                 )
             })?;
+        if pending.decisions.optional_choice_count() != 0 {
+            return Err(format!(
+                "seed {} trigger on {} carried {} announcement-time optional choices; trigger optionals must be chosen at resolution",
+                self.seed,
+                pending.runtime.program.name(),
+                pending.decisions.optional_choice_count()
+            ));
+        }
+        if optional_choices.len() != ability.optional_choice_count() {
+            return Err(format!(
+                "seed {} trigger on {} has {} resolved optional choices for {} slots",
+                self.seed,
+                pending.runtime.program.name(),
+                optional_choices.len(),
+                ability.optional_choice_count()
+            ));
+        }
         let mut bindings =
             ExecutionBindings::new(pending.controller, self.live_opponents(pending.controller))
                 .with_source(pending.runtime.source)
                 .with_targets(pending.targets.clone())
                 .with_object_choices(object_choices)
-                .with_optional_effect_choices(if pending.decisions.optional_choice_count() == 0 {
-                    vec![true; ability.optional_choice_count()]
-                } else if pending.decisions.optional_choice_count()
-                    == ability.optional_choice_count()
-                {
-                    pending.decisions.optional_choices().collect()
-                } else {
-                    return Err(format!(
-                        "seed {} trigger on {} has {} announced optional choices for {} slots",
-                        self.seed,
-                        pending.runtime.program.name(),
-                        pending.decisions.optional_choice_count(),
-                        ability.optional_choice_count()
-                    ));
-                });
+                .with_optional_effect_choices(optional_choices.to_vec());
+        if let Some(player) = pending.triggering_player {
+            bindings = bindings.with_triggering_player(player);
+        }
         if ability.unless_paid().is_some() {
             bindings = bindings.with_unless_payment(false);
         }
@@ -5520,7 +5532,427 @@ impl GameDriver {
                     pending.runtime.program.name()
                 )
             })?;
-        self.pending_triggered_choice_context(pending, ability.object_choice_requirements(), 0, &[])
+        let optional = vec![true; ability.optional_choice_count()];
+        self.pending_triggered_choice_context(
+            pending,
+            ability.object_choice_requirements(),
+            0,
+            &[],
+            &optional,
+        )
+    }
+
+    fn pending_triggered_optional_context(
+        &self,
+        pending: &PendingTriggeredResolution,
+        cursor: usize,
+        prior: &[bool],
+        has_object_choices: bool,
+    ) -> Result<DecisionContext, String> {
+        let ability = pending
+            .runtime
+            .program
+            .triggered_abilities()
+            .get(pending.runtime.ability_index)
+            .ok_or_else(|| {
+                format!(
+                    "seed {} missing triggered runtime {} on {}",
+                    self.seed,
+                    pending.runtime.ability_index,
+                    pending.runtime.program.name()
+                )
+            })?;
+        if cursor >= ability.optional_choice_count() || prior.len() != cursor {
+            return Err(format!(
+                "seed {} trigger optional path has {} choices at slot {cursor} of {}",
+                self.seed,
+                prior.len(),
+                ability.optional_choice_count()
+            ));
+        }
+        let final_slot = cursor + 1 == ability.optional_choice_count();
+        let prompt = u32::try_from(cursor)
+            .map_err(|_| format!("seed {} trigger optional index overflow", self.seed))?;
+        let mut options = Vec::with_capacity(2);
+        for accept in [false, true] {
+            let mut choices = prior.to_vec();
+            choices.push(accept);
+            let actions = if final_slot && !has_object_choices {
+                self.pending_triggered_actions(pending, Vec::new(), &choices)?
+            } else {
+                Vec::new()
+            };
+            options.push(DecisionOption::new(
+                DecisionDescriptor::ChooseOptional { prompt, accept },
+                actions,
+            ));
+        }
+        self.scoped_decision_context(
+            DecisionKind::Optional,
+            pending.controller,
+            options,
+            trigger_optional_path_discriminator(pending.controller, pending.trigger, cursor, prior),
+        )
+    }
+
+    fn select_trigger_optional_choice(
+        &mut self,
+        context: &DecisionContext,
+        controller: PlayerId,
+        human: Option<PlayerId>,
+        decisions: &mut Option<&mut dyn DecisionSource>,
+        ai_policies: Option<&SeatPolicies>,
+    ) -> Result<(bool, Vec<Action>), String> {
+        self.select_trigger_boolean_choice(
+            context,
+            controller,
+            human,
+            decisions,
+            ai_policies,
+            "Choose whether to use the triggered effect",
+            "Accept optional effect",
+            "Decline optional effect",
+            "trigger_optional",
+            1,
+            true,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn select_trigger_boolean_choice(
+        &mut self,
+        context: &DecisionContext,
+        chooser: PlayerId,
+        human: Option<PlayerId>,
+        decisions: &mut Option<&mut dyn DecisionSource>,
+        ai_policies: Option<&SeatPolicies>,
+        prompt: &'static str,
+        accept_label: &'static str,
+        decline_label: &'static str,
+        telemetry_kind: &'static str,
+        accept_prior: i64,
+        autonomous_accept: bool,
+    ) -> Result<(bool, Vec<Action>), String> {
+        let selected_id = if context.options().len() == 1 && ai_policies.is_none() {
+            context.options()[0].id()
+        } else if human == Some(chooser) {
+            let labels = context
+                .options()
+                .iter()
+                .map(|option| match option.descriptor() {
+                    DecisionDescriptor::ChooseOptional { accept, .. } => Ok(if *accept {
+                        accept_label.to_owned()
+                    } else {
+                        decline_label.to_owned()
+                    }),
+                    descriptor => Err(format!(
+                        "seed {} cannot label {telemetry_kind} descriptor {descriptor:?}",
+                        self.seed
+                    )),
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let source = decisions.as_deref_mut().ok_or_else(|| {
+                format!("human game is missing a decision source for {telemetry_kind}")
+            })?;
+            self.prompt_context_choice(source, prompt, context, &labels)?
+        } else if let Some(policies) = ai_policies {
+            let decision_started = Instant::now();
+            let policy = self.policy_for(chooser, policies)?;
+            let (selected_id, decision, policy_name, candidates) = if context.options().len() == 1 {
+                (context.options()[0].id(), None, "forced-v1", Vec::new())
+            } else {
+                let candidates = if matches!(policy, AiController::Random(_)) {
+                    Vec::new()
+                } else {
+                    self.policy_candidates(context, chooser, |option| {
+                        if matches!(
+                            option.descriptor(),
+                            DecisionDescriptor::ChooseOptional { accept: true, .. }
+                        ) {
+                            accept_prior
+                        } else {
+                            0
+                        }
+                    })?
+                };
+                let (selected_id, decision, policy_name) =
+                    self.select_ai_action(policy, context, &candidates, telemetry_kind)?;
+                (selected_id, decision, policy_name, candidates)
+            };
+            self.record_ai_decision(AiDecisionTelemetry {
+                kind: telemetry_kind,
+                policy: policy_name,
+                context,
+                action_id: selected_id,
+                decision,
+                evaluated_candidates: candidates.len(),
+                wall_latency_us: elapsed_us(decision_started),
+                score_override: None,
+                stop_reason: if context.options().len() == 1 {
+                    "single_legal_action"
+                } else if decision.is_some() {
+                    "one_ply_complete"
+                } else {
+                    "random_legal_selection"
+                },
+            });
+            selected_id
+        } else {
+            context
+                .options()
+                .iter()
+                .find(|option| {
+                    matches!(
+                        option.descriptor(),
+                        DecisionDescriptor::ChooseOptional { accept, .. }
+                            if *accept == autonomous_accept
+                    )
+                })
+                .or_else(|| context.options().first())
+                .map(DecisionOption::id)
+                .ok_or_else(|| format!("seed {} {telemetry_kind} has no branch", self.seed))?
+        };
+        let selected = context.select(selected_id).map_err(|error| {
+            format!(
+                "seed {} selected an illegal {telemetry_kind} action: {error}",
+                self.seed
+            )
+        })?;
+        let DecisionDescriptor::ChooseOptional { accept, .. } = selected.descriptor() else {
+            return Err(format!(
+                "seed {} {telemetry_kind} context returned a non-optional descriptor",
+                self.seed
+            ));
+        };
+        Ok((*accept, selected.actions().to_vec()))
+    }
+
+    fn pending_triggered_unless_intent_context(
+        &self,
+        pending: &PendingTriggeredResolution,
+    ) -> Result<(DecisionContext, PlayerId, Vec<PaymentPlan>), String> {
+        let ability = pending
+            .runtime
+            .program
+            .triggered_abilities()
+            .get(pending.runtime.ability_index)
+            .ok_or_else(|| {
+                format!(
+                    "seed {} missing triggered runtime {} on {}",
+                    self.seed,
+                    pending.runtime.ability_index,
+                    pending.runtime.program.name()
+                )
+            })?;
+        let unless = ability.unless_paid().ok_or_else(|| {
+            format!(
+                "seed {} trigger on {} has no unless-paid branch",
+                self.seed,
+                pending.runtime.program.name()
+            )
+        })?;
+        if unless.payer() != PlayerBinding::TriggeringPlayer {
+            return Err(format!(
+                "seed {} trigger on {} has unsupported unless-paid payer {:?}",
+                self.seed,
+                pending.runtime.program.name(),
+                unless.payer()
+            ));
+        }
+        let payer = pending.triggering_player.ok_or_else(|| {
+            format!(
+                "seed {} trigger on {} lost its event-bound payer",
+                self.seed,
+                pending.runtime.program.name()
+            )
+        })?;
+        let plans = self
+            .state
+            .payment_plans_for_player(payer, unless.mana_cost())
+            .map_err(|error| {
+                format!(
+                    "seed {} unless-payment enumeration for player {} failed: {error:?}",
+                    self.seed,
+                    payer.index()
+                )
+            })?
+            .plans()
+            .to_vec();
+        let prompt = u32::try_from(ability.optional_choice_count())
+            .map_err(|_| format!("seed {} unless-payment prompt overflow", self.seed))?;
+        let has_followup = ability.optional_choice_count() != 0
+            || !ability.object_choice_requirements().is_empty();
+        let decline_actions = if has_followup {
+            Vec::new()
+        } else {
+            self.pending_triggered_actions(pending, Vec::new(), &[])?
+        };
+        let mut options = vec![DecisionOption::new(
+            DecisionDescriptor::ChooseOptional {
+                prompt,
+                accept: false,
+            },
+            decline_actions,
+        )];
+        if !plans.is_empty() {
+            options.push(DecisionOption::new(
+                DecisionDescriptor::ChooseOptional {
+                    prompt,
+                    accept: true,
+                },
+                Vec::new(),
+            ));
+        }
+        let context = self.scoped_decision_context(
+            DecisionKind::Optional,
+            payer,
+            options,
+            trigger_unless_path_discriminator(payer, pending.trigger, 0),
+        )?;
+        Ok((context, payer, plans))
+    }
+
+    fn pending_triggered_unless_payment_context(
+        &self,
+        pending: &PendingTriggeredResolution,
+        payer: PlayerId,
+        plans: &[PaymentPlan],
+    ) -> Result<DecisionContext, String> {
+        let unless = pending
+            .runtime
+            .program
+            .triggered_abilities()
+            .get(pending.runtime.ability_index)
+            .and_then(|ability| ability.unless_paid())
+            .ok_or_else(|| {
+                format!(
+                    "seed {} trigger on {} has no unless-paid payment branch",
+                    self.seed,
+                    pending.runtime.program.name()
+                )
+            })?;
+        if plans.is_empty() {
+            return Err(format!(
+                "seed {} player {} accepted an unaffordable unless payment",
+                self.seed,
+                payer.index()
+            ));
+        }
+        let options = plans
+            .iter()
+            .copied()
+            .map(|payment| {
+                DecisionOption::new(
+                    DecisionDescriptor::ChoosePayment { payment },
+                    vec![Action::PayMana {
+                        player: payer,
+                        cost: unless.mana_cost(),
+                        plan: payment,
+                    }],
+                )
+            })
+            .collect();
+        self.scoped_decision_context(
+            DecisionKind::Payment,
+            payer,
+            options,
+            trigger_unless_path_discriminator(payer, pending.trigger, 1),
+        )
+    }
+
+    fn select_trigger_unless_payment(
+        &mut self,
+        context: &DecisionContext,
+        payer: PlayerId,
+        human: Option<PlayerId>,
+        decisions: &mut Option<&mut dyn DecisionSource>,
+        ai_policies: Option<&SeatPolicies>,
+    ) -> Result<Vec<Action>, String> {
+        let selected_id = if context.options().len() == 1 && ai_policies.is_none() {
+            context.options()[0].id()
+        } else if human == Some(payer) {
+            let labels = context
+                .options()
+                .iter()
+                .map(|option| match option.descriptor() {
+                    DecisionDescriptor::ChoosePayment { payment } => {
+                        Ok(format!("Pay (payment waste {})", payment.waste_score()))
+                    }
+                    descriptor => Err(format!(
+                        "seed {} cannot label trigger payment descriptor {descriptor:?}",
+                        self.seed
+                    )),
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let source = decisions.as_deref_mut().ok_or_else(|| {
+                "human game is missing a decision source for trigger payment".to_owned()
+            })?;
+            self.prompt_context_choice(source, "Choose a trigger payment", context, &labels)?
+        } else if let Some(policies) = ai_policies {
+            let decision_started = Instant::now();
+            let policy = self.policy_for(payer, policies)?;
+            let (selected_id, decision, policy_name, candidates) = if context.options().len() == 1 {
+                (context.options()[0].id(), None, "forced-v1", Vec::new())
+            } else {
+                let candidates = if matches!(policy, AiController::Random(_)) {
+                    Vec::new()
+                } else {
+                    self.policy_candidates(context, payer, |option| match option.descriptor() {
+                        DecisionDescriptor::ChoosePayment { payment } => {
+                            -i64::from(payment.waste_score())
+                        }
+                        _ => 0,
+                    })?
+                };
+                let (selected_id, decision, policy_name) =
+                    self.select_ai_action(policy, context, &candidates, "trigger_payment")?;
+                (selected_id, decision, policy_name, candidates)
+            };
+            self.record_ai_decision(AiDecisionTelemetry {
+                kind: "trigger_payment",
+                policy: policy_name,
+                context,
+                action_id: selected_id,
+                decision,
+                evaluated_candidates: candidates.len(),
+                wall_latency_us: elapsed_us(decision_started),
+                score_override: None,
+                stop_reason: if context.options().len() == 1 {
+                    "single_legal_action"
+                } else if decision.is_some() {
+                    "one_ply_complete"
+                } else {
+                    "random_legal_selection"
+                },
+            });
+            selected_id
+        } else {
+            context
+                .options()
+                .iter()
+                .min_by_key(|option| match option.descriptor() {
+                    DecisionDescriptor::ChoosePayment { payment } => payment.waste_score(),
+                    _ => u32::MAX,
+                })
+                .map(DecisionOption::id)
+                .ok_or_else(|| format!("seed {} trigger payment has no options", self.seed))?
+        };
+        let selected = context.select(selected_id).map_err(|error| {
+            format!(
+                "seed {} selected an illegal trigger payment: {error}",
+                self.seed
+            )
+        })?;
+        if !matches!(
+            selected.descriptor(),
+            DecisionDescriptor::ChoosePayment { .. }
+        ) {
+            return Err(format!(
+                "seed {} trigger payment context returned a non-payment descriptor",
+                self.seed
+            ));
+        }
+        Ok(selected.actions().to_vec())
     }
 
     fn pending_triggered_choice_context(
@@ -5529,6 +5961,7 @@ impl GameDriver {
         requirements: &[ObjectChoiceRequirement],
         cursor: usize,
         prior: &[Vec<ObjectId>],
+        optional_choices: &[bool],
     ) -> Result<DecisionContext, String> {
         let requirement = requirements.get(cursor).copied().ok_or_else(|| {
             format!(
@@ -5550,7 +5983,7 @@ impl GameDriver {
             let mut choices = prior.to_vec();
             choices.push(selection);
             let actions = if final_slot {
-                self.pending_triggered_actions(pending, choices.clone())?
+                self.pending_triggered_actions(pending, choices.clone(), optional_choices)?
             } else {
                 Vec::new()
             };
@@ -5597,43 +6030,112 @@ impl GameDriver {
             })?
             .object_choice_requirements()
             .to_vec();
-        if requirements.is_empty() {
+        let optional_count = pending
+            .runtime
+            .program
+            .triggered_abilities()
+            .get(pending.runtime.ability_index)
+            .map_or(0, |ability| ability.optional_choice_count());
+        let has_unless = pending
+            .runtime
+            .program
+            .triggered_abilities()
+            .get(pending.runtime.ability_index)
+            .is_some_and(|ability| ability.unless_paid().is_some());
+        if requirements.is_empty() && optional_count == 0 && !has_unless {
             return Err(format!(
-                "seed {} pending triggered resolution has no object choices",
+                "seed {} pending triggered resolution has no deferred choices",
                 self.seed
             ));
         }
-        let mut choices = Vec::with_capacity(requirements.len());
+        let mut optional_choices = Vec::with_capacity(optional_count);
         let mut actions = Vec::new();
-        for cursor in 0..requirements.len() {
-            let context =
-                self.pending_triggered_choice_context(&pending, &requirements, cursor, &choices)?;
-            let selected_id = self.select_resolution_choice(
+        let mut unless_paid = false;
+        if has_unless {
+            let (context, payer, plans) = self.pending_triggered_unless_intent_context(&pending)?;
+            let (pay, selected_actions) = self.select_trigger_boolean_choice(
                 &context,
-                pending.controller,
+                payer,
                 human,
                 decisions,
                 ai_policies,
-                "trigger_resolution_object_choice",
+                "Choose whether to pay for the triggered ability",
+                "Pay the unless cost",
+                "Do not pay",
+                "trigger_unless_payment_intent",
+                0,
+                false,
             )?;
-            let selected = context.select(selected_id).map_err(|error| {
-                format!(
-                    "seed {} trigger resolution choice failed: {error}",
-                    self.seed
-                )
-            })?;
-            let DecisionDescriptor::ChooseResolutionObjects {
-                choices: selected_choices,
-            } = selected.descriptor()
-            else {
-                return Err(format!(
-                    "seed {} trigger resolution returned a non-object descriptor",
-                    self.seed
-                ));
-            };
-            choices.clone_from(selected_choices);
-            if cursor + 1 == requirements.len() {
-                actions = selected.actions().to_vec();
+            actions = selected_actions;
+            if pay {
+                let payment_context =
+                    self.pending_triggered_unless_payment_context(&pending, payer, &plans)?;
+                actions = self.select_trigger_unless_payment(
+                    &payment_context,
+                    payer,
+                    human,
+                    decisions,
+                    ai_policies,
+                )?;
+                unless_paid = true;
+            }
+        }
+        if !unless_paid {
+            for cursor in 0..optional_count {
+                let context = self.pending_triggered_optional_context(
+                    &pending,
+                    cursor,
+                    &optional_choices,
+                    !requirements.is_empty(),
+                )?;
+                let (accept, selected_actions) = self.select_trigger_optional_choice(
+                    &context,
+                    pending.controller,
+                    human,
+                    decisions,
+                    ai_policies,
+                )?;
+                optional_choices.push(accept);
+                if cursor + 1 == optional_count && requirements.is_empty() {
+                    actions = selected_actions;
+                }
+            }
+            let mut choices = Vec::with_capacity(requirements.len());
+            for cursor in 0..requirements.len() {
+                let context = self.pending_triggered_choice_context(
+                    &pending,
+                    &requirements,
+                    cursor,
+                    &choices,
+                    &optional_choices,
+                )?;
+                let selected_id = self.select_resolution_choice(
+                    &context,
+                    pending.controller,
+                    human,
+                    decisions,
+                    ai_policies,
+                    "trigger_resolution_object_choice",
+                )?;
+                let selected = context.select(selected_id).map_err(|error| {
+                    format!(
+                        "seed {} trigger resolution choice failed: {error}",
+                        self.seed
+                    )
+                })?;
+                let DecisionDescriptor::ChooseResolutionObjects {
+                    choices: selected_choices,
+                } = selected.descriptor()
+                else {
+                    return Err(format!(
+                        "seed {} trigger resolution returned a non-object descriptor",
+                        self.seed
+                    ));
+                };
+                choices.clone_from(selected_choices);
+                if cursor + 1 == requirements.len() {
+                    actions = selected.actions().to_vec();
+                }
             }
         }
         let action_count = actions.len() as u64;
@@ -5668,6 +6170,161 @@ impl GameDriver {
         Ok((0..order.len())
             .map(|offset| order[(start + offset) % order.len()])
             .collect())
+    }
+
+    fn ordered_pending_trigger_instances(
+        &self,
+        pending: &[PendingTriggeredAbility],
+        order: &[TriggerId],
+    ) -> Result<Vec<PendingTriggeredAbility>, String> {
+        if pending.len() != order.len() {
+            return Err(format!(
+                "seed {} trigger instance order has {} IDs for {} pending instances",
+                self.seed,
+                order.len(),
+                pending.len()
+            ));
+        }
+        let mut used = vec![false; pending.len()];
+        let mut ordered = Vec::with_capacity(order.len());
+        for trigger in order {
+            let index = pending
+                .iter()
+                .enumerate()
+                .find_map(|(index, instance)| {
+                    (!used[index] && instance.trigger() == *trigger).then_some(index)
+                })
+                .ok_or_else(|| {
+                    format!(
+                        "seed {} trigger {} has no unmatched pending instance",
+                        self.seed,
+                        trigger.index()
+                    )
+                })?;
+            used[index] = true;
+            ordered.push(pending[index]);
+        }
+        Ok(ordered)
+    }
+
+    fn triggering_player_for_pending(
+        &self,
+        pending: PendingTriggeredAbility,
+    ) -> Result<Option<PlayerId>, String> {
+        let Some(runtime) = self.trigger_programs.get(&pending.trigger()) else {
+            return Ok(None);
+        };
+        let ability = runtime
+            .program
+            .triggered_abilities()
+            .get(runtime.ability_index)
+            .ok_or_else(|| {
+                format!(
+                    "seed {} missing triggered runtime {} on {}",
+                    self.seed,
+                    runtime.ability_index,
+                    runtime.program.name()
+                )
+            })?;
+        if ability.unless_paid().is_none() {
+            return Ok(None);
+        }
+        let event = self
+            .state
+            .events_this_turn()
+            .iter()
+            .copied()
+            .find(|record| {
+                record.turn() == pending.event_turn()
+                    && record.sequence() == pending.event_sequence()
+            })
+            .ok_or_else(|| {
+                format!(
+                    "seed {} cannot recover event {}/{} for unless-paid trigger {}",
+                    self.seed,
+                    pending.event_turn(),
+                    pending.event_sequence(),
+                    pending.trigger().index()
+                )
+            })?;
+        match event.event() {
+            GameEvent::CardDrawn { player, .. } => Ok(Some(player)),
+            other => Err(format!(
+                "seed {} unless-paid trigger {} was queued by unsupported event {other:?}",
+                self.seed,
+                pending.trigger().index()
+            )),
+        }
+    }
+
+    fn prepare_trigger_stack_contexts(
+        &self,
+        ordered: &[PendingTriggeredAbility],
+        bindings: Option<&[TriggerStackBinding]>,
+    ) -> Result<Vec<(TriggerId, Option<PlayerId>)>, String> {
+        if bindings.is_some_and(|bindings| bindings.len() != ordered.len()) {
+            return Err(format!(
+                "seed {} has a mismatched trigger-binding batch",
+                self.seed
+            ));
+        }
+        ordered
+            .iter()
+            .copied()
+            .enumerate()
+            .filter_map(|(index, pending)| {
+                let put_on_stack = bindings.map_or(true, |bindings| {
+                    bindings[index].disposition() == TriggerStackDisposition::PutOnStack
+                });
+                put_on_stack.then_some((index, pending))
+            })
+            .map(|(_, pending)| {
+                self.triggering_player_for_pending(pending)
+                    .map(|player| (pending.trigger(), player))
+            })
+            .collect()
+    }
+
+    fn dispatch_trigger_stack_action(
+        &mut self,
+        action: Action,
+        contexts: Vec<(TriggerId, Option<PlayerId>)>,
+    ) -> Result<Outcome, String> {
+        let outcome = self.dispatch(action)?;
+        let Outcome::StackEntriesAdded(entries) = &outcome else {
+            return Err(format!(
+                "seed {} trigger stack action returned {outcome:?}",
+                self.seed
+            ));
+        };
+        if entries.len() != contexts.len() {
+            return Err(format!(
+                "seed {} trigger stack action created {} entries for {} prepared contexts",
+                self.seed,
+                entries.len(),
+                contexts.len()
+            ));
+        }
+        for (entry, (trigger, triggering_player)) in entries.iter().copied().zip(contexts) {
+            let actual = self
+                .state
+                .stack_entries()
+                .iter()
+                .find(|candidate| candidate.id() == entry)
+                .and_then(|candidate| candidate.trigger());
+            if actual != Some(trigger) {
+                return Err(format!(
+                    "seed {} stack entry {} bound trigger {actual:?} instead of {}",
+                    self.seed,
+                    entry.index(),
+                    trigger.index()
+                ));
+            }
+            if let Some(player) = triggering_player {
+                self.triggering_players_by_stack_entry.insert(entry, player);
+            }
+        }
+        Ok(outcome)
     }
 
     fn trigger_target_context(
@@ -5957,7 +6614,21 @@ impl GameDriver {
             Ok(found || !ability.target_requirements().is_empty())
         })?;
         if !has_controlled_choice && !has_target_prompts {
-            return self.dispatch(Action::PutPendingTriggeredAbilitiesOnStack);
+            let order = apnap
+                .iter()
+                .flat_map(|controller| {
+                    pending
+                        .iter()
+                        .filter(move |trigger| trigger.controller() == *controller)
+                        .map(|trigger| trigger.trigger())
+                })
+                .collect::<Vec<_>>();
+            let ordered = self.ordered_pending_trigger_instances(&pending, &order)?;
+            let contexts = self.prepare_trigger_stack_contexts(&ordered, None)?;
+            return self.dispatch_trigger_stack_action(
+                Action::PutPendingTriggeredAbilitiesOnStack,
+                contexts,
+            );
         }
 
         let mut order = Vec::with_capacity(pending.len());
@@ -6000,7 +6671,12 @@ impl GameDriver {
             order.extend(remaining);
         }
         if !has_target_prompts {
-            return self.dispatch(Action::PutPendingTriggeredAbilitiesOnStackInOrder { order });
+            let ordered = self.ordered_pending_trigger_instances(&pending, &order)?;
+            let contexts = self.prepare_trigger_stack_contexts(&ordered, None)?;
+            return self.dispatch_trigger_stack_action(
+                Action::PutPendingTriggeredAbilitiesOnStackInOrder { order },
+                contexts,
+            );
         }
 
         let mut bindings = Vec::with_capacity(order.len());
@@ -6042,14 +6718,6 @@ impl GameDriver {
                 bindings.push(TriggerStackBinding::no_legal_targets(trigger, requirements));
                 continue;
             }
-            let optional = vec![true; ability.optional_choice_count()];
-            let announced = StackDecisionBindings::new(None, &optional).map_err(|error| {
-                format!(
-                    "seed {} trigger choices on {} failed: {error:?}",
-                    self.seed,
-                    runtime.program.name()
-                )
-            })?;
             let mut targets = Vec::with_capacity(requirements.len());
             for (cursor, requirement) in requirements.iter().copied().enumerate() {
                 let context = self.trigger_target_context(
@@ -6072,10 +6740,15 @@ impl GameDriver {
             bindings.push(
                 TriggerStackBinding::new(trigger)
                     .with_targets(requirements, targets)
-                    .with_decisions(announced),
+                    .with_decisions(StackDecisionBindings::default()),
             );
         }
-        self.dispatch(Action::PutPendingTriggeredAbilitiesOnStackWithChoices { bindings })
+        let ordered = self.ordered_pending_trigger_instances(&pending, &order)?;
+        let contexts = self.prepare_trigger_stack_contexts(&ordered, Some(&bindings))?;
+        self.dispatch_trigger_stack_action(
+            Action::PutPendingTriggeredAbilitiesOnStackWithChoices { bindings },
+            contexts,
+        )
     }
 
     fn pass_priority(&mut self) -> Result<(), String> {
@@ -6109,11 +6782,25 @@ impl GameDriver {
             .map(|target| target.choice())
             .collect::<Vec<_>>();
         let decisions = record.decisions();
+        let triggering_player = self.triggering_players_by_stack_entry.remove(&entry);
         if outcome != ResolutionOutcome::Resolved {
             return Ok(());
         }
         if let Some(trigger) = trigger {
-            return self.execute_trigger(controller, trigger, targets, decisions);
+            return self.execute_trigger(
+                controller,
+                trigger,
+                triggering_player,
+                targets,
+                decisions,
+            );
+        }
+        if triggering_player.is_some() {
+            return Err(format!(
+                "seed {} non-trigger stack entry {} carried trigger event context",
+                self.seed,
+                entry.index()
+            ));
         }
         if let Some(ability) = activated_ability {
             let Some(runtime) = self
@@ -6227,6 +6914,7 @@ impl GameDriver {
         &mut self,
         controller: PlayerId,
         trigger: TriggerId,
+        triggering_player: Option<PlayerId>,
         targets: Vec<TargetChoice>,
         decisions: StackDecisionBindings,
     ) -> Result<(), String> {
@@ -6241,13 +6929,19 @@ impl GameDriver {
             .get(runtime.ability_index)
             .ok_or_else(|| format!("seed {} missing trigger ability", self.seed))?;
         let requires_object_choices = !ability.object_choice_requirements().is_empty();
+        let requires_optional_choices = ability.optional_choice_count() != 0;
+        let requires_unless_choice = ability.unless_paid().is_some();
         let pending = PendingTriggeredResolution {
             controller,
+            trigger,
+            triggering_player,
             runtime,
             targets,
             decisions,
         };
-        if requires_object_choices {
+        let requires_deferred_choices =
+            requires_object_choices || requires_optional_choices || requires_unless_choice;
+        if requires_deferred_choices {
             if self.pending_spell_resolution.is_some()
                 || self.pending_activated_resolution.is_some()
                 || self.pending_triggered_resolution.is_some()
@@ -6260,7 +6954,7 @@ impl GameDriver {
             self.pending_triggered_resolution = Some(pending);
             return Ok(());
         }
-        let actions = self.pending_triggered_actions(&pending, Vec::new())?;
+        let actions = self.pending_triggered_actions(&pending, Vec::new(), &[])?;
         let action_count = actions.len() as u64;
         for action in actions {
             self.dispatch(action)?;
@@ -8908,6 +9602,27 @@ fn resolution_choice_path_discriminator(
         }
     }
     state
+}
+
+fn trigger_optional_path_discriminator(
+    controller: PlayerId,
+    trigger: TriggerId,
+    cursor: usize,
+    prior: &[bool],
+) -> u64 {
+    let mut state = combat_path_mix(0x7472_676f_7074_0001, controller.index() as u64);
+    state = combat_path_mix(state, trigger.index() as u64);
+    state = combat_path_mix(state, cursor as u64);
+    for accept in prior {
+        state = combat_path_mix(state, u64::from(*accept));
+    }
+    state
+}
+
+fn trigger_unless_path_discriminator(payer: PlayerId, trigger: TriggerId, stage: u64) -> u64 {
+    let mut state = combat_path_mix(0x7472_6770_6179_0001, payer.index() as u64);
+    state = combat_path_mix(state, trigger.index() as u64);
+    combat_path_mix(state, stage)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -12027,6 +12742,307 @@ mod tests {
     }
 
     #[test]
+    fn triggered_optionals_use_shared_resolution_contexts_without_silent_acceptance() {
+        let source = r#"card "Optional Trigger Fixture" {
+  id: "forge:test:optional-trigger-fixture"
+  layout: normal
+  status: unverified_playable
+  face "Optional Trigger Fixture" {
+    cost: "{1}{W}"
+    types: "Creature - Human Cleric"
+    oracle: "Whenever an opponent draws a card, you may gain 3 life."
+    power: "2"
+    toughness: "2"
+    keywords: []
+    ability triggered {
+      event: event_draw(opponent())
+      effect: choose_up_to(1, gain_life(3, you()))
+    }
+  }
+}"#;
+        let definition = forge_cardc::parse_card_named("optional_trigger_fixture.frs", source)
+            .unwrap_or_else(|error| panic!("optional-trigger fixture should parse: {error}"));
+        let program =
+            Arc::new(compile_card_program(&definition).unwrap_or_else(|error| {
+                panic!("optional-trigger fixture should compile: {error}")
+            }));
+        assert_eq!(program.triggered_abilities().len(), 1);
+        assert_eq!(program.triggered_abilities()[0].optional_choice_count(), 1);
+
+        let (mut driver, controller, opponent, source_object) = modal_spell_driver();
+        Arc::make_mut(&mut driver.programs).insert(source_object, Arc::clone(&program));
+        driver
+            .dispatch(Action::SetBaseObjectCharacteristics {
+                object: source_object,
+                base: program.base_object(),
+            })
+            .unwrap_or_else(|error| panic!("trigger source characteristics should apply: {error}"));
+        driver
+            .dispatch(Action::MoveObject {
+                object: source_object,
+                to: ZoneId::new(None, ZoneKind::Battlefield),
+            })
+            .unwrap_or_else(|error| panic!("trigger source should enter play: {error}"));
+        driver
+            .register_triggers(controller, source_object, &program)
+            .unwrap_or_else(|error| panic!("trigger runtime should register: {error}"));
+        driver
+            .dispatch(Action::CreateObject {
+                card: CardId::new(1_304),
+                owner: opponent,
+                controller: opponent,
+                zone: ZoneId::new(Some(opponent), ZoneKind::Library),
+            })
+            .unwrap_or_else(|error| panic!("opponent draw card should be created: {error}"));
+        driver
+            .dispatch(Action::DrawCards {
+                player: opponent,
+                count: 1,
+            })
+            .unwrap_or_else(|error| panic!("draw event should queue the trigger: {error}"));
+
+        let mut human_driver = driver.clone();
+        let mut ai_driver = driver;
+        for candidate in [&mut human_driver, &mut ai_driver] {
+            let mut no_decisions = None;
+            let outcome = candidate
+                .put_pending_triggers_on_stack(None, &mut no_decisions, None)
+                .unwrap_or_else(|error| panic!("optional trigger should stack: {error}"));
+            assert!(matches!(outcome, Outcome::StackEntriesAdded(entries) if entries.len() == 1));
+            assert_eq!(
+                candidate
+                    .state
+                    .stack_top()
+                    .map(|entry| entry.decisions().optional_choice_count()),
+                Some(0)
+            );
+            candidate
+                .pass_priority()
+                .unwrap_or_else(|error| panic!("controller pass should succeed: {error}"));
+            candidate
+                .pass_priority()
+                .unwrap_or_else(|error| panic!("opponent pass should resolve trigger: {error}"));
+            assert!(candidate.pending_triggered_resolution.is_some());
+        }
+
+        let expected_context = human_driver
+            .pending_triggered_resolution
+            .as_ref()
+            .and_then(|pending| {
+                human_driver
+                    .pending_triggered_optional_context(pending, 0, &[], false)
+                    .ok()
+            })
+            .unwrap_or_else(|| panic!("trigger optional context should exist"));
+        assert_eq!(expected_context.kind(), DecisionKind::Optional);
+        assert_eq!(expected_context.options().len(), 2);
+        assert_eq!(
+            expected_context
+                .options()
+                .iter()
+                .filter_map(|option| match option.descriptor() {
+                    DecisionDescriptor::ChooseOptional { accept, .. } => Some(*accept),
+                    _ => None,
+                })
+                .collect::<BTreeSet<_>>(),
+            BTreeSet::from([false, true])
+        );
+
+        let mut decline = DeclineOptionalChoice;
+        let mut human_decisions = Some(&mut decline as &mut dyn DecisionSource);
+        human_driver
+            .complete_pending_triggered_resolution(Some(controller), &mut human_decisions, None)
+            .unwrap_or_else(|error| panic!("human decline should resolve: {error}"));
+        assert_eq!(human_driver.state.players()[controller.index()].life(), 20);
+        assert!(human_driver.actions.iter().all(|action| !matches!(
+            action,
+            Action::GainLife { player, amount } if *player == controller && *amount == 3
+        )));
+
+        let policy = AiController::Heuristic(HeuristicPolicy::rollout(
+            AiWeights::bundled().unwrap_or_else(|error| panic!("AI weights should load: {error}")),
+            31,
+        ));
+        let policies = [policy; PLAYER_COUNT];
+        let mut no_decisions = None;
+        ai_driver
+            .complete_pending_triggered_resolution(None, &mut no_decisions, Some(&policies))
+            .unwrap_or_else(|error| panic!("AI optional choice should resolve: {error}"));
+        assert_eq!(ai_driver.state.players()[controller.index()].life(), 23);
+        let record = ai_driver
+            .ai_decisions
+            .last()
+            .unwrap_or_else(|| panic!("AI trigger optional should emit telemetry"));
+        assert_eq!(record.kind, "trigger_optional");
+        assert_eq!(record.context_id, expected_context.id().to_string());
+        assert!(record
+            .canonical_legal_actions
+            .iter()
+            .any(|action| action.action_id == record.action_id));
+    }
+
+    #[test]
+    fn unless_paid_triggers_bind_the_event_player_and_canonical_payment_path() {
+        let source = r#"card "Smothering Tithe Fixture" {
+  id: "forge:test:smothering-tithe-fixture"
+  layout: normal
+  status: unverified_playable
+  face "Smothering Tithe Fixture" {
+    cost: "{3}{W}"
+    types: "Enchantment"
+    oracle: "Whenever an opponent draws a card, that player may pay {2}. If the player doesn't, you create a Treasure token."
+    keywords: []
+    ability triggered {
+      event: event_draw(opponent())
+      effect: unless_paid(create_token("c_a_treasure_sac", 1, you()), controller_of(triggered()), mana_cost("{2}"))
+    }
+  }
+}"#;
+        let definition = forge_cardc::parse_card_named("smothering_tithe_fixture.frs", source)
+            .unwrap_or_else(|error| panic!("unless-paid fixture should parse: {error}"));
+        let program = Arc::new(
+            compile_card_program(&definition)
+                .unwrap_or_else(|error| panic!("unless-paid fixture should compile: {error}")),
+        );
+        assert!(program.triggered_abilities()[0].unless_paid().is_some());
+
+        let (mut driver, controller, opponent, source_object) = modal_spell_driver();
+        Arc::make_mut(&mut driver.programs).insert(source_object, Arc::clone(&program));
+        driver
+            .dispatch(Action::SetBaseObjectCharacteristics {
+                object: source_object,
+                base: program.base_object(),
+            })
+            .unwrap_or_else(|error| panic!("trigger source characteristics should apply: {error}"));
+        driver
+            .dispatch(Action::MoveObject {
+                object: source_object,
+                to: ZoneId::new(None, ZoneKind::Battlefield),
+            })
+            .unwrap_or_else(|error| panic!("trigger source should enter play: {error}"));
+        driver
+            .register_triggers(controller, source_object, &program)
+            .unwrap_or_else(|error| panic!("trigger runtime should register: {error}"));
+        driver
+            .dispatch(Action::CreateObject {
+                card: CardId::new(1_305),
+                owner: opponent,
+                controller: opponent,
+                zone: ZoneId::new(Some(opponent), ZoneKind::Library),
+            })
+            .unwrap_or_else(|error| panic!("opponent draw card should be created: {error}"));
+        driver
+            .dispatch(Action::DrawCards {
+                player: opponent,
+                count: 1,
+            })
+            .unwrap_or_else(|error| panic!("draw event should queue the trigger: {error}"));
+
+        let mut pay_driver = driver.clone();
+        let mut decline_driver = driver.clone();
+        let mut cannot_pay_driver = driver;
+        for candidate in [&mut pay_driver, &mut decline_driver] {
+            candidate
+                .dispatch(Action::AddManaToPool {
+                    player: opponent,
+                    mana: ManaPool::new(2, 0, 0, 0, 0, 0),
+                })
+                .unwrap_or_else(|error| panic!("payer mana setup should succeed: {error}"));
+        }
+        let stage_resolution = |candidate: &mut GameDriver| {
+            let mut no_decisions = None;
+            let outcome = candidate
+                .put_pending_triggers_on_stack(None, &mut no_decisions, None)
+                .unwrap_or_else(|error| panic!("unless-paid trigger should stack: {error}"));
+            assert!(matches!(outcome, Outcome::StackEntriesAdded(entries) if entries.len() == 1));
+            assert_eq!(
+                candidate
+                    .triggering_players_by_stack_entry
+                    .values()
+                    .copied()
+                    .collect::<Vec<_>>(),
+                vec![opponent]
+            );
+            candidate
+                .pass_priority()
+                .unwrap_or_else(|error| panic!("controller pass should succeed: {error}"));
+            candidate
+                .pass_priority()
+                .unwrap_or_else(|error| panic!("opponent pass should resolve trigger: {error}"));
+            let pending = candidate
+                .pending_triggered_resolution
+                .as_ref()
+                .unwrap_or_else(|| panic!("unless-paid choice should be deferred"));
+            assert_eq!(pending.triggering_player, Some(opponent));
+            assert!(candidate.triggering_players_by_stack_entry.is_empty());
+        };
+        stage_resolution(&mut pay_driver);
+        stage_resolution(&mut decline_driver);
+        stage_resolution(&mut cannot_pay_driver);
+
+        let intent = pay_driver
+            .pending_triggered_resolution
+            .as_ref()
+            .and_then(|pending| {
+                pay_driver
+                    .pending_triggered_unless_intent_context(pending)
+                    .ok()
+            })
+            .unwrap_or_else(|| panic!("unless-paid intent context should exist"));
+        assert_eq!(intent.0.actor(), opponent);
+        assert_eq!(intent.0.kind(), DecisionKind::Optional);
+        assert_eq!(intent.0.options().len(), 2);
+
+        let mut pay = PayUnlessChoice;
+        let mut pay_decisions = Some(&mut pay as &mut dyn DecisionSource);
+        pay_driver
+            .complete_pending_triggered_resolution(Some(opponent), &mut pay_decisions, None)
+            .unwrap_or_else(|error| panic!("human payment should resolve: {error}"));
+        assert_eq!(pay_driver.state.mana_pool(opponent), Ok(ManaPool::empty()));
+        assert!(pay_driver.actions.iter().any(|action| matches!(
+            action,
+            Action::PayMana { player, cost, .. }
+                if *player == opponent && cost.base_generic() == 2
+        )));
+        assert!(pay_driver
+            .actions
+            .iter()
+            .all(|action| !matches!(action, Action::CreateToken { .. })));
+
+        let mut decline = DeclineOptionalChoice;
+        let mut decline_decisions = Some(&mut decline as &mut dyn DecisionSource);
+        decline_driver
+            .complete_pending_triggered_resolution(Some(opponent), &mut decline_decisions, None)
+            .unwrap_or_else(|error| panic!("human decline should resolve: {error}"));
+        assert_eq!(
+            decline_driver.state.mana_pool(opponent),
+            Ok(ManaPool::new(2, 0, 0, 0, 0, 0))
+        );
+        assert!(decline_driver
+            .actions
+            .iter()
+            .any(|action| matches!(action, Action::CreateToken { controller: player, .. } if *player == controller)));
+
+        let policies = [AiController::Random(RandomLegalPolicy::new(37)); PLAYER_COUNT];
+        let mut no_decisions = None;
+        cannot_pay_driver
+            .complete_pending_triggered_resolution(None, &mut no_decisions, Some(&policies))
+            .unwrap_or_else(|error| panic!("forced decline should resolve: {error}"));
+        let forced = cannot_pay_driver
+            .ai_decisions
+            .last()
+            .unwrap_or_else(|| panic!("forced decline should emit AI telemetry"));
+        assert_eq!(forced.kind, "trigger_unless_payment_intent");
+        assert_eq!(forced.policy, "forced-v1");
+        assert_eq!(forced.stop_reason, "singleton_legal_action");
+        assert_eq!(forced.legal_actions, 1);
+        assert!(cannot_pay_driver
+            .actions
+            .iter()
+            .any(|action| matches!(action, Action::CreateToken { controller: player, .. } if *player == controller)));
+    }
+
+    #[test]
     fn spell_search_is_deferred_to_a_shared_resolution_context() {
         let source = r#"card "Spell Search Fixture" {
   id: "c992b25e-224d-4856-a785-56b8e4017590"
@@ -12578,6 +13594,7 @@ mod tests {
             .execute_trigger(
                 controller,
                 trigger,
+                None,
                 Vec::new(),
                 StackDecisionBindings::default(),
             )
@@ -12711,6 +13728,43 @@ mod tests {
         }
     }
 
+    struct DeclineOptionalChoice;
+
+    impl DecisionSource for DeclineOptionalChoice {
+        fn choose(&mut self, prompt: &DecisionPrompt<'_>) -> Result<DecisionSelection, String> {
+            prompt
+                .context
+                .options()
+                .iter()
+                .position(|option| {
+                    matches!(
+                        option.descriptor(),
+                        DecisionDescriptor::ChooseOptional { accept: false, .. }
+                    )
+                })
+                .map(DecisionSelection::Option)
+                .ok_or_else(|| "expected a declined optional choice".to_owned())
+        }
+    }
+
+    struct PayUnlessChoice;
+
+    impl DecisionSource for PayUnlessChoice {
+        fn choose(&mut self, prompt: &DecisionPrompt<'_>) -> Result<DecisionSelection, String> {
+            prompt
+                .context
+                .options()
+                .iter()
+                .position(|option| match option.descriptor() {
+                    DecisionDescriptor::ChooseOptional { accept, .. } => *accept,
+                    DecisionDescriptor::ChoosePayment { .. } => true,
+                    _ => false,
+                })
+                .map(DecisionSelection::Option)
+                .ok_or_else(|| "expected an unless-payment choice".to_owned())
+        }
+    }
+
     struct LegacyNoPrompt;
 
     impl DecisionSource for LegacyNoPrompt {
@@ -12727,6 +13781,20 @@ mod tests {
 
     impl DecisionSource for PickNonEmptyResolutionChoice {
         fn choose(&mut self, prompt: &DecisionPrompt<'_>) -> Result<DecisionSelection, String> {
+            if prompt.context.kind() == DecisionKind::Optional {
+                return prompt
+                    .context
+                    .options()
+                    .iter()
+                    .position(|option| {
+                        matches!(
+                            option.descriptor(),
+                            DecisionDescriptor::ChooseOptional { accept: true, .. }
+                        )
+                    })
+                    .map(DecisionSelection::Option)
+                    .ok_or_else(|| "expected an accepted optional choice".to_owned());
+            }
             prompt
                 .options
                 .iter()
@@ -12777,6 +13845,7 @@ mod tests {
             ),
             commanders: vec![commander],
             trigger_programs: HashMap::new(),
+            triggering_players_by_stack_entry: HashMap::new(),
             activated_abilities: Vec::new(),
             pending_spell_resolution: None,
             pending_activated_resolution: None,
@@ -12891,6 +13960,7 @@ mod tests {
             ),
             commanders: vec![spell, creature],
             trigger_programs: HashMap::new(),
+            triggering_players_by_stack_entry: HashMap::new(),
             activated_abilities: Vec::new(),
             pending_spell_resolution: None,
             pending_activated_resolution: None,
@@ -12964,6 +14034,7 @@ mod tests {
             ),
             commanders: vec![first_attacker, second_attacker],
             trigger_programs: HashMap::new(),
+            triggering_players_by_stack_entry: HashMap::new(),
             activated_abilities: Vec::new(),
             pending_spell_resolution: None,
             pending_activated_resolution: None,

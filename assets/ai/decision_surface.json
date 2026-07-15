@@ -20,14 +20,14 @@
       "human": "partial",
       "ai": "partial",
       "benchmark": "partial",
-      "note": "Every live human and AI priority window uses one shared canonical context with a forced-pass fast path, exact normal-cost instant choices, hierarchical printed-X casting, and typed program-bound non-mana activations. Activation targets, optional answers, announced X, payments, and ordinary trigger targets survive the stack; required triggers with an empty current target domain use a kernel-validated no-stack disposition. Alternate costs, unsupported extra activation costs, same-batch inter-trigger targeting, and deferred trigger optionals remain open."
+      "note": "Every live human and AI priority window uses one shared canonical context with a forced-pass fast path, exact normal-cost instant choices, hierarchical printed-X casting, and typed program-bound non-mana activations. Activation targets, optional answers, announced X, payments, and ordinary trigger targets survive the stack; required triggers with an empty current target domain use a kernel-validated no-stack disposition. Triggered optional effects and compiled opponent-draw unless payments now use bounded resolution contexts. Alternate costs, unsupported extra activation costs, same-batch inter-trigger targeting, and modal triggers remain open."
     },
     {
       "kind": "main_phase",
       "human": "partial",
       "ai": "partial",
       "benchmark": "partial",
-      "note": "Human and AI consume the same canonical land, mana activation, typed program-bound non-mana activation, normal-cost cast, and finish options. Printed X spells defer the numeric announcement and payment into bounded shared subcontexts; descriptors bind exact targets, modes, optional answers, announced X, and every legal payment. Search progressively interleaves typed target families without merging their concrete actions or edge statistics. Additional and alternate costs and deferred trigger optionals remain open."
+      "note": "Human and AI consume the same canonical land, mana activation, typed program-bound non-mana activation, normal-cost cast, and finish options. Printed X spells defer the numeric announcement and payment into bounded shared subcontexts; descriptors bind exact targets, modes, optional answers, announced X, and every legal payment. Search progressively interleaves typed target families without merging their concrete actions or edge statistics. Trigger optionals and opponent-draw unless payments resolve through shared contexts; additional and alternate costs remain open."
     },
     {
       "kind": "declare_attackers",
@@ -76,14 +76,14 @@
       "human": "partial",
       "ai": "partial",
       "benchmark": "descriptor_only",
-      "note": "Fixed costs bind explicit mana plans in the root option. Printed X costs use a separate shared Payment context after X is announced, preserve X metadata through cost modification and stack entry, and expose the same final typed CastSpell action to human, heuristic, random, and search consumers. Additional, alternate, and non-mana payment prompts remain open."
+      "note": "Fixed costs bind explicit mana plans in the root option. Printed X costs use a separate shared Payment context after X is announced, preserve X metadata through cost modification and stack entry, and expose the same final typed CastSpell action to human, heuristic, random, and search consumers. Compiled opponent-draw unless costs bind the event player and enumerate that player's exact current payment plans at trigger resolution. Additional, alternate, non-mana, and other event-bound payment families remain open."
     },
     {
       "kind": "optional",
       "human": "partial",
       "ai": "partial",
       "benchmark": "partial",
-      "note": "Normal spell and typed program-bound activation optional-effect products are canonical, visible to humans, available to AI, hashed on the stack, and bound at resolution. Optional costs and triggered or deferred optional prompts remain open."
+      "note": "Normal spell and typed program-bound activation optional-effect products are canonical, visible to humans, available to AI, hashed on the stack, and bound at resolution. Triggered optional effects use one scoped resolution context per group, and opponent-draw unless costs use a separate event-player pay-or-decline context followed by exact payment selection. Optional costs, modal triggers, other event-bound payers, and sealed benchmark labels remain open."
     },
     {
       "kind": "trigger_order",

@@ -66,6 +66,14 @@ no-stack disposition, produces no prompt, and does not block valid sibling
 triggers. Same-batch inter-trigger stack targeting, target distribution, and
 partial-illegality filtering remain fail closed.
 
+Triggered optional effects are deferred until resolution and use one scoped
+`Optional` context per compiled group. Compiled opponent-draw unless branches
+retain the queued event's exact player through the stack-entry identity, then
+offer that player a pay-or-decline context and, only after acceptance, a
+separate exact `Payment` context. An unaffordable cost is a singleton decline;
+it receives no search budget. Other event-bound payer families remain fail
+closed rather than inheriting the trigger controller.
+
 Combat-damage ordering and amounts also use bounded contexts outside the main
 tree. Controllers choose one next blocker and then one amount at a time; large
 numeric ranges are narrowed through binary subranges before a direct context
