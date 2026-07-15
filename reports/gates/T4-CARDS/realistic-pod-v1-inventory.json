@@ -1,0 +1,130 @@
+{
+  "artifact_kind": "realistic_pod_candidate_inventory_report",
+  "claim_boundary": {
+    "cp_ai_realistic_pod_passed": false,
+    "diagnostic": true,
+    "not_claimed": [
+      "benchmark admission",
+      "semantic correctness",
+      "AI competence",
+      "normal game length",
+      "CP-AI-BENCH"
+    ],
+    "promotion_eligible": false
+  },
+  "decks": [
+    {
+      "archetype": "Goblin go-wide combat pressure",
+      "blocked_slots": {
+        "exact_slot_count_claimed": true,
+        "primary_blocker_slot_counts": {
+          "BENCHMARK_FIXTURE_MISSING": 23,
+          "SEMANTIC_EVIDENCE_MISSING": 53
+        },
+        "total_slots": 100
+      },
+      "color_identity": [
+        "R"
+      ],
+      "commander": "Krenko, Mob Boss",
+      "deck_id": "krenko-goblin-pressure",
+      "mainboard_slots": 99,
+      "total_slots": 100,
+      "unique_mainboard_identities": 75
+    },
+    {
+      "archetype": "Sultai ramp, X-spell, and token value",
+      "blocked_slots": {
+        "exact_slot_count_claimed": true,
+        "primary_blocker_slot_counts": {
+          "BENCHMARK_FIXTURE_MISSING": 35,
+          "SEMANTIC_EVIDENCE_MISSING": 50
+        },
+        "total_slots": 100
+      },
+      "color_identity": [
+        "B",
+        "G",
+        "U"
+      ],
+      "commander": "Zaxara, the Exemplary",
+      "deck_id": "zaxara-ramp-value",
+      "mainboard_slots": 99,
+      "total_slots": 100,
+      "unique_mainboard_identities": 84
+    },
+    {
+      "archetype": "Azorius interaction and inevitability",
+      "blocked_slots": {
+        "exact_slot_count_claimed": true,
+        "primary_blocker_slot_counts": {
+          "BENCHMARK_FIXTURE_MISSING": 30,
+          "SEMANTIC_EVIDENCE_MISSING": 49
+        },
+        "total_slots": 100
+      },
+      "color_identity": [
+        "W",
+        "U"
+      ],
+      "commander": "Tobias Andrion",
+      "deck_id": "tobias-azorius-control",
+      "mainboard_slots": 99,
+      "total_slots": 100,
+      "unique_mainboard_identities": 78
+    },
+    {
+      "archetype": "Rakdos sacrifice and death-trigger engine",
+      "blocked_slots": {
+        "exact_slot_count_claimed": true,
+        "primary_blocker_slot_counts": {
+          "BENCHMARK_FIXTURE_MISSING": 16,
+          "SEMANTIC_EVIDENCE_MISSING": 58
+        },
+        "total_slots": 100
+      },
+      "color_identity": [
+        "B",
+        "R"
+      ],
+      "commander": "Judith, the Scourge Diva",
+      "deck_id": "judith-rakdos-aristocrats",
+      "mainboard_slots": 99,
+      "total_slots": 100,
+      "unique_mainboard_identities": 73
+    }
+  ],
+  "input_bindings": {
+    "candidate_manifest": {
+      "path": "assets/ai/pods/realistic-pod-v1-candidates.json",
+      "sha256": "7000028cb6c496cc50832ce4cd311eb01652022c4af4a4370eeda639ec95705e"
+    },
+    "card_catalog": {
+      "path": "assets/card_catalog.json",
+      "sha256": "6c7c41ba91b524b8ac59cf7e215fbceaa31c1f9567ae11623dcfa15f6b3f8321"
+    },
+    "pilot_intents": {
+      "path": "assets/ai/pilot_intents/realistic-pod-v1-candidates.json",
+      "sha256": "a568b27ba432741782fa206966c47f71c6c6bb2b236ec859b15407d3909eb4eb"
+    }
+  },
+  "product_binding": {
+    "commit": "19ef3302c40db3e916d2a60925546d4ebc28608d",
+    "tree": "e79efa91e0146f23f7219367e117db34ce13867a"
+  },
+  "promotion_eligible": false,
+  "schema_version": 1,
+  "status": "blocked_candidate",
+  "summary": {
+    "benchmark_admitted_count": 0,
+    "blocked_count": 282,
+    "candidate_count": 282,
+    "deck_count": 4,
+    "primary_blocker_identity_counts": {
+      "BENCHMARK_FIXTURE_MISSING": 92,
+      "SEMANTIC_EVIDENCE_MISSING": 190
+    },
+    "total_slots": 400,
+    "unique_identity_count": 282
+  }
+}

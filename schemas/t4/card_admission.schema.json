@@ -1,0 +1,400 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forgedeck.local/schemas/t4/card_admission.schema.json",
+  "title": "Forge T4 Card Admission Report",
+  "description": "Deterministic, exact-product-bound, fail-closed admission evidence for candidate card identities.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "artifact_kind",
+    "status",
+    "generator",
+    "generator_sha256",
+    "product_binding",
+    "candidate_manifest",
+    "campaign_bindings",
+    "metadata",
+    "input_hashes",
+    "evidence_sources",
+    "summary",
+    "blocker_families",
+    "cards",
+    "promotion_eligible",
+    "promotion_blockers"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "artifact_kind": {"enum": ["metric", "gate"]},
+    "status": {"enum": ["blocked", "benchmark_admitted"]},
+    "generator": {"const": "tools/build_t4_card_admission.py"},
+    "generator_sha256": {"$ref": "#/$defs/sha256"},
+    "product_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "tree", "source"],
+      "properties": {
+        "commit": {"$ref": "#/$defs/git_object_id"},
+        "tree": {"$ref": "#/$defs/git_object_id"},
+        "source": {"type": "string", "minLength": 1}
+      }
+    },
+    "candidate_manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manifest_id",
+        "pool_kind",
+        "bootstrap",
+        "freeze_status",
+        "path",
+        "sha256",
+        "candidate_count",
+        "selected_deck_ids",
+        "deck_count",
+        "identity_universe_count"
+      ],
+      "properties": {
+        "manifest_id": {"type": "string", "minLength": 1},
+        "pool_kind": {"type": "string", "minLength": 1},
+        "bootstrap": {"type": "boolean"},
+        "freeze_status": {"type": "string", "minLength": 1},
+        "path": {"type": ["string", "null"]},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "candidate_count": {"type": "integer", "minimum": 0},
+        "selected_deck_ids": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "deck_count": {"type": "integer", "minimum": 0},
+        "identity_universe_count": {"type": "integer", "minimum": 0}
+      }
+    },
+    "campaign_bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "deck_manifest_sha256",
+        "card_database_sha256",
+        "pilot_intent_sha256",
+        "policy_sha256",
+        "weights_sha256",
+        "seeds",
+        "platform"
+      ],
+      "properties": {
+        "deck_manifest_sha256": {"$ref": "#/$defs/nullable_sha256"},
+        "card_database_sha256": {"$ref": "#/$defs/sha256"},
+        "pilot_intent_sha256": {"$ref": "#/$defs/nullable_sha256"},
+        "policy_sha256": {"$ref": "#/$defs/nullable_sha256"},
+        "weights_sha256": {"$ref": "#/$defs/nullable_sha256"},
+        "seeds": {"type": "array", "items": {"type": "integer"}},
+        "platform": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "worker_configuration"],
+          "properties": {
+            "status": {"type": "string", "minLength": 1},
+            "worker_configuration": {"type": ["object", "null"]}
+          }
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "generated_at",
+        "diagnostic",
+        "promotion_eligible",
+        "promotion_blockers",
+        "bootstrap_note",
+        "uses_local_repository_data_only",
+        "unsupported_behavior_policy",
+        "card_name_specific_runtime_logic",
+        "full_candidate_inputs_present"
+      ],
+      "properties": {
+        "generated_at": {"type": ["string", "null"]},
+        "diagnostic": {"const": true},
+        "promotion_eligible": {"type": "boolean"},
+        "promotion_blockers": {"type": "array", "items": {"type": "string"}},
+        "bootstrap_note": {"type": ["string", "null"]},
+        "uses_local_repository_data_only": {"const": true},
+        "unsupported_behavior_policy": {"type": "string", "minLength": 1},
+        "card_name_specific_runtime_logic": {"const": false},
+        "full_candidate_inputs_present": {"type": "boolean"}
+      }
+    },
+    "input_hashes": {
+      "type": "object",
+      "additionalProperties": {"$ref": "#/$defs/nullable_sha256"}
+    },
+    "evidence_sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["stage", "paths", "sha256", "product_bound", "product_match"],
+        "properties": {
+          "stage": {"type": "string", "minLength": 1},
+          "paths": {"type": "array", "items": {"type": "string"}},
+          "sha256": {"type": "array", "items": {"$ref": "#/$defs/sha256"}},
+          "product_bound": {"type": "boolean"},
+          "product_match": {"type": "boolean"}
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_count",
+        "admitted_count",
+        "blocked_count",
+        "status_counts",
+        "evidence_level_counts",
+        "primary_reason_counts",
+        "unresolved_blocker_reason_codes"
+      ],
+      "properties": {
+        "candidate_count": {"type": "integer", "minimum": 0},
+        "admitted_count": {"type": "integer", "minimum": 0},
+        "blocked_count": {"type": "integer", "minimum": 0},
+        "status_counts": {"$ref": "#/$defs/status_counts"},
+        "evidence_level_counts": {"$ref": "#/$defs/status_counts"},
+        "primary_reason_counts": {
+          "type": "object",
+          "additionalProperties": {"type": "integer", "minimum": 1}
+        },
+        "unresolved_blocker_reason_codes": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/reason_code"},
+          "uniqueItems": true
+        }
+      }
+    },
+    "blocker_families": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/blocker_family"}
+    },
+    "cards": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/card"}
+    },
+    "promotion_eligible": {"type": "boolean"},
+    "promotion_blockers": {"type": "array", "items": {"type": "string"}},
+    "gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gate_id", "status", "metric_artifact_sha256", "cp_ai_realistic_pod_passed"],
+      "properties": {
+        "gate_id": {"const": "T4-CARDS/ADMISSION"},
+        "status": {"enum": ["blocked", "pass_local"]},
+        "metric_artifact_sha256": {"$ref": "#/$defs/sha256"},
+        "cp_ai_realistic_pod_passed": {"const": false}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "candidate_manifest": {
+            "properties": {"bootstrap": {"const": false}}
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "candidate_manifest": {
+            "properties": {
+              "selected_deck_ids": {"minItems": 4, "maxItems": 4},
+              "deck_count": {"const": 4}
+            }
+          },
+          "campaign_bindings": {
+            "properties": {
+              "deck_manifest_sha256": {"$ref": "#/$defs/sha256"},
+              "pilot_intent_sha256": {"$ref": "#/$defs/sha256"}
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "nullable_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "git_object_id": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "reason_code": {"enum": [
+      "COMPILER_UNSUPPORTED",
+      "RUNTIME_UNSUPPORTED",
+      "SEMANTIC_EVIDENCE_MISSING",
+      "HUMAN_PROMPT_UNSUPPORTED",
+      "AI_PROMPT_UNSUPPORTED",
+      "BENCHMARK_FIXTURE_MISSING",
+      "HIDDEN_INFORMATION_RISK",
+      "REPLAY_DIVERGENCE",
+      "PERFORMANCE_LIMIT",
+      "RULES_AMBIGUITY",
+      "STALE_PRODUCT_BINDING",
+      "IDENTITY_OUT_OF_SCOPE",
+      "INPUT_INTEGRITY_FAILURE"
+    ]},
+    "status_counts": {
+      "type": "object",
+      "additionalProperties": {"type": "integer", "minimum": 0}
+    },
+    "stage_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "verified",
+        "identity_present",
+        "product_bound",
+        "product_match",
+        "source_paths",
+        "source_hashes",
+        "reason_code",
+        "details"
+      ],
+      "properties": {
+        "status": {"type": "string", "minLength": 1},
+        "verified": {"type": "boolean"},
+        "identity_present": {"type": "boolean"},
+        "product_bound": {"type": "boolean"},
+        "product_match": {"type": "boolean"},
+        "source_paths": {"type": "array", "items": {"type": "string"}},
+        "source_hashes": {"type": "array", "items": {"$ref": "#/$defs/sha256"}},
+        "reason_code": {"anyOf": [{"$ref": "#/$defs/reason_code"}, {"type": "null"}]},
+        "details": {"type": "string", "minLength": 1}
+      }
+    },
+    "blocker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reason_code",
+        "stage",
+        "detail",
+        "shared_family",
+        "estimated_cards_unlocked",
+        "estimated_decks_unlocked"
+      ],
+      "properties": {
+        "reason_code": {"$ref": "#/$defs/reason_code"},
+        "stage": {"type": "string", "minLength": 1},
+        "detail": {"type": "string", "minLength": 1},
+        "shared_family": {"type": "string", "minLength": 1},
+        "estimated_cards_unlocked": {"type": "integer", "minimum": 1},
+        "estimated_decks_unlocked": {"type": "integer", "minimum": 1}
+      }
+    },
+    "blocker_family": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reason_code",
+        "shared_family",
+        "affected_card_count",
+        "affected_identity_ids",
+        "estimated_cards_unlocked",
+        "estimated_decks_unlocked",
+        "stages",
+        "details"
+      ],
+      "properties": {
+        "reason_code": {"$ref": "#/$defs/reason_code"},
+        "shared_family": {"type": "string", "minLength": 1},
+        "affected_card_count": {"type": "integer", "minimum": 1},
+        "affected_identity_ids": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "estimated_cards_unlocked": {"type": "integer", "minimum": 1},
+        "estimated_decks_unlocked": {"type": "integer", "minimum": 1},
+        "stages": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "details": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}
+      }
+    },
+    "readiness_checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "identity_in_scope",
+        "structural_translation",
+        "runtime_execution",
+        "family_verification",
+        "card_semantic_verification",
+        "human_choice_coverage",
+        "ai_choice_coverage",
+        "benchmark_adapter",
+        "hidden_information_redacted",
+        "exact_action_replay",
+        "no_unsupported_fallback",
+        "no_card_name_branch",
+        "performance_within_limit",
+        "rules_unambiguous"
+      ],
+      "properties": {
+        "identity_in_scope": {"type": "boolean"},
+        "structural_translation": {"type": "boolean"},
+        "runtime_execution": {"type": "boolean"},
+        "family_verification": {"type": "boolean"},
+        "card_semantic_verification": {"type": "boolean"},
+        "human_choice_coverage": {"type": "boolean"},
+        "ai_choice_coverage": {"type": "boolean"},
+        "benchmark_adapter": {"type": "boolean"},
+        "hidden_information_redacted": {"type": "boolean"},
+        "exact_action_replay": {"type": "boolean"},
+        "no_unsupported_fallback": {"type": "boolean"},
+        "no_card_name_branch": {"type": "boolean"},
+        "performance_within_limit": {"type": "boolean"},
+        "rules_unambiguous": {"type": "boolean"}
+      }
+    },
+    "card": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "identity_id",
+        "name",
+        "mechanic_family",
+        "deck_ids",
+        "status",
+        "last_verified_status",
+        "evidence",
+        "readiness_checks",
+        "primary_blocker",
+        "blockers"
+      ],
+      "properties": {
+        "identity_id": {"type": "string", "minLength": 1},
+        "name": {"type": "string", "minLength": 1},
+        "mechanic_family": {"type": "string", "minLength": 1},
+        "deck_ids": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "status": {"enum": ["blocked", "benchmark_admitted"]},
+        "last_verified_status": {"enum": [
+          "candidate",
+          "runtime_ready",
+          "family_verified",
+          "card_semantic_verified",
+          "ai_decision_ready",
+          "benchmark_admitted"
+        ]},
+        "evidence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["structural_translation", "runtime", "family", "semantic", "ai", "pod"],
+          "properties": {
+            "structural_translation": {"$ref": "#/$defs/stage_evidence"},
+            "runtime": {"$ref": "#/$defs/stage_evidence"},
+            "family": {"$ref": "#/$defs/stage_evidence"},
+            "semantic": {"$ref": "#/$defs/stage_evidence"},
+            "ai": {"$ref": "#/$defs/stage_evidence"},
+            "pod": {"$ref": "#/$defs/stage_evidence"}
+          }
+        },
+        "readiness_checks": {"$ref": "#/$defs/readiness_checks"},
+        "primary_blocker": {"anyOf": [{"$ref": "#/$defs/blocker"}, {"type": "null"}]},
+        "blockers": {"type": "array", "items": {"$ref": "#/$defs/blocker"}}
+      }
+    }
+  }
+}

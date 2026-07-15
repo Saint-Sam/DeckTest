@@ -1,0 +1,658 @@
+{
+  "artifact_kind": "realistic_pod_candidate_blocker_report",
+  "blocker_families": [
+    {
+      "affected_card_count": 34,
+      "affected_deck_count": 4,
+      "affected_deck_ids": [
+        "judith-rakdos-aristocrats",
+        "krenko-goblin-pressure",
+        "tobias-azorius-control",
+        "zaxara-ramp-value"
+      ],
+      "affected_identity_ids": [
+        "09ff28b1-b6c9-48e6-b12e-2f0e644f709f",
+        "0b67c4e2-f88b-4e01-85a1-9d5f5b8db13b",
+        "14c3ff84-1e82-4606-a433-869fc52cc382",
+        "15d5b198-edbe-40f3-87e2-d72f7f0c58ab",
+        "1b9f9f5b-8712-4f00-90cb-1b7b9970eccc",
+        "240e85d3-e495-4877-8609-4b4056c402f7",
+        "2bb2eda7-3b38-4c56-870f-c3218a1056f5",
+        "30a0a6c2-1fbb-4784-ab96-22611d57e62c",
+        "310f141c-7f37-4729-aed6-dd9c09db448d",
+        "367d4cf2-270f-4236-af10-7d5e8ea8c9fe",
+        "437b2dab-15e0-4b9a-a204-58622d37a3b3",
+        "4d18bcba-a346-445e-a182-6cc30b7e066d",
+        "4f9e07ae-6341-4b46-9f77-f17ab659d266",
+        "65986c1b-8e51-4604-b685-d82fa7d1263a",
+        "699b192c-f3f2-4ac5-9ca9-e35bcf08ad8a",
+        "6f4ac4a4-53ec-4bc9-8f5c-d4b801d867b2",
+        "76b003e0-15af-4f22-bdf2-1ade5430964a",
+        "7c777a41-e40a-4b40-96bf-8ddd5c12924c",
+        "7fd61a18-6e4f-40c5-aa00-3d101ec1ec82",
+        "8a52f3c0-2552-4425-b2e3-5496eb2232a7",
+        "8cdfd9df-4783-4138-a286-828a97f516aa",
+        "8d02b297-97c4-4379-9862-0a462400f66f",
+        "94a844d2-0574-45a7-b347-e0e329767c42",
+        "97cabeda-9fe3-490d-99b4-4c8d87c17157",
+        "9dbc3530-b278-4c8d-b2cc-a09dfac9d5e5",
+        "a044474a-cd72-4e9d-bd8d-a08f2de9cdc0",
+        "a85197ab-dc94-4b72-9716-8dbdbbe90ff8",
+        "b099fc54-cdbc-46cb-b4e4-7c2ca77b115b",
+        "c0d8fef4-65f4-4769-982d-b397d2b7e977",
+        "c18013e4-0b99-44e3-a2b2-027ace68723a",
+        "d64e9152-ef24-4394-aeb0-9c3befc56549",
+        "e5223a09-f732-4747-8914-e6546ab0ef4c",
+        "e97f9c2b-b41e-4f36-9245-77c0ac125647",
+        "f82a4e85-526d-4456-b700-7760043a31be"
+      ],
+      "reason_code": "SEMANTIC_EVIDENCE_MISSING",
+      "shared_family": "graveyard_and_sacrifice"
+    },
+    {
+      "affected_card_count": 27,
+      "affected_deck_count": 4,
+      "affected_deck_ids": [
+        "judith-rakdos-aristocrats",
+        "krenko-goblin-pressure",
+        "tobias-azorius-control",
+        "zaxara-ramp-value"
+      ],
+      "affected_identity_ids": [
+        "01546b7d-a233-4176-8843-d732074dc5b6",
+        "12a6cad9-eb42-43bd-9e68-aaf862cd83db",
+        "17975a20-2c13-4325-be1e-0bcda5063a2d",
+        "457af74a-02b3-4659-846d-63e482667f34",
+        "5917216f-5b42-41fa-8976-401bdbeb782e",
+        "5fac139a-07d3-4e6c-98e3-d98b199f7a6f",
+        "68273453-1059-4eab-8c27-5d96f998f3b1",
+        "68418069-f615-40ef-ae0d-764192acae00",
+        "7246d45b-2185-4cdd-981b-5419b7d52bce",
+        "7b8f4879-578e-40e4-863a-41d0c32c6bdd",
+        "84dc94b2-95fb-4d53-aaa2-191cb645639f",
+        "8b022754-6d16-470e-b754-4df6e4f4709e",
+        "a145ff8c-5812-4bcb-bd16-9839dc25121d",
+        "a34b7416-cfe3-4a1e-a8c1-a3056b747519",
+        "a6450b8e-eb18-431c-9eb7-7daf107978b2",
+        "a784481f-eccb-4112-bb38-04a659319660",
+        "a9946ea0-bf0e-4c9c-a3c6-21337a5029ab",
+        "b2347910-d6c6-4681-8316-7ef27056485c",
+        "c232d974-9c65-4bce-b045-e5a7cc0c62e0",
+        "c7f33cea-2ec8-4081-9208-a5b1d86721b3",
+        "d0d2c45b-b6e3-4999-bdab-976e8f0d6617",
+        "d2664f28-49e1-46f8-a863-b217e961a57c",
+        "dcd4da46-5438-4454-8b1b-43ca51bda1f9",
+        "e74c4001-d958-4d2b-b57d-c3601f01580c",
+        "ea1eb902-a23c-44ff-9169-19baf71de238",
+        "eb44b65d-6b56-4f20-a4fb-c5dd147a54c4",
+        "fe83087d-c6c1-40be-9295-baaa1c6b2db1"
+      ],
+      "reason_code": "SEMANTIC_EVIDENCE_MISSING",
+      "shared_family": "tokens"
+    },
+    {
+      "affected_card_count": 22,
+      "affected_deck_count": 4,
+      "affected_deck_ids": [
+        "judith-rakdos-aristocrats",
+        "krenko-goblin-pressure",
+        "tobias-azorius-control",
+        "zaxara-ramp-value"
+      ],
+      "affected_identity_ids": [
+        "00c0543c-2a1f-4425-8283-4062d74a1637",
+        "0d96b60b-a060-48ee-bb83-93f1c4a10669",
+        "14589b6b-1814-46f9-a364-83cc15dacac2",
+        "152b91c9-cc07-4ca8-944f-9bc2242a2283",
+        "1593ea18-2f2f-4ab4-83fb-6ccc0bec8a90",
+        "299fc083-0834-4064-8344-f895aff68867",
+        "30afacd9-4680-4aac-8c22-584f9418822d",
+        "4baa6145-216e-476b-b178-aaaa1e633701",
+        "51ff3e53-90bb-41bf-80e4-bb3fd51d574a",
+        "57c9ff89-dd30-467b-bb3e-499eeea8cb94",
+        "6789a170-f2c5-4fc0-8a45-2b2361e67410",
+        "69872a9a-fe54-4e58-940c-89395af71acd",
+        "788a4896-3414-40bf-b391-d2efea2fb5f9",
+        "792e1072-00bf-4f63-b956-5f20cdf09f11",
+        "82004860-e589-4e38-8d61-8c0210e4ea39",
+        "8203c621-a1a0-4865-8c9a-0d4064c86107",
+        "8b755881-a72d-4e21-a369-d2924eb4585a",
+        "a0abd957-01a0-4aa9-8fc8-0e6840d21606",
+        "a54f0869-94c8-42af-9080-166efb9486a4",
+        "a5852994-d816-4e62-8a03-254223714544",
+        "d2d9ecea-7925-420e-98b9-2f87f41f387c",
+        "ededbdae-d9dc-4206-9335-d7158f2d7700"
+      ],
+      "reason_code": "SEMANTIC_EVIDENCE_MISSING",
+      "shared_family": "tutors_and_search"
+    },
+    {
+      "affected_card_count": 20,
+      "affected_deck_count": 4,
+      "affected_deck_ids": [
+        "judith-rakdos-aristocrats",
+        "krenko-goblin-pressure",
+        "tobias-azorius-control",
+        "zaxara-ramp-value"
+      ],
+      "affected_identity_ids": [
+        "005ee549-1bf5-478f-bc3f-3e791bd7eecf",
+        "02090581-61aa-4348-ad57-451be8ee91c2",
+        "08becc07-28bc-4a2f-a6b0-28a2998d2f50",
+        "0f3c3e5f-6af3-4af2-8703-4ccc8ed8f675",
+        "1cb0610b-a731-42c2-b93f-0a29f63cebf4",
+        "1cfc7b12-a595-492d-81ee-bd100ba7de6a",
+        "36cd2364-d113-47d1-b2c4-b088d9eb88dd",
+        "52232aad-e4ca-4551-8c8d-c69a3b6b49c7",
+        "53236dd7-845a-444c-96d5-f41ed7325d8f",
+        "5def9f38-0a0b-4e8d-9f9d-29dcb46520b4",
+        "605c1ee0-5e8a-4e0a-a99b-42a38873f822",
+        "613a41b8-0b4f-4995-bf1e-ca41f96e6438",
+        "63fd2a57-7a47-4e07-947c-f4e9da7ee538",
+        "6bd872b2-5c40-4e11-9a7f-0136a51b0642",
+        "71d14755-b81d-4aec-b94d-1637884a5844",
+        "78427103-9543-41fb-b6d4-72963fe87275",
+        "8cf38025-5821-45a0-9483-266353b7e82d",
+        "a8e707ec-ce77-4bc5-8c76-5ea3e81e8c7f",
+        "b9f4f96b-6e54-4fe6-8df7-623e0fc72409",
+        "c02c5547-b9c9-4b2d-9d12-e87bfba8f2d2"
+      ],
+      "reason_code": "SEMANTIC_EVIDENCE_MISSING",
+      "shared_family": "card_selection_and_advantage"
+    },
+    {
+      "affected_card_count": 19,
+      "affected_deck_count": 3,
+      "affected_deck_ids": [
+        "judith-rakdos-aristocrats",
+        "tobias-azorius-control",
+        "zaxara-ramp-value"
+      ],
+      "affected_identity_ids": [
+        "032ec6e2-6cc3-4a97-9cc7-3233f5e11904",
+        "05849bd6-8f38-4031-be2b-e2aa03beb8cc",
+        "06692cd9-ac2f-4a32-8fd1-043ba3c0fe71",
+        "21f45043-5419-4019-8b6c-e5294bd5f549",
+        "234a734b-ba28-4f1b-9d01-3c3e7d516590",
+        "3407fe41-fdd3-4119-8f70-4bc4590a379f",
+        "3e39224c-72ce-4ecc-aa17-12c071ea1f3e",
+        "45d35128-76e6-43f9-8d23-41f7506c3a71",
+        "6257c2fd-005f-41e3-8a72-af76df1eb134",
+        "6d4e558e-9109-4918-a082-fdcbaffd516b",
+        "6d7be242-a072-40ce-b540-95880506cccd",
+        "7735eeba-693b-47e2-bd51-414379cf1016",
+        "8ddfc283-c9b4-41a5-af88-cf0068e986cc",
+        "9b271430-f53d-42d6-a547-2f286dd9bcb6",
+        "b1544f21-7e98-461b-aed5-e748b0168c52",
+        "bceecc64-96f1-4e7b-8904-0aef90377764",
+        "cc187110-1148-4090-bbb8-e205694a39f5",
+        "d09c9cba-fdd2-479b-ad5d-d05181c3e3f9",
+        "fae37e28-e137-4177-b973-fa8b4dd8f409"
+      ],
+      "reason_code": "BENCHMARK_FIXTURE_MISSING",
+      "shared_family": "targeted_interaction"
+    },
+    {
+      "affected_card_count": 19,
+      "affected_deck_count": 4,
+      "affected_deck_ids": [
+        "judith-rakdos-aristocrats",
+        "krenko-goblin-pressure",
+        "tobias-azorius-control",
+        "zaxara-ramp-value"
+      ],
+      "affected_identity_ids": [
+        "16437a83-be52-44cd-a768-a767c9347eb2",
+        "1b388371-f9ef-45b4-82a3-ca20a8cd7807",
+        "1c747fe2-289e-492a-a846-aa77707e2dc3",
+        "2f092562-9e17-43cd-aeb8-d0567f99363e",
+        "3029df1d-d02a-4fed-8ab4-000a2096f823",
+        "4709f11c-aef8-45ac-b2bf-e640c568dfac",
+        "4b515bb0-f275-4400-8032-3173b799ab40",
+        "5825997b-10d7-4a36-972c-a80ddd90b8ed",
+        "70dc830e-d05b-4fc7-88dd-879e140b3fbf",
+        "74d3277a-38e5-4732-afed-084a56148f20",
+        "94f0a572-e91c-4b56-a5d1-6cbbeabd210d",
+        "983caa3f-7089-4e66-825d-4086a5adb9bb",
+        "ab1cc360-b9de-48d9-9983-4dfe4a7d2a37",
+        "ac10d218-f9a6-4058-9cda-a15ca1b0b7b5",
+        "bdb94ccd-1bb5-4bb7-9539-e1b1c97c19c5",
+        "c01516e0-eec3-4370-b935-7674982e8850",
+        "d683d985-9888-4d21-8b5f-69e69ce4a03b",
+        "ddc7f59a-bbb1-4ba1-82c8-6813fd191940",
+        "edad60c6-80de-4033-af1b-a703ac332983"
+      ],
+      "reason_code": "SEMANTIC_EVIDENCE_MISSING",
+      "shared_family": "targeted_interaction"
+    },
+    {
+      "affected_card_count": 18,
+      "affected_deck_count": 4,
+      "affected_deck_ids": [
+        "judith-rakdos-aristocrats",
+        "krenko-goblin-pressure",
+        "tobias-azorius-control",
+        "zaxara-ramp-value"
+      ],
+      "affected_identity_ids": [
+        "145737a7-c597-4dec-b752-207c2d0501e3",
+        "1b882a0e-0ede-4d1a-bd1a-9b7cffbcde8e",
+        "31f15274-301b-47c5-ba19-0ced04520878",
+        "376c9d3f-21d3-4251-bb6a-026fa9e1b0e1",
+        "422e1869-134f-463d-9fa1-86b66a998b3e",
+        "495e52e6-4c2b-4574-9474-eadbdcc8b4ac",
+        "4ce2357f-93e6-40ca-beca-8f4e15adc464",
+        "705509e9-a034-4a5a-9c65-66f58748b8a2",
+        "78826359-fe63-44ad-adc4-a17ffcd710e4",
+        "8539f295-5d58-4436-a73a-b9277c4c7795",
+        "893fed41-c144-433f-af88-bc7d419b7fb3",
+        "8973bd99-20f8-4867-90ef-50392147ee1b",
+        "ae83ef2c-960f-4c5b-97cc-52465c687c18",
+        "c5229c17-b7be-4b05-b683-f2277edc4849",
+        "d79cbc61-6c15-48ea-bbba-3cffb819ccba",
+        "e3afc704-220f-498f-9eaa-0821b17dc24c",
+        "e8863518-0bfa-49c3-8c6e-6c9116a81051",
+        "fb81f95c-70f8-4eb7-8d15-15d0ae23ec03"
+      ],
+      "reason_code": "BENCHMARK_FIXTURE_MISSING",
+      "shared_family": "tutors_and_search"
+    },
+    {
+      "affected_card_count": 16,
+      "affected_deck_count": 3,
+      "affected_deck_ids": [
+        "krenko-goblin-pressure",
+        "tobias-azorius-control",
+        "zaxara-ramp-value"
+      ],
+      "affected_identity_ids": [
+        "07a0cba9-8768-4fd9-a3d5-b0f83b4bf8e8",
+        "0d4ecdb1-ec90-497f-a7a4-1c68092b8757",
+        "11b5308d-5bc0-4782-875f-a28be36e665d",
+        "28fe909b-06e0-424c-9f75-c824a25f5865",
+        "3ded0c0c-40ce-4d14-a9a6-b023bc19ee0e",
+        "7a2484a9-04fd-41a0-8224-610c1c07ed10",
+        "8164b1e8-3350-465e-8a17-75f57d326344",
+        "8d286376-f386-43ab-a9bd-8478fb9e2497",
+        "9242cd3e-1a71-4700-8182-9c1005616033",
+        "a1f3da21-af6d-450e-bf0b-985d158418e6",
+        "a27445db-33f2-4571-98b5-83206b797484",
+        "ae120613-97d6-4393-b39d-c3e6c076f5d6",
+        "cc65ac73-5bef-4ecb-ad8e-39199084c027",
+        "d21c3c8f-d105-4ba9-bf69-e5f26f0f8ec5",
+        "e1e96802-fd0c-41f1-aa21-3287d75a0e88",
+        "f2fae95d-074b-4c0c-99cd-f9385a424c05"
+      ],
+      "reason_code": "SEMANTIC_EVIDENCE_MISSING",
+      "shared_family": "utility_spells"
+    },
+    {
+      "affected_card_count": 15,
+      "affected_deck_count": 3,
+      "affected_deck_ids": [
+        "judith-rakdos-aristocrats",
+        "tobias-azorius-control",
+        "zaxara-ramp-value"
+      ],
+      "affected_identity_ids": [
+        "0230de18-8d15-4cfa-9d42-7ccddd9f9570",
+        "09cc8709-fe10-472a-b05c-e89f3523018d",
+        "1fbb2a7c-8093-4729-b8fe-cf032d99470f",
+        "34515b16-c9a4-4f98-8c77-416a7a523407",
+        "36c78a5f-0148-4596-a346-f8e35037b694",
+        "4eb813fd-2d5a-4b02-8193-662681ef4e7d",
+        "51f9a6cc-8eb2-44ed-a2d9-913ac514ad67",
+        "52a0dae4-2a95-487e-acd4-eabdb2d031e2",
+        "932668fa-d6e3-41c0-ad0c-8e0a00e68d11",
+        "9e6a3df4-67a3-452e-a6ef-f04dbadb21ef",
+        "a332e80a-dc51-4dc6-bc85-e114a1c6fdb8",
+        "a6899b94-427d-4851-a474-4087e0a0918a",
+        "afaef788-34d1-460b-b884-9d7ae6ddeb18",
+        "aff34f28-f707-4458-8af3-1bd5b13a6b10",
+        "d57a8f0b-7989-4db5-8756-6f2690097252"
+      ],
+      "reason_code": "SEMANTIC_EVIDENCE_MISSING",
+      "shared_family": "board_resets"
+    },
+    {
+      "affected_card_count": 13,
+      "affected_deck_count": 4,
+      "affected_deck_ids": [
+        "judith-rakdos-aristocrats",
+        "krenko-goblin-pressure",
+        "tobias-azorius-control",
+        "zaxara-ramp-value"
+      ],
+      "affected_identity_ids": [
+        "11bf211c-95a3-4e7f-bd08-13f979d54e73",
+        "1ff62220-be95-4901-b8d8-812b9a1a1b0a",
+        "5bf4d8d9-a2b2-4dba-ac05-9d4470a89db2",
+        "5da7eea8-bb9e-47ce-a554-8a1ee058bd7a",
+        "713332c1-5bd8-400f-bfff-c1ca0697a043",
+        "7eff84f1-f772-497a-b350-bbc93d0230f7",
+        "7ffae8f8-3006-4969-a339-6d30678f87ea",
+        "8305d576-21d8-4ce7-8eda-a7cd9793aca5",
+        "a8abd966-de7b-46a3-8ac7-8747ab35653a",
+        "ac641490-ca14-48d7-8cc4-b69ce984befa",
+        "c6207f6a-a624-4754-88f5-dbe700c841ff",
+        "ee579a32-a048-4335-b966-231ba731cdea",
+        "f84d1291-1f82-4b67-a26e-b79624b4ce1d"
+      ],
+      "reason_code": "BENCHMARK_FIXTURE_MISSING",
+      "shared_family": "card_selection_and_advantage"
+    },
+    {
+      "affected_card_count": 13,
+      "affected_deck_count": 4,
+      "affected_deck_ids": [
+        "judith-rakdos-aristocrats",
+        "krenko-goblin-pressure",
+        "tobias-azorius-control",
+        "zaxara-ramp-value"
+      ],
+      "affected_identity_ids": [
+        "04b7362d-0490-4cb0-b5d7-2a7732f659ce",
+        "0895c9b7-ae7d-4bb3-af17-3b75deb50a25",
+        "2549bc57-9ffb-4053-9f10-f2a5f792b845",
+        "27b047e3-0d41-45e2-98e9-9391d7923a1e",
+        "32116127-cf96-4a1b-8896-a1ebc087b597",
+        "40b36bc6-c185-4bda-99e7-0118953c2c97",
+        "58257464-278e-45fa-8e0b-bcd9a7500bc1",
+        "857febd9-cdd7-4f8e-a852-d88084b0cfbc",
+        "b473e293-59e3-4e04-acf2-622604aeb25f",
+        "d5ad26cc-2bdb-46b7-b8bf-dd099d5fa09b",
+        "f29dc596-2121-4421-8463-15f6c2e8b9b3",
+        "f5c38c01-4a40-469f-91a0-7479daf4e8e7",
+        "ff0ab867-b710-4b1a-baed-95fc3cf68f79"
+      ],
+      "reason_code": "SEMANTIC_EVIDENCE_MISSING",
+      "shared_family": "lands_and_fixing"
+    },
+    {
+      "affected_card_count": 11,
+      "affected_deck_count": 4,
+      "affected_deck_ids": [
+        "judith-rakdos-aristocrats",
+        "krenko-goblin-pressure",
+        "tobias-azorius-control",
+        "zaxara-ramp-value"
+      ],
+      "affected_identity_ids": [
+        "05d24b0c-904a-46b6-b42a-96a4d91a0dd4",
+        "1bd3e453-aa21-4ee6-95c2-d6d920ee8e7a",
+        "56719f6a-1a6c-4c0a-8d21-18f7d7350b68",
+        "a3fb7228-e76b-4e96-a40e-20b5fed75685",
+        "a75445d3-1303-4bb5-89ad-26ea93fecd48",
+        "b2c6aa39-2d2a-459c-a555-fb48ba993373",
+        "b34bb2dc-c1af-4d77-b0b3-a0fb342a5fc6",
+        "bc71ebf6-2056-41f7-be35-b2e5c34afa99",
+        "c23e5b80-08d2-4e24-9908-fe2aa4f30f6f",
+        "cfdd5dc6-593e-495a-8cfe-3a56b3c4c7df",
+        "d2075f58-b0e9-4e85-b7e6-0523a27a1d5b"
+      ],
+      "reason_code": "BENCHMARK_FIXTURE_MISSING",
+      "shared_family": "lands_and_fixing"
+    },
+    {
+      "affected_card_count": 9,
+      "affected_deck_count": 4,
+      "affected_deck_ids": [
+        "judith-rakdos-aristocrats",
+        "krenko-goblin-pressure",
+        "tobias-azorius-control",
+        "zaxara-ramp-value"
+      ],
+      "affected_identity_ids": [
+        "24d0f5e7-0d9e-4b76-900e-a7274e80312d",
+        "30b24e8e-3b0e-4d8e-90f3-f66eb7c1858c",
+        "365548fb-5acc-4a8a-b20b-26d28b7d029f",
+        "3d6fa57a-aa53-4b5c-b8af-a7612c823117",
+        "a1cc5e37-b09a-4b7f-afd5-77c1c35aa425",
+        "a91a3266-cadd-47a0-9b20-160307f14c07",
+        "b2e950fb-cb7e-40a0-a311-5bbdd0477b29",
+        "c97361b5-af16-4a7b-af85-a429dbaf4ad2",
+        "e6e4a8bd-5c40-4654-8de1-0da9afed90fd"
+      ],
+      "reason_code": "BENCHMARK_FIXTURE_MISSING",
+      "shared_family": "graveyard_and_sacrifice"
+    },
+    {
+      "affected_card_count": 9,
+      "affected_deck_count": 3,
+      "affected_deck_ids": [
+        "krenko-goblin-pressure",
+        "tobias-azorius-control",
+        "zaxara-ramp-value"
+      ],
+      "affected_identity_ids": [
+        "07c82cde-f00d-4454-9df4-9286e344c9bb",
+        "0ce47c8b-1e1f-463f-94f0-35ca00be89e6",
+        "2fa94a07-c932-4f85-b6e0-a97d2b29eb52",
+        "4100e486-0d27-436c-8429-76bc2c1a26ab",
+        "4345c359-b9d6-43c8-997f-e00746e6e318",
+        "55dfe722-7487-4d25-b90c-e6ad2c82a671",
+        "69b52907-8aff-4f2a-a391-7d1ab2669b5c",
+        "7e52e91b-70e6-4f26-a5d4-b8e33d1debbf",
+        "c6bdaf76-6a03-4695-9c4b-f040e73435af"
+      ],
+      "reason_code": "SEMANTIC_EVIDENCE_MISSING",
+      "shared_family": "creatures_and_combat"
+    },
+    {
+      "affected_card_count": 9,
+      "affected_deck_count": 4,
+      "affected_deck_ids": [
+        "judith-rakdos-aristocrats",
+        "krenko-goblin-pressure",
+        "tobias-azorius-control",
+        "zaxara-ramp-value"
+      ],
+      "affected_identity_ids": [
+        "0fd114c4-092b-4e28-b0dc-ef529f3bc73e",
+        "1cf51f50-24e4-48d0-95b3-1dad3ffa4bf5",
+        "1d9aeaaa-66f6-41cb-9bac-162d6fd8662c",
+        "3adb7681-977f-4a32-9ec8-51481b958268",
+        "42b8aa14-10bc-4bd6-88d9-4bb287eadd19",
+        "44503105-3e13-408d-a44f-37d503c61d72",
+        "7d881c57-0bd9-4c57-aa4a-b10808b86143",
+        "8c34b089-aad1-476e-958a-3077bf1bbb51",
+        "e018773f-95b3-49a3-9674-6f04ddef2092"
+      ],
+      "reason_code": "SEMANTIC_EVIDENCE_MISSING",
+      "shared_family": "mana_acceleration"
+    },
+    {
+      "affected_card_count": 6,
+      "affected_deck_count": 4,
+      "affected_deck_ids": [
+        "judith-rakdos-aristocrats",
+        "krenko-goblin-pressure",
+        "tobias-azorius-control",
+        "zaxara-ramp-value"
+      ],
+      "affected_identity_ids": [
+        "00e35322-1a9a-41e3-9ce1-359c8eaa3bc7",
+        "3f3b2c10-21f8-4e13-be83-4ef3fa36e123",
+        "4c0a0448-b9d6-43a0-8549-64066dac63f0",
+        "68954295-54e3-4303-a6bc-fc4547a4e3a3",
+        "6ad8011d-3471-4369-9d68-b264cc027487",
+        "9965d9c5-2ebf-4a6c-930e-55c5890979be"
+      ],
+      "reason_code": "BENCHMARK_FIXTURE_MISSING",
+      "shared_family": "mana_acceleration"
+    },
+    {
+      "affected_card_count": 6,
+      "affected_deck_count": 3,
+      "affected_deck_ids": [
+        "judith-rakdos-aristocrats",
+        "krenko-goblin-pressure",
+        "tobias-azorius-control"
+      ],
+      "affected_identity_ids": [
+        "153376c9-dffd-458c-8ce3-a4c8269bc4e9",
+        "498c10c9-253d-4b15-b48c-1509381b17e8",
+        "58f83528-9110-4895-b5ea-51b90af30a8d",
+        "697bcfe1-ecbf-42a1-bfc7-0766d48ca56b",
+        "a5cbd257-c836-493e-bb1a-76242619dea2",
+        "f3abd4d1-a975-4e85-8684-aa0fce029670"
+      ],
+      "reason_code": "BENCHMARK_FIXTURE_MISSING",
+      "shared_family": "tokens"
+    },
+    {
+      "affected_card_count": 6,
+      "affected_deck_count": 2,
+      "affected_deck_ids": [
+        "judith-rakdos-aristocrats",
+        "krenko-goblin-pressure"
+      ],
+      "affected_identity_ids": [
+        "03efb4f3-b8e2-4441-824f-886dc40712c4",
+        "0bc7f093-bef0-4f1a-852c-4b75ebf54838",
+        "539f5396-d99a-417d-a84c-dff7930b5900",
+        "5f7f133e-58ea-41ab-b1be-be4b400fac4c",
+        "95560508-7ac9-4be9-8a3f-3c7d5b52807b",
+        "9b6d3dcf-aa5a-4516-bd48-a0723e86bfd1"
+      ],
+      "reason_code": "SEMANTIC_EVIDENCE_MISSING",
+      "shared_family": "artifacts_and_equipment"
+    },
+    {
+      "affected_card_count": 5,
+      "affected_deck_count": 2,
+      "affected_deck_ids": [
+        "krenko-goblin-pressure",
+        "zaxara-ramp-value"
+      ],
+      "affected_identity_ids": [
+        "368b4052-174e-4458-a6e6-eaf8093aa0fe",
+        "39882df0-c20f-469d-94ba-1617224e71a1",
+        "4fdbbec2-e921-4b63-958d-f9ba1e417197",
+        "8c52bd39-0586-48ca-b263-17210cf9feb6",
+        "d3a0b660-358c-41bd-9cd2-41fbf3491b1a"
+      ],
+      "reason_code": "BENCHMARK_FIXTURE_MISSING",
+      "shared_family": "creatures_and_combat"
+    },
+    {
+      "affected_card_count": 3,
+      "affected_deck_count": 2,
+      "affected_deck_ids": [
+        "tobias-azorius-control",
+        "zaxara-ramp-value"
+      ],
+      "affected_identity_ids": [
+        "24882fa2-3fe9-4c1b-aa3d-0e6488b9db27",
+        "4e183439-17d2-47ff-9d99-5e22821d91e3",
+        "d75b9c82-1b49-4c3e-a1b5-aeef57d6644b"
+      ],
+      "reason_code": "BENCHMARK_FIXTURE_MISSING",
+      "shared_family": "utility_spells"
+    },
+    {
+      "affected_card_count": 2,
+      "affected_deck_count": 1,
+      "affected_deck_ids": [
+        "krenko-goblin-pressure"
+      ],
+      "affected_identity_ids": [
+        "c8b143ad-43ec-4e0d-a440-e348daa31391",
+        "ca204b66-8d0c-431a-8d34-282f7c2d17da"
+      ],
+      "reason_code": "BENCHMARK_FIXTURE_MISSING",
+      "shared_family": "artifacts_and_equipment"
+    }
+  ],
+  "claim_boundary": {
+    "cp_ai_realistic_pod_passed": false,
+    "diagnostic": true,
+    "not_claimed": [
+      "benchmark admission",
+      "semantic correctness",
+      "AI competence",
+      "normal game length",
+      "CP-AI-BENCH"
+    ],
+    "promotion_eligible": false
+  },
+  "input_bindings": {
+    "candidate_manifest": {
+      "path": "assets/ai/pods/realistic-pod-v1-candidates.json",
+      "sha256": "7000028cb6c496cc50832ce4cd311eb01652022c4af4a4370eeda639ec95705e"
+    },
+    "card_catalog": {
+      "path": "assets/card_catalog.json",
+      "sha256": "6c7c41ba91b524b8ac59cf7e215fbceaa31c1f9567ae11623dcfa15f6b3f8321"
+    },
+    "pilot_intents": {
+      "path": "assets/ai/pilot_intents/realistic-pod-v1-candidates.json",
+      "sha256": "a568b27ba432741782fa206966c47f71c6c6bb2b236ec859b15407d3909eb4eb"
+    }
+  },
+  "per_deck": [
+    {
+      "blocked_slots": {
+        "exact_slot_count_claimed": true,
+        "primary_blocker_slot_counts": {
+          "BENCHMARK_FIXTURE_MISSING": 23,
+          "SEMANTIC_EVIDENCE_MISSING": 53
+        },
+        "total_slots": 100
+      },
+      "deck_id": "krenko-goblin-pressure"
+    },
+    {
+      "blocked_slots": {
+        "exact_slot_count_claimed": true,
+        "primary_blocker_slot_counts": {
+          "BENCHMARK_FIXTURE_MISSING": 35,
+          "SEMANTIC_EVIDENCE_MISSING": 50
+        },
+        "total_slots": 100
+      },
+      "deck_id": "zaxara-ramp-value"
+    },
+    {
+      "blocked_slots": {
+        "exact_slot_count_claimed": true,
+        "primary_blocker_slot_counts": {
+          "BENCHMARK_FIXTURE_MISSING": 30,
+          "SEMANTIC_EVIDENCE_MISSING": 49
+        },
+        "total_slots": 100
+      },
+      "deck_id": "tobias-azorius-control"
+    },
+    {
+      "blocked_slots": {
+        "exact_slot_count_claimed": true,
+        "primary_blocker_slot_counts": {
+          "BENCHMARK_FIXTURE_MISSING": 16,
+          "SEMANTIC_EVIDENCE_MISSING": 58
+        },
+        "total_slots": 100
+      },
+      "deck_id": "judith-rakdos-aristocrats"
+    }
+  ],
+  "product_binding": {
+    "commit": "19ef3302c40db3e916d2a60925546d4ebc28608d",
+    "tree": "e79efa91e0146f23f7219367e117db34ce13867a"
+  },
+  "promotion_eligible": false,
+  "schema_version": 1,
+  "status": "blocked_candidate",
+  "summary": {
+    "benchmark_admitted_count": 0,
+    "blocked_count": 282,
+    "candidate_count": 282,
+    "deck_count": 4,
+    "primary_blocker_identity_counts": {
+      "BENCHMARK_FIXTURE_MISSING": 92,
+      "SEMANTIC_EVIDENCE_MISSING": 190
+    },
+    "total_slots": 400,
+    "unique_identity_count": 282
+  }
+}

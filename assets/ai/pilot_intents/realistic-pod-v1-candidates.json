@@ -1,0 +1,310 @@
+{
+  "artifact_kind": "pilot_intent_candidate_set",
+  "claim_boundary": {
+    "cp_ai_realistic_pod_passed": false,
+    "diagnostic": true,
+    "not_claimed": [
+      "benchmark admission",
+      "semantic correctness",
+      "AI competence",
+      "normal game length",
+      "CP-AI-BENCH"
+    ],
+    "promotion_eligible": false
+  },
+  "freeze_status": "not_frozen",
+  "intent_version": "realistic-pod-v1-candidates-0.2",
+  "intents": [
+    {
+      "archetype": "Goblin go-wide combat pressure",
+      "avoided_lines": [
+        "unsupported targets, modes, or payments",
+        "hidden-information access",
+        "unbounded or unproven loops"
+      ],
+      "benchmark_readiness": "not_ready",
+      "broad_role": "proactive_aggro",
+      "candidate_status": "selected_candidate_blocked_pending_admission",
+      "color_identity": [
+        "R"
+      ],
+      "commander": "Krenko, Mob Boss",
+      "commander_identity_id": "68418069-f615-40ef-ae0d-764192acae00",
+      "commander_role": "Central to the proposed archetype; candidate status does not imply runtime, semantic, AI, or benchmark admission.",
+      "deck_id": "krenko-goblin-pressure",
+      "intended_win_conditions": [
+        "multi-opponent combat damage",
+        "token-entry damage",
+        "commander-enabled go-wide pressure"
+      ],
+      "intent_id": "krenko-goblin-pressure",
+      "intent_version": "realistic-pod-v1-candidates-0.2",
+      "interaction_posture": "Candidate-level posture; all choices remain fail-closed pending exact admission evidence.",
+      "mulligan_priorities": [
+        "two or more mana sources",
+        "an early plan card",
+        "one interaction, protection, or recovery card"
+      ],
+      "primary_plan": "Develop Goblins and token multipliers, then convert a wide board into multi-opponent combat damage or repeatable token-entry damage.",
+      "required_prompt_families": [
+        "opening_hand",
+        "main_phase",
+        "payment",
+        "priority",
+        "target",
+        "search",
+        "optional",
+        "declare_attackers",
+        "declare_blockers",
+        "commander_zone"
+      ],
+      "secondary_plan": "Use red card flow, protection, and recovery to rebuild after interaction without assuming a scripted goldfish.",
+      "selection_rank": 1,
+      "signature_cards": [
+        "Krenko, Mob Boss",
+        "Battle Cry Goblin",
+        "Kiki-Jiki, Mirror Breaker",
+        "Dockside Extortionist",
+        "Dragon Fodder",
+        "Goblin Instigator",
+        "Hordeling Outburst",
+        "Mogg War Marshal",
+        "Pashalik Mons",
+        "Siege-Gang Commander",
+        "Goblin Chieftain",
+        "Goblin Ringleader",
+        "Goblin Warchief"
+      ],
+      "tutor_priorities": [
+        "Gamble",
+        "Goblin Matron",
+        "Goblin Recruiter"
+      ],
+      "unsupported_line_policy": "Fail closed with a typed reason; never invent a target, mode, payment, tutor result, hidden card, loop, or benchmark fallback."
+    },
+    {
+      "archetype": "Sultai ramp, X-spell, and token value",
+      "avoided_lines": [
+        "unsupported targets, modes, or payments",
+        "hidden-information access",
+        "unbounded or unproven loops"
+      ],
+      "benchmark_readiness": "not_ready",
+      "broad_role": "midrange_value",
+      "candidate_status": "selected_candidate_blocked_pending_admission",
+      "color_identity": [
+        "B",
+        "G",
+        "U"
+      ],
+      "commander": "Zaxara, the Exemplary",
+      "commander_identity_id": "a9946ea0-bf0e-4c9c-a3c6-21337a5029ab",
+      "commander_role": "Central to the proposed archetype; candidate status does not imply runtime, semantic, AI, or benchmark admission.",
+      "deck_id": "zaxara-ramp-value",
+      "intended_win_conditions": [
+        "large X-spell threats",
+        "Hydra-token pressure",
+        "overrun-style combat finish"
+      ],
+      "intent_id": "zaxara-ramp-value",
+      "intent_version": "realistic-pod-v1-candidates-0.2",
+      "interaction_posture": "Candidate-level posture; all choices remain fail-closed pending exact admission evidence.",
+      "mulligan_priorities": [
+        "two or more mana sources",
+        "an early plan card",
+        "one interaction, protection, or recovery card"
+      ],
+      "primary_plan": "Develop mana efficiently, convert X spells and counter synergies into material, and win through scalable threats rather than an unbounded loop.",
+      "required_prompt_families": [
+        "opening_hand",
+        "main_phase",
+        "payment",
+        "priority",
+        "target",
+        "search",
+        "optional",
+        "declare_attackers",
+        "declare_blockers",
+        "commander_zone"
+      ],
+      "secondary_plan": "Use card advantage, tutors, recursion, and removal to pivot between development and interaction.",
+      "selection_rank": 2,
+      "signature_cards": [
+        "Zaxara, the Exemplary",
+        "Genesis Hydra",
+        "Hydroid Krasis",
+        "Villainous Wealth",
+        "Walking Ballista",
+        "Blue Sun's Zenith",
+        "Torment of Hailfire",
+        "Exsanguinate",
+        "The Great Henge",
+        "Abrupt Decay",
+        "Adrix and Nev, Twincasters",
+        "Hour of Promise",
+        "Doubling Season"
+      ],
+      "tutor_priorities": [
+        "Worldly Tutor",
+        "Finale of Devastation"
+      ],
+      "unsupported_line_policy": "Fail closed with a typed reason; never invent a target, mode, payment, tutor result, hidden card, loop, or benchmark fallback."
+    },
+    {
+      "archetype": "Azorius interaction and inevitability",
+      "avoided_lines": [
+        "unsupported targets, modes, or payments",
+        "hidden-information access",
+        "unbounded or unproven loops"
+      ],
+      "benchmark_readiness": "not_ready",
+      "broad_role": "control_inevitability",
+      "candidate_status": "selected_candidate_blocked_pending_admission",
+      "color_identity": [
+        "W",
+        "U"
+      ],
+      "commander": "Tobias Andrion",
+      "commander_identity_id": "55dfe722-7487-4d25-b90c-e6ad2c82a671",
+      "commander_role": "Central to the proposed archetype; candidate status does not imply runtime, semantic, AI, or benchmark admission.",
+      "deck_id": "tobias-azorius-control",
+      "intended_win_conditions": [
+        "evasive creature pressure",
+        "token-backed inevitability",
+        "post-sweeper value advantage"
+      ],
+      "intent_id": "tobias-azorius-control",
+      "intent_version": "realistic-pod-v1-candidates-0.2",
+      "interaction_posture": "Candidate-level posture; all choices remain fail-closed pending exact admission evidence.",
+      "mulligan_priorities": [
+        "two or more mana sources",
+        "an early plan card",
+        "one interaction, protection, or recovery card"
+      ],
+      "primary_plan": "Develop mana and card flow while preserving priority for interaction, then stabilize with sweepers and win through durable value and evasive pressure.",
+      "required_prompt_families": [
+        "opening_hand",
+        "main_phase",
+        "payment",
+        "priority",
+        "target",
+        "search",
+        "optional",
+        "declare_attackers",
+        "declare_blockers",
+        "commander_zone"
+      ],
+      "secondary_plan": "Recover selected permanents and protect a compact finishing board after trading resources.",
+      "selection_rank": 3,
+      "signature_cards": [
+        "Tobias Andrion",
+        "Delay",
+        "Arcane Denial",
+        "Swan Song",
+        "Dovin's Veto",
+        "An Offer You Can't Refuse",
+        "Fierce Guardianship",
+        "Negate",
+        "Teferi's Protection",
+        "Cloudblazer",
+        "Counterspell",
+        "Dispel",
+        "Mana Drain"
+      ],
+      "tutor_priorities": [
+        "Enlightened Tutor",
+        "Mystical Tutor",
+        "Idyllic Tutor"
+      ],
+      "unsupported_line_policy": "Fail closed with a typed reason; never invent a target, mode, payment, tutor result, hidden card, loop, or benchmark fallback."
+    },
+    {
+      "archetype": "Rakdos sacrifice and death-trigger engine",
+      "avoided_lines": [
+        "unsupported targets, modes, or payments",
+        "hidden-information access",
+        "unbounded or unproven loops"
+      ],
+      "benchmark_readiness": "not_ready",
+      "broad_role": "synergy_engine",
+      "candidate_status": "selected_candidate_blocked_pending_admission",
+      "color_identity": [
+        "B",
+        "R"
+      ],
+      "commander": "Judith, the Scourge Diva",
+      "commander_identity_id": "c01516e0-eec3-4370-b935-7674982e8850",
+      "commander_role": "Central to the proposed archetype; candidate status does not imply runtime, semantic, AI, or benchmark admission.",
+      "deck_id": "judith-rakdos-aristocrats",
+      "intended_win_conditions": [
+        "death-trigger attrition",
+        "token and creature combat",
+        "graveyard-backed finishers"
+      ],
+      "intent_id": "judith-rakdos-aristocrats",
+      "intent_version": "realistic-pod-v1-candidates-0.2",
+      "interaction_posture": "Candidate-level posture; all choices remain fail-closed pending exact admission evidence.",
+      "mulligan_priorities": [
+        "two or more mana sources",
+        "an early plan card",
+        "one interaction, protection, or recovery card"
+      ],
+      "primary_plan": "Build disposable material and sacrifice outlets, convert deaths into cards and damage, and pressure every opponent without relying on an unsupported loop.",
+      "required_prompt_families": [
+        "opening_hand",
+        "main_phase",
+        "payment",
+        "priority",
+        "target",
+        "search",
+        "optional",
+        "declare_attackers",
+        "declare_blockers",
+        "commander_zone"
+      ],
+      "secondary_plan": "Use recursion, removal, and large graveyard payoffs to recover when the first engine is disrupted.",
+      "selection_rank": 4,
+      "signature_cards": [
+        "Judith, the Scourge Diva",
+        "Pitiless Plunderer",
+        "Butcher of Malakir",
+        "Dictate of Erebos",
+        "Grave Pact",
+        "Syr Konrad, the Grim",
+        "Deadly Dispute",
+        "Animate Dead",
+        "Dance of the Dead",
+        "Living Death",
+        "Mayhem Devil",
+        "Necromancy",
+        "Stitcher's Supplier"
+      ],
+      "tutor_priorities": [
+        "Vampiric Tutor",
+        "Demonic Tutor",
+        "Diabolic Tutor"
+      ],
+      "unsupported_line_policy": "Fail closed with a typed reason; never invent a target, mode, payment, tutor result, hidden card, loop, or benchmark fallback."
+    }
+  ],
+  "pilot_intent_contract": {
+    "hidden_information": "player_view_only",
+    "purpose": "Candidate strategic guidance, never a scripted line or legality override.",
+    "unsupported_choices": "fail_closed_typed_reason"
+  },
+  "product_binding": {
+    "commit": "19ef3302c40db3e916d2a60925546d4ebc28608d",
+    "tree": "e79efa91e0146f23f7219367e117db34ce13867a"
+  },
+  "provenance": {
+    "assignment_product": {
+      "commit": "19ef3302c40db3e916d2a60925546d4ebc28608d",
+      "tree": "e79efa91e0146f23f7219367e117db34ce13867a"
+    },
+    "inventory_path": "assets/ai/pods/realistic-pod-v1-candidates.json",
+    "inventory_sha256": "7000028cb6c496cc50832ce4cd311eb01652022c4af4a4370eeda639ec95705e",
+    "private_source_paths_included": false
+  },
+  "schema_version": 1,
+  "status": "candidate_blocked_pending_admission"
+}

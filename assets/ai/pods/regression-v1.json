@@ -1,0 +1,261 @@
+{
+  "schema_version": 1,
+  "fixture_id": "t4-engineering-regression-pod",
+  "fixture_version": "v1",
+  "freeze": {
+    "status": "immutable",
+    "frozen_on": "2026-07-15",
+    "mutation_policy": "Do not edit this version. A semantic change creates regression-v2 with a new source binding and new evidence."
+  },
+  "classification": {
+    "kind": "engineering_regression",
+    "label": "nonrepresentative_deterministic_engineering_regression_only",
+    "deterministic": true,
+    "representative_of_normal_commander": false,
+    "benchmark_eligible": false,
+    "ai_strength_calibration_eligible": false,
+    "search_knee_eligible": false,
+    "product_cost_estimation_eligible": false,
+    "promotion_eligible": false
+  },
+  "role": {
+    "primary": [
+      "fast deterministic four-player regression",
+      "exact typed-action replay regression",
+      "canonical decision-surface regression",
+      "hidden-information canaries",
+      "stack, trigger, cost, and combat regression",
+      "before-and-after performance comparisons",
+      "quick local preflight"
+    ],
+    "explicitly_excluded": [
+      "normal Commander game-length claims",
+      "realistic AI competence claims",
+      "archetype calibration",
+      "search-knee selection",
+      "product compute estimates",
+      "CP-AI-BENCH or CP-AI-REALISTIC-POD promotion"
+    ]
+  },
+  "source_root": "target/translated-cards",
+  "semantic_registry": "metrics/card_semantics_100.json",
+  "source": {
+    "manifest_path": "assets/t3_9/integration_decks.json",
+    "schema_version": 1,
+    "sha256": "0ed6260e37d1f62ad3d5463bbe9235730a31860d2c1c69c4b69f0735979c40c1",
+    "git_blob_sha1": "f6ab74fe7fcc5befdb6f158ea065bf68bf9e9e41",
+    "product_commit": "19ef3302c40db3e916d2a60925546d4ebc28608d",
+    "product_tree": "e79efa91e0146f23f7219367e117db34ce13867a",
+    "authority": "The source manifest is authoritative. This fixture is an immutable, source-bound snapshot and does not replace or modify it."
+  },
+  "taxonomy": {
+    "deck_count": 4,
+    "mainboard_slots": 396,
+    "commander_slots": 4,
+    "total_deck_slots": 400,
+    "mainboard_unique_identity_count": 21,
+    "commander_unique_identity_count": 4,
+    "distinct_identity_count_including_commanders": 25,
+    "mainboard_families": [
+      {
+        "family": "mana_ramp_and_equipment",
+        "unique_identity_count": 8,
+        "paths": [
+          "s/sol_ring.frs",
+          "m/mind_stone.frs",
+          "t/thought_vessel.frs",
+          "s/swiftfoot_boots.frs",
+          "l/lightning_greaves.frs",
+          "w/wayfarers_bauble.frs",
+          "b/burnished_hart.frs",
+          "s/sword_of_the_animist.frs"
+        ]
+      },
+      {
+        "family": "lands_and_fixing",
+        "unique_identity_count": 9,
+        "paths": [
+          "e/evolving_wilds.frs",
+          "t/terramorphic_expanse.frs",
+          "r/reliquary_tower.frs",
+          "t/temple_of_the_false_god.frs",
+          "p/plains.frs",
+          "i/island.frs",
+          "s/swamp.frs",
+          "m/mountain.frs",
+          "w/wastes.frs"
+        ]
+      },
+      {
+        "family": "card_advantage_and_tax",
+        "unique_identity_count": 2,
+        "paths": [
+          "s/smothering_tithe.frs",
+          "m/mulldrifter.frs"
+        ]
+      },
+      {
+        "family": "finishers_and_payoffs",
+        "unique_identity_count": 2,
+        "paths": [
+          "g/grave_titan.frs",
+          "p/purphoros_god_of_the_forge.frs"
+        ]
+      }
+    ],
+    "commander_family": {
+      "unique_identity_count": 4,
+      "paths": [
+        "i/isamaru_hound_of_konda.frs",
+        "t/tobias_andrion.frs",
+        "y/yargle_glutton_of_urborg.frs",
+        "r/rorix_bladewing.frs"
+      ]
+    },
+    "deck_roles": [
+      {
+        "deck_id": "mono-white-isamaru",
+        "role": "proactive_combat_pressure",
+        "scope": "engineering_fixture_only"
+      },
+      {
+        "deck_id": "azorius-tobias",
+        "role": "durable_material_and_simple_value",
+        "scope": "engineering_fixture_only"
+      },
+      {
+        "deck_id": "mono-black-yargle",
+        "role": "large_creature_combat_pressure",
+        "scope": "engineering_fixture_only"
+      },
+      {
+        "deck_id": "mono-red-rorix",
+        "role": "haste_and_combat_pressure",
+        "scope": "engineering_fixture_only"
+      }
+    ]
+  },
+  "reproducibility": {
+    "source_json_order_preserved": true,
+    "fixture_defines_randomness": false,
+    "seed_policy": "The caller must supply and record an explicit deterministic game or replay seed. This fixture does not define a benchmark seed schedule.",
+    "required_bindings": [
+      "product commit and tree",
+      "source manifest SHA-256 and Git blob SHA-1",
+      "translated-card source root",
+      "semantic registry path",
+      "fixture version"
+    ],
+    "historical_replay_reference": "reports/gates/T3.9/cp-four-player-pod-2026-07-13.json",
+    "historical_replay_reference_is_not_current_head_evidence": true
+  },
+  "drift_detection": {
+    "mode": "fail_closed",
+    "required_checks": [
+      "Resolve source.manifest_path as a repository-relative path and reject missing, absolute, or path-traversal paths.",
+      "Recompute source SHA-256 and Git blob SHA-1; reject either mismatch.",
+      "Require source schema_version, source_root, semantic_registry, and decks to equal this fixture's source-bound values.",
+      "Require the ordered deck arrays, commanders, card paths, and counts to equal this fixture's ordered deck snapshot.",
+      "Require the product commit and tree to equal source.product_commit and source.product_tree.",
+      "Reject fallback to a newer source manifest, partial deck data, or an unversioned replacement.",
+      "Require a new version and new hashes for any semantic change."
+    ],
+    "failure_result": "The fixture is stale and must not be loaded for regression, replay, or evidence generation."
+  },
+  "decks": [
+    {
+      "id": "mono-white-isamaru",
+      "name": "Isamaru Integration",
+      "color_identity": ["W"],
+      "commander": "i/isamaru_hound_of_konda.frs",
+      "cards": [
+        {"path": "s/sol_ring.frs", "count": 1},
+        {"path": "m/mind_stone.frs", "count": 1},
+        {"path": "t/thought_vessel.frs", "count": 1},
+        {"path": "s/swiftfoot_boots.frs", "count": 1},
+        {"path": "l/lightning_greaves.frs", "count": 1},
+        {"path": "w/wayfarers_bauble.frs", "count": 1},
+        {"path": "b/burnished_hart.frs", "count": 1},
+        {"path": "s/sword_of_the_animist.frs", "count": 1},
+        {"path": "e/evolving_wilds.frs", "count": 1},
+        {"path": "t/terramorphic_expanse.frs", "count": 1},
+        {"path": "r/reliquary_tower.frs", "count": 1},
+        {"path": "t/temple_of_the_false_god.frs", "count": 1},
+        {"path": "s/smothering_tithe.frs", "count": 1},
+        {"path": "p/plains.frs", "count": 70},
+        {"path": "w/wastes.frs", "count": 16}
+      ]
+    },
+    {
+      "id": "azorius-tobias",
+      "name": "Tobias Integration",
+      "color_identity": ["W", "U"],
+      "commander": "t/tobias_andrion.frs",
+      "cards": [
+        {"path": "s/sol_ring.frs", "count": 1},
+        {"path": "m/mind_stone.frs", "count": 1},
+        {"path": "t/thought_vessel.frs", "count": 1},
+        {"path": "s/swiftfoot_boots.frs", "count": 1},
+        {"path": "l/lightning_greaves.frs", "count": 1},
+        {"path": "w/wayfarers_bauble.frs", "count": 1},
+        {"path": "b/burnished_hart.frs", "count": 1},
+        {"path": "s/sword_of_the_animist.frs", "count": 1},
+        {"path": "e/evolving_wilds.frs", "count": 1},
+        {"path": "t/terramorphic_expanse.frs", "count": 1},
+        {"path": "r/reliquary_tower.frs", "count": 1},
+        {"path": "t/temple_of_the_false_god.frs", "count": 1},
+        {"path": "s/smothering_tithe.frs", "count": 1},
+        {"path": "m/mulldrifter.frs", "count": 1},
+        {"path": "p/plains.frs", "count": 35},
+        {"path": "i/island.frs", "count": 34},
+        {"path": "w/wastes.frs", "count": 16}
+      ]
+    },
+    {
+      "id": "mono-black-yargle",
+      "name": "Yargle Integration",
+      "color_identity": ["B"],
+      "commander": "y/yargle_glutton_of_urborg.frs",
+      "cards": [
+        {"path": "s/sol_ring.frs", "count": 1},
+        {"path": "m/mind_stone.frs", "count": 1},
+        {"path": "t/thought_vessel.frs", "count": 1},
+        {"path": "s/swiftfoot_boots.frs", "count": 1},
+        {"path": "l/lightning_greaves.frs", "count": 1},
+        {"path": "w/wayfarers_bauble.frs", "count": 1},
+        {"path": "b/burnished_hart.frs", "count": 1},
+        {"path": "s/sword_of_the_animist.frs", "count": 1},
+        {"path": "e/evolving_wilds.frs", "count": 1},
+        {"path": "t/terramorphic_expanse.frs", "count": 1},
+        {"path": "r/reliquary_tower.frs", "count": 1},
+        {"path": "t/temple_of_the_false_god.frs", "count": 1},
+        {"path": "g/grave_titan.frs", "count": 1},
+        {"path": "s/swamp.frs", "count": 70},
+        {"path": "w/wastes.frs", "count": 16}
+      ]
+    },
+    {
+      "id": "mono-red-rorix",
+      "name": "Rorix Integration",
+      "color_identity": ["R"],
+      "commander": "r/rorix_bladewing.frs",
+      "cards": [
+        {"path": "s/sol_ring.frs", "count": 1},
+        {"path": "m/mind_stone.frs", "count": 1},
+        {"path": "t/thought_vessel.frs", "count": 1},
+        {"path": "s/swiftfoot_boots.frs", "count": 1},
+        {"path": "l/lightning_greaves.frs", "count": 1},
+        {"path": "w/wayfarers_bauble.frs", "count": 1},
+        {"path": "b/burnished_hart.frs", "count": 1},
+        {"path": "s/sword_of_the_animist.frs", "count": 1},
+        {"path": "e/evolving_wilds.frs", "count": 1},
+        {"path": "t/terramorphic_expanse.frs", "count": 1},
+        {"path": "r/reliquary_tower.frs", "count": 1},
+        {"path": "t/temple_of_the_false_god.frs", "count": 1},
+        {"path": "p/purphoros_god_of_the_forge.frs", "count": 1},
+        {"path": "m/mountain.frs", "count": 70},
+        {"path": "w/wastes.frs", "count": 16}
+      ]
+    }
+  ]
+}

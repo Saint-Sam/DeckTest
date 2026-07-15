@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "gate": "T4-CARDS-WAVE-0",
+  "status": "frozen_nonrepresentative",
+  "pod_id": "t4-engineering-regression-pod",
+  "pod_version": "v1",
+  "promotion_eligible": false,
+  "product_binding": {
+    "commit": "19ef3302c40db3e916d2a60925546d4ebc28608d",
+    "tree": "e79efa91e0146f23f7219367e117db34ce13867a"
+  },
+  "consumer_contract": {
+    "validator": "tools/verify_t4_regression_pod.py",
+    "gate": "scripts/gates/gate_T4_cards.sh",
+    "mode": "fail_closed_before_consume",
+    "product_binding": "explicit_expected_commit_and_tree_arguments"
+  },
+  "source_binding": {
+    "path": "assets/t3_9/integration_decks.json",
+    "schema_version": 1,
+    "sha256": "0ed6260e37d1f62ad3d5463bbe9235730a31860d2c1c69c4b69f0735979c40c1",
+    "git_blob_sha1": "f6ab74fe7fcc5befdb6f158ea065bf68bf9e9e41",
+    "source_root": "target/translated-cards",
+    "semantic_registry": "metrics/card_semantics_100.json"
+  },
+  "fixture_binding": {
+    "path": "assets/ai/pods/regression-v1.json",
+    "version": "v1",
+    "sha256": "ca26b30e66a26904eeb8e7237351905d617eb9b7e3a909291ba639e58063e786"
+  },
+  "taxonomy": {
+    "deck_count": 4,
+    "mainboard_slots": 396,
+    "commander_slots": 4,
+    "total_deck_slots": 400,
+    "mainboard_unique_identity_count": 21,
+    "commander_unique_identity_count": 4,
+    "distinct_identity_count_including_commanders": 25,
+    "role": "deterministic engineering regression, not realistic Commander benchmarking"
+  },
+  "checks": {
+    "source_manifest_present": true,
+    "source_sha256_matches": true,
+    "source_git_blob_sha1_matches": true,
+    "fixture_present": true,
+    "fixture_sha256_matches": true,
+    "fixture_snapshot_matches_source": true,
+    "source_schema_and_roots_match": true,
+    "four_decks_preserved": true,
+    "mainboard_slots_396": true,
+    "commander_slots_4": true,
+    "mainboard_unique_identities_21": true,
+    "exact_replay_contract_preserved": true,
+    "nonrepresentative_label_present": true,
+    "strength_and_calibration_excluded": true,
+    "realistic_benchmark_excluded": true,
+    "fail_closed_validator_bound": true,
+    "diagnostic_gate_blocked": true
+  },
+  "claim_boundary": {
+    "allowed": [
+      "fast deterministic four-player regression",
+      "exact typed-action replay regression",
+      "canonical decision-surface regression",
+      "hidden-information canaries",
+      "stack, trigger, cost, and combat regression",
+      "before-and-after engineering comparisons",
+      "quick local preflight"
+    ],
+    "not_claimed": [
+      "normal Commander game length",
+      "realistic AI competence",
+      "archetype calibration",
+      "search-knee selection",
+      "product compute cost",
+      "CP-AI-REALISTIC-POD or CP-AI-BENCH promotion"
+    ]
+  },
+  "reproducibility": {
+    "random_seed_defined_by_fixture": false,
+    "caller_must_record": [
+      "explicit game or replay seed",
+      "policy and runtime configuration",
+      "product commit and tree",
+      "fixture version",
+      "source and fixture hashes"
+    ],
+    "source_json_order_preserved": true
+  },
+  "drift_detection": {
+    "mode": "fail_closed",
+    "on_mismatch": "stale_and_unusable",
+    "required": [
+      "recompute source SHA-256",
+      "recompute source Git blob SHA-1",
+      "compare ordered source deck snapshot",
+      "compare product commit and tree",
+      "compare fixture hash"
+    ],
+    "no_fallback": true,
+    "new_version_required_for_change": true
+  },
+  "historical_evidence": {
+    "path": "reports/gates/T3.9/cp-four-player-pod-2026-07-13.json",
+    "status": "passed_historical_reference",
+    "purpose": "Prior deterministic four-player and exact typed-action replay evidence for the same source deck semantics.",
+    "product_binding": {
+      "commit": "7bbbafa376a5222c3a335a744b5b942898c67a84",
+      "tree": "270d978f32921a29e92492fc2a782bf60bab0bc2"
+    },
+    "usable_as_current_head_evidence": false
+  }
+}

@@ -1,0 +1,252 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://decktest.local/schemas/t4/realistic_pod_candidates.schema.json",
+  "title": "DeckTest T4 Realistic Commander Candidate Inventory",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "artifact_kind",
+    "manifest_id",
+    "pool_kind",
+    "status",
+    "freeze_status",
+    "product_binding",
+    "provenance",
+    "candidate_decks",
+    "selected_pod",
+    "candidates",
+    "claim_boundary"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "artifact_kind": {"const": "realistic_commander_candidate_inventory"},
+    "manifest_id": {"const": "realistic-pod-v1-candidates"},
+    "pool_kind": {"const": "realistic"},
+    "status": {"const": "candidate_blocked_pending_admission"},
+    "freeze_status": {"const": "not_frozen"},
+    "product_binding": {"$ref": "#/$defs/product_binding"},
+    "evidence_paths": {"type": "object"},
+    "provenance": {
+      "type": "object",
+      "required": ["assignment_product", "inventory_path", "card_catalog", "private_source_paths_included"],
+      "properties": {
+        "assignment_product": {"$ref": "#/$defs/product_binding"},
+        "inventory_path": {"const": "assets/ai/pods/realistic-pod-v1-candidates.json"},
+        "card_catalog": {
+          "type": "object",
+          "required": ["path", "sha256"],
+          "properties": {
+            "path": {"const": "assets/card_catalog.json"},
+            "sha256": {"$ref": "#/$defs/sha256"}
+          }
+        },
+        "private_source_paths_included": {"const": false}
+      }
+    },
+    "candidate_decks": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {"$ref": "#/$defs/candidate_deck"}
+    },
+    "selected_pod": {
+      "type": "object",
+      "required": [
+        "pod_id",
+        "selected_deck_ids",
+        "candidate_identity_universe",
+        "unique_identity_count",
+        "deck_count",
+        "mainboard_slots",
+        "commander_slots",
+        "total_slots",
+        "status"
+      ],
+      "properties": {
+        "pod_id": {"const": "realistic-pod-v1-candidates"},
+        "selected_deck_ids": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "candidate_identity_universe": {
+          "type": "array",
+          "minItems": 250,
+          "maxItems": 350,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "unique_identity_count": {"type": "integer", "minimum": 250, "maximum": 350},
+        "deck_count": {"const": 4},
+        "mainboard_slots": {"const": 396},
+        "commander_slots": {"const": 4},
+        "total_slots": {"const": 400},
+        "status": {"const": "blocked_candidate"}
+      }
+    },
+    "candidates": {
+      "type": "array",
+      "minItems": 250,
+      "maxItems": 350,
+      "items": {"$ref": "#/$defs/candidate"}
+    },
+    "claim_boundary": {
+      "type": "object",
+      "required": ["diagnostic", "promotion_eligible", "cp_ai_realistic_pod_passed"],
+      "properties": {
+        "diagnostic": {"const": true},
+        "promotion_eligible": {"const": false},
+        "cp_ai_realistic_pod_passed": {"const": false}
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "git_object_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "product_binding": {
+      "type": "object",
+      "required": ["commit", "tree"],
+      "properties": {
+        "commit": {"$ref": "#/$defs/git_object_id"},
+        "tree": {"$ref": "#/$defs/git_object_id"}
+      },
+      "additionalProperties": false
+    },
+    "color_identity": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"enum": ["W", "U", "B", "R", "G"]}
+    },
+    "mainboard_card": {
+      "type": "object",
+      "required": [
+        "name",
+        "identity_id",
+        "oracle_id",
+        "count",
+        "color_identity",
+        "type_line",
+        "basic_land"
+      ],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "identity_id": {"type": "string", "minLength": 1},
+        "oracle_id": {"type": "string", "minLength": 1},
+        "count": {"type": "integer", "minimum": 1},
+        "color_identity": {"$ref": "#/$defs/color_identity"},
+        "type_line": {"type": "string", "minLength": 1},
+        "basic_land": {"type": "boolean"}
+      },
+      "additionalProperties": false
+    },
+    "candidate_deck": {
+      "type": "object",
+      "required": [
+        "deck_id",
+        "selected",
+        "selection_rank",
+        "commander",
+        "commander_identity_id",
+        "commander_oracle_id",
+        "color_identity",
+        "broad_role",
+        "archetype",
+        "pilot_intent_id",
+        "pilot_intent_version",
+        "mainboard",
+        "mainboard_slots",
+        "total_slots",
+        "land_slots",
+        "nonland_slots",
+        "candidate_status",
+        "admission_status"
+      ],
+      "properties": {
+        "deck_id": {"type": "string", "minLength": 1},
+        "selected": {"const": true},
+        "selection_rank": {"type": "integer", "minimum": 1, "maximum": 4},
+        "commander": {"type": "string", "minLength": 1},
+        "commander_identity_id": {"type": "string", "minLength": 1},
+        "commander_oracle_id": {"type": "string", "minLength": 1},
+        "color_identity": {"$ref": "#/$defs/color_identity"},
+        "broad_role": {"enum": ["proactive_aggro", "midrange_value", "control_inevitability", "synergy_engine"]},
+        "archetype": {"type": "string", "minLength": 1},
+        "pilot_intent_id": {"type": "string", "minLength": 1},
+        "pilot_intent_version": {"type": "string", "minLength": 1},
+        "mainboard": {
+          "type": "array",
+          "minItems": 60,
+          "maxItems": 99,
+          "items": {"$ref": "#/$defs/mainboard_card"}
+        },
+        "mainboard_slots": {"const": 99},
+        "total_slots": {"const": 100},
+        "land_slots": {"type": "integer", "minimum": 1, "maximum": 99},
+        "nonland_slots": {"type": "integer", "minimum": 1, "maximum": 98},
+        "candidate_status": {"const": "selected_candidate_blocked_pending_admission"},
+        "admission_status": {"const": "blocked_candidate"}
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "required": [
+        "identity_id",
+        "name",
+        "oracle_id",
+        "color_identity",
+        "type_line",
+        "basic_land",
+        "mechanic_family",
+        "deck_ids",
+        "slot_count",
+        "candidate_status",
+        "primary_blocker",
+        "requirements"
+      ],
+      "properties": {
+        "identity_id": {"type": "string", "minLength": 1},
+        "name": {"type": "string", "minLength": 1},
+        "oracle_id": {"type": "string", "minLength": 1},
+        "color_identity": {"$ref": "#/$defs/color_identity"},
+        "type_line": {"type": "string", "minLength": 1},
+        "basic_land": {"type": "boolean"},
+        "mechanic_family": {"type": "string", "minLength": 1},
+        "deck_ids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "slot_count": {"type": "integer", "minimum": 1},
+        "candidate_status": {"const": "blocked"},
+        "primary_blocker": {
+          "enum": [
+            "COMPILER_UNSUPPORTED",
+            "RUNTIME_UNSUPPORTED",
+            "SEMANTIC_EVIDENCE_MISSING",
+            "HUMAN_PROMPT_UNSUPPORTED",
+            "AI_PROMPT_UNSUPPORTED",
+            "BENCHMARK_FIXTURE_MISSING",
+            "HIDDEN_INFORMATION_RISK",
+            "REPLAY_DIVERGENCE",
+            "PERFORMANCE_LIMIT",
+            "RULES_AMBIGUITY"
+          ]
+        },
+        "requirements": {
+          "type": "object",
+          "additionalProperties": {"const": true}
+        }
+      }
+    }
+  }
+}
