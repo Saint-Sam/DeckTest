@@ -4,42 +4,42 @@
   "status": "local_diagnostic_preflight_passed_promotion_blocked",
   "verified_at": "2026-07-14",
   "verification_mode": "local_only_no_github_actions",
-  "product_commit": "a2e223c7e60aa8d6dd4d3afb624933bd9bf3ede9",
-  "product_tree": "240552015135b1c59fe82f529baccf7e4a157407",
-  "preflight_evidence_commit": "bd07d5163382b90044b614c733350e05afd1d506",
-  "preflight_evidence_tree": "1562ff147681972642756b7df1ab225b17f31bc5",
+  "product_commit": "fae0c77baa24176bec9e9585a2a66c1d775316d1",
+  "product_tree": "85e27929dcd3956d6a804261a184a8d1b41b9534",
+  "preflight_evidence_commit": "ee92b6d9af64a53fff65d2cdaecac50dba299b17",
+  "preflight_evidence_tree": "0083b0d40fdb9a08b96c3e443fce0d5c134109c5",
   "gate_command": "scripts/gates/gate_T4.sh --preflight",
   "gate_log": "reports/gates/T4/commands/00-preflight.log",
-  "gate_log_sha256": "e1530694bb19e3feba5b7281fd7c2d318f0765bfa753a6a08fb463041e88a0ae",
+  "gate_log_sha256": "ee45ba7c284ca8dc95230274ef1d0c458a3bce27d398bbc3e0a071c1050ab276",
   "checks": {
     "format": "passed",
     "strict_clippy": "passed",
     "tests": {
-      "passed": 258,
+      "passed": 262,
       "failed": 0,
       "ignored": 1,
       "ignored_reason": "requires local generated T3 translated-card output"
     },
     "heuristic_exact_policy_and_typed_action_replay": {
       "status": "passed",
-      "replay_sha256": "9351d92e0ecd5fb8d4ccecd270d3e858584fb013c17df8be0aa79fc1002d1d15",
+      "replay_sha256": "317f09370823de9347e9cfff56b6f804bec17c068234b3ebd9fbdbb6d338636d",
       "decisions": 15763,
       "typed_actions": 18029,
-      "final_hash": "8829749138877186373"
+      "final_hash": "1347092284232215653"
     },
     "random_legal_exact_policy_and_typed_action_replay": {
       "status": "passed",
-      "replay_sha256": "56b4fd8fb71546be1cac6e4f78d093fe4f73524f834dfe87b3878cc782b267fa",
+      "replay_sha256": "14199ab0e43488669f418881b0999ffc68681bbda99dd7d2826bf0abdc01106c",
       "decisions": 6505,
       "typed_actions": 8299,
-      "final_hash": "11556917610744946793"
+      "final_hash": "7006841597002591361"
     },
     "search_exact_policy_and_typed_action_replay": {
       "status": "passed",
-      "replay_sha256": "8e17f06d892e5f39109a0e375f0ee7278e4c58638c48d4b231546b002bee2d4b",
+      "replay_sha256": "1e0ac3706852c8e4f8828eac9d631a3e2155a3266582aa274eee7a30e141d861",
       "decisions": 16031,
       "typed_actions": 18321,
-      "final_hash": "14097481066362770282"
+      "final_hash": "16375386236967138290"
     },
     "wasm32_unknown_unknown_compile": "passed",
     "aarch64_linux_android_compile": "passed",
@@ -60,16 +60,16 @@
       "strength_claim": false,
       "total_decision_budget_contract": "shared_deadline_and_current_surface_budget_response_passed",
       "observed_p95_wall_latency_us": [
-        1443,
-        4658
+        1543,
+        4841
       ],
       "result": "metrics/ai/search_budget_knee_results.json",
-      "result_sha256": "652aafd09c249e5e194728db0c05da02ea0614268b60f8cdf2fe7284408ac092"
+      "result_sha256": "b062ad60a567de9ddac09c30dc9dd162082c10f0c98305c2eb955baed462d33a"
     },
     "decision_state_key_audit": {
       "status": "passed",
       "artifact": "metrics/ai/decision_state_audit.json",
-      "artifact_sha256": "bb45c7657bf330239c36336aa069787c421110586b367dd0567cdb5bde49d7c8",
+      "artifact_sha256": "b85161646cbf9964457a7249cbb64b3223046d3dac951d096ce3c85821fc0ef3",
       "decisions": 38299,
       "unique_semantic_signatures": 38242,
       "unique_state_keys": 38242,
@@ -96,7 +96,7 @@
     "T4.10"
   ],
   "promotion_blockers": [
-    "complete the remaining canonical human, AI, and benchmark Choice/Prompt adapters, including same-batch inter-trigger targeting, arbitrary alternate and unsupported additional-cost families, modal abilities, target distribution, and partial-legality filtering",
+    "complete the remaining canonical human, AI, and benchmark Choice/Prompt adapters, including same-batch inter-trigger targeting, arbitrary alternate and unsupported spell/activation-cost families, modal abilities, target distribution, and partial-legality filtering",
     "three materially different archetype tracks",
     "development, validation, and sealed Track A campaigns",
     "sealed Track B acceptable-action, catastrophic-blunder, and bounded win/defense labels",
