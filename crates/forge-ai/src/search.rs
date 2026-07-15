@@ -6,8 +6,43 @@ use std::{
     time::{Duration, Instant},
 };
 
+#[cfg(any(target_os = "android", target_os = "linux"))]
+use std::fs;
+
 const VALUE_LIMIT: i64 = 1_000_000_000;
 const PPM: f64 = 1_000_000.0;
+
+/// Supported-platform resource counters captured around one AI decision.
+///
+/// Linux and Android use safe `/proc` reads. Other targets retain `None` so
+/// evidence cannot mistake a wall-time estimate for measured CPU or memory.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ResourceSnapshot {
+    thread_cpu_time_us: Option<u64>,
+    resident_memory_bytes: Option<u64>,
+}
+
+impl ResourceSnapshot {
+    /// Captures the current thread CPU counter and process resident memory.
+    #[must_use]
+    pub fn capture() -> Self {
+        Self {
+            thread_cpu_time_us: current_thread_cpu_time_us(),
+            resident_memory_bytes: current_process_resident_memory_bytes(),
+        }
+    }
+
+    fn cpu_delta(self, end: Self) -> Option<u64> {
+        end.thread_cpu_time_us?
+            .checked_sub(self.thread_cpu_time_us?)
+    }
+
+    fn memory_delta(self, end: Self) -> Option<i64> {
+        let start = i128::from(self.resident_memory_bytes?);
+        let end = i128::from(end.resident_memory_bytes?);
+        i64::try_from(end - start).ok()
+    }
+}
 
 /// Search work limit for one complete decision.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -142,6 +177,7 @@ pub struct SearchConfig {
     workers: u32,
     limit: SearchLimit,
     decision_started: Option<Instant>,
+    resource_started: Option<ResourceSnapshot>,
     rollout_depth: u32,
     exploration_milli: u32,
     progressive_widening: Option<ProgressiveWidening>,
@@ -158,6 +194,7 @@ impl SearchConfig {
             workers: determinizations.max(1),
             limit: SearchLimit::Iterations(iterations),
             decision_started: None,
+            resource_started: None,
             rollout_depth: 24,
             exploration_milli: 1_414,
             progressive_widening: Some(ProgressiveWidening::new(8, 2)),
@@ -174,6 +211,7 @@ impl SearchConfig {
             workers: determinizations.max(1),
             limit: SearchLimit::WallTime(Duration::from_millis(think_ms)),
             decision_started: None,
+            resource_started: None,
             rollout_depth: 24,
             exploration_milli: 1_414,
             progressive_widening: Some(ProgressiveWidening::new(8, 2)),
@@ -195,6 +233,13 @@ impl SearchConfig {
     #[must_use]
     pub fn with_decision_started(mut self, started: Instant) -> Self {
         self.decision_started = Some(started);
+        self
+    }
+
+    /// Includes caller-side context construction in CPU and memory telemetry.
+    #[must_use]
+    pub const fn with_resource_started(mut self, started: ResourceSnapshot) -> Self {
+        self.resource_started = Some(started);
         self
     }
 
@@ -614,6 +659,9 @@ impl SearchEngine {
     ) -> Result<SearchReport, SearchError> {
         validate_config(config)?;
         let started = config.decision_started.unwrap_or_else(Instant::now);
+        let resources_started = config
+            .resource_started
+            .unwrap_or_else(ResourceSnapshot::capture);
         let deadline = match config.limit {
             SearchLimit::WallTime(duration) => started.checked_add(duration),
             SearchLimit::Iterations(_) => None,
@@ -624,6 +672,7 @@ impl SearchEngine {
             .map(|option| option.id())
             .collect::<Vec<_>>();
         if legal.len() == 1 {
+            let resources_finished = ResourceSnapshot::capture();
             return Ok(SearchReport {
                 selected_action: legal[0],
                 actions: vec![SearchActionReport {
@@ -640,8 +689,8 @@ impl SearchEngine {
                 maximum_depth: 0,
                 transposition_hits: 0,
                 actual_wall_time_us: elapsed_us(started),
-                actual_cpu_time_us: None,
-                memory_delta_bytes: None,
+                actual_cpu_time_us: resources_started.cpu_delta(resources_finished),
+                memory_delta_bytes: resources_started.memory_delta(resources_finished),
                 value_gap: 0,
                 visit_gap: 0,
                 uncertainty_ppm: 0,
@@ -675,9 +724,17 @@ impl SearchEngine {
                     .collect::<Result<Vec<_>, _>>()
             })?
         };
+        let worker_cpu_time_us = if worker_count == 1 {
+            None
+        } else {
+            batches
+                .iter()
+                .map(|batch| batch.thread_cpu_time_us)
+                .try_fold(0_u64, |total, value| total.checked_add(value?))
+        };
         let mut trees = Vec::new();
         for batch in batches {
-            for (index, result) in batch {
+            for (index, result) in batch.trees {
                 let tree = result.map_err(|message| SearchError::DomainFailure {
                     determinization: index,
                     message,
@@ -701,8 +758,26 @@ impl SearchEngine {
         if trees.is_empty() {
             return Err(SearchError::MissingTree(0));
         }
-        aggregate(legal, trees, config, worker_count, elapsed_us(started))
+        let mut report = aggregate(legal, trees, config, worker_count, elapsed_us(started))?;
+        let resources_finished = ResourceSnapshot::capture();
+        let main_cpu_time_us = resources_started.cpu_delta(resources_finished);
+        report.actual_cpu_time_us = if worker_count == 1 {
+            main_cpu_time_us
+        } else {
+            match (main_cpu_time_us, worker_cpu_time_us) {
+                (Some(main), Some(worker)) => main.checked_add(worker),
+                _ => None,
+            }
+        };
+        report.memory_delta_bytes = resources_started.memory_delta(resources_finished);
+        report.actual_wall_time_us = elapsed_us(started);
+        Ok(report)
     }
+}
+
+struct WorkerBatch {
+    trees: Vec<(u32, Result<TreeReport, String>)>,
+    thread_cpu_time_us: Option<u64>,
 }
 
 fn run_worker_batch<D: SearchDomain>(
@@ -712,7 +787,8 @@ fn run_worker_batch<D: SearchDomain>(
     worker: u32,
     worker_count: u32,
     deadline: Option<Instant>,
-) -> Vec<(u32, Result<TreeReport, String>)> {
+) -> WorkerBatch {
+    let cpu_started = current_thread_cpu_time_us();
     let mut results = Vec::new();
     for index in (worker..config.determinizations).step_by(worker_count as usize) {
         let deadline_expired = deadline.is_some_and(|deadline| Instant::now() >= deadline);
@@ -722,7 +798,12 @@ fn run_worker_batch<D: SearchDomain>(
         let seed = tree_seed(config.seed, index);
         results.push((index, run_tree(domain, legal, seed, config, deadline)));
     }
-    results
+    let cpu_finished = current_thread_cpu_time_us();
+    WorkerBatch {
+        trees: results,
+        thread_cpu_time_us: cpu_finished
+            .and_then(|finished| cpu_started.and_then(|started| finished.checked_sub(started))),
+    }
 }
 
 struct Node<S> {
@@ -1456,6 +1537,49 @@ fn splitmix64(mut value: u64) -> u64 {
     value ^ (value >> 31)
 }
 
+#[cfg(any(test, target_os = "android", target_os = "linux"))]
+fn parse_schedstat_cpu_time_us(contents: &str) -> Option<u64> {
+    contents
+        .split_whitespace()
+        .next()?
+        .parse::<u64>()
+        .ok()
+        .map(|nanoseconds| nanoseconds / 1_000)
+}
+
+#[cfg(any(test, target_os = "android", target_os = "linux"))]
+fn parse_status_resident_memory_bytes(contents: &str) -> Option<u64> {
+    let kibibytes = contents.lines().find_map(|line| {
+        let value = line.strip_prefix("VmRSS:")?.trim();
+        value.split_whitespace().next()?.parse::<u64>().ok()
+    })?;
+    kibibytes.checked_mul(1_024)
+}
+
+#[cfg(any(target_os = "android", target_os = "linux"))]
+fn current_thread_cpu_time_us() -> Option<u64> {
+    fs::read_to_string("/proc/thread-self/schedstat")
+        .ok()
+        .and_then(|contents| parse_schedstat_cpu_time_us(&contents))
+}
+
+#[cfg(not(any(target_os = "android", target_os = "linux")))]
+const fn current_thread_cpu_time_us() -> Option<u64> {
+    None
+}
+
+#[cfg(any(target_os = "android", target_os = "linux"))]
+fn current_process_resident_memory_bytes() -> Option<u64> {
+    fs::read_to_string("/proc/self/status")
+        .ok()
+        .and_then(|contents| parse_status_resident_memory_bytes(&contents))
+}
+
+#[cfg(not(any(target_os = "android", target_os = "linux")))]
+const fn current_process_resident_memory_bytes() -> Option<u64> {
+    None
+}
+
 fn elapsed_us(started: Instant) -> u64 {
     started.elapsed().as_micros().min(u128::from(u64::MAX)) as u64
 }
@@ -1508,8 +1632,9 @@ impl Error for SearchError {}
 #[cfg(test)]
 mod tests {
     use super::{
-        best_unexpanded, AdaptiveStopping, Edge, Node, ProgressiveWidening, SearchConfig,
-        SearchDomain, SearchEngine, SearchError, SearchStateKey, SearchStopReason,
+        best_unexpanded, parse_schedstat_cpu_time_us, parse_status_resident_memory_bytes,
+        AdaptiveStopping, Edge, Node, ProgressiveWidening, SearchConfig, SearchDomain,
+        SearchEngine, SearchError, SearchStateKey, SearchStopReason,
     };
     use crate::LastDecisionReport;
     use forge_core::{
@@ -1521,6 +1646,22 @@ mod tests {
         thread,
         time::{Duration, Instant},
     };
+
+    #[test]
+    fn linux_resource_counter_parsers_are_exact_and_fail_closed() {
+        assert_eq!(parse_schedstat_cpu_time_us("12345678 42 3\n"), Some(12_345));
+        assert_eq!(parse_schedstat_cpu_time_us("not-a-number"), None);
+        assert_eq!(
+            parse_status_resident_memory_bytes(
+                "Name:\tforge\nVmSize:\t999 kB\nVmRSS:\t12345 kB\nThreads:\t4\n"
+            ),
+            Some(12_641_280)
+        );
+        assert_eq!(
+            parse_status_resident_memory_bytes("Name:\tforge\nVmSize:\t999 kB\n"),
+            None
+        );
+    }
 
     #[derive(Clone)]
     struct ToyState {

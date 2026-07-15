@@ -27,9 +27,9 @@ pub use mulligan::{MulliganDecision, MulliganError, MulliganPolicy};
 pub use policy::{HeuristicPolicy, PolicyCandidate, PolicyDecision, PolicyError, PolicyMode};
 pub use random::{RandomLegalPolicy, RandomPolicyError};
 pub use search::{
-    AdaptiveStopping, BoundedSolution, ProgressiveWidening, SearchActionReport, SearchCheckpoint,
-    SearchConfig, SearchDomain, SearchEngine, SearchError, SearchLimit, SearchReport,
-    SearchStateKey, SearchStopReason,
+    AdaptiveStopping, BoundedSolution, ProgressiveWidening, ResourceSnapshot, SearchActionReport,
+    SearchCheckpoint, SearchConfig, SearchDomain, SearchEngine, SearchError, SearchLimit,
+    SearchReport, SearchStateKey, SearchStopReason,
 };
 pub use target::{TargetDecision, TargetIntent, TargetPolicy, TargetPolicyError};
 pub use tier::{

@@ -64,11 +64,13 @@ comparisons and all three fixed/adaptive ablations. The first artifact exposed
 per-tree deadline multiplication. Product 316d9fd corrected that contract and
 edge accounting, then measured approximately 240-266 ms p95 because eager
 high-branching adapter work and duplicate full-state construction remained
-non-preemptible. Both reports are defect evidence only. The next source product
-uses hierarchical combat subcontexts and constructs one determinized state per
-sample; it must rerun the same ladder before timing can be interpreted. Missing
-Track B labels, CPU cost, reference devices, and wide confidence intervals
-would still prohibit a strength or plateau claim even if timing passes.
+non-preemptible. Product 3b1fd6d replaced those paths with hierarchical combat
+subcontexts and one determinized state per sample; its exact rerun measures
+approximately 1.5-4.7 ms p95 across the same nominal budgets. That is a bounded
+timing diagnostic, not a knee. Safe Linux/Android CPU and memory adapters are
+implemented in the following source wave, but a measured supported-platform
+campaign, Track B labels, reference devices, and useful confidence intervals
+still prohibit a strength, cost, or plateau claim.
 
 The supporting design reference is *Learning to Stop: Dynamic Simulation
 Monte-Carlo Tree Search* (arXiv:2012.07910). DeckTest's own paired arena,

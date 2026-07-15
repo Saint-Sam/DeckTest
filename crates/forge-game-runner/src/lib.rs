@@ -9,8 +9,8 @@
 use forge_ai::{
     ActionRisk, ActionRisks, AdaptiveStopping, AiWeights, DeckModel, Determinizer,
     GuardrailProfile, GuardrailTable, HeuristicPolicy, LastDecisionReport, MulliganPolicy,
-    PolicyCandidate, PolicyDecision, PolicyMode, RandomLegalPolicy, SearchConfig, SearchDomain,
-    SearchEngine, SearchLimit, SearchReport, SearchStateKey, SearchStopReason,
+    PolicyCandidate, PolicyDecision, PolicyMode, RandomLegalPolicy, ResourceSnapshot, SearchConfig,
+    SearchDomain, SearchEngine, SearchLimit, SearchReport, SearchStateKey, SearchStopReason,
 };
 use forge_cards::runtime::{
     bind_activated_effect_actions, bind_program_actions, bind_triggered_ability_actions,
@@ -3406,6 +3406,8 @@ impl GameDriver {
     ) -> Result<(), String> {
         loop {
             let decision_started = Instant::now();
+            let resource_started =
+                matches!(policy, AiController::Search(_)).then(ResourceSnapshot::capture);
             let (context, mappings) = self.main_decision_context(player)?;
             let (selected_id, decision, policy_name, candidates, search_report) = match policy {
                 AiController::Search(controller) => {
@@ -3417,9 +3419,12 @@ impl GameDriver {
                         rollout_seed: controller.seed ^ decision_index,
                         guardrail_profile: controller.guardrail_profile,
                     };
-                    let config = controller
+                    let mut config = controller
                         .config(decision_index)
                         .with_decision_started(decision_started);
+                    if let Some(resource_started) = resource_started {
+                        config = config.with_resource_started(resource_started);
+                    }
                     let report =
                         SearchEngine::search(&domain, &context, &config).map_err(|error| {
                             format!("seed {} main search failed: {error}", self.seed)
@@ -5141,6 +5146,8 @@ impl GameDriver {
         let mut attacks = Vec::new();
         for (cursor, attacker) in objects.iter().copied().enumerate() {
             let decision_started = Instant::now();
+            let resource_started =
+                matches!(policy, AiController::Search(_)).then(ResourceSnapshot::capture);
             let context = self.attack_assignment_context(active, &objects, cursor, &attacks)?;
             let (selected_id, decision, policy_name, candidates, search_report) = match policy {
                 AiController::Search(controller) => {
@@ -5157,9 +5164,12 @@ impl GameDriver {
                         },
                         guardrail_profile: controller.guardrail_profile,
                     };
-                    let config = controller
+                    let mut config = controller
                         .config(decision_index)
                         .with_decision_started(decision_started);
+                    if let Some(resource_started) = resource_started {
+                        config = config.with_resource_started(resource_started);
+                    }
                     let report =
                         SearchEngine::search(&domain, &context, &config).map_err(|error| {
                             format!("seed {} attack search failed: {error}", self.seed)
@@ -5511,6 +5521,8 @@ impl GameDriver {
         let mut blocks = Vec::new();
         for (cursor, blocker) in objects.iter().copied().enumerate() {
             let decision_started = Instant::now();
+            let resource_started =
+                matches!(policy, AiController::Search(_)).then(ResourceSnapshot::capture);
             let context =
                 self.block_assignment_context(defending_player, &objects, cursor, &blocks)?;
             let (selected_id, decision, policy_name, candidates, search_report) = match policy {
@@ -5528,9 +5540,12 @@ impl GameDriver {
                         },
                         guardrail_profile: controller.guardrail_profile,
                     };
-                    let config = controller
+                    let mut config = controller
                         .config(decision_index)
                         .with_decision_started(decision_started);
+                    if let Some(resource_started) = resource_started {
+                        config = config.with_resource_started(resource_started);
+                    }
                     let report =
                         SearchEngine::search(&domain, &context, &config).map_err(|error| {
                             format!("seed {} block search failed: {error}", self.seed)

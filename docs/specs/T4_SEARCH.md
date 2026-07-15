@@ -38,8 +38,8 @@ sequential determinizations after expiry, and `workers=1` executes inline
 without thread creation. A single context build, determinization, or typed
 transition remains non-preemptible, so measured wall time may exceed the
 budget by that operation; the budget can no longer be multiplied by a sequence
-of independently timed trees. Setup/search/aggregation phase telemetry remains
-open T4.9 work.
+of independently timed trees. Supported server telemetry begins before context
+construction and includes parent setup/aggregation plus summed worker CPU.
 
 The current four-player product adapter searches:
 
@@ -98,9 +98,10 @@ latency, value gap, visit gap, normalized uncertainty, and stop reason.
 It also records the configured iteration or wall budget, leader visit share,
 checkpoint count, ranking stability, bounded-solver state, and whether
 experimental adaptive stopping was enabled. Singleton options report zero
-search work. CPU time and resident-memory deltas remain explicit unavailable
-fields until a platform measurement adapter is landed; they must not be
-inferred from wall time.
+search work. Linux and Android populate measured thread-CPU and process
+resident-memory deltas through safe `/proc` adapters. Unsupported platforms
+retain explicit unavailable fields; CPU is never inferred from wall time.
+Worker price and utilization remain campaign inputs.
 
 ## Promotion Limits
 
@@ -109,8 +110,9 @@ playing strength. T4 promotion still requires sealed benchmark evidence,
 paired arena calibration, three archetype decks, at least 400 games per rung,
 latency evidence on required reference platforms, full shipped-card support,
 and Owner CP-AI-LADDER review. No broad T3 reopening is authorized.
-The product-316d9fd 1/2/4 ms ladder proved the shared deadline but retained a
-roughly 240-266 ms p95 tail from non-preemptible adapter work. Hierarchical
-combat contexts and single-construction determinization are implemented in the
-next source product; exact ladder replacement remains required before any
-latency or knee interpretation.
+Product `3b1fd6d` binds hierarchical combat and single-construction
+determinization to exact replays. Its refreshed 1/2/4 ms ladder measures
+approximately 1.5-4.7 ms p95 rather than the former 240-266 ms floor. This
+closes the diagnosed eager-combat timing defect, but CPU/memory campaigns,
+competence labels, confidence, and reference devices still block a latency,
+cost, or knee promotion claim.
