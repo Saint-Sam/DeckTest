@@ -115,10 +115,10 @@
     },
     {
       "kind": "concession",
-      "human": "descriptor_only",
-      "ai": "descriptor_only",
-      "benchmark": "descriptor_only",
-      "note": "The canonical descriptor maps to an immediate typed kernel concession with canonical events; live human, AI, and benchmark prompt adapters remain open."
+      "human": "complete",
+      "ai": "complete",
+      "benchmark": "partial",
+      "note": "An explicit human command and AI/benchmark consumers share one hidden-safe singleton Concession context, canonical membership validation, immediate typed kernel action, telemetry descriptor, and exact decision/action replay. Concession is deliberately absent from ordinary random and search action sets; sealed benchmark fixtures remain open."
     }
   ]
 }

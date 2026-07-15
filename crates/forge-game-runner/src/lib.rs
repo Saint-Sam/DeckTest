@@ -55,6 +55,7 @@ const PILOT_INTENTS_PATH: &str = "assets/ai/pilot_intents.json";
 const RETAINED_REPLAYS: usize = 10;
 const MAX_CANONICAL_SPELL_OPTIONS: usize = 65_536;
 const MAX_DIRECT_COMBAT_DAMAGE_AMOUNTS: u32 = 64;
+const CONCESSION_PROMPT: &str = "Concede the game";
 
 /// Runs the complete local T3.9 pod campaign from process arguments.
 pub fn run() -> Result<(), String> {
@@ -823,6 +824,19 @@ struct DecisionPrompt<'a> {
     view: &'a PlayerView,
     context: &'a DecisionContext,
     options: &'a [String],
+    allow_concession: bool,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum DecisionSelection {
+    Option(usize),
+    RequestConcession,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CanonicalPromptSelection {
+    Option(CanonicalActionId),
+    RequestConcession,
 }
 
 struct LegacyDecisionPrompt<'a> {
@@ -832,7 +846,16 @@ struct LegacyDecisionPrompt<'a> {
 }
 
 trait DecisionSource {
-    fn choose(&mut self, prompt: &DecisionPrompt<'_>) -> Result<usize, String>;
+    fn choose(&mut self, prompt: &DecisionPrompt<'_>) -> Result<DecisionSelection, String>;
+
+    fn choose_concession(&mut self, prompt: &DecisionPrompt<'_>) -> Result<usize, String> {
+        match self.choose(prompt)? {
+            DecisionSelection::Option(selected) => Ok(selected),
+            DecisionSelection::RequestConcession => {
+                Err("concession prompt recursively requested concession".to_owned())
+            }
+        }
+    }
 
     fn is_legacy_replay(&self) -> bool {
         false
@@ -864,7 +887,7 @@ impl<'a> TerminalDecisionSource<'a> {
 }
 
 impl DecisionSource for TerminalDecisionSource<'_> {
-    fn choose(&mut self, prompt: &DecisionPrompt<'_>) -> Result<usize, String> {
+    fn choose(&mut self, prompt: &DecisionPrompt<'_>) -> Result<DecisionSelection, String> {
         if prompt.options.is_empty() {
             return Err(format!("{} prompt has no legal options", prompt.kind));
         }
@@ -911,11 +934,22 @@ impl DecisionSource for TerminalDecisionSource<'_> {
             if read == 0 {
                 return Err("human input ended before the game completed".to_owned());
             }
-            if line.trim().eq_ignore_ascii_case("q") {
+            let input = line.trim();
+            if input.eq_ignore_ascii_case("q") {
                 return Err("human game aborted by owner".to_owned());
             }
-            let Ok(choice) = line.trim().parse::<usize>() else {
-                writeln!(self.output, "Enter an option number, or q to stop.")
+            if prompt.allow_concession
+                && (input.eq_ignore_ascii_case("c") || input.eq_ignore_ascii_case("concede"))
+            {
+                return Ok(DecisionSelection::RequestConcession);
+            }
+            let Ok(choice) = input.parse::<usize>() else {
+                let help = if prompt.allow_concession {
+                    "Enter an option number, c to concede, or q to stop."
+                } else {
+                    "Enter an option number, or q to stop."
+                };
+                writeln!(self.output, "{help}")
                     .map_err(|error| format!("failed to write human prompt: {error}"))?;
                 continue;
             };
@@ -934,7 +968,29 @@ impl DecisionSource for TerminalDecisionSource<'_> {
             prompt,
             selected,
         ));
-        Ok(selected)
+        Ok(DecisionSelection::Option(selected))
+    }
+
+    fn choose_concession(&mut self, prompt: &DecisionPrompt<'_>) -> Result<usize, String> {
+        validate_decision_prompt(prompt)?;
+        if prompt.context.kind() != DecisionKind::Concession
+            || prompt.options.len() != 1
+            || !matches!(
+                prompt.context.options()[0].descriptor(),
+                DecisionDescriptor::Concede
+            )
+        {
+            return Err("canonical concession prompt is malformed".to_owned());
+        }
+        self.decisions
+            .push(snapshot_prompt(self.decisions.len() as u64, prompt, 0));
+        writeln!(
+            self.output,
+            "Seat {} conceded.",
+            prompt.view.observer().index() + 1
+        )
+        .map_err(|error| format!("failed to write concession result: {error}"))?;
+        Ok(0)
     }
 }
 
@@ -971,12 +1027,19 @@ impl ReplayDecisionSource {
 }
 
 impl DecisionSource for ReplayDecisionSource {
-    fn choose(&mut self, prompt: &DecisionPrompt<'_>) -> Result<usize, String> {
+    fn choose(&mut self, prompt: &DecisionPrompt<'_>) -> Result<DecisionSelection, String> {
         validate_decision_prompt(prompt)?;
         let expected = self
             .decisions
             .get(self.cursor)
             .ok_or_else(|| format!("unexpected replay prompt `{}`", prompt.kind))?;
+        if !self.legacy
+            && prompt.allow_concession
+            && expected.prompt == CONCESSION_PROMPT
+            && prompt.kind != CONCESSION_PROMPT
+        {
+            return Ok(DecisionSelection::RequestConcession);
+        }
         let actual = snapshot_prompt(expected.index, prompt, expected.selected);
         if !human_decision_matches(expected, &actual) {
             return Err(format!(
@@ -992,7 +1055,7 @@ impl DecisionSource for ReplayDecisionSource {
             ));
         }
         self.cursor = self.cursor.saturating_add(1);
-        Ok(expected.selected)
+        Ok(DecisionSelection::Option(expected.selected))
     }
 
     fn is_legacy_replay(&self) -> bool {
@@ -1133,6 +1196,36 @@ fn player_view_fingerprint(view: &PlayerView) -> String {
         hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
     }
     format!("{hash:016x}")
+}
+
+/// Builds the explicit singleton concession context used by human, AI, and
+/// benchmark consumers. It is deliberately absent from ordinary policy action
+/// sets so random or search controllers cannot concede accidentally.
+pub fn concession_decision_context(
+    state: &GameState,
+    player: PlayerId,
+) -> Result<DecisionContext, String> {
+    let view = state
+        .player_view(player)
+        .map_err(|error| format!("concession player view failed: {error:?}"))?;
+    concession_decision_context_from_view(&view, player)
+}
+
+fn concession_decision_context_from_view(
+    view: &PlayerView,
+    player: PlayerId,
+) -> Result<DecisionContext, String> {
+    DecisionContext::new(
+        DecisionKind::Concession,
+        player,
+        view,
+        vec![DecisionOption::new(
+            DecisionDescriptor::Concede,
+            vec![Action::Concede { player }],
+        )],
+        Vec::new(),
+    )
+    .map_err(|error| format!("concession decision context failed: {error}"))
 }
 
 #[derive(Clone)]
@@ -2297,6 +2390,33 @@ impl GameDriver {
         context: &DecisionContext,
         options: &[String],
     ) -> Result<CanonicalActionId, String> {
+        match self.prompt_context_selection(source, kind, context, options, false)? {
+            CanonicalPromptSelection::Option(selected) => Ok(selected),
+            CanonicalPromptSelection::RequestConcession => Err(format!(
+                "seed {} prompt `{kind}` accepted concession outside a main or priority window",
+                self.seed
+            )),
+        }
+    }
+
+    fn prompt_context_choice_allowing_concession(
+        &self,
+        source: &mut dyn DecisionSource,
+        kind: &'static str,
+        context: &DecisionContext,
+        options: &[String],
+    ) -> Result<CanonicalPromptSelection, String> {
+        self.prompt_context_selection(source, kind, context, options, true)
+    }
+
+    fn prompt_context_selection(
+        &self,
+        source: &mut dyn DecisionSource,
+        kind: &'static str,
+        context: &DecisionContext,
+        options: &[String],
+        allow_concession: bool,
+    ) -> Result<CanonicalPromptSelection, String> {
         let view = self
             .state
             .player_view(context.actor())
@@ -2306,7 +2426,11 @@ impl GameDriver {
             view: &view,
             context,
             options,
+            allow_concession,
         })?;
+        let DecisionSelection::Option(selected) = selected else {
+            return Ok(CanonicalPromptSelection::RequestConcession);
+        };
         if selected >= options.len() {
             return Err(format!(
                 "seed {} prompt `{kind}` returned option {selected} outside {} choices",
@@ -2327,7 +2451,7 @@ impl GameDriver {
                 self.seed
             )
         })?;
-        Ok(selected.id())
+        Ok(CanonicalPromptSelection::Option(selected.id()))
     }
 
     fn prompt_legacy_choice(
@@ -2371,12 +2495,18 @@ impl GameDriver {
                 .iter()
                 .map(|option| self.main_choice_label(option.descriptor()))
                 .collect::<Result<Vec<_>, _>>()?;
-            let selected_id = self.prompt_context_choice(
+            let selected_id = match self.prompt_context_choice_allowing_concession(
                 source,
                 "Choose a main-phase action",
                 &context,
                 &labels,
-            )?;
+            )? {
+                CanonicalPromptSelection::Option(selected) => selected,
+                CanonicalPromptSelection::RequestConcession => {
+                    self.take_human_concession(player, source)?;
+                    return Ok(());
+                }
+            };
             let choice = mappings
                 .iter()
                 .find_map(|(id, choice)| (*id == selected_id).then(|| choice.clone()))
@@ -2421,8 +2551,18 @@ impl GameDriver {
                 descriptor => self.main_choice_label(descriptor),
             })
             .collect::<Result<Vec<_>, _>>()?;
-        let selected_id =
-            self.prompt_context_choice(source, "Choose a priority action", &context, &labels)?;
+        let selected_id = match self.prompt_context_choice_allowing_concession(
+            source,
+            "Choose a priority action",
+            &context,
+            &labels,
+        )? {
+            CanonicalPromptSelection::Option(selected) => selected,
+            CanonicalPromptSelection::RequestConcession => {
+                self.take_human_concession(player, source)?;
+                return Ok(());
+            }
+        };
         let choice = mappings
             .iter()
             .find_map(|(id, choice)| (*id == selected_id).then(|| choice.clone()))
@@ -2433,6 +2573,43 @@ impl GameDriver {
                 )
             })?;
         self.apply_main_choice(player, choice)?;
+        Ok(())
+    }
+
+    fn take_human_concession(
+        &mut self,
+        player: PlayerId,
+        source: &mut dyn DecisionSource,
+    ) -> Result<(), String> {
+        let context = concession_decision_context(&self.state, player)?;
+        let labels = vec!["Concede the game".to_owned()];
+        let view = self
+            .state
+            .player_view(player)
+            .map_err(|error| format!("seed {} player view failed: {error:?}", self.seed))?;
+        let selected = source.choose_concession(&DecisionPrompt {
+            kind: CONCESSION_PROMPT,
+            view: &view,
+            context: &context,
+            options: &labels,
+            allow_concession: false,
+        })?;
+        let option = context.options().get(selected).ok_or_else(|| {
+            format!(
+                "seed {} concession prompt selected option {selected} outside {} choices",
+                self.seed,
+                context.options().len()
+            )
+        })?;
+        context.select(option.id()).map_err(|error| {
+            format!(
+                "seed {} concession prompt selected an illegal action: {error}",
+                self.seed
+            )
+        })?;
+        for action in option.actions().to_vec() {
+            self.dispatch(action)?;
+        }
         Ok(())
     }
 
@@ -9194,11 +9371,13 @@ fn build_report(
 #[cfg(test)]
 mod tests {
     use super::{
-        campaign_seed, legacy_human_summary_matches, player_view_fingerprint,
-        replay_captured_actions, replay_human_file, run_prompted_game, snapshot_prompt,
-        ActivatedRuntime, AiController, DecisionPrompt, DecisionSource, GameDriver, GameMetrics,
-        GameSummary, HeuristicPolicy, IdentityExercise, MainChoice, PendingActivatedResolution,
-        RandomLegalPolicy, ReplayDecisionSource, TraceMode, TraceRecord, PLAYER_COUNT,
+        campaign_seed, concession_decision_context, concession_decision_context_from_view,
+        legacy_human_summary_matches, player_view_fingerprint, replay_captured_actions,
+        replay_human_file, run_prompted_game, snapshot_prompt, ActivatedRuntime, AiController,
+        DecisionPrompt, DecisionSelection, DecisionSource, GameDriver, GameMetrics, GameSummary,
+        HeuristicPolicy, IdentityExercise, MainChoice, PendingActivatedResolution,
+        RandomLegalPolicy, ReplayDecisionSource, TerminalDecisionSource, TraceMode, TraceRecord,
+        CONCESSION_PROMPT, PLAYER_COUNT,
     };
     use forge_ai::{AiWeights, GuardrailTable};
     use forge_cards::runtime::compile_card_program;
@@ -9312,6 +9491,7 @@ mod tests {
             view: &view,
             context: &context,
             options: &options,
+            allow_concession: false,
         };
         let record = snapshot_prompt(0, &prompt, 1);
         assert_eq!(record.context_id, context.id().to_string());
@@ -9322,7 +9502,7 @@ mod tests {
             context.options()[1].id().to_string()
         );
         let mut replay = ReplayDecisionSource::new(vec![record]);
-        assert_eq!(replay.choose(&prompt), Ok(1));
+        assert_eq!(replay.choose(&prompt), Ok(DecisionSelection::Option(1)));
         assert!(replay.finish().is_ok());
 
         let changed_options = vec!["Different action".to_owned(), "Pass".to_owned()];
@@ -9331,6 +9511,7 @@ mod tests {
             view: &view,
             context: &context,
             options: &changed_options,
+            allow_concession: false,
         };
         let record = snapshot_prompt(0, &prompt, 1);
         let mut replay = ReplayDecisionSource::new(vec![record]);
@@ -9359,6 +9540,7 @@ mod tests {
             view: &view,
             context: &context,
             options: &labels,
+            allow_concession: false,
         };
         let mut legacy = snapshot_prompt(0, &prompt, 0);
         legacy.decision_context_schema = 0;
@@ -9369,7 +9551,7 @@ mod tests {
         legacy.selected_action_id.clear();
 
         let mut replay = ReplayDecisionSource::new(vec![legacy]);
-        assert_eq!(replay.choose(&prompt), Ok(0));
+        assert_eq!(replay.choose(&prompt), Ok(DecisionSelection::Option(0)));
         assert!(replay.finish().is_ok());
     }
 
@@ -10005,6 +10187,83 @@ mod tests {
                 && label.contains("targets seat 2")
                 && label.contains("mode 1")
         }));
+    }
+
+    #[test]
+    fn explicit_concession_uses_one_human_ai_and_replay_context() {
+        let (driver, caster, opponent, _spell) = modal_spell_driver();
+        let mut human_driver = driver.clone();
+        let mut input = Cursor::new(b"concede\n".as_slice());
+        let mut output = Vec::new();
+        let mut terminal = TerminalDecisionSource::new(&mut input, &mut output);
+        human_driver
+            .take_human_priority_action(caster, &mut terminal)
+            .unwrap_or_else(|error| panic!("human concession should succeed: {error}"));
+        let decisions = terminal.into_decisions();
+
+        assert_eq!(decisions.len(), 1);
+        assert_eq!(decisions[0].prompt, CONCESSION_PROMPT);
+        assert_eq!(decisions[0].canonical_legal_actions.len(), 1);
+        assert_eq!(
+            decisions[0].canonical_legal_actions[0].descriptor,
+            serde_json::json!({"kind": "concede"})
+        );
+        assert!(String::from_utf8(output)
+            .unwrap_or_else(|error| panic!("terminal output should be UTF-8: {error}"))
+            .contains("Seat 1 conceded."));
+        assert!(human_driver.state.players()[caster.index()].lost());
+        assert_eq!(
+            human_driver.state.game_outcome(),
+            forge_core::GameOutcome::Won(opponent)
+        );
+        assert!(matches!(
+            human_driver.actions.last(),
+            Some(Action::Concede { player }) if *player == caster
+        ));
+
+        let mut replay_driver = driver.clone();
+        let mut replay = ReplayDecisionSource::new(decisions);
+        replay_driver
+            .take_human_priority_action(caster, &mut replay)
+            .unwrap_or_else(|error| panic!("concession replay should succeed: {error}"));
+        assert!(replay.finish().is_ok());
+        assert_eq!(replay_driver.actions, human_driver.actions);
+        assert_eq!(
+            replay_driver.state.deterministic_hash(),
+            human_driver.state.deterministic_hash()
+        );
+
+        let mut ai_driver = driver;
+        let context = concession_decision_context(&ai_driver.state, caster)
+            .unwrap_or_else(|error| panic!("AI concession context should exist: {error}"));
+        assert_eq!(context.kind(), DecisionKind::Concession);
+        assert_eq!(context.options().len(), 1);
+        let selected_id = RandomLegalPolicy::new(91)
+            .select(&context, 0)
+            .unwrap_or_else(|error| panic!("AI should select the singleton context: {error}"));
+        let selected = context
+            .select(selected_id)
+            .unwrap_or_else(|error| panic!("AI selection should be canonical: {error}"));
+        for action in selected.actions().to_vec() {
+            ai_driver
+                .dispatch(action)
+                .unwrap_or_else(|error| panic!("AI concession action should apply: {error}"));
+        }
+        assert_eq!(
+            ai_driver.state.deterministic_hash(),
+            human_driver.state.deterministic_hash()
+        );
+
+        let first_hidden = hidden_card_view(7, false);
+        let second_hidden = hidden_card_view(8, false);
+        let first_context =
+            concession_decision_context_from_view(&first_hidden, first_hidden.observer())
+                .unwrap_or_else(|error| panic!("first hidden context should exist: {error}"));
+        let second_context =
+            concession_decision_context_from_view(&second_hidden, second_hidden.observer())
+                .unwrap_or_else(|error| panic!("second hidden context should exist: {error}"));
+        assert_eq!(first_context.id(), second_context.id());
+        assert_eq!(first_context.state_key(), second_context.state_key());
     }
 
     #[test]
@@ -10670,9 +10929,9 @@ mod tests {
     struct PickSecondChoice;
 
     impl DecisionSource for PickSecondChoice {
-        fn choose(&mut self, prompt: &DecisionPrompt<'_>) -> Result<usize, String> {
+        fn choose(&mut self, prompt: &DecisionPrompt<'_>) -> Result<DecisionSelection, String> {
             (prompt.options.len() == 2)
-                .then_some(1)
+                .then_some(DecisionSelection::Option(1))
                 .ok_or_else(|| "expected exactly two commander-zone options".to_owned())
         }
     }
@@ -10680,7 +10939,7 @@ mod tests {
     struct LegacyNoPrompt;
 
     impl DecisionSource for LegacyNoPrompt {
-        fn choose(&mut self, _prompt: &DecisionPrompt<'_>) -> Result<usize, String> {
+        fn choose(&mut self, _prompt: &DecisionPrompt<'_>) -> Result<DecisionSelection, String> {
             Err("legacy combat damage must remain automatic".to_owned())
         }
 
@@ -10692,11 +10951,12 @@ mod tests {
     struct PickNonEmptyResolutionChoice;
 
     impl DecisionSource for PickNonEmptyResolutionChoice {
-        fn choose(&mut self, prompt: &DecisionPrompt<'_>) -> Result<usize, String> {
+        fn choose(&mut self, prompt: &DecisionPrompt<'_>) -> Result<DecisionSelection, String> {
             prompt
                 .options
                 .iter()
                 .position(|label| !label.starts_with("Find no matching"))
+                .map(DecisionSelection::Option)
                 .ok_or_else(|| "expected a non-empty resolution choice".to_owned())
         }
     }

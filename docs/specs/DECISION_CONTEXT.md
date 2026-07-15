@@ -86,6 +86,9 @@ The T4.3-T4.5 diagnostics path currently adapts:
 - kernel-validated combat-damage ordering and sequential amounts for human and
   AI controllers, using bounded next-blocker contexts and binary range
   narrowing above 64 direct amounts rather than complete distributions;
+- explicit human, AI, and benchmark concession through one hidden-safe
+  singleton `Concession` context, while ordinary random and search action sets
+  exclude concession unless a caller explicitly requests that context;
 - one shared sorted context for the live human and AI main-phase, attacker,
   blocker, and commander-zone adapters; presentation labels are derived from
   those typed options rather than independently enumerated menus;
@@ -103,9 +106,9 @@ and the current typed activated slice cover targets, optional effects,
 payments, and activated/triggered object searches, but those prompt families
 remain partial until their remaining trigger-target, spell-resolution, and
 multi-zone forms use the same boundary.
-A typed immediate concession action and event exist, but the always-available
-human/AI/benchmark prompt adapter remains open. These gaps cannot be silently
-skipped for CP-AI-BENCH,
+The live concession adapter is complete, but its sealed benchmark fixture is
+still pending with the other Track B evidence. Remaining gaps cannot be
+silently skipped for CP-AI-BENCH,
 CP-HUMAN-TRACE, teacher-corpus eligibility, or product-strength claims.
 
 ## Replay And Data Boundary
