@@ -6403,7 +6403,8 @@ impl GameDriver {
             .state
             .player_view(actor)
             .map_err(|error| format!("seed {} player view failed: {error:?}", self.seed))?;
-        let runtime = self.benchmark_runtime_semantics();
+        let mut runtime = self.benchmark_runtime_semantics();
+        self.bind_decision_object_semantics(&mut runtime, &options)?;
         DecisionContext::new_with_benchmark_semantics(
             kind,
             actor,
@@ -6426,7 +6427,8 @@ impl GameDriver {
             .state
             .player_view(actor)
             .map_err(|error| format!("seed {} player view failed: {error:?}", self.seed))?;
-        let runtime = self.benchmark_runtime_semantics();
+        let mut runtime = self.benchmark_runtime_semantics();
+        self.bind_decision_object_semantics(&mut runtime, &options)?;
         DecisionContext::new_scoped_with_benchmark_semantics(
             kind,
             actor,
@@ -6459,6 +6461,41 @@ impl GameDriver {
             runtime.bind_stack_entry(entry.clone(), position as u32);
         }
         runtime
+    }
+
+    fn bind_decision_object_semantics(
+        &self,
+        runtime: &mut BenchmarkRuntimeSemantics,
+        options: &[DecisionOption],
+    ) -> Result<(), String> {
+        let mut objects = BTreeSet::new();
+        for option in options {
+            match option.descriptor() {
+                DecisionDescriptor::ChooseSearchObject { object } => {
+                    objects.insert(*object);
+                }
+                DecisionDescriptor::ChooseResolutionObjects { choices } => {
+                    objects.extend(choices.iter().flatten().copied());
+                }
+                _ => {}
+            }
+        }
+        for object in objects {
+            let record = self.state.object(object).ok_or_else(|| {
+                format!(
+                    "seed {} decision option references missing object {object:?}",
+                    self.seed
+                )
+            })?;
+            let zone = self.state.object_zone(object).ok_or_else(|| {
+                format!(
+                    "seed {} decision option object {object:?} has no zone",
+                    self.seed
+                )
+            })?;
+            runtime.bind_decision_object(object, record.card(), record.owner(), zone);
+        }
+        Ok(())
     }
 
     fn policy_candidates(
@@ -18230,6 +18267,7 @@ card "Mulldrifter" {
             .pending_spell_context(pending)
             .unwrap_or_else(|error| panic!("spell search context should exist: {error}"));
         assert_eq!(search.kind(), DecisionKind::Search);
+        assert!(search.benchmark_normalization_complete());
         assert_eq!(search.options().len(), 2);
         assert!(search.options().iter().any(|option| matches!(
             option.descriptor(),
@@ -18735,6 +18773,7 @@ card "Mulldrifter" {
             .pending_activated_choice_context(&pending, &requirements, 0, &[])
             .unwrap_or_else(|error| panic!("first search slot should exist: {error}"));
         assert_eq!(first.kind(), DecisionKind::Search);
+        assert!(first.benchmark_normalization_complete());
         assert_eq!(first.options().len(), 9);
         let first_choice = first
             .options()
@@ -18751,6 +18790,7 @@ card "Mulldrifter" {
         let second = driver
             .pending_activated_choice_context(&pending, &requirements, 1, &first_choice)
             .unwrap_or_else(|error| panic!("second search slot should exist: {error}"));
+        assert!(second.benchmark_normalization_complete());
         assert_eq!(second.options().len(), 9);
         assert_ne!(first.state_key(), second.state_key());
         assert!(second.options().iter().all(|option| matches!(

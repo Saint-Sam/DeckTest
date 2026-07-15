@@ -1,8 +1,8 @@
 use super::{
-    Action, ActivatedAbilityId, AnnouncedTarget, AttackDeclaration, BlockDeclaration, ManaKind,
-    ObjectCharacteristics, ObjectId, ObjectRecord, ObjectView, PaymentPlan, PlayerId, PlayerView,
-    PlayerViewHash, SpellAlternateCost, StackEntry, StackEntryId, Step, TargetChoice, TriggerId,
-    ZoneId, ZoneKind,
+    Action, ActivatedAbilityId, AnnouncedTarget, AttackDeclaration, BlockDeclaration, CardId,
+    ManaKind, ObjectCharacteristics, ObjectId, ObjectRecord, ObjectView, PaymentPlan, PlayerId,
+    PlayerView, PlayerViewHash, SpellAlternateCost, StackEntry, StackEntryId, Step, TargetChoice,
+    TriggerId, ZoneId, ZoneKind,
 };
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -120,6 +120,13 @@ struct RuntimeSemanticBinding {
     tag: u128,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct RuntimeDecisionObjectBinding {
+    card: CardId,
+    owner: PlayerId,
+    zone: ZoneId,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct RuntimeStackBinding {
     position: u32,
@@ -134,12 +141,26 @@ struct RuntimeStackBinding {
 /// semantics.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct BenchmarkRuntimeSemantics {
+    decision_objects: BTreeMap<ObjectId, RuntimeDecisionObjectBinding>,
     abilities: BTreeMap<ActivatedAbilityId, RuntimeSemanticBinding>,
     triggers: BTreeMap<TriggerId, RuntimeSemanticBinding>,
     stack_entries: BTreeMap<StackEntryId, RuntimeStackBinding>,
 }
 
 impl BenchmarkRuntimeSemantics {
+    /// Binds an object exposed by a legal decision option but hidden in the
+    /// ordinary redacted view to allocation-independent printed semantics.
+    pub fn bind_decision_object(
+        &mut self,
+        object: ObjectId,
+        card: CardId,
+        owner: PlayerId,
+        zone: ZoneId,
+    ) {
+        self.decision_objects
+            .insert(object, RuntimeDecisionObjectBinding { card, owner, zone });
+    }
+
     /// Binds one activated ability to allocation-independent program semantics.
     pub fn bind_ability(
         &mut self,
@@ -1518,6 +1539,23 @@ fn benchmark_projection(
     let normalized_view_hash = normalized_view.deterministic_hash();
 
     if let Some(runtime) = runtime {
+        for (object, binding) in &runtime.decision_objects {
+            if projection.objects.contains_key(object) {
+                continue;
+            }
+            let mut payload = CanonicalDecisionBytes::default();
+            payload.u32(binding.card.get());
+            payload.player(binding.owner);
+            payload.zone(binding.zone);
+            projection.decision_objects.insert(
+                *object,
+                stable_hash(
+                    b"forge-benchmark-decision-object-v1",
+                    &payload.finish_with_status().0,
+                ),
+            );
+        }
+
         for (ability, binding) in &runtime.abilities {
             if let Some(source) = projection.objects.get(&binding.source).copied() {
                 let mut payload = CanonicalDecisionBytes::default();
@@ -1980,6 +2018,7 @@ impl Error for DecisionContextError {}
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 struct BenchmarkIdProjection {
     objects: BTreeMap<ObjectId, u32>,
+    decision_objects: BTreeMap<ObjectId, u128>,
     abilities: BTreeMap<ActivatedAbilityId, u128>,
     triggers: BTreeMap<TriggerId, u128>,
     stack_entries: BTreeMap<StackEntryId, u128>,
@@ -2041,11 +2080,17 @@ impl<'a> CanonicalDecisionBytes<'a> {
                     self.u8(0);
                     self.u32(value);
                 }
-                None => {
-                    self.complete = false;
-                    self.u8(1);
-                    self.u32(object.index() as u32);
-                }
+                None => match projection.decision_objects.get(&object).copied() {
+                    Some(value) => {
+                        self.u8(1);
+                        self.u128(value);
+                    }
+                    None => {
+                        self.complete = false;
+                        self.u8(2);
+                        self.u32(object.index() as u32);
+                    }
+                },
             },
             None => self.u32(object.index() as u32),
         }
@@ -2395,6 +2440,90 @@ mod tests {
             first.normalized_player_view_hash(),
             second.normalized_player_view_hash()
         );
+        assert_eq!(
+            first.normalized_benchmark_key(),
+            second.normalized_benchmark_key()
+        );
+        assert!(first.benchmark_normalization_complete());
+        assert!(second.benchmark_normalization_complete());
+    }
+
+    #[test]
+    fn normalized_keys_bind_hidden_decision_objects_by_printed_semantics() {
+        let library = |player| ZoneId::new(Some(player), ZoneKind::Library);
+        let option = |object| {
+            vec![DecisionOption::new(
+                DecisionDescriptor::ChooseResolutionObjects {
+                    choices: vec![vec![object]],
+                },
+                Vec::new(),
+            )]
+        };
+
+        let (mut first_state, first_player) = setup_view();
+        let first_choice =
+            create_visible_object(&mut first_state, first_player, 11, ZoneKind::Library);
+        let _first_other =
+            create_visible_object(&mut first_state, first_player, 22, ZoneKind::Library);
+        let (mut second_state, second_player) = setup_view();
+        let _second_other =
+            create_visible_object(&mut second_state, second_player, 22, ZoneKind::Library);
+        let second_choice =
+            create_visible_object(&mut second_state, second_player, 11, ZoneKind::Library);
+
+        let first_view = first_state
+            .player_view(first_player)
+            .unwrap_or_else(|error| panic!("first view failed: {error:?}"));
+        let second_view = second_state
+            .player_view(second_player)
+            .unwrap_or_else(|error| panic!("second view failed: {error:?}"));
+        let unbound = DecisionContext::new_scoped(
+            DecisionKind::Search,
+            first_player,
+            &first_view,
+            option(first_choice),
+            Vec::new(),
+            9,
+        )
+        .unwrap_or_else(|error| panic!("unbound context failed: {error}"));
+        assert!(!unbound.benchmark_normalization_complete());
+
+        let mut first_runtime = BenchmarkRuntimeSemantics::default();
+        first_runtime.bind_decision_object(
+            first_choice,
+            CardId::new(11),
+            first_player,
+            library(first_player),
+        );
+        let mut second_runtime = BenchmarkRuntimeSemantics::default();
+        second_runtime.bind_decision_object(
+            second_choice,
+            CardId::new(11),
+            second_player,
+            library(second_player),
+        );
+        let first = DecisionContext::new_scoped_with_benchmark_semantics(
+            DecisionKind::Search,
+            first_player,
+            &first_view,
+            option(first_choice),
+            Vec::new(),
+            9,
+            &first_runtime,
+        )
+        .unwrap_or_else(|error| panic!("first bound context failed: {error}"));
+        let second = DecisionContext::new_scoped_with_benchmark_semantics(
+            DecisionKind::Search,
+            second_player,
+            &second_view,
+            option(second_choice),
+            Vec::new(),
+            9,
+            &second_runtime,
+        )
+        .unwrap_or_else(|error| panic!("second bound context failed: {error}"));
+
+        assert_ne!(first.state_key(), second.state_key());
         assert_eq!(
             first.normalized_benchmark_key(),
             second.normalized_benchmark_key()

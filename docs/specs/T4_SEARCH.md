@@ -185,8 +185,10 @@ deadlines, caller-side budget accounting, edge statistics, transpositions,
 hidden information, hierarchical paths, target legality, trigger staging and
 ordering, cost announcements, and search across opponent priority and stack
 resolution. Mutants run sequentially from an archived exact product with the
-repository's single shared Cargo target. A compiler failure does not count as a
-kill; the named focused test must execute and fail.
+shared Cargo registry/cache and an isolated temporary build target that is
+deleted after the campaign. This prevents mutant artifacts from replacing
+normal workspace products. A compiler failure does not count as a kill; the
+named focused test must execute and fail.
 
 ## Promotion Limits
 

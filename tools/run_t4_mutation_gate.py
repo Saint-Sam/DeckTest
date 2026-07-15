@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import atexit
 import hashlib
 import io
 import json
@@ -20,6 +21,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_ROOT = ROOT / "target/t4-mutation/source"
+MUTATION_TARGET = ROOT / "target/t4-mutation/cargo-target"
 LOG_ROOT = ROOT / "reports/gates/T4/mutations"
 METRIC = ROOT / "metrics/ai/t4_mutation.json"
 REPORT = ROOT / "reports/gates/T4/mutation_test_report.md"
@@ -327,7 +329,7 @@ def run_test(command: list[str], log: Path) -> tuple[int, str]:
         env={
             **os.environ,
             "CARGO_NET_OFFLINE": "true",
-            "CARGO_TARGET_DIR": str(ROOT / "target"),
+            "CARGO_TARGET_DIR": str(MUTATION_TARGET),
             "TMPDIR": os.environ.get("TMPDIR", "/private/tmp"),
         },
         text=True,
@@ -392,7 +394,7 @@ def render_report(metric: dict[str, Any]) -> str:
         "",
         f"- Score: {metric['mutation_score_percent']}%",
         f"- Survivors: {len(metric['surviving_mutants'])}",
-        f"- Shared Cargo target: `{metric['constraints']['cargo_target_dir']}`",
+        f"- Isolated temporary Cargo target: `{metric['constraints']['cargo_target_dir']}`",
         "",
         "| Mutant | Category | Killing test |",
         "|---|---|---|",
@@ -406,6 +408,8 @@ def generate(jobs: int) -> int:
     if not 1 <= jobs <= 24:
         raise ValueError("jobs must be in 1..=24")
     commit, tree, coverage = product_binding()
+    shutil.rmtree(MUTATION_TARGET, ignore_errors=True)
+    atexit.register(shutil.rmtree, MUTATION_TARGET, ignore_errors=True)
     materialize_product(commit)
     LOG_ROOT.mkdir(parents=True, exist_ok=True)
     for log in LOG_ROOT.glob("generated-*.log"):
@@ -484,7 +488,9 @@ def generate(jobs: int) -> int:
             "installs_performed": False,
             "push_performed": False,
             "workers_used": jobs,
-            "cargo_target_dir": "target",
+            "cargo_target_dir": "target/t4-mutation/cargo-target",
+            "isolated_build_target": True,
+            "build_target_removed_after_campaign": True,
             "separate_cargo_cache_created": False,
         },
     }
