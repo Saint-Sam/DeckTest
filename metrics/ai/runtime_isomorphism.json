@@ -1,0 +1,32 @@
+{
+  "artifact_classification": "diagnostic_not_promotion_eligible",
+  "checks": {
+    "ability_registration_order_isomorphic": true,
+    "equivalent_mana_source_creation_order_isomorphic": true,
+    "equivalent_zone_membership_runtime_handles_isomorphic": true,
+    "exact_replay_ids_unchanged": true,
+    "exact_runtime_handles_remain_distinct": true,
+    "hierarchical_paths_remain_distinct": true,
+    "normalization_complete": true,
+    "object_allocation_order_isomorphic": true,
+    "unequal_semantics_remain_distinct": true,
+    "visible_stack_semantics_remain_distinct": true
+  },
+  "claim_limits": [
+    "exact replay identifiers remain authoritative for replay execution",
+    "normalized keys are evidence-only and require complete semantic bindings",
+    "sealed benchmark split evidence remains a separate promotion gate"
+  ],
+  "fixtures": {
+    "first_exact_context_id": "21a4269bf5d0a981d9b6e2687500e74f",
+    "first_path_key": "289ca7f3101cd1c83b6d7449a2916e5f",
+    "other_path_key": "5548bfbcc68a784ff5ac726260624d32",
+    "reordered_exact_context_id": "e56e1b1203d1b9f08244209114522160",
+    "shared_normalized_benchmark_key": "f81d336dcab072cab4965e20b47e0a99",
+    "unequal_semantics_key": "80f3d8674d142777a19feb2fa9240706"
+  },
+  "product_commit": "19ef3302c40db3e916d2a60925546d4ebc28608d",
+  "product_tree": "e79efa91e0146f23f7219367e117db34ce13867a",
+  "schema_version": 1,
+  "status": "passed"
+}

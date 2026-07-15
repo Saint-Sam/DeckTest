@@ -1,9 +1,10 @@
 {
   "artifact_classification": "diagnostic_not_promotion_eligible",
   "failures": [],
-  "near_state_dedup_audit": "not_run_runtime_isomorphism",
-  "product_commit": "72ea3eeef2d2c6dd8c92fb8289a0fb65ee613439",
-  "product_tree": "379793e9bd2e55b29448fd46396371402ed3fdbd",
+  "near_state_dedup_audit": "passed_runtime_isomorphism",
+  "normalized_key_signature_consistency": "passed",
+  "product_commit": "19ef3302c40db3e916d2a60925546d4ebc28608d",
+  "product_tree": "e79efa91e0146f23f7219367e117db34ce13867a",
   "promotion_limits": [
     "this artifact checks recorded key/signature consistency; it does not construct independently allocated equivalent runtime states",
     "paired baseline overlap is expected and is not a development/validation/sealed leakage audit",
@@ -11,9 +12,27 @@
   ],
   "recorded_key_signature_consistency": "passed",
   "replay_family_leakage_audit": "not_applicable_paired_diagnostic_baselines",
+  "runtime_isomorphism_fixture": {
+    "checks": {
+      "ability_registration_order_isomorphic": true,
+      "equivalent_mana_source_creation_order_isomorphic": true,
+      "equivalent_zone_membership_runtime_handles_isomorphic": true,
+      "exact_replay_ids_unchanged": true,
+      "exact_runtime_handles_remain_distinct": true,
+      "hierarchical_paths_remain_distinct": true,
+      "normalization_complete": true,
+      "object_allocation_order_isomorphic": true,
+      "unequal_semantics_remain_distinct": true,
+      "visible_stack_semantics_remain_distinct": true
+    },
+    "path": "metrics/ai/runtime_isomorphism.json",
+    "sha256": "3f76d3b85a3900aef7b0cf0e4d9ecdb5e1c0c665abd69dddd7abcba8f9abcb50",
+    "status": "passed"
+  },
   "schema_version": 1,
   "signature_contract": {
     "context": "state signature + DecisionContextId",
+    "normalized_benchmark": "decision kind + normalized PlayerViewHash + hierarchical path discriminator + sorted normalized legal-action multiset",
     "state": "decision kind + PlayerViewHash + hierarchical path discriminator + sorted canonical legal descriptors"
   },
   "sources": [
@@ -22,29 +41,34 @@
       "path": "reports/gates/T4.3/ai-baseline.frsreplay",
       "policy": "heuristic-v1",
       "seed": "17306488943054686737",
-      "sha256": "2ec92d3b1d9c918759cbc4a87834f8822a2f2d86aff44bfc2b435fc47dcc0686"
+      "sha256": "52eca94f74a1a9a8ea4f21e92732b13016473eaf2769ba0528b4c803b7bb88dc"
     },
     {
       "decisions": 6505,
       "path": "reports/gates/T4.3/random-legal-baseline.frsreplay",
       "policy": "random-legal-v1",
       "seed": "17306488943054686737",
-      "sha256": "55f6ae0d07ec1f8737b5d50ece835c7dce1e7cccd0c348d212eec4936f2b1c87"
+      "sha256": "04d5bce32d4d5adae424822800a518debc495e8aa87fdbbb756bc2566686537e"
     },
     {
       "decisions": 16010,
       "path": "reports/gates/T4.3/search-baseline.frsreplay",
       "policy": "determinized-uct-v1",
       "seed": "17306488943054686737",
-      "sha256": "e96e969ff47a9c020538756faf62b9175c906c846c170f63831c29b572d41aa6"
+      "sha256": "cf65dbfa1edeb2afd850708910c7d675e31fd7f53610205bc98792b48a873281"
     }
   ],
   "status": "passed",
   "totals": {
+    "decision_episodes": 38276,
     "decisions": 38278,
     "failures": 0,
+    "forced_prompt_records": 14587,
     "keys_shared_across_paired_policy_replays": 48,
     "path_bound_decisions": 183,
+    "strategic_decision_episodes": 23689,
+    "unique_normalized_benchmark_keys": 38229,
+    "unique_normalized_signatures": 38229,
     "unique_semantic_signatures": 38229,
     "unique_state_keys": 38229
   }

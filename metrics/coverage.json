@@ -1,16 +1,178 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "passed": true,
-  "reviewed_commit": "8b22ea60bd222a82b13f834318e94e6531195856",
-  "reviewed_tree": "f7c4a93e2234c03702ac78dbba0759815cce1cd5",
-  "source_sha256": "f1faf94aea798b38a323c521b52dad4a0b3305c844b7c49df58a7565b5da56dd",
-  "raw_report_sha256": "7b1d0d03960bb69e748d52d57838dd9d6fe62b12913ebed5fa3e0d32caa55e3b",
+  "reviewed_commit": "19ef3302c40db3e916d2a60925546d4ebc28608d",
+  "reviewed_tree": "e79efa91e0146f23f7219367e117db34ce13867a",
+  "source_sha256": "26c5cb51561f19b5681bcf8350d3830f756d6f47b7f3e958a632b1e14c79d6e1",
+  "raw_report_sha256": "dfcbe19e6536424dd5a2918d38cd4d1dd75ed2b0a7a93a60e84c61842a23f0eb",
   "raw_report_path": "target/coverage/coverage.raw.json",
+  "lcov_report_sha256": "d520780996f794f57ba86e9a7e391c479071841a78b0bd69cb8465918981fe33",
+  "lcov_report_path": "target/coverage/coverage.raw.lcov",
   "floor_percent": 80,
   "lines": {
-    "count": 64596,
-    "covered": 51849,
-    "not_covered": 12747,
-    "percent": 80.26657997399221
+    "count": 92357,
+    "covered": 74278,
+    "not_covered": 18079,
+    "percent": 80.42487304698074
+  },
+  "changed_lines": {
+    "base_commit": "c211fc27d5b4cfc1c281d095bb5b403b47d95f46",
+    "base_tree": "aefe50167021cd33e1d36d80323b8bbdb0aa43ca",
+    "scope": "added executable Rust lines from the pre-T4 product through reviewed_commit",
+    "changed_rust_lines": 35078,
+    "executable_lines": 26289,
+    "non_executable_lines": 8789,
+    "covered": 19950,
+    "not_covered": 6339,
+    "percent": 75.88725322378181,
+    "files": [
+      {
+        "path": "crates/forge-ai/src/api.rs",
+        "changed_lines": 133,
+        "executable_lines": 67,
+        "covered_lines": 46,
+        "percent": 68.65671641791045
+      },
+      {
+        "path": "crates/forge-ai/src/determinization.rs",
+        "changed_lines": 454,
+        "executable_lines": 279,
+        "covered_lines": 206,
+        "percent": 73.83512544802868
+      },
+      {
+        "path": "crates/forge-ai/src/evaluation.rs",
+        "changed_lines": 641,
+        "executable_lines": 400,
+        "covered_lines": 332,
+        "percent": 83.0
+      },
+      {
+        "path": "crates/forge-ai/src/guardrail.rs",
+        "changed_lines": 338,
+        "executable_lines": 201,
+        "covered_lines": 186,
+        "percent": 92.53731343283582
+      },
+      {
+        "path": "crates/forge-ai/src/mulligan.rs",
+        "changed_lines": 342,
+        "executable_lines": 209,
+        "covered_lines": 160,
+        "percent": 76.55502392344498
+      },
+      {
+        "path": "crates/forge-ai/src/policy.rs",
+        "changed_lines": 353,
+        "executable_lines": 206,
+        "covered_lines": 178,
+        "percent": 86.40776699029126
+      },
+      {
+        "path": "crates/forge-ai/src/random.rs",
+        "changed_lines": 101,
+        "executable_lines": 57,
+        "covered_lines": 51,
+        "percent": 89.47368421052632
+      },
+      {
+        "path": "crates/forge-ai/src/search.rs",
+        "changed_lines": 2165,
+        "executable_lines": 1440,
+        "covered_lines": 1229,
+        "percent": 85.34722222222223
+      },
+      {
+        "path": "crates/forge-ai/src/target.rs",
+        "changed_lines": 285,
+        "executable_lines": 170,
+        "covered_lines": 127,
+        "percent": 74.70588235294117
+      },
+      {
+        "path": "crates/forge-ai/src/tier.rs",
+        "changed_lines": 400,
+        "executable_lines": 231,
+        "covered_lines": 195,
+        "percent": 84.41558441558442
+      },
+      {
+        "path": "crates/forge-arena/src/ladder.rs",
+        "changed_lines": 1462,
+        "executable_lines": 984,
+        "covered_lines": 268,
+        "percent": 27.235772357723576
+      },
+      {
+        "path": "crates/forge-arena/src/main.rs",
+        "changed_lines": 35,
+        "executable_lines": 24,
+        "covered_lines": 18,
+        "percent": 75.0
+      },
+      {
+        "path": "crates/forge-cards/src/runtime.rs",
+        "changed_lines": 1202,
+        "executable_lines": 921,
+        "covered_lines": 699,
+        "percent": 75.8957654723127
+      },
+      {
+        "path": "crates/forge-cli/src/lib.rs",
+        "changed_lines": 141,
+        "executable_lines": 122,
+        "covered_lines": 0,
+        "percent": 0.0
+      },
+      {
+        "path": "crates/forge-core/src/decision.rs",
+        "changed_lines": 2994,
+        "executable_lines": 2013,
+        "covered_lines": 1717,
+        "percent": 85.29557873820168
+      },
+      {
+        "path": "crates/forge-core/src/lib.rs",
+        "changed_lines": 3742,
+        "executable_lines": 2673,
+        "covered_lines": 2536,
+        "percent": 94.87467265245043
+      },
+      {
+        "path": "crates/forge-game-runner/src/bin/t4_runtime_isomorphism.rs",
+        "changed_lines": 343,
+        "executable_lines": 279,
+        "covered_lines": 262,
+        "percent": 93.9068100358423
+      },
+      {
+        "path": "crates/forge-game-runner/src/lib.rs",
+        "changed_lines": 19693,
+        "executable_lines": 15863,
+        "covered_lines": 11640,
+        "percent": 73.37830170837799
+      },
+      {
+        "path": "crates/forge-game-runner/src/main.rs",
+        "changed_lines": 10,
+        "executable_lines": 6,
+        "covered_lines": 4,
+        "percent": 66.66666666666667
+      },
+      {
+        "path": "crates/forge-testkit/src/lib.rs",
+        "changed_lines": 5,
+        "executable_lines": 3,
+        "covered_lines": 3,
+        "percent": 100.0
+      },
+      {
+        "path": "crates/forge-testkit/src/runtime_smoke.rs",
+        "changed_lines": 176,
+        "executable_lines": 141,
+        "covered_lines": 93,
+        "percent": 65.95744680851064
+      }
+    ]
   }
 }
