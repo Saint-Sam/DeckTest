@@ -1,6 +1,6 @@
 # DeckTest / Forge 2.0 Status
 
-Generated: 2026-07-14T08:18:18.889209+00:00 by `tools/write_card_maturity.py`
+Generated: 2026-07-15T02:13:42Z by `tools/write_card_maturity.py` plus exact T4 evidence binding
 
 Plan: v1.8
 
@@ -73,18 +73,19 @@ onto identities.
 
 ## Next Gates
 
-1. Product `165b7ea` has an extracted production runner, one pre-context shared
+1. Product `2c8a3f9` has an extracted production runner, one pre-context shared
    search deadline, inline single-worker execution, action-edge statistics, and
-   collision-checked transposition buckets. The 232-test local preflight,
+   collision-checked transposition buckets. The 236-test local preflight,
    WASM/Android compiles, clone guard, and all three exact policy/action replays
-   pass. The exact state-key audit covers 40,949 decisions with zero failures.
+   pass. The exact state-key audit covers 38,299 decisions with zero failures.
 2. Hierarchical per-attacker/per-blocker contexts and single-construction
-   determinization are exact-replay-bound. The 18,321-action search game and
-   final hash are preserved, while the refreshed 1-4 ms ladder now measures
-   approximately 1.5-4.8 ms p95 instead of the former 240-266 ms floor. No
-   search knee is claimed yet.
+   determinization are exact-replay-bound. Combat-damage order and amount now
+   use the same bounded typed path. The 18,321-action search game and final hash
+   are preserved, while the refreshed 1-4 ms ladder measures approximately
+   1.5-4.9 ms p95 instead of the former 240-266 ms floor. No search knee is
+   claimed yet.
 3. Complete the remaining canonical Choice/Prompt adapters and T4.5 action abstraction.
-   Live combat-damage order and amount adapters are now implemented with bounded
+   Live combat-damage order and amount adapters are complete with bounded
    hierarchical contexts and strict kernel validation.
    The safe Linux/Android CPU/RSS adapter is implemented; run its supported-server
    measurement campaign, then

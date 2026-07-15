@@ -4,39 +4,39 @@
   "status": "local_diagnostic_preflight_passed_promotion_blocked",
   "verified_at": "2026-07-14",
   "verification_mode": "local_only_no_github_actions",
-  "product_commit": "165b7ea68d24fb39b45e8a656a504e6c396730e7",
-  "product_tree": "85ac78cbacb57f62cefb855fa9f474862cb3b71a",
-  "preflight_evidence_commit": "aeb380439ced3a3d4beb0bc158948108dccec737",
-  "preflight_evidence_tree": "e743173aced3f5c1b99c42fd458e255d4b9c7214",
+  "product_commit": "2c8a3f996d050e99504625bf20cc869ccef25573",
+  "product_tree": "a188129b83457eb7b190c92dec62ee0ae358fbeb",
+  "preflight_evidence_commit": "b8d57e6d06ef598599291bfd09882a52cbb84786",
+  "preflight_evidence_tree": "497b2c4fc0e382a8b6412a2b043a08c325ea487f",
   "gate_command": "scripts/gates/gate_T4.sh --preflight",
   "gate_log": "reports/gates/T4/commands/00-preflight.log",
-  "gate_log_sha256": "a6eab361e21170f388495088143e68b735b702ccad91d3aa87f2e6289e4dc6f7",
+  "gate_log_sha256": "409e5e44e20bee72cb8aee90ded421c0e2368164d4661a39d018cfd7569f2084",
   "checks": {
     "format": "passed",
     "strict_clippy": "passed",
     "tests": {
-      "passed": 232,
+      "passed": 236,
       "failed": 0,
       "ignored": 1,
       "ignored_reason": "requires local generated T3 translated-card output"
     },
     "heuristic_exact_policy_and_typed_action_replay": {
       "status": "passed",
-      "replay_sha256": "6bec6be1f7854d340ecc19105dfda5bc46143fb72e47a657e5f93dd3db1d8770",
+      "replay_sha256": "5e1e0fbecc7dd9bf168370fd2c60227c6195f2ee8f82ddfddb0eedbf70196e94",
       "decisions": 15763,
       "typed_actions": 18029,
       "final_hash": "5970657412682018395"
     },
     "random_legal_exact_policy_and_typed_action_replay": {
       "status": "passed",
-      "replay_sha256": "dd3617d01d18e78d198542034c7ca718d0f0a0c372f17ee39f3bca7cb3d79c8d",
-      "decisions": 9155,
-      "typed_actions": 11172,
-      "final_hash": "12854593566509466757"
+      "replay_sha256": "30d41d8f27d05aed3290081f8c4502bc0d19e15e1541aed17fcbaaa47ec7809e",
+      "decisions": 6505,
+      "typed_actions": 8299,
+      "final_hash": "16389952752106501979"
     },
     "search_exact_policy_and_typed_action_replay": {
       "status": "passed",
-      "replay_sha256": "164cf39961caf46697b0f09644cee883e4daade0f2d1c24a5066d8474e7eee66",
+      "replay_sha256": "3800afaef2f0d4f251fbf7e439a5cd0e05ec9c9615feb383a7c6648b350f625d",
       "decisions": 16031,
       "typed_actions": 18321,
       "final_hash": "3933493530367397528"
@@ -60,20 +60,20 @@
       "strength_claim": false,
       "total_decision_budget_contract": "shared_deadline_and_current_surface_budget_response_passed",
       "observed_p95_wall_latency_us": [
-        1525,
-        4833
+        1461,
+        4882
       ],
       "result": "metrics/ai/search_budget_knee_results.json",
-      "result_sha256": "00b814124ba8812484677aa162b2be595c5a03f241802df4cdd3b194f83e3332"
+      "result_sha256": "f61dbdb27b692b15237788901ad0fba6f1aa2cd7fafad07c5f6ec510fe221965"
     },
     "decision_state_key_audit": {
       "status": "passed",
       "artifact": "metrics/ai/decision_state_audit.json",
-      "artifact_sha256": "87695e1e2a29bf9d294dedd85fe625a4c60527eb86faba6b7ec8e1059d2bb66c",
-      "decisions": 40949,
-      "unique_semantic_signatures": 40881,
-      "unique_state_keys": 40881,
-      "path_bound_decisions": 201,
+      "artifact_sha256": "d6fd69eb3a7b7ebd32a7936d1aa744699175217e9d1dcc6e690c2180330e9662",
+      "decisions": 38299,
+      "unique_semantic_signatures": 38242,
+      "unique_state_keys": 38242,
+      "path_bound_decisions": 190,
       "paired_policy_shared_keys": 56,
       "failures": 0
     },
