@@ -570,6 +570,82 @@ impl DecisionDescriptor {
         }
         bytes.0
     }
+
+    fn widening_group(&self, concrete_id: CanonicalActionId) -> u64 {
+        let mut bytes = CanonicalDecisionBytes::default();
+        let target_family = match self {
+            Self::ActivateProgramAbility {
+                source,
+                ability,
+                payment,
+                targets,
+                optional,
+            } => {
+                bytes.u8(20);
+                bytes.object(*source);
+                bytes.u32(ability.get());
+                bytes.payment(*payment);
+                bytes.target_kinds(targets);
+                bytes.u32(optional.len() as u32);
+                for accept in optional {
+                    bytes.u8(u8::from(*accept));
+                }
+                true
+            }
+            Self::CastSpell {
+                object,
+                payment,
+                targets,
+                modes,
+                optional,
+            } => {
+                bytes.u8(5);
+                bytes.object(*object);
+                bytes.payment(*payment);
+                bytes.target_kinds(targets);
+                bytes.u32(modes.len() as u32);
+                for mode in modes {
+                    bytes.u32(*mode);
+                }
+                bytes.u32(optional.len() as u32);
+                for accept in optional {
+                    bytes.u8(u8::from(*accept));
+                }
+                true
+            }
+            Self::BeginCastSpell {
+                object,
+                targets,
+                modes,
+                optional,
+            } => {
+                bytes.u8(26);
+                bytes.object(*object);
+                bytes.target_kinds(targets);
+                bytes.u32(modes.len() as u32);
+                for mode in modes {
+                    bytes.u32(*mode);
+                }
+                bytes.u32(optional.len() as u32);
+                for accept in optional {
+                    bytes.u8(u8::from(*accept));
+                }
+                true
+            }
+            Self::ChooseTarget { target } => {
+                bytes.u8(10);
+                bytes.u8(target.canonical_code());
+                true
+            }
+            _ => false,
+        };
+        let value = if target_family {
+            stable_hash(b"forge-target-family-v1", &bytes.0)
+        } else {
+            concrete_id.get()
+        };
+        value as u64 ^ (value >> 64) as u64
+    }
 }
 
 /// One canonical option and its executable kernel-action mapping.
@@ -611,6 +687,17 @@ impl DecisionOption {
     #[must_use]
     pub fn actions(&self) -> &[Action] {
         &self.actions
+    }
+
+    /// Returns the typed target-family key used only for widening order.
+    ///
+    /// Target-bearing options normalize target handles while retaining the
+    /// source, payment, modes, and optional answers. Every concrete option
+    /// keeps its own canonical ID, legal-set membership, edge statistics, and
+    /// executable action.
+    #[must_use]
+    pub fn widening_group(&self) -> u64 {
+        self.descriptor.widening_group(self.id)
     }
 }
 
@@ -975,6 +1062,13 @@ impl CanonicalDecisionBytes {
         }
     }
 
+    fn target_kinds(&mut self, targets: &[TargetChoice]) {
+        self.u32(targets.len() as u32);
+        for target in targets {
+            self.u8(target.canonical_code());
+        }
+    }
+
     fn payment(&mut self, payment: PaymentPlan) {
         for kind in [
             ManaKind::White,
@@ -1127,6 +1221,57 @@ mod tests {
         );
         assert_eq!(first.id(), same.id());
         assert_ne!(first.id(), different.id());
+    }
+
+    #[test]
+    fn target_family_grouping_preserves_concrete_ids_and_typed_boundaries() {
+        let (mut state, player) = setup_view();
+        let opponent = match apply(&mut state, Action::AddPlayer) {
+            Outcome::PlayerAdded(player) => player,
+            other => panic!("unexpected opponent result: {other:?}"),
+        };
+        let spell = crate::ObjectId(7);
+        let first = DecisionOption::new(
+            DecisionDescriptor::BeginCastSpell {
+                object: spell,
+                targets: vec![crate::TargetChoice::Player(player)],
+                modes: vec![1],
+                optional: vec![true],
+            },
+            Vec::new(),
+        );
+        let other_player = DecisionOption::new(
+            DecisionDescriptor::BeginCastSpell {
+                object: spell,
+                targets: vec![crate::TargetChoice::Player(opponent)],
+                modes: vec![1],
+                optional: vec![true],
+            },
+            Vec::new(),
+        );
+        let permanent = DecisionOption::new(
+            DecisionDescriptor::BeginCastSpell {
+                object: spell,
+                targets: vec![crate::TargetChoice::Object(crate::ObjectId(8))],
+                modes: vec![1],
+                optional: vec![true],
+            },
+            Vec::new(),
+        );
+        let other_spell = DecisionOption::new(
+            DecisionDescriptor::BeginCastSpell {
+                object: crate::ObjectId(9),
+                targets: vec![crate::TargetChoice::Player(player)],
+                modes: vec![1],
+                optional: vec![true],
+            },
+            Vec::new(),
+        );
+
+        assert_ne!(first.id(), other_player.id());
+        assert_eq!(first.widening_group(), other_player.widening_group());
+        assert_ne!(first.widening_group(), permanent.widening_group());
+        assert_ne!(first.widening_group(), other_spell.widening_group());
     }
 
     #[test]

@@ -79,10 +79,13 @@ The tree supports:
 - a transposition table keyed only when the domain supplies a complete
   deterministic state key;
 - deterministic progressive widening ordered by card-agnostic action priors;
-- an equivalence-group hook that can explore one representative per group
-  before redundant alternatives while retaining every concrete legal action;
-- unique groups in the current product adapters until a cheap typed
-  equivalence proof replaces the removed transition-cloning implementation;
+- a typed action-family hook that can explore one option from each family
+  before opening later variants while retaining every concrete legal action;
+- target-family abstraction for casts and program-bound activations: target
+  handles are normalized for widening order while source, ability, payment,
+  target kinds, modes, and optional answers remain bound. Concrete canonical
+  IDs, transitions, edge statistics, membership checks, and replay actions are
+  never merged;
 - fixed-visit adaptive checkpoints and forced/singleton bypasses.
 
 Visit/value totals now live on action edges while transposition nodes retain
@@ -123,7 +126,7 @@ playing strength. T4 promotion still requires sealed benchmark evidence,
 paired arena calibration, three archetype decks, at least 400 games per rung,
 latency evidence on required reference platforms, full shipped-card support,
 and Owner CP-AI-LADDER review. No broad T3 reopening is authorized.
-Product `3b1fd6d` binds hierarchical combat and single-construction
+The exact diagnostic packet binds hierarchical combat and single-construction
 determinization to exact replays. Its refreshed 1/2/4 ms ladder measures
 approximately 1.5-4.7 ms p95 rather than the former 240-266 ms floor. This
 closes the diagnosed eager-combat timing defect, but CPU/memory campaigns,

@@ -7965,6 +7965,16 @@ impl SearchDomain for MainSearchDomain<'_> {
         state.priors.get(&action).copied().unwrap_or(0)
     }
 
+    fn action_group(&self, state: &Self::State, action: CanonicalActionId) -> u64 {
+        state.context.select(action).map_or_else(
+            |_| {
+                let value = action.get();
+                value as u64 ^ (value >> 64) as u64
+            },
+            DecisionOption::widening_group,
+        )
+    }
+
     fn state_key(&self, state: &Self::State) -> Option<SearchStateKey> {
         let context = state.context.id().get();
         let discriminator = (context as u64)

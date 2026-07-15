@@ -373,11 +373,12 @@ pub trait SearchDomain: Sync {
         0
     }
 
-    /// Returns a deterministic equivalence group for widening order.
+    /// Returns a deterministic typed family for widening order.
     ///
-    /// The default gives every action its own group. Domain adapters may group
-    /// actions only when they preserve the complete concrete legal set and can
-    /// justify equivalent transition semantics.
+    /// The default gives every action its own group. A domain may group
+    /// concrete alternatives that differ in one typed subchoice, such as the
+    /// target of the same spell. Grouping only interleaves expansion order: it
+    /// never merges legal actions, transitions, edge statistics, or reports.
     fn action_group(&self, _state: &Self::State, action: CanonicalActionId) -> u64 {
         let value = action.get();
         value as u64 ^ (value >> 64) as u64
@@ -1632,7 +1633,7 @@ impl Error for SearchError {}
 #[cfg(test)]
 mod tests {
     use super::{
-        best_unexpanded, parse_schedstat_cpu_time_us, parse_status_resident_memory_bytes,
+        best_unexpanded, new_node, parse_schedstat_cpu_time_us, parse_status_resident_memory_bytes,
         AdaptiveStopping, Edge, Node, ProgressiveWidening, SearchConfig, SearchDomain,
         SearchEngine, SearchError, SearchStateKey, SearchStopReason,
     };
@@ -1642,6 +1643,7 @@ mod tests {
         DecisionOption, GameState, Outcome,
     };
     use std::{
+        collections::HashMap,
         sync::atomic::{AtomicU32, Ordering},
         thread,
         time::{Duration, Instant},
@@ -1755,6 +1757,63 @@ mod tests {
             } else {
                 0
             }
+        }
+    }
+
+    struct GroupedDomain {
+        actions: Vec<CanonicalActionId>,
+        groups: HashMap<CanonicalActionId, u64>,
+        priors: HashMap<CanonicalActionId, i64>,
+    }
+
+    impl SearchDomain for GroupedDomain {
+        type State = ();
+
+        fn determinize(&self, _seed: u64) -> Result<Self::State, String> {
+            Ok(())
+        }
+
+        fn legal_actions(&self, _state: &Self::State) -> Result<Vec<CanonicalActionId>, String> {
+            Ok(self.actions.clone())
+        }
+
+        fn apply_action(
+            &self,
+            _state: &Self::State,
+            _action: CanonicalActionId,
+        ) -> Result<Self::State, String> {
+            Ok(())
+        }
+
+        fn terminal_value(&self, _state: &Self::State) -> Option<i64> {
+            None
+        }
+
+        fn evaluate(&self, _state: &Self::State) -> i64 {
+            0
+        }
+
+        fn rollout_action(
+            &self,
+            _state: &Self::State,
+            actions: &[CanonicalActionId],
+            _seed: u64,
+        ) -> Result<CanonicalActionId, String> {
+            actions
+                .first()
+                .copied()
+                .ok_or_else(|| "no action".to_owned())
+        }
+
+        fn action_prior(&self, _state: &Self::State, action: CanonicalActionId) -> i64 {
+            self.priors.get(&action).copied().unwrap_or(0)
+        }
+
+        fn action_group(&self, _state: &Self::State, action: CanonicalActionId) -> u64 {
+            self.groups.get(&action).copied().unwrap_or_else(|| {
+                let value = action.get();
+                value as u64 ^ (value >> 64) as u64
+            })
         }
     }
 
@@ -1985,6 +2044,36 @@ mod tests {
         assert_eq!(best_unexpanded(&node, &config), None);
         node.visits = 4;
         assert_eq!(best_unexpanded(&node, &config), Some(2));
+    }
+
+    #[test]
+    fn widening_groups_interleave_families_without_merging_concrete_actions() {
+        let (_, actions) = context(6);
+        let groups = actions
+            .iter()
+            .copied()
+            .enumerate()
+            .map(|(index, action)| (action, if index < 3 { 1 } else { 2 }))
+            .collect();
+        let priors = actions
+            .iter()
+            .copied()
+            .enumerate()
+            .map(|(index, action)| (action, 10 - index as i64))
+            .collect();
+        let domain = GroupedDomain {
+            actions: actions.clone(),
+            groups,
+            priors,
+        };
+        let config = SearchConfig::fixed_iterations(31, 1, 8)
+            .with_progressive_widening(Some(ProgressiveWidening::new(2, 1)));
+        let node = new_node(&domain, (), 0, &config, None, Some(actions.clone()))
+            .unwrap_or_else(|error| panic!("grouped node failed: {error}"));
+
+        assert_eq!(node.actions, actions);
+        assert_eq!(node.edges.len(), 6);
+        assert_eq!(node.expansion_order, vec![0, 3, 1, 4, 2, 5]);
     }
 
     #[test]
