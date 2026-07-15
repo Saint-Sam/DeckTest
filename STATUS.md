@@ -1,6 +1,6 @@
 # DeckTest / Forge 2.0 Status
 
-Generated: 2026-07-15T09:47:15Z by `tools/write_card_maturity.py` plus exact T4 evidence binding
+Generated: 2026-07-15T11:13:56Z by `tools/write_card_maturity.py` plus exact T4 evidence binding
 
 Plan: v1.8
 
@@ -73,7 +73,7 @@ onto identities.
 
 ## Next Gates
 
-1. Product `a0c21b9` has an extracted production runner, one pre-context shared
+1. Product `72ea3ee` has an extracted production runner, one pre-context shared
    search deadline, inline single-worker execution, action-edge statistics, and
    collision-checked transposition buckets. Printed `{X}` now uses typed
    begin-cast, numeric-range, payment, and final-cast contexts. Typed target
@@ -92,12 +92,14 @@ onto identities.
    telemetry, and replay path; required targetless triggers use an explicit
    kernel-validated no-stack disposition. Later simultaneous triggers can now
    target prior entries in the same atomically validated APNAP batch through
-   the shared human, AI, telemetry, and replay path. Bounded main-phase search
+   the shared human, AI, telemetry, and replay path. Kernel-recorded per-slot
+   target legality now skips only effects bound to illegal targets while legal
+   target and untargeted instructions continue. Bounded main-phase search
    now crosses real opponent
    priority, resolves the production stack, places forced triggers, and applies
    an explicit paranoid-coalition multiplayer backup. Unopposed combat search
    crosses forced priority and production damage while choice-bearing responses
-   remain fail closed. The 267-test current-product local preflight,
+   remain fail closed. The 268-test current-product local preflight,
    WASM/Android compiles, clone guard, all three exact policy/action replays,
    and the 38,278-decision state-key audit pass with zero failures.
 2. Hierarchical per-attacker/per-blocker contexts and single-construction
@@ -106,7 +108,7 @@ onto identities.
    is exact-replay verified at final hash `8631010851649779696`; its 563 searched
    decisions perform 8,672 simulations, reach depth 7, and preserve the full
    canonical replay. The refreshed 1-4 ms ladder reaches meaningful depth 3-4
-   and measures approximately 2.2-5.3 ms p95 instead of the former 240-266
+   and measures approximately 2.1-5.5 ms p95 instead of the former 240-266
    ms floor. No search knee is
    claimed yet.
 3. T4.5 search mechanics are locally complete. Complete the remaining canonical
@@ -116,6 +118,9 @@ onto identities.
    The safe Linux/Android CPU/RSS adapter is implemented; run its supported-server
    measurement campaign, then
    run the three-track development, validation, and sealed CP-AI-BENCH campaigns.
+   Exact replay artifacts are now Git LFS-backed; the current 50 replay paths
+   remain available while superseded unpushed replay revisions stay on the
+   local recovery branch documented by ADR 0033.
 4. Complete Owner CP-AI-LADDER and CP-NN-GO decisions. Reopen T3 only for a concrete T4 blocker, fix the smallest shared primitive,
    add semantic regressions, and resume T4. Broad mapper expansion remains closed.
 
