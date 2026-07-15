@@ -2,8 +2,8 @@
   "artifact_classification": "diagnostic_not_promotion_eligible",
   "failures": [],
   "near_state_dedup_audit": "passed_exact_baseline_isomorphism",
-  "product_commit": "0961e94dd16a7bea689e9e079e38da5878cc5ac0",
-  "product_tree": "a43fe89ee755d13ba4fd9c056182c06e0983edef",
+  "product_commit": "07e2f52ad8422be10aef9e2d9ec0657ac53a5207",
+  "product_tree": "2af66380f9840fecd5c99f256c794be53f381443",
   "promotion_limits": [
     "paired baseline overlap is expected and is not a development/validation/sealed leakage audit",
     "campaign split manifests and sealed labels remain required before promotion"
@@ -20,21 +20,21 @@
       "path": "reports/gates/T4.3/ai-baseline.frsreplay",
       "policy": "heuristic-v1",
       "seed": "17306488943054686737",
-      "sha256": "56f7aeff6f9d375d39e7b08efa3117d2a3b1daa2f98af04994d35cc9766775db"
+      "sha256": "b0e56210d642d3001c918f36f3edd2736197dadbcbc3dd2d0e1655ddfa6f3105"
     },
     {
       "decisions": 6505,
       "path": "reports/gates/T4.3/random-legal-baseline.frsreplay",
       "policy": "random-legal-v1",
       "seed": "17306488943054686737",
-      "sha256": "b1f4f142c4eccb4cce5183c7dc90dcfc825838cb21ab1bc4a7572e6ebb29aeb8"
+      "sha256": "8d02e7b16f51cdd494db616f850b565457760d924b4dc23cf3c562d8d91a513b"
     },
     {
       "decisions": 16031,
       "path": "reports/gates/T4.3/search-baseline.frsreplay",
       "policy": "determinized-uct-v1",
       "seed": "17306488943054686737",
-      "sha256": "fdd89ea894a30bf3084305128840673bde130f9eed01f74d20e133298872e7e2"
+      "sha256": "eac1e28498618ce3e79393645ad1474b106fd025ece11f414ea46aadf76077a9"
     }
   ],
   "status": "passed",
