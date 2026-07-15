@@ -17,10 +17,10 @@
   },
   "t4_diagnostic_product": {
     "status": "local_preflight_passed_resource_and_state_key_audited_promotion_blocked",
-    "commit": "f8645e8c7865b18d1343f0fce4999cbe5fb7cdb4",
-    "tree": "4d5d0c23ac0bbf3a020868bb289648d27410d19d",
-    "preflight_evidence_commit": "fef5aeea30c721a780bd5399dc3d6ff5ff004d89",
-    "preflight_evidence_tree": "5b7720bee6605269a58b658e007502735c76bf2f",
+    "commit": "7bced0359f00d75591fcc14e45e9ac9f24f1a637",
+    "tree": "4f72f5a3fd64050845a180d44fd7198f2984925f",
+    "preflight_evidence_commit": "586bd1766771e4730980f16c9f6ca62bd0b7e2dc",
+    "preflight_evidence_tree": "f32b476fd4e331d517f4d95166b5fe3077d8e1e4",
     "evidence": "reports/gates/T4/LOCAL-DIAGNOSTIC-PREFLIGHT.json",
     "promotion_gate": "scripts/gates/gate_T4.sh"
   },
@@ -377,19 +377,19 @@
       "status": "verified_local_diagnostics",
       "branch": "task/T4.3-heuristic-policy",
       "attempts": 0,
-      "verification": "Seeded random-legal, deterministic/noisy one-ply heuristic, mulligan, threat/target helpers, and exact release-profile policy/action replay pass at product f8645e8. Regenerated heuristic and random replays cover 15,763 and 6,505 canonical decisions and persist complete legal descriptors, PlayerView hashes, DecisionStateKeys, and path discriminators. The exact three-policy audit covers 38,299 decisions with 38,242 semantic signatures, matching 38,242 state keys, 190 explicitly path-bound decisions, and zero collisions or missing canonical fields. Hierarchical attacker, blocker, combat-damage order/amount, variable-number, and payment choices preserve complete typed declarations without materializing Cartesian products; program-bound activations remain canonical and unsupported resolution-time searches fail closed."
+      "verification": "Seeded random-legal, deterministic/noisy one-ply heuristic, mulligan, threat/target helpers, and exact release-profile policy/action replay pass at product 7bced03. Regenerated heuristic and random replays cover 15,763 and 6,505 canonical decisions and persist complete legal descriptors, PlayerView hashes, DecisionStateKeys, and path discriminators. The exact three-policy audit covers 38,299 decisions with 38,242 semantic signatures, matching 38,242 state keys, 190 explicitly path-bound decisions, and zero collisions or missing canonical fields. Hierarchical attacker, blocker, combat-damage order/amount, variable-number, and payment choices preserve complete typed declarations without materializing Cartesian products; program-bound activations remain canonical and unsupported resolution-time searches fail closed."
     },
     "T4.4": {
       "status": "verified_local_diagnostics",
       "branch": "task/T4.4-determinized-mcts-v1",
       "attempts": 0,
-      "verification": "Root-parallel determinized UCT passes the regenerated exact full-game replay at product f8645e8: 16,031 canonical decisions, 789 search-policy decisions, 1,086 simulations, and 1,629 nodes, with 18,321 typed actions and final hash 3933493530367397528. Action-edge statistics, collision-checked wide-key buckets, hierarchical combat and variable-mana path identity, and exact state-key auditing pass focused regressions."
+      "verification": "Root-parallel determinized UCT passes the regenerated exact full-game replay at product 7bced03: 16,031 canonical decisions, 789 search-policy decisions, 1,086 simulations, and 1,629 nodes, with 18,321 typed actions and final hash 3933493530367397528. Action-edge statistics, collision-checked wide-key buckets, hierarchical combat and variable-mana path identity, typed target-family widening, and exact state-key auditing pass focused regressions."
     },
     "T4.5": {
-      "status": "in_progress_hierarchical_latency_and_variable_mana_closed",
+      "status": "verified_local_diagnostics",
       "branch": "task/T4.5-search-upgrades",
       "attempts": 0,
-      "verification": "Product f8645e8 replaces exponential combat products with scoped per-object subcontexts, preserves split attacks and menace completion, validates combat-damage order and amount through bounded hierarchical contexts, and resolves printed {X} through typed begin-cast, numeric-range, payment, and final-cast contexts. Typed partial declarations survive deeper search states and each sampled GameState is constructed once. Exact heuristic, random, and search replays pass; the refreshed fixed/adaptive 1-4 ms ladder measures approximately 1.5-4.7 ms p95 instead of the former 240-266 ms floor. Transpositions and time budgets are implemented; remaining T4.5 work is action abstraction for equivalent targets and any measured high-branching family that still needs progressive or hierarchical expansion."
+      "verification": "Product 7bced03 replaces exponential combat products with scoped per-object subcontexts, preserves split attacks and menace completion, validates combat-damage order and amount through bounded hierarchical contexts, and resolves printed {X} through typed begin-cast, numeric-range, payment, and final-cast contexts. Typed partial declarations survive deeper search states and each sampled GameState is constructed once. Target variants of the same typed cast or program-bound activation are interleaved as widening families while every concrete ID, transition, edge statistic, and replay action remains distinct. Exact heuristic, random, and search replays pass; the refreshed fixed/adaptive 1-4 ms ladder measures approximately 1.5-4.7 ms p95 instead of the former 240-266 ms floor. Transpositions, progressive widening, action abstraction, and total decision time budgets are implemented; future hierarchical expansion is evidence-driven rather than an open T4.5 deliverable."
     },
     "T4.6": {
       "status": "blocked_on_telemetry_labels_and_promotion_evidence",

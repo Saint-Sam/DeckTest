@@ -73,10 +73,11 @@ onto identities.
 
 ## Next Gates
 
-1. Product `f8645e8` has an extracted production runner, one pre-context shared
+1. Product `7bced03` has an extracted production runner, one pre-context shared
    search deadline, inline single-worker execution, action-edge statistics, and
    collision-checked transposition buckets. Printed `{X}` now uses typed
-   begin-cast, numeric-range, payment, and final-cast contexts. The 240-test local preflight,
+   begin-cast, numeric-range, payment, and final-cast contexts. Typed target
+   families interleave widening without merging concrete actions. The 242-test local preflight,
    WASM/Android compiles, clone guard, and all three exact policy/action replays
    pass. The exact state-key audit covers 38,299 decisions with zero failures.
 2. Hierarchical per-attacker/per-blocker contexts and single-construction
@@ -85,7 +86,8 @@ onto identities.
    are preserved, while the refreshed 1-4 ms ladder measures approximately
    1.5-4.7 ms p95 instead of the former 240-266 ms floor. No search knee is
    claimed yet.
-3. Complete the remaining canonical Choice/Prompt adapters and T4.5 action abstraction.
+3. T4.5 search mechanics are locally complete. Complete the remaining canonical
+   Choice/Prompt adapters and benchmark fixtures.
    Live combat-damage order and amount adapters are complete with bounded
    hierarchical contexts and strict kernel validation.
    The safe Linux/Android CPU/RSS adapter is implemented; run its supported-server
