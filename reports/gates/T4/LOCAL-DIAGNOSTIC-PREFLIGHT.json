@@ -4,39 +4,39 @@
   "status": "local_diagnostic_preflight_passed_promotion_blocked",
   "verified_at": "2026-07-14",
   "verification_mode": "local_only_no_github_actions",
-  "product_commit": "f8fbb4fe1de4a14c9f37ee6eb1832319465dfcbc",
-  "product_tree": "47a186d0e08dcdd0716d256c22efc66ebe3f8a67",
-  "preflight_evidence_commit": "c86dc49f5e9a29a4a6a7ccd2a4952a1390964221",
-  "preflight_evidence_tree": "6077018e8ace33ec26bbcf6b381de7e38851ff8c",
+  "product_commit": "313158a00fb32ce5d617a13c628f867b807ba32b",
+  "product_tree": "74e28e10e498d5889682a1bab42bc867aad7d1f3",
+  "preflight_evidence_commit": "dcf43d62bae852d89ff175e808c94a65bb7145f5",
+  "preflight_evidence_tree": "845460099566f3f84b38c624cb4cf5a7be1f6f7f",
   "gate_command": "scripts/gates/gate_T4.sh --preflight",
   "gate_log": "reports/gates/T4/commands/00-preflight.log",
-  "gate_log_sha256": "88ad4fb19d853a1736a91c57a53f014f47b9b9edbf6d200937250ad7952c9411",
+  "gate_log_sha256": "69baedb6d401387c3dfae6705b92fe9feb5f1177d79b7735ddc7370ac75faf66",
   "checks": {
     "format": "passed",
     "strict_clippy": "passed",
     "tests": {
-      "passed": 245,
+      "passed": 247,
       "failed": 0,
       "ignored": 1,
       "ignored_reason": "requires local generated T3 translated-card output"
     },
     "heuristic_exact_policy_and_typed_action_replay": {
       "status": "passed",
-      "replay_sha256": "0303708e9efad6b071051fcdadd07b19464591ca6c959acbac3f525422a8b08f",
+      "replay_sha256": "e7101ba6b78452a623d136994c35558f6be78d14bd644dc5d259790389cb10f7",
       "decisions": 15763,
       "typed_actions": 18029,
       "final_hash": "5970657412682018395"
     },
     "random_legal_exact_policy_and_typed_action_replay": {
       "status": "passed",
-      "replay_sha256": "f5302d3c789ec7d52d666b3dd1e6e0377b09ee98e2e4c209f9008d93376984d7",
+      "replay_sha256": "c51ea7cfaad54dc13b1314b5088a80715900a06e09d9ad14888e51d9d630d87d",
       "decisions": 6505,
       "typed_actions": 8299,
       "final_hash": "16389952752106501979"
     },
     "search_exact_policy_and_typed_action_replay": {
       "status": "passed",
-      "replay_sha256": "99835d61396df313adc51f33dd2d2bfe3b5d174ca793fc27c3a9ce4d93b1438e",
+      "replay_sha256": "50f8bbc8aaefba751fc574439399e588ba58d6485ac88d90f4dc30ac55d6679b",
       "decisions": 16031,
       "typed_actions": 18321,
       "final_hash": "3933493530367397528"
@@ -60,16 +60,16 @@
       "strength_claim": false,
       "total_decision_budget_contract": "shared_deadline_and_current_surface_budget_response_passed",
       "observed_p95_wall_latency_us": [
-        1504,
-        4694
+        1523,
+        4817
       ],
       "result": "metrics/ai/search_budget_knee_results.json",
-      "result_sha256": "3bf77e0e11c7048d7208fdce6ec417d2d1c499dac753abf7e0cbf7152ec9694f"
+      "result_sha256": "e478ab4491cd55248d30f71509585c4be7050b414a4df9b2841752d725544e9f"
     },
     "decision_state_key_audit": {
       "status": "passed",
       "artifact": "metrics/ai/decision_state_audit.json",
-      "artifact_sha256": "f723d31b4fb6abaa376befafabf206d6722619e6e0cc8245e38f67017cd2b575",
+      "artifact_sha256": "400c3f02419834a9bd1ec5628ee96aaf767a38b93c5456ba76cc9bd33f0bab30",
       "decisions": 38299,
       "unique_semantic_signatures": 38242,
       "unique_state_keys": 38242,
@@ -96,7 +96,7 @@
     "T4.10"
   ],
   "promotion_blockers": [
-    "complete canonical human, AI, and benchmark Choice/Prompt adapters, including required no-legal-target trigger suppression",
+    "complete canonical human, AI, and benchmark Choice/Prompt adapters, including same-batch inter-trigger targeting",
     "three materially different archetype tracks",
     "development, validation, and sealed Track A campaigns",
     "sealed Track B acceptable-action, catastrophic-blunder, and bounded win/defense labels",
