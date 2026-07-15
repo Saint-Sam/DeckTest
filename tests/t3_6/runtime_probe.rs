@@ -3265,6 +3265,7 @@ fn boros_charm_probe(program: &CardProgram) -> Option<serde_json::Value> {
         [EffectProgram::DealDamageToTarget {
             target: 0,
             amount: AmountProgram::Literal(4),
+            divided: false,
         }]
     );
     let indestructible_program_exact = matches!(

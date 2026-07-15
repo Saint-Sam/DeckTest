@@ -2677,6 +2677,11 @@ impl TargetPredicate {
 pub struct TargetRequirement {
     kind: TargetKind,
     predicate: TargetPredicate,
+    group: Option<u8>,
+    minimum: u8,
+    maximum: u8,
+    allocation_total: Option<u32>,
+    assigned_allocation: Option<u32>,
 }
 
 impl TargetRequirement {
@@ -2686,7 +2691,39 @@ impl TargetRequirement {
         Self {
             kind,
             predicate: TargetPredicate::Any,
+            group: None,
+            minimum: 1,
+            maximum: 1,
+            allocation_total: None,
+            assigned_allocation: None,
         }
+    }
+
+    /// Associates this requirement with one printed target occurrence.
+    ///
+    /// Repeating the returned requirement represents multiple distinct
+    /// choices for the same target occurrence. The bounds describe the
+    /// complete group, not one individual choice.
+    #[must_use]
+    pub const fn with_group(mut self, group: u8, minimum: u8, maximum: u8) -> Self {
+        self.group = Some(group);
+        self.minimum = minimum;
+        self.maximum = maximum;
+        self
+    }
+
+    /// Records the total amount that must be divided among this target group.
+    #[must_use]
+    pub const fn with_allocation_total(mut self, total: u32) -> Self {
+        self.allocation_total = Some(total);
+        self
+    }
+
+    /// Records the amount announced for this selected member of a target group.
+    #[must_use]
+    pub const fn with_assigned_allocation(mut self, amount: u32) -> Self {
+        self.assigned_allocation = Some(amount);
+        self
     }
 
     /// Returns the required target category.
@@ -2725,6 +2762,36 @@ impl TargetRequirement {
     pub const fn predicate(self) -> TargetPredicate {
         self.predicate
     }
+
+    /// Returns the printed target-group index, when explicitly represented.
+    #[must_use]
+    pub const fn group(self) -> Option<u8> {
+        self.group
+    }
+
+    /// Returns the minimum number of choices for this target occurrence.
+    #[must_use]
+    pub const fn minimum(self) -> u8 {
+        self.minimum
+    }
+
+    /// Returns the maximum number of choices for this target occurrence.
+    #[must_use]
+    pub const fn maximum(self) -> u8 {
+        self.maximum
+    }
+
+    /// Returns the total amount divided among this target group, when any.
+    #[must_use]
+    pub const fn allocation_total(self) -> Option<u32> {
+        self.allocation_total
+    }
+
+    /// Returns the amount assigned to this selected target, when any.
+    #[must_use]
+    pub const fn assigned_allocation(self) -> Option<u32> {
+        self.assigned_allocation
+    }
 }
 
 /// A selected spell target.
@@ -2745,6 +2812,55 @@ impl TargetChoice {
             Self::Object(_) => 1,
             Self::StackEntry(_) => 2,
         }
+    }
+}
+
+/// One target selected for a represented printed target occurrence.
+///
+/// The group index distinguishes separate occurrences that happen to select
+/// the same object. Divided effects additionally preserve the positive amount
+/// announced for this target when the stack object is created.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct AnnouncedTarget {
+    group: u8,
+    target: TargetChoice,
+    allocation: Option<u32>,
+}
+
+impl AnnouncedTarget {
+    /// Creates an unallocated target selection for one printed group.
+    #[must_use]
+    pub const fn new(group: u8, target: TargetChoice) -> Self {
+        Self {
+            group,
+            target,
+            allocation: None,
+        }
+    }
+
+    /// Records the positive amount assigned to this target.
+    #[must_use]
+    pub const fn with_allocation(mut self, allocation: u32) -> Self {
+        self.allocation = Some(allocation);
+        self
+    }
+
+    /// Returns the printed target-group index.
+    #[must_use]
+    pub const fn group(self) -> u8 {
+        self.group
+    }
+
+    /// Returns the selected player, object, or stack entry.
+    #[must_use]
+    pub const fn target(self) -> TargetChoice {
+        self.target
+    }
+
+    /// Returns the divided amount assigned to this target, when any.
+    #[must_use]
+    pub const fn allocation(self) -> Option<u32> {
+        self.allocation
     }
 }
 
@@ -7133,6 +7249,38 @@ pub enum StateError {
         required: u32,
         /// Number of targets selected by the player.
         selected: u32,
+    },
+    /// One represented target group selected outside its declared bounds.
+    InvalidTargetGroupCount {
+        /// Printed zero-based target-group index.
+        group: u32,
+        /// Minimum legal selection count.
+        minimum: u32,
+        /// Maximum legal selection count.
+        maximum: u32,
+        /// Actual selection count.
+        selected: u32,
+    },
+    /// Repeated members of one target group disagreed about its closed definition.
+    InvalidTargetGroupDefinition {
+        /// Printed zero-based target-group index.
+        group: u32,
+    },
+    /// One target was selected more than once for the same printed occurrence.
+    DuplicateTargetInGroup {
+        /// Printed zero-based target-group index.
+        group: u32,
+        /// Repeated target.
+        target: TargetChoice,
+    },
+    /// Divided target allocations were missing, zero, or did not match the total.
+    InvalidTargetAllocation {
+        /// Printed zero-based target-group index.
+        group: u32,
+        /// Total amount that must be divided.
+        required: u32,
+        /// Sum of announced allocations.
+        assigned: u32,
     },
     /// A stack choice payload exceeded its fixed optional-answer capacity.
     StackOptionalChoiceCountOverflow {
@@ -12289,7 +12437,7 @@ impl GameState {
                             || !binding.target_choices().is_empty()
                             || binding.decisions() != StackDecisionBindings::default()
                             || requirements.iter().copied().all(|requirement| {
-                                staged.has_legal_target(
+                                staged.has_minimum_legal_targets(
                                     trigger.controller(),
                                     trigger.source(),
                                     requirement,
@@ -12357,7 +12505,7 @@ impl GameState {
                             || !binding.target_choices().is_empty()
                             || binding.decisions() != StackDecisionBindings::default()
                             || requirements.iter().copied().all(|requirement| {
-                                self.has_legal_target(
+                                self.has_minimum_legal_targets(
                                     trigger.controller(),
                                     trigger.source(),
                                     requirement,
@@ -15506,28 +15654,61 @@ impl GameState {
         source: Option<ObjectId>,
         requirement: TargetRequirement,
     ) -> bool {
-        self.players.iter().any(|candidate| {
+        self.legal_target_count(player, source, requirement) != 0
+    }
+
+    /// Returns the number of distinct legal choices for one target group.
+    #[must_use]
+    pub fn legal_target_count(
+        &self,
+        player: PlayerId,
+        source: Option<ObjectId>,
+        requirement: TargetRequirement,
+    ) -> usize {
+        let players = self.players.iter().filter(|candidate| {
             self.can_target(
                 player,
                 source,
                 requirement,
                 TargetChoice::Player(candidate.id()),
             )
-        }) || self.objects.iter().any(|candidate| {
+        });
+        let objects = self.objects.iter().filter(|candidate| {
             self.can_target(
                 player,
                 source,
                 requirement,
                 TargetChoice::Object(candidate.id()),
             )
-        }) || self.stack_entries.iter().any(|candidate| {
+        });
+        let stack_entries = self.stack_entries.iter().filter(|candidate| {
             self.can_target(
                 player,
                 source,
                 requirement,
                 TargetChoice::StackEntry(candidate.id()),
             )
-        })
+        });
+        players.count() + objects.count() + stack_entries.count()
+    }
+
+    /// Returns whether a target group can satisfy its minimum cardinality.
+    #[must_use]
+    pub fn has_minimum_legal_targets(
+        &self,
+        player: PlayerId,
+        source: Option<ObjectId>,
+        requirement: TargetRequirement,
+    ) -> bool {
+        let minimum = if requirement.allocation_total().is_some() {
+            usize::from(requirement.minimum()).max(1)
+        } else {
+            usize::from(requirement.minimum())
+        };
+        requirement
+            .allocation_total()
+            .map_or(true, |total| total >= u32::from(requirement.minimum()))
+            && self.legal_target_count(player, source, requirement) >= minimum
     }
 
     /// Returns the ward cost that would be observed when choosing one target.
@@ -15559,6 +15740,110 @@ impl GameState {
                 required: requirements.len() as u32,
                 selected: choices.len() as u32,
             });
+        }
+        for (index, requirement) in requirements.iter().copied().enumerate() {
+            let group = requirement.group.map_or(index as u32, u32::from);
+            let first = requirements
+                .iter()
+                .enumerate()
+                .position(|(candidate_index, candidate)| {
+                    candidate.group.map_or(candidate_index as u32, u32::from) == group
+                })
+                .unwrap_or(index);
+            if first != index {
+                continue;
+            }
+            if requirement.maximum == 0 || requirement.minimum > requirement.maximum {
+                return Err(StateError::InvalidTargetGroupDefinition { group });
+            }
+            let members = requirements
+                .iter()
+                .enumerate()
+                .filter(|(candidate_index, candidate)| {
+                    candidate.group.map_or(*candidate_index as u32, u32::from) == group
+                })
+                .collect::<Vec<_>>();
+            if members.iter().any(|(_, candidate)| {
+                candidate.kind != requirement.kind
+                    || candidate.predicate != requirement.predicate
+                    || candidate.minimum != requirement.minimum
+                    || candidate.maximum != requirement.maximum
+                    || candidate.allocation_total != requirement.allocation_total
+            }) {
+                return Err(StateError::InvalidTargetGroupDefinition { group });
+            }
+            let selected = members.len() as u32;
+            if selected < u32::from(requirement.minimum)
+                || selected > u32::from(requirement.maximum)
+            {
+                return Err(StateError::InvalidTargetGroupCount {
+                    group,
+                    minimum: u32::from(requirement.minimum),
+                    maximum: u32::from(requirement.maximum),
+                    selected,
+                });
+            }
+            for (member_offset, (member_index, _)) in members.iter().enumerate() {
+                let choice = choices[*member_index];
+                if members[..member_offset]
+                    .iter()
+                    .any(|(prior_index, _)| choices[*prior_index] == choice)
+                {
+                    return Err(StateError::DuplicateTargetInGroup {
+                        group,
+                        target: choice,
+                    });
+                }
+            }
+            match requirement.allocation_total {
+                Some(total) => {
+                    let mut assigned = 0_u32;
+                    for (_, member) in &members {
+                        let Some(amount) = member.assigned_allocation else {
+                            return Err(StateError::InvalidTargetAllocation {
+                                group,
+                                required: total,
+                                assigned,
+                            });
+                        };
+                        if amount == 0 {
+                            return Err(StateError::InvalidTargetAllocation {
+                                group,
+                                required: total,
+                                assigned,
+                            });
+                        }
+                        assigned = assigned.checked_add(amount).ok_or(
+                            StateError::InvalidTargetAllocation {
+                                group,
+                                required: total,
+                                assigned: u32::MAX,
+                            },
+                        )?;
+                    }
+                    if assigned != total {
+                        return Err(StateError::InvalidTargetAllocation {
+                            group,
+                            required: total,
+                            assigned,
+                        });
+                    }
+                }
+                None if members
+                    .iter()
+                    .any(|(_, member)| member.assigned_allocation.is_some()) =>
+                {
+                    return Err(StateError::InvalidTargetAllocation {
+                        group,
+                        required: 0,
+                        assigned: members
+                            .iter()
+                            .filter_map(|(_, member)| member.assigned_allocation)
+                            .fold(0_u32, u32::saturating_add),
+                    });
+                }
+                None => {}
+            }
         }
         let mut snapshots = Vec::with_capacity(requirements.len());
         for (index, (requirement, choice)) in requirements.iter().zip(choices.iter()).enumerate() {
@@ -16963,6 +17248,17 @@ impl Fnva64 {
     fn write_target_requirement(&mut self, requirement: TargetRequirement) {
         self.write_target_kind(requirement.kind);
         self.write_target_predicate(requirement.predicate);
+        match requirement.group {
+            Some(group) => {
+                self.write_u8(1);
+                self.write_u8(group);
+            }
+            None => self.write_u8(0),
+        }
+        self.write_u8(requirement.minimum);
+        self.write_u8(requirement.maximum);
+        self.write_optional_u32(requirement.allocation_total);
+        self.write_optional_u32(requirement.assigned_allocation);
     }
 
     fn write_target_choice(&mut self, choice: TargetChoice) {
@@ -18354,6 +18650,17 @@ impl CanonicalBytes {
     fn write_target_requirement(&mut self, requirement: TargetRequirement) {
         self.write_target_kind(requirement.kind);
         self.write_target_predicate(requirement.predicate);
+        match requirement.group {
+            Some(group) => {
+                self.write_u8(1);
+                self.write_u8(group);
+            }
+            None => self.write_u8(0),
+        }
+        self.write_u8(requirement.minimum);
+        self.write_u8(requirement.maximum);
+        self.write_optional_u32(requirement.allocation_total);
+        self.write_optional_u32(requirement.assigned_allocation);
     }
 
     fn write_target_choice(&mut self, choice: TargetChoice) {
@@ -23002,6 +23309,104 @@ mod tests {
             })
         );
         assert_eq!(state.canonical_bytes(), before);
+    }
+
+    #[test]
+    fn target_groups_enforce_cardinality_distinctness_and_exact_allocation() {
+        let mut state = GameState::new();
+        let caster = state.add_player();
+        let opponent = state.add_player();
+        let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+        let first = state
+            .create_object(CardId::new(9_310), opponent, opponent, battlefield)
+            .unwrap_or_else(|error| panic!("unexpected first target error: {error:?}"));
+        let second = state
+            .create_object(CardId::new(9_311), opponent, opponent, battlefield)
+            .unwrap_or_else(|error| panic!("unexpected second target error: {error:?}"));
+
+        let ranged = TargetRequirement::new(TargetKind::Permanent).with_group(0, 1, 2);
+        assert_eq!(
+            state.validate_target_choices(
+                caster,
+                None,
+                &[ranged, ranged],
+                &[TargetChoice::Object(first), TargetChoice::Object(second)],
+            ),
+            Ok(())
+        );
+        assert_eq!(
+            state.validate_target_choices(
+                caster,
+                None,
+                &[ranged, ranged],
+                &[TargetChoice::Object(first), TargetChoice::Object(first)],
+            ),
+            Err(StateError::DuplicateTargetInGroup {
+                group: 0,
+                target: TargetChoice::Object(first),
+            })
+        );
+
+        let at_least_two = TargetRequirement::new(TargetKind::Permanent).with_group(0, 2, 3);
+        assert_eq!(
+            state.validate_target_choices(
+                caster,
+                None,
+                &[at_least_two],
+                &[TargetChoice::Object(first)],
+            ),
+            Err(StateError::InvalidTargetGroupCount {
+                group: 0,
+                minimum: 2,
+                maximum: 3,
+                selected: 1,
+            })
+        );
+
+        let divided = TargetRequirement::new(TargetKind::Permanent)
+            .with_group(0, 1, 2)
+            .with_allocation_total(4);
+        assert_eq!(
+            state.validate_target_choices(
+                caster,
+                None,
+                &[
+                    divided.with_assigned_allocation(1),
+                    divided.with_assigned_allocation(3),
+                ],
+                &[TargetChoice::Object(first), TargetChoice::Object(second)],
+            ),
+            Ok(())
+        );
+        assert_eq!(
+            state.validate_target_choices(
+                caster,
+                None,
+                &[
+                    divided.with_assigned_allocation(1),
+                    divided.with_assigned_allocation(2),
+                ],
+                &[TargetChoice::Object(first), TargetChoice::Object(second)],
+            ),
+            Err(StateError::InvalidTargetAllocation {
+                group: 0,
+                required: 4,
+                assigned: 3,
+            })
+        );
+
+        assert_eq!(
+            state.validate_target_choices(
+                caster,
+                None,
+                &[
+                    TargetRequirement::new(TargetKind::Permanent).with_group(0, 1, 1),
+                    TargetRequirement::new(TargetKind::Permanent).with_group(1, 1, 1),
+                ],
+                &[TargetChoice::Object(first), TargetChoice::Object(first)],
+            ),
+            Ok(())
+        );
     }
 
     #[test]

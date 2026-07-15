@@ -621,7 +621,7 @@ fn compile_life_totals(
                     smoke_player_mask_for_binding(*players, target_requirements)?,
                     smoke_expected_amount(*amount)?,
                 ),
-                EffectProgram::DealDamageToTarget { target, amount } => (
+                EffectProgram::DealDamageToTarget { target, amount, .. } => (
                     &mut losses,
                     smoke_target_player_mask(
                         target_requirements.get(*target).copied().ok_or_else(|| {
@@ -1296,7 +1296,7 @@ fn execute_smoke(
                 )
             })?;
         let mut request = CastSpellRequest::new(stack_kind, timing, cast_cost, payment)
-            .with_targets(spell_target_requirements.to_vec(), targets.clone());
+            .with_targets(targets.requirements.clone(), targets.choices.clone());
         if smoke_flashback {
             request = request.with_flashback(cast_cost);
         }
@@ -3188,7 +3188,7 @@ fn prepare_effect_bindings_and_hand_delta(
     state: &GameState,
     effects: &[EffectProgram],
     optional_choice_count: usize,
-    targets: Vec<TargetChoice>,
+    targets: SynthesizedTargets,
     object_choices: Vec<Vec<ObjectId>>,
     caster: PlayerId,
     opponent: PlayerId,
@@ -3197,7 +3197,7 @@ fn prepare_effect_bindings_and_hand_delta(
     phase: &str,
 ) -> Result<ExecutionBindings, RuntimeSmokeFailure> {
     let mut bindings = ExecutionBindings::new(caster, vec![opponent])
-        .with_targets(targets)
+        .with_announced_targets(targets.requirements, targets.choices)
         .with_object_choices(object_choices.clone())
         .with_optional_effect_choices(vec![true; optional_choice_count]);
     if let Some(kind) = alternate_kind {
@@ -3646,101 +3646,189 @@ fn assert_object_choice_destinations(
     Ok(())
 }
 
+#[derive(Clone, Debug)]
+struct SynthesizedTargets {
+    requirements: Vec<TargetRequirement>,
+    choices: Vec<TargetChoice>,
+}
+
 fn synthesize_targets(
     execution: &mut Execution,
-    requirements: &[forge_core::TargetRequirement],
+    requirements: &[TargetRequirement],
     caster: PlayerId,
     opponent: PlayerId,
     base_card_id: u32,
     phase: &str,
-) -> Result<Vec<TargetChoice>, RuntimeSmokeFailure> {
-    let mut choices = Vec::with_capacity(requirements.len());
+) -> Result<SynthesizedTargets, RuntimeSmokeFailure> {
+    let mut expanded_requirements = Vec::new();
+    let mut choices = Vec::new();
     for (index, requirement) in requirements.iter().copied().enumerate() {
-        let choice = match requirement.kind() {
-            TargetKind::Player => {
-                let player = match requirement.predicate() {
-                    TargetPredicate::Any | TargetPredicate::Player(PlayerTargetPredicate::Any) => {
-                        opponent
-                    }
-                    TargetPredicate::Player(PlayerTargetPredicate::You) => caster,
-                    TargetPredicate::Player(PlayerTargetPredicate::Opponent) => opponent,
-                    TargetPredicate::Player(PlayerTargetPredicate::Player(player)) => player,
-                    TargetPredicate::Object(_) | TargetPredicate::PlayerOrObject { .. } => {
-                        return Err(RuntimeSmokeFailure::new(
-                            RuntimeSmokeFailureCode::UnexpectedOutcome,
-                            format!("{phase}[{index}]"),
-                            "player target carries an object predicate",
-                        ));
-                    }
-                };
-                TargetChoice::Player(player)
-            }
-            TargetKind::PlayerOrPermanent => TargetChoice::Player(opponent),
-            TargetKind::StackEntry => {
-                let (types, kind) = synthesize_stack_spell_shape(
-                    requirement.predicate(),
-                    &format!("{phase}[{index}]"),
-                )?;
-                let object = expect_object(execution.dispatch(
-                    &format!("{phase}[{index}].stack_object"),
-                    Action::CreateObject {
-                        card: CardId::new(
-                            base_card_id.wrapping_add(50_000).wrapping_add(index as u32),
-                        ),
-                        owner: caster,
-                        controller: caster,
-                        zone: ZoneId::new(Some(caster), ZoneKind::Hand),
-                    },
-                )?)?;
-                execution.dispatch(
-                    &format!("{phase}[{index}].stack_characteristics"),
-                    Action::SetBaseObjectCharacteristics {
-                        object,
-                        base: BaseObjectCharacteristics::new(
-                            types,
-                            ObjectColors::none().with_blue(),
-                        ),
-                    },
-                )?;
-                if types.creature() {
-                    execution.dispatch(
-                        &format!("{phase}[{index}].stack_creature"),
-                        Action::SetBaseCreatureCharacteristics {
-                            object,
-                            base: BaseCreatureCharacteristics::new(2, 2),
-                        },
-                    )?;
+        let group = u8::try_from(index).map_err(|_| {
+            RuntimeSmokeFailure::new(
+                RuntimeSmokeFailureCode::UnexpectedOutcome,
+                phase,
+                "target-group index exceeds the runtime range",
+            )
+        })?;
+        if requirement
+            .group()
+            .is_some_and(|compiled| compiled != group)
+        {
+            return Err(RuntimeSmokeFailure::new(
+                RuntimeSmokeFailureCode::UnexpectedOutcome,
+                format!("{phase}[{index}]"),
+                "compiled target group has inconsistent identity",
+            ));
+        }
+        let logical = requirement.with_group(group, requirement.minimum(), requirement.maximum());
+        let player_candidates = match logical.kind() {
+            TargetKind::Player => match logical.predicate() {
+                TargetPredicate::Any | TargetPredicate::Player(PlayerTargetPredicate::Any) => {
+                    vec![opponent, caster]
                 }
-                let outcome = execution.dispatch(
-                    &format!("{phase}[{index}].put_on_stack"),
-                    Action::PutSpellOnStack {
-                        player: caster,
-                        object,
-                        kind,
-                        hold_priority: true,
-                    },
-                )?;
-                let Outcome::StackEntryAdded(entry) = outcome else {
-                    return Err(unexpected_outcome("setup.target.stack", outcome));
-                };
-                TargetChoice::StackEntry(entry)
-            }
+                TargetPredicate::Player(PlayerTargetPredicate::You) => vec![caster],
+                TargetPredicate::Player(PlayerTargetPredicate::Opponent) => vec![opponent],
+                TargetPredicate::Player(PlayerTargetPredicate::Player(player)) => vec![player],
+                TargetPredicate::Object(_) | TargetPredicate::PlayerOrObject { .. } => {
+                    return Err(RuntimeSmokeFailure::new(
+                        RuntimeSmokeFailureCode::UnexpectedOutcome,
+                        format!("{phase}[{index}]"),
+                        "player target carries an object predicate",
+                    ));
+                }
+            },
+            TargetKind::PlayerOrPermanent => vec![opponent, caster],
             TargetKind::Permanent
             | TargetKind::ObjectInZone(_)
-            | TargetKind::ObjectInZoneKind(_) => TargetChoice::Object(synthesize_object_target(
-                execution,
-                requirement.kind(),
-                requirement.predicate(),
-                caster,
-                opponent,
-                base_card_id.wrapping_add(40_000).wrapping_add(index as u32),
-                index,
-                phase,
-            )?),
+            | TargetKind::ObjectInZoneKind(_)
+            | TargetKind::StackEntry => Vec::new(),
         };
-        choices.push(choice);
+        let available = if matches!(
+            logical.kind(),
+            TargetKind::Player | TargetKind::PlayerOrPermanent
+        ) {
+            player_candidates.len()
+        } else {
+            usize::from(logical.maximum())
+        };
+        let allocation_limit = logical
+            .allocation_total()
+            .map_or(usize::MAX, |total| total as usize);
+        let selected_count = usize::from(logical.minimum())
+            .max(1)
+            .min(usize::from(logical.maximum()))
+            .min(allocation_limit)
+            .min(available);
+        if selected_count < usize::from(logical.minimum()) {
+            return Err(RuntimeSmokeFailure::new(
+                RuntimeSmokeFailureCode::UnexpectedOutcome,
+                format!("{phase}[{index}]"),
+                format!(
+                    "two-player smoke can synthesize {selected_count} distinct targets, below minimum {}",
+                    logical.minimum()
+                ),
+            ));
+        }
+        let allocation_total = logical.allocation_total();
+        for offset in 0..selected_count {
+            let choice = match logical.kind() {
+                TargetKind::Player | TargetKind::PlayerOrPermanent => {
+                    TargetChoice::Player(*player_candidates.get(offset).ok_or_else(|| {
+                        RuntimeSmokeFailure::new(
+                            RuntimeSmokeFailureCode::UnexpectedOutcome,
+                            format!("{phase}[{index}][{offset}]"),
+                            "synthesized player-target candidate is missing",
+                        )
+                    })?)
+                }
+                TargetKind::StackEntry => {
+                    let (types, kind) = synthesize_stack_spell_shape(
+                        logical.predicate(),
+                        &format!("{phase}[{index}][{offset}]"),
+                    )?;
+                    let object = expect_object(
+                        execution.dispatch(
+                            &format!("{phase}[{index}][{offset}].stack_object"),
+                            Action::CreateObject {
+                                card: CardId::new(
+                                    base_card_id
+                                        .wrapping_add(50_000)
+                                        .wrapping_add((index as u32).saturating_mul(64))
+                                        .wrapping_add(offset as u32),
+                                ),
+                                owner: caster,
+                                controller: caster,
+                                zone: ZoneId::new(Some(caster), ZoneKind::Hand),
+                            },
+                        )?,
+                    )?;
+                    execution.dispatch(
+                        &format!("{phase}[{index}][{offset}].stack_characteristics"),
+                        Action::SetBaseObjectCharacteristics {
+                            object,
+                            base: BaseObjectCharacteristics::new(
+                                types,
+                                ObjectColors::none().with_blue(),
+                            ),
+                        },
+                    )?;
+                    if types.creature() {
+                        execution.dispatch(
+                            &format!("{phase}[{index}][{offset}].stack_creature"),
+                            Action::SetBaseCreatureCharacteristics {
+                                object,
+                                base: BaseCreatureCharacteristics::new(2, 2),
+                            },
+                        )?;
+                    }
+                    let outcome = execution.dispatch(
+                        &format!("{phase}[{index}][{offset}].put_on_stack"),
+                        Action::PutSpellOnStack {
+                            player: caster,
+                            object,
+                            kind,
+                            hold_priority: true,
+                        },
+                    )?;
+                    let Outcome::StackEntryAdded(entry) = outcome else {
+                        return Err(unexpected_outcome("setup.target.stack", outcome));
+                    };
+                    TargetChoice::StackEntry(entry)
+                }
+                TargetKind::Permanent
+                | TargetKind::ObjectInZone(_)
+                | TargetKind::ObjectInZoneKind(_) => {
+                    TargetChoice::Object(synthesize_object_target(
+                        execution,
+                        logical.kind(),
+                        logical.predicate(),
+                        caster,
+                        opponent,
+                        base_card_id
+                            .wrapping_add(40_000)
+                            .wrapping_add((index as u32).saturating_mul(64))
+                            .wrapping_add(offset as u32),
+                        index.saturating_mul(64).saturating_add(offset),
+                        phase,
+                    )?)
+                }
+            };
+            let expanded = allocation_total.map_or(logical, |total| {
+                let amount = if offset == 0 {
+                    total.saturating_sub((selected_count - 1) as u32)
+                } else {
+                    1
+                };
+                logical.with_assigned_allocation(amount)
+            });
+            expanded_requirements.push(expanded);
+            choices.push(choice);
+        }
     }
-    Ok(choices)
+    Ok(SynthesizedTargets {
+        requirements: expanded_requirements,
+        choices,
+    })
 }
 
 fn synthesize_object_choices(

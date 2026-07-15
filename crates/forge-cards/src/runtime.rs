@@ -11,7 +11,7 @@ use forge_carddef::{
 };
 use forge_core::{
     apply, auto_payment_plan, AbilityPlayer, Action, ActivatedAbilityDefinition,
-    ActivatedAbilityEffect, ActivationCondition, ActivationCost, ActivationTiming,
+    ActivatedAbilityEffect, ActivationCondition, ActivationCost, ActivationTiming, AnnouncedTarget,
     BaseCreatureCharacteristics, BaseObjectCharacteristics, BasicLandTypes, CardId,
     CombatDamageTarget, CombatRestriction, CombatRestrictionSubject, ContinuousEffectCondition,
     ContinuousEffectDefinition, ContinuousEffectDuration, ContinuousEffectOperation,
@@ -30,6 +30,7 @@ const MAX_EFFECTS: usize = 64;
 const MAX_ACTIVATED_ABILITIES: usize = 16;
 const MAX_TOKEN_COUNT: u32 = 64;
 const MAX_SPELL_MODES: usize = 8;
+const MAX_TARGETS_PER_GROUP: u8 = 64;
 
 /// Stable reason that a definition could not compile into a complete program.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -565,6 +566,8 @@ pub enum EffectProgram {
         target: usize,
         /// Damage amount.
         amount: AmountProgram,
+        /// Whether the amount was divided among the selected target group.
+        divided: bool,
     },
     /// Deal noncombat damage to a resolved player set without targeting.
     DealDamageToPlayers {
@@ -3343,6 +3346,14 @@ struct CompiledTarget {
     requirement: TargetRequirement,
 }
 
+#[derive(Clone, Copy)]
+struct TargetSelectorSpec<'a> {
+    selector: &'a Expression,
+    minimum: u8,
+    maximum: u8,
+    allocation_total: Option<u32>,
+}
+
 struct CompiledObjectChoice {
     selector: Expression,
     requirement: ObjectChoiceRequirement,
@@ -4475,9 +4486,24 @@ fn compile_effect(
                     .push(EffectProgram::DealDamageToPlayers { players, amount });
             } else {
                 let target = compile_damage_target(target, &format!("{path}.target"), compiler)?;
-                compiler
-                    .effects
-                    .push(EffectProgram::DealDamageToTarget { target, amount });
+                let allocation_total = compiler.targets[target].requirement.allocation_total();
+                let divided = allocation_total.is_some();
+                if let Some(total) = allocation_total {
+                    if amount != AmountProgram::Literal(total) {
+                        return Err(CompileDiagnostic::new(
+                            CompileDiagnosticCode::EffectArguments,
+                            format!("{path}.amount"),
+                            format!(
+                                "divided target total {total} must exactly match the literal damage amount"
+                            ),
+                        ));
+                    }
+                }
+                compiler.effects.push(EffectProgram::DealDamageToTarget {
+                    target,
+                    amount,
+                    divided,
+                });
             }
             Ok(())
         }
@@ -4699,8 +4725,9 @@ fn compile_effect(
                     "one permanent target selector",
                 ));
             };
-            let selector = target_selector(target_expression, &format!("{path}.target"))?;
-            let selector_spec = compile_object_selector(selector, &format!("{path}.target"))?;
+            let target_spec = target_selector(target_expression, &format!("{path}.target"))?;
+            let selector_spec =
+                compile_object_selector(target_spec.selector, &format!("{path}.target"))?;
             if selector_spec.kind != TargetKind::Permanent {
                 return Err(CompileDiagnostic::new(
                     CompileDiagnosticCode::EffectArguments,
@@ -5311,7 +5338,7 @@ fn compile_player_binding(
                 return Ok(PlayerBinding::TriggeringPlayer);
             }
             let selector = target_selector(target, path)?;
-            if is_any_selector(selector) {
+            if is_any_selector(selector.selector) {
                 let object = unique_existing_target(compiler, TargetClass::Object, path)?;
                 let stack = unique_existing_target(compiler, TargetClass::Stack, path)?;
                 return match (object, stack) {
@@ -5346,13 +5373,17 @@ fn compile_player_target(
     compiler: &mut ProgramCompiler,
     path: &str,
 ) -> Result<usize, CompileDiagnostic> {
-    let selector = target_selector(expression, path)?;
-    if is_any_selector(selector) {
+    let spec = target_selector(expression, path)?;
+    if spec.minimum == 1
+        && spec.maximum == 1
+        && spec.allocation_total.is_none()
+        && is_any_selector(spec.selector)
+    {
         if let Some(index) = unique_existing_target(compiler, TargetClass::Player, path)? {
             return Ok(index);
         }
     }
-    let predicate = match selector {
+    let predicate = match spec.selector {
         Expression::Call {
             operation: Operation::Any,
             arguments,
@@ -5375,7 +5406,7 @@ fn compile_player_target(
     };
     intern_target(
         compiler,
-        selector,
+        spec,
         TargetRequirement::new(TargetKind::Player).with_player_predicate(predicate),
     )
 }
@@ -5385,8 +5416,8 @@ fn compile_damage_target(
     path: &str,
     compiler: &mut ProgramCompiler,
 ) -> Result<usize, CompileDiagnostic> {
-    let selector = target_selector(expression, path)?;
-    match selector {
+    let spec = target_selector(expression, path)?;
+    match spec.selector {
         Expression::Call {
             operation: Operation::All,
             arguments,
@@ -5405,8 +5436,8 @@ fn compile_damage_target(
                     "player-or-permanent damage target requires any() for the player branch",
                 ));
             }
-            let spec = compile_object_selector(object_selector, &format!("{path}.object"))?;
-            if spec.kind != TargetKind::Permanent || spec.exclude_source {
+            let object_spec = compile_object_selector(object_selector, &format!("{path}.object"))?;
+            if object_spec.kind != TargetKind::Permanent || object_spec.exclude_source {
                 return Err(CompileDiagnostic::new(
                     CompileDiagnosticCode::EffectArguments,
                     format!("{path}.object"),
@@ -5415,11 +5446,11 @@ fn compile_damage_target(
             }
             intern_target(
                 compiler,
-                selector,
+                spec,
                 TargetRequirement::new(TargetKind::PlayerOrPermanent)
                     .with_player_or_object_predicate(
                         PlayerTargetPredicate::Any,
-                        object_predicate_from_spec(spec),
+                        object_predicate_from_spec(object_spec),
                     ),
             )
         }
@@ -5446,13 +5477,17 @@ fn compile_stack_target(
     path: &str,
     compiler: &mut ProgramCompiler,
 ) -> Result<usize, CompileDiagnostic> {
-    let selector = target_selector(expression, path)?;
-    if is_any_selector(selector) {
+    let spec = target_selector(expression, path)?;
+    if spec.minimum == 1
+        && spec.maximum == 1
+        && spec.allocation_total.is_none()
+        && is_any_selector(spec.selector)
+    {
         if let Some(index) = unique_existing_target(compiler, TargetClass::Stack, path)? {
             return Ok(index);
         }
     }
-    match selector {
+    match spec.selector {
         Expression::Call {
             operation: Operation::Spells,
             arguments,
@@ -5469,7 +5504,7 @@ fn compile_stack_target(
                     ));
                 }
             };
-            intern_target(compiler, selector, requirement)
+            intern_target(compiler, spec, requirement)
         }
         _ => Err(CompileDiagnostic::new(
             CompileDiagnosticCode::EffectArguments,
@@ -5572,13 +5607,17 @@ fn compile_object_target(
     path: &str,
     compiler: &mut ProgramCompiler,
 ) -> Result<usize, CompileDiagnostic> {
-    let selector = target_selector(expression, path)?;
-    if is_any_selector(selector) {
+    let target_spec = target_selector(expression, path)?;
+    if target_spec.minimum == 1
+        && target_spec.maximum == 1
+        && target_spec.allocation_total.is_none()
+        && is_any_selector(target_spec.selector)
+    {
         if let Some(index) = unique_existing_target(compiler, TargetClass::Object, path)? {
             return Ok(index);
         }
     }
-    let spec = compile_object_selector(selector, path)?;
+    let spec = compile_object_selector(target_spec.selector, path)?;
     if spec.exclude_source {
         return Err(CompileDiagnostic::new(
             CompileDiagnosticCode::EffectArguments,
@@ -5603,7 +5642,7 @@ fn compile_object_target(
     }
     intern_target(
         compiler,
-        selector,
+        target_spec,
         TargetRequirement::new(spec.kind).with_object_predicate(predicate),
     )
 }
@@ -5611,26 +5650,125 @@ fn compile_object_target(
 fn target_selector<'a>(
     expression: &'a Expression,
     path: &str,
-) -> Result<&'a Expression, CompileDiagnostic> {
+) -> Result<TargetSelectorSpec<'a>, CompileDiagnostic> {
     let Expression::Call {
-        operation: Operation::Target,
+        operation,
         arguments,
     } = expression
     else {
         return Err(CompileDiagnostic::new(
             CompileDiagnosticCode::EffectArguments,
             path,
-            "selector is not wrapped in target(...)[]",
+            "selector is not wrapped in target(...), target_range(...), or target_allocation(...)[]",
         ));
     };
-    let [selector] = arguments.as_slice() else {
-        return Err(CompileDiagnostic::new(
+    match operation {
+        Operation::Target => {
+            let [selector] = arguments.as_slice() else {
+                return Err(effect_arity(path, operation, "exactly one selector"));
+            };
+            Ok(TargetSelectorSpec {
+                selector,
+                minimum: 1,
+                maximum: 1,
+                allocation_total: None,
+            })
+        }
+        Operation::TargetRange => {
+            let [selector, Expression::Integer(minimum), Expression::Integer(maximum)] =
+                arguments.as_slice()
+            else {
+                return Err(effect_arity(
+                    path,
+                    operation,
+                    "one selector and literal minimum/maximum bounds",
+                ));
+            };
+            let minimum = u8::try_from(*minimum).map_err(|_| {
+                CompileDiagnostic::new(
+                    CompileDiagnosticCode::ProgramBounds,
+                    format!("{path}.minimum"),
+                    "target minimum is outside the u8 runtime range",
+                )
+            })?;
+            let maximum = u8::try_from(*maximum).map_err(|_| {
+                CompileDiagnostic::new(
+                    CompileDiagnosticCode::ProgramBounds,
+                    format!("{path}.maximum"),
+                    "target maximum is outside the u8 runtime range",
+                )
+            })?;
+            if maximum == 0 || minimum > maximum || maximum > MAX_TARGETS_PER_GROUP {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::ProgramBounds,
+                    path,
+                    format!(
+                        "target range must satisfy 0 <= minimum <= maximum <= {MAX_TARGETS_PER_GROUP} with a positive maximum"
+                    ),
+                ));
+            }
+            Ok(TargetSelectorSpec {
+                selector,
+                minimum,
+                maximum,
+                allocation_total: None,
+            })
+        }
+        Operation::TargetAllocation => {
+            let [range, Expression::Integer(total)] = arguments.as_slice() else {
+                return Err(effect_arity(
+                    path,
+                    operation,
+                    "one target_range(...) and one literal total",
+                ));
+            };
+            if !matches!(
+                range,
+                Expression::Call {
+                    operation: Operation::TargetRange,
+                    ..
+                }
+            ) {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::EffectArguments,
+                    format!("{path}.range"),
+                    "target allocation requires a target_range declaration",
+                ));
+            }
+            let mut spec = target_selector(range, &format!("{path}.range"))?;
+            let total = u32::try_from(*total).map_err(|_| {
+                CompileDiagnostic::new(
+                    CompileDiagnosticCode::EffectAmount,
+                    format!("{path}.total"),
+                    "target allocation total is outside the u32 runtime range",
+                )
+            })?;
+            if total == 0 || total > u32::from(MAX_TARGETS_PER_GROUP) {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::ProgramBounds,
+                    format!("{path}.total"),
+                    format!("target allocation total must be in 1..={MAX_TARGETS_PER_GROUP}"),
+                ));
+            }
+            if total < u32::from(spec.minimum) {
+                return Err(CompileDiagnostic::new(
+                    CompileDiagnosticCode::ProgramBounds,
+                    format!("{path}.total"),
+                    format!(
+                        "target allocation total {total} cannot satisfy minimum target count {}",
+                        spec.minimum
+                    ),
+                ));
+            }
+            spec.allocation_total = Some(total);
+            Ok(spec)
+        }
+        _ => Err(CompileDiagnostic::new(
             CompileDiagnosticCode::EffectArguments,
             path,
-            "target requires exactly one selector",
-        ));
-    };
-    Ok(selector)
+            format!("unsupported target selector `{}`", operation.as_str()),
+        )),
+    }
 }
 
 fn is_any_selector(expression: &Expression) -> bool {
@@ -5717,19 +5855,33 @@ fn unique_existing_target(
 
 fn intern_target(
     compiler: &mut ProgramCompiler,
-    selector: &Expression,
-    requirement: TargetRequirement,
+    spec: TargetSelectorSpec<'_>,
+    mut requirement: TargetRequirement,
 ) -> Result<usize, CompileDiagnostic> {
-    if let Some(index) = compiler
-        .targets
-        .iter()
-        .position(|target| target.selector == *selector && target.requirement == requirement)
-    {
+    if let Some(index) = compiler.targets.iter().position(|target| {
+        target.selector == *spec.selector
+            && target.requirement.kind() == requirement.kind()
+            && target.requirement.predicate() == requirement.predicate()
+            && target.requirement.minimum() == spec.minimum
+            && target.requirement.maximum() == spec.maximum
+            && target.requirement.allocation_total() == spec.allocation_total
+    }) {
         return Ok(index);
     }
     let index = compiler.targets.len();
+    let group = u8::try_from(index).map_err(|_| {
+        CompileDiagnostic::new(
+            CompileDiagnosticCode::ProgramBounds,
+            "target_groups",
+            "compiled target-group count exceeds u8",
+        )
+    })?;
+    requirement = requirement.with_group(group, spec.minimum, spec.maximum);
+    if let Some(total) = spec.allocation_total {
+        requirement = requirement.with_allocation_total(total);
+    }
     compiler.targets.push(CompiledTarget {
-        selector: selector.clone(),
+        selector: spec.selector.clone(),
         requirement,
     });
     Ok(index)
@@ -6618,12 +6770,12 @@ fn compile_effect_object_set(
     let is_target = matches!(
         expression,
         Expression::Call {
-            operation: Operation::Target,
+            operation: Operation::Target | Operation::TargetRange,
             ..
         }
     );
     let selector = if is_target {
-        target_selector(expression, path)?
+        target_selector(expression, path)?.selector
     } else {
         expression
     };
@@ -6758,6 +6910,7 @@ pub struct ExecutionBindings {
     unless_payment: Option<bool>,
     opponents: Vec<PlayerId>,
     targets: Vec<TargetChoice>,
+    target_requirements: Option<Vec<TargetRequirement>>,
     target_legalities: Option<Vec<bool>>,
     object_choices: Vec<Vec<ObjectId>>,
     optional_effect_choices: Vec<bool>,
@@ -6777,6 +6930,7 @@ impl ExecutionBindings {
             unless_payment: None,
             opponents,
             targets: Vec::new(),
+            target_requirements: None,
             target_legalities: None,
             object_choices: Vec::new(),
             optional_effect_choices: Vec::new(),
@@ -6822,6 +6976,21 @@ impl ExecutionBindings {
     /// Supplies target choices in compiled announcement order.
     #[must_use]
     pub fn with_targets(mut self, targets: Vec<TargetChoice>) -> Self {
+        self.targets = targets;
+        self
+    }
+
+    /// Supplies the expanded requirements and choices announced on the stack.
+    ///
+    /// Range members repeat the same explicit group metadata and divided
+    /// effects carry one positive allocation on each repeated requirement.
+    #[must_use]
+    pub fn with_announced_targets(
+        mut self,
+        requirements: Vec<TargetRequirement>,
+        targets: Vec<TargetChoice>,
+    ) -> Self {
+        self.target_requirements = Some(requirements);
         self.targets = targets;
         self
     }
@@ -6905,6 +7074,12 @@ impl ExecutionBindings {
         &self.targets
     }
 
+    /// Returns expanded announcement requirements when supplied by the kernel.
+    #[must_use]
+    pub fn announced_target_requirements(&self) -> Option<&[TargetRequirement]> {
+        self.target_requirements.as_deref()
+    }
+
     /// Returns explicit hidden-zone object choices in compiled order.
     #[must_use]
     pub fn object_choices(&self) -> &[Vec<ObjectId>] {
@@ -6916,6 +7091,106 @@ impl ExecutionBindings {
     pub fn optional_effect_choices(&self) -> &[bool] {
         &self.optional_effect_choices
     }
+}
+
+/// Expands logical target groups into the per-selection kernel representation.
+///
+/// This is the only card-interpreter adapter from canonical announced targets
+/// to kernel requirements. Unknown groups and mismatched allocation metadata
+/// remain fail closed; legality and group cardinality are validated again by
+/// the kernel when the stack object is created.
+pub fn expand_announced_targets(
+    groups: &[TargetRequirement],
+    selections: &[AnnouncedTarget],
+) -> Result<(Vec<TargetRequirement>, Vec<TargetChoice>), ExecutionDiagnostic> {
+    let mut requirements = Vec::with_capacity(selections.len());
+    let mut targets = Vec::with_capacity(selections.len());
+    let mut prior_group = None;
+    for selection in selections.iter().copied() {
+        let group = usize::from(selection.group());
+        if prior_group.is_some_and(|prior| group < prior) {
+            return Err(ExecutionDiagnostic::new(
+                ExecutionDiagnosticCode::InvalidChoice,
+                None,
+                "announced target groups are not in canonical order",
+            ));
+        }
+        prior_group = Some(group);
+        let logical = groups.get(group).copied().ok_or_else(|| {
+            ExecutionDiagnostic::new(
+                ExecutionDiagnosticCode::InvalidChoice,
+                None,
+                format!("announced target references unknown group {group}"),
+            )
+        })?;
+        if logical.group().map_or(group, usize::from) != group {
+            return Err(ExecutionDiagnostic::new(
+                ExecutionDiagnosticCode::InvalidChoice,
+                None,
+                format!("compiled target group {group} has inconsistent identity"),
+            ));
+        }
+        let requirement = match (logical.allocation_total(), selection.allocation()) {
+            (Some(_), Some(amount)) if amount != 0 => logical.with_assigned_allocation(amount),
+            (Some(total), _) => {
+                return Err(ExecutionDiagnostic::new(
+                    ExecutionDiagnosticCode::InvalidChoice,
+                    None,
+                    format!("target group {group} requires positive allocations totaling {total}"),
+                ));
+            }
+            (None, None) => logical,
+            (None, Some(_)) => {
+                return Err(ExecutionDiagnostic::new(
+                    ExecutionDiagnosticCode::InvalidChoice,
+                    None,
+                    format!("target group {group} does not accept allocations"),
+                ));
+            }
+        };
+        requirements.push(requirement);
+        targets.push(selection.target());
+    }
+    for (group_index, logical) in groups.iter().copied().enumerate() {
+        let selected = selections
+            .iter()
+            .filter(|selection| usize::from(selection.group()) == group_index)
+            .count();
+        if selected < usize::from(logical.minimum()) || selected > usize::from(logical.maximum()) {
+            return Err(ExecutionDiagnostic::new(
+                ExecutionDiagnosticCode::InvalidChoice,
+                None,
+                format!(
+                    "target group {group_index} selected {selected}, required {}..={}",
+                    logical.minimum(),
+                    logical.maximum()
+                ),
+            ));
+        }
+        if let Some(total) = logical.allocation_total() {
+            let assigned = selections
+                .iter()
+                .filter(|selection| usize::from(selection.group()) == group_index)
+                .try_fold(0_u32, |sum, selection| {
+                    sum.checked_add(selection.allocation().unwrap_or(0))
+                })
+                .ok_or_else(|| {
+                    ExecutionDiagnostic::new(
+                        ExecutionDiagnosticCode::InvalidChoice,
+                        None,
+                        format!("target group {group_index} allocation sum overflowed"),
+                    )
+                })?;
+            if assigned != total {
+                return Err(ExecutionDiagnostic::new(
+                    ExecutionDiagnosticCode::InvalidChoice,
+                    None,
+                    format!("target group {group_index} allocated {assigned}, required {total}"),
+                ));
+            }
+        }
+    }
+    Ok((requirements, targets))
 }
 
 /// Stable reason that a compiled program could not bind or execute.
@@ -7268,27 +7543,53 @@ fn bind_effect_actions(
                     });
                 }
             }
-            EffectProgram::DealDamageToTarget { target, amount } => {
-                let amount = resolve_amount(state, *amount, bindings, effect_index)?;
-                let target = match bindings.targets.get(*target) {
-                    Some(TargetChoice::Player(player)) => CombatDamageTarget::Player(*player),
-                    Some(TargetChoice::Object(object)) => CombatDamageTarget::Object(*object),
-                    _ => {
-                        return Err(ExecutionDiagnostic::new(
-                            ExecutionDiagnosticCode::MissingBinding,
-                            Some(effect_index),
-                            format!("target slot {target} is not a player or object"),
-                        ));
-                    }
-                };
-                actions.push(BoundAction {
-                    effect_index,
-                    action: Action::DealDamage {
-                        source: bindings.source,
-                        target,
-                        amount,
-                    },
-                });
+            EffectProgram::DealDamageToTarget {
+                target,
+                amount,
+                divided,
+            } => {
+                let shared_amount = resolve_amount(state, *amount, bindings, effect_index)?;
+                for (physical_index, choice) in
+                    legal_target_group_members(bindings, *target, effect_index)?
+                {
+                    let damage_target = match choice {
+                        TargetChoice::Player(player) => CombatDamageTarget::Player(player),
+                        TargetChoice::Object(object) => CombatDamageTarget::Object(object),
+                        TargetChoice::StackEntry(_) => {
+                            return Err(ExecutionDiagnostic::new(
+                                ExecutionDiagnosticCode::MissingBinding,
+                                Some(effect_index),
+                                format!("target group {target} contains a stack target"),
+                            ));
+                        }
+                    };
+                    let amount = if *divided {
+                        bindings
+                            .target_requirements
+                            .as_deref()
+                            .and_then(|requirements| requirements.get(physical_index))
+                            .and_then(|requirement| requirement.assigned_allocation())
+                            .ok_or_else(|| {
+                                ExecutionDiagnostic::new(
+                                    ExecutionDiagnosticCode::MissingChoice,
+                                    Some(effect_index),
+                                    format!(
+                                        "divided target group {target} lacks allocation metadata"
+                                    ),
+                                )
+                            })?
+                    } else {
+                        shared_amount
+                    };
+                    actions.push(BoundAction {
+                        effect_index,
+                        action: Action::DealDamage {
+                            source: bindings.source,
+                            target: damage_target,
+                            amount,
+                        },
+                    });
+                }
             }
             EffectProgram::DealDamageToPlayers { players, amount } => {
                 let amount = resolve_amount(state, *amount, bindings, effect_index)?;
@@ -7380,38 +7681,39 @@ fn bind_effect_actions(
                 }
             }
             EffectProgram::DestroyPermanent { target } => {
-                actions.push(BoundAction {
-                    effect_index,
-                    action: Action::DestroyPermanent {
-                        object: resolve_object_target(bindings, *target, effect_index)?,
-                    },
-                });
+                for object in resolve_object_targets(bindings, *target, effect_index)? {
+                    actions.push(BoundAction {
+                        effect_index,
+                        action: Action::DestroyPermanent { object },
+                    });
+                }
             }
             EffectProgram::DestroyPermanentWithoutRegeneration { target } => {
-                actions.push(BoundAction {
-                    effect_index,
-                    action: Action::DestroyPermanentWithoutRegeneration {
-                        object: resolve_object_target(bindings, *target, effect_index)?,
-                    },
-                });
+                for object in resolve_object_targets(bindings, *target, effect_index)? {
+                    actions.push(BoundAction {
+                        effect_index,
+                        action: Action::DestroyPermanentWithoutRegeneration { object },
+                    });
+                }
             }
             EffectProgram::ExileObject { target } => {
-                let object = resolve_object_target(bindings, *target, effect_index)?;
-                actions.push(BoundAction {
-                    effect_index,
-                    action: Action::MoveObject {
-                        object,
-                        to: ZoneId::new(None, ZoneKind::Exile),
-                    },
-                });
+                for object in resolve_object_targets(bindings, *target, effect_index)? {
+                    actions.push(BoundAction {
+                        effect_index,
+                        action: Action::MoveObject {
+                            object,
+                            to: ZoneId::new(None, ZoneKind::Exile),
+                        },
+                    });
+                }
             }
             EffectProgram::CounterStackEntry { target } => {
-                actions.push(BoundAction {
-                    effect_index,
-                    action: Action::CounterStackEntry {
-                        entry: resolve_stack_target(bindings, *target, effect_index)?,
-                    },
-                });
+                for entry in resolve_stack_targets(bindings, *target, effect_index)? {
+                    actions.push(BoundAction {
+                        effect_index,
+                        action: Action::CounterStackEntry { entry },
+                    });
+                }
             }
             EffectProgram::MoveTargetObject {
                 target,
@@ -7447,7 +7749,7 @@ fn bind_effect_actions(
                         })
                         .collect::<Vec<_>>()
                 } else {
-                    vec![resolve_object_target(bindings, *target, effect_index)?]
+                    resolve_object_targets(bindings, *target, effect_index)?
                 };
                 for object in objects {
                     let current = state.object_zone(object).ok_or_else(|| {
@@ -7810,15 +8112,127 @@ fn validate_effect_target_bindings(
     target_requirements: &[TargetRequirement],
     bindings: &ExecutionBindings,
 ) -> Result<(), ExecutionDiagnostic> {
-    if target_requirements.len() != bindings.targets.len() {
+    let announced = match bindings.target_requirements.as_deref() {
+        Some(requirements) => requirements,
+        None if target_requirements.iter().all(|requirement| {
+            requirement.minimum() == 1
+                && requirement.maximum() == 1
+                && requirement.allocation_total().is_none()
+        }) =>
+        {
+            target_requirements
+        }
+        None => {
+            return Err(ExecutionDiagnostic::new(
+                ExecutionDiagnosticCode::MissingChoice,
+                None,
+                "variable or divided targets require expanded announcement metadata",
+            ));
+        }
+    };
+    if announced.len() != bindings.targets.len() {
         return Err(ExecutionDiagnostic::new(
             ExecutionDiagnosticCode::InvalidChoice,
             None,
             format!(
-                "program requires {} target binding(s), found {}",
-                target_requirements.len(),
+                "announcement carries {} target requirement(s), found {} target choice(s)",
+                announced.len(),
                 bindings.targets.len()
             ),
+        ));
+    }
+    let mut represented = 0_usize;
+    for (group_index, requirement) in target_requirements.iter().copied().enumerate() {
+        let group = requirement.group().map_or(group_index, usize::from);
+        let members = announced
+            .iter()
+            .enumerate()
+            .filter(|(index, candidate)| candidate.group().map_or(*index, usize::from) == group)
+            .collect::<Vec<_>>();
+        represented = represented.saturating_add(members.len());
+        if members.len() < usize::from(requirement.minimum())
+            || members.len() > usize::from(requirement.maximum())
+        {
+            return Err(ExecutionDiagnostic::new(
+                ExecutionDiagnosticCode::InvalidChoice,
+                None,
+                format!(
+                    "target group {group} selected {} target(s), required range is {}..={}",
+                    members.len(),
+                    requirement.minimum(),
+                    requirement.maximum()
+                ),
+            ));
+        }
+        let mut allocation_sum = 0_u32;
+        for (member_offset, (physical_index, member)) in members.iter().enumerate() {
+            if member.kind() != requirement.kind()
+                || member.predicate() != requirement.predicate()
+                || member.minimum() != requirement.minimum()
+                || member.maximum() != requirement.maximum()
+                || member.allocation_total() != requirement.allocation_total()
+            {
+                return Err(ExecutionDiagnostic::new(
+                    ExecutionDiagnosticCode::InvalidChoice,
+                    None,
+                    format!("target group {group} announcement metadata diverges"),
+                ));
+            }
+            let choice = bindings.targets[*physical_index];
+            if members[..member_offset]
+                .iter()
+                .any(|(prior, _)| bindings.targets[*prior] == choice)
+            {
+                return Err(ExecutionDiagnostic::new(
+                    ExecutionDiagnosticCode::InvalidChoice,
+                    None,
+                    format!("target group {group} repeats target {choice:?}"),
+                ));
+            }
+            match (requirement.allocation_total(), member.assigned_allocation()) {
+                (Some(_), Some(amount)) if amount != 0 => {
+                    allocation_sum = allocation_sum.checked_add(amount).ok_or_else(|| {
+                        ExecutionDiagnostic::new(
+                            ExecutionDiagnosticCode::InvalidChoice,
+                            None,
+                            format!("target group {group} allocation sum overflowed"),
+                        )
+                    })?;
+                }
+                (Some(total), _) => {
+                    return Err(ExecutionDiagnostic::new(
+                        ExecutionDiagnosticCode::InvalidChoice,
+                        None,
+                        format!(
+                            "target group {group} requires positive allocations totaling {total}"
+                        ),
+                    ));
+                }
+                (None, None) => {}
+                (None, Some(_)) => {
+                    return Err(ExecutionDiagnostic::new(
+                        ExecutionDiagnosticCode::InvalidChoice,
+                        None,
+                        format!("target group {group} has an unexpected allocation"),
+                    ));
+                }
+            }
+        }
+        if let Some(total) = requirement.allocation_total() {
+            if allocation_sum != total {
+                return Err(ExecutionDiagnostic::new(
+                    ExecutionDiagnosticCode::InvalidChoice,
+                    None,
+                    format!("target group {group} allocated {allocation_sum}, required {total}"),
+                ));
+            }
+        }
+    }
+    if represented != announced.len() {
+        return Err(ExecutionDiagnostic::new(
+            ExecutionDiagnosticCode::InvalidChoice,
+            None,
+            "announcement contains an unknown target group",
         ));
     }
     let Some(legalities) = bindings.target_legalities.as_deref() else {
@@ -7826,7 +8240,7 @@ fn validate_effect_target_bindings(
             .validate_target_choices(
                 bindings.controller,
                 bindings.source,
-                target_requirements,
+                announced,
                 &bindings.targets,
             )
             .map_err(|error| {
@@ -7855,7 +8269,7 @@ fn validate_effect_target_bindings(
             "an all-illegal targeted stack object must be countered before effect binding",
         ));
     }
-    for (index, ((requirement, choice), legal)) in target_requirements
+    for (index, ((requirement, choice), legal)) in announced
         .iter()
         .zip(&bindings.targets)
         .zip(legalities)
@@ -7900,6 +8314,7 @@ fn effect_references_illegal_target(
         EffectProgram::DealDamageToTarget {
             target: slot,
             amount: value,
+            ..
         } => Ok(target(*slot)? || amount(*value)?),
         EffectProgram::DrawCards { players, count } | EffectProgram::Scry { players, count } => {
             Ok(player(*players)? || amount(*count)?)
@@ -7946,15 +8361,58 @@ fn target_slot_is_illegal(
     target: usize,
     effect_index: usize,
 ) -> Result<bool, ExecutionDiagnostic> {
+    let indices = target_group_indices(bindings, target, effect_index)?;
+    if indices.is_empty() {
+        return Ok(bindings.target_requirements.is_some());
+    }
     let Some(legalities) = bindings.target_legalities.as_deref() else {
         return Ok(false);
     };
-    legalities.get(target).map(|legal| !*legal).ok_or_else(|| {
-        ExecutionDiagnostic::new(
+    Ok(indices
+        .iter()
+        .all(|index| legalities.get(*index).is_some_and(|legal| !*legal)))
+}
+
+fn target_group_indices(
+    bindings: &ExecutionBindings,
+    target: usize,
+    effect_index: usize,
+) -> Result<Vec<usize>, ExecutionDiagnostic> {
+    let indices = if let Some(requirements) = bindings.target_requirements.as_deref() {
+        requirements
+            .iter()
+            .enumerate()
+            .filter_map(|(index, requirement)| {
+                (requirement.group().map_or(index, usize::from) == target).then_some(index)
+            })
+            .collect::<Vec<_>>()
+    } else if target < bindings.targets.len() {
+        vec![target]
+    } else {
+        Vec::new()
+    };
+    if indices.iter().any(|index| *index >= bindings.targets.len()) {
+        return Err(ExecutionDiagnostic::new(
             ExecutionDiagnosticCode::MissingBinding,
             Some(effect_index),
-            format!("target slot {target} has no resolution-legality entry"),
-        )
+            format!("target group {target} has incomplete announcement data"),
+        ));
+    }
+    Ok(indices)
+}
+
+fn legal_target_group_members(
+    bindings: &ExecutionBindings,
+    target: usize,
+    effect_index: usize,
+) -> Result<Vec<(usize, TargetChoice)>, ExecutionDiagnostic> {
+    let legalities = bindings.target_legalities.as_deref();
+    target_group_indices(bindings, target, effect_index).map(|indices| {
+        indices
+            .into_iter()
+            .filter(|index| legalities.map_or(true, |mask| mask.get(*index).copied() == Some(true)))
+            .map(|index| (index, bindings.targets[index]))
+            .collect()
     })
 }
 
@@ -8176,14 +8634,19 @@ fn resolve_players(
             "opponent selector has no bound opponent",
         )),
         PlayerBinding::Opponents => Ok(bindings.opponents.clone()),
-        PlayerBinding::Target(target) => match bindings.targets.get(target) {
-            Some(TargetChoice::Player(player)) => Ok(vec![*player]),
-            _ => Err(ExecutionDiagnostic::new(
-                ExecutionDiagnosticCode::MissingBinding,
-                Some(effect_index),
-                format!("target slot {target} is not a player"),
-            )),
-        },
+        PlayerBinding::Target(target) => {
+            legal_target_group_members(bindings, target, effect_index)?
+                .into_iter()
+                .map(|(_, choice)| match choice {
+                    TargetChoice::Player(player) => Ok(player),
+                    _ => Err(ExecutionDiagnostic::new(
+                        ExecutionDiagnosticCode::MissingBinding,
+                        Some(effect_index),
+                        format!("target group {target} contains a non-player target"),
+                    )),
+                })
+                .collect()
+        }
         PlayerBinding::ControllerOfTargetObject(target) => {
             let object = resolve_object_target(bindings, target, effect_index)?;
             state
@@ -8198,17 +8661,11 @@ fn resolve_players(
                 })
         }
         PlayerBinding::ControllerOfTargetStack(target) => {
-            let Some(TargetChoice::StackEntry(entry)) = bindings.targets.get(target) else {
-                return Err(ExecutionDiagnostic::new(
-                    ExecutionDiagnosticCode::MissingBinding,
-                    Some(effect_index),
-                    format!("target slot {target} is not a stack entry"),
-                ));
-            };
+            let entry = resolve_stack_target(bindings, target, effect_index)?;
             state
                 .stack_entries()
                 .iter()
-                .find(|candidate| candidate.id() == *entry)
+                .find(|candidate| candidate.id() == entry)
                 .map(|entry| vec![entry.controller()])
                 .ok_or_else(|| {
                     ExecutionDiagnostic::new(
@@ -8309,9 +8766,7 @@ fn resolve_object_set(
     effect_index: usize,
 ) -> Result<Vec<ObjectId>, ExecutionDiagnostic> {
     match objects {
-        ObjectSetProgram::Target(target) => {
-            Ok(vec![resolve_object_target(bindings, target, effect_index)?])
-        }
+        ObjectSetProgram::Target(target) => resolve_object_targets(bindings, target, effect_index),
         ObjectSetProgram::Battlefield(predicate) => {
             let battlefield = state
                 .zone_objects(ZoneId::new(None, ZoneKind::Battlefield))
@@ -8338,14 +8793,33 @@ fn resolve_object_target(
     target: usize,
     effect_index: usize,
 ) -> Result<ObjectId, ExecutionDiagnostic> {
-    match bindings.targets.get(target) {
-        Some(TargetChoice::Object(object)) => Ok(*object),
+    let members = resolve_object_targets(bindings, target, effect_index)?;
+    match members.as_slice() {
+        [object] => Ok(*object),
         _ => Err(ExecutionDiagnostic::new(
             ExecutionDiagnosticCode::MissingBinding,
             Some(effect_index),
-            format!("target slot {target} is not an object"),
+            format!("target group {target} is not exactly one legal object"),
         )),
     }
+}
+
+fn resolve_object_targets(
+    bindings: &ExecutionBindings,
+    target: usize,
+    effect_index: usize,
+) -> Result<Vec<ObjectId>, ExecutionDiagnostic> {
+    legal_target_group_members(bindings, target, effect_index)?
+        .into_iter()
+        .map(|(_, choice)| match choice {
+            TargetChoice::Object(object) => Ok(object),
+            _ => Err(ExecutionDiagnostic::new(
+                ExecutionDiagnosticCode::MissingBinding,
+                Some(effect_index),
+                format!("target group {target} contains a non-object target"),
+            )),
+        })
+        .collect()
 }
 
 fn resolve_stack_target(
@@ -8353,14 +8827,33 @@ fn resolve_stack_target(
     target: usize,
     effect_index: usize,
 ) -> Result<StackEntryId, ExecutionDiagnostic> {
-    match bindings.targets.get(target) {
-        Some(TargetChoice::StackEntry(entry)) => Ok(*entry),
+    let members = legal_target_group_members(bindings, target, effect_index)?;
+    match members.as_slice() {
+        [(_, TargetChoice::StackEntry(entry))] => Ok(*entry),
         _ => Err(ExecutionDiagnostic::new(
             ExecutionDiagnosticCode::MissingBinding,
             Some(effect_index),
-            format!("target slot {target} is not a stack entry"),
+            format!("target group {target} is not exactly one legal stack entry"),
         )),
     }
+}
+
+fn resolve_stack_targets(
+    bindings: &ExecutionBindings,
+    target: usize,
+    effect_index: usize,
+) -> Result<Vec<StackEntryId>, ExecutionDiagnostic> {
+    legal_target_group_members(bindings, target, effect_index)?
+        .into_iter()
+        .map(|(_, choice)| match choice {
+            TargetChoice::StackEntry(entry) => Ok(entry),
+            _ => Err(ExecutionDiagnostic::new(
+                ExecutionDiagnosticCode::MissingBinding,
+                Some(effect_index),
+                format!("target group {target} contains a non-stack target"),
+            )),
+        })
+        .collect()
 }
 
 /// Binds the complete program before applying any production action.
@@ -8399,11 +8892,11 @@ mod tests {
     };
     use forge_core::{
         apply, Action, ActivationCondition, BaseCreatureCharacteristics, BaseObjectCharacteristics,
-        BasicLandTypes, CardId, ContinuousEffectDuration, GameEvent, GameState, ManaCost, ManaKind,
-        ManaPool, ObjectColors, ObjectSubtype, ObjectSupertypes, ObjectTargetPredicate,
-        ObjectTypes, Outcome, RestrictionDefinition, RestrictionEffect, StackObjectKind,
-        TargetChoice, TargetControllerPredicate, TargetKind, TargetRequirement, TriggerCondition,
-        ZoneId, ZoneKind,
+        BasicLandTypes, CardId, CombatDamageTarget, ContinuousEffectDuration, GameEvent, GameState,
+        ManaCost, ManaKind, ManaPool, ObjectColors, ObjectSubtype, ObjectSupertypes,
+        ObjectTargetPredicate, ObjectTypes, Outcome, RestrictionDefinition, RestrictionEffect,
+        StackObjectKind, TargetChoice, TargetControllerPredicate, TargetKind, TargetRequirement,
+        TriggerCondition, ZoneId, ZoneKind,
     };
 
     const SWORDS: &str = r#"
@@ -8450,6 +8943,38 @@ card "Partial Target Legality" {
     keywords: []
     ability spell {
       effect: sequence(deal_damage(target(permanents(type_is("creature"))), 2), lose_life(1, target(opponent())))
+    }
+  }
+}
+"#;
+    const TARGET_RANGE_FIXTURE: &str = r#"
+card "Target Range Fixture" {
+  id: "forge:test:target-range-fixture"
+  layout: normal
+  status: unverified_playable
+  face "Target Range Fixture" {
+    cost: "{2}{R}"
+    types: "Sorcery"
+    oracle: "Target Range Fixture deals 1 damage to up to three target creatures."
+    keywords: []
+    ability spell {
+      effect: deal_damage(target_range(permanents(type_is("creature")), 0, 3), 1)
+    }
+  }
+}
+"#;
+    const DIVIDED_TARGET_FIXTURE: &str = r#"
+card "Divided Target Fixture" {
+  id: "forge:test:divided-target-fixture"
+  layout: normal
+  status: unverified_playable
+  face "Divided Target Fixture" {
+    cost: "{4}{R}{R}"
+    types: "Instant"
+    oracle: "Divided Target Fixture deals 4 damage divided as you choose among up to four target creatures."
+    keywords: []
+    ability spell {
+      effect: deal_damage(target_allocation(target_range(permanents(type_is("creature")), 0, 4), 4), 4)
     }
   }
 }
@@ -8996,6 +9521,139 @@ card "Purphoros, God of the Forge" {
             panic!("an all-illegal stack object must not execute effects");
         };
         assert_eq!(all_illegal.code(), ExecutionDiagnosticCode::InvalidChoice);
+    }
+
+    #[test]
+    fn target_ranges_bind_distinct_members_and_preserve_partial_legality() {
+        let program = compile_card_program(&parse("target_range.frs", TARGET_RANGE_FIXTURE))
+            .unwrap_or_else(|error| panic!("target range should compile: {error}"));
+        let requirement = program.target_requirements()[0];
+        assert_eq!((requirement.minimum(), requirement.maximum()), (0, 3));
+        let mut state = GameState::new();
+        let controller = add_player(&mut state);
+        let opponent = add_player(&mut state);
+        let mut targets = Vec::new();
+        for card in 3_200..3_203 {
+            let target = create_object(
+                &mut state,
+                CardId::new(card),
+                opponent,
+                ZoneId::new(None, ZoneKind::Battlefield),
+            );
+            assert_eq!(
+                apply(
+                    &mut state,
+                    Action::SetBaseObjectCharacteristics {
+                        object: target,
+                        base: BaseObjectCharacteristics::new(
+                            ObjectTypes::none().with_creature(),
+                            ObjectColors::none(),
+                        ),
+                    },
+                ),
+                Outcome::Applied
+            );
+            targets.push(target);
+        }
+        let bindings = ExecutionBindings::new(controller, vec![opponent])
+            .with_announced_targets(
+                vec![requirement; 3],
+                targets.iter().copied().map(TargetChoice::Object).collect(),
+            )
+            .with_target_legalities(vec![true, false, true]);
+        let actions = bind_program_actions(&state, &program, &bindings)
+            .unwrap_or_else(|error| panic!("target range should bind: {error}"));
+        assert_eq!(actions.len(), 2);
+        assert!(matches!(
+            actions[0].action(),
+            Action::DealDamage {
+                target: CombatDamageTarget::Object(object),
+                amount: 1,
+                ..
+            } if *object == targets[0]
+        ));
+        assert!(matches!(
+            actions[1].action(),
+            Action::DealDamage {
+                target: CombatDamageTarget::Object(object),
+                amount: 1,
+                ..
+            } if *object == targets[2]
+        ));
+
+        let empty = ExecutionBindings::new(controller, vec![opponent])
+            .with_announced_targets(Vec::new(), Vec::new());
+        assert!(bind_program_actions(&state, &program, &empty)
+            .unwrap_or_else(|error| panic!("optional empty target group should bind: {error}"))
+            .is_empty());
+    }
+
+    #[test]
+    fn divided_target_amounts_are_positive_exact_and_not_redistributed() {
+        let program = compile_card_program(&parse("divided_target.frs", DIVIDED_TARGET_FIXTURE))
+            .unwrap_or_else(|error| panic!("divided target should compile: {error}"));
+        let requirement = program.target_requirements()[0];
+        assert_eq!(requirement.allocation_total(), Some(4));
+        let mut state = GameState::new();
+        let controller = add_player(&mut state);
+        let opponent = add_player(&mut state);
+        let mut targets = Vec::new();
+        for card in 3_210..3_212 {
+            let target = create_object(
+                &mut state,
+                CardId::new(card),
+                opponent,
+                ZoneId::new(None, ZoneKind::Battlefield),
+            );
+            assert_eq!(
+                apply(
+                    &mut state,
+                    Action::SetBaseObjectCharacteristics {
+                        object: target,
+                        base: BaseObjectCharacteristics::new(
+                            ObjectTypes::none().with_creature(),
+                            ObjectColors::none(),
+                        ),
+                    },
+                ),
+                Outcome::Applied
+            );
+            targets.push(target);
+        }
+        let announced = vec![
+            requirement.with_assigned_allocation(1),
+            requirement.with_assigned_allocation(3),
+        ];
+        let bindings = ExecutionBindings::new(controller, vec![opponent])
+            .with_announced_targets(
+                announced.clone(),
+                targets.iter().copied().map(TargetChoice::Object).collect(),
+            )
+            .with_target_legalities(vec![false, true]);
+        let actions = bind_program_actions(&state, &program, &bindings)
+            .unwrap_or_else(|error| panic!("divided target should bind: {error}"));
+        assert_eq!(actions.len(), 1);
+        assert!(matches!(
+            actions[0].action(),
+            Action::DealDamage {
+                target: CombatDamageTarget::Object(object),
+                amount: 3,
+                ..
+            } if *object == targets[1]
+        ));
+
+        let wrong_total = ExecutionBindings::new(controller, vec![opponent])
+            .with_announced_targets(
+                vec![
+                    requirement.with_assigned_allocation(1),
+                    requirement.with_assigned_allocation(2),
+                ],
+                targets.into_iter().map(TargetChoice::Object).collect(),
+            );
+        let Err(error) = bind_program_actions(&state, &program, &wrong_total) else {
+            panic!("mismatched divided total must fail closed");
+        };
+        assert_eq!(error.code(), ExecutionDiagnosticCode::InvalidChoice);
     }
 
     #[test]

@@ -58,7 +58,10 @@ the cross-requirement Cartesian product while preserving every legal concrete
 selection for human, AI, telemetry, and replay consumers.
 
 Targeted triggered abilities use bounded target-slot contexts before the
-pending trigger is put on the stack. The final typed trigger binding is
+pending trigger is put on the stack. Fixed slots retain their one-choice path;
+statically bounded target groups add one distinct member at a time, expose an
+explicit finish option only after the effective minimum, and assign divided
+amounts through bounded positive numeric contexts. The final typed trigger binding is
 validated atomically by the kernel, snapshots targets for the priority window,
 and is recovered from the resolution record by the interpreter. A required
 trigger with an empty current target domain uses an explicit kernel-validated
@@ -66,7 +69,9 @@ no-stack disposition, produces no prompt, and does not block valid sibling
 triggers. Same-batch inter-trigger stack targeting is canonical. At resolution,
 the interpreter consumes the kernel's per-slot legality mask, skips only effects
 that depend on illegal targets, and continues independent legal-target and
-untargeted instructions. Target distribution remains fail closed.
+untargeted instructions without redistributing announced amounts. Dynamic
+target bounds, dynamic division totals, and unsupported cross-target
+relationships remain fail closed.
 
 Triggered optional effects are deferred until resolution and use one scoped
 `Optional` context per compiled group. Compiled opponent-draw unless branches

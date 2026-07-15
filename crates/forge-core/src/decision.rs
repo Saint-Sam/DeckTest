@@ -1,7 +1,7 @@
 use super::{
-    Action, ActivatedAbilityId, AttackDeclaration, BlockDeclaration, ManaKind, ObjectId,
-    PaymentPlan, PlayerId, PlayerView, PlayerViewHash, SpellAlternateCost, Step, TargetChoice,
-    TriggerId, ZoneId, ZoneKind,
+    Action, ActivatedAbilityId, AnnouncedTarget, AttackDeclaration, BlockDeclaration, ManaKind,
+    ObjectId, PaymentPlan, PlayerId, PlayerView, PlayerViewHash, SpellAlternateCost, Step,
+    TargetChoice, TriggerId, ZoneId, ZoneKind,
 };
 use std::{collections::BTreeSet, error::Error, fmt};
 
@@ -259,6 +259,67 @@ pub enum DecisionDescriptor {
         /// Optional-effect answers already bound by the enclosing action-family choice.
         optional: Vec<bool>,
     },
+    /// Activate a program ability with grouped or divided targets.
+    ActivateProgramAbilityTargetGroups {
+        /// Source object used by presentation and auditing.
+        source: ObjectId,
+        /// Registered ability ID.
+        ability: ActivatedAbilityId,
+        /// Explicit mana payment.
+        payment: PaymentPlan,
+        /// Canonical target groups and announced allocations.
+        targets: Vec<AnnouncedTarget>,
+        /// Optional-effect answers in prompt order.
+        optional: Vec<bool>,
+    },
+    /// Begin an extra-cost activation with grouped or divided targets.
+    BeginActivateProgramAbilityWithCostsTargetGroups {
+        /// Source object used by presentation and auditing.
+        source: ObjectId,
+        /// Registered ability ID.
+        ability: ActivatedAbilityId,
+        /// Canonical target groups and announced allocations.
+        targets: Vec<AnnouncedTarget>,
+        /// Optional-effect answers in prompt order.
+        optional: Vec<bool>,
+    },
+    /// Cast a spell with grouped or divided targets.
+    CastSpellTargetGroups {
+        /// Spell object.
+        object: ObjectId,
+        /// Chosen mana payment.
+        payment: PaymentPlan,
+        /// Canonical target groups and announced allocations.
+        targets: Vec<AnnouncedTarget>,
+        /// Bound mode indexes in canonical order.
+        modes: Vec<u32>,
+        /// Optional-effect answers in prompt order.
+        optional: Vec<bool>,
+    },
+    /// Begin a grouped-target cast with numeric and payment choices deferred.
+    BeginCastSpellTargetGroups {
+        /// Spell object.
+        object: ObjectId,
+        /// Canonical target groups and announced allocations.
+        targets: Vec<AnnouncedTarget>,
+        /// Bound mode indexes in canonical order.
+        modes: Vec<u32>,
+        /// Optional-effect answers in prompt order.
+        optional: Vec<bool>,
+    },
+    /// Begin an alternate-cost cast with grouped or divided targets.
+    BeginCastSpellAlternateTargetGroups {
+        /// Spell object.
+        object: ObjectId,
+        /// Closed alternate-cost meaning selected for this cast.
+        alternate: SpellAlternateCost,
+        /// Canonical target groups and announced allocations.
+        targets: Vec<AnnouncedTarget>,
+        /// Bound mode indexes in canonical order.
+        modes: Vec<u32>,
+        /// Optional-effect answers in prompt order.
+        optional: Vec<bool>,
+    },
     /// Declare a complete attacker set.
     DeclareAttackers {
         /// Attack declarations for this option.
@@ -299,6 +360,13 @@ pub enum DecisionDescriptor {
     ChooseTarget {
         /// Selected target.
         target: TargetChoice,
+    },
+    /// Extend or finish a triggered ability's grouped target announcement.
+    ChooseTriggerTargetGroups {
+        /// Trigger whose target announcement is being built.
+        trigger: TriggerId,
+        /// Canonical announcement prefix after choosing this option.
+        targets: Vec<AnnouncedTarget>,
     },
     /// Choose one mode index.
     ChooseMode {
@@ -523,6 +591,96 @@ impl DecisionDescriptor {
                     bytes.u8(u8::from(*accept));
                 }
             }
+            Self::ActivateProgramAbilityTargetGroups {
+                source,
+                ability,
+                payment,
+                targets,
+                optional,
+            } => {
+                bytes.u8(32);
+                bytes.object(*source);
+                bytes.u32(ability.get());
+                bytes.payment(*payment);
+                bytes.announced_targets(targets);
+                bytes.u32(optional.len() as u32);
+                for accept in optional {
+                    bytes.u8(u8::from(*accept));
+                }
+            }
+            Self::BeginActivateProgramAbilityWithCostsTargetGroups {
+                source,
+                ability,
+                targets,
+                optional,
+            } => {
+                bytes.u8(33);
+                bytes.object(*source);
+                bytes.u32(ability.get());
+                bytes.announced_targets(targets);
+                bytes.u32(optional.len() as u32);
+                for accept in optional {
+                    bytes.u8(u8::from(*accept));
+                }
+            }
+            Self::CastSpellTargetGroups {
+                object,
+                payment,
+                targets,
+                modes,
+                optional,
+            } => {
+                bytes.u8(34);
+                bytes.object(*object);
+                bytes.payment(*payment);
+                bytes.announced_targets(targets);
+                bytes.u32(modes.len() as u32);
+                for mode in modes {
+                    bytes.u32(*mode);
+                }
+                bytes.u32(optional.len() as u32);
+                for accept in optional {
+                    bytes.u8(u8::from(*accept));
+                }
+            }
+            Self::BeginCastSpellTargetGroups {
+                object,
+                targets,
+                modes,
+                optional,
+            } => {
+                bytes.u8(35);
+                bytes.object(*object);
+                bytes.announced_targets(targets);
+                bytes.u32(modes.len() as u32);
+                for mode in modes {
+                    bytes.u32(*mode);
+                }
+                bytes.u32(optional.len() as u32);
+                for accept in optional {
+                    bytes.u8(u8::from(*accept));
+                }
+            }
+            Self::BeginCastSpellAlternateTargetGroups {
+                object,
+                alternate,
+                targets,
+                modes,
+                optional,
+            } => {
+                bytes.u8(36);
+                bytes.object(*object);
+                bytes.u8(alternate.canonical_code());
+                bytes.announced_targets(targets);
+                bytes.u32(modes.len() as u32);
+                for mode in modes {
+                    bytes.u32(*mode);
+                }
+                bytes.u32(optional.len() as u32);
+                for accept in optional {
+                    bytes.u8(u8::from(*accept));
+                }
+            }
             Self::DeclareAttackers { attacks } => {
                 bytes.u8(6);
                 bytes.u32(attacks.len() as u32);
@@ -567,6 +725,11 @@ impl DecisionDescriptor {
             Self::ChooseTarget { target } => {
                 bytes.u8(10);
                 bytes.target(*target);
+            }
+            Self::ChooseTriggerTargetGroups { trigger, targets } => {
+                bytes.u8(37);
+                bytes.u32(trigger.get());
+                bytes.announced_targets(targets);
             }
             Self::ChooseMode { mode } => {
                 bytes.u8(11);
@@ -676,6 +839,107 @@ impl DecisionDescriptor {
                 for accept in optional {
                     bytes.u8(u8::from(*accept));
                 }
+                true
+            }
+            Self::ActivateProgramAbilityTargetGroups {
+                source,
+                ability,
+                payment,
+                targets,
+                optional,
+            } => {
+                bytes.u8(32);
+                bytes.object(*source);
+                bytes.u32(ability.get());
+                bytes.payment(*payment);
+                bytes.announced_target_kinds(targets);
+                bytes.u32(optional.len() as u32);
+                for accept in optional {
+                    bytes.u8(u8::from(*accept));
+                }
+                true
+            }
+            Self::BeginActivateProgramAbilityWithCostsTargetGroups {
+                source,
+                ability,
+                targets,
+                optional,
+            } => {
+                bytes.u8(33);
+                bytes.object(*source);
+                bytes.u32(ability.get());
+                bytes.announced_target_kinds(targets);
+                bytes.u32(optional.len() as u32);
+                for accept in optional {
+                    bytes.u8(u8::from(*accept));
+                }
+                true
+            }
+            Self::CastSpellTargetGroups {
+                object,
+                payment,
+                targets,
+                modes,
+                optional,
+            } => {
+                bytes.u8(34);
+                bytes.object(*object);
+                bytes.payment(*payment);
+                bytes.announced_target_kinds(targets);
+                bytes.u32(modes.len() as u32);
+                for mode in modes {
+                    bytes.u32(*mode);
+                }
+                bytes.u32(optional.len() as u32);
+                for accept in optional {
+                    bytes.u8(u8::from(*accept));
+                }
+                true
+            }
+            Self::BeginCastSpellTargetGroups {
+                object,
+                targets,
+                modes,
+                optional,
+            } => {
+                bytes.u8(35);
+                bytes.object(*object);
+                bytes.announced_target_kinds(targets);
+                bytes.u32(modes.len() as u32);
+                for mode in modes {
+                    bytes.u32(*mode);
+                }
+                bytes.u32(optional.len() as u32);
+                for accept in optional {
+                    bytes.u8(u8::from(*accept));
+                }
+                true
+            }
+            Self::BeginCastSpellAlternateTargetGroups {
+                object,
+                alternate,
+                targets,
+                modes,
+                optional,
+            } => {
+                bytes.u8(36);
+                bytes.object(*object);
+                bytes.u8(alternate.canonical_code());
+                bytes.announced_target_kinds(targets);
+                bytes.u32(modes.len() as u32);
+                for mode in modes {
+                    bytes.u32(*mode);
+                }
+                bytes.u32(optional.len() as u32);
+                for accept in optional {
+                    bytes.u8(u8::from(*accept));
+                }
+                true
+            }
+            Self::ChooseTriggerTargetGroups { trigger, targets } => {
+                bytes.u8(37);
+                bytes.u32(trigger.get());
+                bytes.announced_target_kinds(targets);
                 true
             }
             Self::BeginActivateProgramAbilityWithCosts {
@@ -1192,6 +1456,36 @@ impl CanonicalDecisionBytes {
         }
     }
 
+    fn announced_targets(&mut self, targets: &[AnnouncedTarget]) {
+        self.u32(targets.len() as u32);
+        for target in targets {
+            self.u8(target.group());
+            self.target(target.target());
+            match target.allocation() {
+                Some(amount) => {
+                    self.u8(1);
+                    self.u32(amount);
+                }
+                None => self.u8(0),
+            }
+        }
+    }
+
+    fn announced_target_kinds(&mut self, targets: &[AnnouncedTarget]) {
+        self.u32(targets.len() as u32);
+        for target in targets {
+            self.u8(target.group());
+            self.u8(target.target().canonical_code());
+            match target.allocation() {
+                Some(amount) => {
+                    self.u8(1);
+                    self.u32(amount);
+                }
+                None => self.u8(0),
+            }
+        }
+    }
+
     fn payment(&mut self, payment: PaymentPlan) {
         for kind in [
             ManaKind::White,
@@ -1502,6 +1796,54 @@ mod tests {
                 modes: Vec::new(),
                 optional: vec![false],
             },
+            DecisionDescriptor::ActivateProgramAbilityTargetGroups {
+                source: object,
+                ability: crate::ActivatedAbilityId(3),
+                payment,
+                targets: vec![crate::AnnouncedTarget::new(
+                    0,
+                    crate::TargetChoice::Player(opponent),
+                )],
+                optional: Vec::new(),
+            },
+            DecisionDescriptor::BeginActivateProgramAbilityWithCostsTargetGroups {
+                source: object,
+                ability: crate::ActivatedAbilityId(4),
+                targets: vec![crate::AnnouncedTarget::new(
+                    0,
+                    crate::TargetChoice::Player(opponent),
+                )],
+                optional: Vec::new(),
+            },
+            DecisionDescriptor::CastSpellTargetGroups {
+                object,
+                payment,
+                targets: vec![crate::AnnouncedTarget::new(
+                    0,
+                    crate::TargetChoice::Player(opponent),
+                )],
+                modes: Vec::new(),
+                optional: Vec::new(),
+            },
+            DecisionDescriptor::BeginCastSpellTargetGroups {
+                object,
+                targets: vec![crate::AnnouncedTarget::new(
+                    0,
+                    crate::TargetChoice::Player(opponent),
+                )],
+                modes: Vec::new(),
+                optional: Vec::new(),
+            },
+            DecisionDescriptor::BeginCastSpellAlternateTargetGroups {
+                object,
+                alternate: crate::SpellAlternateCost::Overload,
+                targets: vec![crate::AnnouncedTarget::new(
+                    0,
+                    crate::TargetChoice::Player(opponent),
+                )],
+                modes: Vec::new(),
+                optional: Vec::new(),
+            },
             DecisionDescriptor::ChooseActivationCostObjects {
                 objects: vec![object],
             },
@@ -1526,6 +1868,13 @@ mod tests {
             },
             DecisionDescriptor::ChooseTarget {
                 target: crate::TargetChoice::Object(object),
+            },
+            DecisionDescriptor::ChooseTriggerTargetGroups {
+                trigger: crate::TriggerId(0),
+                targets: vec![crate::AnnouncedTarget::new(
+                    0,
+                    crate::TargetChoice::Object(object),
+                )],
             },
             DecisionDescriptor::ChooseMode { mode: 1 },
             DecisionDescriptor::ChooseNumber { value: 2 },
@@ -1574,6 +1923,6 @@ mod tests {
             .into_iter()
             .map(|descriptor| DecisionOption::new(descriptor, Vec::new()).id())
             .collect::<std::collections::BTreeSet<_>>();
-        assert_eq!(ids.len(), 32);
+        assert_eq!(ids.len(), 38);
     }
 }

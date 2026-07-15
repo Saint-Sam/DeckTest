@@ -14,21 +14,21 @@ use forge_ai::{
 };
 use forge_cards::runtime::{
     bind_activated_effect_actions, bind_program_actions, bind_triggered_ability_actions,
-    compile_card_program, object_satisfies_choice_requirement, AlternateCostKind, CardProgram,
-    ExecutionBindings, ObjectChoiceRequirement, PlayerBinding, ProgramKind,
-    SpellAdditionalCostProgram, SpellModeProgram,
+    compile_card_program, expand_announced_targets, object_satisfies_choice_requirement,
+    AlternateCostKind, CardProgram, ExecutionBindings, ObjectChoiceRequirement, PlayerBinding,
+    ProgramKind, SpellAdditionalCostProgram, SpellModeProgram,
 };
 use forge_core::{
     apply, Action, ActivatedAbilityDefinition, ActivatedAbilityEffect, ActivatedAbilityId,
-    ActivationCost, AttackDeclaration, BlockDeclaration, CanonicalActionId, CardId,
-    CastSpellRequest, CombatDamageAssignment, CombatDamageAssignmentRequest, CombatDamageStepKind,
-    CombatDamageTarget, DecisionContext, DecisionDescriptor, DecisionKind, DecisionOption,
-    GameEvent, GameOutcome, GameState, HiddenCardDefinition, HiddenSlotDefinition, ManaKind,
-    ObjectColors, ObjectId, ObjectView, Outcome, PaymentPlan, PendingTriggeredAbility, PlayerId,
-    PlayerView, PriorityOutcome, ResolutionOutcome, SpellAdditionalCostPayment, SpellAlternateCost,
-    SpellTiming, StackDecisionBindings, StackEntryId, StackObjectKind, StateError, Step,
-    TargetChoice, TargetKind, TargetPredicate, TargetRequirement, TriggerId, TriggerStackBinding,
-    TriggerStackDisposition, ZoneId, ZoneKind,
+    ActivationCost, AnnouncedTarget, AttackDeclaration, BlockDeclaration, CanonicalActionId,
+    CardId, CastSpellRequest, CombatDamageAssignment, CombatDamageAssignmentRequest,
+    CombatDamageStepKind, CombatDamageTarget, DecisionContext, DecisionDescriptor, DecisionKind,
+    DecisionOption, GameEvent, GameOutcome, GameState, HiddenCardDefinition, HiddenSlotDefinition,
+    ManaKind, ObjectColors, ObjectId, ObjectView, Outcome, PaymentPlan, PendingTriggeredAbility,
+    PlayerId, PlayerView, PriorityOutcome, ResolutionOutcome, SpellAdditionalCostPayment,
+    SpellAlternateCost, SpellTiming, StackDecisionBindings, StackEntryId, StackObjectKind,
+    StateError, Step, TargetChoice, TargetKind, TargetPredicate, TargetRequirement, TriggerId,
+    TriggerStackBinding, TriggerStackDisposition, ZoneId, ZoneKind,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -1384,6 +1384,7 @@ struct RegisteredAbility {
 struct PendingActivatedResolution {
     controller: PlayerId,
     runtime: ActivatedRuntime,
+    target_requirements: Vec<TargetRequirement>,
     targets: Vec<TargetChoice>,
     target_legalities: Vec<bool>,
     decisions: StackDecisionBindings,
@@ -1394,6 +1395,7 @@ struct PendingSpellResolution {
     controller: PlayerId,
     object: ObjectId,
     program: Arc<CardProgram>,
+    target_requirements: Vec<TargetRequirement>,
     targets: Vec<TargetChoice>,
     target_legalities: Vec<bool>,
     decisions: StackDecisionBindings,
@@ -1405,6 +1407,7 @@ struct PendingTriggeredResolution {
     trigger: TriggerId,
     triggering_player: Option<PlayerId>,
     runtime: TriggerRuntime,
+    target_requirements: Vec<TargetRequirement>,
     targets: Vec<TargetChoice>,
     target_legalities: Vec<bool>,
     decisions: StackDecisionBindings,
@@ -1423,13 +1426,13 @@ enum MainChoice {
         source: ObjectId,
         ability: ActivatedAbilityId,
         payment: PaymentPlan,
-        targets: Vec<TargetChoice>,
+        targets: Vec<AnnouncedTarget>,
         optional: Vec<bool>,
     },
     BeginActivateProgramWithCosts {
         source: ObjectId,
         ability: ActivatedAbilityId,
-        targets: Vec<TargetChoice>,
+        targets: Vec<AnnouncedTarget>,
         optional: Vec<bool>,
         sacrifice_objects: Option<Vec<ObjectId>>,
     },
@@ -1437,14 +1440,14 @@ enum MainChoice {
         source: ObjectId,
         ability: ActivatedAbilityId,
         payment: PaymentPlan,
-        targets: Vec<TargetChoice>,
+        targets: Vec<AnnouncedTarget>,
         optional: Vec<bool>,
         sacrifice_objects: Vec<ObjectId>,
     },
     BeginCast {
         object: ObjectId,
         alternate: Option<AlternateCostKind>,
-        targets: Vec<TargetChoice>,
+        targets: Vec<AnnouncedTarget>,
         mode: Option<u32>,
         optional: Vec<bool>,
         additional_costs: Vec<Vec<ObjectId>>,
@@ -1452,7 +1455,7 @@ enum MainChoice {
     NarrowCastX {
         object: ObjectId,
         alternate: Option<AlternateCostKind>,
-        targets: Vec<TargetChoice>,
+        targets: Vec<AnnouncedTarget>,
         mode: Option<u32>,
         optional: Vec<bool>,
         additional_costs: Vec<Vec<ObjectId>>,
@@ -1462,7 +1465,7 @@ enum MainChoice {
     ChooseCastX {
         object: ObjectId,
         alternate: Option<AlternateCostKind>,
-        targets: Vec<TargetChoice>,
+        targets: Vec<AnnouncedTarget>,
         mode: Option<u32>,
         optional: Vec<bool>,
         additional_costs: Vec<Vec<ObjectId>>,
@@ -1472,7 +1475,7 @@ enum MainChoice {
         object: ObjectId,
         alternate: Option<AlternateCostKind>,
         payment: PaymentPlan,
-        targets: Vec<TargetChoice>,
+        targets: Vec<AnnouncedTarget>,
         mode: Option<u32>,
         optional: Vec<bool>,
         additional_costs: Vec<Vec<ObjectId>>,
@@ -1484,7 +1487,7 @@ type MainDecisionAdapter = (DecisionContext, Vec<(CanonicalActionId, MainChoice)
 
 #[derive(Clone)]
 struct SpellChoiceBinding {
-    targets: Vec<TargetChoice>,
+    targets: Vec<AnnouncedTarget>,
     mode: Option<u32>,
     optional: Vec<bool>,
 }
@@ -3216,12 +3219,16 @@ impl GameDriver {
                 let decisions = StackDecisionBindings::new(None, &optional).map_err(|error| {
                     format!("seed {} activation choices failed: {error:?}", self.seed)
                 })?;
+                let (target_requirements, target_choices) =
+                    expand_announced_targets(effect.target_requirements(), &targets).map_err(
+                        |error| format!("seed {} activation targets failed: {error}", self.seed),
+                    )?;
                 let outcome = self.dispatch(Action::ActivateProgramAbility {
                     player,
                     ability,
                     payment,
-                    target_requirements: effect.target_requirements().to_vec(),
-                    target_choices: targets,
+                    target_requirements,
+                    target_choices,
                     decisions,
                 })?;
                 if !matches!(outcome, Outcome::StackEntryAdded(_)) {
@@ -3257,12 +3264,16 @@ impl GameDriver {
                 let decisions = StackDecisionBindings::new(None, &optional).map_err(|error| {
                     format!("seed {} activation choices failed: {error:?}", self.seed)
                 })?;
+                let (target_requirements, target_choices) =
+                    expand_announced_targets(effect.target_requirements(), &targets).map_err(
+                        |error| format!("seed {} activation targets failed: {error}", self.seed),
+                    )?;
                 let outcome = self.dispatch(Action::ActivateProgramAbilityWithCosts {
                     player,
                     ability,
                     payment,
-                    target_requirements: effect.target_requirements().to_vec(),
-                    target_choices: targets,
+                    target_requirements,
+                    target_choices,
                     decisions,
                     additional_cost_objects: sacrifice_objects,
                 })?;
@@ -3460,7 +3471,7 @@ impl GameDriver {
         player: PlayerId,
         object: ObjectId,
         alternate: Option<AlternateCostKind>,
-        targets: &[TargetChoice],
+        targets: &[AnnouncedTarget],
         mode: Option<u32>,
         optional: &[bool],
         prior: &[Vec<ObjectId>],
@@ -3618,7 +3629,7 @@ impl GameDriver {
         player: PlayerId,
         ability: ActivatedAbilityId,
         payment: PaymentPlan,
-        targets: &[TargetChoice],
+        targets: &[AnnouncedTarget],
         optional: &[bool],
         sacrifice_objects: &[ObjectId],
     ) -> Result<Action, String> {
@@ -3637,12 +3648,16 @@ impl GameDriver {
             })?;
         let decisions = StackDecisionBindings::new(None, optional)
             .map_err(|error| format!("seed {} activation choices failed: {error:?}", self.seed))?;
+        let (target_requirements, target_choices) =
+            expand_announced_targets(effect.target_requirements(), targets).map_err(|error| {
+                format!("seed {} activation targets failed: {error}", self.seed)
+            })?;
         Ok(Action::ActivateProgramAbilityWithCosts {
             player,
             ability,
             payment,
-            target_requirements: effect.target_requirements().to_vec(),
-            target_choices: targets.to_vec(),
+            target_requirements,
+            target_choices,
             decisions,
             additional_cost_objects: sacrifice_objects.to_vec(),
         })
@@ -3653,7 +3668,7 @@ impl GameDriver {
         player: PlayerId,
         source: ObjectId,
         ability: ActivatedAbilityId,
-        targets: &[TargetChoice],
+        targets: &[AnnouncedTarget],
         optional: &[bool],
     ) -> Result<bool, String> {
         let cost = self
@@ -3689,16 +3704,73 @@ impl GameDriver {
         player: PlayerId,
         source: ObjectId,
         requirements: &[TargetRequirement],
-    ) -> Result<Vec<Vec<TargetChoice>>, String> {
+    ) -> Result<Vec<Vec<AnnouncedTarget>>, String> {
         let mut bindings = vec![Vec::new()];
-        for requirement in requirements {
-            let choices = self.legal_targets_for(player, source, *requirement);
-            if choices.is_empty() {
+        for (group_index, requirement) in requirements.iter().copied().enumerate() {
+            let group = u8::try_from(group_index)
+                .map_err(|_| format!("seed {} target group index overflow", self.seed))?;
+            if requirement
+                .group()
+                .is_some_and(|compiled| compiled != group)
+            {
+                return Err(format!(
+                    "seed {} target group {group_index} has inconsistent compiled identity",
+                    self.seed
+                ));
+            }
+            let choices = self.legal_targets_for(player, source, requirement);
+            let minimum = if requirement.allocation_total().is_some() {
+                usize::from(requirement.minimum()).max(1)
+            } else {
+                usize::from(requirement.minimum())
+            };
+            let maximum = usize::from(requirement.maximum()).min(choices.len());
+            if minimum > maximum {
+                return Ok(Vec::new());
+            }
+            let combinations = bounded_target_combinations(
+                &choices,
+                minimum,
+                maximum,
+                MAX_CANONICAL_SPELL_OPTIONS,
+            )?;
+            let mut group_bindings = Vec::new();
+            for combination in combinations {
+                if let Some(total) = requirement.allocation_total() {
+                    if combination.is_empty() {
+                        continue;
+                    }
+                    for allocation in bounded_positive_allocations(
+                        total,
+                        combination.len(),
+                        MAX_CANONICAL_SPELL_OPTIONS,
+                    )? {
+                        group_bindings.push(
+                            combination
+                                .iter()
+                                .copied()
+                                .zip(allocation)
+                                .map(|(target, amount)| {
+                                    AnnouncedTarget::new(group, target).with_allocation(amount)
+                                })
+                                .collect::<Vec<_>>(),
+                        );
+                    }
+                } else {
+                    group_bindings.push(
+                        combination
+                            .into_iter()
+                            .map(|target| AnnouncedTarget::new(group, target))
+                            .collect::<Vec<_>>(),
+                    );
+                }
+            }
+            if group_bindings.is_empty() {
                 return Ok(Vec::new());
             }
             let next_len = bindings
                 .len()
-                .checked_mul(choices.len())
+                .checked_mul(group_bindings.len())
                 .ok_or_else(|| format!("seed {} target option count overflow", self.seed))?;
             if next_len > MAX_CANONICAL_SPELL_OPTIONS {
                 return Err(format!(
@@ -3708,9 +3780,9 @@ impl GameDriver {
             }
             let mut next = Vec::with_capacity(next_len);
             for prefix in &bindings {
-                for choice in &choices {
+                for group_binding in &group_bindings {
                     let mut binding = prefix.clone();
-                    binding.push(*choice);
+                    binding.extend(group_binding.iter().copied());
                     next.push(binding);
                 }
             }
@@ -4175,13 +4247,18 @@ impl GameDriver {
                         StackDecisionBindings::new(None, optional).map_err(|error| {
                             format!("seed {} activation choices failed: {error:?}", self.seed)
                         })?;
+                    let (target_requirements, target_choices) =
+                        expand_announced_targets(ability.target_requirements(), &target_binding)
+                            .map_err(|error| {
+                                format!("seed {} activation targets failed: {error}", self.seed)
+                            })?;
                     for payment in payments.plans().iter().copied() {
                         let action = Action::ActivateProgramAbility {
                             player,
                             ability: registered.id,
                             payment,
-                            target_requirements: ability.target_requirements().to_vec(),
-                            target_choices: target_binding.clone(),
+                            target_requirements: target_requirements.clone(),
+                            target_choices: target_choices.clone(),
                             decisions,
                         };
                         if self.action_is_legal(&action) {
@@ -4276,7 +4353,7 @@ impl GameDriver {
         program: &CardProgram,
         alternate: Option<AlternateCostKind>,
         payment: PaymentPlan,
-        targets: &[TargetChoice],
+        targets: &[AnnouncedTarget],
         mode: Option<u32>,
         optional: &[bool],
         additional_costs: &[Vec<ObjectId>],
@@ -4314,8 +4391,15 @@ impl GameDriver {
         let printed_cost = self.cast_mana_cost(program, alternate)?;
         let announced_cost = printed_cost.with_x(printed_cost.x_count(), payment.x_value());
         let additional_costs = self.spell_additional_cost_payments(program, additional_costs)?;
+        let (target_requirements, target_choices) = expand_announced_targets(requirements, targets)
+            .map_err(|error| {
+                format!(
+                    "seed {} spell target announcement failed: {error}",
+                    self.seed
+                )
+            })?;
         let mut request = CastSpellRequest::new(kind, timing, announced_cost, payment)
-            .with_targets(requirements.to_vec(), targets.to_vec())
+            .with_targets(target_requirements, target_choices)
             .with_additional_costs(additional_costs)
             .with_decisions(decisions);
         if program.split_second() {
@@ -4838,20 +4922,37 @@ impl GameDriver {
                 let decisions = StackDecisionBindings::new(None, &optional).map_err(|error| {
                     format!("seed {} activation choices failed: {error:?}", self.seed)
                 })?;
+                let descriptor_targets = announced_target_choices(&targets);
+                let (target_requirements, target_choices) =
+                    expand_announced_targets(effect.target_requirements(), &targets).map_err(
+                        |error| format!("seed {} activation targets failed: {error}", self.seed),
+                    )?;
+                let descriptor =
+                    if has_grouped_target_semantics(effect.target_requirements(), &targets) {
+                        DecisionDescriptor::ActivateProgramAbilityTargetGroups {
+                            source,
+                            ability,
+                            payment,
+                            targets: targets.clone(),
+                            optional: optional.clone(),
+                        }
+                    } else {
+                        DecisionDescriptor::ActivateProgramAbility {
+                            source,
+                            ability,
+                            payment,
+                            targets: descriptor_targets,
+                            optional: optional.clone(),
+                        }
+                    };
                 Ok(DecisionOption::new(
-                    DecisionDescriptor::ActivateProgramAbility {
-                        source,
-                        ability,
-                        payment,
-                        targets: targets.clone(),
-                        optional,
-                    },
+                    descriptor,
                     vec![Action::ActivateProgramAbility {
                         player,
                         ability,
                         payment,
-                        target_requirements: effect.target_requirements().to_vec(),
-                        target_choices: targets,
+                        target_requirements,
+                        target_choices,
                         decisions,
                     }],
                 ))
@@ -4862,15 +4963,39 @@ impl GameDriver {
                 targets,
                 optional,
                 sacrifice_objects: None,
-            } => Ok(DecisionOption::new(
-                DecisionDescriptor::BeginActivateProgramAbilityWithCosts {
-                    source,
-                    ability,
-                    targets,
-                    optional,
-                },
-                Vec::new(),
-            )),
+            } => {
+                let runtime = self.activated_runtime(ability)?;
+                let effect = runtime
+                    .program
+                    .activated_effects()
+                    .get(runtime.ability_index)
+                    .ok_or_else(|| {
+                        format!(
+                            "seed {} missing activated runtime {} on {}",
+                            self.seed,
+                            runtime.ability_index,
+                            runtime.program.name()
+                        )
+                    })?;
+                Ok(DecisionOption::new(
+                    if has_grouped_target_semantics(effect.target_requirements(), &targets) {
+                        DecisionDescriptor::BeginActivateProgramAbilityWithCostsTargetGroups {
+                            source,
+                            ability,
+                            targets,
+                            optional,
+                        }
+                    } else {
+                        DecisionDescriptor::BeginActivateProgramAbilityWithCosts {
+                            source,
+                            ability,
+                            targets: announced_target_choices(&targets),
+                            optional,
+                        }
+                    },
+                    Vec::new(),
+                ))
+            }
             MainChoice::BeginActivateProgramWithCosts { .. }
             | MainChoice::ActivateProgramWithCosts { .. } => Err(format!(
                 "seed {} hierarchical activation stage cannot enter a root context",
@@ -4884,20 +5009,57 @@ impl GameDriver {
                 optional,
                 ..
             } => {
-                let descriptor = match alternate {
-                    None => DecisionDescriptor::BeginCastSpell {
+                let program = self.programs.get(&object).ok_or_else(|| {
+                    format!("seed {} missing program for AI cast option", self.seed)
+                })?;
+                let requirements = match mode {
+                    Some(mode) => program
+                        .spell_modes()
+                        .get(mode as usize)
+                        .ok_or_else(|| format!("seed {} invalid spell mode {mode}", self.seed))?
+                        .target_requirements(),
+                    None if program.spell_modes().is_empty() => {
+                        program.target_requirements_for_alternate(alternate)
+                    }
+                    None => {
+                        return Err(format!(
+                            "seed {} modal spell {} has no mode binding",
+                            self.seed,
+                            program.name()
+                        ));
+                    }
+                };
+                let grouped = has_grouped_target_semantics(requirements, &targets);
+                let modes = mode.into_iter().collect();
+                let descriptor = match (alternate, grouped) {
+                    (None, false) => DecisionDescriptor::BeginCastSpell {
                         object,
-                        targets,
-                        modes: mode.into_iter().collect(),
+                        targets: announced_target_choices(&targets),
+                        modes,
                         optional,
                     },
-                    Some(alternate) => DecisionDescriptor::BeginCastSpellAlternate {
+                    (None, true) => DecisionDescriptor::BeginCastSpellTargetGroups {
+                        object,
+                        targets,
+                        modes,
+                        optional,
+                    },
+                    (Some(alternate), false) => DecisionDescriptor::BeginCastSpellAlternate {
                         object,
                         alternate: runtime_alternate_to_core(alternate),
-                        targets,
-                        modes: mode.into_iter().collect(),
+                        targets: announced_target_choices(&targets),
+                        modes,
                         optional,
                     },
+                    (Some(alternate), true) => {
+                        DecisionDescriptor::BeginCastSpellAlternateTargetGroups {
+                            object,
+                            alternate: runtime_alternate_to_core(alternate),
+                            targets,
+                            modes,
+                            optional,
+                        }
+                    }
                 };
                 Ok(DecisionOption::new(descriptor, Vec::new()))
             }
@@ -4932,14 +5094,42 @@ impl GameDriver {
                     &optional,
                     &additional_costs,
                 )?;
-                Ok(DecisionOption::new(
-                    DecisionDescriptor::CastSpell {
+                let requirements = match mode {
+                    Some(mode) => program
+                        .spell_modes()
+                        .get(mode as usize)
+                        .ok_or_else(|| format!("seed {} invalid spell mode {mode}", self.seed))?
+                        .target_requirements(),
+                    None if program.spell_modes().is_empty() => {
+                        program.target_requirements_for_alternate(alternate)
+                    }
+                    None => {
+                        return Err(format!(
+                            "seed {} modal spell {} has no mode binding",
+                            self.seed,
+                            program.name()
+                        ));
+                    }
+                };
+                let descriptor = if has_grouped_target_semantics(requirements, &targets) {
+                    DecisionDescriptor::CastSpellTargetGroups {
                         object,
                         payment,
                         targets,
                         modes: mode.into_iter().collect(),
                         optional,
-                    },
+                    }
+                } else {
+                    DecisionDescriptor::CastSpell {
+                        object,
+                        payment,
+                        targets: announced_target_choices(&targets),
+                        modes: mode.into_iter().collect(),
+                        optional,
+                    }
+                };
+                Ok(DecisionOption::new(
+                    descriptor,
                     vec![Action::CastSpell {
                         player,
                         object,
@@ -4963,7 +5153,7 @@ impl GameDriver {
         player: PlayerId,
         source: ObjectId,
         ability: ActivatedAbilityId,
-        targets: &[TargetChoice],
+        targets: &[AnnouncedTarget],
         optional: &[bool],
     ) -> Result<MainDecisionAdapter, String> {
         let cost = self
@@ -5048,7 +5238,7 @@ impl GameDriver {
         player: PlayerId,
         source: ObjectId,
         ability: ActivatedAbilityId,
-        targets: &[TargetChoice],
+        targets: &[AnnouncedTarget],
         optional: &[bool],
         sacrifice_objects: &[ObjectId],
     ) -> Result<MainDecisionAdapter, String> {
@@ -5119,7 +5309,7 @@ impl GameDriver {
         player: PlayerId,
         object: ObjectId,
         alternate: Option<AlternateCostKind>,
-        targets: &[TargetChoice],
+        targets: &[AnnouncedTarget],
         mode: Option<u32>,
         optional: &[bool],
         additional_costs: &[Vec<ObjectId>],
@@ -5205,7 +5395,7 @@ impl GameDriver {
         player: PlayerId,
         object: ObjectId,
         alternate: Option<AlternateCostKind>,
-        targets: &[TargetChoice],
+        targets: &[AnnouncedTarget],
         mode: Option<u32>,
         optional: &[bool],
         additional_costs: &[Vec<ObjectId>],
@@ -5870,7 +6060,7 @@ impl GameDriver {
         object: ObjectId,
         alternate: Option<AlternateCostKind>,
         payment: PaymentPlan,
-        targets: Vec<TargetChoice>,
+        targets: Vec<AnnouncedTarget>,
         mode: Option<u32>,
         optional: Vec<bool>,
         additional_costs: Vec<Vec<ObjectId>>,
@@ -6122,7 +6312,10 @@ impl GameDriver {
         let mut bindings =
             ExecutionBindings::new(pending.controller, self.live_opponents(pending.controller))
                 .with_source(pending.object)
-                .with_targets(pending.targets.clone())
+                .with_announced_targets(
+                    pending.target_requirements.clone(),
+                    pending.targets.clone(),
+                )
                 .with_target_legalities(pending.target_legalities.clone())
                 .with_object_choices(object_choices)
                 .with_optional_effect_choices(pending.decisions.optional_choices().collect());
@@ -6287,7 +6480,10 @@ impl GameDriver {
         let bindings =
             ExecutionBindings::new(pending.controller, self.live_opponents(pending.controller))
                 .with_source(pending.runtime.source)
-                .with_targets(pending.targets.clone())
+                .with_announced_targets(
+                    pending.target_requirements.clone(),
+                    pending.targets.clone(),
+                )
                 .with_target_legalities(pending.target_legalities.clone())
                 .with_object_choices(object_choices)
                 .with_optional_effect_choices(pending.decisions.optional_choices().collect());
@@ -6600,7 +6796,10 @@ impl GameDriver {
         let mut bindings =
             ExecutionBindings::new(pending.controller, self.live_opponents(pending.controller))
                 .with_source(pending.runtime.source)
-                .with_targets(pending.targets.clone())
+                .with_announced_targets(
+                    pending.target_requirements.clone(),
+                    pending.targets.clone(),
+                )
                 .with_target_legalities(pending.target_legalities.clone())
                 .with_object_choices(object_choices)
                 .with_optional_effect_choices(optional_choices.to_vec());
@@ -7476,56 +7675,189 @@ impl GameDriver {
         source: ObjectId,
         trigger: TriggerId,
         position: (usize, usize),
-        prior: &[TargetChoice],
+        prior: &[AnnouncedTarget],
         requirement: TargetRequirement,
         prospective_stack_entries: &[StackEntryId],
     ) -> Result<DecisionContext, String> {
-        let (stack_position, cursor) = position;
-        if prior.len() != cursor {
+        let (stack_position, group_index) = position;
+        let group = u8::try_from(group_index)
+            .map_err(|_| format!("seed {} trigger target group overflow", self.seed))?;
+        if requirement
+            .group()
+            .is_some_and(|compiled| compiled != group)
+        {
             return Err(format!(
-                "seed {} trigger target path has {} choices at slot {cursor}",
-                self.seed,
-                prior.len()
-            ));
-        }
-        let choices =
-            self.trigger_target_choices(controller, source, requirement, prospective_stack_entries);
-        if choices.is_empty() {
-            return Err(format!(
-                "seed {} trigger {} lost every legal target after its no-target disposition check at slot {cursor}",
+                "seed {} trigger {} target group {group_index} has inconsistent compiled identity",
                 self.seed,
                 trigger.index()
             ));
         }
-        let options = choices
+        let selected = prior
+            .iter()
+            .filter(|target| target.group() == group)
+            .count();
+        if selected >= usize::from(requirement.maximum()) {
+            return Err(format!(
+                "seed {} trigger {} target group {group_index} is already complete",
+                self.seed,
+                trigger.index()
+            ));
+        }
+        let mut choices =
+            self.trigger_target_choices(controller, source, requirement, prospective_stack_entries);
+        choices.retain(|choice| {
+            !prior
+                .iter()
+                .any(|target| target.group() == group && target.target() == *choice)
+        });
+        let mut options = choices
             .into_iter()
             .map(|target| {
-                DecisionOption::new(DecisionDescriptor::ChooseTarget { target }, Vec::new())
+                let mut targets = prior.to_vec();
+                targets.push(AnnouncedTarget::new(group, target));
+                DecisionOption::new(
+                    DecisionDescriptor::ChooseTriggerTargetGroups { trigger, targets },
+                    Vec::new(),
+                )
             })
-            .collect();
+            .collect::<Vec<_>>();
+        let minimum = if requirement.allocation_total().is_some() {
+            usize::from(requirement.minimum()).max(1)
+        } else {
+            usize::from(requirement.minimum())
+        };
+        if selected >= minimum {
+            options.push(DecisionOption::new(
+                DecisionDescriptor::ChooseTriggerTargetGroups {
+                    trigger,
+                    targets: prior.to_vec(),
+                },
+                Vec::new(),
+            ));
+        }
+        if options.is_empty() {
+            return Err(format!(
+                "seed {} trigger {} lost every legal target before satisfying group {group_index}",
+                self.seed,
+                trigger.index()
+            ));
+        }
         self.scoped_decision_context(
             DecisionKind::Target,
             controller,
             options,
-            trigger_target_path_discriminator(controller, trigger, stack_position, cursor, prior),
+            trigger_target_path_discriminator(
+                controller,
+                trigger,
+                stack_position,
+                group_index,
+                0,
+                prior,
+            ),
         )
     }
 
-    fn select_trigger_target_choice(
+    #[allow(clippy::too_many_arguments)]
+    fn trigger_target_allocation_context(
+        &self,
+        controller: PlayerId,
+        trigger: TriggerId,
+        stack_position: usize,
+        target_index: usize,
+        prior: &[AnnouncedTarget],
+        minimum: u32,
+        maximum: u32,
+    ) -> Result<DecisionContext, String> {
+        let target = prior.get(target_index).copied().ok_or_else(|| {
+            format!(
+                "seed {} trigger {} allocation target {target_index} is missing",
+                self.seed,
+                trigger.index()
+            )
+        })?;
+        if minimum == 0 || minimum > maximum {
+            return Err(format!(
+                "seed {} trigger {} has invalid target allocation range {minimum}-{maximum}",
+                self.seed,
+                trigger.index()
+            ));
+        }
+        let options = (minimum..=maximum)
+            .map(|amount| {
+                let mut targets = prior.to_vec();
+                targets[target_index] =
+                    AnnouncedTarget::new(target.group(), target.target()).with_allocation(amount);
+                DecisionOption::new(
+                    DecisionDescriptor::ChooseTriggerTargetGroups { trigger, targets },
+                    Vec::new(),
+                )
+            })
+            .collect::<Vec<_>>();
+        self.scoped_decision_context(
+            DecisionKind::NumericValue,
+            controller,
+            options,
+            trigger_target_path_discriminator(
+                controller,
+                trigger,
+                stack_position,
+                target_index,
+                1,
+                prior,
+            ),
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn select_trigger_target_groups(
         &mut self,
         context: &DecisionContext,
         controller: PlayerId,
         human: Option<PlayerId>,
         decisions: &mut Option<&mut dyn DecisionSource>,
         ai_policies: Option<&SeatPolicies>,
-    ) -> Result<TargetChoice, String> {
+        prior: &[AnnouncedTarget],
+        prompt: &'static str,
+        telemetry_kind: &'static str,
+    ) -> Result<Vec<AnnouncedTarget>, String> {
         let selected_id = if human == Some(controller) {
             let labels = context
                 .options()
                 .iter()
                 .map(|option| match option.descriptor() {
-                    DecisionDescriptor::ChooseTarget { target } => {
-                        Ok(format!("Target {}", self.target_choice_label(*target)))
+                    DecisionDescriptor::ChooseTriggerTargetGroups { targets, .. }
+                        if targets == prior =>
+                    {
+                        Ok("Finish this target group".to_owned())
+                    }
+                    DecisionDescriptor::ChooseTriggerTargetGroups { targets, .. }
+                        if targets.len() == prior.len() + 1 =>
+                    {
+                        let target = targets.last().ok_or_else(|| {
+                            format!("seed {} target announcement is empty", self.seed)
+                        })?;
+                        Ok(format!(
+                            "Target {}",
+                            self.target_choice_label(target.target())
+                        ))
+                    }
+                    DecisionDescriptor::ChooseTriggerTargetGroups { targets, .. } => {
+                        let changed = targets
+                            .iter()
+                            .zip(prior)
+                            .find(|(next, current)| next.allocation() != current.allocation())
+                            .map(|(next, _)| *next)
+                            .ok_or_else(|| {
+                                format!(
+                                    "seed {} target-allocation option does not change its prefix",
+                                    self.seed
+                                )
+                            })?;
+                        Ok(format!(
+                            "Assign {} to {}",
+                            changed.allocation().unwrap_or_default(),
+                            self.target_choice_label(changed.target())
+                        ))
                     }
                     descriptor => Err(format!(
                         "seed {} cannot label trigger-target descriptor {descriptor:?}",
@@ -7536,12 +7868,7 @@ impl GameDriver {
             let source = decisions.as_deref_mut().ok_or_else(|| {
                 "human game is missing a decision source for trigger targets".to_owned()
             })?;
-            self.prompt_context_choice(
-                source,
-                "Choose a triggered ability target",
-                context,
-                &labels,
-            )?
+            self.prompt_context_choice(source, prompt, context, &labels)?
         } else if let Some(policies) = ai_policies {
             let decision_started = Instant::now();
             let policy = self.policy_for(controller, policies)?;
@@ -7554,11 +7881,11 @@ impl GameDriver {
                     self.policy_candidates(context, controller, |_| 0)?
                 };
                 let (selected_id, decision, policy_name) =
-                    self.select_ai_action(policy, context, &candidates, "trigger_target")?;
+                    self.select_ai_action(policy, context, &candidates, telemetry_kind)?;
                 (selected_id, decision, policy_name, candidates)
             };
             self.record_ai_decision(AiDecisionTelemetry {
-                kind: "trigger_target",
+                kind: telemetry_kind,
                 policy: policy_name,
                 context,
                 action_id: selected_id,
@@ -7584,17 +7911,18 @@ impl GameDriver {
         };
         let selected = context.select(selected_id).map_err(|error| {
             format!(
-                "seed {} selected an illegal trigger-target action: {error}",
+                "seed {} selected an illegal {telemetry_kind} action: {error}",
                 self.seed
             )
         })?;
-        let DecisionDescriptor::ChooseTarget { target } = selected.descriptor() else {
+        let DecisionDescriptor::ChooseTriggerTargetGroups { targets, .. } = selected.descriptor()
+        else {
             return Err(format!(
                 "seed {} trigger-target context returned a non-target descriptor",
                 self.seed
             ));
         };
-        Ok(*target)
+        Ok(targets.clone())
     }
 
     fn trigger_order_context(
@@ -7860,40 +8188,157 @@ impl GameDriver {
             let source = runtime.source;
             let requirements = ability.target_requirements().to_vec();
             if requirements.iter().copied().any(|requirement| {
-                self.trigger_target_choices(
+                let legal = self.trigger_target_choices(
                     controller,
                     source,
                     requirement,
                     &prospective_stack_entries,
-                )
-                .is_empty()
+                );
+                let minimum = if requirement.allocation_total().is_some() {
+                    usize::from(requirement.minimum()).max(1)
+                } else {
+                    usize::from(requirement.minimum())
+                };
+                legal.len() < minimum
+                    || requirement
+                        .allocation_total()
+                        .is_some_and(|total| total < u32::from(requirement.minimum()))
             }) {
                 bindings.push(TriggerStackBinding::no_legal_targets(trigger, requirements));
                 continue;
             }
-            let mut targets = Vec::with_capacity(requirements.len());
-            for (cursor, requirement) in requirements.iter().copied().enumerate() {
-                let context = self.trigger_target_context(
-                    controller,
-                    source,
-                    trigger,
-                    (stack_position, cursor),
-                    &targets,
-                    requirement,
-                    &prospective_stack_entries,
-                )?;
-                let target = self.select_trigger_target_choice(
-                    &context,
-                    controller,
-                    human,
-                    decisions,
-                    ai_policies,
-                )?;
-                targets.push(target);
+            let mut targets = Vec::new();
+            for (group_index, requirement) in requirements.iter().copied().enumerate() {
+                let group = u8::try_from(group_index)
+                    .map_err(|_| format!("seed {} trigger target group overflow", self.seed))?;
+                let legal_count = self
+                    .trigger_target_choices(
+                        controller,
+                        source,
+                        requirement,
+                        &prospective_stack_entries,
+                    )
+                    .len();
+                let allocation_limit = requirement
+                    .allocation_total()
+                    .map_or(usize::MAX, |total| total as usize);
+                let maximum = usize::from(requirement.maximum())
+                    .min(legal_count)
+                    .min(allocation_limit);
+                let group_start = targets.len();
+                while targets.len() - group_start < maximum {
+                    let context = self.trigger_target_context(
+                        controller,
+                        source,
+                        trigger,
+                        (stack_position, group_index),
+                        &targets,
+                        requirement,
+                        &prospective_stack_entries,
+                    )?;
+                    let next = self.select_trigger_target_groups(
+                        &context,
+                        controller,
+                        human,
+                        decisions,
+                        ai_policies,
+                        &targets,
+                        "Choose triggered ability targets",
+                        "trigger_target",
+                    )?;
+                    if next == targets {
+                        break;
+                    }
+                    targets = next;
+                }
+                let selected = targets.len() - group_start;
+                let minimum = if requirement.allocation_total().is_some() {
+                    usize::from(requirement.minimum()).max(1)
+                } else {
+                    usize::from(requirement.minimum())
+                };
+                if selected < minimum {
+                    return Err(format!(
+                        "seed {} trigger {} selected {selected} targets for group {group_index}, below effective minimum {minimum}",
+                        self.seed,
+                        trigger.index()
+                    ));
+                }
+                if let Some(total) = requirement.allocation_total() {
+                    let group_end = targets.len();
+                    let mut remaining = total;
+                    for target_index in group_start..group_end {
+                        let remaining_members = group_end - target_index - 1;
+                        let maximum = remaining
+                            .checked_sub(remaining_members as u32)
+                            .ok_or_else(|| {
+                                format!(
+                                    "seed {} trigger {} cannot allocate {total} across {selected} targets",
+                                    self.seed,
+                                    trigger.index()
+                                )
+                            })?;
+                        let amount = if target_index + 1 == group_end || maximum == 1 {
+                            maximum
+                        } else {
+                            let context = self.trigger_target_allocation_context(
+                                controller,
+                                trigger,
+                                stack_position,
+                                target_index,
+                                &targets,
+                                1,
+                                maximum,
+                            )?;
+                            targets = self.select_trigger_target_groups(
+                                &context,
+                                controller,
+                                human,
+                                decisions,
+                                ai_policies,
+                                &targets,
+                                "Allocate the triggered ability's target amount",
+                                "trigger_target_allocation",
+                            )?;
+                            targets[target_index].allocation().ok_or_else(|| {
+                                format!(
+                                    "seed {} trigger {} allocation choice omitted its amount",
+                                    self.seed,
+                                    trigger.index()
+                                )
+                            })?
+                        };
+                        targets[target_index] =
+                            AnnouncedTarget::new(group, targets[target_index].target())
+                                .with_allocation(amount);
+                        remaining = remaining.checked_sub(amount).ok_or_else(|| {
+                            format!(
+                                "seed {} trigger {} target allocation exceeded {total}",
+                                self.seed,
+                                trigger.index()
+                            )
+                        })?;
+                    }
+                    if remaining != 0 {
+                        return Err(format!(
+                            "seed {} trigger {} left {remaining} target allocation unassigned",
+                            self.seed,
+                            trigger.index()
+                        ));
+                    }
+                }
             }
+            let (target_requirements, target_choices) =
+                expand_announced_targets(&requirements, &targets).map_err(|error| {
+                    format!(
+                        "seed {} trigger {} target expansion failed: {error}",
+                        self.seed,
+                        trigger.index()
+                    )
+                })?;
             bindings.push(
                 TriggerStackBinding::new(trigger)
-                    .with_targets(requirements, targets)
+                    .with_targets(target_requirements, target_choices)
                     .with_decisions(StackDecisionBindings::default()),
             );
             prospective_stack_entries
@@ -7932,6 +8377,11 @@ impl GameDriver {
         let trigger = record.trigger();
         let activated_ability = record.activated_ability();
         let outcome = record.outcome();
+        let target_requirements = record
+            .targets()
+            .iter()
+            .map(|target| target.requirement())
+            .collect::<Vec<_>>();
         let targets = record
             .targets()
             .iter()
@@ -7968,6 +8418,7 @@ impl GameDriver {
                 controller,
                 trigger,
                 triggering_player,
+                target_requirements,
                 targets,
                 target_legalities,
                 decisions,
@@ -8005,6 +8456,7 @@ impl GameDriver {
             let pending = PendingActivatedResolution {
                 controller,
                 runtime,
+                target_requirements,
                 targets,
                 target_legalities,
                 decisions,
@@ -8057,6 +8509,7 @@ impl GameDriver {
                 controller,
                 object,
                 program,
+                target_requirements,
                 targets,
                 target_legalities,
                 decisions,
@@ -8090,11 +8543,13 @@ impl GameDriver {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn execute_trigger(
         &mut self,
         controller: PlayerId,
         trigger: TriggerId,
         triggering_player: Option<PlayerId>,
+        target_requirements: Vec<TargetRequirement>,
         targets: Vec<TargetChoice>,
         target_legalities: Vec<bool>,
         decisions: StackDecisionBindings,
@@ -8117,6 +8572,7 @@ impl GameDriver {
             trigger,
             triggering_player,
             runtime,
+            target_requirements,
             targets,
             target_legalities,
             decisions,
@@ -10516,6 +10972,101 @@ fn bounded_object_combinations(
     Ok(output)
 }
 
+fn bounded_target_combinations(
+    candidates: &[TargetChoice],
+    minimum: usize,
+    maximum: usize,
+    limit: usize,
+) -> Result<Vec<Vec<TargetChoice>>, String> {
+    fn extend(
+        candidates: &[TargetChoice],
+        start: usize,
+        remaining: usize,
+        limit: usize,
+        current: &mut Vec<TargetChoice>,
+        output: &mut Vec<Vec<TargetChoice>>,
+    ) -> Result<(), String> {
+        if remaining == 0 {
+            if output.len() >= limit {
+                return Err(format!(
+                    "target combinations exceed the {limit}-option canonical cap"
+                ));
+            }
+            output.push(current.clone());
+            return Ok(());
+        }
+        if candidates.len().saturating_sub(start) < remaining {
+            return Ok(());
+        }
+        let final_start = candidates.len() - remaining;
+        for index in start..=final_start {
+            current.push(candidates[index]);
+            extend(candidates, index + 1, remaining - 1, limit, current, output)?;
+            current.pop();
+        }
+        Ok(())
+    }
+
+    let maximum = maximum.min(candidates.len());
+    if minimum > maximum {
+        return Ok(Vec::new());
+    }
+    let mut output = Vec::new();
+    let mut current = Vec::new();
+    for count in minimum..=maximum {
+        extend(candidates, 0, count, limit, &mut current, &mut output)?;
+    }
+    Ok(output)
+}
+
+fn bounded_positive_allocations(
+    total: u32,
+    count: usize,
+    limit: usize,
+) -> Result<Vec<Vec<u32>>, String> {
+    fn extend(
+        remaining: u32,
+        slots: usize,
+        limit: usize,
+        current: &mut Vec<u32>,
+        output: &mut Vec<Vec<u32>>,
+    ) -> Result<(), String> {
+        if slots == 1 {
+            if remaining == 0 {
+                return Ok(());
+            }
+            if output.len() >= limit {
+                return Err(format!(
+                    "target allocations exceed the {limit}-option canonical cap"
+                ));
+            }
+            current.push(remaining);
+            output.push(current.clone());
+            current.pop();
+            return Ok(());
+        }
+        let remaining_slots = u32::try_from(slots - 1)
+            .map_err(|_| "target allocation slot count exceeds u32".to_owned())?;
+        if remaining <= remaining_slots {
+            return Ok(());
+        }
+        let maximum = remaining - remaining_slots;
+        for amount in 1..=maximum {
+            current.push(amount);
+            extend(remaining - amount, slots - 1, limit, current, output)?;
+            current.pop();
+        }
+        Ok(())
+    }
+
+    if count == 0 || total < count as u32 {
+        return Ok(Vec::new());
+    }
+    let mut output = Vec::new();
+    extend(total, count, limit, &mut Vec::new(), &mut output)?;
+    Ok(output)
+}
+
 impl CombatSearchProgress {
     fn context(&self, driver: &GameDriver) -> Result<DecisionContext, String> {
         match self {
@@ -11056,7 +11607,7 @@ fn activation_cost_path_discriminator(
     player: PlayerId,
     source: ObjectId,
     ability: ActivatedAbilityId,
-    targets: &[TargetChoice],
+    targets: &[AnnouncedTarget],
     optional: &[bool],
     sacrifice_objects: Option<&[ObjectId]>,
     stage: u64,
@@ -11066,17 +11617,7 @@ fn activation_cost_path_discriminator(
     state = combat_path_mix(state, u64::from(ability.get()));
     state = combat_path_mix(state, stage);
     for target in targets {
-        state = match target {
-            TargetChoice::Player(player) => {
-                combat_path_mix(combat_path_mix(state, 0), player.index() as u64)
-            }
-            TargetChoice::Object(object) => {
-                combat_path_mix(combat_path_mix(state, 1), object.index() as u64)
-            }
-            TargetChoice::StackEntry(entry) => {
-                combat_path_mix(combat_path_mix(state, 2), entry.index() as u64)
-            }
-        };
+        state = mix_announced_target(state, *target);
     }
     for accept in optional {
         state = combat_path_mix(state, u64::from(*accept));
@@ -11093,12 +11634,33 @@ fn activation_cost_path_discriminator(
     state
 }
 
+fn mix_announced_target(mut state: u64, target: AnnouncedTarget) -> u64 {
+    state = combat_path_mix(state, u64::from(target.group()));
+    state = combat_path_mix(
+        state,
+        target
+            .allocation()
+            .map_or(0, |amount| u64::from(amount) + 1),
+    );
+    match target.target() {
+        TargetChoice::Player(player) => {
+            combat_path_mix(combat_path_mix(state, 0), player.index() as u64)
+        }
+        TargetChoice::Object(object) => {
+            combat_path_mix(combat_path_mix(state, 1), object.index() as u64)
+        }
+        TargetChoice::StackEntry(entry) => {
+            combat_path_mix(combat_path_mix(state, 2), entry.index() as u64)
+        }
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn variable_cast_path_discriminator(
     player: PlayerId,
     object: ObjectId,
     alternate: Option<AlternateCostKind>,
-    targets: &[TargetChoice],
+    targets: &[AnnouncedTarget],
     mode: Option<u32>,
     optional: &[bool],
     additional_costs: &[Vec<ObjectId>],
@@ -11114,17 +11676,7 @@ fn variable_cast_path_discriminator(
     state = combat_path_mix(state, u64::from(maximum));
     state = combat_path_mix(state, mode.map_or(u64::MAX, u64::from));
     for target in targets {
-        state = match target {
-            TargetChoice::Player(player) => {
-                combat_path_mix(combat_path_mix(state, 0), player.index() as u64)
-            }
-            TargetChoice::Object(object) => {
-                combat_path_mix(combat_path_mix(state, 1), object.index() as u64)
-            }
-            TargetChoice::StackEntry(entry) => {
-                combat_path_mix(combat_path_mix(state, 2), entry.index() as u64)
-            }
-        };
+        state = mix_announced_target(state, *target);
     }
     for accept in optional {
         state = combat_path_mix(state, u64::from(*accept));
@@ -11145,7 +11697,7 @@ fn additional_cast_path_discriminator(
     player: PlayerId,
     object: ObjectId,
     alternate: Option<AlternateCostKind>,
-    targets: &[TargetChoice],
+    targets: &[AnnouncedTarget],
     mode: Option<u32>,
     optional: &[bool],
     prior: &[Vec<ObjectId>],
@@ -11156,17 +11708,7 @@ fn additional_cast_path_discriminator(
     state = combat_path_mix(state, prior.len() as u64);
     state = combat_path_mix(state, mode.map_or(u64::MAX, u64::from));
     for target in targets {
-        state = match target {
-            TargetChoice::Player(player) => {
-                combat_path_mix(combat_path_mix(state, 0), player.index() as u64)
-            }
-            TargetChoice::Object(object) => {
-                combat_path_mix(combat_path_mix(state, 1), object.index() as u64)
-            }
-            TargetChoice::StackEntry(entry) => {
-                combat_path_mix(combat_path_mix(state, 2), entry.index() as u64)
-            }
-        };
+        state = mix_announced_target(state, *target);
     }
     for accept in optional {
         state = combat_path_mix(state, u64::from(*accept));
@@ -11202,24 +11744,16 @@ fn trigger_target_path_discriminator(
     trigger: TriggerId,
     stack_position: usize,
     cursor: usize,
-    prior: &[TargetChoice],
+    phase: u8,
+    prior: &[AnnouncedTarget],
 ) -> u64 {
     let mut state = combat_path_mix(0x7472_6774_6172_0001, controller.index() as u64);
     state = combat_path_mix(state, trigger.index() as u64);
     state = combat_path_mix(state, stack_position as u64);
     state = combat_path_mix(state, cursor as u64);
+    state = combat_path_mix(state, u64::from(phase));
     for target in prior {
-        state = match target {
-            TargetChoice::Player(player) => {
-                combat_path_mix(combat_path_mix(state, 0), player.index() as u64)
-            }
-            TargetChoice::Object(object) => {
-                combat_path_mix(combat_path_mix(state, 1), object.index() as u64)
-            }
-            TargetChoice::StackEntry(entry) => {
-                combat_path_mix(combat_path_mix(state, 2), entry.index() as u64)
-            }
-        };
+        state = mix_announced_target(state, *target);
     }
     state
 }
@@ -11391,6 +11925,72 @@ fn decision_descriptor_value(descriptor: &DecisionDescriptor) -> Value {
             "modes": modes,
             "optional": optional
         }),
+        DecisionDescriptor::ActivateProgramAbilityTargetGroups {
+            source,
+            ability,
+            payment,
+            targets,
+            optional,
+        } => json!({
+            "kind": "activate_program_ability_target_groups",
+            "source_object_id": source.index(),
+            "ability_id": ability.get(),
+            "payment": payment_value(*payment),
+            "targets": targets.iter().copied().map(announced_target_value).collect::<Vec<_>>(),
+            "optional": optional
+        }),
+        DecisionDescriptor::BeginActivateProgramAbilityWithCostsTargetGroups {
+            source,
+            ability,
+            targets,
+            optional,
+        } => json!({
+            "kind": "begin_activate_program_ability_with_costs_target_groups",
+            "source_object_id": source.index(),
+            "ability_id": ability.get(),
+            "targets": targets.iter().copied().map(announced_target_value).collect::<Vec<_>>(),
+            "optional": optional
+        }),
+        DecisionDescriptor::CastSpellTargetGroups {
+            object,
+            payment,
+            targets,
+            modes,
+            optional,
+        } => json!({
+            "kind": "cast_spell_target_groups",
+            "object_id": object.index(),
+            "payment": payment_value(*payment),
+            "targets": targets.iter().copied().map(announced_target_value).collect::<Vec<_>>(),
+            "modes": modes,
+            "optional": optional
+        }),
+        DecisionDescriptor::BeginCastSpellTargetGroups {
+            object,
+            targets,
+            modes,
+            optional,
+        } => json!({
+            "kind": "begin_cast_spell_target_groups",
+            "object_id": object.index(),
+            "targets": targets.iter().copied().map(announced_target_value).collect::<Vec<_>>(),
+            "modes": modes,
+            "optional": optional
+        }),
+        DecisionDescriptor::BeginCastSpellAlternateTargetGroups {
+            object,
+            alternate,
+            targets,
+            modes,
+            optional,
+        } => json!({
+            "kind": "begin_cast_spell_alternate_target_groups",
+            "object_id": object.index(),
+            "alternate": format!("{alternate:?}"),
+            "targets": targets.iter().copied().map(announced_target_value).collect::<Vec<_>>(),
+            "modes": modes,
+            "optional": optional
+        }),
         DecisionDescriptor::DeclareAttackers { attacks } => json!({
             "kind": "declare_attackers",
             "attacks": attacks.iter().map(|attack| json!({
@@ -11427,6 +12027,11 @@ fn decision_descriptor_value(descriptor: &DecisionDescriptor) -> Value {
         DecisionDescriptor::ChooseTarget { target } => {
             json!({"kind": "choose_target", "target": target_value(*target)})
         }
+        DecisionDescriptor::ChooseTriggerTargetGroups { trigger, targets } => json!({
+            "kind": "choose_trigger_target_groups",
+            "trigger_id": trigger.get(),
+            "targets": targets.iter().copied().map(announced_target_value).collect::<Vec<_>>()
+        }),
         DecisionDescriptor::ChooseMode { mode } => {
             json!({"kind": "choose_mode", "mode": mode})
         }
@@ -11536,6 +12141,31 @@ fn target_value(target: TargetChoice) -> Value {
             json!({"kind": "stack_entry", "stack_entry_id": entry.get()})
         }
     }
+}
+
+fn announced_target_value(target: AnnouncedTarget) -> Value {
+    json!({
+        "group": target.group(),
+        "target": target_value(target.target()),
+        "allocation": target.allocation()
+    })
+}
+
+fn announced_target_choices(targets: &[AnnouncedTarget]) -> Vec<TargetChoice> {
+    targets.iter().map(|target| target.target()).collect()
+}
+
+fn has_grouped_target_semantics(
+    requirements: &[TargetRequirement],
+    targets: &[AnnouncedTarget],
+) -> bool {
+    requirements.iter().any(|requirement| {
+        requirement.minimum() != 1
+            || requirement.maximum() != 1
+            || requirement.allocation_total().is_some()
+    }) || targets.iter().enumerate().any(|(index, target)| {
+        usize::from(target.group()) != index || target.allocation().is_some()
+    })
 }
 
 fn zone_value(zone: ZoneId) -> Value {
@@ -12693,7 +13323,8 @@ fn build_report(
 #[cfg(test)]
 mod tests {
     use super::{
-        campaign_seed, concession_decision_context, concession_decision_context_from_view,
+        bounded_positive_allocations, bounded_target_combinations, campaign_seed,
+        concession_decision_context, concession_decision_context_from_view,
         legacy_human_summary_matches, multiplayer_backup_sign, player_view_fingerprint,
         replay_captured_actions, replay_human_file, run_prompted_game, snapshot_prompt,
         ActivatedRuntime, AiController, CombatSearchDomain, CombatSearchProgress, DecisionPrompt,
@@ -12708,13 +13339,14 @@ mod tests {
     use forge_cards::runtime::{compile_card_program, AlternateCostKind};
     use forge_core::{
         apply, AbilityPlayer, Action, ActivatedAbilityDefinition, ActivatedAbilityEffect,
-        ActivationCost, ActivationTiming, AttackDeclaration, BaseCreatureCharacteristics,
-        BaseObjectCharacteristics, BasicLandTypes, BlockDeclaration, CardId, CombatDamageTarget,
-        CreatureKeywords, DecisionContext, DecisionDescriptor, DecisionKind, DecisionOption,
-        GameState, ManaCost, ManaPool, ObjectColors, ObjectId, ObjectSupertypes, ObjectTypes,
-        Outcome, PaymentPlan, PlayerId, PlayerView, ResolutionOutcome, SpellAlternateCost,
-        StackDecisionBindings, Step, TargetChoice, TargetKind, TargetRequirement, TriggerCondition,
-        TriggerDefinition, TriggerPlayerFilter, TriggerStackDisposition, ZoneId, ZoneKind,
+        ActivationCost, ActivationTiming, AnnouncedTarget, AttackDeclaration,
+        BaseCreatureCharacteristics, BaseObjectCharacteristics, BasicLandTypes, BlockDeclaration,
+        CardId, CombatDamageTarget, CreatureKeywords, DecisionContext, DecisionDescriptor,
+        DecisionKind, DecisionOption, GameState, ManaCost, ManaPool, ObjectColors, ObjectId,
+        ObjectSupertypes, ObjectTypes, Outcome, PaymentPlan, PlayerId, PlayerView,
+        ResolutionOutcome, SpellAlternateCost, StackDecisionBindings, Step, TargetChoice,
+        TargetKind, TargetRequirement, TriggerCondition, TriggerDefinition, TriggerPlayerFilter,
+        TriggerStackDisposition, ZoneId, ZoneKind,
     };
 
     const FLAWLESS_MANEUVER: &str = r#"
@@ -13475,7 +14107,8 @@ card "Mulldrifter" {
                 targets,
                 optional,
                 ..
-            } if targets == &vec![TargetChoice::Player(opponent)] && optional.is_empty()
+            } if targets == &vec![AnnouncedTarget::new(0, TargetChoice::Player(opponent))]
+                && optional.is_empty()
         ));
         assert_eq!(driver.apply_main_choice(caster, choice), Ok(true));
         let stack = driver
@@ -14983,14 +15616,17 @@ card "Mulldrifter" {
         assert_eq!(context.options().len(), 1);
         assert!(matches!(
             context.options()[0].descriptor(),
-            DecisionDescriptor::ChooseTarget {
-                target: TargetChoice::Player(player)
-            } if *player == opponent
+            DecisionDescriptor::ChooseTriggerTargetGroups { trigger: selected, targets }
+                if *selected == trigger
+                    && targets == &[AnnouncedTarget::new(
+                        0,
+                        TargetChoice::Player(opponent),
+                    )]
         ));
 
         let mut ai_driver = driver.clone();
         let mut human_driver = driver;
-        let mut source = PickFirstChoice;
+        let mut source = MaximizeTriggerTargets;
         let mut decisions = Some(&mut source as &mut dyn DecisionSource);
         let outcome = human_driver
             .put_pending_triggers_on_stack(Some(controller), &mut decisions, None)
@@ -15046,6 +15682,152 @@ card "Mulldrifter" {
     }
 
     #[test]
+    fn triggered_target_ranges_and_divided_amounts_are_announced_hierarchically() {
+        let source = r#"card "Divided Trigger Fixture" {
+  id: "forge:test:divided-trigger-fixture"
+  layout: normal
+  status: unverified_playable
+  face "Divided Trigger Fixture" {
+    cost: "{2}{R}"
+    types: "Creature - Human Wizard"
+    oracle: "Whenever an opponent draws a card, this deals 4 damage divided as you choose among up to four target creatures."
+    power: "2"
+    toughness: "3"
+    keywords: []
+    ability triggered {
+      event: event_draw(opponent())
+      effect: deal_damage(target_allocation(target_range(permanents(type_is("creature")), 0, 4), 4), 4)
+    }
+  }
+}"#;
+        let definition = forge_cardc::parse_card_named("divided_trigger_fixture.frs", source)
+            .unwrap_or_else(|error| panic!("divided trigger fixture should parse: {error}"));
+        let program = Arc::new(
+            compile_card_program(&definition)
+                .unwrap_or_else(|error| panic!("divided trigger fixture should compile: {error}")),
+        );
+        let requirement = program.triggered_abilities()[0].target_requirements()[0];
+        assert_eq!((requirement.minimum(), requirement.maximum()), (0, 4));
+        assert_eq!(requirement.allocation_total(), Some(4));
+
+        let (mut driver, controller, opponent, source_object) = modal_spell_driver();
+        let existing = driver
+            .state
+            .zone_objects(ZoneId::new(None, ZoneKind::Battlefield))
+            .and_then(|objects| objects.first())
+            .copied()
+            .unwrap_or_else(|| panic!("fixture should begin with one battlefield creature"));
+        Arc::make_mut(&mut driver.programs).insert(source_object, Arc::clone(&program));
+        driver
+            .dispatch(Action::SetBaseObjectCharacteristics {
+                object: source_object,
+                base: program.base_object(),
+            })
+            .unwrap_or_else(|error| panic!("trigger source characteristics should apply: {error}"));
+        driver
+            .dispatch(Action::MoveObject {
+                object: source_object,
+                to: ZoneId::new(None, ZoneKind::Battlefield),
+            })
+            .unwrap_or_else(|error| panic!("trigger source should enter play: {error}"));
+        driver
+            .register_triggers(controller, source_object, &program, None)
+            .unwrap_or_else(|error| panic!("trigger runtime should register: {error}"));
+        let first = create_test_creature(&mut driver.state, opponent, 1_350, 2, 2);
+        driver
+            .dispatch(Action::CreateObject {
+                card: CardId::new(1_352),
+                owner: opponent,
+                controller: opponent,
+                zone: ZoneId::new(Some(opponent), ZoneKind::Library),
+            })
+            .unwrap_or_else(|error| panic!("draw card should be created: {error}"));
+        driver
+            .dispatch(Action::DrawCards {
+                player: opponent,
+                count: 1,
+            })
+            .unwrap_or_else(|error| panic!("draw should queue divided trigger: {error}"));
+        let trigger = driver.state.pending_triggers()[0].trigger();
+        let initial = driver
+            .trigger_target_context(
+                controller,
+                source_object,
+                trigger,
+                (0, 0),
+                &[],
+                requirement,
+                &[],
+            )
+            .unwrap_or_else(|error| panic!("range target context should exist: {error}"));
+        assert!(!initial.options().iter().any(|option| matches!(
+            option.descriptor(),
+            DecisionDescriptor::ChooseTriggerTargetGroups { targets, .. } if targets.is_empty()
+        )));
+        let first_prefix = initial
+            .options()
+            .iter()
+            .find_map(|option| match option.descriptor() {
+                DecisionDescriptor::ChooseTriggerTargetGroups { targets, .. }
+                    if targets.len() == 1 =>
+                {
+                    Some(targets.clone())
+                }
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("range context should expose a first target"));
+        let continuation = driver
+            .trigger_target_context(
+                controller,
+                source_object,
+                trigger,
+                (0, 0),
+                &first_prefix,
+                requirement,
+                &[],
+            )
+            .unwrap_or_else(|error| panic!("range continuation should exist: {error}"));
+        assert!(continuation.options().iter().any(|option| matches!(
+            option.descriptor(),
+            DecisionDescriptor::ChooseTriggerTargetGroups { targets, .. }
+                if targets == &first_prefix
+        )));
+
+        let mut source = MaximizeTriggerTargets;
+        let mut decisions = Some(&mut source as &mut dyn DecisionSource);
+        let outcome = driver
+            .put_pending_triggers_on_stack(Some(controller), &mut decisions, None)
+            .unwrap_or_else(|error| panic!("divided trigger should stack: {error}"));
+        assert!(matches!(outcome, Outcome::StackEntriesAdded(entries) if entries.len() == 1));
+        let stack_entry = driver
+            .state
+            .stack_top()
+            .unwrap_or_else(|| panic!("divided trigger should be on stack"));
+        let targets = stack_entry.targets();
+        assert_eq!(targets.len(), 3);
+        assert_eq!(
+            targets
+                .iter()
+                .map(|target| target.requirement().assigned_allocation())
+                .collect::<Vec<_>>(),
+            vec![Some(1), Some(1), Some(2)]
+        );
+        assert_eq!(
+            targets
+                .iter()
+                .map(|target| target.choice())
+                .collect::<HashSet<_>>(),
+            [
+                TargetChoice::Object(source_object),
+                TargetChoice::Object(existing),
+                TargetChoice::Object(first),
+            ]
+            .into_iter()
+            .collect::<HashSet<_>>()
+        );
+    }
+
+    #[test]
     fn same_batch_trigger_targeting_uses_the_staged_stack_for_human_and_ai() {
         let source = r#"card "Trigger Batch Fixture" {
   id: "forge:test:trigger-batch-fixture"
@@ -15080,7 +15862,7 @@ card "Mulldrifter" {
             .is_empty());
         assert_eq!(
             program.triggered_abilities()[1].target_requirements(),
-            &[TargetRequirement::new(TargetKind::StackEntry)]
+            &[TargetRequirement::new(TargetKind::StackEntry).with_group(0, 1, 1)]
         );
 
         let (mut driver, controller, opponent, source_object) = modal_spell_driver();
@@ -15131,9 +15913,12 @@ card "Mulldrifter" {
         assert_eq!(target_context.options().len(), 1);
         assert!(matches!(
             target_context.options()[0].descriptor(),
-            DecisionDescriptor::ChooseTarget {
-                target: TargetChoice::StackEntry(entry)
-            } if *entry == lower_entry
+            DecisionDescriptor::ChooseTriggerTargetGroups { trigger, targets }
+                if *trigger == upper_trigger
+                    && targets == &[AnnouncedTarget::new(
+                        0,
+                        TargetChoice::StackEntry(lower_entry),
+                    )]
         ));
 
         let mut human_driver = driver.clone();
@@ -16220,6 +17005,7 @@ card "Mulldrifter" {
                 ability_index: 0,
                 source: source_object,
             },
+            target_requirements: Vec::new(),
             targets: Vec::new(),
             target_legalities: Vec::new(),
             decisions: StackDecisionBindings::default(),
@@ -16359,6 +17145,7 @@ card "Mulldrifter" {
                 None,
                 Vec::new(),
                 Vec::new(),
+                Vec::new(),
                 StackDecisionBindings::default(),
             )
             .unwrap_or_else(|error| panic!("Sword trigger should await a search: {error}"));
@@ -16488,6 +17275,19 @@ card "Mulldrifter" {
             (!prompt.options.is_empty())
                 .then_some(DecisionSelection::Option(0))
                 .ok_or_else(|| "expected at least one canonical option".to_owned())
+        }
+    }
+
+    struct MaximizeTriggerTargets;
+
+    impl DecisionSource for MaximizeTriggerTargets {
+        fn choose(&mut self, prompt: &DecisionPrompt<'_>) -> Result<DecisionSelection, String> {
+            prompt
+                .options
+                .iter()
+                .position(|label| label != "Finish this target group")
+                .map(DecisionSelection::Option)
+                .ok_or_else(|| "expected a non-finish trigger target option".to_owned())
         }
     }
 
@@ -16941,6 +17741,74 @@ card "Mulldrifter" {
             seed: 17,
         };
         (driver, caster, opponent, spell)
+    }
+
+    #[test]
+    fn grouped_target_enumeration_is_distinct_bounded_and_allocation_sensitive() {
+        let mut state = GameState::new();
+        let player = match apply(&mut state, Action::AddPlayer) {
+            Outcome::PlayerAdded(player) => player,
+            other => panic!("unexpected player setup outcome: {other:?}"),
+        };
+        let choices = (10..13)
+            .map(|card| {
+                match apply(
+                    &mut state,
+                    Action::CreateObject {
+                        card: CardId::new(card),
+                        owner: player,
+                        controller: player,
+                        zone: ZoneId::new(Some(player), ZoneKind::Hand),
+                    },
+                ) {
+                    Outcome::ObjectCreated(object) => TargetChoice::Object(object),
+                    other => panic!("unexpected object setup outcome: {other:?}"),
+                }
+            })
+            .collect::<Vec<_>>();
+        let combinations = bounded_target_combinations(&choices, 0, 2, 16)
+            .unwrap_or_else(|error| panic!("target combinations should enumerate: {error}"));
+        assert_eq!(combinations.len(), 7);
+        assert!(combinations.iter().all(|combination| {
+            combination.iter().copied().collect::<HashSet<_>>().len() == combination.len()
+        }));
+        assert_eq!(
+            bounded_positive_allocations(4, 2, 16)
+                .unwrap_or_else(|error| panic!("allocations should enumerate: {error}")),
+            vec![vec![1, 3], vec![2, 2], vec![3, 1]]
+        );
+
+        let first = DecisionOption::new(
+            DecisionDescriptor::BeginCastSpellTargetGroups {
+                object: match choices[0] {
+                    TargetChoice::Object(object) => object,
+                    _ => unreachable!("fixture choices are objects"),
+                },
+                targets: vec![
+                    AnnouncedTarget::new(0, choices[0]).with_allocation(1),
+                    AnnouncedTarget::new(0, choices[1]).with_allocation(3),
+                ],
+                modes: Vec::new(),
+                optional: Vec::new(),
+            },
+            Vec::new(),
+        );
+        let second = DecisionOption::new(
+            DecisionDescriptor::BeginCastSpellTargetGroups {
+                object: match choices[0] {
+                    TargetChoice::Object(object) => object,
+                    _ => unreachable!("fixture choices are objects"),
+                },
+                targets: vec![
+                    AnnouncedTarget::new(0, choices[0]).with_allocation(2),
+                    AnnouncedTarget::new(0, choices[1]).with_allocation(2),
+                ],
+                modes: Vec::new(),
+                optional: Vec::new(),
+            },
+            Vec::new(),
+        );
+        assert_ne!(first.id(), second.id());
     }
 
     fn combat_decision_driver() -> (GameDriver, PlayerId, [PlayerId; 3], [ObjectId; 4]) {

@@ -24,18 +24,48 @@
     "versioned PilotIntent records for all four integration decks",
     "canonical human and AI commander-zone move-or-leave adapter",
     "split multiplayer player-defender attack assignment product",
-    "APNAP-ordered blocker decisions for every attacked player with kernel accumulation"
+    "APNAP-ordered blocker decisions for every attacked player with kernel accumulation",
+    "canonical static target groups with bounded cardinality, distinct choices, exact divided allocation, partial-legality resolution, and hierarchical trigger announcements"
   ],
   "blocking_for_pass": [
-    "complete production Choice/Prompt adapters",
-    "complete non-player combat-defender and strategic combat-damage prompt surface",
-    "immutable manifest hashes generated from a clean product commit",
-    "near-state and replay-family leakage audit",
-    "sealed hidden canaries",
-    "platform CPU-time and resident-memory measurement adapters",
-    "paired development and validation campaigns",
-    "catastrophic and acceptable-action review labels"
+    "dynamic or cross-target relationships and non-cost numeric choices remain fail closed",
+    "modal activated and modal triggered ability adapters remain incomplete",
+    "remaining arbitrary alternate, optional, additional, and activation cost families remain fail closed",
+    "multi-zone hidden/search choices and remaining event-bound payer families remain incomplete",
+    "non-player combat defenders remain unsupported",
+    "strategic-decision episode linkage is not yet emitted for hierarchical prompt chains",
+    "runtime-isomorphism and replay-family leakage fixtures have not run",
+    "sealed benchmark fixtures, hidden canaries, acceptable-action labels, and catastrophic-blunder labels are pending",
+    "supported Linux CPU/RSS and whole-pod cost measurements are pending",
+    "development, validation, and sealed strength campaigns are pending",
+    "search-knee selection and Owner CP-AI-LADDER approval are pending"
   ],
+  "blocker_owners": {
+    "choice_adapters": {
+      "owner": "forge-game-runner plus forge-core",
+      "evidence": "assets/ai/decision_surface.json and exact replay packet"
+    },
+    "strategic_episodes": {
+      "owner": "forge-game-runner plus learning schemas",
+      "evidence": "decision replay, Track B episode counts, and human-trace integrity"
+    },
+    "state_equivalence": {
+      "owner": "forge-core plus T4 benchmark tooling",
+      "evidence": "runtime isomorphism and split-leakage reports"
+    },
+    "linux_cost": {
+      "owner": "forge-ai plus forge-arena",
+      "evidence": "exact-product Linux CPU/RSS and whole-pod cost packet"
+    },
+    "strength_and_labels": {
+      "owner": "forge-arena plus independent reviewers",
+      "evidence": "development, validation, sealed, Track B, and Track C packets"
+    },
+    "promotion": {
+      "owner": "Owner and Gate Reviewer",
+      "evidence": "CP-AI-BENCH and CP-AI-LADDER decisions"
+    }
+  },
   "promotion_eligible": false,
   "plan_change_required": false,
   "note": "Implementation continues under the ratified T4 order; no acceptance criterion was silently weakened."
