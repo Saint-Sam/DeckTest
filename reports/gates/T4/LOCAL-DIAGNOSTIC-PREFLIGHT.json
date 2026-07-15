@@ -4,39 +4,39 @@
   "status": "local_diagnostic_preflight_passed_promotion_blocked",
   "verified_at": "2026-07-14",
   "verification_mode": "local_only_no_github_actions",
-  "product_commit": "3b1fd6d2a67e450db9448e01442249fa042f1101",
-  "product_tree": "c4c3fb424ce9265ccf04275a76c55b86b96a0099",
-  "preflight_evidence_commit": "a3d0cae5896a4f27036768a4155cfbad003623a3",
-  "preflight_evidence_tree": "dd01aee29e67c204cbd35b6634d2704673e06fc3",
+  "product_commit": "165b7ea68d24fb39b45e8a656a504e6c396730e7",
+  "product_tree": "85ac78cbacb57f62cefb855fa9f474862cb3b71a",
+  "preflight_evidence_commit": "aeb380439ced3a3d4beb0bc158948108dccec737",
+  "preflight_evidence_tree": "e743173aced3f5c1b99c42fd458e255d4b9c7214",
   "gate_command": "scripts/gates/gate_T4.sh --preflight",
   "gate_log": "reports/gates/T4/commands/00-preflight.log",
-  "gate_log_sha256": "601cf2fecf2b1403bad2044378bc57c3f732ad09d4dbe8013687da297797b63c",
+  "gate_log_sha256": "a6eab361e21170f388495088143e68b735b702ccad91d3aa87f2e6289e4dc6f7",
   "checks": {
     "format": "passed",
     "strict_clippy": "passed",
     "tests": {
-      "passed": 231,
+      "passed": 232,
       "failed": 0,
       "ignored": 1,
       "ignored_reason": "requires local generated T3 translated-card output"
     },
     "heuristic_exact_policy_and_typed_action_replay": {
       "status": "passed",
-      "replay_sha256": "89ebff5ff7a9aa3f9131f760422bdb7690a5df7298e23dad797ea4b54a4eabc0",
+      "replay_sha256": "6bec6be1f7854d340ecc19105dfda5bc46143fb72e47a657e5f93dd3db1d8770",
       "decisions": 15763,
       "typed_actions": 18029,
       "final_hash": "5970657412682018395"
     },
     "random_legal_exact_policy_and_typed_action_replay": {
       "status": "passed",
-      "replay_sha256": "32f986ebb974e337912d76ad5b29619354422cc1955672568a8ef2bde790bcb7",
+      "replay_sha256": "dd3617d01d18e78d198542034c7ca718d0f0a0c372f17ee39f3bca7cb3d79c8d",
       "decisions": 9155,
       "typed_actions": 11172,
       "final_hash": "12854593566509466757"
     },
     "search_exact_policy_and_typed_action_replay": {
       "status": "passed",
-      "replay_sha256": "c7056c9c1bb48ba918b44c058fd7146ea1fad8781b1717d854dafc6724d88ce3",
+      "replay_sha256": "164cf39961caf46697b0f09644cee883e4daade0f2d1c24a5066d8474e7eee66",
       "decisions": 16031,
       "typed_actions": 18321,
       "final_hash": "3933493530367397528"
@@ -60,11 +60,29 @@
       "strength_claim": false,
       "total_decision_budget_contract": "shared_deadline_and_current_surface_budget_response_passed",
       "observed_p95_wall_latency_us": [
-        1475,
-        4651
+        1525,
+        4833
       ],
       "result": "metrics/ai/search_budget_knee_results.json",
-      "result_sha256": "027dd1ec9fa021bdea071f19a9826a976bda59cb62cd2644c897f6917906e9e8"
+      "result_sha256": "00b814124ba8812484677aa162b2be595c5a03f241802df4cdd3b194f83e3332"
+    },
+    "decision_state_key_audit": {
+      "status": "passed",
+      "artifact": "metrics/ai/decision_state_audit.json",
+      "artifact_sha256": "87695e1e2a29bf9d294dedd85fe625a4c60527eb86faba6b7ec8e1059d2bb66c",
+      "decisions": 40949,
+      "unique_semantic_signatures": 40881,
+      "unique_state_keys": 40881,
+      "path_bound_decisions": 201,
+      "paired_policy_shared_keys": 56,
+      "failures": 0
+    },
+    "resource_telemetry": {
+      "status": "adapter_passed_measurement_campaign_pending",
+      "linux_android_thread_cpu": "safe_proc_thread_self_schedstat",
+      "linux_android_process_rss": "safe_proc_self_status_vmrss",
+      "unsupported_platform_contract": "explicit_null",
+      "darwin_exact_replay_cpu_memory_samples": 0
     }
   },
   "implemented_t4_tasks": [
@@ -74,6 +92,7 @@
     "T4.4",
     "T4.5",
     "T4.7",
+    "T4.9",
     "T4.10"
   ],
   "promotion_blockers": [
@@ -81,8 +100,8 @@
     "three materially different archetype tracks",
     "development, validation, and sealed Track A campaigns",
     "sealed Track B acceptable-action, catastrophic-blunder, and bounded win/defense labels",
-    "near-state and replay-family leakage audits",
-    "per-decision CPU time and resident-memory measurement",
+    "development, validation, and sealed split/replay-family leakage audits",
+    "supported Linux CPU, resident-memory, worker-price, and utilization campaign",
     "physical Android and WASM reference-device latency",
     "Owner CP-AI-LADDER review",
     "Owner CP-NN-GO decision"

@@ -73,18 +73,19 @@ onto identities.
 
 ## Next Gates
 
-1. Product `3b1fd6d` has an extracted production runner, one pre-context shared
+1. Product `165b7ea` has an extracted production runner, one pre-context shared
    search deadline, inline single-worker execution, action-edge statistics, and
-   collision-checked transposition buckets. The 231-test local preflight,
+   collision-checked transposition buckets. The 232-test local preflight,
    WASM/Android compiles, clone guard, and all three exact policy/action replays
-   pass.
+   pass. The exact state-key audit covers 40,949 decisions with zero failures.
 2. Hierarchical per-attacker/per-blocker contexts and single-construction
    determinization are exact-replay-bound. The 18,321-action search game and
    final hash are preserved, while the refreshed 1-4 ms ladder now measures
-   approximately 1.5-4.7 ms p95 instead of the former 240-266 ms floor. No
+   approximately 1.5-4.8 ms p95 instead of the former 240-266 ms floor. No
    search knee is claimed yet.
-3. Complete canonical Choice/Prompt adapters, remaining T4.5 action abstraction,
-   and T4.9 CPU/memory telemetry, then
+3. Complete canonical Choice/Prompt adapters and remaining T4.5 action abstraction.
+   The safe Linux/Android CPU/RSS adapter is implemented; run its supported-server
+   measurement campaign, then
    run the three-track development, validation, and sealed CP-AI-BENCH campaigns.
 4. Complete Owner CP-AI-LADDER and CP-NN-GO decisions. Reopen T3 only for a concrete T4 blocker, fix the smallest shared primitive,
    add semantic regressions, and resume T4. Broad mapper expansion remains closed.

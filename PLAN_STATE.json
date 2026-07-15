@@ -11,16 +11,16 @@
   },
   "tier": 4,
   "execution_flow": {
-    "current": "complete the remaining canonical decision adapters, T4.5 action abstraction, and CPU/memory telemetry",
+    "current": "complete the remaining canonical decision adapters and T4.5 action abstraction, then run supported-server resource and CP-AI-BENCH campaigns",
     "next": "run CP-AI-BENCH development, validation, sealed calibration, and search-knee campaigns",
     "targeted_fallback": "When T4 discovers a concrete coverage blocker, fix the smallest shared T3 primitive, add semantic regression tests, and resume T4. Do not reopen broad mapper expansion."
   },
   "t4_diagnostic_product": {
-    "status": "local_preflight_passed_hierarchical_surface_promotion_blocked",
-    "commit": "3b1fd6d2a67e450db9448e01442249fa042f1101",
-    "tree": "c4c3fb424ce9265ccf04275a76c55b86b96a0099",
-    "preflight_evidence_commit": "a3d0cae5896a4f27036768a4155cfbad003623a3",
-    "preflight_evidence_tree": "dd01aee29e67c204cbd35b6634d2704673e06fc3",
+    "status": "local_preflight_passed_resource_and_state_key_audited_promotion_blocked",
+    "commit": "165b7ea68d24fb39b45e8a656a504e6c396730e7",
+    "tree": "85ac78cbacb57f62cefb855fa9f474862cb3b71a",
+    "preflight_evidence_commit": "aeb380439ced3a3d4beb0bc158948108dccec737",
+    "preflight_evidence_tree": "e743173aced3f5c1b99c42fd458e255d4b9c7214",
     "evidence": "reports/gates/T4/LOCAL-DIAGNOSTIC-PREFLIGHT.json",
     "promotion_gate": "scripts/gates/gate_T4.sh"
   },
@@ -377,19 +377,19 @@
       "status": "verified_local_diagnostics",
       "branch": "task/T4.3-heuristic-policy",
       "attempts": 0,
-      "verification": "Seeded random-legal, deterministic/noisy one-ply heuristic, mulligan, threat/target helpers, and exact release-profile policy/action replay pass at product 3b1fd6d. Regenerated heuristic and random replays cover 15,763 and 9,155 canonical decisions and persist complete legal descriptors, PlayerView hashes, and DecisionStateKeys. Hierarchical per-object combat choices preserve complete typed declarations and split defenders without materializing Cartesian products; program-bound activations remain canonical and unsupported resolution-time searches fail closed."
+      "verification": "Seeded random-legal, deterministic/noisy one-ply heuristic, mulligan, threat/target helpers, and exact release-profile policy/action replay pass at product 165b7ea. Regenerated heuristic and random replays cover 15,763 and 9,155 canonical decisions and persist complete legal descriptors, PlayerView hashes, DecisionStateKeys, and path discriminators. The exact three-policy audit covers 40,949 decisions with 40,881 semantic signatures, matching 40,881 state keys, 201 explicitly path-bound decisions, and zero collisions or missing canonical fields. Hierarchical per-object combat choices preserve complete typed declarations and split defenders without materializing Cartesian products; program-bound activations remain canonical and unsupported resolution-time searches fail closed."
     },
     "T4.4": {
       "status": "verified_local_diagnostics",
       "branch": "task/T4.4-determinized-mcts-v1",
       "attempts": 0,
-      "verification": "Root-parallel determinized UCT passes the regenerated exact full-game replay at product 3b1fd6d: 16,031 canonical decisions, 789 search-policy decisions, 1,086 simulations, and 1,629 nodes, with the same 18,321 typed actions and final hash 3933493530367397528. Action-edge statistics, collision-checked wide-key buckets, and hierarchical combat path identity pass focused regressions."
+      "verification": "Root-parallel determinized UCT passes the regenerated exact full-game replay at product 165b7ea: 16,031 canonical decisions, 789 search-policy decisions, 1,086 simulations, and 1,629 nodes, with the same 18,321 typed actions and final hash 3933493530367397528. Action-edge statistics, collision-checked wide-key buckets, hierarchical combat path identity, and exact state-key auditing pass focused regressions."
     },
     "T4.5": {
       "status": "in_progress_hierarchical_latency_defect_closed",
       "branch": "task/T4.5-search-upgrades",
       "attempts": 0,
-      "verification": "Product 3b1fd6d replaces exponential combat products with scoped per-object subcontexts, preserves split attacks and menace completion, carries typed partial declarations through deeper search states, and constructs each sampled GameState once. Exact heuristic, random, and search replays pass; the refreshed fixed/adaptive 1-4 ms ladder measures approximately 1.5-4.7 ms p95 instead of the former 240-266 ms floor. Transpositions and time budgets are implemented; remaining T4.5 work is action abstraction for equivalent targets and any measured high-branching family that still needs progressive or hierarchical expansion."
+      "verification": "Product 165b7ea replaces exponential combat products with scoped per-object subcontexts, preserves split attacks and menace completion, carries typed partial declarations through deeper search states, and constructs each sampled GameState once. Exact heuristic, random, and search replays pass; the refreshed fixed/adaptive 1-4 ms ladder measures approximately 1.5-4.8 ms p95 instead of the former 240-266 ms floor. Transpositions and time budgets are implemented; remaining T4.5 work is action abstraction for equivalent targets and any measured high-branching family that still needs progressive or hierarchical expansion."
     },
     "T4.6": {
       "status": "blocked_on_telemetry_labels_and_promotion_evidence",
@@ -414,7 +414,7 @@
       "status": "in_progress_reference_devices_pending",
       "branch": "task/T4.9-ai-latency-harness",
       "attempts": 0,
-      "verification": "Release desktop wall-latency percentiles and paired B/2B diagnostics are exact-product-bound; the hierarchical 1-4 ms smoke now measures approximately 1.5-4.7 ms p95. forge-ai compiles for wasm32-unknown-unknown and aarch64-linux-android. CPU time, resident memory, worker price, and physical Android/WASM reference-device latency remain missing."
+      "verification": "Release desktop wall-latency percentiles and paired B/2B diagnostics are exact-product-bound; the hierarchical 1-4 ms smoke now measures approximately 1.5-4.8 ms p95. A dependency-free safe adapter records Linux/Android thread CPU from /proc/thread-self/schedstat and process RSS from /proc/self/status, while unsupported platforms emit explicit nulls. forge-ai compiles for wasm32-unknown-unknown and aarch64-linux-android. Supported Linux measurements, worker price/utilization, and physical Android/WASM reference-device latency remain pending."
     },
     "T4.10": {
       "status": "verified_local_diagnostics",
