@@ -14,9 +14,9 @@ use forge_ai::{
 };
 use forge_cards::runtime::{
     bind_activated_effect_actions, bind_program_actions, bind_triggered_ability_actions,
-    compile_card_program, object_satisfies_choice_requirement, CardProgram, ExecutionBindings,
-    ObjectChoiceRequirement, PlayerBinding, ProgramKind, SpellAdditionalCostProgram,
-    SpellModeProgram,
+    compile_card_program, object_satisfies_choice_requirement, AlternateCostKind, CardProgram,
+    ExecutionBindings, ObjectChoiceRequirement, PlayerBinding, ProgramKind,
+    SpellAdditionalCostProgram, SpellModeProgram,
 };
 use forge_core::{
     apply, Action, ActivatedAbilityDefinition, ActivatedAbilityEffect, ActivatedAbilityId,
@@ -25,10 +25,10 @@ use forge_core::{
     CombatDamageTarget, DecisionContext, DecisionDescriptor, DecisionKind, DecisionOption,
     GameEvent, GameOutcome, GameState, HiddenCardDefinition, HiddenSlotDefinition, ManaKind,
     ObjectColors, ObjectId, ObjectView, Outcome, PaymentPlan, PendingTriggeredAbility, PlayerId,
-    PlayerView, PriorityOutcome, ResolutionOutcome, SpellAdditionalCostPayment, SpellTiming,
-    StackDecisionBindings, StackEntryId, StackObjectKind, StateError, Step, TargetChoice,
-    TargetKind, TargetRequirement, TriggerId, TriggerStackBinding, TriggerStackDisposition, ZoneId,
-    ZoneKind,
+    PlayerView, PriorityOutcome, ResolutionOutcome, SpellAdditionalCostPayment, SpellAlternateCost,
+    SpellTiming, StackDecisionBindings, StackEntryId, StackObjectKind, StateError, Step,
+    TargetChoice, TargetKind, TargetRequirement, TriggerId, TriggerStackBinding,
+    TriggerStackDisposition, ZoneId, ZoneKind,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -1425,6 +1425,7 @@ enum MainChoice {
     },
     BeginCast {
         object: ObjectId,
+        alternate: Option<AlternateCostKind>,
         targets: Vec<TargetChoice>,
         mode: Option<u32>,
         optional: Vec<bool>,
@@ -1432,6 +1433,7 @@ enum MainChoice {
     },
     NarrowCastX {
         object: ObjectId,
+        alternate: Option<AlternateCostKind>,
         targets: Vec<TargetChoice>,
         mode: Option<u32>,
         optional: Vec<bool>,
@@ -1441,6 +1443,7 @@ enum MainChoice {
     },
     ChooseCastX {
         object: ObjectId,
+        alternate: Option<AlternateCostKind>,
         targets: Vec<TargetChoice>,
         mode: Option<u32>,
         optional: Vec<bool>,
@@ -1449,6 +1452,7 @@ enum MainChoice {
     },
     Cast {
         object: ObjectId,
+        alternate: Option<AlternateCostKind>,
         payment: PaymentPlan,
         targets: Vec<TargetChoice>,
         mode: Option<u32>,
@@ -1557,6 +1561,7 @@ struct GameDriver {
     guardrails: Arc<GuardrailTable>,
     commanders: Vec<ObjectId>,
     trigger_programs: HashMap<TriggerId, TriggerRuntime>,
+    conditional_cast_triggers: HashMap<ObjectId, Vec<TriggerId>>,
     triggering_players_by_stack_entry: HashMap<StackEntryId, PlayerId>,
     activated_abilities: Vec<RegisteredAbility>,
     pending_spell_resolution: Option<PendingSpellResolution>,
@@ -1660,6 +1665,7 @@ impl GameDriver {
             ),
             commanders: Vec::with_capacity(PLAYER_COUNT),
             trigger_programs: HashMap::new(),
+            conditional_cast_triggers: HashMap::new(),
             triggering_players_by_stack_entry: HashMap::new(),
             activated_abilities: Vec::new(),
             pending_spell_resolution: None,
@@ -2052,6 +2058,7 @@ impl GameDriver {
             guardrails: Arc::clone(&self.guardrails),
             commanders: self.commanders.clone(),
             trigger_programs: self.trigger_programs.clone(),
+            conditional_cast_triggers: self.conditional_cast_triggers.clone(),
             triggering_players_by_stack_entry: self.triggering_players_by_stack_entry.clone(),
             activated_abilities: self.activated_abilities.clone(),
             pending_spell_resolution: self.pending_spell_resolution.clone(),
@@ -2386,6 +2393,10 @@ impl GameDriver {
     }
 
     fn dispatch(&mut self, action: Action) -> Result<Outcome, String> {
+        let countered_entry = match &action {
+            Action::CounterStackEntry { entry } => Some(*entry),
+            _ => None,
+        };
         let trace_header = self
             .trace
             .enabled()
@@ -2427,6 +2438,9 @@ impl GameDriver {
             .metrics
             .eliminations
             .saturating_add(lost_after.saturating_sub(lost_before) as u64);
+        if let Some(entry) = countered_entry {
+            self.handle_resolution(entry)?;
+        }
         Ok(outcome)
     }
 
@@ -2930,63 +2944,88 @@ impl GameDriver {
                 targets,
                 modes,
                 optional,
-            } => {
-                let program = self
-                    .programs
-                    .get(object)
-                    .ok_or_else(|| format!("seed {} missing deferred spell program", self.seed))?;
-                let mut pending = Vec::new();
-                if !program.additional_costs().is_empty() {
-                    pending.push("additional costs");
-                }
-                if program.mana_cost().x_count() != 0 {
-                    pending.push("X");
-                }
-                pending.push("mana payment");
-                let mut details = vec![format!("choose {}", pending.join(", then "))];
-                if !targets.is_empty() {
-                    details.push(format!(
-                        "targets {}",
-                        targets
-                            .iter()
-                            .copied()
-                            .map(|target| self.target_choice_label(target))
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    ));
-                }
-                if !modes.is_empty() {
-                    details.push(format!(
-                        "mode {}",
-                        modes
-                            .iter()
-                            .map(|mode| mode.saturating_add(1).to_string())
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    ));
-                }
-                if !optional.is_empty() {
-                    details.push(format!(
-                        "optional {}",
-                        optional
-                            .iter()
-                            .map(|accept| if *accept { "yes" } else { "no" })
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    ));
-                }
-                Ok(format!(
-                    "Cast: {} ({})",
-                    self.object_name(*object),
-                    details.join("; ")
-                ))
-            }
+            } => self.deferred_cast_choice_label(*object, None, targets, modes, optional),
+            DecisionDescriptor::BeginCastSpellAlternate {
+                object,
+                alternate,
+                targets,
+                modes,
+                optional,
+            } => self.deferred_cast_choice_label(
+                *object,
+                Some(core_alternate_to_runtime(*alternate)),
+                targets,
+                modes,
+                optional,
+            ),
             DecisionDescriptor::PassPriority => Ok("Finish main phase".to_owned()),
             other => Err(format!(
                 "seed {} main prompt cannot label descriptor {other:?}",
                 self.seed
             )),
         }
+    }
+
+    fn deferred_cast_choice_label(
+        &self,
+        object: ObjectId,
+        alternate: Option<AlternateCostKind>,
+        targets: &[TargetChoice],
+        modes: &[u32],
+        optional: &[bool],
+    ) -> Result<String, String> {
+        let program = self
+            .programs
+            .get(&object)
+            .ok_or_else(|| format!("seed {} missing deferred spell program", self.seed))?;
+        let mut pending = Vec::new();
+        if !program.additional_costs().is_empty() {
+            pending.push("additional costs");
+        }
+        if self.cast_mana_cost(program, alternate)?.x_count() != 0 {
+            pending.push("X");
+        }
+        pending.push("mana payment");
+        let mut details = vec![format!("choose {}", pending.join(", then "))];
+        if let Some(alternate) = alternate {
+            details.push(format!("alternate cost {alternate:?}"));
+        }
+        if !targets.is_empty() {
+            details.push(format!(
+                "targets {}",
+                targets
+                    .iter()
+                    .copied()
+                    .map(|target| self.target_choice_label(target))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
+        }
+        if !modes.is_empty() {
+            details.push(format!(
+                "mode {}",
+                modes
+                    .iter()
+                    .map(|mode| mode.saturating_add(1).to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
+        }
+        if !optional.is_empty() {
+            details.push(format!(
+                "optional {}",
+                optional
+                    .iter()
+                    .map(|accept| if *accept { "yes" } else { "no" })
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
+        }
+        Ok(format!(
+            "Cast: {} ({})",
+            self.object_name(object),
+            details.join("; ")
+        ))
     }
 
     fn target_choice_label(&self, target: TargetChoice) -> String {
@@ -3105,6 +3144,7 @@ impl GameDriver {
             )),
             MainChoice::Cast {
                 object,
+                alternate,
                 payment,
                 targets,
                 mode,
@@ -3114,6 +3154,7 @@ impl GameDriver {
                 self.cast_program_with_choices(
                     player,
                     object,
+                    alternate,
                     payment,
                     targets,
                     mode,
@@ -3134,6 +3175,7 @@ impl GameDriver {
         player: PlayerId,
         object: ObjectId,
         program: &CardProgram,
+        alternate: Option<AlternateCostKind>,
     ) -> Result<Vec<SpellChoiceBinding>, String> {
         let mut bindings = Vec::new();
         if program.spell_modes().is_empty() {
@@ -3142,7 +3184,7 @@ impl GameDriver {
                 object,
                 program.name(),
                 None,
-                program.target_requirements(),
+                program.target_requirements_for_alternate(alternate),
                 program.optional_choice_count(),
                 &mut bindings,
             )?;
@@ -3274,6 +3316,7 @@ impl GameDriver {
         &self,
         player: PlayerId,
         object: ObjectId,
+        alternate: Option<AlternateCostKind>,
         targets: &[TargetChoice],
         mode: Option<u32>,
         optional: &[bool],
@@ -3318,6 +3361,7 @@ impl GameDriver {
                 option.id(),
                 MainChoice::BeginCast {
                     object,
+                    alternate,
                     targets: targets.to_vec(),
                     mode,
                     optional: optional.to_vec(),
@@ -3337,7 +3381,9 @@ impl GameDriver {
             DecisionKind::Payment,
             player,
             options,
-            additional_cast_path_discriminator(player, object, targets, mode, optional, prior),
+            additional_cast_path_discriminator(
+                player, object, alternate, targets, mode, optional, prior,
+            ),
         )?;
         Ok((context, mappings))
     }
@@ -3512,17 +3558,41 @@ impl GameDriver {
             .collect())
     }
 
+    fn cast_mana_cost(
+        &self,
+        program: &CardProgram,
+        alternate: Option<AlternateCostKind>,
+    ) -> Result<forge_core::ManaCost, String> {
+        let Some(alternate) = alternate else {
+            return Ok(program.mana_cost());
+        };
+        program
+            .alternate_costs()
+            .iter()
+            .copied()
+            .find(|cost| cost.kind() == alternate)
+            .map(|cost| cost.mana_cost())
+            .ok_or_else(|| {
+                format!(
+                    "seed {} spell {} does not compile alternate cost {alternate:?}",
+                    self.seed,
+                    program.name()
+                )
+            })
+    }
+
     fn cast_payment_plans(
         &self,
         player: PlayerId,
         object: ObjectId,
+        alternate: Option<AlternateCostKind>,
         x_value: u32,
     ) -> Result<Vec<PaymentPlan>, String> {
         let program = self
             .programs
             .get(&object)
             .ok_or_else(|| format!("seed {} missing cast program", self.seed))?;
-        let printed_cost = program.mana_cost();
+        let printed_cost = self.cast_mana_cost(program, alternate)?;
         let announced_cost = printed_cost.with_x(printed_cost.x_count(), x_value);
         let effective_cost = match self
             .state
@@ -3558,19 +3628,23 @@ impl GameDriver {
         &self,
         player: PlayerId,
         object: ObjectId,
+        alternate: Option<AlternateCostKind>,
     ) -> Result<Option<u32>, String> {
         let program = self
             .programs
             .get(&object)
             .ok_or_else(|| format!("seed {} missing X spell program", self.seed))?;
-        let x_count = program.mana_cost().x_count();
+        let x_count = self.cast_mana_cost(program, alternate)?.x_count();
         if x_count == 0 {
             return Err(format!(
                 "seed {} requested X range for a fixed cost",
                 self.seed
             ));
         }
-        if self.cast_payment_plans(player, object, 0)?.is_empty() {
+        if self
+            .cast_payment_plans(player, object, alternate, 0)?
+            .is_empty()
+        {
             return Ok(None);
         }
 
@@ -3579,7 +3653,7 @@ impl GameDriver {
         while minimum < maximum {
             let midpoint = minimum + (maximum - minimum).div_ceil(2);
             if self
-                .cast_payment_plans(player, object, midpoint)?
+                .cast_payment_plans(player, object, alternate, midpoint)?
                 .is_empty()
             {
                 maximum = midpoint - 1;
@@ -3599,7 +3673,7 @@ impl GameDriver {
         let commander = self.commanders[seat];
         let mut candidates = Vec::new();
         if self.state.object_zone(commander) == Some(ZoneId::new(None, ZoneKind::Command)) {
-            candidates.push(commander);
+            candidates.push((commander, None));
         }
         let hand = ZoneId::new(Some(player), ZoneKind::Hand);
         let mut hand_objects = self
@@ -3608,17 +3682,48 @@ impl GameDriver {
             .ok_or_else(|| format!("seed {} missing hand zone", self.seed))?
             .to_vec();
         hand_objects.sort_by_key(|object| object.index());
-        candidates.extend(hand_objects);
+        candidates.extend(hand_objects.iter().copied().map(|object| (object, None)));
+
+        let graveyard = ZoneId::new(Some(player), ZoneKind::Graveyard);
+        let mut alternate_objects = hand_objects;
+        alternate_objects.extend(
+            self.state
+                .zone_objects(graveyard)
+                .ok_or_else(|| format!("seed {} missing graveyard zone", self.seed))?
+                .iter()
+                .copied(),
+        );
+        alternate_objects.sort_by_key(|object| object.index());
+        alternate_objects.dedup();
+        for object in alternate_objects {
+            let Some(program) = self.programs.get(&object) else {
+                continue;
+            };
+            for alternate in program.alternate_costs().iter().copied() {
+                let source_zone_is_valid = match alternate.kind() {
+                    AlternateCostKind::Flashback => {
+                        self.state.object_zone(object) == Some(graveyard)
+                    }
+                    AlternateCostKind::Commander
+                    | AlternateCostKind::Evoke
+                    | AlternateCostKind::Overload => self.state.object_zone(object) == Some(hand),
+                };
+                if source_zone_is_valid && alternate.is_available(&self.state, player, Some(object))
+                {
+                    candidates.push((object, Some(alternate.kind())));
+                }
+            }
+        }
 
         let mut choices = Vec::new();
-        for object in candidates {
+        for (object, alternate) in candidates {
             let Some(program) = self.programs.get(&object) else {
                 continue;
             };
             if !self.normal_spell_timing_available(player, program.kind()) {
                 continue;
             }
-            let spell_bindings = self.spell_choice_bindings(player, object, program)?;
+            let spell_bindings = self.spell_choice_bindings(player, object, program, alternate)?;
             let mut no_additional_costs = Vec::new();
             let Some(first_additional_costs) = self.spell_additional_cost_first_completion(
                 player,
@@ -3629,17 +3734,20 @@ impl GameDriver {
             else {
                 continue;
             };
-            let payment_options = self.cast_payment_plans(player, object, 0)?;
+            let payment_options = self.cast_payment_plans(player, object, alternate, 0)?;
             if payment_options.is_empty() {
                 continue;
             }
-            let requires_hierarchy =
-                program.mana_cost().x_count() != 0 || !program.additional_costs().is_empty();
+            let cast_cost = self.cast_mana_cost(program, alternate)?;
+            let requires_hierarchy = alternate.is_some()
+                || cast_cost.x_count() != 0
+                || !program.additional_costs().is_empty();
             if requires_hierarchy {
                 for binding in spell_bindings {
                     let is_legal = payment_options.iter().copied().any(|payment| {
                         self.spell_request(
                             program,
+                            alternate,
                             payment,
                             &binding.targets,
                             binding.mode,
@@ -3659,6 +3767,7 @@ impl GameDriver {
                     }
                     choices.push(MainChoice::BeginCast {
                         object,
+                        alternate,
                         targets: binding.targets,
                         mode: binding.mode,
                         optional: binding.optional,
@@ -3684,6 +3793,7 @@ impl GameDriver {
                 for payment in payment_options.iter().copied() {
                     let request = self.spell_request(
                         program,
+                        alternate,
                         payment,
                         &binding.targets,
                         binding.mode,
@@ -3700,6 +3810,7 @@ impl GameDriver {
                     }
                     choices.push(MainChoice::Cast {
                         object,
+                        alternate,
                         payment,
                         targets: binding.targets.clone(),
                         mode: binding.mode,
@@ -3878,9 +3989,11 @@ impl GameDriver {
             .collect()
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn spell_request(
         &self,
         program: &CardProgram,
+        alternate: Option<AlternateCostKind>,
         payment: PaymentPlan,
         targets: &[TargetChoice],
         mode: Option<u32>,
@@ -3901,7 +4014,9 @@ impl GameDriver {
                 .get(mode as usize)
                 .ok_or_else(|| format!("seed {} invalid spell mode {mode}", self.seed))?
                 .target_requirements(),
-            None if program.spell_modes().is_empty() => program.target_requirements(),
+            None if program.spell_modes().is_empty() => {
+                program.target_requirements_for_alternate(alternate)
+            }
             None => {
                 return Err(format!(
                     "seed {} modal spell {} has no mode binding",
@@ -3910,11 +4025,13 @@ impl GameDriver {
                 ));
             }
         };
-        let decisions = StackDecisionBindings::new(mode, optional)
+        let mut decisions = StackDecisionBindings::new(mode, optional)
             .map_err(|error| format!("seed {} stack choices failed: {error:?}", self.seed))?;
-        let announced_cost = program
-            .mana_cost()
-            .with_x(program.mana_cost().x_count(), payment.x_value());
+        if let Some(alternate) = alternate {
+            decisions = decisions.with_alternate_cost(runtime_alternate_to_core(alternate));
+        }
+        let printed_cost = self.cast_mana_cost(program, alternate)?;
+        let announced_cost = printed_cost.with_x(printed_cost.x_count(), payment.x_value());
         let additional_costs = self.spell_additional_cost_payments(program, additional_costs)?;
         let mut request = CastSpellRequest::new(kind, timing, announced_cost, payment)
             .with_targets(requirements.to_vec(), targets.to_vec())
@@ -3922,6 +4039,9 @@ impl GameDriver {
             .with_decisions(decisions);
         if program.split_second() {
             request = request.with_split_second();
+        }
+        if alternate == Some(AlternateCostKind::Flashback) {
+            request = request.with_flashback(announced_cost);
         }
         Ok(request)
     }
@@ -4130,6 +4250,7 @@ impl GameDriver {
                 labels.push(format!("Cast: {}", program.name()));
                 choices.push(MainChoice::Cast {
                     object,
+                    alternate: None,
                     payment,
                     targets: Vec::new(),
                     mode: None,
@@ -4444,36 +4565,54 @@ impl GameDriver {
             }
             MainChoice::BeginCast {
                 object,
+                alternate,
                 targets,
                 mode,
                 optional,
                 ..
-            } => Ok(DecisionOption::new(
-                DecisionDescriptor::BeginCastSpell {
-                    object,
-                    targets,
-                    modes: mode.into_iter().collect(),
-                    optional,
-                },
-                Vec::new(),
-            )),
+            } => {
+                let descriptor = match alternate {
+                    None => DecisionDescriptor::BeginCastSpell {
+                        object,
+                        targets,
+                        modes: mode.into_iter().collect(),
+                        optional,
+                    },
+                    Some(alternate) => DecisionDescriptor::BeginCastSpellAlternate {
+                        object,
+                        alternate: runtime_alternate_to_core(alternate),
+                        targets,
+                        modes: mode.into_iter().collect(),
+                        optional,
+                    },
+                };
+                Ok(DecisionOption::new(descriptor, Vec::new()))
+            }
             MainChoice::NarrowCastX { .. } | MainChoice::ChooseCastX { .. } => Err(format!(
                 "seed {} hierarchical cast stage cannot enter a root context",
                 self.seed
             )),
             MainChoice::Cast {
                 object,
+                alternate,
                 payment,
                 targets,
                 mode,
                 optional,
                 additional_costs,
             } => {
+                if alternate.is_some() {
+                    return Err(format!(
+                        "seed {} alternate cast bypassed its canonical root hierarchy",
+                        self.seed
+                    ));
+                }
                 let program = self.programs.get(&object).ok_or_else(|| {
                     format!("seed {} missing program for AI cast option", self.seed)
                 })?;
                 let request = self.spell_request(
                     program,
+                    alternate,
                     payment,
                     &targets,
                     mode,
@@ -4511,6 +4650,7 @@ impl GameDriver {
         &self,
         player: PlayerId,
         object: ObjectId,
+        alternate: Option<AlternateCostKind>,
         targets: &[TargetChoice],
         mode: Option<u32>,
         optional: &[bool],
@@ -4539,6 +4679,7 @@ impl GameDriver {
                     option.id(),
                     MainChoice::ChooseCastX {
                         object,
+                        alternate,
                         targets: targets.to_vec(),
                         mode,
                         optional: optional.to_vec(),
@@ -4558,6 +4699,7 @@ impl GameDriver {
                     option.id(),
                     MainChoice::NarrowCastX {
                         object,
+                        alternate,
                         targets: targets.to_vec(),
                         mode,
                         optional: optional.to_vec(),
@@ -4576,6 +4718,7 @@ impl GameDriver {
             variable_cast_path_discriminator(
                 player,
                 object,
+                alternate,
                 targets,
                 mode,
                 optional,
@@ -4593,6 +4736,7 @@ impl GameDriver {
         &self,
         player: PlayerId,
         object: ObjectId,
+        alternate: Option<AlternateCostKind>,
         targets: &[TargetChoice],
         mode: Option<u32>,
         optional: &[bool],
@@ -4605,9 +4749,16 @@ impl GameDriver {
             .ok_or_else(|| format!("seed {} missing X spell program", self.seed))?;
         let mut mappings = Vec::new();
         let mut options = Vec::new();
-        for payment in self.cast_payment_plans(player, object, x_value)? {
-            let request =
-                self.spell_request(program, payment, targets, mode, optional, additional_costs)?;
+        for payment in self.cast_payment_plans(player, object, alternate, x_value)? {
+            let request = self.spell_request(
+                program,
+                alternate,
+                payment,
+                targets,
+                mode,
+                optional,
+                additional_costs,
+            )?;
             let action = Action::CastSpell {
                 player,
                 object,
@@ -4622,6 +4773,7 @@ impl GameDriver {
                 option.id(),
                 MainChoice::Cast {
                     object,
+                    alternate,
                     payment,
                     targets: targets.to_vec(),
                     mode,
@@ -4645,6 +4797,7 @@ impl GameDriver {
             variable_cast_path_discriminator(
                 player,
                 object,
+                alternate,
                 targets,
                 mode,
                 optional,
@@ -4665,6 +4818,7 @@ impl GameDriver {
         match choice {
             MainChoice::BeginCast {
                 object,
+                alternate,
                 targets,
                 mode,
                 optional,
@@ -4679,6 +4833,7 @@ impl GameDriver {
                         .additional_cast_cost_context(
                             player,
                             *object,
+                            *alternate,
                             targets,
                             *mode,
                             optional,
@@ -4693,11 +4848,12 @@ impl GameDriver {
                         program.name()
                     ));
                 }
-                if program.mana_cost().x_count() == 0 {
+                if self.cast_mana_cost(program, *alternate)?.x_count() == 0 {
                     return self
                         .variable_cast_payment_context(
                             player,
                             *object,
+                            *alternate,
                             targets,
                             *mode,
                             optional,
@@ -4706,12 +4862,15 @@ impl GameDriver {
                         )
                         .map(Some);
                 }
-                let maximum = self.maximum_affordable_x(player, *object)?.ok_or_else(|| {
-                    format!("seed {} selected an unaffordable X spell", self.seed)
-                })?;
+                let maximum = self
+                    .maximum_affordable_x(player, *object, *alternate)?
+                    .ok_or_else(|| {
+                        format!("seed {} selected an unaffordable X spell", self.seed)
+                    })?;
                 self.variable_cast_numeric_context(
                     player,
                     *object,
+                    *alternate,
                     targets,
                     *mode,
                     optional,
@@ -4722,6 +4881,7 @@ impl GameDriver {
             }
             MainChoice::NarrowCastX {
                 object,
+                alternate,
                 targets,
                 mode,
                 optional,
@@ -4732,6 +4892,7 @@ impl GameDriver {
                 .variable_cast_numeric_context(
                     player,
                     *object,
+                    *alternate,
                     targets,
                     *mode,
                     optional,
@@ -4741,6 +4902,7 @@ impl GameDriver {
                 .map(Some),
             MainChoice::ChooseCastX {
                 object,
+                alternate,
                 targets,
                 mode,
                 optional,
@@ -4750,6 +4912,7 @@ impl GameDriver {
                 .variable_cast_payment_context(
                     player,
                     *object,
+                    *alternate,
                     targets,
                     *mode,
                     optional,
@@ -5182,6 +5345,7 @@ impl GameDriver {
             return self.cast_program_with_choices(
                 player,
                 object,
+                None,
                 payment,
                 Vec::new(),
                 None,
@@ -5197,6 +5361,7 @@ impl GameDriver {
         &mut self,
         player: PlayerId,
         object: ObjectId,
+        alternate: Option<AlternateCostKind>,
         payment: PaymentPlan,
         targets: Vec<TargetChoice>,
         mode: Option<u32>,
@@ -5210,6 +5375,7 @@ impl GameDriver {
             .ok_or_else(|| format!("seed {} missing program for cast object", self.seed))?;
         let request = self.spell_request(
             &program,
+            alternate,
             payment,
             &targets,
             mode,
@@ -5237,7 +5403,7 @@ impl GameDriver {
                     self.metrics.taxed_commander_recasts.saturating_add(1);
             }
         }
-        self.register_triggers(player, object, &program)
+        self.register_triggers(player, object, &program, alternate)
     }
 
     fn register_triggers(
@@ -5245,14 +5411,23 @@ impl GameDriver {
         controller: PlayerId,
         source: ObjectId,
         program: &Arc<CardProgram>,
+        alternate: Option<AlternateCostKind>,
     ) -> Result<(), String> {
-        if !self.triggers_registered_for.insert(source) {
-            return Ok(());
-        }
+        let first_registration = self.triggers_registered_for.insert(source);
         for (ability_index, ability) in program.triggered_abilities().iter().enumerate() {
-            let outcome = self.dispatch(Action::RegisterTriggeredAbility {
-                definition: ability.bind(controller, source),
-            })?;
+            let conditional = ability.required_alternate_cost();
+            if conditional.is_none() && !first_registration {
+                continue;
+            }
+            if conditional.is_some() && conditional != alternate {
+                continue;
+            }
+            let definition = if conditional.is_some() {
+                ability.bind(controller, source).delayed_once()
+            } else {
+                ability.bind(controller, source)
+            };
+            let outcome = self.dispatch(Action::RegisterTriggeredAbility { definition })?;
             let Outcome::TriggerRegistered(trigger) = outcome else {
                 return Err(format!(
                     "seed {} trigger registration returned {outcome:?}",
@@ -5267,6 +5442,12 @@ impl GameDriver {
                     source,
                 },
             );
+            if conditional.is_some() {
+                self.conditional_cast_triggers
+                    .entry(source)
+                    .or_default()
+                    .push(trigger);
+            }
             self.metrics.triggers_registered = self.metrics.triggers_registered.saturating_add(1);
         }
         Ok(())
@@ -5440,6 +5621,9 @@ impl GameDriver {
                 .with_optional_effect_choices(pending.decisions.optional_choices().collect());
         if let Some(mode) = pending.decisions.mode() {
             bindings = bindings.with_spell_mode(mode as usize);
+        }
+        if let Some(alternate) = pending.decisions.alternate_cost() {
+            bindings = bindings.with_alternate_cost(core_alternate_to_runtime(alternate));
         }
         bind_program_actions(&self.state, &pending.program, &bindings)
             .map(|actions| {
@@ -7196,6 +7380,26 @@ impl GameDriver {
             .collect::<Vec<_>>();
         let decisions = record.decisions();
         let triggering_player = self.triggering_players_by_stack_entry.remove(&entry);
+        if let Some(object) = object {
+            if let Some(conditional_triggers) = self.conditional_cast_triggers.remove(&object) {
+                let entered_battlefield = outcome == ResolutionOutcome::Resolved
+                    && self.state.object_zone(object)
+                        == Some(ZoneId::new(None, ZoneKind::Battlefield));
+                for trigger in conditional_triggers {
+                    let queued = entered_battlefield
+                        && self
+                            .state
+                            .pending_triggers()
+                            .iter()
+                            .any(|pending| pending.trigger() == trigger);
+                    if queued {
+                        continue;
+                    }
+                    self.dispatch(Action::UnregisterTriggeredAbility { trigger })?;
+                    self.trigger_programs.remove(&trigger);
+                }
+            }
+        }
         if outcome != ResolutionOutcome::Resolved {
             return Ok(());
         }
@@ -10041,10 +10245,39 @@ fn trigger_unless_path_discriminator(payer: PlayerId, trigger: TriggerId, stage:
     combat_path_mix(state, stage)
 }
 
+const fn runtime_alternate_to_core(alternate: AlternateCostKind) -> SpellAlternateCost {
+    match alternate {
+        AlternateCostKind::Commander => SpellAlternateCost::Commander,
+        AlternateCostKind::Flashback => SpellAlternateCost::Flashback,
+        AlternateCostKind::Evoke => SpellAlternateCost::Evoke,
+        AlternateCostKind::Overload => SpellAlternateCost::Overload,
+    }
+}
+
+const fn core_alternate_to_runtime(alternate: SpellAlternateCost) -> AlternateCostKind {
+    match alternate {
+        SpellAlternateCost::Commander => AlternateCostKind::Commander,
+        SpellAlternateCost::Flashback => AlternateCostKind::Flashback,
+        SpellAlternateCost::Evoke => AlternateCostKind::Evoke,
+        SpellAlternateCost::Overload => AlternateCostKind::Overload,
+    }
+}
+
+const fn runtime_alternate_path_code(alternate: Option<AlternateCostKind>) -> u64 {
+    match alternate {
+        None => 0,
+        Some(AlternateCostKind::Commander) => 1,
+        Some(AlternateCostKind::Flashback) => 2,
+        Some(AlternateCostKind::Evoke) => 3,
+        Some(AlternateCostKind::Overload) => 4,
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn variable_cast_path_discriminator(
     player: PlayerId,
     object: ObjectId,
+    alternate: Option<AlternateCostKind>,
     targets: &[TargetChoice],
     mode: Option<u32>,
     optional: &[bool],
@@ -10055,6 +10288,7 @@ fn variable_cast_path_discriminator(
 ) -> u64 {
     let mut state = combat_path_mix(0x7661_7263_6173_0001, player.index() as u64);
     state = combat_path_mix(state, object.index() as u64);
+    state = combat_path_mix(state, runtime_alternate_path_code(alternate));
     state = combat_path_mix(state, stage);
     state = combat_path_mix(state, u64::from(minimum));
     state = combat_path_mix(state, u64::from(maximum));
@@ -10090,6 +10324,7 @@ fn variable_cast_path_discriminator(
 fn additional_cast_path_discriminator(
     player: PlayerId,
     object: ObjectId,
+    alternate: Option<AlternateCostKind>,
     targets: &[TargetChoice],
     mode: Option<u32>,
     optional: &[bool],
@@ -10097,6 +10332,7 @@ fn additional_cast_path_discriminator(
 ) -> u64 {
     let mut state = combat_path_mix(0x6164_6463_6173_0001, player.index() as u64);
     state = combat_path_mix(state, object.index() as u64);
+    state = combat_path_mix(state, runtime_alternate_path_code(alternate));
     state = combat_path_mix(state, prior.len() as u64);
     state = combat_path_mix(state, mode.map_or(u64::MAX, u64::from));
     for target in targets {
@@ -10305,6 +10541,20 @@ fn decision_descriptor_value(descriptor: &DecisionDescriptor) -> Value {
         } => json!({
             "kind": "begin_cast_spell",
             "object_id": object.index(),
+            "targets": targets.iter().copied().map(target_value).collect::<Vec<_>>(),
+            "modes": modes,
+            "optional": optional
+        }),
+        DecisionDescriptor::BeginCastSpellAlternate {
+            object,
+            alternate,
+            targets,
+            modes,
+            optional,
+        } => json!({
+            "kind": "begin_cast_spell_alternate",
+            "object_id": object.index(),
+            "alternate": format!("{alternate:?}"),
             "targets": targets.iter().copied().map(target_value).collect::<Vec<_>>(),
             "modes": modes,
             "optional": optional
@@ -11616,15 +11866,99 @@ mod tests {
         TerminalDecisionSource, TraceMode, TraceRecord, CONCESSION_PROMPT, PLAYER_COUNT,
     };
     use forge_ai::{AiWeights, GuardrailProfile, GuardrailTable, SearchDomain};
-    use forge_cards::runtime::compile_card_program;
+    use forge_cards::runtime::{compile_card_program, AlternateCostKind};
     use forge_core::{
         apply, Action, AttackDeclaration, BaseCreatureCharacteristics, BaseObjectCharacteristics,
         BasicLandTypes, BlockDeclaration, CardId, CombatDamageTarget, CreatureKeywords,
         DecisionContext, DecisionDescriptor, DecisionKind, DecisionOption, GameState, ManaPool,
         ObjectColors, ObjectId, ObjectSupertypes, ObjectTypes, Outcome, PaymentPlan, PlayerId,
-        PlayerView, ResolutionOutcome, StackDecisionBindings, Step, TargetChoice, TriggerCondition,
-        TriggerDefinition, TriggerPlayerFilter, TriggerStackDisposition, ZoneId, ZoneKind,
+        PlayerView, ResolutionOutcome, SpellAlternateCost, StackDecisionBindings, Step,
+        TargetChoice, TriggerCondition, TriggerDefinition, TriggerPlayerFilter,
+        TriggerStackDisposition, ZoneId, ZoneKind,
     };
+
+    const FLAWLESS_MANEUVER: &str = r#"
+card "Flawless Maneuver" {
+  id: "4e183439-17d2-47ff-9d99-5e22821d91e3"
+  layout: normal
+  status: unverified_playable
+  face "Flawless Maneuver" {
+    cost: "{2}{W}"
+    types: "Instant"
+    oracle: "If you control a commander, you may cast this spell without paying its mana cost. Creatures you control gain indestructible until end of turn."
+    keywords: []
+    ability static {
+      effect: while_condition(at_least(count(permanents(and(designation_is("commander"), controlled_by(you())))), 1), alternate_cost(spells(and(equals(any(), source()), controlled_by(you()))), mana_cost("{0}")))
+    }
+    ability spell {
+      effect: grant_keyword(permanents(and(type_is("creature"), controlled_by(you()))), "indestructible", "until_end_of_turn")
+    }
+  }
+}
+"#;
+
+    const FAITHLESS_LOOTING: &str = r#"
+card "Faithless Looting" {
+  id: "3d6fa57a-aa53-4b5c-b8af-a7612c823117"
+  layout: normal
+  status: unverified_playable
+  face "Faithless Looting" {
+    cost: "{R}"
+    types: "Sorcery"
+    oracle: "Draw two cards, then discard two cards. Flashback {2}{R}."
+    keywords: [flashback]
+    ability static {
+      effect: continuous(source(), alternate_cost(source(), mana_cost("{2}{R}")))
+    }
+    ability spell {
+      effect: sequence(draw(2, you()), discard_cards(2, you(), "choose"))
+    }
+  }
+}
+"#;
+
+    const CYCLONIC_RIFT: &str = r#"
+card "Cyclonic Rift" {
+  id: "d75b9c82-1b49-4c3e-a1b5-aeef57d6644b"
+  layout: normal
+  status: unverified_playable
+  face "Cyclonic Rift" {
+    cost: "{1}{U}"
+    types: "Instant"
+    oracle: "Return target nonland permanent you don't control to its owner's hand. Overload {6}{U}."
+    keywords: [overload]
+    ability static {
+      effect: continuous(source(), alternate_cost(source(), mana_cost("{6}{U}")))
+    }
+    ability spell {
+      effect: return_to_hand(target(permanents(and(not(type_is("land")), not(controlled_by(you()))))))
+    }
+  }
+}
+"#;
+
+    const MULLDRIFTER: &str = r#"
+card "Mulldrifter" {
+  id: "24d0f5e7-0d9e-4b76-900e-a7274e80312d"
+  layout: normal
+  status: unverified_playable
+  face "Mulldrifter" {
+    cost: "{4}{U}"
+    types: "Creature - Elemental"
+    oracle: "Flying. When Mulldrifter enters, draw two cards. Evoke {2}{U}."
+    power: "2"
+    toughness: "2"
+    keywords: [evoke, flying]
+    ability static {
+      effect: continuous(source(), alternate_cost(source(), mana_cost("{2}{U}")))
+    }
+    ability triggered {
+      event: event_enters(source())
+      effect: draw(2, you())
+    }
+  }
+}
+"#;
     use std::{
         collections::{BTreeSet, HashMap, HashSet},
         env,
@@ -12285,6 +12619,179 @@ mod tests {
     }
 
     #[test]
+    fn commander_alternate_cost_uses_the_shared_canonical_cast_hierarchy() {
+        let (mut driver, caster, _opponent, spell, _) =
+            alternate_spell_driver("flawless_maneuver.frs", FLAWLESS_MANEUVER);
+        let choice = selected_alternate_cast(&driver, caster, spell, SpellAlternateCost::Commander);
+        assert!(matches!(
+            choice,
+            MainChoice::Cast {
+                alternate: Some(AlternateCostKind::Commander),
+                ..
+            }
+        ));
+        assert_eq!(driver.apply_main_choice(caster, choice), Ok(true));
+        let stack = driver
+            .state
+            .stack_top()
+            .unwrap_or_else(|| panic!("commander alternate should be on the stack"));
+        assert_eq!(
+            stack.decisions().alternate_cost(),
+            Some(SpellAlternateCost::Commander)
+        );
+        assert_eq!(
+            stack.payment().map(PaymentPlan::paid),
+            Some(ManaPool::empty())
+        );
+    }
+
+    #[test]
+    fn flashback_is_offered_from_graveyard_and_exiles_after_resolution() {
+        let (mut driver, caster, _opponent, spell, _) =
+            alternate_spell_driver("faithless_looting.frs", FAITHLESS_LOOTING);
+        driver
+            .dispatch(Action::MoveObject {
+                object: spell,
+                to: ZoneId::new(Some(caster), ZoneKind::Graveyard),
+            })
+            .unwrap_or_else(|error| panic!("flashback setup move failed: {error}"));
+        let choice = selected_alternate_cast(&driver, caster, spell, SpellAlternateCost::Flashback);
+        assert_eq!(driver.apply_main_choice(caster, choice), Ok(true));
+        let stack = driver
+            .state
+            .stack_top()
+            .unwrap_or_else(|| panic!("flashback spell should be on the stack"));
+        assert!(stack.flashback());
+        assert_eq!(
+            stack.decisions().alternate_cost(),
+            Some(SpellAlternateCost::Flashback)
+        );
+        resolve_top_for_two_players(&mut driver);
+        assert_eq!(
+            driver.state.object_zone(spell),
+            Some(ZoneId::new(None, ZoneKind::Exile))
+        );
+        assert!(driver.pending_spell_resolution.is_some());
+    }
+
+    #[test]
+    fn overload_removes_targets_and_applies_to_each_matching_permanent() {
+        let (mut driver, caster, opponent, spell, permanents) =
+            alternate_spell_driver("cyclonic_rift.frs", CYCLONIC_RIFT);
+        let choice = selected_alternate_cast(&driver, caster, spell, SpellAlternateCost::Overload);
+        assert!(matches!(
+            &choice,
+            MainChoice::Cast {
+                alternate: Some(AlternateCostKind::Overload),
+                targets,
+                ..
+            } if targets.is_empty()
+        ));
+        assert_eq!(driver.apply_main_choice(caster, choice), Ok(true));
+        resolve_top_for_two_players(&mut driver);
+        let opponent_hand = ZoneId::new(Some(opponent), ZoneKind::Hand);
+        assert_eq!(driver.state.object_zone(permanents[0]), Some(opponent_hand));
+        assert_eq!(driver.state.object_zone(permanents[1]), Some(opponent_hand));
+    }
+
+    #[test]
+    fn evoke_sacrifice_trigger_exists_only_for_an_evoke_cast() {
+        let (mut normal, caster, _opponent, spell, _) =
+            alternate_spell_driver("mulldrifter.frs", MULLDRIFTER);
+        let (context, mappings) = normal
+            .main_decision_context(caster)
+            .unwrap_or_else(|error| panic!("normal cast context should exist: {error}"));
+        let normal_option = context
+            .options()
+            .iter()
+            .find(|option| {
+                matches!(
+                    option.descriptor(),
+                    DecisionDescriptor::CastSpell { object, .. } if *object == spell
+                )
+            })
+            .unwrap_or_else(|| panic!("normal Mulldrifter cast should be canonical"));
+        let normal_choice = mappings
+            .iter()
+            .find_map(|(id, choice)| (*id == normal_option.id()).then(|| choice.clone()))
+            .unwrap_or_else(|| panic!("normal cast should have an adapter"));
+        assert_eq!(normal.apply_main_choice(caster, normal_choice), Ok(true));
+        assert!(normal.conditional_cast_triggers.is_empty());
+        resolve_top_for_two_players(&mut normal);
+        assert_eq!(
+            normal.state.object_zone(spell),
+            Some(ZoneId::new(None, ZoneKind::Battlefield))
+        );
+        assert_eq!(normal.state.pending_triggers().len(), 1);
+        let normal_trigger = normal.state.pending_triggers()[0].trigger();
+        let runtime = normal
+            .trigger_programs
+            .get(&normal_trigger)
+            .unwrap_or_else(|| panic!("normal trigger runtime should exist"));
+        assert_eq!(
+            runtime.program.triggered_abilities()[runtime.ability_index].required_alternate_cost(),
+            None
+        );
+
+        let (mut evoked, caster, _opponent, spell, _) =
+            alternate_spell_driver("mulldrifter.frs", MULLDRIFTER);
+        let evoke_choice =
+            selected_alternate_cast(&evoked, caster, spell, SpellAlternateCost::Evoke);
+        assert_eq!(evoked.apply_main_choice(caster, evoke_choice), Ok(true));
+        assert_eq!(
+            evoked.conditional_cast_triggers.get(&spell).map(Vec::len),
+            Some(1)
+        );
+        resolve_top_for_two_players(&mut evoked);
+        assert_eq!(evoked.state.pending_triggers().len(), 2);
+        assert!(!evoked.conditional_cast_triggers.contains_key(&spell));
+        let outcome = evoked
+            .dispatch(Action::PutPendingTriggeredAbilitiesOnStack)
+            .unwrap_or_else(|error| panic!("evoke triggers should stack: {error}"));
+        assert!(matches!(outcome, Outcome::StackEntriesAdded(entries) if entries.len() == 2));
+        resolve_top_for_two_players(&mut evoked);
+        assert_eq!(
+            evoked.state.object_zone(spell),
+            Some(ZoneId::new(Some(caster), ZoneKind::Graveyard))
+        );
+        resolve_top_for_two_players(&mut evoked);
+    }
+
+    #[test]
+    fn countered_evoke_cast_retires_its_conditional_trigger() {
+        let (mut driver, caster, _opponent, spell, _) =
+            alternate_spell_driver("mulldrifter.frs", MULLDRIFTER);
+        let choice = selected_alternate_cast(&driver, caster, spell, SpellAlternateCost::Evoke);
+        assert_eq!(driver.apply_main_choice(caster, choice), Ok(true));
+        let entry = driver
+            .state
+            .stack_top()
+            .map(|stack| stack.id())
+            .unwrap_or_else(|| panic!("evoke spell should be on the stack"));
+        let conditional = driver
+            .conditional_cast_triggers
+            .get(&spell)
+            .and_then(|triggers| triggers.first())
+            .copied()
+            .unwrap_or_else(|| panic!("evoke trigger should be registered conditionally"));
+        assert_eq!(
+            driver.dispatch(Action::CounterStackEntry { entry }),
+            Ok(Outcome::Applied)
+        );
+        assert!(!driver.conditional_cast_triggers.contains_key(&spell));
+        assert!(!driver.trigger_programs.contains_key(&conditional));
+
+        assert_eq!(
+            driver.dispatch(Action::MoveObject {
+                object: spell,
+                to: ZoneId::new(None, ZoneKind::Battlefield),
+            }),
+            Ok(Outcome::Applied)
+        );
+        assert_eq!(driver.state.pending_triggers().len(), 1);
+    }
+
+    #[test]
     fn optional_spell_choices_survive_canonical_cast_and_resolution() {
         let source = r#"card "Healing Choice" {
   id: "f16f5077-392e-4606-8e48-b1ec2350cdb1"
@@ -12781,7 +13288,7 @@ mod tests {
         Arc::make_mut(&mut driver.programs).insert(spell, program);
 
         let (large, _) = driver
-            .variable_cast_numeric_context(caster, spell, &[], None, &[], &[], (0, u32::MAX))
+            .variable_cast_numeric_context(caster, spell, None, &[], None, &[], &[], (0, u32::MAX))
             .unwrap_or_else(|error| panic!("large X range should build: {error}"));
         assert_eq!(large.options().len(), 2);
         assert!(large.options().iter().all(|option| matches!(
@@ -13247,7 +13754,7 @@ mod tests {
             })
             .unwrap_or_else(|error| panic!("trigger source should enter play: {error}"));
         driver
-            .register_triggers(controller, source_object, &program)
+            .register_triggers(controller, source_object, &program, None)
             .unwrap_or_else(|error| panic!("trigger runtime should register: {error}"));
         driver
             .dispatch(Action::CreateObject {
@@ -13385,7 +13892,7 @@ mod tests {
             })
             .unwrap_or_else(|error| panic!("trigger source should enter play: {error}"));
         driver
-            .register_triggers(controller, source_object, &program)
+            .register_triggers(controller, source_object, &program, None)
             .unwrap_or_else(|error| panic!("trigger runtime should register: {error}"));
         driver
             .dispatch(Action::CreateObject {
@@ -13475,7 +13982,7 @@ mod tests {
             })
             .unwrap_or_else(|error| panic!("trigger source should enter play: {error}"));
         driver
-            .register_triggers(controller, source_object, &program)
+            .register_triggers(controller, source_object, &program, None)
             .unwrap_or_else(|error| panic!("trigger runtime should register: {error}"));
         driver
             .dispatch(Action::CreateObject {
@@ -13612,7 +14119,7 @@ mod tests {
             })
             .unwrap_or_else(|error| panic!("trigger source should enter play: {error}"));
         driver
-            .register_triggers(controller, source_object, &program)
+            .register_triggers(controller, source_object, &program, None)
             .unwrap_or_else(|error| panic!("trigger runtime should register: {error}"));
         driver
             .dispatch(Action::CreateObject {
@@ -14270,7 +14777,7 @@ mod tests {
                 .unwrap_or_else(|error| panic!("land characteristics should apply: {error}"));
         }
         driver
-            .register_triggers(controller, sword, &program)
+            .register_triggers(controller, sword, &program, None)
             .unwrap_or_else(|error| panic!("Sword trigger should register: {error}"));
         driver
             .register_permanent_runtime(controller, sword)
@@ -14536,6 +15043,7 @@ mod tests {
             ),
             commanders: vec![commander],
             trigger_programs: HashMap::new(),
+            conditional_cast_triggers: HashMap::new(),
             triggering_players_by_stack_entry: HashMap::new(),
             activated_abilities: Vec::new(),
             pending_spell_resolution: None,
@@ -14555,6 +15063,203 @@ mod tests {
             seed: 17,
         };
         (driver, owner, commander, graveyard)
+    }
+
+    fn alternate_spell_driver(
+        file: &str,
+        source: &str,
+    ) -> (GameDriver, PlayerId, PlayerId, ObjectId, [ObjectId; 2]) {
+        let definition = forge_cardc::parse_card_named(file, source)
+            .unwrap_or_else(|error| panic!("alternate fixture should parse: {error}"));
+        let program = Arc::new(
+            compile_card_program(&definition)
+                .unwrap_or_else(|error| panic!("alternate fixture should compile: {error}")),
+        );
+        let mut state = GameState::new();
+        let caster = match apply(&mut state, Action::AddPlayer) {
+            Outcome::PlayerAdded(player) => player,
+            other => panic!("unexpected caster setup outcome: {other:?}"),
+        };
+        let opponent = match apply(&mut state, Action::AddPlayer) {
+            Outcome::PlayerAdded(player) => player,
+            other => panic!("unexpected opponent setup outcome: {other:?}"),
+        };
+        let spell = match apply(
+            &mut state,
+            Action::CreateObject {
+                card: CardId::new(9_100),
+                owner: caster,
+                controller: caster,
+                zone: ZoneId::new(Some(caster), ZoneKind::Hand),
+            },
+        ) {
+            Outcome::ObjectCreated(object) => object,
+            other => panic!("unexpected spell setup outcome: {other:?}"),
+        };
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::SetBaseObjectCharacteristics {
+                    object: spell,
+                    base: program.base_object(),
+                },
+            ),
+            Outcome::Applied
+        );
+        if let Some(base) = program.base_creature() {
+            assert_eq!(
+                apply(
+                    &mut state,
+                    Action::SetBaseCreatureCharacteristics {
+                        object: spell,
+                        base,
+                    },
+                ),
+                Outcome::Applied
+            );
+        }
+        let commander = create_test_creature(&mut state, caster, 9_101, 2, 2);
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::DesignateCommander {
+                    object: commander,
+                    color_identity: ObjectColors::none(),
+                },
+            ),
+            Outcome::Applied
+        );
+        let opponent_permanents = [
+            create_test_creature(&mut state, opponent, 9_102, 2, 2),
+            create_test_creature(&mut state, opponent, 9_103, 3, 3),
+        ];
+        for card in 9_200..9_212 {
+            assert!(matches!(
+                apply(
+                    &mut state,
+                    Action::CreateObject {
+                        card: CardId::new(card),
+                        owner: caster,
+                        controller: caster,
+                        zone: ZoneId::new(Some(caster), ZoneKind::Library),
+                    },
+                ),
+                Outcome::ObjectCreated(_)
+            ));
+        }
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::StartTurn {
+                    active_player: caster,
+                },
+            ),
+            Outcome::Applied
+        );
+        while state.current_step() != Some(Step::PrecombatMain) {
+            assert!(matches!(
+                apply(&mut state, Action::AdvanceStep),
+                Outcome::StepAdvanced(_)
+            ));
+        }
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::AddManaToPool {
+                    player: caster,
+                    mana: ManaPool::new(20, 20, 20, 20, 20, 20),
+                },
+            ),
+            Outcome::Applied
+        );
+        let mut programs = HashMap::new();
+        programs.insert(spell, program);
+        let driver = GameDriver {
+            state,
+            players: vec![caster, opponent],
+            programs: Arc::new(programs),
+            deck_models: Arc::new(Vec::new()),
+            card_definitions: Arc::new(HashMap::new()),
+            guardrails: Arc::new(
+                GuardrailTable::bundled()
+                    .unwrap_or_else(|error| panic!("guardrails should load: {error}")),
+            ),
+            commanders: vec![commander, opponent_permanents[0]],
+            trigger_programs: HashMap::new(),
+            conditional_cast_triggers: HashMap::new(),
+            triggering_players_by_stack_entry: HashMap::new(),
+            activated_abilities: Vec::new(),
+            pending_spell_resolution: None,
+            pending_activated_resolution: None,
+            pending_triggered_resolution: None,
+            triggers_registered_for: HashSet::new(),
+            permanent_runtime_registered_for: HashSet::new(),
+            commander_zone_decisions: HashMap::new(),
+            current_attacks: Vec::new(),
+            coverage_target: None,
+            metrics: GameMetrics::default(),
+            trace: TraceMode::Off,
+            actions: Vec::new(),
+            ai_decisions: Vec::new(),
+            next_hidden_check_action: u64::MAX,
+            next_invariant_check_action: u64::MAX,
+            seed: 29,
+        };
+        (driver, caster, opponent, spell, opponent_permanents)
+    }
+
+    fn selected_alternate_cast(
+        driver: &GameDriver,
+        caster: PlayerId,
+        spell: ObjectId,
+        alternate: SpellAlternateCost,
+    ) -> MainChoice {
+        let (context, mappings) = driver
+            .main_decision_context(caster)
+            .unwrap_or_else(|error| panic!("alternate main context should exist: {error}"));
+        let root = context
+            .options()
+            .iter()
+            .find(|option| {
+                matches!(
+                    option.descriptor(),
+                    DecisionDescriptor::BeginCastSpellAlternate {
+                        object,
+                        alternate: selected,
+                        ..
+                    } if *object == spell && *selected == alternate
+                )
+            })
+            .unwrap_or_else(|| panic!("alternate root should be canonical"));
+        let begin = mappings
+            .iter()
+            .find_map(|(id, choice)| (*id == root.id()).then(|| choice.clone()))
+            .unwrap_or_else(|| panic!("alternate root should have a typed adapter"));
+        let (payment_context, payment_mappings) = driver
+            .hierarchical_cast_context(caster, &begin)
+            .unwrap_or_else(|error| panic!("alternate payment context should build: {error}"))
+            .unwrap_or_else(|| panic!("alternate cast should defer payment"));
+        assert!(payment_context.options().iter().all(|option| matches!(
+            option.descriptor(),
+            DecisionDescriptor::ChoosePayment { .. }
+        )));
+        let selected = payment_context
+            .options()
+            .first()
+            .unwrap_or_else(|| panic!("alternate cast should have a payment"));
+        payment_mappings
+            .iter()
+            .find_map(|(id, choice)| (*id == selected.id()).then(|| choice.clone()))
+            .unwrap_or_else(|| panic!("alternate payment should have a typed adapter"))
+    }
+
+    fn resolve_top_for_two_players(driver: &mut GameDriver) {
+        driver
+            .pass_priority()
+            .unwrap_or_else(|error| panic!("first pass failed: {error}"));
+        driver
+            .pass_priority()
+            .unwrap_or_else(|error| panic!("second pass failed: {error}"));
     }
 
     fn modal_spell_driver() -> (GameDriver, PlayerId, PlayerId, ObjectId) {
@@ -14651,6 +15356,7 @@ mod tests {
             ),
             commanders: vec![spell, creature],
             trigger_programs: HashMap::new(),
+            conditional_cast_triggers: HashMap::new(),
             triggering_players_by_stack_entry: HashMap::new(),
             activated_abilities: Vec::new(),
             pending_spell_resolution: None,
@@ -14725,6 +15431,7 @@ mod tests {
             ),
             commanders: vec![first_attacker, second_attacker],
             trigger_programs: HashMap::new(),
+            conditional_cast_triggers: HashMap::new(),
             triggering_players_by_stack_entry: HashMap::new(),
             activated_abilities: Vec::new(),
             pending_spell_resolution: None,

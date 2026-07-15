@@ -20,14 +20,14 @@
       "human": "partial",
       "ai": "partial",
       "benchmark": "partial",
-      "note": "Every live human and AI priority window uses one shared canonical context with a forced-pass fast path, exact normal-cost instant choices, hierarchical printed-X casting, typed discard and sacrifice additional spell costs, and program-bound non-mana activations. Activation targets, optional answers, announced X, payments, and ordinary trigger targets survive the stack; required triggers with an empty current target domain use a kernel-validated no-stack disposition. Triggered optional effects and compiled opponent-draw unless payments use bounded resolution contexts. Alternate costs, unsupported additional-cost families, unsupported extra activation costs, same-batch inter-trigger targeting, and modal triggers remain open."
+      "note": "Every live human and AI priority window uses one shared canonical context with a forced-pass fast path, exact normal-cost instant choices, hierarchical printed-X casting, typed discard and sacrifice additional spell costs, compiler-declared Commander, flashback, evoke, and overload costs, and program-bound non-mana activations. Activation targets, optional answers, announced X, alternate meaning, payments, and ordinary trigger targets survive the stack; required triggers with an empty current target domain use a kernel-validated no-stack disposition. Triggered optional effects and compiled opponent-draw unless payments use bounded resolution contexts. Arbitrary alternate costs, unsupported additional-cost families, unsupported extra activation costs, same-batch inter-trigger targeting, and modal triggers remain open."
     },
     {
       "kind": "main_phase",
       "human": "partial",
       "ai": "partial",
       "benchmark": "partial",
-      "note": "Human and AI consume the same canonical land, mana activation, typed program-bound non-mana activation, normal-cost cast, and finish options. Printed X and the currently compiled discard and sacrifice additional spell costs defer their choices and mana payment into bounded shared subcontexts; descriptors bind exact targets, modes, optional answers, announced X, cost objects, and every legal mana payment. Search progressively interleaves typed target families without merging their concrete actions or edge statistics. Trigger optionals and opponent-draw unless payments resolve through shared contexts; alternate and unsupported additional-cost families remain open."
+      "note": "Human and AI consume the same canonical land, mana activation, typed program-bound non-mana activation, normal-cost cast, compiler-declared Commander, flashback, evoke, and overload cast, and finish options. Alternate selection, printed X, and compiled discard or sacrifice additional costs defer into bounded shared subcontexts; descriptors bind exact targets, modes, optional answers, alternate meaning, announced X, cost objects, and every legal mana payment. Search progressively interleaves typed target families without merging concrete actions or edge statistics. Arbitrary alternate and unsupported additional-cost families remain open."
     },
     {
       "kind": "declare_attackers",
@@ -76,7 +76,7 @@
       "human": "partial",
       "ai": "partial",
       "benchmark": "descriptor_only",
-      "note": "Fixed mana costs bind explicit plans in the root option. Printed X uses a shared Payment context after announcement. Compiled discard-card and sacrifice-permanent additional spell costs use one bounded shared Payment context per printed group before X and mana selection, preserve exact object choices in typed path identity, and are validated atomically by the kernel. Compiled opponent-draw unless costs bind the event player and enumerate that player's exact current mana plans at trigger resolution. Alternate, optional, unsupported non-mana, activation, and other event-bound payment families remain open."
+      "note": "Fixed printed mana costs bind explicit plans in the root option. Printed X and compiler-declared Commander, flashback, evoke, and overload costs use shared Payment contexts after announcement. Compiled discard-card and sacrifice-permanent additional spell costs use one bounded shared Payment context per printed group before X and mana selection, preserve exact object choices and alternate meaning in typed path identity, and are validated atomically by the kernel. Compiled opponent-draw unless costs bind the event player and enumerate that player's exact current mana plans at trigger resolution. Arbitrary alternate, optional, unsupported non-mana, activation, and other event-bound payment families remain open."
     },
     {
       "kind": "optional",

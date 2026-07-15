@@ -46,7 +46,8 @@ longer silent or structurally unavailable. Their choices are inspectable,
 replayable, searchable, and rejected atomically when stale or invalid.
 
 The bounded option cap remains fail closed; it never truncates a legal set.
-Alternate costs and uncompiled life, tap, reveal, exile, optional, or other
-non-mana cost families remain open. Legacy autonomous compatibility helpers do
-not guess additional-cost payments. No AI-strength or T4 promotion claim
-follows from this diagnostic adapter.
+The four compiler-declared alternate-cost families are handled separately by
+ADR 0028. Uncompiled life, tap, reveal, exile, optional, or other non-mana cost
+families remain open. Legacy autonomous compatibility helpers do not guess
+additional-cost payments. No AI-strength or T4 promotion claim follows from
+this diagnostic adapter.

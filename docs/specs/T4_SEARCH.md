@@ -80,8 +80,17 @@ the X and mana-payment stages. Each partial selection must have at least one
 complete continuation, and prior selections remain in typed path state, so the
 adapter never constructs a cross-cost Cartesian product. The kernel validates
 the entire announcement before mutation and then pays additional costs in
-order. Alternate and other uncompiled non-mana cost families remain fail
-closed.
+order.
+
+Compiler-declared Commander, flashback, evoke, and overload casting costs enter
+through an append-only alternate-cast root descriptor and then reuse those same
+additional-cost, X, and exact-payment contexts. The alternate meaning is stored
+on the stack and in canonical state keys. Flashback is offered only from the
+owner's graveyard and resolves to exile; overload removes target announcement
+and binds the compiler's each-object semantics; evoke installs its sacrifice
+trigger only for the matching cast and retires that one-shot subscription when
+the spell is countered. Arbitrary alternate costs and other uncompiled
+non-mana cost families remain fail closed.
 
 Combat-damage ordering and amounts also use bounded contexts outside the main
 tree. Controllers choose one next blocker and then one amount at a time; large

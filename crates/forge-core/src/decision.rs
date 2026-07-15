@@ -1,7 +1,7 @@
 use super::{
     Action, ActivatedAbilityId, AttackDeclaration, BlockDeclaration, ManaKind, ObjectId,
-    PaymentPlan, PlayerId, PlayerView, PlayerViewHash, Step, TargetChoice, TriggerId, ZoneId,
-    ZoneKind,
+    PaymentPlan, PlayerId, PlayerView, PlayerViewHash, SpellAlternateCost, Step, TargetChoice,
+    TriggerId, ZoneId, ZoneKind,
 };
 use std::{collections::BTreeSet, error::Error, fmt};
 
@@ -235,6 +235,19 @@ pub enum DecisionDescriptor {
         /// Optional-effect answers already bound by the enclosing action-family choice.
         optional: Vec<bool>,
     },
+    /// Begin casting a spell with a selected alternate cost and deferred payment.
+    BeginCastSpellAlternate {
+        /// Spell object.
+        object: ObjectId,
+        /// Closed alternate-cost meaning selected for this cast.
+        alternate: SpellAlternateCost,
+        /// Targets already bound by the enclosing action-family choice.
+        targets: Vec<TargetChoice>,
+        /// Mode indexes already bound by the enclosing action-family choice.
+        modes: Vec<u32>,
+        /// Optional-effect answers already bound by the enclosing action-family choice.
+        optional: Vec<bool>,
+    },
     /// Declare a complete attacker set.
     DeclareAttackers {
         /// Attack declarations for this option.
@@ -453,6 +466,29 @@ impl DecisionDescriptor {
                     bytes.u8(u8::from(*accept));
                 }
             }
+            Self::BeginCastSpellAlternate {
+                object,
+                alternate,
+                targets,
+                modes,
+                optional,
+            } => {
+                bytes.u8(29);
+                bytes.object(*object);
+                bytes.u8(alternate.canonical_code());
+                bytes.u32(targets.len() as u32);
+                for target in targets {
+                    bytes.target(*target);
+                }
+                bytes.u32(modes.len() as u32);
+                for mode in modes {
+                    bytes.u32(*mode);
+                }
+                bytes.u32(optional.len() as u32);
+                for accept in optional {
+                    bytes.u8(u8::from(*accept));
+                }
+            }
             Self::DeclareAttackers { attacks } => {
                 bytes.u8(6);
                 bytes.u32(attacks.len() as u32);
@@ -633,6 +669,27 @@ impl DecisionDescriptor {
             } => {
                 bytes.u8(26);
                 bytes.object(*object);
+                bytes.target_kinds(targets);
+                bytes.u32(modes.len() as u32);
+                for mode in modes {
+                    bytes.u32(*mode);
+                }
+                bytes.u32(optional.len() as u32);
+                for accept in optional {
+                    bytes.u8(u8::from(*accept));
+                }
+                true
+            }
+            Self::BeginCastSpellAlternate {
+                object,
+                alternate,
+                targets,
+                modes,
+                optional,
+            } => {
+                bytes.u8(29);
+                bytes.object(*object);
+                bytes.u8(alternate.canonical_code());
                 bytes.target_kinds(targets);
                 bytes.u32(modes.len() as u32);
                 for mode in modes {
@@ -1378,6 +1435,13 @@ mod tests {
                 modes: vec![0],
                 optional: vec![true],
             },
+            DecisionDescriptor::BeginCastSpellAlternate {
+                object,
+                alternate: crate::SpellAlternateCost::Overload,
+                targets: Vec::new(),
+                modes: Vec::new(),
+                optional: vec![false],
+            },
             DecisionDescriptor::DeclareAttackers {
                 attacks: vec![AttackDeclaration::new(object, opponent)],
             },
@@ -1447,6 +1511,6 @@ mod tests {
             .into_iter()
             .map(|descriptor| DecisionOption::new(descriptor, Vec::new()).id())
             .collect::<std::collections::BTreeSet<_>>();
-        assert_eq!(ids.len(), 29);
+        assert_eq!(ids.len(), 30);
     }
 }

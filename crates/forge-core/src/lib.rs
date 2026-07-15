@@ -3327,6 +3327,30 @@ impl ReplacementChoiceOrder {
 /// Maximum number of optional answers carried by one stack object.
 pub const MAX_STACK_OPTIONAL_CHOICES: usize = u64::BITS as usize;
 
+/// Closed alternate-cost meaning announced while casting a spell.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum SpellAlternateCost {
+    /// A conditional cost available while the caster controls a commander.
+    Commander,
+    /// A graveyard cast using flashback.
+    Flashback,
+    /// A hand-zone permanent cast using evoke.
+    Evoke,
+    /// A hand-zone spell cast using overload.
+    Overload,
+}
+
+impl SpellAlternateCost {
+    const fn canonical_code(self) -> u8 {
+        match self {
+            Self::Commander => 0,
+            Self::Flashback => 1,
+            Self::Evoke => 2,
+            Self::Overload => 3,
+        }
+    }
+}
+
 /// Compact typed choices announced for a spell or ability on the stack.
 ///
 /// Targets and mana payments retain their dedicated kernel representations.
@@ -3337,6 +3361,7 @@ pub struct StackDecisionBindings {
     mode: Option<u32>,
     optional_count: u8,
     optional_accept_mask: u64,
+    alternate_cost: Option<SpellAlternateCost>,
 }
 
 impl StackDecisionBindings {
@@ -3363,7 +3388,21 @@ impl StackDecisionBindings {
             mode,
             optional_count: optional.len() as u8,
             optional_accept_mask,
+            alternate_cost: None,
         })
+    }
+
+    /// Records the alternate cost selected during spell announcement.
+    #[must_use]
+    pub const fn with_alternate_cost(mut self, alternate_cost: SpellAlternateCost) -> Self {
+        self.alternate_cost = Some(alternate_cost);
+        self
+    }
+
+    /// Returns the alternate cost selected during spell announcement.
+    #[must_use]
+    pub const fn alternate_cost(self) -> Option<SpellAlternateCost> {
+        self.alternate_cost
     }
 
     /// Returns the announced zero-based mode index, when present.
@@ -6870,6 +6909,8 @@ pub enum StateError {
     InvalidPendingTriggerOrder,
     /// A no-legal-target trigger disposition was not proven by the current state.
     InvalidPendingTriggerDisposition(TriggerId),
+    /// The requested triggered ability subscription ID does not exist.
+    UnknownTrigger(TriggerId),
     /// The requested replacement/prevention effect ID does not exist.
     UnknownReplacementEffect(ReplacementEffectId),
     /// A replacement ordering preference named the same effect more than once.
@@ -6966,6 +7007,8 @@ pub enum StateError {
     DuplicateSpellAdditionalCostObject(ObjectId),
     /// An object cannot pay the declared spell additional cost in the current state.
     InvalidSpellAdditionalCostObject(ObjectId),
+    /// The selected alternate cost is not legal for this object in its current state.
+    InvalidSpellAlternateCost(SpellAlternateCost),
     /// The object cannot be cast from its current zone by that player.
     ObjectNotCastable(ObjectId),
     /// The object cannot be played as a land from its current zone by that player.
@@ -7415,6 +7458,11 @@ pub enum Action {
     RegisterTriggeredAbility {
         /// Data-only trigger definition.
         definition: TriggerDefinition,
+    },
+    /// Remove one registered trigger subscription before it has queued.
+    UnregisterTriggeredAbility {
+        /// Trigger subscription to remove.
+        trigger: TriggerId,
     },
     /// Put all currently pending triggered abilities on the stack in APNAP order.
     PutPendingTriggeredAbilitiesOnStack,
@@ -8022,6 +8070,12 @@ fn apply_fallback(state: &mut GameState, action: Action) -> Outcome {
         Action::RegisterTriggeredAbility { definition } => {
             match state.register_triggered_ability(definition) {
                 Ok(trigger) => Outcome::TriggerRegistered(trigger),
+                Err(error) => Outcome::Failed(error),
+            }
+        }
+        Action::UnregisterTriggeredAbility { trigger } => {
+            match state.unregister_triggered_ability(trigger) {
+                Ok(()) => Outcome::Applied,
                 Err(error) => Outcome::Failed(error),
             }
         }
@@ -11575,6 +11629,35 @@ impl GameState {
         let casting_from_graveyard_with_flashback = request.flashback().is_some()
             && record.owner() == player
             && zone == Some(ZoneId::new(Some(player), ZoneKind::Graveyard));
+        let selected_alternate = request.decisions().alternate_cost();
+        let alternate_source_is_valid = match selected_alternate {
+            None => true,
+            Some(SpellAlternateCost::Commander) => {
+                casting_from_hand
+                    && self
+                        .zone_objects(ZoneId::new(None, ZoneKind::Battlefield))
+                        .is_some_and(|objects| {
+                            objects.iter().copied().any(|candidate| {
+                                self.objects.get(candidate).is_some_and(|candidate_record| {
+                                    candidate_record.controller() == player
+                                        && candidate_record.is_commander()
+                                })
+                            })
+                        })
+            }
+            Some(SpellAlternateCost::Flashback) => casting_from_graveyard_with_flashback,
+            Some(SpellAlternateCost::Evoke | SpellAlternateCost::Overload) => casting_from_hand,
+        };
+        let flashback_binding_is_valid = match selected_alternate {
+            Some(SpellAlternateCost::Flashback) => request.flashback().is_some(),
+            Some(_) => request.flashback().is_none(),
+            None => true,
+        };
+        if !alternate_source_is_valid || !flashback_binding_is_valid {
+            return Err(StateError::InvalidSpellAlternateCost(
+                selected_alternate.unwrap_or(SpellAlternateCost::Flashback),
+            ));
+        }
         if !casting_from_hand
             && !casting_commander_from_command
             && !casting_from_graveyard_with_flashback
@@ -11808,6 +11891,23 @@ impl GameState {
             duration: definition.duration(),
         });
         Ok(id)
+    }
+
+    fn unregister_triggered_ability(&mut self, trigger: TriggerId) -> Result<(), StateError> {
+        if self
+            .pending_triggers
+            .iter()
+            .any(|pending| pending.trigger() == trigger)
+        {
+            return Err(StateError::PendingTriggeredAbilities);
+        }
+        let index = self
+            .trigger_subscriptions
+            .iter()
+            .position(|subscription| subscription.id == trigger)
+            .ok_or(StateError::UnknownTrigger(trigger))?;
+        self.trigger_subscriptions.remove(index);
+        Ok(())
     }
 
     /// Puts pending triggered abilities onto the stack using APNAP ordering.
@@ -16429,6 +16529,16 @@ impl Fnva64 {
         }
     }
 
+    fn write_optional_spell_alternate_cost(&mut self, value: Option<SpellAlternateCost>) {
+        match value {
+            Some(value) => {
+                self.write_u8(1);
+                self.write_u8(value.canonical_code());
+            }
+            None => self.write_u8(0),
+        }
+    }
+
     fn write_optional_object(&mut self, object: Option<ObjectId>) {
         match object {
             Some(object) => {
@@ -17072,6 +17182,7 @@ impl Fnva64 {
         self.write_optional_u32(entry.decisions.mode);
         self.write_u8(entry.decisions.optional_count);
         self.write_u64(entry.decisions.optional_accept_mask);
+        self.write_optional_spell_alternate_cost(entry.decisions.alternate_cost);
     }
 
     fn write_resolution_record(&mut self, record: &ResolutionRecord) {
@@ -17097,6 +17208,7 @@ impl Fnva64 {
         self.write_optional_u32(record.decisions.mode);
         self.write_u8(record.decisions.optional_count);
         self.write_u64(record.decisions.optional_accept_mask);
+        self.write_optional_spell_alternate_cost(record.decisions.alternate_cost);
     }
 
     fn write_event_record(&mut self, record: EventRecord) {
@@ -17824,6 +17936,16 @@ impl CanonicalBytes {
         }
     }
 
+    fn write_optional_spell_alternate_cost(&mut self, value: Option<SpellAlternateCost>) {
+        match value {
+            Some(value) => {
+                self.write_u8(1);
+                self.write_u8(value.canonical_code());
+            }
+            None => self.write_u8(0),
+        }
+    }
+
     fn write_optional_object(&mut self, object: Option<ObjectId>) {
         match object {
             Some(object) => {
@@ -18436,6 +18558,7 @@ impl CanonicalBytes {
         self.write_optional_u32(entry.decisions.mode);
         self.write_u8(entry.decisions.optional_count);
         self.write_u64(entry.decisions.optional_accept_mask);
+        self.write_optional_spell_alternate_cost(entry.decisions.alternate_cost);
     }
 
     fn write_resolution_record(&mut self, record: &ResolutionRecord) {
@@ -18461,6 +18584,7 @@ impl CanonicalBytes {
         self.write_optional_u32(record.decisions.mode);
         self.write_u8(record.decisions.optional_count);
         self.write_u64(record.decisions.optional_accept_mask);
+        self.write_optional_spell_alternate_cost(record.decisions.alternate_cost);
     }
 
     fn write_event_record(&mut self, record: EventRecord) {
@@ -18993,14 +19117,14 @@ mod tests {
         PriorityOutcome, ReplacementCondition, ReplacementDamageTargetFilter,
         ReplacementDefinition, ReplacementDuration, ReplacementEffectId, ReplacementOperation,
         ReplacementSourceFilter, ResolutionOutcome, RestrictionDefinition, RestrictionEffect,
-        SpellAdditionalCostPayment, SpellTiming, StackDecisionBindings, StackEntryId,
-        StackEntryRequest, StackObjectKind, StateBasedActionKind, StateBasedActionReport,
-        StateError, Step, TargetChoice, TargetControllerPredicate, TargetKind, TargetRequirement,
-        TargetRestriction, TargetRestrictionSubject, TriggerCondition, TriggerDefinition,
-        TriggerInterveningIf, TriggerObjectFilter, TriggerPlayerFilter, TriggerStackBinding,
-        TriggerStackDisposition, TriggerZoneFilter, ZoneConservation, ZoneId, ZoneKind,
-        EVENT_RING_CAPACITY, MAX_STACK_OPTIONAL_CHOICES, NORMAL_TURN_STEPS, OPENING_HAND_SIZE,
-        PAYMENT_PLAN_LIMIT,
+        SpellAdditionalCostPayment, SpellAlternateCost, SpellTiming, StackDecisionBindings,
+        StackEntryId, StackEntryRequest, StackObjectKind, StateBasedActionKind,
+        StateBasedActionReport, StateError, Step, TargetChoice, TargetControllerPredicate,
+        TargetKind, TargetRequirement, TargetRestriction, TargetRestrictionSubject,
+        TriggerCondition, TriggerDefinition, TriggerInterveningIf, TriggerObjectFilter,
+        TriggerPlayerFilter, TriggerStackBinding, TriggerStackDisposition, TriggerZoneFilter,
+        ZoneConservation, ZoneId, ZoneKind, EVENT_RING_CAPACITY, MAX_STACK_OPTIONAL_CHOICES,
+        NORMAL_TURN_STEPS, OPENING_HAND_SIZE, PAYMENT_PLAN_LIMIT,
     };
 
     #[test]
@@ -22886,6 +23010,13 @@ mod tests {
         assert_eq!(decisions.optional_choice_count(), answers.len());
         assert_eq!(decisions.optional_choices().collect::<Vec<_>>(), answers);
         assert_eq!(decisions.optional_choice(MAX_STACK_OPTIONAL_CHOICES), None);
+        assert_eq!(decisions.alternate_cost(), None);
+        assert_eq!(
+            decisions
+                .with_alternate_cost(SpellAlternateCost::Overload)
+                .alternate_cost(),
+            Some(SpellAlternateCost::Overload)
+        );
 
         let overflow = vec![true; MAX_STACK_OPTIONAL_CHOICES + 1];
         assert_eq!(
@@ -22895,6 +23026,89 @@ mod tests {
                 supplied: (MAX_STACK_OPTIONAL_CHOICES + 1) as u32,
             })
         );
+    }
+
+    #[test]
+    fn alternate_spell_costs_validate_closed_source_conditions() {
+        let mut base = GameState::new();
+        let caster = base.add_player();
+        let hand = ZoneId::new(Some(caster), ZoneKind::Hand);
+        let battlefield = ZoneId::new(None, ZoneKind::Battlefield);
+        let spell = base
+            .create_object(CardId::new(5_100), caster, caster, hand)
+            .unwrap_or_else(|error| panic!("spell setup failed: {error:?}"));
+        let commander = base
+            .create_object(CardId::new(5_101), caster, caster, battlefield)
+            .unwrap_or_else(|error| panic!("commander setup failed: {error:?}"));
+        assert_eq!(
+            apply(
+                &mut base,
+                Action::DesignateCommander {
+                    object: commander,
+                    color_identity: ObjectColors::none(),
+                },
+            ),
+            Outcome::Applied
+        );
+        start_upkeep(&mut base, caster);
+        let cost = ManaCost::new(0, 0, 0, 0, 0, 0);
+        let commander_request = CastSpellRequest::new(
+            StackObjectKind::InstantSpell,
+            SpellTiming::Instant,
+            cost,
+            zero_payment(cost),
+        )
+        .with_decisions(
+            StackDecisionBindings::default().with_alternate_cost(SpellAlternateCost::Commander),
+        );
+        let mut valid_commander = base.clone();
+        assert!(valid_commander
+            .cast_spell(caster, spell, commander_request.clone())
+            .is_ok());
+
+        let mut no_commander = base.clone();
+        no_commander
+            .move_object(commander, ZoneId::new(Some(caster), ZoneKind::Graveyard))
+            .unwrap_or_else(|error| panic!("commander move failed: {error:?}"));
+        assert_eq!(
+            no_commander.cast_spell(caster, spell, commander_request),
+            Err(StateError::InvalidSpellAlternateCost(
+                SpellAlternateCost::Commander
+            ))
+        );
+
+        let mut flashback = base;
+        flashback
+            .move_object(spell, ZoneId::new(Some(caster), ZoneKind::Graveyard))
+            .unwrap_or_else(|error| panic!("spell graveyard move failed: {error:?}"));
+        let missing_flashback_flag = CastSpellRequest::new(
+            StackObjectKind::InstantSpell,
+            SpellTiming::Instant,
+            cost,
+            zero_payment(cost),
+        )
+        .with_decisions(
+            StackDecisionBindings::default().with_alternate_cost(SpellAlternateCost::Flashback),
+        );
+        assert_eq!(
+            flashback.cast_spell(caster, spell, missing_flashback_flag),
+            Err(StateError::InvalidSpellAlternateCost(
+                SpellAlternateCost::Flashback
+            ))
+        );
+        let flashback_request = CastSpellRequest::new(
+            StackObjectKind::InstantSpell,
+            SpellTiming::Instant,
+            cost,
+            zero_payment(cost),
+        )
+        .with_flashback(cost)
+        .with_decisions(
+            StackDecisionBindings::default().with_alternate_cost(SpellAlternateCost::Flashback),
+        );
+        assert!(flashback
+            .cast_spell(caster, spell, flashback_request)
+            .is_ok());
     }
 
     #[test]
@@ -22909,8 +23123,9 @@ mod tests {
         let cost = ManaCost::new(0, 0, 0, 0, 0, 0);
         let left_decisions = StackDecisionBindings::new(Some(0), &[false, true])
             .unwrap_or_else(|error| panic!("left decisions should exist: {error:?}"));
-        let right_decisions = StackDecisionBindings::new(Some(1), &[false, true])
-            .unwrap_or_else(|error| panic!("right decisions should exist: {error:?}"));
+        let right_decisions = StackDecisionBindings::new(Some(0), &[false, true])
+            .unwrap_or_else(|error| panic!("right decisions should exist: {error:?}"))
+            .with_alternate_cost(SpellAlternateCost::Overload);
 
         let mut left = base.clone();
         let entry = left
