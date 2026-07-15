@@ -6678,6 +6678,8 @@ pub enum StateError {
     },
     /// Triggered abilities must be put on the stack before priority actions.
     PendingTriggeredAbilities,
+    /// An explicit pending-trigger order did not match the APNAP controller groups and multiset.
+    InvalidPendingTriggerOrder,
     /// The requested replacement/prevention effect ID does not exist.
     UnknownReplacementEffect(ReplacementEffectId),
     /// A replacement ordering preference named the same effect more than once.
@@ -7327,6 +7329,11 @@ pub enum Action {
         /// Permanent to destroy.
         object: ObjectId,
     },
+    /// Put all pending triggers on the stack in an explicit APNAP-valid order.
+    PutPendingTriggeredAbilitiesOnStackInOrder {
+        /// Trigger IDs from bottom to top, grouped by controller in APNAP order.
+        order: Vec<TriggerId>,
+    },
 }
 
 /// Ordered set of currently legal actions.
@@ -7819,6 +7826,12 @@ fn apply_fallback(state: &mut GameState, action: Action) -> Outcome {
         }
         Action::PutPendingTriggeredAbilitiesOnStack => {
             match state.put_pending_triggered_abilities_on_stack() {
+                Ok(entries) => Outcome::StackEntriesAdded(entries),
+                Err(error) => Outcome::Failed(error),
+            }
+        }
+        Action::PutPendingTriggeredAbilitiesOnStackInOrder { order } => {
+            match state.put_pending_triggered_abilities_on_stack_in_order(&order) {
                 Ok(entries) => Outcome::StackEntriesAdded(entries),
                 Err(error) => Outcome::Failed(error),
             }
@@ -11538,38 +11551,104 @@ impl GameState {
     fn put_pending_triggered_abilities_on_stack(
         &mut self,
     ) -> Result<Vec<StackEntryId>, StateError> {
+        self.put_pending_triggered_abilities_on_stack_with_order(None)
+    }
+
+    fn put_pending_triggered_abilities_on_stack_in_order(
+        &mut self,
+        order: &[TriggerId],
+    ) -> Result<Vec<StackEntryId>, StateError> {
+        self.put_pending_triggered_abilities_on_stack_with_order(Some(order))
+    }
+
+    fn put_pending_triggered_abilities_on_stack_with_order(
+        &mut self,
+        requested_order: Option<&[TriggerId]>,
+    ) -> Result<Vec<StackEntryId>, StateError> {
         let active = self.active_player.ok_or(StateError::TurnNotStarted)?;
-        let pending = core::mem::take(&mut self.pending_triggers);
-        if pending.is_empty() {
+        if self.pending_triggers.is_empty() {
+            if requested_order.is_some_and(|order| !order.is_empty()) {
+                return Err(StateError::InvalidPendingTriggerOrder);
+            }
             return Ok(Vec::new());
         }
 
-        let mut ids = Vec::with_capacity(pending.len());
-        for player in self.apnap_players(active)? {
-            for trigger in &pending {
-                if trigger.controller() == player {
-                    let id = self.push_stack_entry(StackEntryRequest {
-                        controller: player,
-                        object: None,
-                        trigger: Some(trigger.trigger()),
-                        activated_ability: None,
-                        kind: StackObjectKind::TriggeredAbility,
-                        targets: Vec::new(),
-                        payment: None,
-                        copy_info: None,
-                        kicked: false,
-                        flashback: false,
-                        split_second: false,
-                        decisions: StackDecisionBindings::default(),
-                    });
-                    self.emit_event_without_triggers(GameEvent::TriggeredAbilityPutOnStack {
-                        trigger: trigger.trigger(),
-                        entry: id,
-                        controller: player,
-                    });
-                    ids.push(id);
+        let apnap = self.apnap_players(active)?;
+        let ordered = if let Some(order) = requested_order {
+            if order.len() != self.pending_triggers.len() {
+                return Err(StateError::InvalidPendingTriggerOrder);
+            }
+            let mut used = vec![false; self.pending_triggers.len()];
+            let mut ordered = Vec::with_capacity(order.len());
+            let mut cursor = 0;
+            for player in &apnap {
+                let controller_count = self
+                    .pending_triggers
+                    .iter()
+                    .filter(|trigger| trigger.controller() == *player)
+                    .count();
+                for _ in 0..controller_count {
+                    let trigger_id = order
+                        .get(cursor)
+                        .copied()
+                        .ok_or(StateError::InvalidPendingTriggerOrder)?;
+                    let index = self
+                        .pending_triggers
+                        .iter()
+                        .enumerate()
+                        .find_map(|(index, trigger)| {
+                            (!used[index]
+                                && trigger.controller() == *player
+                                && trigger.trigger() == trigger_id)
+                                .then_some(index)
+                        })
+                        .ok_or(StateError::InvalidPendingTriggerOrder)?;
+                    used[index] = true;
+                    ordered.push(self.pending_triggers[index]);
+                    cursor += 1;
                 }
             }
+            if cursor != order.len() || used.iter().any(|used| !used) {
+                return Err(StateError::InvalidPendingTriggerOrder);
+            }
+            ordered
+        } else {
+            let mut ordered = Vec::with_capacity(self.pending_triggers.len());
+            for player in &apnap {
+                ordered.extend(
+                    self.pending_triggers
+                        .iter()
+                        .copied()
+                        .filter(|trigger| trigger.controller() == *player),
+                );
+            }
+            ordered
+        };
+        self.pending_triggers.clear();
+
+        let mut ids = Vec::with_capacity(ordered.len());
+        for trigger in ordered {
+            let controller = trigger.controller();
+            let id = self.push_stack_entry(StackEntryRequest {
+                controller,
+                object: None,
+                trigger: Some(trigger.trigger()),
+                activated_ability: None,
+                kind: StackObjectKind::TriggeredAbility,
+                targets: Vec::new(),
+                payment: None,
+                copy_info: None,
+                kicked: false,
+                flashback: false,
+                split_second: false,
+                decisions: StackDecisionBindings::default(),
+            });
+            self.emit_event_without_triggers(GameEvent::TriggeredAbilityPutOnStack {
+                trigger: trigger.trigger(),
+                entry: id,
+                controller,
+            });
+            ids.push(id);
         }
         let priority = self.deferred_priority_player.or(self.active_player);
         self.deferred_priority_player = None;
@@ -18804,6 +18883,75 @@ mod tests {
         assert_eq!(
             state.stack_top().map(|entry| entry.controller()),
             Some(third)
+        );
+    }
+
+    #[test]
+    fn explicit_pending_trigger_order_is_validated_and_preserved() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let controller = state.add_player();
+        state
+            .start_turn(active)
+            .unwrap_or_else(|error| panic!("unexpected start error: {error:?}"));
+        let mut triggers = Vec::new();
+        for _ in 0..2 {
+            let trigger = match apply(
+                &mut state,
+                Action::RegisterTriggeredAbility {
+                    definition: TriggerDefinition::new(
+                        controller,
+                        TriggerCondition::LifeLost {
+                            player: TriggerPlayerFilter::Any,
+                        },
+                    ),
+                },
+            ) {
+                Outcome::TriggerRegistered(trigger) => trigger,
+                other => panic!("unexpected trigger registration: {other:?}"),
+            };
+            triggers.push(trigger);
+        }
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::LoseLife {
+                    player: active,
+                    amount: 1,
+                },
+            ),
+            Outcome::Applied
+        );
+        assert_eq!(state.pending_triggers().len(), 2);
+
+        let mut invalid = state.clone();
+        assert_eq!(
+            apply(
+                &mut invalid,
+                Action::PutPendingTriggeredAbilitiesOnStackInOrder {
+                    order: vec![triggers[0], triggers[0]],
+                },
+            ),
+            Outcome::Failed(StateError::InvalidPendingTriggerOrder)
+        );
+        assert_eq!(invalid.pending_triggers().len(), 2);
+        assert!(invalid.stack_entries().is_empty());
+
+        let entries = match apply(
+            &mut state,
+            Action::PutPendingTriggeredAbilitiesOnStackInOrder {
+                order: vec![triggers[1], triggers[0]],
+            },
+        ) {
+            Outcome::StackEntriesAdded(entries) => entries,
+            other => panic!("unexpected ordered trigger outcome: {other:?}"),
+        };
+        assert_eq!(entries.len(), 2);
+        assert_eq!(state.stack_entries()[0].trigger(), Some(triggers[1]));
+        assert_eq!(state.stack_entries()[1].trigger(), Some(triggers[0]));
+        assert_eq!(
+            state.stack_top().and_then(|entry| entry.trigger()),
+            Some(triggers[0])
         );
     }
 

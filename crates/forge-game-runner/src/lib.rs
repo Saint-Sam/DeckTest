@@ -2070,7 +2070,11 @@ impl GameDriver {
                 ));
             }
             if !self.state.pending_triggers().is_empty() {
-                let outcome = self.dispatch(Action::PutPendingTriggeredAbilitiesOnStack)?;
+                let outcome = self.put_pending_triggers_on_stack(
+                    human,
+                    &mut decisions,
+                    ai_policies.as_ref(),
+                )?;
                 if !matches!(outcome, Outcome::StackEntriesAdded(_)) {
                     return Err(format!(
                         "seed {}: pending trigger placement returned {outcome:?}",
@@ -4757,6 +4761,214 @@ impl GameDriver {
         Ok(())
     }
 
+    fn apnap_players(&self, active: PlayerId) -> Result<Vec<PlayerId>, String> {
+        let order = if self.state.turn_order().is_empty() {
+            self.state
+                .players()
+                .iter()
+                .map(|player| player.id())
+                .collect::<Vec<_>>()
+        } else {
+            self.state.turn_order().to_vec()
+        };
+        let start = order
+            .iter()
+            .position(|player| *player == active)
+            .ok_or_else(|| format!("seed {} active player is outside turn order", self.seed))?;
+        Ok((0..order.len())
+            .map(|offset| order[(start + offset) % order.len()])
+            .collect())
+    }
+
+    fn trigger_order_context(
+        &self,
+        controller: PlayerId,
+        remaining: &[TriggerId],
+        controller_prefix: &[TriggerId],
+        global_prefix: &[TriggerId],
+    ) -> Result<DecisionContext, String> {
+        let candidates = remaining.iter().copied().collect::<BTreeSet<_>>();
+        let options = candidates
+            .into_iter()
+            .map(|trigger| {
+                let mut triggers = controller_prefix.to_vec();
+                triggers.push(trigger);
+                DecisionOption::new(DecisionDescriptor::OrderTriggers { triggers }, Vec::new())
+            })
+            .collect();
+        self.scoped_decision_context(
+            DecisionKind::TriggerOrder,
+            controller,
+            options,
+            trigger_order_path_discriminator(controller, remaining, global_prefix),
+        )
+    }
+
+    fn trigger_order_label(&self, trigger: TriggerId, position: usize) -> String {
+        self.trigger_programs.get(&trigger).map_or_else(
+            || {
+                format!(
+                    "Put trigger {} in stack position {}",
+                    trigger.index(),
+                    position
+                )
+            },
+            |runtime| {
+                format!(
+                    "Put {} ability {} in stack position {}",
+                    runtime.program.name(),
+                    runtime.ability_index + 1,
+                    position
+                )
+            },
+        )
+    }
+
+    fn select_trigger_order_choice(
+        &mut self,
+        context: &DecisionContext,
+        controller: PlayerId,
+        human: Option<PlayerId>,
+        decisions: &mut Option<&mut dyn DecisionSource>,
+        ai_policies: Option<&SeatPolicies>,
+        position: usize,
+    ) -> Result<TriggerId, String> {
+        let selected_id = if human == Some(controller) {
+            let labels = context
+                .options()
+                .iter()
+                .map(|option| match option.descriptor() {
+                    DecisionDescriptor::OrderTriggers { triggers } => triggers
+                        .last()
+                        .copied()
+                        .map(|trigger| self.trigger_order_label(trigger, position))
+                        .ok_or_else(|| format!("seed {} trigger-order option is empty", self.seed)),
+                    descriptor => Err(format!(
+                        "seed {} cannot label trigger-order descriptor {descriptor:?}",
+                        self.seed
+                    )),
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let source = decisions.as_deref_mut().ok_or_else(|| {
+                "human game is missing a decision source for trigger ordering".to_owned()
+            })?;
+            self.prompt_context_choice(source, "Order simultaneous triggers", context, &labels)?
+        } else if let Some(policies) = ai_policies {
+            let decision_started = Instant::now();
+            let policy = self.policy_for(controller, policies)?;
+            let candidates = if matches!(policy, AiController::Random(_)) {
+                Vec::new()
+            } else {
+                self.policy_candidates(context, controller, |_| 0)?
+            };
+            let (selected_id, decision, policy_name) =
+                self.select_ai_action(policy, context, &candidates, "trigger_order")?;
+            self.record_ai_decision(AiDecisionTelemetry {
+                kind: "trigger_order",
+                policy: policy_name,
+                context,
+                action_id: selected_id,
+                decision,
+                evaluated_candidates: candidates.len(),
+                wall_latency_us: elapsed_us(decision_started),
+                score_override: None,
+                stop_reason: if decision.is_some() {
+                    "one_ply_complete"
+                } else {
+                    "random_legal_selection"
+                },
+            });
+            selected_id
+        } else {
+            return Err(format!(
+                "seed {} trigger-order prompt has no controller",
+                self.seed
+            ));
+        };
+        let selected = context.select(selected_id).map_err(|error| {
+            format!(
+                "seed {} selected an illegal trigger-order action: {error}",
+                self.seed
+            )
+        })?;
+        let DecisionDescriptor::OrderTriggers { triggers } = selected.descriptor() else {
+            return Err(format!(
+                "seed {} trigger-order context returned a non-order descriptor",
+                self.seed
+            ));
+        };
+        triggers
+            .last()
+            .copied()
+            .ok_or_else(|| format!("seed {} trigger-order selection is empty", self.seed))
+    }
+
+    fn put_pending_triggers_on_stack(
+        &mut self,
+        human: Option<PlayerId>,
+        decisions: &mut Option<&mut dyn DecisionSource>,
+        ai_policies: Option<&SeatPolicies>,
+    ) -> Result<Outcome, String> {
+        let pending = self.state.pending_triggers().to_vec();
+        let active = self
+            .state
+            .active_player()
+            .ok_or_else(|| format!("seed {} cannot order triggers before a turn", self.seed))?;
+        let apnap = self.apnap_players(active)?;
+        let has_controlled_choice = apnap.iter().copied().any(|controller| {
+            let ids = pending
+                .iter()
+                .filter(|trigger| trigger.controller() == controller)
+                .map(|trigger| trigger.trigger())
+                .collect::<BTreeSet<_>>();
+            ids.len() > 1 && (human == Some(controller) || ai_policies.is_some())
+        });
+        if !has_controlled_choice {
+            return self.dispatch(Action::PutPendingTriggeredAbilitiesOnStack);
+        }
+
+        let mut order = Vec::with_capacity(pending.len());
+        for controller in apnap {
+            let mut remaining = pending
+                .iter()
+                .filter(|trigger| trigger.controller() == controller)
+                .map(|trigger| trigger.trigger())
+                .collect::<Vec<_>>();
+            if human != Some(controller) && ai_policies.is_none() {
+                order.extend(remaining);
+                continue;
+            }
+            let mut controller_prefix = Vec::with_capacity(remaining.len());
+            while remaining.iter().copied().collect::<BTreeSet<_>>().len() > 1 {
+                let context =
+                    self.trigger_order_context(controller, &remaining, &controller_prefix, &order)?;
+                let selected = self.select_trigger_order_choice(
+                    &context,
+                    controller,
+                    human,
+                    decisions,
+                    ai_policies,
+                    order.len() + 1,
+                )?;
+                let index = remaining
+                    .iter()
+                    .position(|trigger| *trigger == selected)
+                    .ok_or_else(|| {
+                        format!(
+                            "seed {} selected trigger {} outside the remaining order",
+                            self.seed,
+                            selected.index()
+                        )
+                    })?;
+                remaining.remove(index);
+                controller_prefix.push(selected);
+                order.push(selected);
+            }
+            order.extend(remaining);
+        }
+        self.dispatch(Action::PutPendingTriggeredAbilitiesOnStackInOrder { order })
+    }
+
     fn pass_priority(&mut self) -> Result<(), String> {
         let player = self
             .state
@@ -7052,6 +7264,23 @@ fn resolution_choice_path_discriminator(
     state
 }
 
+fn trigger_order_path_discriminator(
+    controller: PlayerId,
+    remaining: &[TriggerId],
+    global_prefix: &[TriggerId],
+) -> u64 {
+    let mut state = combat_path_mix(0x7472_6967_6765_0001, controller.index() as u64);
+    state = combat_path_mix(state, global_prefix.len() as u64);
+    for trigger in global_prefix {
+        state = combat_path_mix(state, trigger.index() as u64);
+    }
+    state = combat_path_mix(state, remaining.len() as u64);
+    for trigger in remaining {
+        state = combat_path_mix(state, trigger.index() as u64);
+    }
+    state
+}
+
 fn canonical_legal_actions(context: &DecisionContext) -> Vec<AiLegalAction> {
     context
         .options()
@@ -8388,7 +8617,7 @@ mod tests {
         replay_captured_actions, replay_human_file, run_prompted_game, snapshot_prompt,
         ActivatedRuntime, AiController, DecisionPrompt, DecisionSource, GameDriver, GameMetrics,
         GameSummary, HeuristicPolicy, IdentityExercise, MainChoice, PendingActivatedResolution,
-        ReplayDecisionSource, TraceMode, TraceRecord, PLAYER_COUNT,
+        RandomLegalPolicy, ReplayDecisionSource, TraceMode, TraceRecord, PLAYER_COUNT,
     };
     use forge_ai::{AiWeights, GuardrailTable};
     use forge_cards::runtime::compile_card_program;
@@ -8397,7 +8626,8 @@ mod tests {
         BasicLandTypes, BlockDeclaration, CardId, CombatDamageTarget, CreatureKeywords,
         DecisionContext, DecisionDescriptor, DecisionKind, DecisionOption, GameState, ManaPool,
         ObjectColors, ObjectId, ObjectSupertypes, ObjectTypes, Outcome, PlayerId, PlayerView,
-        ResolutionOutcome, StackDecisionBindings, Step, TargetChoice, ZoneId, ZoneKind,
+        ResolutionOutcome, StackDecisionBindings, Step, TargetChoice, TriggerCondition,
+        TriggerDefinition, TriggerPlayerFilter, ZoneId, ZoneKind,
     };
     use std::{
         collections::{BTreeSet, HashMap, HashSet},
@@ -9160,6 +9390,73 @@ mod tests {
                 ..
             } if *player == opponent
         )));
+    }
+
+    #[test]
+    fn simultaneous_trigger_order_uses_shared_human_and_ai_contexts() {
+        let (mut driver, controller, opponent, _source) = modal_spell_driver();
+        let mut triggers = Vec::new();
+        for _ in 0..2 {
+            let trigger = match driver
+                .dispatch(Action::RegisterTriggeredAbility {
+                    definition: TriggerDefinition::new(
+                        controller,
+                        TriggerCondition::LifeLost {
+                            player: TriggerPlayerFilter::Any,
+                        },
+                    ),
+                })
+                .unwrap_or_else(|error| panic!("trigger registration should succeed: {error}"))
+            {
+                Outcome::TriggerRegistered(trigger) => trigger,
+                other => panic!("unexpected trigger registration outcome: {other:?}"),
+            };
+            triggers.push(trigger);
+        }
+        driver
+            .dispatch(Action::LoseLife {
+                player: opponent,
+                amount: 1,
+            })
+            .unwrap_or_else(|error| panic!("trigger event should succeed: {error}"));
+        let context = driver
+            .trigger_order_context(controller, &triggers, &[], &[])
+            .unwrap_or_else(|error| panic!("trigger order context should exist: {error}"));
+        assert_eq!(context.kind(), DecisionKind::TriggerOrder);
+        assert_eq!(context.options().len(), 2);
+        assert!(context.options().iter().all(|option| {
+            option.actions().is_empty()
+                && matches!(
+                    option.descriptor(),
+                    DecisionDescriptor::OrderTriggers { triggers } if triggers.len() == 1
+                )
+        }));
+
+        let mut human_driver = driver.clone();
+        let mut source = PickSecondChoice;
+        let mut decisions = Some(&mut source as &mut dyn DecisionSource);
+        let human_outcome = human_driver
+            .put_pending_triggers_on_stack(Some(controller), &mut decisions, None)
+            .unwrap_or_else(|error| panic!("human trigger order should succeed: {error}"));
+        assert!(matches!(human_outcome, Outcome::StackEntriesAdded(entries) if entries.len() == 2));
+        assert!(matches!(
+            human_driver.actions.last(),
+            Some(Action::PutPendingTriggeredAbilitiesOnStackInOrder { order }) if order.len() == 2
+        ));
+
+        let policies = [AiController::Random(RandomLegalPolicy::new(17)); PLAYER_COUNT];
+        let mut ai_driver = driver;
+        let mut no_decisions = None;
+        let ai_outcome = ai_driver
+            .put_pending_triggers_on_stack(None, &mut no_decisions, Some(&policies))
+            .unwrap_or_else(|error| panic!("AI trigger order should succeed: {error}"));
+        assert!(matches!(ai_outcome, Outcome::StackEntriesAdded(entries) if entries.len() == 2));
+        assert_eq!(ai_driver.ai_decisions.len(), 1);
+        assert_eq!(ai_driver.ai_decisions[0].kind, "trigger_order");
+        assert!(ai_driver.ai_decisions[0]
+            .canonical_legal_actions
+            .iter()
+            .any(|action| action.action_id == ai_driver.ai_decisions[0].action_id));
     }
 
     #[test]

@@ -80,6 +80,9 @@ The T4.3-T4.5 diagnostics path currently adapts:
   APNAP order, and accumulated by the kernel;
 - complete canonical commander move-or-leave choices for both human and AI
   controllers, with selected-ID membership and telemetry regression coverage;
+- kernel-validated simultaneous-trigger ordering in APNAP controller groups,
+  represented as one bounded next-trigger subcontext at a time for live human
+  and AI controllers rather than complete-order permutations;
 - one shared sorted context for the live human and AI main-phase, attacker,
   blocker, and commander-zone adapters; presentation labels are derived from
   those typed options rather than independently enumerated menus;
@@ -91,7 +94,7 @@ The T4.3-T4.5 diagnostics path currently adapts:
 The current path remains `limited` and diagnostics-only because it does not yet
 canonicalize the full Commander prompt surface: unsupported activation cost
 families, target distribution, X, additional and alternative costs, trigger
-order, spell resolution-time choices, triggered targets and deferred optionals,
+  trigger-order benchmark labels, spell resolution-time choices, triggered targets and deferred optionals,
 non-player combat defenders,
 and strategic damage ordering. Normal spells and the current typed activated
 slice cover targets, optional effects, payments, and activated/triggered object

@@ -87,10 +87,10 @@
     },
     {
       "kind": "trigger_order",
-      "human": "descriptor_only",
-      "ai": "descriptor_only",
-      "benchmark": "descriptor_only",
-      "note": "The current diagnostics driver permits only autonomous triggers."
+      "human": "complete",
+      "ai": "complete",
+      "benchmark": "partial",
+      "note": "Simultaneous same-controller triggers use bounded next-trigger subcontexts inside a kernel-validated APNAP order. Human and AI controllers share membership checks, typed path identity, telemetry, and replay; repeated identical trigger instances are equivalent. Sealed benchmark fixtures and independent acceptable-order labels remain open."
     },
     {
       "kind": "hidden_choice",
