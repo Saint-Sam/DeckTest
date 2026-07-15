@@ -3,8 +3,8 @@
   "status": "diagnostics_only",
   "generated_at": "2026-07-14",
   "artifact_classification": "diagnostic_not_promotion_eligible",
-  "product_commit": "3b1fd6d2a67e450db9448e01442249fa042f1101",
-  "product_tree": "c4c3fb424ce9265ccf04275a76c55b86b96a0099",
+  "product_commit": "165b7ea68d24fb39b45e8a656a504e6c396730e7",
+  "product_tree": "85ac78cbacb57f62cefb855fa9f474862cb3b71a",
   "environment": {
     "platform": "Darwin 23.6.0 arm64",
     "cpu": "Apple M2 Ultra",
@@ -40,7 +40,7 @@
       "profile": "release",
       "replay": "reports/gates/T4.3/ai-baseline.frsreplay",
       "command": "target/release/forge-cli play --ai --seed 17306488943054686737 --policy-seed 11601272640106397697 --max-turns 500 --replay-out reports/gates/T4.3/ai-baseline.frsreplay",
-      "replay_sha256": "89ebff5ff7a9aa3f9131f760422bdb7690a5df7298e23dad797ea4b54a4eabc0",
+      "replay_sha256": "6bec6be1f7854d340ecc19105dfda5bc46143fb72e47a657e5f93dd3db1d8770",
       "decisions": 15763,
       "typed_actions": 18029,
       "turns": 243,
@@ -58,7 +58,7 @@
       "profile": "release",
       "replay": "reports/gates/T4.3/random-legal-baseline.frsreplay",
       "command": "target/release/forge-cli play --ai --random-legal --seed 17306488943054686737 --policy-seed 11601272640106397697 --max-turns 500 --replay-out reports/gates/T4.3/random-legal-baseline.frsreplay",
-      "replay_sha256": "32f986ebb974e337912d76ad5b29619354422cc1955672568a8ef2bde790bcb7",
+      "replay_sha256": "dd3617d01d18e78d198542034c7ca718d0f0a0c372f17ee39f3bca7cb3d79c8d",
       "decisions": 9155,
       "typed_actions": 11172,
       "turns": 185,
@@ -81,7 +81,7 @@
       },
       "replay": "reports/gates/T4.3/search-baseline.frsreplay",
       "command": "target/release/forge-cli play --ai --search --search-iterations 2 --determinizations 1 --search-workers 1 --seed 17306488943054686737 --policy-seed 11601272640106397697 --max-turns 500 --replay-out reports/gates/T4.3/search-baseline.frsreplay",
-      "replay_sha256": "c7056c9c1bb48ba918b44c058fd7146ea1fad8781b1717d854dafc6724d88ce3",
+      "replay_sha256": "164cf39961caf46697b0f09644cee883e4daade0f2d1c24a5066d8474e7eee66",
       "decisions": 16031,
       "searched_decisions": 789,
       "typed_actions": 18321,
@@ -100,8 +100,8 @@
       "exact_typed_action_replay": true
     }
   ],
-  "near_state_dedup_audit": "not_run",
-  "replay_family_leakage_audit": "not_run",
+  "near_state_dedup_audit": "passed_exact_baseline_isomorphism",
+  "replay_family_leakage_audit": "not_applicable_paired_diagnostic_baselines",
   "promotion_eligible": false,
   "reasons": [
     "single paired diagnostic seed, not a development/validation/sealed campaign",
@@ -109,6 +109,14 @@
     "non-player combat defenders and strategic combat-damage prompts remain incomplete",
     "acceptable-action, catastrophic-blunder, and bounded win/defense labels are not sealed",
     "hierarchical combat decisions and single-construction determinization now keep the 1-4 ms diagnostic ladder near budget, but the product budget and acceptance labels remain unsealed",
-    "search counters and wall percentiles are recorded, but per-decision CPU and memory adapters remain unavailable"
-  ]
+    "safe Linux/Android per-decision CPU and memory adapters are implemented, but a supported-platform measured cost campaign has not run"
+  ],
+  "decision_state_audit": {
+    "path": "metrics/ai/decision_state_audit.json",
+    "sha256": "87695e1e2a29bf9d294dedd85fe625a4c60527eb86faba6b7ec8e1059d2bb66c",
+    "decisions": 40949,
+    "unique_state_keys": 40881,
+    "path_bound_decisions": 201,
+    "failures": 0
+  }
 }

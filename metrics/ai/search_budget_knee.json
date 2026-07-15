@@ -94,8 +94,8 @@
   "promotion_authority": "DeckTest paired arena, decision benchmark, human trace review, latency, and measured cost evidence",
   "implementation_evidence": {
     "date": "2026-07-14",
-    "product_commit": "3b1fd6d2a67e450db9448e01442249fa042f1101",
-    "product_tree": "c4c3fb424ce9265ccf04275a76c55b86b96a0099",
+    "product_commit": "165b7ea68d24fb39b45e8a656a504e6c396730e7",
+    "product_tree": "85ac78cbacb57f62cefb855fa9f474862cb3b71a",
     "policy": "determinized-uct-v1",
     "decision_families": [
       "main_phase",
@@ -119,7 +119,7 @@
       "winner_seat_zero_based": 0,
       "final_hash": "3933493530367397528",
       "replay": "reports/gates/T4.3/search-baseline.frsreplay",
-      "replay_sha256": "c7056c9c1bb48ba918b44c058fd7146ea1fad8781b1717d854dafc6724d88ce3",
+      "replay_sha256": "164cf39961caf46697b0f09644cee883e4daade0f2d1c24a5066d8474e7eee66",
       "exact_policy_replay_passed": true,
       "exact_typed_action_replay_passed": true,
       "canonical_legal_action_records_complete": true,
@@ -130,7 +130,7 @@
     "release_search_knee_smoke": {
       "command": "target/release/forge-arena --search-knee --tier standard --budgets 1,2,4 --games 2 --jobs 2 --max-turns 500 --output metrics/ai/search_budget_knee_results.json",
       "result": "metrics/ai/search_budget_knee_results.json",
-      "result_sha256": "027dd1ec9fa021bdea071f19a9826a976bda59cb62cd2644c897f6917906e9e8",
+      "result_sha256": "00b814124ba8812484677aa162b2be595c5a03f241802df4cdd3b194f83e3332",
       "profile": "release",
       "games_per_comparison": 2,
       "max_turns": 500,
@@ -144,8 +144,8 @@
             -40.54687942657693,
             40.54687942657693
           ],
-          "lower_p95_wall_us": 1475,
-          "upper_p95_wall_us": 2611,
+          "lower_p95_wall_us": 1525,
+          "upper_p95_wall_us": 2614,
           "acceptance_fields_complete": false,
           "plateau_accepted": false
         },
@@ -158,16 +158,16 @@
             -40.54687942657693,
             40.54687942657693
           ],
-          "lower_p95_wall_us": 2579,
-          "upper_p95_wall_us": 4645,
+          "lower_p95_wall_us": 2669,
+          "upper_p95_wall_us": 4649,
           "acceptance_fields_complete": false,
           "plateau_accepted": false
         }
       ],
       "adaptive_p95_wall_us": {
-        "1": 1580,
-        "2": 2628,
-        "4": 4619
+        "1": 1625,
+        "2": 2716,
+        "4": 4833
       },
       "fixed_adaptive_ablations_completed": 3,
       "fixed_checkpoint_history_unit_test": "passed",
@@ -179,6 +179,14 @@
       "required": "one shared wall-clock deadline across all determinizations and workers for one decision",
       "observed": "hierarchical combat contexts, inline single-worker search, and single-construction determinization reduce the refreshed nominal 1-4 ms ladder to approximately 1.5-4.7 ms p95",
       "next_action": "add process CPU and memory telemetry, complete Track B and acceptable-action labels, then run the full paired calibration ladder before selecting a Standard budget"
+    },
+    "resource_telemetry": {
+      "adapter_status": "implemented_measurement_pending",
+      "supported_platforms": [
+        "linux",
+        "android"
+      ],
+      "current_darwin_fields": "explicit_null"
     }
   },
   "measurements": [],

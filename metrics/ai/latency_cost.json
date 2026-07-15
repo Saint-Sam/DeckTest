@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
-  "status": "diagnostic_exact_replays_bound_hierarchical_surface_budget_responsive",
+  "status": "diagnostic_exact_replays_bound_budget_responsive_resource_probe_unmeasured_local",
   "generated_at": "2026-07-14",
   "artifact_classification": "diagnostic_not_promotion_eligible",
-  "product_commit": "3b1fd6d2a67e450db9448e01442249fa042f1101",
-  "product_tree": "c4c3fb424ce9265ccf04275a76c55b86b96a0099",
+  "product_commit": "165b7ea68d24fb39b45e8a656a504e6c396730e7",
+  "product_tree": "85ac78cbacb57f62cefb855fa9f474862cb3b71a",
   "required_budgets_ms": [
     0,
     10,
@@ -43,17 +43,17 @@
     {
       "policy": "heuristic-v1",
       "path": "reports/gates/T4.3/ai-baseline.frsreplay",
-      "sha256": "89ebff5ff7a9aa3f9131f760422bdb7690a5df7298e23dad797ea4b54a4eabc0"
+      "sha256": "6bec6be1f7854d340ecc19105dfda5bc46143fb72e47a657e5f93dd3db1d8770"
     },
     {
       "policy": "random-legal-v1",
       "path": "reports/gates/T4.3/random-legal-baseline.frsreplay",
-      "sha256": "32f986ebb974e337912d76ad5b29619354422cc1955672568a8ef2bde790bcb7"
+      "sha256": "dd3617d01d18e78d198542034c7ca718d0f0a0c372f17ee39f3bca7cb3d79c8d"
     },
     {
       "policy": "determinized-uct-v1",
       "path": "reports/gates/T4.3/search-baseline.frsreplay",
-      "sha256": "c7056c9c1bb48ba918b44c058fd7146ea1fad8781b1717d854dafc6724d88ce3"
+      "sha256": "164cf39961caf46697b0f09644cee883e4daade0f2d1c24a5066d8474e7eee66"
     }
   ],
   "diagnostic_runs": [
@@ -61,11 +61,11 @@
       "policy": "heuristic-v1",
       "scope": "policy_owned_decisions",
       "decisions": 13706,
-      "mean_wall_latency_us": 1576.8664,
-      "p50_wall_latency_us": 758,
-      "p95_wall_latency_us": 5448,
-      "p99_wall_latency_us": 7298,
-      "max_wall_latency_us": 28964,
+      "mean_wall_latency_us": 1715.3435,
+      "p50_wall_latency_us": 826,
+      "p95_wall_latency_us": 5701,
+      "p99_wall_latency_us": 7167,
+      "max_wall_latency_us": 10658,
       "mean_legal_actions": 12.8434,
       "max_legal_actions": 63,
       "singleton_early_stops": 2105
@@ -74,11 +74,11 @@
       "policy": "random-legal-v1",
       "scope": "policy_owned_decisions",
       "decisions": 3350,
-      "mean_wall_latency_us": 189.4618,
-      "p50_wall_latency_us": 152,
-      "p95_wall_latency_us": 434,
-      "p99_wall_latency_us": 702,
-      "max_wall_latency_us": 2732,
+      "mean_wall_latency_us": 233.7579,
+      "p50_wall_latency_us": 178,
+      "p95_wall_latency_us": 570,
+      "p99_wall_latency_us": 874,
+      "max_wall_latency_us": 2807,
       "mean_legal_actions": 10.5140,
       "max_legal_actions": 2347,
       "singleton_early_stops": 5874
@@ -94,11 +94,11 @@
       "searched_decisions": 789,
       "simulations": 1086,
       "nodes": 1629,
-      "mean_wall_latency_us": 980.7338,
-      "p50_wall_latency_us": 859,
-      "p95_wall_latency_us": 2487,
-      "p99_wall_latency_us": 3101,
-      "max_wall_latency_us": 3994,
+      "mean_wall_latency_us": 954.6781,
+      "p50_wall_latency_us": 824,
+      "p95_wall_latency_us": 2423,
+      "p99_wall_latency_us": 2954,
+      "max_wall_latency_us": 3329,
       "mean_legal_actions": 2.0203,
       "max_legal_actions": 5,
       "singleton_early_stops": 246,
@@ -108,7 +108,7 @@
   ],
   "release_search_knee_smoke": {
     "result_path": "metrics/ai/search_budget_knee_results.json",
-    "result_sha256": "027dd1ec9fa021bdea071f19a9826a976bda59cb62cd2644c897f6917906e9e8",
+    "result_sha256": "00b814124ba8812484677aa162b2be595c5a03f241802df4cdd3b194f83e3332",
     "command": "target/release/forge-arena --search-knee --tier standard --budgets 1,2,4 --games 2 --jobs 2 --max-turns 500 --output metrics/ai/search_budget_knee_results.json",
     "profile": "release",
     "hardware_and_threads_frozen_within_each_pair": true,
@@ -117,31 +117,31 @@
       {
         "lower_budget_ms": 1,
         "upper_budget_ms": 2,
-        "lower_p95_wall_latency_us": 1475,
-        "upper_p95_wall_latency_us": 2611
+        "lower_p95_wall_latency_us": 1525,
+        "upper_p95_wall_latency_us": 2614
       },
       {
         "lower_budget_ms": 2,
         "upper_budget_ms": 4,
-        "lower_p95_wall_latency_us": 2579,
-        "upper_p95_wall_latency_us": 4645
+        "lower_p95_wall_latency_us": 2669,
+        "upper_p95_wall_latency_us": 4649
       }
     ],
     "adaptive_ablations": [
       {
         "budget_ms": 1,
-        "fixed_p95_wall_latency_us": 1617,
-        "adaptive_p95_wall_latency_us": 1580
+        "fixed_p95_wall_latency_us": 1599,
+        "adaptive_p95_wall_latency_us": 1625
       },
       {
         "budget_ms": 2,
-        "fixed_p95_wall_latency_us": 2621,
-        "adaptive_p95_wall_latency_us": 2628
+        "fixed_p95_wall_latency_us": 2761,
+        "adaptive_p95_wall_latency_us": 2716
       },
       {
         "budget_ms": 4,
-        "fixed_p95_wall_latency_us": 4651,
-        "adaptive_p95_wall_latency_us": 4619
+        "fixed_p95_wall_latency_us": 4644,
+        "adaptive_p95_wall_latency_us": 4833
       }
     ],
     "product_latency_claim": false
@@ -158,8 +158,8 @@
       4
     ],
     "observed_p95_wall_latency_range_us": [
-      1475,
-      4651
+      1525,
+      4833
     ],
     "promotion_effect": "removes the eager-combat latency defect; product promotion remains blocked by CPU, memory, competence-label, archetype, and reference-device evidence"
   },
@@ -169,12 +169,25 @@
     "reference_device_latency_measured": false
   },
   "missing_authoritative_measurements": [
-    "per-decision process CPU time",
-    "resident-memory and peak-memory deltas",
+    "supported Linux/Android per-decision CPU and memory campaign",
     "worker utilization",
     "worker price",
     "physical Android reference-device latency",
     "physical WASM reference-device latency"
   ],
-  "note": "Exact product-bound heuristic, random, and search replays pass after hierarchical combat regeneration. The refreshed 1-4 ms ladder measures approximately 1.5-4.7 ms p95, so current search work responds to the configured total deadline instead of the former approximately 250 ms eager-context floor. This is diagnostic evidence, not a selected knee: CPU, memory, Track B, acceptable-action, archetype, and reference-device evidence remain mandatory."
+  "note": "Exact product-bound heuristic, random, and search replays pass with hierarchical path telemetry and a zero-failure 40,949-decision state-key isomorphism audit. The refreshed 1-4 ms ladder measures approximately 1.5-4.8 ms p95. Safe Linux/Android CPU and memory adapters are implemented, but this Darwin replay correctly retains null resource fields; a supported-platform campaign, Track B labels, acceptable-action evidence, archetype evidence, and reference devices remain mandatory.",
+  "resource_telemetry_adapter": {
+    "status": "implemented_measurement_pending",
+    "supported_platforms": [
+      "linux",
+      "android"
+    ],
+    "thread_cpu_source": "/proc/thread-self/schedstat",
+    "resident_memory_source": "/proc/self/status VmRSS",
+    "caller_context_included": true,
+    "parallel_worker_cpu_summed": true,
+    "unsupported_platform_behavior": "explicit null",
+    "current_darwin_replay_cpu_records": 0,
+    "current_darwin_replay_memory_records": 0
+  }
 }

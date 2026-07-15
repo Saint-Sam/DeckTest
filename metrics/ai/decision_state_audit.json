@@ -1,0 +1,49 @@
+{
+  "artifact_classification": "diagnostic_not_promotion_eligible",
+  "failures": [],
+  "near_state_dedup_audit": "passed_exact_baseline_isomorphism",
+  "product_commit": "165b7ea68d24fb39b45e8a656a504e6c396730e7",
+  "product_tree": "85ac78cbacb57f62cefb855fa9f474862cb3b71a",
+  "promotion_limits": [
+    "paired baseline overlap is expected and is not a development/validation/sealed leakage audit",
+    "campaign split manifests and sealed labels remain required before promotion"
+  ],
+  "replay_family_leakage_audit": "not_applicable_paired_diagnostic_baselines",
+  "schema_version": 1,
+  "signature_contract": {
+    "context": "state signature + DecisionContextId",
+    "state": "decision kind + PlayerViewHash + hierarchical path discriminator + sorted canonical legal descriptors"
+  },
+  "sources": [
+    {
+      "decisions": 15763,
+      "path": "reports/gates/T4.3/ai-baseline.frsreplay",
+      "policy": "heuristic-v1",
+      "seed": "17306488943054686737",
+      "sha256": "6bec6be1f7854d340ecc19105dfda5bc46143fb72e47a657e5f93dd3db1d8770"
+    },
+    {
+      "decisions": 9155,
+      "path": "reports/gates/T4.3/random-legal-baseline.frsreplay",
+      "policy": "random-legal-v1",
+      "seed": "17306488943054686737",
+      "sha256": "dd3617d01d18e78d198542034c7ca718d0f0a0c372f17ee39f3bca7cb3d79c8d"
+    },
+    {
+      "decisions": 16031,
+      "path": "reports/gates/T4.3/search-baseline.frsreplay",
+      "policy": "determinized-uct-v1",
+      "seed": "17306488943054686737",
+      "sha256": "164cf39961caf46697b0f09644cee883e4daade0f2d1c24a5066d8474e7eee66"
+    }
+  ],
+  "status": "passed",
+  "totals": {
+    "decisions": 40949,
+    "failures": 0,
+    "keys_shared_across_paired_policy_replays": 56,
+    "path_bound_decisions": 201,
+    "unique_semantic_signatures": 40881,
+    "unique_state_keys": 40881
+  }
+}

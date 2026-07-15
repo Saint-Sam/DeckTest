@@ -2,7 +2,11 @@
   "schema_version": 1,
   "decision_context_schema": 1,
   "gate_status": "blocked_incomplete_adapters",
-  "allowed_statuses": ["complete", "partial", "descriptor_only"],
+  "allowed_statuses": [
+    "complete",
+    "partial",
+    "descriptor_only"
+  ],
   "families": [
     {
       "kind": "opening_hand",
@@ -30,14 +34,14 @@
       "human": "partial",
       "ai": "partial",
       "benchmark": "partial",
-      "note": "Human and AI consume the same capped canonical Cartesian product assigning each legal attacker to no attack or any legal live player defender, including split multiplayer attacks; non-player defenders and sealed benchmark fixtures remain open."
+      "note": "Human and AI consume the same scoped per-attacker contexts, assigning each legal attacker to no attack or any legal live player defender while carrying the typed partial declaration and preserving split multiplayer attacks. Non-player defenders and sealed benchmark fixtures remain open."
     },
     {
       "kind": "declare_blockers",
       "human": "partial",
       "ai": "partial",
       "benchmark": "partial",
-      "note": "Human and AI consume complete capped canonical blocker combinations for every attacked player in deterministic APNAP order, with declarations accumulated by the kernel; strategic damage ordering and sealed benchmark fixtures remain open."
+      "note": "Human and AI consume the same scoped per-blocker contexts for every attacked player in deterministic APNAP order; typed partial declarations include fail-closed menace completion and the kernel receives one complete declaration. Strategic damage ordering and sealed benchmark fixtures remain open."
     },
     {
       "kind": "commander_zone",
