@@ -20,7 +20,7 @@
       "human": "partial",
       "ai": "partial",
       "benchmark": "partial",
-      "note": "Every live human and AI priority window uses one shared canonical context with a forced-pass fast path, exact normal-cost instant choices, hierarchical printed-X casting, and typed program-bound non-mana activations. Activation targets, optional answers, announced X, payments, and ordinary trigger targets survive the stack; alternate costs, unsupported extra activation costs, no-legal-target trigger suppression, and deferred trigger optionals remain open."
+      "note": "Every live human and AI priority window uses one shared canonical context with a forced-pass fast path, exact normal-cost instant choices, hierarchical printed-X casting, and typed program-bound non-mana activations. Activation targets, optional answers, announced X, payments, and ordinary trigger targets survive the stack; required triggers with an empty current target domain use a kernel-validated no-stack disposition. Alternate costs, unsupported extra activation costs, same-batch inter-trigger targeting, and deferred trigger optionals remain open."
     },
     {
       "kind": "main_phase",
@@ -55,7 +55,7 @@
       "human": "partial",
       "ai": "partial",
       "benchmark": "partial",
-      "note": "Normal spells and typed program-bound activated abilities enumerate exact legal target products and preserve selected targets through stack resolution. Triggered abilities now use one scoped canonical context per target slot before entering the stack, with atomic kernel validation, exact snapshots, telemetry, replay, and resolution bindings. Target variants share only a progressive-widening key; canonical IDs and transitions remain concrete. No-legal-target trigger suppression, target distribution, partial-illegality effect filtering, and sealed benchmark labels remain open."
+      "note": "Normal spells and typed program-bound activated abilities enumerate exact legal target products and preserve selected targets through stack resolution. Triggered abilities use one scoped canonical context per target slot before entering the stack, with atomic kernel validation, exact snapshots, telemetry, replay, and resolution bindings. A required trigger with an empty current target domain is removed through an explicit kernel-validated disposition without prompting. Target variants share only a progressive-widening key; canonical IDs and transitions remain concrete. Same-batch inter-trigger targeting, target distribution, partial-illegality effect filtering, and sealed benchmark labels remain open."
     },
     {
       "kind": "mode",

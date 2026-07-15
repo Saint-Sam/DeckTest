@@ -90,6 +90,9 @@ The T4.3-T4.5 diagnostics path currently adapts:
 - kernel-validated triggered-ability targets announced while each pending
   trigger is put on the stack, represented as one scoped target-slot context at
   a time with exact target snapshots retained through priority and resolution;
+- an explicit kernel-validated no-stack disposition when a required trigger
+  target slot has no legal choice, consuming that pending instance without a
+  human or AI prompt while preserving every valid sibling trigger;
 - kernel-validated combat-damage ordering and sequential amounts for human and
   AI controllers, using bounded next-blocker contexts and binary range
   narrowing above 64 direct amounts rather than complete distributions;
@@ -107,8 +110,8 @@ The T4.3-T4.5 diagnostics path currently adapts:
 The current path remains `limited` and diagnostics-only because it does not yet
 canonicalize the full Commander prompt surface: unsupported activation cost
 families, target distribution, non-cost numeric values, additional and alternative costs,
-trigger-order benchmark labels, no-legal-target trigger suppression and
-deferred optionals, and non-player combat defenders. Normal spells, the current
+trigger-order benchmark labels, same-batch inter-trigger targeting and deferred
+optionals, and non-player combat defenders. Normal spells, the current
 typed activated slice, and ordinary targeted triggers cover target announcement;
 payments and spell/activated/triggered object searches also share the boundary.
 Those prompt families remain partial until their remaining multi-zone,

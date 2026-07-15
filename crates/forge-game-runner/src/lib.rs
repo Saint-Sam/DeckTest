@@ -5690,7 +5690,7 @@ impl GameDriver {
         let choices = self.legal_targets_for(controller, source, requirement);
         if choices.is_empty() {
             return Err(format!(
-                "seed {} trigger {} has no legal target at slot {cursor}; no-target trigger suppression remains fail closed",
+                "seed {} trigger {} lost every legal target after its no-target disposition check at slot {cursor}",
                 self.seed,
                 trigger.index()
             ));
@@ -6034,6 +6034,14 @@ impl GameDriver {
                 })?;
             let source = runtime.source;
             let requirements = ability.target_requirements().to_vec();
+            if requirements.iter().copied().any(|requirement| {
+                !self
+                    .state
+                    .has_legal_target(controller, Some(source), requirement)
+            }) {
+                bindings.push(TriggerStackBinding::no_legal_targets(trigger, requirements));
+                continue;
+            }
             let optional = vec![true; ability.optional_choice_count()];
             let announced = StackDecisionBindings::new(None, &optional).map_err(|error| {
                 format!(
@@ -10432,7 +10440,7 @@ mod tests {
         DecisionContext, DecisionDescriptor, DecisionKind, DecisionOption, GameState, ManaPool,
         ObjectColors, ObjectId, ObjectSupertypes, ObjectTypes, Outcome, PaymentPlan, PlayerId,
         PlayerView, ResolutionOutcome, StackDecisionBindings, Step, TargetChoice, TriggerCondition,
-        TriggerDefinition, TriggerPlayerFilter, ZoneId, ZoneKind,
+        TriggerDefinition, TriggerPlayerFilter, TriggerStackDisposition, ZoneId, ZoneKind,
     };
     use std::{
         collections::{BTreeSet, HashMap, HashSet},
@@ -11923,6 +11931,99 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![TargetChoice::Player(opponent)]
         );
+    }
+
+    #[test]
+    fn required_trigger_without_legal_targets_is_removed_without_prompting() {
+        let source = r#"card "No Target Trigger Fixture" {
+  id: "forge:test:no-target-trigger-fixture"
+  layout: normal
+  status: unverified_playable
+  face "No Target Trigger Fixture" {
+    cost: "{2}{U}"
+    types: "Creature - Human Wizard"
+    oracle: "Whenever an opponent draws a card, this deals 1 damage to target planeswalker."
+    power: "2"
+    toughness: "2"
+    keywords: []
+    ability triggered {
+      event: event_draw(opponent())
+      effect: deal_damage(target(permanents(type_is("planeswalker"))), 1)
+    }
+  }
+}"#;
+        let definition = forge_cardc::parse_card_named("no_target_trigger_fixture.frs", source)
+            .unwrap_or_else(|error| panic!("no-target fixture should parse: {error}"));
+        let program = Arc::new(
+            compile_card_program(&definition)
+                .unwrap_or_else(|error| panic!("no-target fixture should compile: {error}")),
+        );
+        assert_eq!(program.triggered_abilities().len(), 1);
+        assert_eq!(
+            program.triggered_abilities()[0].target_requirements().len(),
+            1
+        );
+
+        let (mut driver, controller, opponent, source_object) = modal_spell_driver();
+        Arc::make_mut(&mut driver.programs).insert(source_object, Arc::clone(&program));
+        driver
+            .dispatch(Action::SetBaseObjectCharacteristics {
+                object: source_object,
+                base: program.base_object(),
+            })
+            .unwrap_or_else(|error| panic!("trigger source characteristics should apply: {error}"));
+        driver
+            .dispatch(Action::MoveObject {
+                object: source_object,
+                to: ZoneId::new(None, ZoneKind::Battlefield),
+            })
+            .unwrap_or_else(|error| panic!("trigger source should enter play: {error}"));
+        driver
+            .register_triggers(controller, source_object, &program)
+            .unwrap_or_else(|error| panic!("trigger runtime should register: {error}"));
+        driver
+            .dispatch(Action::CreateObject {
+                card: CardId::new(1_303),
+                owner: opponent,
+                controller: opponent,
+                zone: ZoneId::new(Some(opponent), ZoneKind::Library),
+            })
+            .unwrap_or_else(|error| panic!("opponent draw card should be created: {error}"));
+        driver
+            .dispatch(Action::DrawCards {
+                player: opponent,
+                count: 1,
+            })
+            .unwrap_or_else(|error| panic!("draw event should queue the trigger: {error}"));
+        assert_eq!(driver.state.pending_triggers().len(), 1);
+
+        let mut ai_driver = driver.clone();
+        let mut human_driver = driver;
+        let mut source = PickFirstChoice;
+        let mut decisions = Some(&mut source as &mut dyn DecisionSource);
+        let outcome = human_driver
+            .put_pending_triggers_on_stack(Some(controller), &mut decisions, None)
+            .unwrap_or_else(|error| panic!("human no-target trigger should be removed: {error}"));
+        assert!(matches!(outcome, Outcome::StackEntriesAdded(entries) if entries.is_empty()));
+        assert!(human_driver.state.pending_triggers().is_empty());
+        assert!(human_driver.state.stack_entries().is_empty());
+        assert!(matches!(
+            human_driver.actions.last(),
+            Some(Action::PutPendingTriggeredAbilitiesOnStackWithChoices { bindings })
+                if bindings.len() == 1
+                    && bindings[0].disposition()
+                        == TriggerStackDisposition::RemoveForNoLegalTargets
+        ));
+
+        let policies = [AiController::Random(RandomLegalPolicy::new(23)); PLAYER_COUNT];
+        let mut no_decisions = None;
+        let outcome = ai_driver
+            .put_pending_triggers_on_stack(None, &mut no_decisions, Some(&policies))
+            .unwrap_or_else(|error| panic!("AI no-target trigger should be removed: {error}"));
+        assert!(matches!(outcome, Outcome::StackEntriesAdded(entries) if entries.is_empty()));
+        assert!(ai_driver.state.pending_triggers().is_empty());
+        assert!(ai_driver.state.stack_entries().is_empty());
+        assert!(ai_driver.ai_decisions.is_empty());
     }
 
     #[test]

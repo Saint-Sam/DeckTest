@@ -3395,14 +3395,24 @@ impl StackDecisionBindings {
     }
 }
 
-/// Choices announced while one pending triggered ability is put on the stack.
+/// Kernel disposition for one pending triggered ability.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum TriggerStackDisposition {
+    /// Put the triggered ability on the stack with its announced choices.
+    PutOnStack,
+    /// Remove the triggered ability because a required target slot has no legal choice.
+    RemoveForNoLegalTargets,
+}
+
+/// Choices announced while one pending triggered ability is processed.
 ///
 /// The binding is ordered with its pending trigger from bottom to top. Target
-/// requirements remain explicit so the kernel can validate and snapshot every
-/// choice before consuming the pending-trigger queue.
+/// requirements remain explicit so the kernel can validate either the chosen
+/// targets or a no-legal-target disposition before consuming the queue.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TriggerStackBinding {
     trigger: TriggerId,
+    disposition: TriggerStackDisposition,
     target_requirements: Vec<TargetRequirement>,
     target_choices: Vec<TargetChoice>,
     decisions: StackDecisionBindings,
@@ -3414,7 +3424,20 @@ impl TriggerStackBinding {
     pub fn new(trigger: TriggerId) -> Self {
         Self {
             trigger,
+            disposition: TriggerStackDisposition::PutOnStack,
             target_requirements: Vec::new(),
+            target_choices: Vec::new(),
+            decisions: StackDecisionBindings::default(),
+        }
+    }
+
+    /// Records that a required target slot has no legal choice.
+    #[must_use]
+    pub fn no_legal_targets(trigger: TriggerId, requirements: Vec<TargetRequirement>) -> Self {
+        Self {
+            trigger,
+            disposition: TriggerStackDisposition::RemoveForNoLegalTargets,
+            target_requirements: requirements,
             target_choices: Vec::new(),
             decisions: StackDecisionBindings::default(),
         }
@@ -3443,6 +3466,12 @@ impl TriggerStackBinding {
     #[must_use]
     pub const fn trigger(&self) -> TriggerId {
         self.trigger
+    }
+
+    /// Returns whether this trigger is put on the stack or removed.
+    #[must_use]
+    pub const fn disposition(&self) -> TriggerStackDisposition {
+        self.disposition
     }
 
     /// Returns target requirements in announcement order.
@@ -6794,6 +6823,8 @@ pub enum StateError {
     PendingTriggeredAbilities,
     /// An explicit pending-trigger order did not match the APNAP controller groups and multiset.
     InvalidPendingTriggerOrder,
+    /// A no-legal-target trigger disposition was not proven by the current state.
+    InvalidPendingTriggerDisposition(TriggerId),
     /// The requested replacement/prevention effect ID does not exist.
     UnknownReplacementEffect(ReplacementEffectId),
     /// A replacement ordering preference named the same effect more than once.
@@ -11774,31 +11805,56 @@ impl GameState {
         }
         let mut prepared = Vec::with_capacity(ordered.len());
         for (index, trigger) in ordered.iter().copied().enumerate() {
-            let (targets, decisions) = if let Some(bindings) = requested_bindings {
+            let (targets, decisions, put_on_stack) = if let Some(bindings) = requested_bindings {
                 let binding = bindings
                     .get(index)
                     .ok_or(StateError::InvalidPendingTriggerOrder)?;
                 if binding.trigger() != trigger.trigger() {
                     return Err(StateError::InvalidPendingTriggerOrder);
                 }
-                (
-                    self.capture_target_snapshots(
-                        trigger.controller(),
-                        trigger.source(),
-                        binding.target_requirements(),
-                        binding.target_choices(),
-                    )?,
-                    binding.decisions(),
-                )
+                match binding.disposition() {
+                    TriggerStackDisposition::PutOnStack => (
+                        self.capture_target_snapshots(
+                            trigger.controller(),
+                            trigger.source(),
+                            binding.target_requirements(),
+                            binding.target_choices(),
+                        )?,
+                        binding.decisions(),
+                        true,
+                    ),
+                    TriggerStackDisposition::RemoveForNoLegalTargets => {
+                        let requirements = binding.target_requirements();
+                        if requirements.is_empty()
+                            || !binding.target_choices().is_empty()
+                            || binding.decisions() != StackDecisionBindings::default()
+                            || requirements.iter().copied().all(|requirement| {
+                                self.has_legal_target(
+                                    trigger.controller(),
+                                    trigger.source(),
+                                    requirement,
+                                )
+                            })
+                        {
+                            return Err(StateError::InvalidPendingTriggerDisposition(
+                                trigger.trigger(),
+                            ));
+                        }
+                        (Vec::new(), StackDecisionBindings::default(), false)
+                    }
+                }
             } else {
-                (Vec::new(), StackDecisionBindings::default())
+                (Vec::new(), StackDecisionBindings::default(), true)
             };
-            prepared.push((trigger, targets, decisions));
+            prepared.push((trigger, targets, decisions, put_on_stack));
         }
         self.pending_triggers.clear();
 
         let mut ids = Vec::with_capacity(prepared.len());
-        for (trigger, targets, decisions) in prepared {
+        for (trigger, targets, decisions, put_on_stack) in prepared {
+            if !put_on_stack {
+                continue;
+            }
             let controller = trigger.controller();
             let id = self.push_stack_entry(StackEntryRequest {
                 controller,
@@ -14912,6 +14968,38 @@ impl GameState {
         choice: TargetChoice,
     ) -> bool {
         self.is_target_legal_at_cast(player, source, requirement, choice)
+    }
+
+    /// Returns whether at least one legal choice exists for a required target slot.
+    #[must_use]
+    pub fn has_legal_target(
+        &self,
+        player: PlayerId,
+        source: Option<ObjectId>,
+        requirement: TargetRequirement,
+    ) -> bool {
+        self.players.iter().any(|candidate| {
+            self.can_target(
+                player,
+                source,
+                requirement,
+                TargetChoice::Player(candidate.id()),
+            )
+        }) || self.objects.iter().any(|candidate| {
+            self.can_target(
+                player,
+                source,
+                requirement,
+                TargetChoice::Object(candidate.id()),
+            )
+        }) || self.stack_entries.iter().any(|candidate| {
+            self.can_target(
+                player,
+                source,
+                requirement,
+                TargetChoice::StackEntry(candidate.id()),
+            )
+        })
     }
 
     /// Returns the ward cost that would be observed when choosing one target.
@@ -18807,9 +18895,9 @@ mod tests {
         StateBasedActionKind, StateBasedActionReport, StateError, Step, TargetChoice,
         TargetControllerPredicate, TargetKind, TargetRequirement, TargetRestriction,
         TargetRestrictionSubject, TriggerCondition, TriggerDefinition, TriggerInterveningIf,
-        TriggerObjectFilter, TriggerPlayerFilter, TriggerStackBinding, TriggerZoneFilter,
-        ZoneConservation, ZoneId, ZoneKind, EVENT_RING_CAPACITY, MAX_STACK_OPTIONAL_CHOICES,
-        NORMAL_TURN_STEPS, OPENING_HAND_SIZE, PAYMENT_PLAN_LIMIT,
+        TriggerObjectFilter, TriggerPlayerFilter, TriggerStackBinding, TriggerStackDisposition,
+        TriggerZoneFilter, ZoneConservation, ZoneId, ZoneKind, EVENT_RING_CAPACITY,
+        MAX_STACK_OPTIONAL_CHOICES, NORMAL_TURN_STEPS, OPENING_HAND_SIZE, PAYMENT_PLAN_LIMIT,
     };
 
     #[test]
@@ -19335,6 +19423,100 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![TargetChoice::Object(legal_target)]
         );
+    }
+
+    #[test]
+    fn no_legal_target_trigger_disposition_is_validated_and_preserves_other_triggers() {
+        let mut state = GameState::new();
+        let active = state.add_player();
+        let controller = state.add_player();
+        let source = state
+            .create_object(
+                CardId::new(2_213),
+                controller,
+                controller,
+                ZoneId::new(None, ZoneKind::Battlefield),
+            )
+            .unwrap_or_else(|error| panic!("unexpected source create error: {error:?}"));
+        state
+            .start_turn(active)
+            .unwrap_or_else(|error| panic!("unexpected start error: {error:?}"));
+        let mut register = || match apply(
+            &mut state,
+            Action::RegisterTriggeredAbility {
+                definition: TriggerDefinition::new(
+                    controller,
+                    TriggerCondition::LifeLost {
+                        player: TriggerPlayerFilter::Any,
+                    },
+                )
+                .with_source(source),
+            },
+        ) {
+            Outcome::TriggerRegistered(trigger) => trigger,
+            other => panic!("unexpected trigger registration: {other:?}"),
+        };
+        let removed_trigger = register();
+        let stacked_trigger = register();
+        assert_eq!(
+            apply(
+                &mut state,
+                Action::LoseLife {
+                    player: active,
+                    amount: 1,
+                },
+            ),
+            Outcome::Applied
+        );
+        assert_eq!(state.pending_triggers().len(), 2);
+
+        let mut invalid = state.clone();
+        assert_eq!(
+            apply(
+                &mut invalid,
+                Action::PutPendingTriggeredAbilitiesOnStackWithChoices {
+                    bindings: vec![
+                        TriggerStackBinding::no_legal_targets(
+                            removed_trigger,
+                            vec![TargetRequirement::new(TargetKind::Permanent)],
+                        ),
+                        TriggerStackBinding::new(stacked_trigger),
+                    ],
+                },
+            ),
+            Outcome::Failed(StateError::InvalidPendingTriggerDisposition(
+                removed_trigger
+            ))
+        );
+        assert_eq!(invalid.pending_triggers().len(), 2);
+        assert!(invalid.stack_entries().is_empty());
+
+        let removed = TriggerStackBinding::no_legal_targets(
+            removed_trigger,
+            vec![TargetRequirement::new(TargetKind::ObjectInZone(
+                ZoneId::new(None, ZoneKind::Exile),
+            ))],
+        );
+        assert_eq!(
+            removed.disposition(),
+            TriggerStackDisposition::RemoveForNoLegalTargets
+        );
+        let entries = match apply(
+            &mut state,
+            Action::PutPendingTriggeredAbilitiesOnStackWithChoices {
+                bindings: vec![removed, TriggerStackBinding::new(stacked_trigger)],
+            },
+        ) {
+            Outcome::StackEntriesAdded(entries) => entries,
+            other => panic!("unexpected no-target trigger outcome: {other:?}"),
+        };
+        assert_eq!(entries.len(), 1);
+        assert!(state.pending_triggers().is_empty());
+        assert_eq!(
+            state.stack_top().and_then(|entry| entry.trigger()),
+            Some(stacked_trigger)
+        );
+        assert_eq!(state.priority_player(), Some(active));
     }
 
     #[test]

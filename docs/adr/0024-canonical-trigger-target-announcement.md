@@ -1,6 +1,7 @@
 # ADR 0024: Canonical Trigger Target Announcement
 
-Status: accepted for local T4 diagnostics on 2026-07-14.
+Status: accepted for local T4 diagnostics on 2026-07-14. The no-legal-target
+limitation is resolved for the current typed target model by ADR 0025.
 
 ## Context
 
@@ -38,8 +39,8 @@ boundary as spells and program-bound activated abilities without materializing
 a cross-slot Cartesian product. Existing untargeted triggers retain their
 previous action stream.
 
-A required targeted trigger with no legal target remains fail closed until the
-kernel has an explicit no-stack disposition for that trigger instance.
-Target distribution, per-target partial-illegality effect filtering, deferred
-trigger optionals, and sealed benchmark labels also remain open. This ADR does
-not declare the target decision family promotion-complete.
+ADR 0025 adds the explicit kernel no-stack disposition for a required target
+slot with no legal choice. Target distribution, same-batch inter-trigger stack
+targeting, per-target partial-illegality effect filtering, deferred trigger
+optionals, and sealed benchmark labels remain open. This ADR does not declare
+the target decision family promotion-complete.

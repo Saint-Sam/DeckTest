@@ -61,8 +61,10 @@ Targeted triggered abilities use bounded target-slot contexts before the
 pending trigger is put on the stack. The final typed trigger binding is
 validated atomically by the kernel, snapshots targets for the priority window,
 and is recovered from the resolution record by the interpreter. A required
-trigger with no legal target still fails closed pending an explicit kernel
-no-stack disposition; search support does not imply that case is complete.
+trigger with an empty current target domain uses an explicit kernel-validated
+no-stack disposition, produces no prompt, and does not block valid sibling
+triggers. Same-batch inter-trigger stack targeting, target distribution, and
+partial-illegality filtering remain fail closed.
 
 Combat-damage ordering and amounts also use bounded contexts outside the main
 tree. Controllers choose one next blocker and then one amount at a time; large
